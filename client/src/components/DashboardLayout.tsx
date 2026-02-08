@@ -170,9 +170,11 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
-                  </span>
+                  <img 
+                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663162723291/nbOqLZxfgryzBBzs.png" 
+                    alt="BTREE Ambiental" 
+                    className="h-8 object-contain"
+                  />
                 </div>
               ) : null}
             </div>
@@ -201,7 +203,16 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3">
+          <SidebarFooter className="p-3 space-y-3">
+            {!isCollapsed && (
+              <div className="flex items-center justify-center pb-2 border-t pt-3">
+                <img 
+                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663162723291/araEdTGAInvzokqw.png" 
+                  alt="Desenvolvido por Kobayashi" 
+                  className="h-6 object-contain opacity-60 hover:opacity-100 transition-opacity"
+                />
+              </div>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
