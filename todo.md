@@ -229,12 +229,12 @@
 
 - [x] Configurar repositório GitHub frontend (btree_frontend)
 - [x] Criar arquivo SQL completo com todas as tabelas MySQL
-- [ ] Preparar backend para deploy no Render
-- [ ] Fazer push do backend no GitHub (btree_ambiental)
-- [ ] Atualizar repositório btree_frontend com código completo
-- [ ] Criar guia passo a passo de deploy no Render
-- [ ] Criar guia de configuração de variáveis de ambiente
-- [ ] Documentar conexão MySQL
+- [x] Preparar backend para deploy no Render
+- [x] Fazer push do backend no GitHub (btree_ambiental)
+- [x] Atualizar repositório btree_frontend com código completo
+- [x] Criar guia passo a passo de deploy no Render
+- [x] Criar guia de configuração de variáveis de ambiente
+- [x] Documentar conexão MySQL
 - [ ] Configurar Cloudinary (usar mesmo do Aza Connect)
 - [x] Compilar frontend para Hostinger
 - [ ] Testar deploy completo
