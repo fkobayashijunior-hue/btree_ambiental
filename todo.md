@@ -251,7 +251,7 @@
 - [x] Criar tela de registro no frontend
 - [x] Remover dependências do Manus OAuth
 - [ ] Testar sistema de autenticação completo
-- [ ] Atualizar GitHub (backend e frontend)
-- [ ] Compilar frontend para Hostinger
+- [x] Atualizar GitHub (backend e frontend)
+- [x] Compilar frontend para Hostinger
 - [ ] Fazer deploy no Render
 
