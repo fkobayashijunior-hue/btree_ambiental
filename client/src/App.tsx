@@ -9,6 +9,10 @@ import UsersPage from "./pages/UsersPage";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Collaborators from "./pages/Collaborators";
+import BiometricAttendancePage from "./pages/BiometricAttendance";
+import AttendanceList from "./pages/AttendanceList";
+import Landing from "./pages/Landing";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -17,7 +21,11 @@ function Router() {
       <Route path={"/login"} component={Login} />
       <Route path={"/forgot-password"} component={ForgotPassword} />
       <Route path={"/reset-password"} component={ResetPassword} />
-      <Route path={"/"} component={Home} />
+      <Route path={"/colaboradores"} component={Collaborators} />
+      <Route path={"/presenca"} component={BiometricAttendancePage} />
+      <Route path={"/presencas"} component={AttendanceList} />
+      <Route path={"/"} component={Landing} />
+      <Route path={"/app"} component={Home} />
       <Route path={"/usuarios"} component={UsersPage} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

@@ -39,7 +39,73 @@ export const passwordResetTokens = mysqlTable("password_reset_tokens", {
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 
-// Perfis de usuário
+// Ficha completa do colaborador
+export const collaborators = mysqlTable("collaborators", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").references(() => users.id, { onDelete: "set null" }),
+  // Dados pessoais
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 20 }),
+  cpf: varchar("cpf", { length: 14 }),
+  rg: varchar("rg", { length: 20 }),
+  // Endereço
+  address: varchar("address", { length: 500 }),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 2 }),
+  zipCode: varchar("zip_code", { length: 10 }),
+  // Foto e biometria facial
+  photoUrl: text("photo_url"),
+  faceDescriptor: text("face_descriptor"), // JSON com vetor facial (128 floats)
+  // Função e acesso
+  role: mysqlEnum("role", [
+    "administrativo",
+    "encarregado",
+    "mecanico",
+    "motosserrista",
+    "carregador",
+    "operador",
+    "motorista",
+    "terceirizado"
+  ]).notNull().default("operador"),
+  // Dados de pagamento
+  pixKey: varchar("pix_key", { length: 255 }),
+  dailyRate: varchar("daily_rate", { length: 20 }),
+  employmentType: mysqlEnum("employment_type", ["clt", "terceirizado", "diarista"]).default("diarista"),
+  // Tamanhos para EPI
+  shirtSize: mysqlEnum("shirt_size", ["PP", "P", "M", "G", "GG", "XGG"]),
+  pantsSize: varchar("pants_size", { length: 10 }),
+  shoeSize: varchar("shoe_size", { length: 5 }),
+  bootSize: varchar("boot_size", { length: 5 }),
+  // Status
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  createdBy: int("created_by").references(() => users.id),
+});
+export type Collaborator = typeof collaborators.$inferSelect;
+export type InsertCollaborator = typeof collaborators.$inferInsert;
+
+// Registro de presença biométrica
+export const biometricAttendance = mysqlTable("biometric_attendance", {
+  id: int("id").autoincrement().primaryKey(),
+  collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
+  date: timestamp("date").notNull(),
+  checkInTime: timestamp("check_in_time").notNull(),
+  checkOutTime: timestamp("check_out_time"),
+  location: varchar("location", { length: 255 }), // Nome do local (fazenda, talhao)
+  latitude: varchar("latitude", { length: 20 }),
+  longitude: varchar("longitude", { length: 20 }),
+  photoUrl: text("photo_url"), // Foto tirada no momento da presença
+  confidence: varchar("confidence", { length: 10 }), // % de confiança do reconhecimento
+  registeredBy: int("registered_by").notNull().references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type BiometricAttendance = typeof biometricAttendance.$inferSelect;
+export type InsertBiometricAttendance = typeof biometricAttendance.$inferInsert;
+
+// Perfis de usuário (mantido para compatibilidade)
 export const userProfiles = mysqlTable("user_profiles", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
