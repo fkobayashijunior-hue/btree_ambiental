@@ -3,9 +3,9 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
-import { registerUser, loginUser } from "./auth";
+import { registerUser, loginUser, hashPassword } from "./auth";
 import { sdk } from "./_core/sdk";
-import { getUserByEmail } from "./db";
+import { getUserByEmail, upsertUser } from "./db";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -66,6 +66,31 @@ export const appRouter = router({
         } catch (error) {
           throw new Error(error instanceof Error ? error.message : 'Erro ao fazer login');
         }
+      }),
+
+    // Rota de seed para criar/atualizar admin (apenas para uso interno)
+    seedAdmin: publicProcedure
+      .input(z.object({
+        seedKey: z.string(),
+        email: z.string().email(),
+        name: z.string(),
+        password: z.string().min(4),
+      }))
+      .mutation(async ({ input }) => {
+        // Chave secreta para proteger esta rota
+        if (input.seedKey !== 'BTREE_SEED_2026') {
+          throw new Error('Chave inválida');
+        }
+        const passwordHash = await hashPassword(input.password);
+        await upsertUser({
+          email: input.email,
+          name: input.name,
+          passwordHash,
+          loginMethod: 'email',
+          role: 'admin',
+          lastSignedIn: new Date(),
+        });
+        return { success: true, message: `Admin ${input.email} criado/atualizado com sucesso` };
       }),
 
     logout: publicProcedure.mutation(({ ctx }) => {
