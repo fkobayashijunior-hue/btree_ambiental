@@ -33,7 +33,7 @@ export default function Login() {
         <CardHeader className="space-y-3 text-center">
           <div className="flex justify-center mb-4">
             <img 
-              src="/logo-btree.png" 
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree_2d00f2da.png" 
               alt="BTREE Ambiental" 
               className="h-16 w-auto"
             />
@@ -102,7 +102,7 @@ export default function Login() {
         <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
           <span>Desenvolvido por</span>
           <img 
-            src="/logo-kobayashi.png" 
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png" 
             alt="Kobayashi" 
             className="h-6 w-auto"
           />
