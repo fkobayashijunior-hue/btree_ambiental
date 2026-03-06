@@ -181,7 +181,7 @@ export default function Collaborators() {
               <UserPlus className="h-4 w-4" /> Novo Colaborador
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle className="text-emerald-800">
                 {editId ? "Editar Colaborador" : "Cadastrar Novo Colaborador"}
@@ -197,7 +197,7 @@ export default function Collaborators() {
                 </TabsList>
 
                 {/* Aba: Dados Pessoais */}
-                <TabsContent value="pessoal" className="space-y-4 pt-4">
+                <TabsContent value="pessoal" className="space-y-4 pt-4" forceMount>
                   {/* Foto */}
                   <div className="flex items-center gap-4">
                     <div
@@ -282,7 +282,7 @@ export default function Collaborators() {
                 </TabsContent>
 
                 {/* Aba: Endereço */}
-                <TabsContent value="endereco" className="space-y-4 pt-4">
+                <TabsContent value="endereco" className="space-y-4 pt-4" forceMount>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
                       <Label>Endereço</Label>
@@ -304,7 +304,7 @@ export default function Collaborators() {
                 </TabsContent>
 
                 {/* Aba: EPI & Trabalho */}
-                <TabsContent value="epi" className="space-y-4 pt-4">
+                <TabsContent value="epi" className="space-y-4 pt-4" forceMount>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>Chave PIX</Label>
