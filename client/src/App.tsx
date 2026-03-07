@@ -20,6 +20,7 @@ import MachineHoursPage from "./pages/MachineHoursPage";
 import VehicleControlPage from "./pages/VehicleControlPage";
 import PartsPage from "./pages/PartsPage";
 import ClientsPage from "./pages/ClientsPage";
+import ClientPortal from "./pages/ClientPortal";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -38,6 +39,7 @@ function Router() {
       <Route path={"/veiculos"} component={VehicleControlPage} />
       <Route path={"/pecas"} component={PartsPage} />
       <Route path={"/clientes"} component={ClientsPage} />
+      <Route path={"/client-portal"} component={ClientPortal} />
       <Route path={"/"} component={Landing} />
       <Route path={"/app"} component={Home} />
       <Route path={"/usuarios"} component={UsersPage} />

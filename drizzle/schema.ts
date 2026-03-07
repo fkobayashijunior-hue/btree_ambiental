@@ -428,3 +428,59 @@ export const partsRequests = mysqlTable("parts_requests", {
 });
 export type PartsRequest = typeof partsRequests.$inferSelect;
 export type InsertPartsRequest = typeof partsRequests.$inferInsert;
+// ===== PORTAL DO CLIENTE =====
+
+// Código de acesso do cliente ao portal (PIN de 6 dígitos ou token)
+export const clientPortalAccess = mysqlTable("client_portal_access", {
+  id: int("id").autoincrement().primaryKey(),
+  clientId: int("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  accessCode: varchar("access_code", { length: 64 }).notNull().unique(), // PIN ou token
+  active: int("active").default(1).notNull(),
+  lastAccessAt: timestamp("last_access_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  createdBy: int("created_by").references(() => users.id),
+});
+export type ClientPortalAccess = typeof clientPortalAccess.$inferSelect;
+export type InsertClientPortalAccess = typeof clientPortalAccess.$inferInsert;
+
+// Replantio vinculado ao cliente
+export const replantingRecords = mysqlTable("replanting_records", {
+  id: int("id").autoincrement().primaryKey(),
+  clientId: int("client_id").notNull().references(() => clients.id),
+  date: timestamp("date").notNull(),
+  area: varchar("area", { length: 100 }), // ex: "Fazenda Boa Vista - Talhão 3"
+  species: varchar("species", { length: 100 }).default("Eucalipto"), // espécie plantada
+  quantity: int("quantity"), // número de mudas
+  areaHectares: varchar("area_hectares", { length: 20 }), // área em hectares
+  notes: text("notes"),
+  photosJson: text("photos_json"), // JSON array de URLs
+  registeredBy: int("registered_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type ReplantingRecord = typeof replantingRecords.$inferSelect;
+export type InsertReplantingRecord = typeof replantingRecords.$inferInsert;
+
+// Pagamentos ao cliente (compra de eucalipto)
+export const clientPayments = mysqlTable("client_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  clientId: int("client_id").notNull().references(() => clients.id),
+  referenceDate: timestamp("reference_date").notNull(), // mês/período de referência
+  description: varchar("description", { length: 500 }), // ex: "Compra de eucalipto - Talhão 3"
+  volumeM3: varchar("volume_m3", { length: 20 }), // volume comprado
+  pricePerM3: varchar("price_per_m3", { length: 20 }), // preço por m³
+  grossAmount: varchar("gross_amount", { length: 20 }).notNull(), // valor bruto
+  deductions: varchar("deductions", { length: 20 }).default("0"), // descontos
+  netAmount: varchar("net_amount", { length: 20 }).notNull(), // valor líquido
+  status: mysqlEnum("status", ["pendente", "pago", "atrasado", "cancelado"]).default("pendente").notNull(),
+  dueDate: timestamp("due_date"), // data de vencimento
+  paidAt: timestamp("paid_at"), // data do pagamento
+  pixKey: varchar("pix_key", { length: 255 }), // chave pix do cliente
+  notes: text("notes"),
+  registeredBy: int("registered_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type ClientPayment = typeof clientPayments.$inferSelect;
+export type InsertClientPayment = typeof clientPayments.$inferInsert;

@@ -213,7 +213,20 @@
 
 ---
 
-**Última atualização:** 08/02/2026  
+## 🌐 FASE 17: PORTAL DO CLIENTE + MELHORIAS LANDING (07/03/2026)
+
+- [x] Corrigir contato comercial para Fábio Jundy Kobayashi
+- [x] Adicionar botão "Área do Cliente" na navbar da landing page
+- [x] Schema DB: tabelas clientPortalAccess, replantingRecords, clientPayments
+- [x] Portal do cliente: login com código de acesso único
+- [x] Portal do cliente: dashboard com cargas saídas, replantio e pagamentos
+- [x] Área do colaborador: link no menu do dashboard
+- [x] Rodapé discreto na landing: divulgação do desenvolvedor Fernando Kobayashi Jr.
+- [x] Build de produção realizado com sucesso
+
+---
+
+**Última atualização:** 07/03/2026  
 **Versão atual:** 1.0.0 (em desenvolvimento)
 
 ---

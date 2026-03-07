@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, Fuel, ClipboardList, Layers, ShieldCheck, Car, Package, ShoppingCart } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, Fuel, ClipboardList, Layers, ShieldCheck, Car, Package, ShoppingCart, Globe } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -39,6 +39,7 @@ const menuItems = [
   { icon: Car, label: "Veículos", path: "/veiculos" },
   { icon: Package, label: "Peças & Acessórios", path: "/pecas" },
   { icon: Users, label: "Clientes", path: "/clientes" },
+  { icon: Globe, label: "Portal do Cliente", path: "/client-portal" },
   { icon: Users, label: "Usuários", path: "/usuarios" },
 ];
 

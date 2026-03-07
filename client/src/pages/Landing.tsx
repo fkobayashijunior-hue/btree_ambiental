@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 
 // CDN Assets
@@ -66,6 +65,12 @@ export default function Landing() {
                 </button>
               ))}
               <a
+                href="/client-portal"
+                className="border border-[#2e7d32] text-[#2e7d32] px-5 py-2 rounded-full text-sm font-semibold hover:bg-[#2e7d32]/10 transition-colors"
+              >
+                Área do Cliente
+              </a>
+              <a
                 href={getLoginUrl()}
                 className="bg-[#2e7d32] text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-[#1b5e20] transition-colors"
               >
@@ -106,7 +111,13 @@ export default function Landing() {
                   {item.label}
                 </button>
               ))}
-              <div className="px-6 pt-2">
+              <div className="px-6 pt-2 flex flex-col gap-2">
+                <a
+                  href="/client-portal"
+                  className="block border border-[#2e7d32] text-[#2e7d32] px-5 py-3 rounded-full text-sm font-semibold text-center hover:bg-[#2e7d32]/10 transition-colors"
+                >
+                  Área do Cliente
+                </a>
                 <a
                   href={getLoginUrl()}
                   className="block bg-[#2e7d32] text-white px-5 py-3 rounded-full text-sm font-semibold text-center hover:bg-[#1b5e20] transition-colors"
@@ -419,7 +430,7 @@ export default function Landing() {
               </div>
               <h3 className="font-bold text-gray-900 mb-1">Telefone</h3>
               <p className="text-[#2e7d32] font-semibold">(44) 98833-4679</p>
-              <p className="text-gray-500 text-sm mt-1">Fernando Kobayashi</p>
+              <p className="text-gray-500 text-sm mt-1">Fábio Jundy Kobayashi</p>
             </a>
 
             <a
@@ -513,6 +524,12 @@ export default function Landing() {
                 </svg>
               </a>
               <a
+                href="/client-portal"
+                className="text-gray-400 hover:text-white transition-colors text-sm"
+              >
+                Área do Cliente
+              </a>
+              <a
                 href={getLoginUrl()}
                 className="text-gray-400 hover:text-white transition-colors text-sm"
               >
@@ -520,9 +537,20 @@ export default function Landing() {
               </a>
             </div>
           </div>
-          <div className="border-t border-gray-800 mt-8 pt-6 text-center">
+          <div className="border-t border-gray-800 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="text-gray-600 text-xs">
               © 2025 BTREE Ambiental. Todos os direitos reservados. | Astorga, Paraná, Brasil
+            </p>
+            <p className="text-gray-700 text-xs">
+              Desenvolvido por{" "}
+              <a
+                href="https://wa.me/5544988334679?text=Ol%C3%A1%2C+vi+o+site+da+BTREE+Ambiental+e+gostaria+de+saber+mais+sobre+sistemas+e+sites!"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-500 hover:text-[#2e7d32] transition-colors font-medium"
+              >
+                Fernando Kobayashi Jr. — Sistemas &amp; Web
+              </a>
             </p>
           </div>
         </div>
