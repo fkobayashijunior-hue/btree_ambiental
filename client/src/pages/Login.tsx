@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Leaf } from "lucide-react";
 
 // Logo BTREE Ambiental — versão verde (fundo branco/transparente)
-const BTREE_LOGO_GREEN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-ambiental-v2-WJyQgZeP74baA3cKwgBsBe.webp";
+const BTREE_LOGO_GREEN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
 // Logo Kobayashi
 const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
 

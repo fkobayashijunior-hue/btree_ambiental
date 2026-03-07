@@ -46,7 +46,7 @@ export default function Register() {
         <CardHeader className="space-y-3 text-center">
           <div className="flex justify-center mb-4">
             <img 
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-ambiental-v2-WJyQgZeP74baA3cKwgBsBe.webp" 
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png" 
               alt="BTREE Ambiental" 
               className="h-16 w-auto"
             />
