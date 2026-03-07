@@ -4,6 +4,11 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Eye, EyeOff, Leaf } from "lucide-react";
 
+// Logo BTREE Ambiental — versão verde (fundo branco/transparente)
+const BTREE_LOGO_GREEN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-ambiental-v2-WJyQgZeP74baA3cKwgBsBe.webp";
+// Logo Kobayashi
+const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,7 +39,7 @@ export default function Login() {
           background: "linear-gradient(135deg, #0d4f2e 0%, #1a7a4a 40%, #00b87a 100%)",
         }}
       >
-        {/* Eucalyptus forest texture overlay */}
+        {/* Pattern overlay */}
         <div
           className="absolute inset-0 opacity-20"
           style={{
@@ -42,23 +47,19 @@ export default function Login() {
           }}
         />
 
-        {/* Decorative circle */}
-        <div
-          className="absolute -right-20 -top-20 w-80 h-80 rounded-full opacity-10"
-          style={{ background: "white" }}
-        />
-        <div
-          className="absolute -right-10 bottom-20 w-48 h-48 rounded-full opacity-10"
-          style={{ background: "white" }}
-        />
+        {/* Decorative circles */}
+        <div className="absolute -right-20 -top-20 w-80 h-80 rounded-full opacity-10" style={{ background: "white" }} />
+        <div className="absolute -right-10 bottom-20 w-48 h-48 rounded-full opacity-10" style={{ background: "white" }} />
 
-        {/* Logo */}
+        {/* Logo BTREE — versão branca (invertida) no painel verde */}
         <div className="relative z-10">
-          <img
-            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree_2d00f2da.png"
-            alt="BTREE Ambiental"
-            className="h-14 w-auto object-contain brightness-0 invert"
-          />
+          <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 inline-block">
+            <img
+              src={BTREE_LOGO_GREEN}
+              alt="BTREE Ambiental"
+              className="h-16 w-auto object-contain brightness-0 invert"
+            />
+          </div>
         </div>
 
         {/* Tagline */}
@@ -88,19 +89,11 @@ export default function Login() {
       <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 bg-white min-h-screen md:min-h-0">
         {/* Mobile logo */}
         <div className="md:hidden mb-8 text-center">
-          <div
-            className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-4"
-            style={{ background: "linear-gradient(135deg, #0d4f2e, #00b87a)" }}
-          >
-            <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree_2d00f2da.png"
-              alt="BTREE"
-              className="h-12 w-auto object-contain brightness-0 invert"
-            />
-          </div>
-          <h2 className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-            BTREE Ambiental
-          </h2>
+          <img
+            src={BTREE_LOGO_GREEN}
+            alt="BTREE Ambiental"
+            className="h-16 w-auto object-contain mx-auto mb-2"
+          />
           <p className="text-gray-500 text-sm mt-1">Sistema de Gestão de Reflorestamento</p>
         </div>
 
@@ -185,13 +178,13 @@ export default function Login() {
           </form>
         </div>
 
-        {/* Developer footer */}
-        <div className="mt-auto pt-8 flex items-center gap-2 text-xs text-gray-400">
-          <span>Desenvolvido por</span>
+        {/* Developer footer — logo Kobayashi bem visível */}
+        <div className="mt-auto pt-8 flex flex-col items-center gap-2">
+          <span className="text-xs text-gray-400 font-medium tracking-wide">Desenvolvido por</span>
           <img
-            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png"
-            alt="Kobayashi"
-            className="h-8 w-auto opacity-50 hover:opacity-80 transition-opacity"
+            src={KOBAYASHI_LOGO}
+            alt="Kobayashi Desenvolvimento"
+            className="h-14 w-auto object-contain opacity-80 hover:opacity-100 transition-opacity"
           />
         </div>
       </div>

@@ -8,7 +8,10 @@ import {
   Shield, Award, BarChart3, Users, Globe, CheckCircle2, Menu, X
 } from "lucide-react";
 
-const LOGO_URL = "https://files.manuscdn.com/files/btree-logo.png";
+// Logo BTREE Ambiental — versão verde (fundo branco)
+const BTREE_LOGO_GREEN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-ambiental-v2-WJyQgZeP74baA3cKwgBsBe.webp";
+// Logo Kobayashi
+const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
 
 const services = [
   {
@@ -70,24 +73,37 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <TreePine className="h-5 w-5 text-white" />
-              </div>
-              <span className={`font-bold text-lg ${scrolled ? "text-emerald-800" : "text-white"}`}>
-                BTREE Ambiental
-              </span>
+            <div className="flex items-center">
+              {scrolled ? (
+                <img
+                  src={BTREE_LOGO_GREEN}
+                  alt="BTREE Ambiental"
+                  className="h-10 w-auto object-contain"
+                />
+              ) : (
+                <img
+                  src={BTREE_LOGO_GREEN}
+                  alt="BTREE Ambiental"
+                  className="h-10 w-auto object-contain brightness-0 invert"
+                />
+              )}
             </div>
 
             {/* Desktop nav */}
             <div className="hidden md:flex items-center gap-8">
-              {["Início", "Serviços", "Sobre", "Contato"].map(item => (
+              {[
+                { label: "Início", href: "#inicio" },
+                { label: "Não se trata de uma questão de...", href: "#sobre" },
+                { label: "Serviços", href: "#servicos" },
+                { label: "Sobre", href: "#sobre" },
+                { label: "Contato", href: "#contato" },
+              ].map(item => (
                 <a
-                  key={item}
-                  href={`#${item.toLowerCase().replace("í", "i")}`}
+                  key={item.label}
+                  href={item.href}
                   className={`text-sm font-medium transition-colors hover:text-emerald-400 ${scrolled ? "text-gray-700" : "text-white/90"}`}
                 >
-                  {item}
+                  {item.label}
                 </a>
               ))}
               <Link href="/login">
@@ -139,7 +155,7 @@ export default function Landing() {
             <Badge className="bg-emerald-500/30 text-emerald-200 border-emerald-500/50 mb-6 text-sm">
               🌱 Reflorestamento com Tecnologia
             </Badge>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6" style={{ fontFamily: "'Montserrat', sans-serif" }}>
               Recuperando o<br />
               <span className="text-emerald-300">futuro verde</span><br />
               do Brasil
@@ -149,12 +165,16 @@ export default function Landing() {
               Transformamos áreas degradadas em florestas produtivas com rastreabilidade completa.
             </p>
             <div className="flex flex-wrap gap-4">
-              <Button size="lg" className="bg-white text-emerald-800 hover:bg-emerald-50 font-semibold gap-2">
-                Solicitar Orçamento <ArrowRight className="h-4 w-4" />
-              </Button>
-              <Button size="lg" variant="outline" className="border-white/50 text-white hover:bg-white/10 bg-transparent">
-                Conheça nossos projetos
-              </Button>
+              <a href="#contato">
+                <Button size="lg" className="bg-white text-emerald-800 hover:bg-emerald-50 font-semibold gap-2">
+                  Solicitar Orçamento <ArrowRight className="h-4 w-4" />
+                </Button>
+              </a>
+              <a href="#servicos">
+                <Button size="lg" variant="outline" className="border-white/50 text-white hover:bg-white/10 bg-transparent">
+                  Conheça nossos projetos
+                </Button>
+              </a>
             </div>
           </div>
 
@@ -182,7 +202,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <Badge className="bg-emerald-100 text-emerald-700 mb-4">Nossos Serviços</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Montserrat', sans-serif" }}>
               Soluções completas em<br />
               <span className="text-emerald-600">gestão ambiental</span>
             </h2>
@@ -213,7 +233,7 @@ export default function Landing() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             <div>
               <Badge className="bg-emerald-100 text-emerald-700 mb-4">Por que a BTREE?</Badge>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                 Tecnologia e expertise<br />
                 <span className="text-emerald-600">a serviço da natureza</span>
               </h2>
@@ -230,7 +250,7 @@ export default function Landing() {
               </div>
             </div>
 
-            {/* Visual placeholder */}
+            {/* Visual card */}
             <div className="relative">
               <div className="bg-gradient-to-br from-emerald-600 to-green-800 rounded-3xl p-8 text-white">
                 <div className="grid grid-cols-2 gap-4">
@@ -262,19 +282,23 @@ export default function Landing() {
       {/* CTA */}
       <section className="py-20 bg-emerald-700">
         <div className="max-w-4xl mx-auto px-4 text-center text-white">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: "'Montserrat', sans-serif" }}>
             Pronto para iniciar seu projeto de reflorestamento?
           </h2>
           <p className="text-emerald-100 text-lg mb-8">
             Entre em contato com nossa equipe técnica e receba uma proposta personalizada.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <Button size="lg" className="bg-white text-emerald-800 hover:bg-emerald-50 font-semibold gap-2">
-              <Phone className="h-4 w-4" /> Falar com especialista
-            </Button>
-            <Button size="lg" variant="outline" className="border-white/50 text-white hover:bg-white/10 bg-transparent gap-2">
-              <Mail className="h-4 w-4" /> Enviar mensagem
-            </Button>
+            <a href="tel:+554488334679">
+              <Button size="lg" className="bg-white text-emerald-800 hover:bg-emerald-50 font-semibold gap-2">
+                <Phone className="h-4 w-4" /> (44) 8833-4679
+              </Button>
+            </a>
+            <a href="mailto:contato@btreeambiental.com.br">
+              <Button size="lg" variant="outline" className="border-white/50 text-white hover:bg-white/10 bg-transparent gap-2">
+                <Mail className="h-4 w-4" /> Enviar mensagem
+              </Button>
+            </a>
           </div>
         </div>
       </section>
@@ -282,22 +306,52 @@ export default function Landing() {
       {/* Contato */}
       <section id="contato" className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <Badge className="bg-emerald-100 text-emerald-700 mb-4">Fale Conosco</Badge>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+              Entre em contato
+            </h2>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
             {[
-              { icon: Phone, label: "Telefone", value: "(00) 00000-0000", sub: "Seg–Sex, 8h–18h" },
-              { icon: Mail, label: "E-mail", value: "contato@btreeambiental.com", sub: "Respondemos em até 24h" },
-              { icon: MapPin, label: "Localização", value: "Estado de São Paulo, Brasil", sub: "Atendimento nacional" },
+              {
+                icon: Phone,
+                label: "Contato Comercial",
+                value: "(44) 8833-4679",
+                sub: "Fábio Jundy Kobayashi",
+                href: "tel:+554488334679",
+              },
+              {
+                icon: Mail,
+                label: "E-mail",
+                value: "contato@btreeambiental.com.br",
+                sub: "Respondemos em até 24h",
+                href: "mailto:contato@btreeambiental.com.br",
+              },
+              {
+                icon: MapPin,
+                label: "Escritório",
+                value: "Av. Pres. Epitácio, 278 — Centro",
+                sub: "CEP 86730-000 · Astorga-PR",
+                href: "https://maps.google.com/?q=Avenida+Presidente+Epitácio+278+Astorga+PR",
+              },
             ].map((c, i) => (
-              <div key={i} className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                  <c.icon className="h-6 w-6 text-emerald-600" />
+              <a
+                key={i}
+                href={c.href}
+                target={c.href.startsWith("http") ? "_blank" : undefined}
+                rel={c.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                className="flex flex-col items-center gap-3 group cursor-pointer"
+              >
+                <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                  <c.icon className="h-7 w-7 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-800">{c.label}</p>
-                  <p className="text-gray-600">{c.value}</p>
+                  <p className="font-bold text-gray-800 text-sm uppercase tracking-wide">{c.label}</p>
+                  <p className="text-gray-700 font-medium mt-1">{c.value}</p>
                   <p className="text-gray-400 text-sm">{c.sub}</p>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
@@ -305,21 +359,44 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="bg-emerald-900 text-white py-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
-              <TreePine className="h-5 w-5 text-white" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            {/* Logo BTREE */}
+            <div className="flex items-center">
+              <img
+                src={BTREE_LOGO_GREEN}
+                alt="BTREE Ambiental"
+                className="h-12 w-auto object-contain brightness-0 invert"
+              />
             </div>
-            <span className="font-bold">BTREE Ambiental</span>
+
+            {/* Copyright */}
+            <div className="text-center">
+              <p className="text-emerald-300 text-sm">
+                © {new Date().getFullYear()} BTREE Ambiental. Todos os direitos reservados.
+              </p>
+              <p className="text-emerald-500 text-xs mt-1">
+                Av. Pres. Epitácio, 278 — Centro · Astorga-PR · CEP 86730-000
+              </p>
+            </div>
+
+            {/* Área do colaborador + Dev */}
+            <div className="flex flex-col items-center gap-3">
+              <Link href="/login">
+                <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-300 hover:bg-emerald-800 bg-transparent">
+                  Área do Colaborador
+                </Button>
+              </Link>
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-emerald-500 text-xs">Desenvolvido por</span>
+                <img
+                  src={KOBAYASHI_LOGO}
+                  alt="Kobayashi Desenvolvimento"
+                  className="h-10 w-auto object-contain opacity-70 hover:opacity-100 transition-opacity brightness-0 invert"
+                />
+              </div>
+            </div>
           </div>
-          <p className="text-emerald-300 text-sm text-center">
-            © {new Date().getFullYear()} BTREE Ambiental. Todos os direitos reservados.
-          </p>
-          <Link href="/login">
-            <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-300 hover:bg-emerald-800 bg-transparent">
-              Área do Colaborador
-            </Button>
-          </Link>
         </div>
       </footer>
     </div>
