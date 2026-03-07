@@ -255,3 +255,104 @@
 - [x] Compilar frontend para Hostinger
 - [ ] Fazer deploy no Render
 
+
+---
+
+## 🐛 CORREÇÕES IMEDIATAS (06/03/2026)
+
+- [ ] Corrigir aba Usuários: editar e remover funcionando com backend real
+- [ ] Conectar aba Usuários ao banco de dados (listar usuários reais)
+
+---
+
+## 🚛 MÓDULO: CONTROLE DE CARGAS (Novo)
+
+- [ ] Schema: tabela cargo_loads com campos completos
+- [ ] Backend: rotas list, create, update, delete
+- [ ] Frontend: página CargoControl.tsx
+- [ ] Formulário: caminhão, motorista, data, altura, largura, comprimento
+- [ ] Cálculo automático de volume (m³)
+- [ ] Upload de fotos da carga
+- [ ] Campos: destino, nota fiscal, tipo de madeira, cliente
+- [ ] Listagem com filtros por data/cliente/motorista
+
+---
+
+## ⚙️ MÓDULO: CONTROLE DE HORAS DE MÁQUINAS (Novo)
+
+- [ ] Schema: tabela machine_hours com horímetro, operador, data
+- [ ] Schema: tabela machine_maintenance com peças trocadas, mecânico, tipo (próprio/terceirizado)
+- [ ] Schema: tabela machine_fuel para controle de abastecimento por horímetro
+- [ ] Backend: rotas para horas, manutenção e abastecimento
+- [ ] Frontend: página MachineHours.tsx
+- [ ] Operador registra horas trabalhadas (início/fim horímetro)
+- [ ] Mecânico registra peças trocadas (próprio ou terceirizado)
+- [ ] Controle de abastecimento vinculado ao horímetro
+- [ ] Alertas de manutenção preventiva por horas
+
+---
+
+## 🚗 MÓDULO: CONTROLE DE VEÍCULOS (Novo)
+
+- [ ] Schema: tabela vehicle_records com km, abastecimento, manutenções
+- [ ] Backend: rotas CRUD para veículos e registros
+- [ ] Frontend: página VehicleControl.tsx
+- [ ] Registro de km percorrido
+- [ ] Controle de abastecimento (litros, valor, km)
+- [ ] Registro de manutenções (tipo, peças, custo, responsável)
+- [ ] Histórico por veículo
+
+---
+
+## 🔩 MÓDULO: CONTROLE DE PEÇAS E ACESSÓRIOS (Novo)
+
+- [ ] Schema: tabela parts com código, descrição, categoria, estoque
+- [ ] Backend: rotas CRUD para peças
+- [ ] Frontend: página PartsControl.tsx
+- [ ] Cadastro de peças com foto
+- [ ] Controle de estoque (entrada/saída)
+- [ ] Histórico de uso por equipamento
+
+---
+
+## 📋 MÓDULO: SOLICITAÇÃO DE PEÇAS (Novo)
+
+- [ ] Schema: tabela parts_requests com status, urgência, aprovação
+- [ ] Backend: rotas para criar, aprovar, rejeitar solicitações
+- [ ] Frontend: página PartsRequest.tsx
+- [ ] Formulário de solicitação (peça, quantidade, urgência, observação)
+- [ ] Sistema de aprovação pelo administrativo
+- [ ] Status: Pendente / Aprovado / Rejeitado / Comprado
+- [ ] Notificação para administrativo
+
+---
+
+## 👤 MÓDULO: ABA DO CLIENTE (Novo)
+
+- [ ] Schema: tabela clients com dados do cliente
+- [ ] Schema: tabela client_cargo_reports para relatórios de carga por cliente
+- [ ] Schema: tabela client_contracts para contratos (corte/replantio)
+- [ ] Backend: rotas CRUD para clientes e relatórios
+- [ ] Frontend: página Clients.tsx
+- [ ] Cadastro de clientes
+- [ ] Vinculação de cargas ao cliente
+- [ ] Relatório de cargas por cliente para pagamento
+- [ ] Controle de contratos (corte de moitas, replantio)
+- [ ] Portal do cliente (acesso externo para visualizar relatórios)
+
+---
+
+## 📊 MÓDULO: DASHBOARDS E RELATÓRIOS PDF (Novo)
+
+- [ ] Dashboard com dados reais do banco (não demo)
+- [ ] Gráficos: cargas por período, horas por máquina, consumo de combustível
+- [ ] Geração de PDF profissional com logo BTREE no cabeçalho
+- [ ] Logo Kobayashi no rodapé dos PDFs
+- [ ] QR code do site nos rodapés
+- [ ] Contatos da empresa nos rodapés
+- [ ] Relatório de cargas (por período, por cliente, por motorista)
+- [ ] Relatório de horas de máquinas
+- [ ] Relatório de manutenções
+- [ ] Relatório de veículos
+- [ ] Relatório de presença/pagamento
+- [ ] Relatório de peças/estoque

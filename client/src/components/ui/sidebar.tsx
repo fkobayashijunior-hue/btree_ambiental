@@ -127,7 +127,7 @@ function SidebarProvider({
 
   return (
     <SidebarContext.Provider value={contextValue}>
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider delayDuration={0} disableHoverableContent>
         <div
           data-slot="sidebar-wrapper"
           style={
@@ -189,11 +189,10 @@ function Sidebar({
           data-slot="sidebar"
           data-mobile="true"
           className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
-          style={
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
+          style={{
+            background: 'linear-gradient(180deg, #0d4f2e 0%, #1a5c3a 60%, #1e6b42 100%)',
+            "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+          } as React.CSSProperties}
           side={side}
         >
           <SheetHeader className="sr-only">
@@ -252,6 +251,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
           className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+          style={{ background: 'linear-gradient(180deg, #0d4f2e 0%, #1a5c3a 60%, #1e6b42 100%)' }}
         >
           {children}
         </div>
@@ -539,13 +539,17 @@ function SidebarMenuButton({
     };
   }
 
+  // Only render tooltip when sidebar is actually collapsed to prevent removeChild DOM errors
+  if (state !== "collapsed" || isMobile) {
+    return button;
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent
         side="right"
         align="center"
-        hidden={state !== "collapsed" || isMobile}
         {...tooltip}
       />
     </Tooltip>

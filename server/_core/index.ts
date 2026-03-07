@@ -34,11 +34,22 @@ async function startServer() {
   
   // Configure CORS to allow requests from frontend domain
   app.use(cors({
-    origin: [
-      "https://btreeambiental.com",
-      "http://localhost:5173", // development
-      "http://localhost:3000",  // development
-    ],
+    origin: (origin, callback) => {
+      const allowed = [
+        "https://btreeambiental.com",
+        "https://www.btreeambiental.com",
+        "http://btreeambiental.com",
+        "http://www.btreeambiental.com",
+        "http://localhost:5173",
+        "http://localhost:3000",
+      ];
+      // Allow requests with no origin (mobile apps, curl, etc)
+      if (!origin || allowed.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Allow all origins for now to fix mobile issues
+      }
+    },
     credentials: true,
   }));
   

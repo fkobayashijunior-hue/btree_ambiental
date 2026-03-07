@@ -4,6 +4,12 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { collaboratorsRouter } from "./routers/collaborators";
 import { sectorsRouter } from "./routers/sectors";
+import { usersManagementRouter } from "./routers/usersManagement";
+import { cargoLoadsRouter } from "./routers/cargoLoads";
+import { machineHoursRouter } from "./routers/machineHours";
+import { vehicleRecordsRouter } from "./routers/vehicleRecords";
+import { partsRouter } from "./routers/parts";
+import { clientsRouter } from "./routers/clientsRouter";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { sdk } from "./_core/sdk";
@@ -153,6 +159,12 @@ export const appRouter = router({
 
   collaborators: collaboratorsRouter,
   sectors: sectorsRouter,
+  usersManagement: usersManagementRouter,
+  cargoLoads: cargoLoadsRouter,
+  machineHours: machineHoursRouter,
+  vehicleRecords: vehicleRecordsRouter,
+  parts: partsRouter,
+  clients: clientsRouter,
 
   // TODO: add feature routers here, e.g.
   // todo: router({

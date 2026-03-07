@@ -15,6 +15,11 @@ import AttendanceList from "./pages/AttendanceList";
 import Landing from "./pages/Landing";
 import SectorsEquipment from "./pages/SectorsEquipment";
 import AccessControl from "./pages/AccessControl";
+import CargoControl from "./pages/CargoControl";
+import MachineHoursPage from "./pages/MachineHoursPage";
+import VehicleControlPage from "./pages/VehicleControlPage";
+import PartsPage from "./pages/PartsPage";
+import ClientsPage from "./pages/ClientsPage";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -28,6 +33,11 @@ function Router() {
       <Route path={"/presencas"} component={AttendanceList} />
       <Route path={"/setores"} component={SectorsEquipment} />
       <Route path={"/controle-acesso"} component={AccessControl} />
+      <Route path={"/cargas"} component={CargoControl} />
+      <Route path={"/maquinas"} component={MachineHoursPage} />
+      <Route path={"/veiculos"} component={VehicleControlPage} />
+      <Route path={"/pecas"} component={PartsPage} />
+      <Route path={"/clientes"} component={ClientsPage} />
       <Route path={"/"} component={Landing} />
       <Route path={"/app"} component={Home} />
       <Route path={"/usuarios"} component={UsersPage} />
