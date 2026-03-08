@@ -18,8 +18,11 @@ __export(schema_exports, {
   clientPayments: () => clientPayments,
   clientPortalAccess: () => clientPortalAccess,
   clients: () => clients,
+  collaboratorDocuments: () => collaboratorDocuments,
   collaborators: () => collaborators,
   equipment: () => equipment,
+  equipmentMaintenance: () => equipmentMaintenance,
+  equipmentPhotos: () => equipmentPhotos,
   equipmentTypes: () => equipmentTypes,
   fuelRecords: () => fuelRecords,
   machineFuel: () => machineFuel,
@@ -36,7 +39,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments;
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -451,6 +454,60 @@ var init_schema = __esm({
       registeredBy: int("registered_by").references(() => users.id),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    collaboratorDocuments = mysqlTable("collaborator_documents", {
+      id: int("id").autoincrement().primaryKey(),
+      collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
+      type: mysqlEnum("type", [
+        "cnh",
+        "certificado",
+        "aso",
+        "contrato",
+        "rg",
+        "cpf",
+        "outros"
+      ]).notNull().default("outros"),
+      title: varchar("title", { length: 255 }).notNull(),
+      // ex: "CNH Categoria B", "Certificado NR10"
+      fileUrl: varchar("file_url", { length: 1e3 }).notNull(),
+      // URL Cloudinary
+      fileType: varchar("file_type", { length: 50 }),
+      // "image/jpeg", "application/pdf"
+      issueDate: timestamp("issue_date"),
+      // data de emissão
+      expiryDate: timestamp("expiry_date"),
+      // data de validade (opcional)
+      notes: text("notes"),
+      uploadedBy: int("uploaded_by").references(() => users.id),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    equipmentPhotos = mysqlTable("equipment_photos", {
+      id: int("id").autoincrement().primaryKey(),
+      equipmentId: int("equipment_id").notNull(),
+      // referência ao equipamento (setores/equipamentos)
+      photoUrl: varchar("photo_url", { length: 1e3 }).notNull(),
+      caption: varchar("caption", { length: 255 }),
+      // ex: "Foto da placa", "Vista lateral"
+      uploadedBy: int("uploaded_by").references(() => users.id),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    equipmentMaintenance = mysqlTable("equipment_maintenance", {
+      id: int("id").autoincrement().primaryKey(),
+      equipmentId: int("equipment_id").notNull(),
+      type: mysqlEnum("type", ["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]).notNull().default("manutencao"),
+      description: text("description").notNull(),
+      performedBy: varchar("performed_by", { length: 255 }),
+      // nome do responsável
+      cost: varchar("cost", { length: 20 }),
+      // custo em R$
+      nextMaintenanceDate: timestamp("next_maintenance_date"),
+      // próxima manutenção prevista
+      photosJson: text("photos_json"),
+      // JSON array de URLs
+      registeredBy: int("registered_by").references(() => users.id),
+      performedAt: timestamp("performed_at").notNull(),
+      // data da manutenção
+      createdAt: timestamp("created_at").defaultNow().notNull()
     });
   }
 });
@@ -1089,56 +1146,34 @@ init_schema();
 import { z as z2 } from "zod";
 import { eq as eq2, desc, and as and2, like, or } from "drizzle-orm";
 
-// server/storage.ts
-init_env();
-function getStorageConfig() {
-  const baseUrl = ENV.forgeApiUrl;
-  const apiKey = ENV.forgeApiKey;
-  if (!baseUrl || !apiKey) {
-    throw new Error(
-      "Storage proxy credentials missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
-    );
+// server/cloudinary.ts
+var CLOUD_NAME = "djob7pxme";
+var UPLOAD_PRESET = "btree_ambiental";
+var CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+async function cloudinaryUpload(data, folder = "btree") {
+  let base64Data;
+  if (Buffer.isBuffer(data)) {
+    base64Data = `data:image/jpeg;base64,${data.toString("base64")}`;
+  } else {
+    base64Data = data.startsWith("data:") ? data : `data:image/jpeg;base64,${data}`;
   }
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
-}
-function buildUploadUrl(baseUrl, relKey) {
-  const url = new URL("v1/storage/upload", ensureTrailingSlash(baseUrl));
-  url.searchParams.set("path", normalizeKey(relKey));
-  return url;
-}
-function ensureTrailingSlash(value) {
-  return value.endsWith("/") ? value : `${value}/`;
-}
-function normalizeKey(relKey) {
-  return relKey.replace(/^\/+/, "");
-}
-function toFormData(data, contentType, fileName) {
-  const blob = typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data], { type: contentType });
-  const form = new FormData();
-  form.append("file", blob, fileName || "file");
-  return form;
-}
-function buildAuthHeaders(apiKey) {
-  return { Authorization: `Bearer ${apiKey}` };
-}
-async function storagePut(relKey, data, contentType = "application/octet-stream") {
-  const { baseUrl, apiKey } = getStorageConfig();
-  const key = normalizeKey(relKey);
-  const uploadUrl = buildUploadUrl(baseUrl, key);
-  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
-  const response = await fetch(uploadUrl, {
+  const formData = new FormData();
+  formData.append("file", base64Data);
+  formData.append("upload_preset", UPLOAD_PRESET);
+  formData.append("folder", folder);
+  const response = await fetch(CLOUDINARY_UPLOAD_URL, {
     method: "POST",
-    headers: buildAuthHeaders(apiKey),
     body: formData
   });
   if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(
-      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
-    );
+    const errorText = await response.text().catch(() => response.statusText);
+    throw new Error(`Cloudinary upload failed (${response.status}): ${errorText}`);
   }
-  const url = (await response.json()).url;
-  return { key, url };
+  const result = await response.json();
+  return {
+    url: result.secure_url,
+    publicId: result.public_id
+  };
 }
 
 // server/routers/collaborators.ts
@@ -1217,10 +1252,7 @@ var collaboratorsRouter = router({
     if (!db) throw new Error("Database not available");
     let photoUrl;
     if (input.photoBase64) {
-      const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
-      const buffer = Buffer.from(base64Data, "base64");
-      const fileName = `collaborators/${Date.now()}-${input.name.replace(/\s+/g, "-").toLowerCase()}.jpg`;
-      const result = await storagePut(fileName, buffer, "image/jpeg");
+      const result = await cloudinaryUpload(input.photoBase64, "btree/collaborators");
       photoUrl = result.url;
     }
     let userId;
@@ -1286,10 +1318,7 @@ var collaboratorsRouter = router({
     const { id, photoBase64, password, ...rest } = input;
     const updateData = { ...rest };
     if (photoBase64) {
-      const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, "");
-      const buffer = Buffer.from(base64Data, "base64");
-      const fileName = `collaborators/${Date.now()}-${id}.jpg`;
-      const result = await storagePut(fileName, buffer, "image/jpeg");
+      const result = await cloudinaryUpload(photoBase64, "btree/collaborators");
       updateData.photoUrl = result.url;
     }
     if (updateData.active !== void 0) {
@@ -1318,10 +1347,7 @@ var collaboratorsRouter = router({
     if (!db) throw new Error("Database not available");
     const updateData = { faceDescriptor: input.faceDescriptor };
     if (input.photoBase64) {
-      const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
-      const buffer = Buffer.from(base64Data, "base64");
-      const fileName = `collaborators/face-${Date.now()}-${input.id}.jpg`;
-      const result = await storagePut(fileName, buffer, "image/jpeg");
+      const result = await cloudinaryUpload(input.photoBase64, "btree/faces");
       updateData.photoUrl = result.url;
     }
     await db.update(collaborators).set(updateData).where(eq2(collaborators.id, input.id));
@@ -1341,10 +1367,7 @@ var collaboratorsRouter = router({
     if (!db) throw new Error("Database not available");
     let photoUrl;
     if (input.photoBase64) {
-      const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
-      const buffer = Buffer.from(base64Data, "base64");
-      const fileName = `attendance/${Date.now()}-${input.collaboratorId}.jpg`;
-      const result = await storagePut(fileName, buffer, "image/jpeg");
+      const result = await cloudinaryUpload(input.photoBase64, "btree/attendance");
       photoUrl = result.url;
     }
     const now = /* @__PURE__ */ new Date();
@@ -1691,6 +1714,171 @@ init_db();
 init_schema();
 import { TRPCError as TRPCError4 } from "@trpc/server";
 import { eq as eq5, desc as desc3 } from "drizzle-orm";
+
+// server/_core/llm.ts
+init_env();
+var ensureArray = (value) => Array.isArray(value) ? value : [value];
+var normalizeContentPart = (part) => {
+  if (typeof part === "string") {
+    return { type: "text", text: part };
+  }
+  if (part.type === "text") {
+    return part;
+  }
+  if (part.type === "image_url") {
+    return part;
+  }
+  if (part.type === "file_url") {
+    return part;
+  }
+  throw new Error("Unsupported message content part");
+};
+var normalizeMessage = (message) => {
+  const { role, name, tool_call_id } = message;
+  if (role === "tool" || role === "function") {
+    const content = ensureArray(message.content).map((part) => typeof part === "string" ? part : JSON.stringify(part)).join("\n");
+    return {
+      role,
+      name,
+      tool_call_id,
+      content
+    };
+  }
+  const contentParts = ensureArray(message.content).map(normalizeContentPart);
+  if (contentParts.length === 1 && contentParts[0].type === "text") {
+    return {
+      role,
+      name,
+      content: contentParts[0].text
+    };
+  }
+  return {
+    role,
+    name,
+    content: contentParts
+  };
+};
+var normalizeToolChoice = (toolChoice, tools) => {
+  if (!toolChoice) return void 0;
+  if (toolChoice === "none" || toolChoice === "auto") {
+    return toolChoice;
+  }
+  if (toolChoice === "required") {
+    if (!tools || tools.length === 0) {
+      throw new Error(
+        "tool_choice 'required' was provided but no tools were configured"
+      );
+    }
+    if (tools.length > 1) {
+      throw new Error(
+        "tool_choice 'required' needs a single tool or specify the tool name explicitly"
+      );
+    }
+    return {
+      type: "function",
+      function: { name: tools[0].function.name }
+    };
+  }
+  if ("name" in toolChoice) {
+    return {
+      type: "function",
+      function: { name: toolChoice.name }
+    };
+  }
+  return toolChoice;
+};
+var resolveApiUrl = () => ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0 ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions` : "https://forge.manus.im/v1/chat/completions";
+var assertApiKey = () => {
+  if (!ENV.forgeApiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+};
+var normalizeResponseFormat = ({
+  responseFormat,
+  response_format,
+  outputSchema,
+  output_schema
+}) => {
+  const explicitFormat = responseFormat || response_format;
+  if (explicitFormat) {
+    if (explicitFormat.type === "json_schema" && !explicitFormat.json_schema?.schema) {
+      throw new Error(
+        "responseFormat json_schema requires a defined schema object"
+      );
+    }
+    return explicitFormat;
+  }
+  const schema = outputSchema || output_schema;
+  if (!schema) return void 0;
+  if (!schema.name || !schema.schema) {
+    throw new Error("outputSchema requires both name and schema");
+  }
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: schema.name,
+      schema: schema.schema,
+      ...typeof schema.strict === "boolean" ? { strict: schema.strict } : {}
+    }
+  };
+};
+async function invokeLLM(params) {
+  assertApiKey();
+  const {
+    messages,
+    tools,
+    toolChoice,
+    tool_choice,
+    outputSchema,
+    output_schema,
+    responseFormat,
+    response_format
+  } = params;
+  const payload = {
+    model: "gemini-2.5-flash",
+    messages: messages.map(normalizeMessage)
+  };
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+  const normalizedToolChoice = normalizeToolChoice(
+    toolChoice || tool_choice,
+    tools
+  );
+  if (normalizedToolChoice) {
+    payload.tool_choice = normalizedToolChoice;
+  }
+  payload.max_tokens = 32768;
+  payload.thinking = {
+    "budget_tokens": 128
+  };
+  const normalizedResponseFormat = normalizeResponseFormat({
+    responseFormat,
+    response_format,
+    outputSchema,
+    output_schema
+  });
+  if (normalizedResponseFormat) {
+    payload.response_format = normalizedResponseFormat;
+  }
+  const response = await fetch(resolveApiUrl(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${ENV.forgeApiKey}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `LLM invoke failed: ${response.status} ${response.statusText} \u2013 ${errorText}`
+    );
+  }
+  return await response.json();
+}
+
+// server/routers/cargoLoads.ts
 var cargoLoadsRouter = router({
   list: protectedProcedure.input(z5.object({
     search: z5.string().optional(),
@@ -1719,6 +1907,95 @@ var cargoLoadsRouter = router({
     const result = await db.select().from(cargoLoads).where(eq5(cargoLoads.id, input.id)).limit(1);
     if (!result.length) throw new TRPCError4({ code: "NOT_FOUND" });
     return result[0];
+  }),
+  // Analisar foto de carga via IA e extrair dados automaticamente
+  analyzePhoto: protectedProcedure.input(z5.object({
+    photoBase64: z5.string()
+    // base64 da imagem
+  })).mutation(async ({ input }) => {
+    const uploaded = await cloudinaryUpload(input.photoBase64, "btree/cargo-analysis");
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `Voc\xEA \xE9 um assistente especializado em extrair dados de documentos de transporte de lenha/madeira no Brasil.
+Analise a imagem fornecida (pode ser um formul\xE1rio de recebimento, ticket de pesagem, nota fiscal ou foto da carga) e extraia os dados dispon\xEDveis.
+Retorne APENAS um JSON v\xE1lido com os campos encontrados, sem texto adicional.
+Se um campo n\xE3o estiver vis\xEDvel ou leg\xEDvel, retorne null para esse campo.`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Analise esta imagem e extraia os dados de transporte/carga. Retorne um JSON com os campos: date (data no formato YYYY-MM-DD), vehiclePlate (placa do ve\xEDculo), driverName (nome do motorista), heightM (altura em metros, apenas n\xFAmero), widthM (largura em metros, apenas n\xFAmero), lengthM (comprimento em metros, apenas n\xFAmero), volumeM3 (volume em m\xB3, apenas n\xFAmero), woodType (tipo de lenha/madeira), destination (destino/estabelecimento), invoiceNumber (n\xFAmero da nota fiscal/NF), clientName (nome do cliente/empresa recebedora), notes (observa\xE7\xF5es)."
+            },
+            {
+              type: "image_url",
+              image_url: { url: uploaded.url, detail: "high" }
+            }
+          ]
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "cargo_data",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              date: { type: ["string", "null"], description: "Data no formato YYYY-MM-DD" },
+              vehiclePlate: { type: ["string", "null"], description: "Placa do ve\xEDculo" },
+              driverName: { type: ["string", "null"], description: "Nome do motorista" },
+              heightM: { type: ["string", "null"], description: "Altura em metros" },
+              widthM: { type: ["string", "null"], description: "Largura em metros" },
+              lengthM: { type: ["string", "null"], description: "Comprimento em metros" },
+              volumeM3: { type: ["string", "null"], description: "Volume em m\xB3" },
+              woodType: { type: ["string", "null"], description: "Tipo de lenha/madeira" },
+              destination: { type: ["string", "null"], description: "Destino/estabelecimento" },
+              invoiceNumber: { type: ["string", "null"], description: "N\xFAmero da nota fiscal" },
+              clientName: { type: ["string", "null"], description: "Nome do cliente/empresa" },
+              notes: { type: ["string", "null"], description: "Observa\xE7\xF5es" }
+            },
+            required: ["date", "vehiclePlate", "driverName", "heightM", "widthM", "lengthM", "volumeM3", "woodType", "destination", "invoiceNumber", "clientName", "notes"],
+            additionalProperties: false
+          }
+        }
+      }
+    });
+    const content = response.choices?.[0]?.message?.content;
+    let extracted = {};
+    try {
+      extracted = typeof content === "string" ? JSON.parse(content) : content;
+    } catch {
+      extracted = {};
+    }
+    return {
+      photoUrl: uploaded.url,
+      extracted
+    };
+  }),
+  // Upload de foto para uma carga existente
+  uploadPhoto: protectedProcedure.input(z5.object({
+    cargoId: z5.number(),
+    photoBase64: z5.string()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const uploaded = await cloudinaryUpload(input.photoBase64, `btree/cargo/${input.cargoId}`);
+    const existing = await db.select({ photosJson: cargoLoads.photosJson }).from(cargoLoads).where(eq5(cargoLoads.id, input.cargoId)).limit(1);
+    let photos = [];
+    if (existing[0]?.photosJson) {
+      try {
+        photos = JSON.parse(existing[0].photosJson);
+      } catch {
+        photos = [];
+      }
+    }
+    photos.push(uploaded.url);
+    await db.update(cargoLoads).set({ photosJson: JSON.stringify(photos), updatedAt: /* @__PURE__ */ new Date() }).where(eq5(cargoLoads.id, input.cargoId));
+    return { url: uploaded.url, photos };
   }),
   create: protectedProcedure.input(z5.object({
     date: z5.string(),
@@ -2289,8 +2566,194 @@ var clientPortalRouter = router({
   })
 });
 
-// server/routers.ts
+// server/routers/collaboratorDocuments.ts
+init_db();
+init_schema();
 import { z as z11 } from "zod";
+import { eq as eq11, desc as desc9 } from "drizzle-orm";
+var DOC_TYPES = ["cnh", "certificado", "aso", "contrato", "rg", "cpf", "outros"];
+var collaboratorDocumentsRouter = router({
+  // Listar documentos de um colaborador
+  list: protectedProcedure.input(z11.object({ collaboratorId: z11.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return await db.select().from(collaboratorDocuments).where(eq11(collaboratorDocuments.collaboratorId, input.collaboratorId)).orderBy(desc9(collaboratorDocuments.createdAt));
+  }),
+  // Adicionar documento
+  add: protectedProcedure.input(z11.object({
+    collaboratorId: z11.number(),
+    type: z11.enum(DOC_TYPES),
+    title: z11.string().min(2),
+    fileBase64: z11.string(),
+    // base64 da imagem ou PDF
+    fileType: z11.string().optional(),
+    // "image/jpeg", "application/pdf"
+    issueDate: z11.string().optional(),
+    // ISO date string
+    expiryDate: z11.string().optional(),
+    notes: z11.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const folder = "btree/documents";
+    let fileUrl;
+    if (input.fileBase64.startsWith("data:application/pdf") || input.fileType === "application/pdf") {
+      const base64Data = input.fileBase64.replace(/^data:[^;]+;base64,/, "");
+      const CLOUD_NAME2 = "djob7pxme";
+      const UPLOAD_PRESET2 = "btree_ambiental";
+      const formData = new FormData();
+      formData.append("file", `data:application/pdf;base64,${base64Data}`);
+      formData.append("upload_preset", UPLOAD_PRESET2);
+      formData.append("folder", folder);
+      formData.append("resource_type", "raw");
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME2}/raw/upload`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) throw new Error("Falha ao fazer upload do PDF");
+      const json = await res.json();
+      fileUrl = json.secure_url;
+    } else {
+      const result = await cloudinaryUpload(input.fileBase64, folder);
+      fileUrl = result.url;
+    }
+    const [inserted] = await db.insert(collaboratorDocuments).values({
+      collaboratorId: input.collaboratorId,
+      type: input.type,
+      title: input.title,
+      fileUrl,
+      fileType: input.fileType,
+      issueDate: input.issueDate ? new Date(input.issueDate) : void 0,
+      expiryDate: input.expiryDate ? new Date(input.expiryDate) : void 0,
+      notes: input.notes,
+      uploadedBy: ctx.user.id
+    });
+    const newId = inserted.insertId;
+    const created = await db.select().from(collaboratorDocuments).where(eq11(collaboratorDocuments.id, newId)).limit(1);
+    return created[0];
+  }),
+  // Remover documento
+  remove: protectedProcedure.input(z11.object({ id: z11.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(collaboratorDocuments).where(eq11(collaboratorDocuments.id, input.id));
+    return { success: true };
+  }),
+  // Buscar colaborador com todos os dados para gerar PDF
+  getForPdf: protectedProcedure.input(z11.object({ collaboratorId: z11.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [collab] = await db.select().from(collaborators).where(eq11(collaborators.id, input.collaboratorId)).limit(1);
+    if (!collab) throw new Error("Colaborador n\xE3o encontrado");
+    const docs = await db.select().from(collaboratorDocuments).where(eq11(collaboratorDocuments.collaboratorId, input.collaboratorId)).orderBy(desc9(collaboratorDocuments.createdAt));
+    return { collaborator: collab, documents: docs };
+  })
+});
+
+// server/routers/equipmentDetail.ts
+import { z as z12 } from "zod";
+init_db();
+init_schema();
+import { eq as eq12, desc as desc10 } from "drizzle-orm";
+var equipmentDetailRouter = router({
+  // Buscar equipamento por ID
+  getById: protectedProcedure.input(z12.object({ id: z12.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const result = await db.select().from(equipment).where(eq12(equipment.id, input.id)).limit(1);
+    return result[0] || null;
+  }),
+  // Listar fotos do equipamento
+  listPhotos: protectedProcedure.input(z12.object({ equipmentId: z12.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return db.select().from(equipmentPhotos).where(eq12(equipmentPhotos.equipmentId, input.equipmentId)).orderBy(desc10(equipmentPhotos.createdAt));
+  }),
+  // Adicionar foto ao equipamento
+  addPhoto: protectedProcedure.input(z12.object({
+    equipmentId: z12.number(),
+    photoBase64: z12.string(),
+    caption: z12.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const result = await cloudinaryUpload(input.photoBase64, `btree/equipment/${input.equipmentId}`);
+    const [ins] = await db.insert(equipmentPhotos).values({
+      equipmentId: input.equipmentId,
+      photoUrl: result.url,
+      caption: input.caption,
+      uploadedBy: ctx.user.id
+    });
+    return { id: ins.insertId, url: result.url };
+  }),
+  // Remover foto
+  removePhoto: protectedProcedure.input(z12.object({ id: z12.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(equipmentPhotos).where(eq12(equipmentPhotos.id, input.id));
+    return { success: true };
+  }),
+  // Listar histórico de manutenções
+  listMaintenance: protectedProcedure.input(z12.object({ equipmentId: z12.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return db.select().from(equipmentMaintenance).where(eq12(equipmentMaintenance.equipmentId, input.equipmentId)).orderBy(desc10(equipmentMaintenance.performedAt));
+  }),
+  // Registrar manutenção
+  addMaintenance: protectedProcedure.input(z12.object({
+    equipmentId: z12.number(),
+    type: z12.enum(["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]),
+    description: z12.string().min(3),
+    performedBy: z12.string().optional(),
+    cost: z12.string().optional(),
+    nextMaintenanceDate: z12.string().optional(),
+    // ISO date string
+    performedAt: z12.string(),
+    // ISO date string
+    photoBase64: z12.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    let photosJson;
+    if (input.photoBase64) {
+      const result = await cloudinaryUpload(input.photoBase64, `btree/maintenance/${input.equipmentId}`);
+      photosJson = JSON.stringify([result.url]);
+    }
+    const [ins] = await db.insert(equipmentMaintenance).values({
+      equipmentId: input.equipmentId,
+      type: input.type,
+      description: input.description,
+      performedBy: input.performedBy,
+      cost: input.cost,
+      nextMaintenanceDate: input.nextMaintenanceDate ? new Date(input.nextMaintenanceDate) : void 0,
+      performedAt: new Date(input.performedAt),
+      photosJson,
+      registeredBy: ctx.user.id
+    });
+    return { id: ins.insertId };
+  }),
+  // Remover manutenção
+  removeMaintenance: protectedProcedure.input(z12.object({ id: z12.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(equipmentMaintenance).where(eq12(equipmentMaintenance.id, input.id));
+    return { success: true };
+  }),
+  // Atualizar foto principal do equipamento
+  updateMainPhoto: protectedProcedure.input(z12.object({
+    id: z12.number(),
+    photoBase64: z12.string()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const result = await cloudinaryUpload(input.photoBase64, `btree/equipment/main`);
+    await db.update(equipment).set({ imageUrl: result.url }).where(eq12(equipment.id, input.id));
+    return { url: result.url };
+  })
+});
+
+// server/routers.ts
+import { z as z13 } from "zod";
 init_db();
 
 // server/email.ts
@@ -2392,10 +2855,10 @@ var appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z11.object({
-      name: z11.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z11.string().email("Email inv\xE1lido"),
-      password: z11.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z13.object({
+      name: z13.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z13.string().email("Email inv\xE1lido"),
+      password: z13.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -2414,9 +2877,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z11.object({
-      email: z11.string().email("Email inv\xE1lido"),
-      password: z11.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z13.object({
+      email: z13.string().email("Email inv\xE1lido"),
+      password: z13.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -2436,11 +2899,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z11.object({
-      seedKey: z11.string(),
-      email: z11.string().email(),
-      name: z11.string(),
-      password: z11.string().min(4)
+    seedAdmin: publicProcedure.input(z13.object({
+      seedKey: z13.string(),
+      email: z13.string().email(),
+      name: z13.string(),
+      password: z13.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -2450,9 +2913,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z11.object({
-      email: z11.string().email("Email inv\xE1lido"),
-      origin: z11.string().url().optional()
+    forgotPassword: publicProcedure.input(z13.object({
+      email: z13.string().email("Email inv\xE1lido"),
+      origin: z13.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -2466,9 +2929,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z11.object({
-      token: z11.string().min(1),
-      password: z11.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z13.object({
+      token: z13.string().min(1),
+      password: z13.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -2477,10 +2940,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq11 } = await import("drizzle-orm");
+      const { eq: eq13 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users2).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq11(users2.id, resetToken.userId));
+      await dbInstance.update(users2).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq13(users2.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -2500,7 +2963,9 @@ var appRouter = router({
   vehicleRecords: vehicleRecordsRouter,
   parts: partsRouter,
   clients: clientsRouter,
-  clientPortal: clientPortalRouter
+  clientPortal: clientPortalRouter,
+  collaboratorDocuments: collaboratorDocumentsRouter,
+  equipmentDetail: equipmentDetailRouter
   // TODO: add feature routers here, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>

@@ -396,3 +396,97 @@
 - [x] Corrigir `client/src/main.tsx`: redirecionamento de não-autenticado usa `/login` diretamente
 - [x] Verificar todos os usos de `getLoginUrl` nos componentes Landing.tsx, useAuth.ts, DashboardLayout.tsx
 
+
+---
+
+## 🚀 NOVAS FUNCIONALIDADES — SPRINT 08/03/2026
+
+### 🔐 LOGIN RÁPIDO (PIN)
+- [ ] Após primeiro login bem-sucedido, oferecer opção de criar PIN de 6 dígitos
+- [ ] Salvar PIN criptografado no localStorage vinculado ao e-mail
+- [ ] Tela de login rápido: mostrar nome/avatar do usuário + campo PIN
+- [ ] Botão "Usar outra conta" para voltar ao login completo
+- [ ] Suporte a Web Authentication API (biometria nativa do dispositivo) como alternativa ao PIN
+
+### 👷 COLABORADORES — CORREÇÕES E MELHORIAS
+- [ ] Corrigir captura de foto pela câmera no cadastro (bug: erro ao salvar)
+- [ ] Corrigir upload de foto da galeria (bug: erro ao salvar)
+- [ ] Adicionar aba "Documentos & Certificados" no perfil do colaborador
+- [ ] Upload de CNH (com data de validade e categoria)
+- [ ] Upload de certificados de cursos (nome do curso, data, validade)
+- [ ] Alertas de documentos vencendo (CNH, certificados)
+- [ ] Geração de PDF com ficha completa do colaborador (dados + documentos)
+
+### 🖥️ NAVEGAÇÃO — BOTÃO DE MENU
+- [ ] Botão "Voltar ao Menu" fixo em todas as páginas internas (não apenas na home)
+- [ ] Ou: manter sidebar sempre visível / botão de hambúrguer sempre acessível no mobile
+
+### ⚡ AÇÕES RÁPIDAS
+- [ ] Corrigir botões de ação rápida no dashboard (Nova Carga, Registrar Abastecimento, Registrar Presença, Novo Equipamento)
+
+### 🚜 EQUIPAMENTOS — MELHORIAS
+- [ ] Upload de fotos do equipamento (múltiplas fotos)
+- [ ] Upload de foto da placa (quando houver)
+- [ ] Geração de ficha PDF do equipamento (dados + fotos)
+- [ ] Histórico de manutenções por equipamento (data, tipo, descrição, mecânico)
+- [ ] Histórico de limpeza por equipamento
+- [ ] Histórico de afiação (motosserras)
+
+### 🚗 MÓDULO DE VEÍCULOS (separado de equipamentos)
+- [ ] Cadastro de veículos (placa, modelo, ano, proprietário)
+- [ ] Upload de documentos do veículo (CRLV, seguro, etc.)
+- [ ] Alertas de documentos vencendo
+- [ ] Histórico de manutenções do veículo
+
+### 📦 CARGAS — LEITURA AUTOMÁTICA VIA IA
+- [ ] Upload de foto do formulário/ticket de pesagem
+- [ ] IA extrai automaticamente: data, placa, motorista, tipo de lenha, altura, largura, comprimento, volume, NF, cliente
+- [ ] Campos pré-preenchidos para revisão antes de salvar
+- [ ] Suporte aos dois formatos vistos: "Formulário de Recebimento de Lenha" e "Ticket de Pesagem"
+
+### 📊 RELATÓRIOS PDF PROFISSIONAIS
+- [ ] Template PDF com logo BTREE no cabeçalho
+- [ ] Informações da empresa e site no rodapé
+- [ ] QR code para acesso rápido ao site btreeambiental.com
+- [ ] Relatório de cargas por período
+- [ ] Relatório de cargas por cliente
+- [ ] Acompanhamento consolidado de todas as cargas
+- [ ] Relatório de colaboradores
+- [ ] Relatório de equipamentos
+
+
+---
+
+## 🚀 MELHORIAS IMPLEMENTADAS (08/03/2026)
+
+### Login
+- [x] Login rápido com PIN de 4 dígitos (salvo localmente no dispositivo)
+
+### Cadastro de Colaborador
+- [x] Corrigir captura de foto direta pela câmera (suporte a câmera + galeria)
+- [x] Integrar Cloudinary (cloud: djob7pxme) para upload de fotos de colaboradores
+- [x] Aba de documentos/certificados no colaborador (CNH, cursos, certificados)
+- [x] Geração de PDF com todos os dados do colaborador (ficha completa)
+- [x] Botão "Ficha" na listagem de colaboradores
+
+### Dashboard
+- [x] Botão de menu sempre visível (não só no mobile)
+- [x] Ações rápidas do dashboard com navegação funcional
+
+### Equipamentos
+- [x] Fotos do equipamento e da placa (upload via Cloudinary)
+- [x] Ficha do equipamento em PDF
+- [x] Histórico de manutenções, limpeza, afiação
+- [x] Botão "Ficha" na listagem de equipamentos
+
+### Controle de Cargas
+- [x] Análise automática de fotos de cargas via IA (extrai dados do formulário/ticket)
+- [x] Acompanhamento de cargas por cliente (vista agrupada)
+- [x] Relatórios PDF profissionais com logo BTREE, cabeçalho e rodapé
+- [x] Filtros por cliente e status
+- [x] Fotos vinculadas às cargas
+
+### Pendente (próxima versão)
+- [ ] Aba de veículos com documentos (CNH, CRLV)
+- [ ] Histórico de manutenções de veículos
+- [ ] Módulo de abastecimento por horímetro

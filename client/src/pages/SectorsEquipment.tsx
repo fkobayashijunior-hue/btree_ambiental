@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Building2, Plus, Pencil, Trash2, Wrench, Tractor, Search,
-  CheckCircle2, AlertTriangle, XCircle, Layers
+  CheckCircle2, AlertTriangle, XCircle, Layers, FileText
 } from "lucide-react";
 
 const STATUS_CONFIG = {
@@ -26,6 +27,7 @@ const SECTOR_COLORS = [
 
 export default function SectorsEquipment() {
   const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
 
   // Setores state
   const [sectorOpen, setSectorOpen] = useState(false);
@@ -373,6 +375,9 @@ export default function SectorsEquipment() {
                           <div className="flex gap-1">
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" onClick={() => openEditEquip(e)}>
                               <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-500 hover:text-emerald-700" title="Ficha do Equipamento" onClick={() => setLocation(`/equipamento/${e.id}`)}>
+                              <FileText className="h-3.5 w-3.5" />
                             </Button>
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
                               onClick={() => { if (confirm(`Remover "${e.name}"?`)) deleteEquip.mutate({ id: e.id }); }}>

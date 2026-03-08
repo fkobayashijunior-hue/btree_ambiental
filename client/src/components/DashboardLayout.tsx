@@ -251,20 +251,27 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset>
-        {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
-                  </span>
-                </div>
+        <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="flex items-center gap-2">
+            {isMobile && <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />}
+            {!isMobile && isCollapsed && (
+              <button
+                onClick={toggleSidebar}
+                className="h-9 w-9 flex items-center justify-center rounded-lg border bg-background hover:bg-accent transition-colors"
+                aria-label="Abrir menu"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </button>
+            )}
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-1">
+                <span className="tracking-tight text-foreground font-medium">
+                  {activeMenuItem?.label ?? "BTREE Ambiental"}
+                </span>
               </div>
             </div>
           </div>
-        )}
+        </div>
         <main className="flex-1 p-4">{children}</main>
       </SidebarInset>
     </>

@@ -11,6 +11,8 @@ import { vehicleRecordsRouter } from "./routers/vehicleRecords";
 import { partsRouter } from "./routers/parts";
 import { clientsRouter } from "./routers/clientsRouter";
 import { clientPortalRouter } from "./routers/clientPortal";
+import { collaboratorDocumentsRouter } from "./routers/collaboratorDocuments";
+import { equipmentDetailRouter } from "./routers/equipmentDetail";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { sdk } from "./_core/sdk";
@@ -167,6 +169,8 @@ export const appRouter = router({
   parts: partsRouter,
   clients: clientsRouter,
   clientPortal: clientPortalRouter,
+  collaboratorDocuments: collaboratorDocumentsRouter,
+  equipmentDetail: equipmentDetailRouter,
 
   // TODO: add feature routers here, e.g.
   // todo: router({

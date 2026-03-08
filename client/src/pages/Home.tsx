@@ -1,8 +1,9 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Truck, Package, Fuel, Users, TrendingUp, Calendar } from "lucide-react";
-
+import { useLocation } from "wouter";
 export default function Home() {
+  const [, setLocation] = useLocation();
   // Dados de exemplo para o dashboard
   const stats = [
     {
@@ -161,21 +162,21 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <button className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+              <button onClick={() => setLocation("/cargas")} className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
                 <Package className="h-8 w-8 text-primary mb-2" />
                 <span className="text-sm font-medium">Nova Carga</span>
               </button>
-              <button className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+              <button onClick={() => setLocation("/maquinas")} className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
                 <Fuel className="h-8 w-8 text-primary mb-2" />
-                <span className="text-sm font-medium">Registrar Abastecimento</span>
+                <span className="text-sm font-medium">Horas Máquinas</span>
               </button>
-              <button className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+              <button onClick={() => setLocation("/presenca")} className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
                 <Users className="h-8 w-8 text-primary mb-2" />
                 <span className="text-sm font-medium">Registrar Presença</span>
               </button>
-              <button className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+              <button onClick={() => setLocation("/setores")} className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
                 <Truck className="h-8 w-8 text-primary mb-2" />
-                <span className="text-sm font-medium">Novo Equipamento</span>
+                <span className="text-sm font-medium">Setores & Equipamentos</span>
               </button>
             </div>
           </CardContent>

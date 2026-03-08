@@ -21,6 +21,8 @@ import VehicleControlPage from "./pages/VehicleControlPage";
 import PartsPage from "./pages/PartsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ClientPortal from "./pages/ClientPortal";
+import CollaboratorDetail from "./pages/CollaboratorDetail";
+import EquipmentDetail from "./pages/EquipmentDetail";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -30,6 +32,8 @@ function Router() {
       <Route path={"/forgot-password"} component={ForgotPassword} />
       <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/colaboradores"} component={Collaborators} />
+      <Route path={"/colaboradores/:id"} component={CollaboratorDetail} />
+      <Route path={"/equipamento/:id"} component={EquipmentDetail} />
       <Route path={"/presenca"} component={BiometricAttendancePage} />
       <Route path={"/presencas"} component={AttendanceList} />
       <Route path={"/setores"} component={SectorsEquipment} />

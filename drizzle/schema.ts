@@ -484,3 +484,51 @@ export const clientPayments = mysqlTable("client_payments", {
 });
 export type ClientPayment = typeof clientPayments.$inferSelect;
 export type InsertClientPayment = typeof clientPayments.$inferInsert;
+
+// ===== DOCUMENTOS & CERTIFICADOS DE COLABORADORES =====
+export const collaboratorDocuments = mysqlTable("collaborator_documents", {
+  id: int("id").autoincrement().primaryKey(),
+  collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
+  type: mysqlEnum("type", [
+    "cnh", "certificado", "aso", "contrato", "rg", "cpf", "outros"
+  ]).notNull().default("outros"),
+  title: varchar("title", { length: 255 }).notNull(), // ex: "CNH Categoria B", "Certificado NR10"
+  fileUrl: varchar("file_url", { length: 1000 }).notNull(), // URL Cloudinary
+  fileType: varchar("file_type", { length: 50 }), // "image/jpeg", "application/pdf"
+  issueDate: timestamp("issue_date"), // data de emissão
+  expiryDate: timestamp("expiry_date"), // data de validade (opcional)
+  notes: text("notes"),
+  uploadedBy: int("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type CollaboratorDocument = typeof collaboratorDocuments.$inferSelect;
+export type InsertCollaboratorDocument = typeof collaboratorDocuments.$inferInsert;
+
+// ===== FOTOS DE EQUIPAMENTOS =====
+export const equipmentPhotos = mysqlTable("equipment_photos", {
+  id: int("id").autoincrement().primaryKey(),
+  equipmentId: int("equipment_id").notNull(), // referência ao equipamento (setores/equipamentos)
+  photoUrl: varchar("photo_url", { length: 1000 }).notNull(),
+  caption: varchar("caption", { length: 255 }), // ex: "Foto da placa", "Vista lateral"
+  uploadedBy: int("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type EquipmentPhoto = typeof equipmentPhotos.$inferSelect;
+export type InsertEquipmentPhoto = typeof equipmentPhotos.$inferInsert;
+
+// ===== HISTÓRICO DE MANUTENÇÕES DE EQUIPAMENTOS =====
+export const equipmentMaintenance = mysqlTable("equipment_maintenance", {
+  id: int("id").autoincrement().primaryKey(),
+  equipmentId: int("equipment_id").notNull(),
+  type: mysqlEnum("type", ["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]).notNull().default("manutencao"),
+  description: text("description").notNull(),
+  performedBy: varchar("performed_by", { length: 255 }), // nome do responsável
+  cost: varchar("cost", { length: 20 }), // custo em R$
+  nextMaintenanceDate: timestamp("next_maintenance_date"), // próxima manutenção prevista
+  photosJson: text("photos_json"), // JSON array de URLs
+  registeredBy: int("registered_by").references(() => users.id),
+  performedAt: timestamp("performed_at").notNull(), // data da manutenção
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type EquipmentMaintenance = typeof equipmentMaintenance.$inferSelect;
+export type InsertEquipmentMaintenance = typeof equipmentMaintenance.$inferInsert;

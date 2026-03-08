@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getDb, updateUserPasswordByEmail } from "../db";
 import { collaborators, biometricAttendance, users } from "../../drizzle/schema";
 import { eq, desc, and, like, or } from "drizzle-orm";
-import { storagePut } from "../storage";
+import { cloudinaryUpload } from "../cloudinary";
 import bcrypt from "bcryptjs";
 
 const collaboratorRoles = [
@@ -94,12 +94,9 @@ export const collaboratorsRouter = router({
 
       let photoUrl: string | undefined;
 
-      // Upload da foto para S3 se fornecida
+      // Upload da foto para Cloudinary se fornecida
       if (input.photoBase64) {
-        const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
-        const buffer = Buffer.from(base64Data, "base64");
-        const fileName = `collaborators/${Date.now()}-${input.name.replace(/\s+/g, "-").toLowerCase()}.jpg`;
-        const result = await storagePut(fileName, buffer, "image/jpeg");
+        const result = await cloudinaryUpload(input.photoBase64, "btree/collaborators");
         photoUrl = result.url;
       }
 
@@ -176,10 +173,7 @@ export const collaboratorsRouter = router({
 
       // Upload de nova foto se fornecida
       if (photoBase64) {
-        const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, "");
-        const buffer = Buffer.from(base64Data, "base64");
-        const fileName = `collaborators/${Date.now()}-${id}.jpg`;
-        const result = await storagePut(fileName, buffer, "image/jpeg");
+        const result = await cloudinaryUpload(photoBase64, "btree/collaborators");
         updateData.photoUrl = result.url;
       }
 
@@ -218,10 +212,7 @@ export const collaboratorsRouter = router({
       const updateData: any = { faceDescriptor: input.faceDescriptor };
 
       if (input.photoBase64) {
-        const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
-        const buffer = Buffer.from(base64Data, "base64");
-        const fileName = `collaborators/face-${Date.now()}-${input.id}.jpg`;
-        const result = await storagePut(fileName, buffer, "image/jpeg");
+        const result = await cloudinaryUpload(input.photoBase64, "btree/faces");
         updateData.photoUrl = result.url;
       }
 
@@ -246,10 +237,7 @@ export const collaboratorsRouter = router({
 
       let photoUrl: string | undefined;
       if (input.photoBase64) {
-        const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
-        const buffer = Buffer.from(base64Data, "base64");
-        const fileName = `attendance/${Date.now()}-${input.collaboratorId}.jpg`;
-        const result = await storagePut(fileName, buffer, "image/jpeg");
+        const result = await cloudinaryUpload(input.photoBase64, "btree/attendance");
         photoUrl = result.url;
       }
 

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,31 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { UserPlus, Search, Camera, Users, Eye, EyeOff, Lock, ChevronDown, ChevronUp } from "lucide-react";
+import { UserPlus, Search, Camera, Users, Eye, EyeOff, Lock, ChevronDown, ChevronUp, ImagePlus, X, FileText } from "lucide-react";
+
+// Comprime imagem para máx 800px e qualidade 0.8 (reduz tamanho do base64)
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 800;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 
 const ROLE_LABELS: Record<string, string> = {
   administrativo: "Administrativo",
@@ -62,6 +87,7 @@ function SectionTitle({ icon, title, open, onToggle }: { icon: React.ReactNode; 
 }
 
 export default function Collaborators() {
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -69,6 +95,7 @@ export default function Collaborators() {
   const [showPassword, setShowPassword] = useState(false);
   const [openSections, setOpenSections] = useState({ pessoal: true, endereco: false, epi: false });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
   const { data: collaborators = [], isLoading } = trpc.collaborators.list.useQuery({
@@ -96,14 +123,16 @@ export default function Collaborators() {
     onError: (e) => toast.error(e.message),
   });
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setForm(f => ({ ...f, photoBase64: ev.target?.result as string }));
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file);
+      setForm(f => ({ ...f, photoBase64: compressed }));
+    } catch {
+      toast.error("Erro ao processar imagem");
+    }
+    e.target.value = "";
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -205,7 +234,7 @@ export default function Collaborators() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {collaborators.map((c: any) => (
-            <Card key={c.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => openEdit(c)}>
+            <Card key={c.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   {c.photoUrl ? (
@@ -222,6 +251,20 @@ export default function Collaborators() {
                       {ROLE_LABELS[c.role] || c.role}
                     </Badge>
                   </div>
+                </div>
+                <div className="flex gap-2 mt-3 pt-3 border-t">
+                  <Button
+                    variant="outline" size="sm" className="flex-1 text-xs"
+                    onClick={() => openEdit(c)}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    size="sm" className="flex-1 gap-1 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                    onClick={() => setLocation(`/colaboradores/${c.id}`)}
+                  >
+                    <FileText className="h-3 w-3" /> Ficha
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -251,21 +294,33 @@ export default function Collaborators() {
               <div className="space-y-4 px-1">
                 {/* Foto */}
                 <div className="flex items-center gap-4">
-                  <div
-                    className="w-20 h-20 rounded-full border-2 border-dashed border-emerald-300 flex items-center justify-center overflow-hidden cursor-pointer bg-emerald-50 hover:bg-emerald-100 transition-colors flex-shrink-0"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {form.photoBase64 ? (
-                      <img src={form.photoBase64} alt="Foto" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center">
-                        <Camera className="h-7 w-7 text-emerald-400 mx-auto" />
-                        <span className="text-xs text-emerald-500 mt-0.5 block">Foto</span>
-                      </div>
+                  <div className="relative flex-shrink-0">
+                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-emerald-300 flex items-center justify-center overflow-hidden bg-emerald-50">
+                      {form.photoBase64 ? (
+                        <img src={form.photoBase64} alt="Foto" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-center">
+                          <Camera className="h-7 w-7 text-emerald-400 mx-auto" />
+                          <span className="text-xs text-emerald-500 mt-0.5 block">Foto</span>
+                        </div>
+                      )}
+                    </div>
+                    {form.photoBase64 && (
+                      <button type="button" onClick={() => setForm(f => ({ ...f, photoBase64: "" }))} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600">
+                        <X className="h-3 w-3" />
+                      </button>
                     )}
                   </div>
+                  <div className="flex flex-col gap-2">
+                    <Button type="button" variant="outline" size="sm" className="gap-2 text-xs" onClick={() => cameraInputRef.current?.click()}>
+                      <Camera className="h-3.5 w-3.5" /> Tirar Foto
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="gap-2 text-xs" onClick={() => fileInputRef.current?.click()}>
+                      <ImagePlus className="h-3.5 w-3.5" /> Galeria
+                    </Button>
+                  </div>
                   <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-                  <p className="text-xs text-gray-500">Clique no círculo para adicionar foto do colaborador</p>
+                  <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
                 </div>
 
                 <div>
