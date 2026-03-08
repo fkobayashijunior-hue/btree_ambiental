@@ -6,11 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2 } from "lucide-react";
+import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Copy, Globe } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 type FormData = {
   name: string; document: string; email: string; phone: string;
@@ -31,6 +35,7 @@ export default function ClientsPage() {
   const [form, setForm] = useState<FormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteName, setDeleteName] = useState("");
+  const [accessCodeDialog, setAccessCodeDialog] = useState<{ clientName: string; code: string } | null>(null);
 
   const utils = trpc.useUtils();
   const { data: clientsList = [], isLoading } = trpc.clients.list.useQuery({ search: search || undefined });
@@ -48,6 +53,14 @@ export default function ClientsPage() {
   const deleteMutation = trpc.clients.delete.useMutation({
     onSuccess: () => { toast.success("Cliente removido!"); utils.clients.list.invalidate(); setDeleteId(null); },
     onError: (e) => toast.error(e.message),
+  });
+
+  const generateAccessMutation = trpc.clientPortal.generateAccessCode.useMutation({
+    onSuccess: (data, variables) => {
+      const client = clientsList.find((c: any) => c.id === variables.clientId);
+      setAccessCodeDialog({ clientName: client?.name || "Cliente", code: data.accessCode });
+    },
+    onError: (e) => toast.error(e.message || "Erro ao gerar código de acesso"),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -72,6 +85,10 @@ export default function ClientsPage() {
     setIsOpen(true);
   };
 
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code).then(() => toast.success("Código copiado!")).catch(() => toast.error("Não foi possível copiar"));
+  };
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -86,6 +103,18 @@ export default function ClientsPage() {
         <Button onClick={() => { setEditId(null); setForm(emptyForm); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
           <Plus className="h-4 w-4" /> Novo Cliente
         </Button>
+      </div>
+
+      {/* Informativo sobre Portal do Cliente */}
+      <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+        <Globe className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="font-medium text-blue-800 text-sm">Portal do Cliente</p>
+          <p className="text-xs text-blue-600 mt-0.5">
+            Cada cliente pode acessar o portal em <strong>/client-portal</strong> usando um código de acesso.
+            Clique no botão <strong>🔑 Gerar Código</strong> ao lado de cada cliente para criar o código de acesso.
+          </p>
+        </div>
       </div>
 
       <div className="relative max-w-md">
@@ -106,13 +135,13 @@ export default function ClientsPage() {
           ) : (
             <div className="space-y-3">
               {clientsList.map((c: any) => (
-                <div key={c.id} className="flex items-start justify-between p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start gap-3">
+                <div key={c.id} className="flex items-start justify-between p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
                       <span className="text-sm font-bold text-emerald-700">{c.name[0].toUpperCase()}</span>
                     </div>
-                    <div>
-                      <p className="font-semibold text-gray-800">{c.name}</p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-800 truncate">{c.name}</p>
                       {c.document && <p className="text-xs text-gray-400">CPF/CNPJ: {c.document}</p>}
                       <div className="flex gap-3 mt-1 flex-wrap">
                         {c.phone && <span className="text-xs text-gray-500 flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
@@ -121,7 +150,18 @@ export default function ClientsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => generateAccessMutation.mutate({ clientId: c.id })}
+                      disabled={generateAccessMutation.isPending}
+                      className="text-blue-700 border-blue-200 hover:bg-blue-50 text-xs gap-1"
+                      title="Gerar código de acesso ao Portal do Cliente"
+                    >
+                      <Key className="h-3 w-3" />
+                      <span className="hidden sm:inline">Código Portal</span>
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="text-emerald-700 hover:bg-emerald-50">
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -136,6 +176,47 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
 
+      {/* Dialog: Código de Acesso Gerado */}
+      <Dialog open={!!accessCodeDialog} onOpenChange={() => setAccessCodeDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-blue-600" /> Código de Acesso Gerado
+            </DialogTitle>
+            <DialogDescription>
+              Compartilhe este código com <strong>{accessCodeDialog?.clientName}</strong> para acessar o Portal do Cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center justify-center gap-3 p-6 bg-blue-50 rounded-xl border border-blue-200">
+              <span className="text-4xl font-bold tracking-widest text-blue-800 font-mono">
+                {accessCodeDialog?.code}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => accessCodeDialog && copyCode(accessCodeDialog.code)}
+                className="text-blue-600 hover:bg-blue-100"
+              >
+                <Copy className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="text-xs text-gray-500 space-y-1">
+              <p>• O cliente acessa em: <strong>/client-portal</strong></p>
+              <p>• O código é válido até ser substituído por um novo</p>
+              <p>• Guarde este código em local seguro</p>
+            </div>
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => accessCodeDialog && copyCode(accessCodeDialog.code)}
+            >
+              <Copy className="h-4 w-4 mr-2" /> Copiar Código
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sheet: Formulário de Cliente */}
       <Sheet open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) { setEditId(null); setForm(emptyForm); } }}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader className="mb-4"><SheetTitle className="text-emerald-800">{editId ? "Editar Cliente" : "Novo Cliente"}</SheetTitle></SheetHeader>
@@ -168,6 +249,7 @@ export default function ClientsPage() {
         </SheetContent>
       </Sheet>
 
+      {/* AlertDialog: Confirmar exclusão */}
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => { if (!v) setDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>

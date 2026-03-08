@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,9 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Camera, CheckCircle, XCircle, MapPin, Clock, Users, AlertTriangle, RefreshCw } from "lucide-react";
+import { Camera, CheckCircle, XCircle, MapPin, Clock, Users, AlertTriangle, RefreshCw, UserPlus, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useLocation } from "wouter";
 
 const ROLE_LABELS: Record<string, string> = {
   administrativo: "Administrativo", encarregado: "Encarregado",
@@ -17,21 +18,56 @@ const ROLE_LABELS: Record<string, string> = {
   motorista: "Motorista", terceirizado: "Terceirizado",
 };
 
+// Carrega o face-api.js de forma segura (sem appendChild em React)
+let faceApiLoadPromise: Promise<void> | null = null;
+
+function loadFaceApiScript(): Promise<void> {
+  if (faceApiLoadPromise) return faceApiLoadPromise;
+  
+  faceApiLoadPromise = new Promise((resolve, reject) => {
+    // Se já está carregado
+    if ((window as any).faceapi) {
+      resolve();
+      return;
+    }
+    
+    // Verificar se o script já existe no DOM
+    const existingScript = document.querySelector('script[data-faceapi]');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve());
+      existingScript.addEventListener('error', reject);
+      return;
+    }
+    
+    const script = document.createElement("script");
+    script.setAttribute('data-faceapi', 'true');
+    script.src = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = reject;
+    document.body.appendChild(script); // usar body em vez de head
+  });
+  
+  return faceApiLoadPromise;
+}
+
 export default function BiometricAttendancePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
-  const [location, setLocation] = useState("");
+  const [locationText, setLocationText] = useState("");
   const [gpsCoords, setGpsCoords] = useState<{ lat: string; lng: string } | null>(null);
   const [recognizing, setRecognizing] = useState(false);
   const [recognized, setRecognized] = useState<any | null>(null);
   const [faceApiLoaded, setFaceApiLoaded] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
 
   const { data: faceDescriptors = [] } = trpc.collaborators.getFaceDescriptors.useQuery();
-  const { data: todayAttendance = [], refetch: refetchAttendance } = trpc.collaborators.listAttendance.useQuery();
+  const { data: todayAttendance = [] } = trpc.collaborators.listAttendance.useQuery();
 
   const registerMutation = trpc.collaborators.registerAttendance.useMutation({
     onSuccess: () => {
@@ -43,36 +79,31 @@ export default function BiometricAttendancePage() {
     onError: (e) => toast.error(e.message),
   });
 
-  // Carregar face-api.js
+  // Carregar face-api.js de forma segura
   useEffect(() => {
-    const loadFaceApi = async () => {
-      if ((window as any).faceapi) {
-        setFaceApiLoaded(true);
-        return;
-      }
+    const init = async () => {
       setLoadingModels(true);
-      const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js";
-      script.onload = async () => {
+      setLoadError(null);
+      try {
+        await loadFaceApiScript();
         const faceapi = (window as any).faceapi;
+        if (!faceapi) throw new Error("face-api.js não carregou");
+        
         const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/";
-        try {
-          await Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-          ]);
-          setFaceApiLoaded(true);
-          setLoadingModels(false);
-        } catch (e) {
-          console.error("Erro ao carregar modelos:", e);
-          setLoadingModels(false);
-          toast.error("Erro ao carregar modelos de reconhecimento facial");
-        }
-      };
-      document.head.appendChild(script);
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        ]);
+        setFaceApiLoaded(true);
+      } catch (e) {
+        console.error("Erro ao carregar modelos:", e);
+        setLoadError("Erro ao carregar IA de reconhecimento. Verifique a conexão.");
+      } finally {
+        setLoadingModels(false);
+      }
     };
-    loadFaceApi();
+    init();
   }, []);
 
   // Obter GPS
@@ -91,15 +122,16 @@ export default function BiometricAttendancePage() {
   const startCamera = async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: 640, height: 480 }
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }
       });
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        await videoRef.current.play().catch(() => {});
       }
       setStream(mediaStream);
       setCameraActive(true);
     } catch (e) {
-      toast.error("Não foi possível acessar a câmera");
+      toast.error("Não foi possível acessar a câmera. Verifique as permissões.");
     }
   };
 
@@ -130,33 +162,27 @@ export default function BiometricAttendancePage() {
 
       // Capturar foto
       const canvas = canvasRef.current;
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      canvas.width = videoRef.current.videoWidth || 640;
+      canvas.height = videoRef.current.videoHeight || 480;
       canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
       const photoBase64 = canvas.toDataURL("image/jpeg", 0.8);
 
+      // Verificar se há descritores cadastrados
+      const validDescriptors = faceDescriptors.filter(c => c.faceDescriptor);
+      if (validDescriptors.length === 0) {
+        toast.info("Nenhum colaborador com biometria cadastrada. Cadastre a biometria primeiro na ficha do colaborador.");
+        setRecognizing(false);
+        return;
+      }
+
       // Comparar com descritores cadastrados
-      if (faceDescriptors.length === 0) {
-        toast.info("Nenhum colaborador com biometria cadastrada. Cadastre a biometria primeiro.");
-        setRecognizing(false);
-        return;
-      }
-
-      const labeledDescriptors = faceDescriptors
-        .filter(c => c.faceDescriptor)
-        .map(c => {
-          const descriptorArray = JSON.parse(c.faceDescriptor!);
-          return new faceapi.LabeledFaceDescriptors(
-            String(c.id),
-            [new Float32Array(descriptorArray)]
-          );
-        });
-
-      if (labeledDescriptors.length === 0) {
-        toast.info("Nenhum colaborador com biometria cadastrada.");
-        setRecognizing(false);
-        return;
-      }
+      const labeledDescriptors = validDescriptors.map(c => {
+        const descriptorArray = JSON.parse(c.faceDescriptor!);
+        return new faceapi.LabeledFaceDescriptors(
+          String(c.id),
+          [new Float32Array(descriptorArray)]
+        );
+      });
 
       const matcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
       const match = matcher.findBestMatch(detection.descriptor);
@@ -170,11 +196,7 @@ export default function BiometricAttendancePage() {
       const collaborator = faceDescriptors.find(c => String(c.id) === match.label);
       const confidence = ((1 - match.distance) * 100).toFixed(1);
 
-      setRecognized({
-        ...collaborator,
-        confidence,
-        photoBase64,
-      });
+      setRecognized({ ...collaborator, confidence, photoBase64 });
 
     } catch (e) {
       console.error(e);
@@ -187,7 +209,7 @@ export default function BiometricAttendancePage() {
     if (!recognized) return;
     registerMutation.mutate({
       collaboratorId: recognized.id,
-      location: location || undefined,
+      location: locationText || undefined,
       latitude: gpsCoords?.lat,
       longitude: gpsCoords?.lng,
       photoBase64: recognized.photoBase64,
@@ -203,6 +225,8 @@ export default function BiometricAttendancePage() {
     return format(d, "yyyy-MM-dd") === todayStr;
   });
 
+  const hasBiometricCollaborators = faceDescriptors.length > 0;
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div>
@@ -211,6 +235,45 @@ export default function BiometricAttendancePage() {
         </h1>
         <p className="text-gray-500 text-sm mt-1">Reconhecimento facial para registro de ponto</p>
       </div>
+
+      {/* Aviso: sem biometria cadastrada */}
+      {!hasBiometricCollaborators && (
+        <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
+          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium text-amber-800 text-sm">Nenhuma biometria cadastrada</p>
+            <p className="text-xs text-amber-700 mt-1">
+              Para usar o reconhecimento facial, acesse a ficha de cada colaborador e cadastre a biometria facial na aba "Biometria".
+            </p>
+            <Button
+              size="sm"
+              className="mt-2 bg-amber-600 hover:bg-amber-700 text-white text-xs h-8"
+              onClick={() => setLocation("/colaboradores")}
+            >
+              <UserPlus className="h-3 w-3 mr-1" /> Ir para Colaboradores
+              <ArrowRight className="h-3 w-3 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Erro de carregamento */}
+      {loadError && (
+        <div className="flex items-start gap-3 p-4 bg-red-50 rounded-xl border border-red-200">
+          <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-red-800 text-sm">{loadError}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 text-xs h-8"
+              onClick={() => { faceApiLoadPromise = null; window.location.reload(); }}
+            >
+              <RefreshCw className="h-3 w-3 mr-1" /> Tentar novamente
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Câmera */}
@@ -225,11 +288,11 @@ export default function BiometricAttendancePage() {
               <div className="flex gap-2 mt-1">
                 <Input
                   placeholder="Ex: Fazenda São João - Talhão 3"
-                  value={location}
-                  onChange={e => setLocation(e.target.value)}
+                  value={locationText}
+                  onChange={e => setLocationText(e.target.value)}
                 />
                 {gpsCoords && (
-                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 whitespace-nowrap text-xs flex items-center gap-1">
+                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 whitespace-nowrap text-xs flex items-center gap-1 flex-shrink-0">
                     <MapPin className="h-3 w-3" /> GPS ✓
                   </Badge>
                 )}
@@ -248,9 +311,19 @@ export default function BiometricAttendancePage() {
               <canvas ref={canvasRef} className="hidden" />
 
               {!cameraActive && (
-                <div className="text-center text-gray-400">
-                  <Camera className="h-16 w-16 mx-auto mb-3 opacity-40" />
-                  <p className="text-sm">Câmera desativada</p>
+                <div className="text-center text-gray-400 p-4">
+                  {loadingModels ? (
+                    <>
+                      <RefreshCw className="h-12 w-12 mx-auto mb-3 opacity-40 animate-spin" />
+                      <p className="text-sm">Carregando IA de reconhecimento...</p>
+                      <p className="text-xs mt-1 opacity-60">Pode levar alguns segundos</p>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-16 w-16 mx-auto mb-3 opacity-40" />
+                      <p className="text-sm">Câmera desativada</p>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -273,7 +346,7 @@ export default function BiometricAttendancePage() {
                 <Button
                   onClick={startCamera}
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                  disabled={loadingModels}
+                  disabled={loadingModels || !!loadError}
                 >
                   {loadingModels ? (
                     <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Carregando IA...</>
@@ -320,15 +393,6 @@ export default function BiometricAttendancePage() {
                 </>
               )}
             </div>
-
-            {faceDescriptors.length === 0 && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-700">
-                  Nenhum colaborador com biometria cadastrada. Acesse a ficha do colaborador para cadastrar a biometria facial.
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
 

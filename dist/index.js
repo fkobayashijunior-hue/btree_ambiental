@@ -1146,33 +1146,85 @@ init_schema();
 import { z as z2 } from "zod";
 import { eq as eq2, desc, and as and2, like, or } from "drizzle-orm";
 
-// server/cloudinary.ts
-var CLOUD_NAME = "djob7pxme";
-var UPLOAD_PRESET = "btree_ambiental";
-var CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
-async function cloudinaryUpload(data, folder = "btree") {
-  let base64Data;
-  if (Buffer.isBuffer(data)) {
-    base64Data = `data:image/jpeg;base64,${data.toString("base64")}`;
-  } else {
-    base64Data = data.startsWith("data:") ? data : `data:image/jpeg;base64,${data}`;
+// server/storage.ts
+init_env();
+function getStorageConfig() {
+  const baseUrl = ENV.forgeApiUrl;
+  const apiKey = ENV.forgeApiKey;
+  if (!baseUrl || !apiKey) {
+    throw new Error(
+      "Storage proxy credentials missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
+    );
   }
-  const formData = new FormData();
-  formData.append("file", base64Data);
-  formData.append("upload_preset", UPLOAD_PRESET);
-  formData.append("folder", folder);
-  const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+  return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
+}
+function buildUploadUrl(baseUrl, relKey) {
+  const url = new URL("v1/storage/upload", ensureTrailingSlash(baseUrl));
+  url.searchParams.set("path", normalizeKey(relKey));
+  return url;
+}
+function ensureTrailingSlash(value) {
+  return value.endsWith("/") ? value : `${value}/`;
+}
+function normalizeKey(relKey) {
+  return relKey.replace(/^\/+/, "");
+}
+function toFormData(data, contentType, fileName) {
+  const blob = typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data], { type: contentType });
+  const form = new FormData();
+  form.append("file", blob, fileName || "file");
+  return form;
+}
+function buildAuthHeaders(apiKey) {
+  return { Authorization: `Bearer ${apiKey}` };
+}
+async function storagePut(relKey, data, contentType = "application/octet-stream") {
+  const { baseUrl, apiKey } = getStorageConfig();
+  const key = normalizeKey(relKey);
+  const uploadUrl = buildUploadUrl(baseUrl, key);
+  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
+  const response = await fetch(uploadUrl, {
     method: "POST",
+    headers: buildAuthHeaders(apiKey),
     body: formData
   });
   if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
-    throw new Error(`Cloudinary upload failed (${response.status}): ${errorText}`);
+    const message = await response.text().catch(() => response.statusText);
+    throw new Error(
+      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
+    );
   }
-  const result = await response.json();
+  const url = (await response.json()).url;
+  return { key, url };
+}
+
+// server/cloudinary.ts
+async function cloudinaryUpload(data, folder = "btree") {
+  let buffer;
+  let contentType = "image/jpeg";
+  if (Buffer.isBuffer(data)) {
+    buffer = data;
+  } else {
+    if (data.startsWith("data:")) {
+      const match = data.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        contentType = match[1];
+        buffer = Buffer.from(match[2], "base64");
+      } else {
+        buffer = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
+      }
+    } else {
+      buffer = Buffer.from(data, "base64");
+    }
+  }
+  const timestamp2 = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  const ext = contentType.includes("pdf") ? "pdf" : contentType.includes("png") ? "png" : "jpg";
+  const key = `${folder}/${timestamp2}-${random}.${ext}`;
+  const { url } = await storagePut(key, buffer, contentType);
   return {
-    url: result.secure_url,
-    publicId: result.public_id
+    url,
+    publicId: key
   };
 }
 
@@ -2579,44 +2631,23 @@ var collaboratorDocumentsRouter = router({
     if (!db) throw new Error("Database not available");
     return await db.select().from(collaboratorDocuments).where(eq11(collaboratorDocuments.collaboratorId, input.collaboratorId)).orderBy(desc9(collaboratorDocuments.createdAt));
   }),
-  // Adicionar documento
+  // Adicionar documento (imagem ou PDF) — usa S3 via cloudinaryUpload helper
   add: protectedProcedure.input(z11.object({
     collaboratorId: z11.number(),
     type: z11.enum(DOC_TYPES),
     title: z11.string().min(2),
     fileBase64: z11.string(),
-    // base64 da imagem ou PDF
+    // base64 da imagem ou PDF (pode ter prefixo data:...)
     fileType: z11.string().optional(),
     // "image/jpeg", "application/pdf"
     issueDate: z11.string().optional(),
-    // ISO date string
     expiryDate: z11.string().optional(),
     notes: z11.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const folder = "btree/documents";
-    let fileUrl;
-    if (input.fileBase64.startsWith("data:application/pdf") || input.fileType === "application/pdf") {
-      const base64Data = input.fileBase64.replace(/^data:[^;]+;base64,/, "");
-      const CLOUD_NAME2 = "djob7pxme";
-      const UPLOAD_PRESET2 = "btree_ambiental";
-      const formData = new FormData();
-      formData.append("file", `data:application/pdf;base64,${base64Data}`);
-      formData.append("upload_preset", UPLOAD_PRESET2);
-      formData.append("folder", folder);
-      formData.append("resource_type", "raw");
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME2}/raw/upload`, {
-        method: "POST",
-        body: formData
-      });
-      if (!res.ok) throw new Error("Falha ao fazer upload do PDF");
-      const json = await res.json();
-      fileUrl = json.secure_url;
-    } else {
-      const result = await cloudinaryUpload(input.fileBase64, folder);
-      fileUrl = result.url;
-    }
+    const result = await cloudinaryUpload(input.fileBase64, "btree/documents");
+    const fileUrl = result.url;
     const [inserted] = await db.insert(collaboratorDocuments).values({
       collaboratorId: input.collaboratorId,
       type: input.type,

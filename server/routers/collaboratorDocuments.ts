@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { collaboratorDocuments, collaborators } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
-import { cloudinaryUpload } from "../cloudinary";
+import { cloudinaryUpload } from "../cloudinary"; // agora usa S3 internamente
 
 const DOC_TYPES = ["cnh", "certificado", "aso", "contrato", "rg", "cpf", "outros"] as const;
 
@@ -19,15 +19,15 @@ export const collaboratorDocumentsRouter = router({
         .orderBy(desc(collaboratorDocuments.createdAt));
     }),
 
-  // Adicionar documento
+  // Adicionar documento (imagem ou PDF) — usa S3 via cloudinaryUpload helper
   add: protectedProcedure
     .input(z.object({
       collaboratorId: z.number(),
       type: z.enum(DOC_TYPES),
       title: z.string().min(2),
-      fileBase64: z.string(), // base64 da imagem ou PDF
+      fileBase64: z.string(), // base64 da imagem ou PDF (pode ter prefixo data:...)
       fileType: z.string().optional(), // "image/jpeg", "application/pdf"
-      issueDate: z.string().optional(), // ISO date string
+      issueDate: z.string().optional(),
       expiryDate: z.string().optional(),
       notes: z.string().optional(),
     }))
@@ -35,32 +35,9 @@ export const collaboratorDocumentsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Upload para Cloudinary
-      const folder = "btree/documents";
-      let fileUrl: string;
-
-      if (input.fileBase64.startsWith("data:application/pdf") || input.fileType === "application/pdf") {
-        // PDF — upload como raw
-        const base64Data = input.fileBase64.replace(/^data:[^;]+;base64,/, "");
-        const CLOUD_NAME = "djob7pxme";
-        const UPLOAD_PRESET = "btree_ambiental";
-        const formData = new FormData();
-        formData.append("file", `data:application/pdf;base64,${base64Data}`);
-        formData.append("upload_preset", UPLOAD_PRESET);
-        formData.append("folder", folder);
-        formData.append("resource_type", "raw");
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`, {
-          method: "POST",
-          body: formData,
-        });
-        if (!res.ok) throw new Error("Falha ao fazer upload do PDF");
-        const json = await res.json();
-        fileUrl = json.secure_url;
-      } else {
-        // Imagem
-        const result = await cloudinaryUpload(input.fileBase64, folder);
-        fileUrl = result.url;
-      }
+      // Upload para S3 (cloudinaryUpload agora usa S3 internamente)
+      const result = await cloudinaryUpload(input.fileBase64, "btree/documents");
+      const fileUrl = result.url;
 
       const [inserted] = await db.insert(collaboratorDocuments).values({
         collaboratorId: input.collaboratorId,

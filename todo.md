@@ -490,3 +490,33 @@
 - [ ] Aba de veículos com documentos (CNH, CRLV)
 - [ ] Histórico de manutenções de veículos
 - [ ] Módulo de abastecimento por horímetro
+
+---
+
+## 🐛 BUGS REPORTADOS (08/03/2026)
+
+- [ ] PIN não funciona — substituir por "Lembrar acesso" com localStorage (email+senha salvos)
+- [ ] Erro ao registrar presença (NotFoundError DOM ao abrir câmera)
+- [ ] Upload de CNH dá erro (Cloudinary não configurado no servidor Hostinger)
+- [ ] Upload de foto de equipamento dá erro (mesmo problema Cloudinary)
+- [ ] Análise de foto de carga dá erro: "OPENAI_API_KEY is not configured" — usar LLM interno do Manus
+- [ ] Botão de menu e botão voltar desaparecem ao entrar em subpáginas no mobile
+- [ ] Câmera de presença não encontra colaboradores — explicar fluxo de cadastro biométrico
+
+---
+
+## 🐛 CORREÇÕES (08/03/2026)
+
+- [x] Substituir Cloudinary por S3 do Manus em todos os uploads (documentos, equipamentos, cargas, presença)
+- [x] Corrigir erro de upload de CNH (collaboratorDocuments.ts)
+- [x] Corrigir erro de upload de foto de equipamento (equipmentDetail.ts)
+- [x] Corrigir erro de análise de foto de carga (cargoLoads.ts)
+- [x] Corrigir erro de registro de presença biométrica
+- [x] Corrigir carregamento do face-api.js (usar document.body em vez de document.head)
+- [x] Adicionar aba de Biometria Facial no CollaboratorDetail para cadastro facial
+- [x] Corrigir botão menu no mobile (z-index do header acima do Sheet)
+- [x] Adicionar botão voltar em subpáginas no DashboardLayout
+- [x] Adicionar botão Home no header do DashboardLayout
+- [x] Substituir PIN por "Lembrar acesso" com localStorage no Login
+- [x] Adicionar botão "Gerar Código de Acesso" na página de Clientes para o Portal do Cliente
+- [x] Corrigir import do useAuth no DashboardLayout
