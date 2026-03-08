@@ -8,6 +8,24 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// server/_core/env.ts
+var ENV;
+var init_env = __esm({
+  "server/_core/env.ts"() {
+    "use strict";
+    ENV = {
+      appId: process.env.VITE_APP_ID ?? "",
+      cookieSecret: process.env.JWT_SECRET ?? "",
+      databaseUrl: process.env.DATABASE_URL ?? "",
+      oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
+      ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+      isProduction: process.env.NODE_ENV === "production",
+      forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
+      forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
+    };
+  }
+});
+
 // drizzle/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
@@ -512,24 +530,6 @@ var init_schema = __esm({
   }
 });
 
-// server/_core/env.ts
-var ENV;
-var init_env = __esm({
-  "server/_core/env.ts"() {
-    "use strict";
-    ENV = {
-      appId: process.env.VITE_APP_ID ?? "",
-      cookieSecret: process.env.JWT_SECRET ?? "",
-      databaseUrl: process.env.DATABASE_URL ?? "",
-      oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-      ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-      isProduction: process.env.NODE_ENV === "production",
-      forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-      forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
-    };
-  }
-});
-
 // server/db.ts
 var db_exports = {};
 __export(db_exports, {
@@ -537,6 +537,7 @@ __export(db_exports, {
   createUser: () => createUser,
   getDb: () => getDb,
   getUserByEmail: () => getUserByEmail,
+  getUserById: () => getUserById,
   getUserByOpenId: () => getUserByOpenId,
   getValidResetToken: () => getValidResetToken,
   markTokenAsUsed: () => markTokenAsUsed,
@@ -623,6 +624,12 @@ async function getUserByEmail(email) {
   const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
   return result.length > 0 ? result[0] : void 0;
 }
+async function getUserById(id) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
 async function createUser(user) {
   const db = await getDb();
   if (!db) {
@@ -695,12 +702,8 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 // shared/const.ts
 var COOKIE_NAME = "app_session_id";
 var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
-var AXIOS_TIMEOUT_MS = 3e4;
 var UNAUTHED_ERR_MSG = "Please login (10001)";
 var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
-
-// server/_core/oauth.ts
-init_db();
 
 // server/_core/cookies.ts
 function isSecureRequest(req) {
@@ -719,283 +722,6 @@ function getSessionCookieOptions(req) {
   };
 }
 
-// shared/_core/errors.ts
-var HttpError = class extends Error {
-  constructor(statusCode, message) {
-    super(message);
-    this.statusCode = statusCode;
-    this.name = "HttpError";
-  }
-};
-var ForbiddenError = (msg) => new HttpError(403, msg);
-
-// server/_core/sdk.ts
-init_db();
-init_env();
-import axios from "axios";
-import { parse as parseCookieHeader } from "cookie";
-import { SignJWT, jwtVerify } from "jose";
-var isNonEmptyString = (value) => typeof value === "string" && value.length > 0;
-var EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
-var GET_USER_INFO_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfo`;
-var GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfoWithJwt`;
-var OAuthService = class {
-  constructor(client) {
-    this.client = client;
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
-    }
-  }
-  decodeState(state) {
-    const redirectUri = atob(state);
-    return redirectUri;
-  }
-  async getTokenByCode(code, state) {
-    const payload = {
-      clientId: ENV.appId,
-      grantType: "authorization_code",
-      code,
-      redirectUri: this.decodeState(state)
-    };
-    const { data } = await this.client.post(
-      EXCHANGE_TOKEN_PATH,
-      payload
-    );
-    return data;
-  }
-  async getUserInfoByToken(token) {
-    const { data } = await this.client.post(
-      GET_USER_INFO_PATH,
-      {
-        accessToken: token.accessToken
-      }
-    );
-    return data;
-  }
-};
-var createOAuthHttpClient = () => axios.create({
-  baseURL: ENV.oAuthServerUrl,
-  timeout: AXIOS_TIMEOUT_MS
-});
-var SDKServer = class {
-  client;
-  oauthService;
-  constructor(client = createOAuthHttpClient()) {
-    this.client = client;
-    this.oauthService = new OAuthService(this.client);
-  }
-  deriveLoginMethod(platforms, fallback) {
-    if (fallback && fallback.length > 0) return fallback;
-    if (!Array.isArray(platforms) || platforms.length === 0) return null;
-    const set = new Set(
-      platforms.filter((p) => typeof p === "string")
-    );
-    if (set.has("REGISTERED_PLATFORM_EMAIL")) return "email";
-    if (set.has("REGISTERED_PLATFORM_GOOGLE")) return "google";
-    if (set.has("REGISTERED_PLATFORM_APPLE")) return "apple";
-    if (set.has("REGISTERED_PLATFORM_MICROSOFT") || set.has("REGISTERED_PLATFORM_AZURE"))
-      return "microsoft";
-    if (set.has("REGISTERED_PLATFORM_GITHUB")) return "github";
-    const first = Array.from(set)[0];
-    return first ? first.toLowerCase() : null;
-  }
-  /**
-   * Exchange OAuth authorization code for access token
-   * @example
-   * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-   */
-  async exchangeCodeForToken(code, state) {
-    return this.oauthService.getTokenByCode(code, state);
-  }
-  /**
-   * Get user information using access token
-   * @example
-   * const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
-   */
-  async getUserInfo(accessToken) {
-    const data = await this.oauthService.getUserInfoByToken({
-      accessToken
-    });
-    const loginMethod = this.deriveLoginMethod(
-      data?.platforms,
-      data?.platform ?? data.platform ?? null
-    );
-    return {
-      ...data,
-      platform: loginMethod,
-      loginMethod
-    };
-  }
-  parseCookies(cookieHeader) {
-    if (!cookieHeader) {
-      return /* @__PURE__ */ new Map();
-    }
-    const parsed = parseCookieHeader(cookieHeader);
-    return new Map(Object.entries(parsed));
-  }
-  getSessionSecret() {
-    const secret = ENV.cookieSecret;
-    return new TextEncoder().encode(secret);
-  }
-  /**
-   * Create a session token for a Manus user openId
-   * @example
-   * const sessionToken = await sdk.createSessionToken(userInfo.openId);
-   */
-  async createSessionToken(openId, options = {}) {
-    return this.signSession(
-      {
-        openId,
-        appId: ENV.appId,
-        name: options.name || ""
-      },
-      options
-    );
-  }
-  async signSession(payload, options = {}) {
-    const issuedAt = Date.now();
-    const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
-    const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1e3);
-    const secretKey = this.getSessionSecret();
-    return new SignJWT({
-      openId: payload.openId,
-      appId: payload.appId,
-      name: payload.name
-    }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setExpirationTime(expirationSeconds).sign(secretKey);
-  }
-  async verifySession(cookieValue) {
-    if (!cookieValue) {
-      console.warn("[Auth] Missing session cookie");
-      return null;
-    }
-    try {
-      const secretKey = this.getSessionSecret();
-      const { payload } = await jwtVerify(cookieValue, secretKey, {
-        algorithms: ["HS256"]
-      });
-      const { openId, appId, name } = payload;
-      if (!isNonEmptyString(openId) || !isNonEmptyString(appId) || !isNonEmptyString(name)) {
-        console.warn("[Auth] Session payload missing required fields");
-        return null;
-      }
-      return {
-        openId,
-        appId,
-        name
-      };
-    } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
-      return null;
-    }
-  }
-  async getUserInfoWithJwt(jwtToken) {
-    const payload = {
-      jwtToken,
-      projectId: ENV.appId
-    };
-    const { data } = await this.client.post(
-      GET_USER_INFO_WITH_JWT_PATH,
-      payload
-    );
-    const loginMethod = this.deriveLoginMethod(
-      data?.platforms,
-      data?.platform ?? data.platform ?? null
-    );
-    return {
-      ...data,
-      platform: loginMethod,
-      loginMethod
-    };
-  }
-  async authenticateRequest(req) {
-    const cookies = this.parseCookies(req.headers.cookie);
-    const sessionCookie = cookies.get(COOKIE_NAME);
-    const session = await this.verifySession(sessionCookie);
-    if (!session) {
-      throw ForbiddenError("Invalid session cookie");
-    }
-    const sessionUserId = session.openId;
-    const signedInAt = /* @__PURE__ */ new Date();
-    let user = await getUserByOpenId(sessionUserId);
-    if (!user) {
-      user = await getUserByEmail(sessionUserId);
-    }
-    if (!user && sessionUserId.includes("@") === false) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
-        await upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || "",
-          email: userInfo.email || "",
-          loginMethod: userInfo.loginMethod || userInfo.platform || "oauth",
-          lastSignedIn: signedInAt
-        });
-        user = await getUserByOpenId(userInfo.openId);
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
-      }
-    }
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
-    if (user.openId) {
-      await upsertUser({
-        openId: user.openId,
-        name: user.name || "",
-        email: user.email || "",
-        lastSignedIn: signedInAt
-      });
-    }
-    return user;
-  }
-};
-var sdk = new SDKServer();
-
-// server/_core/oauth.ts
-function getQueryParam(req, key) {
-  const value = req.query[key];
-  return typeof value === "string" ? value : void 0;
-}
-function registerOAuthRoutes(app) {
-  app.get("/api/oauth/callback", async (req, res) => {
-    const code = getQueryParam(req, "code");
-    const state = getQueryParam(req, "state");
-    if (!code || !state) {
-      res.status(400).json({ error: "code and state are required" });
-      return;
-    }
-    try {
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-      const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
-      if (!userInfo.openId) {
-        res.status(400).json({ error: "openId missing from user info" });
-        return;
-      }
-      await upsertUser({
-        openId: userInfo.openId,
-        name: userInfo.name || "",
-        email: userInfo.email || "",
-        loginMethod: userInfo.loginMethod || userInfo.platform || "oauth",
-        lastSignedIn: /* @__PURE__ */ new Date()
-      });
-      const sessionToken = await sdk.createSessionToken(userInfo.openId, {
-        name: userInfo.name || "",
-        expiresInMs: ONE_YEAR_MS
-      });
-      const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-      res.redirect(302, "/");
-    } catch (error) {
-      console.error("[OAuth] Callback failed", error);
-      res.status(500).json({ error: "OAuth callback failed" });
-    }
-  });
-}
-
 // server/_core/systemRouter.ts
 import { z } from "zod";
 
@@ -1005,7 +731,7 @@ import { TRPCError } from "@trpc/server";
 var TITLE_MAX_LENGTH = 1200;
 var CONTENT_MAX_LENGTH = 2e4;
 var trimValue = (value) => value.trim();
-var isNonEmptyString2 = (value) => typeof value === "string" && value.trim().length > 0;
+var isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
 var buildEndpointUrl = (baseUrl) => {
   const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   return new URL(
@@ -1014,13 +740,13 @@ var buildEndpointUrl = (baseUrl) => {
   ).toString();
 };
 var validatePayload = (input) => {
-  if (!isNonEmptyString2(input.title)) {
+  if (!isNonEmptyString(input.title)) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Notification title is required."
     });
   }
-  if (!isNonEmptyString2(input.content)) {
+  if (!isNonEmptyString(input.content)) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Notification content is required."
@@ -1146,85 +872,47 @@ init_schema();
 import { z as z2 } from "zod";
 import { eq as eq2, desc, and as and2, like, or } from "drizzle-orm";
 
-// server/storage.ts
-init_env();
-function getStorageConfig() {
-  const baseUrl = ENV.forgeApiUrl;
-  const apiKey = ENV.forgeApiKey;
-  if (!baseUrl || !apiKey) {
-    throw new Error(
-      "Storage proxy credentials missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
-    );
-  }
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
-}
-function buildUploadUrl(baseUrl, relKey) {
-  const url = new URL("v1/storage/upload", ensureTrailingSlash(baseUrl));
-  url.searchParams.set("path", normalizeKey(relKey));
-  return url;
-}
-function ensureTrailingSlash(value) {
-  return value.endsWith("/") ? value : `${value}/`;
-}
-function normalizeKey(relKey) {
-  return relKey.replace(/^\/+/, "");
-}
-function toFormData(data, contentType, fileName) {
-  const blob = typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data], { type: contentType });
-  const form = new FormData();
-  form.append("file", blob, fileName || "file");
-  return form;
-}
-function buildAuthHeaders(apiKey) {
-  return { Authorization: `Bearer ${apiKey}` };
-}
-async function storagePut(relKey, data, contentType = "application/octet-stream") {
-  const { baseUrl, apiKey } = getStorageConfig();
-  const key = normalizeKey(relKey);
-  const uploadUrl = buildUploadUrl(baseUrl, key);
-  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers: buildAuthHeaders(apiKey),
-    body: formData
-  });
-  if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(
-      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
-    );
-  }
-  const url = (await response.json()).url;
-  return { key, url };
-}
-
 // server/cloudinary.ts
+var CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "djob7pxme";
+var CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "azaconnect";
 async function cloudinaryUpload(data, folder = "btree") {
-  let buffer;
+  let base64;
   let contentType = "image/jpeg";
   if (Buffer.isBuffer(data)) {
-    buffer = data;
-  } else {
-    if (data.startsWith("data:")) {
-      const match = data.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        contentType = match[1];
-        buffer = Buffer.from(match[2], "base64");
-      } else {
-        buffer = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
-      }
+    base64 = data.toString("base64");
+    contentType = "image/jpeg";
+  } else if (data.startsWith("data:")) {
+    const match = data.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      contentType = match[1];
+      base64 = match[2];
     } else {
-      buffer = Buffer.from(data, "base64");
+      base64 = data.replace(/^data:[^;]+;base64,/, "");
     }
+  } else {
+    base64 = data;
   }
-  const timestamp2 = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  const ext = contentType.includes("pdf") ? "pdf" : contentType.includes("png") ? "png" : "jpg";
-  const key = `${folder}/${timestamp2}-${random}.${ext}`;
-  const { url } = await storagePut(key, buffer, contentType);
+  const dataUri = `data:${contentType};base64,${base64}`;
+  const params = new URLSearchParams();
+  params.append("file", dataUri);
+  params.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  params.append("folder", folder);
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString()
+    }
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Cloudinary upload failed: ${response.status} - ${errorText}`);
+  }
+  const result = await response.json();
   return {
-    url,
-    publicId: key
+    url: result.secure_url,
+    publicId: result.public_id
   };
 }
 
@@ -1776,171 +1464,6 @@ init_db();
 init_schema();
 import { TRPCError as TRPCError4 } from "@trpc/server";
 import { eq as eq5, desc as desc3 } from "drizzle-orm";
-
-// server/_core/llm.ts
-init_env();
-var ensureArray = (value) => Array.isArray(value) ? value : [value];
-var normalizeContentPart = (part) => {
-  if (typeof part === "string") {
-    return { type: "text", text: part };
-  }
-  if (part.type === "text") {
-    return part;
-  }
-  if (part.type === "image_url") {
-    return part;
-  }
-  if (part.type === "file_url") {
-    return part;
-  }
-  throw new Error("Unsupported message content part");
-};
-var normalizeMessage = (message) => {
-  const { role, name, tool_call_id } = message;
-  if (role === "tool" || role === "function") {
-    const content = ensureArray(message.content).map((part) => typeof part === "string" ? part : JSON.stringify(part)).join("\n");
-    return {
-      role,
-      name,
-      tool_call_id,
-      content
-    };
-  }
-  const contentParts = ensureArray(message.content).map(normalizeContentPart);
-  if (contentParts.length === 1 && contentParts[0].type === "text") {
-    return {
-      role,
-      name,
-      content: contentParts[0].text
-    };
-  }
-  return {
-    role,
-    name,
-    content: contentParts
-  };
-};
-var normalizeToolChoice = (toolChoice, tools) => {
-  if (!toolChoice) return void 0;
-  if (toolChoice === "none" || toolChoice === "auto") {
-    return toolChoice;
-  }
-  if (toolChoice === "required") {
-    if (!tools || tools.length === 0) {
-      throw new Error(
-        "tool_choice 'required' was provided but no tools were configured"
-      );
-    }
-    if (tools.length > 1) {
-      throw new Error(
-        "tool_choice 'required' needs a single tool or specify the tool name explicitly"
-      );
-    }
-    return {
-      type: "function",
-      function: { name: tools[0].function.name }
-    };
-  }
-  if ("name" in toolChoice) {
-    return {
-      type: "function",
-      function: { name: toolChoice.name }
-    };
-  }
-  return toolChoice;
-};
-var resolveApiUrl = () => ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0 ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions` : "https://forge.manus.im/v1/chat/completions";
-var assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-};
-var normalizeResponseFormat = ({
-  responseFormat,
-  response_format,
-  outputSchema,
-  output_schema
-}) => {
-  const explicitFormat = responseFormat || response_format;
-  if (explicitFormat) {
-    if (explicitFormat.type === "json_schema" && !explicitFormat.json_schema?.schema) {
-      throw new Error(
-        "responseFormat json_schema requires a defined schema object"
-      );
-    }
-    return explicitFormat;
-  }
-  const schema = outputSchema || output_schema;
-  if (!schema) return void 0;
-  if (!schema.name || !schema.schema) {
-    throw new Error("outputSchema requires both name and schema");
-  }
-  return {
-    type: "json_schema",
-    json_schema: {
-      name: schema.name,
-      schema: schema.schema,
-      ...typeof schema.strict === "boolean" ? { strict: schema.strict } : {}
-    }
-  };
-};
-async function invokeLLM(params) {
-  assertApiKey();
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format
-  } = params;
-  const payload = {
-    model: "gemini-2.5-flash",
-    messages: messages.map(normalizeMessage)
-  };
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
-  }
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
-  payload.max_tokens = 32768;
-  payload.thinking = {
-    "budget_tokens": 128
-  };
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema
-  });
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-  const response = await fetch(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`
-    },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} \u2013 ${errorText}`
-    );
-  }
-  return await response.json();
-}
-
-// server/routers/cargoLoads.ts
 var cargoLoadsRouter = router({
   list: protectedProcedure.input(z5.object({
     search: z5.string().optional(),
@@ -1970,72 +1493,14 @@ var cargoLoadsRouter = router({
     if (!result.length) throw new TRPCError4({ code: "NOT_FOUND" });
     return result[0];
   }),
-  // Analisar foto de carga via IA e extrair dados automaticamente
+  // Upload de foto de documento de carga (preenchimento manual dos dados)
   analyzePhoto: protectedProcedure.input(z5.object({
     photoBase64: z5.string()
-    // base64 da imagem
   })).mutation(async ({ input }) => {
     const uploaded = await cloudinaryUpload(input.photoBase64, "btree/cargo-analysis");
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: `Voc\xEA \xE9 um assistente especializado em extrair dados de documentos de transporte de lenha/madeira no Brasil.
-Analise a imagem fornecida (pode ser um formul\xE1rio de recebimento, ticket de pesagem, nota fiscal ou foto da carga) e extraia os dados dispon\xEDveis.
-Retorne APENAS um JSON v\xE1lido com os campos encontrados, sem texto adicional.
-Se um campo n\xE3o estiver vis\xEDvel ou leg\xEDvel, retorne null para esse campo.`
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Analise esta imagem e extraia os dados de transporte/carga. Retorne um JSON com os campos: date (data no formato YYYY-MM-DD), vehiclePlate (placa do ve\xEDculo), driverName (nome do motorista), heightM (altura em metros, apenas n\xFAmero), widthM (largura em metros, apenas n\xFAmero), lengthM (comprimento em metros, apenas n\xFAmero), volumeM3 (volume em m\xB3, apenas n\xFAmero), woodType (tipo de lenha/madeira), destination (destino/estabelecimento), invoiceNumber (n\xFAmero da nota fiscal/NF), clientName (nome do cliente/empresa recebedora), notes (observa\xE7\xF5es)."
-            },
-            {
-              type: "image_url",
-              image_url: { url: uploaded.url, detail: "high" }
-            }
-          ]
-        }
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "cargo_data",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              date: { type: ["string", "null"], description: "Data no formato YYYY-MM-DD" },
-              vehiclePlate: { type: ["string", "null"], description: "Placa do ve\xEDculo" },
-              driverName: { type: ["string", "null"], description: "Nome do motorista" },
-              heightM: { type: ["string", "null"], description: "Altura em metros" },
-              widthM: { type: ["string", "null"], description: "Largura em metros" },
-              lengthM: { type: ["string", "null"], description: "Comprimento em metros" },
-              volumeM3: { type: ["string", "null"], description: "Volume em m\xB3" },
-              woodType: { type: ["string", "null"], description: "Tipo de lenha/madeira" },
-              destination: { type: ["string", "null"], description: "Destino/estabelecimento" },
-              invoiceNumber: { type: ["string", "null"], description: "N\xFAmero da nota fiscal" },
-              clientName: { type: ["string", "null"], description: "Nome do cliente/empresa" },
-              notes: { type: ["string", "null"], description: "Observa\xE7\xF5es" }
-            },
-            required: ["date", "vehiclePlate", "driverName", "heightM", "widthM", "lengthM", "volumeM3", "woodType", "destination", "invoiceNumber", "clientName", "notes"],
-            additionalProperties: false
-          }
-        }
-      }
-    });
-    const content = response.choices?.[0]?.message?.content;
-    let extracted = {};
-    try {
-      extracted = typeof content === "string" ? JSON.parse(content) : content;
-    } catch {
-      extracted = {};
-    }
     return {
       photoUrl: uploaded.url,
-      extracted
+      extracted: {}
     };
   }),
   // Upload de foto para uma carga existente
@@ -2796,6 +2261,7 @@ var equipmentDetailRouter = router({
 // server/routers.ts
 import { z as z13 } from "zod";
 init_db();
+import { SignJWT } from "jose";
 
 // server/email.ts
 import nodemailer from "nodemailer";
@@ -2891,6 +2357,11 @@ Se n\xE3o solicitou, ignore este email.`
 
 // server/routers.ts
 import crypto2 from "crypto";
+async function createSessionToken(userId, email, name) {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET || "btree-secret-key");
+  const expiresAt = Math.floor((Date.now() + 365 * 24 * 60 * 60 * 1e3) / 1e3);
+  return new SignJWT({ userId: String(userId), email, name }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setExpirationTime(expiresAt).sign(secret);
+}
 var appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -2903,11 +2374,7 @@ var appRouter = router({
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
-        const sessionToken = await sdk.createSessionToken(user.email, {
-          name: user.name,
-          expiresInMs: 365 * 24 * 60 * 60 * 1e3
-          // 1 ano
-        });
+        const sessionToken = await createSessionToken(user.id, user.email, user.name);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, sessionToken, cookieOptions);
         return {
@@ -2924,11 +2391,7 @@ var appRouter = router({
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
-        const sessionToken = await sdk.createSessionToken(user.email, {
-          name: user.name,
-          expiresInMs: 365 * 24 * 60 * 60 * 1e3
-          // 1 ano
-        });
+        const sessionToken = await createSessionToken(user.id, user.email, user.name);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, sessionToken, cookieOptions);
         return {
@@ -3016,11 +2479,34 @@ var appRouter = router({
 });
 
 // server/_core/context.ts
+import { jwtVerify } from "jose";
+init_db();
+function parseCookies(cookieHeader) {
+  if (!cookieHeader) return /* @__PURE__ */ new Map();
+  const map = /* @__PURE__ */ new Map();
+  cookieHeader.split(";").forEach((part) => {
+    const [key, ...val] = part.trim().split("=");
+    if (key) map.set(key.trim(), decodeURIComponent(val.join("=")));
+  });
+  return map;
+}
 async function createContext(opts) {
   let user = null;
   try {
-    user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
+    const cookies = parseCookies(opts.req.headers.cookie);
+    const sessionCookie = cookies.get(COOKIE_NAME);
+    if (sessionCookie) {
+      const secret = new TextEncoder().encode(process.env.JWT_SECRET || "btree-secret-key");
+      const { payload } = await jwtVerify(sessionCookie, secret, { algorithms: ["HS256"] });
+      const userId = payload.userId;
+      const email = payload.email;
+      if (userId) {
+        user = await getUserById(parseInt(userId)) ?? null;
+      } else if (email) {
+        user = await getUserByEmail(email) ?? null;
+      }
+    }
+  } catch {
     user = null;
   }
   return {
@@ -3107,7 +2593,6 @@ async function startServer() {
   }));
   app.use(express2.json({ limit: "50mb" }));
   app.use(express2.urlencoded({ limit: "50mb", extended: true }));
-  registerOAuthRoutes(app);
   app.use(
     "/api/trpc",
     createExpressMiddleware({
