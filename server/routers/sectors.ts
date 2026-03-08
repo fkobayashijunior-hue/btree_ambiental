@@ -1,8 +1,8 @@
-import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { z } from "zod";import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { sectors, equipment, equipmentTypes } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { cloudinaryUpload } from "../cloudinary";
 
 export const sectorsRouter = router({
   // --- SETORES ---
@@ -127,8 +127,15 @@ export const sectorsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      let imageUrl = input.imageUrl;
+      // Se for base64, fazer upload para S3
+      if (imageUrl && imageUrl.startsWith("data:")) {
+        const result = await cloudinaryUpload(imageUrl, "btree/equipment");
+        imageUrl = result.url;
+      }
       const [result] = await db.insert(equipment).values({
         ...input,
+        imageUrl,
         status: input.status || "ativo",
       });
       return { id: (result as any).insertId };
@@ -150,6 +157,11 @@ export const sectorsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const { id, ...data } = input;
+      // Se for base64, fazer upload para S3
+      if (data.imageUrl && data.imageUrl.startsWith("data:")) {
+        const uploaded = await cloudinaryUpload(data.imageUrl, "btree/equipment");
+        data.imageUrl = uploaded.url;
+      }
       await db.update(equipment).set(data).where(eq(equipment.id, id));
       return { success: true };
     }),

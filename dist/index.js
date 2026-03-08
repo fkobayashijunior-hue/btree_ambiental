@@ -1581,8 +1581,14 @@ var sectorsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    let imageUrl = input.imageUrl;
+    if (imageUrl && imageUrl.startsWith("data:")) {
+      const result2 = await cloudinaryUpload(imageUrl, "btree/equipment");
+      imageUrl = result2.url;
+    }
     const [result] = await db.insert(equipment).values({
       ...input,
+      imageUrl,
       status: input.status || "ativo"
     });
     return { id: result.insertId };
@@ -1601,6 +1607,10 @@ var sectorsRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const { id, ...data } = input;
+    if (data.imageUrl && data.imageUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data.imageUrl, "btree/equipment");
+      data.imageUrl = uploaded.url;
+    }
     await db.update(equipment).set(data).where(eq3(equipment.id, id));
     return { success: true };
   }),

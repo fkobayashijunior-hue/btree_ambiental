@@ -520,3 +520,10 @@
 - [x] Substituir PIN por "Lembrar acesso" com localStorage no Login
 - [x] Adicionar botão "Gerar Código de Acesso" na página de Clientes para o Portal do Cliente
 - [x] Corrigir import do useAuth no DashboardLayout
+
+---
+
+## 🐛 CORREÇÕES ADICIONAIS (08/03/2026 - tarde)
+
+- [x] Mover upload de foto para dentro do formulário de cadastro/edição de equipamento
+- [x] Garantir que aba de Biometria Facial apareça corretamente no mobile (CollaboratorDetail - overflow-x-auto nas tabs)

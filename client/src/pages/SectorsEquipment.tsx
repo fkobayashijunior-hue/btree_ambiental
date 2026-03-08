@@ -1,17 +1,16 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Building2, Plus, Pencil, Trash2, Wrench, Tractor, Search,
-  CheckCircle2, AlertTriangle, XCircle, Layers, FileText
+  CheckCircle2, AlertTriangle, XCircle, Layers, FileText, Camera, X, ImageIcon
 } from "lucide-react";
 
 const STATUS_CONFIG = {
@@ -42,6 +41,11 @@ export default function SectorsEquipment() {
     name: "", typeId: 0, brand: "", model: "",
     year: "", serialNumber: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
   });
+  // Upload de foto do equipamento
+  const [equipPhotoPreview, setEquipPhotoPreview] = useState<string | null>(null);
+  const [equipPhotoBase64, setEquipPhotoBase64] = useState<string | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tipo de equipamento state
   const [typeOpen, setTypeOpen] = useState(false);
@@ -88,7 +92,12 @@ export default function SectorsEquipment() {
     onError: (e) => toast.error(e.message),
   });
 
-  const resetEquipForm = () => setEquipForm({ name: "", typeId: 0, brand: "", model: "", year: "", serialNumber: "", status: "ativo" });
+  const resetEquipForm = () => {
+    setEquipForm({ name: "", typeId: 0, brand: "", model: "", year: "", serialNumber: "", status: "ativo" });
+    setEquipPhotoPreview(null);
+    setEquipPhotoBase64(null);
+    setExistingImageUrl(null);
+  };
 
   const openEditSector = (s: typeof sectorsList[number]) => {
     setEditSectorId(s.id);
@@ -103,7 +112,33 @@ export default function SectorsEquipment() {
       model: e.model || "", year: e.year?.toString() || "",
       serialNumber: e.serialNumber || "", status: e.status as any,
     });
+    // Carregar imagem existente
+    const imgUrl = (e as any).imageUrl;
+    if (imgUrl) {
+      setExistingImageUrl(imgUrl);
+      setEquipPhotoPreview(imgUrl);
+    } else {
+      setExistingImageUrl(null);
+      setEquipPhotoPreview(null);
+    }
+    setEquipPhotoBase64(null);
     setEquipOpen(true);
+  };
+
+  const handlePhotoChange = (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Foto muito grande. Máximo 5MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      setEquipPhotoPreview(base64);
+      setEquipPhotoBase64(base64);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSectorSubmit = (ev: React.FormEvent) => {
@@ -126,6 +161,7 @@ export default function SectorsEquipment() {
       year: equipForm.year ? parseInt(equipForm.year) : undefined,
       serialNumber: equipForm.serialNumber || undefined,
       status: equipForm.status,
+      imageUrl: equipPhotoBase64 || existingImageUrl || undefined,
     };
     if (editEquipId) {
       updateEquip.mutate({ id: editEquipId, ...data });
@@ -133,6 +169,8 @@ export default function SectorsEquipment() {
       createEquip.mutate(data);
     }
   };
+
+  const isPendingEquip = createEquip.isPending || updateEquip.isPending;
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -267,17 +305,60 @@ export default function SectorsEquipment() {
                 </DialogContent>
               </Dialog>
 
+              {/* Dialog: Cadastrar/Editar Equipamento */}
               <Dialog open={equipOpen} onOpenChange={(v) => { setEquipOpen(v); if (!v) { setEditEquipId(null); resetEquipForm(); } }}>
                 <DialogTrigger asChild>
                   <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
                     <Plus className="h-4 w-4" /> Novo Equipamento
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>{editEquipId ? "Editar Equipamento" : "Cadastrar Equipamento"}</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleEquipSubmit} className="space-y-4">
+                    {/* Upload de Foto */}
+                    <div>
+                      <Label className="mb-2 block">Foto do Equipamento</Label>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handlePhotoChange}
+                      />
+                      {equipPhotoPreview ? (
+                        <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-200">
+                          <img src={equipPhotoPreview} alt="Preview" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => { setEquipPhotoPreview(null); setEquipPhotoBase64(null); setExistingImageUrl(null); }}
+                            className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 hover:bg-black/80"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="absolute bottom-2 right-2 bg-black/60 text-white rounded-lg px-3 py-1 text-xs flex items-center gap-1 hover:bg-black/80"
+                          >
+                            <Camera className="h-3 w-3" /> Trocar foto
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
+                        >
+                          <ImageIcon className="h-8 w-8" />
+                          <span className="text-sm font-medium">Tirar foto ou escolher da galeria</span>
+                          <span className="text-xs">JPG, PNG até 5MB</span>
+                        </button>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2">
                         <Label>Nome / Identificação *</Label>
@@ -331,8 +412,8 @@ export default function SectorsEquipment() {
                     </div>
                     <div className="flex gap-3 pt-2">
                       <Button type="button" variant="outline" className="flex-1" onClick={() => setEquipOpen(false)}>Cancelar</Button>
-                      <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={createEquip.isPending || updateEquip.isPending}>
-                        {createEquip.isPending || updateEquip.isPending ? "Salvando..." : editEquipId ? "Salvar" : "Cadastrar"}
+                      <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={isPendingEquip}>
+                        {isPendingEquip ? "Salvando..." : editEquipId ? "Salvar" : "Cadastrar"}
                       </Button>
                     </div>
                   </form>
@@ -357,7 +438,13 @@ export default function SectorsEquipment() {
                 const sc = STATUS_CONFIG[e.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.ativo;
                 const Icon = sc.icon;
                 return (
-                  <Card key={e.id} className="hover:shadow-md transition-shadow">
+                  <Card key={e.id} className="hover:shadow-md transition-shadow overflow-hidden">
+                    {/* Foto do equipamento (se houver) */}
+                    {(e as any).imageUrl && (
+                      <div className="h-32 w-full overflow-hidden">
+                        <img src={(e as any).imageUrl} alt={e.name} className="w-full h-full object-cover" />
+                      </div>
+                    )}
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
