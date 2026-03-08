@@ -1,8 +1,14 @@
 #!/bin/bash
 set -e
 
+# Instalar dependências se necessário
+if [ ! -d "node_modules" ]; then
+  echo "Installing dependencies..."
+  npm install
+fi
+
 # Garantir que o vite está instalado e acessível
-if ! command -v vite &> /dev/null && ! [ -f "./node_modules/.bin/vite" ]; then
+if ! [ -f "./node_modules/.bin/vite" ]; then
   echo "Installing vite..."
   npm install vite@7.1.9 @vitejs/plugin-react@5.0.4 esbuild@0.25.0 --no-save
 fi

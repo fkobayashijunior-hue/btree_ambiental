@@ -3,10 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
-  "packageManager": "pnpm@10.30.3",
   "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",

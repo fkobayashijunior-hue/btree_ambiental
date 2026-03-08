@@ -1,53 +1,62 @@
 /**
- * Upload helper — usa o S3 do Manus (storagePut) para armazenar imagens.
- * Mantém a mesma interface do cloudinaryUpload para compatibilidade.
- * 
- * Migrado do Cloudinary para S3 do Manus pois o Cloudinary requer
- * configuração de preset no painel externo.
+ * Upload de arquivos para o Cloudinary usando upload preset unsigned.
+ * Cloud Name: djob7pxme
+ * Upload Preset: azaconnect (unsigned, public, auto resource type)
  */
 
-import { storagePut } from "./storage";
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "djob7pxme";
+const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "azaconnect";
 
 /**
- * Faz upload de uma imagem (Buffer ou base64 string) para o S3 do Manus.
- * Retorna a URL pública da imagem.
+ * Faz upload de uma imagem (Buffer ou base64 string) para o Cloudinary.
+ * Retorna URL pública e publicId.
  */
 export async function cloudinaryUpload(
   data: Buffer | string,
   folder = "btree"
 ): Promise<{ url: string; publicId: string }> {
-  // Converter base64 para Buffer se necessário
-  let buffer: Buffer;
+  let base64: string;
   let contentType = "image/jpeg";
 
   if (Buffer.isBuffer(data)) {
-    buffer = data;
-  } else {
-    // Extrair content type do prefixo data: se presente
-    if (data.startsWith("data:")) {
-      const match = data.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        contentType = match[1];
-        buffer = Buffer.from(match[2], "base64");
-      } else {
-        buffer = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
-      }
+    base64 = data.toString("base64");
+    contentType = "image/jpeg";
+  } else if (data.startsWith("data:")) {
+    const match = data.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      contentType = match[1];
+      base64 = match[2];
     } else {
-      // Já é base64 puro
-      buffer = Buffer.from(data, "base64");
+      base64 = data.replace(/^data:[^;]+;base64,/, "");
     }
+  } else {
+    base64 = data;
   }
 
-  // Gerar chave única para o arquivo
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  const ext = contentType.includes("pdf") ? "pdf" : contentType.includes("png") ? "png" : "jpg";
-  const key = `${folder}/${timestamp}-${random}.${ext}`;
+  const dataUri = `data:${contentType};base64,${base64}`;
 
-  const { url } = await storagePut(key, buffer, contentType);
+  const params = new URLSearchParams();
+  params.append("file", dataUri);
+  params.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  params.append("folder", folder);
 
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Cloudinary upload failed: ${response.status} - ${errorText}`);
+  }
+
+  const result = (await response.json()) as { secure_url: string; public_id: string };
   return {
-    url,
-    publicId: key,
+    url: result.secure_url,
+    publicId: result.public_id,
   };
 }

@@ -15,10 +15,19 @@ import { collaboratorDocumentsRouter } from "./routers/collaboratorDocuments";
 import { equipmentDetailRouter } from "./routers/equipmentDetail";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
-import { sdk } from "./_core/sdk";
+import { SignJWT } from "jose";
 import { getUserByEmail, upsertUser, updateUserPasswordByEmail, createPasswordResetToken, getValidResetToken, markTokenAsUsed } from "./db";
 import { sendPasswordResetEmail } from "./email";
 import crypto from "crypto";
+
+async function createSessionToken(userId: number, email: string, name: string): Promise<string> {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET || "btree-secret-key");
+  const expiresAt = Math.floor((Date.now() + 365 * 24 * 60 * 60 * 1000) / 1000);
+  return new SignJWT({ userId: String(userId), email, name })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setExpirationTime(expiresAt)
+    .sign(secret);
+}
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -37,10 +46,7 @@ export const appRouter = router({
           const user = await registerUser(input);
           
           // Criar sessão automática após registro
-          const sessionToken = await sdk.createSessionToken(user.email, {
-            name: user.name,
-            expiresInMs: 365 * 24 * 60 * 60 * 1000, // 1 ano
-          });
+          const sessionToken = await createSessionToken(user.id, user.email, user.name);
 
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(COOKIE_NAME, sessionToken, cookieOptions);
@@ -64,10 +70,7 @@ export const appRouter = router({
           const user = await loginUser(input.email, input.password);
           
           // Criar sessão
-          const sessionToken = await sdk.createSessionToken(user.email, {
-            name: user.name,
-            expiresInMs: 365 * 24 * 60 * 60 * 1000, // 1 ano
-          });
+          const sessionToken = await createSessionToken(user.id, user.email, user.name);
 
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(COOKIE_NAME, sessionToken, cookieOptions);

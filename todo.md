@@ -527,3 +527,17 @@
 
 - [x] Mover upload de foto para dentro do formulário de cadastro/edição de equipamento
 - [x] Garantir que aba de Biometria Facial apareça corretamente no mobile (CollaboratorDetail - overflow-x-auto nas tabs)
+
+---
+
+## 🚀 MIGRAÇÃO PARA HOSTINGER
+
+- [ ] Substituir autenticação Manus OAuth por email/senha próprio (bcrypt + JWT)
+- [ ] Criar tela de login com email/senha (sem OAuth)
+- [ ] Criar tela de cadastro de usuário administrador
+- [ ] Substituir S3 do Manus por Cloudinary para uploads de fotos e documentos
+- [ ] Remover análise de IA de fotos de carga (será preenchimento manual)
+- [ ] Remover dependências exclusivas do Manus (vite-plugin-manus-runtime, forge API, etc.)
+- [ ] Criar arquivos de configuração para deploy na Hostinger (.htaccess, ecosystem.config.cjs)
+- [ ] Ajustar package.json para usar npm em vez de pnpm
+- [ ] Fazer push no GitHub para deploy automático na Hostinger

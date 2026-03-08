@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
-import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
 // jsxLocPlugin is a Manus dev-only plugin — load it only if available
 let jsxLocPlugin: (() => Plugin) | null = null;
@@ -163,7 +162,6 @@ const plugins = [
   react(),
   tailwindcss(),
   ...(jsxLocPlugin ? [jsxLocPlugin()] : []),
-  vitePluginManusRuntime(),
   vitePluginManusDebugCollector(),
 ];
 
@@ -186,11 +184,8 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: [
-      ".manuspre.computer",
-      ".manus.computer",
-      ".manus-asia.computer",
-      ".manuscomputer.ai",
-      ".manusvm.computer",
+      "btreeambiental.com",
+      "www.btreeambiental.com",
       "localhost",
       "127.0.0.1",
     ],

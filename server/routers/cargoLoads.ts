@@ -4,7 +4,6 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { cargoLoads, collaborators, clients, equipment } from "../../drizzle/schema";
 import { eq, desc, like, or, and, gte, lte } from "drizzle-orm";
-import { invokeLLM } from "../_core/llm";
 import { cloudinaryUpload } from "../cloudinary";
 
 export const cargoLoadsRouter = router({
@@ -49,78 +48,16 @@ export const cargoLoadsRouter = router({
       return result[0];
     }),
 
-  // Analisar foto de carga via IA e extrair dados automaticamente
+  // Upload de foto de documento de carga (preenchimento manual dos dados)
   analyzePhoto: protectedProcedure
     .input(z.object({
-      photoBase64: z.string(), // base64 da imagem
+      photoBase64: z.string(),
     }))
     .mutation(async ({ input }) => {
-      // Upload da foto para o Cloudinary primeiro
       const uploaded = await cloudinaryUpload(input.photoBase64, "btree/cargo-analysis");
-
-      // Analisar a imagem com IA
-      const response = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `Você é um assistente especializado em extrair dados de documentos de transporte de lenha/madeira no Brasil.
-Analise a imagem fornecida (pode ser um formulário de recebimento, ticket de pesagem, nota fiscal ou foto da carga) e extraia os dados disponíveis.
-Retorne APENAS um JSON válido com os campos encontrados, sem texto adicional.
-Se um campo não estiver visível ou legível, retorne null para esse campo.`,
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Analise esta imagem e extraia os dados de transporte/carga. Retorne um JSON com os campos: date (data no formato YYYY-MM-DD), vehiclePlate (placa do veículo), driverName (nome do motorista), heightM (altura em metros, apenas número), widthM (largura em metros, apenas número), lengthM (comprimento em metros, apenas número), volumeM3 (volume em m³, apenas número), woodType (tipo de lenha/madeira), destination (destino/estabelecimento), invoiceNumber (número da nota fiscal/NF), clientName (nome do cliente/empresa recebedora), notes (observações).",
-              },
-              {
-                type: "image_url",
-                image_url: { url: uploaded.url, detail: "high" },
-              },
-            ],
-          },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "cargo_data",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                date: { type: ["string", "null"], description: "Data no formato YYYY-MM-DD" },
-                vehiclePlate: { type: ["string", "null"], description: "Placa do veículo" },
-                driverName: { type: ["string", "null"], description: "Nome do motorista" },
-                heightM: { type: ["string", "null"], description: "Altura em metros" },
-                widthM: { type: ["string", "null"], description: "Largura em metros" },
-                lengthM: { type: ["string", "null"], description: "Comprimento em metros" },
-                volumeM3: { type: ["string", "null"], description: "Volume em m³" },
-                woodType: { type: ["string", "null"], description: "Tipo de lenha/madeira" },
-                destination: { type: ["string", "null"], description: "Destino/estabelecimento" },
-                invoiceNumber: { type: ["string", "null"], description: "Número da nota fiscal" },
-                clientName: { type: ["string", "null"], description: "Nome do cliente/empresa" },
-                notes: { type: ["string", "null"], description: "Observações" },
-              },
-              required: ["date", "vehiclePlate", "driverName", "heightM", "widthM", "lengthM", "volumeM3", "woodType", "destination", "invoiceNumber", "clientName", "notes"],
-              additionalProperties: false,
-            },
-          },
-        },
-      });
-
-      const content = response.choices?.[0]?.message?.content;
-      let extracted: Record<string, string | null> = {};
-      try {
-        extracted = typeof content === "string" ? JSON.parse(content) : (content as any);
-      } catch {
-        extracted = {};
-      }
-
       return {
         photoUrl: uploaded.url,
-        extracted,
+        extracted: {},
       };
     }),
 
