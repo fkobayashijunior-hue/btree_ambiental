@@ -229,9 +229,9 @@ function DashboardLayoutContent({
             {!isCollapsed && (
               <div className="flex items-center justify-center pb-2 border-t border-white/20 pt-3">
                 <img
-                  src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png"
+                  src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png"
                   alt="Desenvolvido por Kobayashi"
-                  className="h-6 object-contain opacity-40 hover:opacity-80 transition-opacity brightness-0 invert"
+                  className="h-6 object-contain opacity-80 hover:opacity-100 transition-opacity"
                 />
               </div>
             )}

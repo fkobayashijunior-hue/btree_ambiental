@@ -7,7 +7,7 @@ import { Eye, EyeOff, Leaf, Lock, ArrowRight, User, KeyRound } from "lucide-reac
 // Logo BTREE Ambiental — versão verde (fundo branco/transparente)
 const BTREE_LOGO_GREEN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
 // Logo Kobayashi
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 
 const SAVED_EMAIL_KEY = "btree_saved_email";
 const SAVED_PASSWORD_KEY = "btree_saved_password";
@@ -186,7 +186,7 @@ export default function Login() {
         <img
           src={KOBAYASHI_LOGO}
           alt="Desenvolvido por Kobayashi"
-          className="h-5 object-contain opacity-40 hover:opacity-70 transition-opacity brightness-0 invert mt-2"
+          className="h-6 object-contain opacity-80 hover:opacity-100 transition-opacity mt-2"
         />
       </div>
     </div>
