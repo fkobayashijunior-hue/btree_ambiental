@@ -1,16 +1,18 @@
 #!/bin/bash
 set -e
 
-# Instalar dependências se necessário
-if [ ! -d "node_modules" ]; then
-  echo "Installing dependencies..."
-  npm install
-fi
+echo "=== BTREE Ambiental Build ==="
+echo "Node: $(node --version)"
+echo "npm: $(npm --version)"
 
-# Garantir que o vite está instalado e acessível
+# Sempre instalar todas as dependências (incluindo devDependencies para o build)
+echo "Installing all dependencies..."
+npm install --include=dev --legacy-peer-deps
+
+# Garantir que o vite e plugin-react estão instalados
 if ! [ -f "./node_modules/.bin/vite" ]; then
-  echo "Installing vite..."
-  npm install vite@7.1.9 @vitejs/plugin-react@5.0.4 esbuild@0.25.0 --no-save
+  echo "Vite not found, installing explicitly..."
+  npm install vite@7.1.9 @vitejs/plugin-react@5.0.4 esbuild@0.25.0 --legacy-peer-deps --no-save
 fi
 
 # Usar o vite local

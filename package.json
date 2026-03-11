@@ -102,11 +102,5 @@
     "wouter": "^3.3.5",
     "zod": "^4.1.12"
   },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.4",
-    "esbuild": "^0.25.0",
-    "typescript": "5.9.3",
-    "vite": "^7.1.9",
-    "vitest": "^2.1.4"
-  }
+  "devDependencies": {}
 }
