@@ -12,7 +12,7 @@ npm install --include=dev --legacy-peer-deps
 # Garantir que o vite e plugin-react estão instalados
 if ! [ -f "./node_modules/.bin/vite" ]; then
   echo "Vite not found, installing explicitly..."
-  npm install vite@7.1.9 @vitejs/plugin-react@5.0.4 esbuild@0.25.0 --legacy-peer-deps --no-save
+  npm install vite@7.1.9 @vitejs/plugin-react@4.3.4 esbuild@0.25.0 --legacy-peer-deps --no-save
 fi
 
 # Usar o vite local
