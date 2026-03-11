@@ -64,8 +64,6 @@ export default function CollaboratorDetail() {
   const [docExpiryDate, setDocExpiryDate] = useState("");
   const [docNotes, setDocNotes] = useState("");
   const [previewDoc, setPreviewDoc] = useState<{ url: string; type: string; title: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // --- Biometria ---
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -118,14 +116,27 @@ export default function CollaboratorDetail() {
     setDocFileType(""); setDocIssueDate(""); setDocExpiryDate(""); setDocNotes("");
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileSelect = (file: File) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10MB."); return; }
     setDocFileType(file.type);
     const reader = new FileReader();
     reader.onload = (ev) => setDocFile(ev.target?.result as string);
     reader.readAsDataURL(file);
+  };
+  // Abre seletor de arquivo de forma segura no mobile (evita NotFoundError insertBefore)
+  const openFilePicker = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*,application/pdf";
+    input.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;";
+    document.body.appendChild(input);
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (file) handleFileSelect(file);
+      try { document.body.removeChild(input); } catch {}
+    });
+    input.click();
   };
 
   const handleAddDoc = () => {
@@ -636,10 +647,9 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block">Arquivo (imagem ou PDF) *</label>
-              <input ref={fileInputRef} type="file" accept="image/*,application/pdf" onChange={handleFileSelect} className="hidden" />
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openFilePicker}
                 className={`w-full h-20 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-colors ${docFile ? "border-emerald-500 bg-emerald-50" : "border-gray-300 hover:border-emerald-400"}`}
               >
                 {docFile ? (
