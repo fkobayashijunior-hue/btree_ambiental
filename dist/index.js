@@ -133,19 +133,14 @@ var init_schema = __esm({
     });
     biometricAttendance = mysqlTable("biometric_attendance", {
       id: int("id").autoincrement().primaryKey(),
-      collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
-      date: timestamp("date").notNull(),
-      checkInTime: timestamp("check_in_time").notNull(),
-      checkOutTime: timestamp("check_out_time"),
+      collaboratorId: int("collaborator_id").notNull(),
+      checkIn: timestamp("check_in").notNull(),
+      checkOut: timestamp("check_out"),
       location: varchar("location", { length: 255 }),
-      // Nome do local (fazenda, talhao)
       latitude: varchar("latitude", { length: 20 }),
       longitude: varchar("longitude", { length: 20 }),
-      photoUrl: text("photo_url"),
-      // Foto tirada no momento da presença
       confidence: varchar("confidence", { length: 10 }),
-      // % de confiança do reconhecimento
-      registeredBy: int("registered_by").notNull().references(() => users.id),
+      registeredBy: int("registered_by"),
       notes: text("notes"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
@@ -423,7 +418,7 @@ var init_schema = __esm({
       lastAccessAt: timestamp("last_access_at"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-      createdBy: int("created_by").references(() => users.id)
+      createdBy: int("created_by")
     });
     replantingRecords = mysqlTable("replanting_records", {
       id: int("id").autoincrement().primaryKey(),
@@ -1104,20 +1099,19 @@ var collaboratorsRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    let photoUrl;
     if (input.photoBase64) {
-      const result = await cloudinaryUpload(input.photoBase64, "btree/attendance");
-      photoUrl = result.url;
+      try {
+        await cloudinaryUpload(input.photoBase64);
+      } catch {
+      }
     }
     const now = /* @__PURE__ */ new Date();
     const [inserted] = await db.insert(biometricAttendance).values({
       collaboratorId: input.collaboratorId,
-      date: now,
-      checkInTime: now,
+      checkIn: now,
       location: input.location,
       latitude: input.latitude,
       longitude: input.longitude,
-      photoUrl,
       confidence: input.confidence,
       registeredBy: ctx.user.id,
       notes: input.notes
@@ -1139,17 +1133,15 @@ var collaboratorsRouter = router({
       collaboratorName: collaborators.name,
       collaboratorRole: collaborators.role,
       collaboratorPhoto: collaborators.photoUrl,
-      date: biometricAttendance.date,
-      checkInTime: biometricAttendance.checkInTime,
-      checkOutTime: biometricAttendance.checkOutTime,
+      checkInTime: biometricAttendance.checkIn,
+      checkOutTime: biometricAttendance.checkOut,
       location: biometricAttendance.location,
       latitude: biometricAttendance.latitude,
       longitude: biometricAttendance.longitude,
-      photoUrl: biometricAttendance.photoUrl,
       confidence: biometricAttendance.confidence,
       notes: biometricAttendance.notes,
       createdAt: biometricAttendance.createdAt
-    }).from(biometricAttendance).innerJoin(collaborators, eq2(biometricAttendance.collaboratorId, collaborators.id)).orderBy(desc(biometricAttendance.checkInTime));
+    }).from(biometricAttendance).innerJoin(collaborators, eq2(biometricAttendance.collaboratorId, collaborators.id)).orderBy(desc(biometricAttendance.checkIn));
     return records;
   }),
   // Buscar todos os descritores faciais (para reconhecimento)
@@ -2003,7 +1995,7 @@ var clientPortalRouter = router({
     return { client, loads, replanting, payments };
   }),
   // ── GERAR CÓDIGO DE ACESSO (admin) ──
-  generateAccessCode: protectedProcedure.input(z10.object({ clientId: z10.number() })).mutation(async ({ input, ctx }) => {
+  generateAccessCode: protectedProcedure.input(z10.object({ clientId: z10.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.update(clientPortalAccess).set({ active: 0 }).where(eq10(clientPortalAccess.clientId, input.clientId));
@@ -2011,8 +2003,7 @@ var clientPortalRouter = router({
     await db.insert(clientPortalAccess).values({
       clientId: input.clientId,
       accessCode: code,
-      active: 1,
-      createdBy: ctx.user.id
+      active: 1
     });
     return { accessCode: code };
   }),
