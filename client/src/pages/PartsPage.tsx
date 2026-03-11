@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Package, Plus, Search, AlertTriangle, ShoppingCart, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Package, Plus, Search, AlertTriangle, ShoppingCart, CheckCircle, XCircle, Camera, Image as ImageIcon } from "lucide-react";
 
 type ActiveTab = "estoque" | "solicitacoes";
 
@@ -25,14 +25,6 @@ const STATUS_COLORS: Record<string, string> = {
   entregue: "bg-green-100 text-green-800",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pendente: "Pendente",
-  aprovado: "Aprovado",
-  rejeitado: "Rejeitado",
-  comprado: "Comprado",
-  entregue: "Entregue",
-};
-
 export default function PartsPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("estoque");
   const [search, setSearch] = useState("");
@@ -44,6 +36,8 @@ export default function PartsPage() {
     code: "", name: "", category: "", unit: "un", stockQuantity: "0",
     minStock: "0", unitCost: "", supplier: "", notes: "",
   });
+  const [partPhotoBase64, setPartPhotoBase64] = useState<string | null>(null);
+  const [partPhotoPreview, setPartPhotoPreview] = useState<string | null>(null);
 
   const [requestForm, setRequestForm] = useState({
     partName: "", quantity: "1", urgency: "media" as "baixa" | "media" | "alta",
@@ -56,12 +50,12 @@ export default function PartsPage() {
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
 
   const createPartMutation = trpc.parts.createPart.useMutation({
-    onSuccess: () => { toast.success("Peça cadastrada!"); utils.parts.listParts.invalidate(); setIsPartOpen(false); },
+    onSuccess: () => { toast.success("Peça cadastrada!"); utils.parts.listParts.invalidate(); setIsPartOpen(false); resetPartForm(); },
     onError: (e) => toast.error(e.message),
   });
 
   const updatePartMutation = trpc.parts.updatePart.useMutation({
-    onSuccess: () => { toast.success("Peça atualizada!"); utils.parts.listParts.invalidate(); setIsPartOpen(false); setEditPartId(null); },
+    onSuccess: () => { toast.success("Peça atualizada!"); utils.parts.listParts.invalidate(); setIsPartOpen(false); setEditPartId(null); resetPartForm(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -80,6 +74,12 @@ export default function PartsPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const resetPartForm = () => {
+    setPartForm({ code: "", name: "", category: "", unit: "un", stockQuantity: "0", minStock: "0", unitCost: "", supplier: "", notes: "" });
+    setPartPhotoBase64(null);
+    setPartPhotoPreview(null);
+  };
+
   const openEditPart = (p: any) => {
     setEditPartId(p.id);
     setPartForm({
@@ -88,7 +88,39 @@ export default function PartsPage() {
       minStock: String(p.minStock || 0), unitCost: p.unitCost || "",
       supplier: p.supplier || "", notes: p.notes || "",
     });
+    setPartPhotoBase64(null);
+    setPartPhotoPreview(p.photoUrl || null);
     setIsPartOpen(true);
+  };
+
+  // Abre seletor de arquivo de forma segura no mobile
+  const openPhotoPicker = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "environment"; // câmera traseira no mobile
+    input.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;";
+    document.body.appendChild(input);
+    const cleanup = () => {
+      setTimeout(() => { try { if (document.body.contains(input)) document.body.removeChild(input); } catch {} }, 300);
+    };
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (file) {
+        if (file.size > 5 * 1024 * 1024) { toast.error("Imagem muito grande. Máximo 5MB."); cleanup(); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const base64 = ev.target?.result as string;
+          setPartPhotoBase64(base64);
+          setPartPhotoPreview(base64);
+        };
+        reader.readAsDataURL(file);
+      }
+      cleanup();
+    });
+    input.addEventListener("cancel", cleanup);
+    setTimeout(cleanup, 60000);
+    input.click();
   };
 
   const handlePartSubmit = (e: React.FormEvent) => {
@@ -103,6 +135,7 @@ export default function PartsPage() {
       unitCost: partForm.unitCost || undefined,
       supplier: partForm.supplier || undefined,
       notes: partForm.notes || undefined,
+      photoBase64: partPhotoBase64 || undefined,
     };
     if (editPartId) updatePartMutation.mutate({ id: editPartId, ...data });
     else createPartMutation.mutate(data);
@@ -134,7 +167,7 @@ export default function PartsPage() {
         </div>
         <div className="flex gap-2">
           {activeTab === "estoque" && (
-            <Button onClick={() => { setEditPartId(null); setPartForm({ code: "", name: "", category: "", unit: "un", stockQuantity: "0", minStock: "0", unitCost: "", supplier: "", notes: "" }); setIsPartOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+            <Button onClick={() => { setEditPartId(null); resetPartForm(); setIsPartOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
               <Plus className="h-4 w-4" /> Nova Peça
             </Button>
           )}
@@ -201,6 +234,13 @@ export default function PartsPage() {
                   <tr key={p.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
+                        {p.photoUrl ? (
+                          <img src={p.photoUrl} alt={p.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <Package className="h-4 w-4 text-gray-400" />
+                          </div>
+                        )}
                         {p.stockQuantity <= (p.minStock || 0) && <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />}
                         <div>
                           <p className="font-medium text-gray-800">{p.name}</p>
@@ -242,7 +282,7 @@ export default function PartsPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-gray-800">{r.partName}</span>
                         <Badge className={`text-xs ${URGENCY_COLORS[r.urgency]}`}>{r.urgency}</Badge>
-                        <Badge className={`text-xs ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge>
+                        <Badge className={`text-xs ${STATUS_COLORS[r.status]}`}>{r.status}</Badge>
                       </div>
                       <p className="text-sm text-gray-500 mt-1">
                         Qtd: {r.quantity} · {r.equipmentName || "Sem equipamento"} · {new Date(r.createdAt).toLocaleDateString("pt-BR")}
@@ -278,10 +318,34 @@ export default function PartsPage() {
       )}
 
       {/* Sheet - Peça */}
-      <Sheet open={isPartOpen} onOpenChange={(v) => { setIsPartOpen(v); if (!v) setEditPartId(null); }}>
+      <Sheet open={isPartOpen} onOpenChange={(v) => { setIsPartOpen(v); if (!v) { setEditPartId(null); resetPartForm(); } }}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader className="mb-4"><SheetTitle className="text-emerald-800">{editPartId ? "Editar Peça" : "Nova Peça"}</SheetTitle></SheetHeader>
           <form onSubmit={handlePartSubmit} className="space-y-4 pb-8">
+            {/* Foto da peça */}
+            <div>
+              <Label>Foto da Peça</Label>
+              <div className="mt-1.5 flex items-center gap-3">
+                <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden bg-gray-50 flex-shrink-0">
+                  {partPhotoPreview ? (
+                    <img src={partPhotoPreview} alt="Foto" className="w-full h-full object-cover" />
+                  ) : (
+                    <Package className="h-8 w-8 text-gray-300" />
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={openPhotoPicker} className="gap-1.5 text-xs">
+                    <Camera className="h-3.5 w-3.5" /> Câmera / Galeria
+                  </Button>
+                  {partPhotoPreview && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setPartPhotoBase64(null); setPartPhotoPreview(null); }} className="text-red-500 text-xs">
+                      Remover foto
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Código</Label><Input value={partForm.code} onChange={e => setPartForm(f => ({ ...f, code: e.target.value }))} placeholder="ex: FLT-001" /></div>
               <div><Label>Nome *</Label><Input value={partForm.name} onChange={e => setPartForm(f => ({ ...f, name: e.target.value }))} required placeholder="Nome da peça" /></div>

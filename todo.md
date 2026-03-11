@@ -198,7 +198,11 @@
 
 ## 🐛 BUGS CONHECIDOS
 
-*(Nenhum bug reportado ainda)*
+- [ ] Corrigir erro insertBefore em todos os componentes com upload de arquivo (foto equipamento, documentos, peças)
+- [ ] Substituir biometria facial por registro manual de ponto (entrada/saída com hora e data)
+- [ ] Refazer portal do cliente: login com usuário/senha próprio, visão restrita ao cliente
+- [ ] Corrigir upload de foto de equipamento (câmera não carrega no mobile)
+- [ ] Adicionar campo de foto em peças e acessórios
 
 ---
 
@@ -541,3 +545,15 @@
 - [ ] Criar arquivos de configuração para deploy na Hostinger (.htaccess, ecosystem.config.cjs)
 - [ ] Ajustar package.json para usar npm em vez de pnpm
 - [ ] Fazer push no GitHub para deploy automático na Hostinger
+
+---
+
+## 🔧 CORREÇÕES E MELHORIAS (11/03/2026)
+
+- [x] Portal do Cliente: substituído login por código por login com e-mail + senha (bcrypt)
+- [x] ClientsPage: botão "Senha Portal" para definir senha de cada cliente
+- [x] Peças e Acessórios: adicionado campo de upload de foto (câmera/galeria) no formulário
+- [x] Schema DB: coluna `password` em `clients`, coluna `photo_url` em `parts`
+- [x] SQL de atualização para Hostinger: ATUALIZACAO_BANCO_HOSTINGER_v2.sql
+- [x] build.sh: corrigido para usar pnpm (evita erro workspace:* do drizzle-kit no npm)
+- [x] package.json: drizzle-kit removido das dependências (apenas usado localmente via pnpm)

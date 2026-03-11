@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Copy, Globe } from "lucide-react";
+import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -14,7 +14,6 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 
 type FormData = {
   name: string; document: string; email: string; phone: string;
@@ -35,7 +34,11 @@ export default function ClientsPage() {
   const [form, setForm] = useState<FormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteName, setDeleteName] = useState("");
-  const [accessCodeDialog, setAccessCodeDialog] = useState<{ clientName: string; code: string } | null>(null);
+
+  // Diálogo de senha do portal
+  const [passwordDialog, setPasswordDialog] = useState<{ clientId: number; clientName: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: clientsList = [], isLoading } = trpc.clients.list.useQuery({ search: search || undefined });
@@ -55,12 +58,13 @@ export default function ClientsPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const generateAccessMutation = trpc.clientPortal.generateAccessCode.useMutation({
-    onSuccess: (data, variables) => {
-      const client = clientsList.find((c: any) => c.id === variables.clientId);
-      setAccessCodeDialog({ clientName: client?.name || "Cliente", code: data.accessCode });
+  const setPasswordMutation = trpc.clientPortal.setClientPassword.useMutation({
+    onSuccess: () => {
+      toast.success("Senha do portal definida com sucesso!");
+      setPasswordDialog(null);
+      setNewPassword("");
     },
-    onError: (e) => toast.error(e.message || "Erro ao gerar código de acesso"),
+    onError: (e) => toast.error(e.message || "Erro ao definir senha"),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -85,8 +89,10 @@ export default function ClientsPage() {
     setIsOpen(true);
   };
 
-  const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code).then(() => toast.success("Código copiado!")).catch(() => toast.error("Não foi possível copiar"));
+  const handleSetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordDialog || !newPassword.trim()) return;
+    setPasswordMutation.mutate({ clientId: passwordDialog.clientId, password: newPassword });
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -111,8 +117,8 @@ export default function ClientsPage() {
         <div>
           <p className="font-medium text-blue-800 text-sm">Portal do Cliente</p>
           <p className="text-xs text-blue-600 mt-0.5">
-            Cada cliente pode acessar o portal em <strong>/client-portal</strong> usando um código de acesso.
-            Clique no botão <strong>🔑 Gerar Código</strong> ao lado de cada cliente para criar o código de acesso.
+            Cada cliente acessa o portal em <strong>/client-portal</strong> usando o <strong>e-mail</strong> e uma <strong>senha</strong>.
+            Clique no botão <strong>🔑 Definir Senha</strong> ao lado de cada cliente para configurar o acesso.
           </p>
         </div>
       </div>
@@ -154,13 +160,12 @@ export default function ClientsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => generateAccessMutation.mutate({ clientId: c.id })}
-                      disabled={generateAccessMutation.isPending}
+                      onClick={() => { setPasswordDialog({ clientId: c.id, clientName: c.name }); setNewPassword(""); setShowPassword(false); }}
                       className="text-blue-700 border-blue-200 hover:bg-blue-50 text-xs gap-1"
-                      title="Gerar código de acesso ao Portal do Cliente"
+                      title="Definir senha do Portal do Cliente"
                     >
                       <Key className="h-3 w-3" />
-                      <span className="hidden sm:inline">Código Portal</span>
+                      <span className="hidden sm:inline">Senha Portal</span>
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="text-emerald-700 hover:bg-emerald-50">
                       <Pencil className="h-4 w-4" />
@@ -176,43 +181,52 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
 
-      {/* Dialog: Código de Acesso Gerado */}
-      <Dialog open={!!accessCodeDialog} onOpenChange={() => setAccessCodeDialog(null)}>
+      {/* Dialog: Definir Senha do Portal */}
+      <Dialog open={!!passwordDialog} onOpenChange={(v) => { if (!v) { setPasswordDialog(null); setNewPassword(""); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5 text-blue-600" /> Código de Acesso Gerado
+              <Lock className="h-5 w-5 text-blue-600" /> Senha do Portal
             </DialogTitle>
             <DialogDescription>
-              Compartilhe este código com <strong>{accessCodeDialog?.clientName}</strong> para acessar o Portal do Cliente.
+              Defina a senha de acesso ao Portal do Cliente para <strong>{passwordDialog?.clientName}</strong>.
+              O cliente usará o e-mail cadastrado + esta senha para entrar.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-3 p-6 bg-blue-50 rounded-xl border border-blue-200">
-              <span className="text-4xl font-bold tracking-widest text-blue-800 font-mono">
-                {accessCodeDialog?.code}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => accessCodeDialog && copyCode(accessCodeDialog.code)}
-                className="text-blue-600 hover:bg-blue-100"
-              >
-                <Copy className="h-5 w-5" />
+          <form onSubmit={handleSetPassword} className="space-y-4">
+            <div>
+              <Label>Nova Senha</Label>
+              <div className="relative mt-1.5">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 4 caracteres"
+                  minLength={4}
+                  required
+                  className="w-full h-10 pl-3 pr-10 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="text-xs text-gray-500 space-y-1 bg-gray-50 rounded-lg p-3">
+              <p>• O cliente acessa em: <strong>/client-portal</strong></p>
+              <p>• Login: e-mail cadastrado + esta senha</p>
+              <p>• Compartilhe a senha com segurança</p>
+            </div>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setPasswordDialog(null)}>Cancelar</Button>
+              <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" disabled={setPasswordMutation.isPending || !newPassword.trim()}>
+                {setPasswordMutation.isPending ? "Salvando..." : "Definir Senha"}
               </Button>
             </div>
-            <div className="text-xs text-gray-500 space-y-1">
-              <p>• O cliente acessa em: <strong>/client-portal</strong></p>
-              <p>• O código é válido até ser substituído por um novo</p>
-              <p>• Guarde este código em local seguro</p>
-            </div>
-            <Button
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => accessCodeDialog && copyCode(accessCodeDialog.code)}
-            >
-              <Copy className="h-4 w-4 mr-2" /> Copiar Código
-            </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 

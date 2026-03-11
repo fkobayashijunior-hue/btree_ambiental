@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { parts, partsRequests } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
+import { cloudinaryUpload } from "../cloudinary";
 
 export const partsRouter = router({
   // === PEÇAS ===
@@ -34,12 +35,21 @@ export const partsRouter = router({
       minStock: z.number().optional(),
       unitCost: z.string().optional(),
       supplier: z.string().optional(),
+      photoBase64: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      await db.insert(parts).values({ ...input, createdBy: ctx.user.id });
+
+      let photoUrl: string | undefined;
+      if (input.photoBase64) {
+        const result = await cloudinaryUpload(input.photoBase64, "btree/parts");
+        photoUrl = result.url;
+      }
+
+      const { photoBase64, ...rest } = input;
+      await db.insert(parts).values({ ...rest, photoUrl, createdBy: ctx.user.id });
       return { success: true };
     }),
 
@@ -54,14 +64,23 @@ export const partsRouter = router({
       minStock: z.number().optional(),
       unitCost: z.string().optional(),
       supplier: z.string().optional(),
+      photoBase64: z.string().optional(),
       notes: z.string().optional(),
       active: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      const { id, ...rest } = input;
-      await db.update(parts).set({ ...rest, updatedAt: new Date() }).where(eq(parts.id, id));
+
+      const { id, photoBase64, ...rest } = input;
+      const updateData: any = { ...rest, updatedAt: new Date() };
+
+      if (photoBase64) {
+        const result = await cloudinaryUpload(photoBase64, "btree/parts");
+        updateData.photoUrl = result.url;
+      }
+
+      await db.update(parts).set(updateData).where(eq(parts.id, id));
       return { success: true };
     }),
 

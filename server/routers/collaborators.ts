@@ -220,34 +220,31 @@ export const collaboratorsRouter = router({
       return { success: true };
     }),
 
-  // Registrar presença biométrica
+  // Registrar ponto (manual ou biométrico)
   registerAttendance: protectedProcedure
     .input(z.object({
       collaboratorId: z.number(),
+      checkInOverride: z.string().optional(), // ISO string para registro manual
+      checkOutOverride: z.string().optional(), // ISO string para saída manual
       location: z.string().optional(),
       latitude: z.string().optional(),
       longitude: z.string().optional(),
-      photoBase64: z.string().optional(),
-      confidence: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Upload da foto (opcional, apenas para log)
-      if (input.photoBase64) {
-        try { await cloudinaryUpload(input.photoBase64); } catch {}
-      }
+      const checkInTime = input.checkInOverride ? new Date(input.checkInOverride) : new Date();
+      const checkOutTime = input.checkOutOverride ? new Date(input.checkOutOverride) : undefined;
 
-      const now = new Date();
       const [inserted] = await db.insert(biometricAttendance).values({
         collaboratorId: input.collaboratorId,
-        checkIn: now,
+        checkIn: checkInTime,
+        checkOut: checkOutTime,
         location: input.location,
         latitude: input.latitude,
         longitude: input.longitude,
-        confidence: input.confidence,
         registeredBy: ctx.user.id,
         notes: input.notes,
       });
@@ -256,7 +253,7 @@ export const collaboratorsRouter = router({
       return { success: true, id: newId };
     }),
 
-  // Listar presenças (para o admin/Mary)
+  // Listar registros de ponto
   listAttendance: protectedProcedure
     .input(z.object({
       date: z.string().optional(), // YYYY-MM-DD
@@ -266,7 +263,7 @@ export const collaboratorsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const records = await db
+      const baseQuery = db
         .select({
           id: biometricAttendance.id,
           collaboratorId: biometricAttendance.collaboratorId,
@@ -278,14 +275,20 @@ export const collaboratorsRouter = router({
           location: biometricAttendance.location,
           latitude: biometricAttendance.latitude,
           longitude: biometricAttendance.longitude,
-          confidence: biometricAttendance.confidence,
           notes: biometricAttendance.notes,
           createdAt: biometricAttendance.createdAt,
         })
         .from(biometricAttendance)
-        .innerJoin(collaborators, eq(biometricAttendance.collaboratorId, collaborators.id))
-        .orderBy(desc(biometricAttendance.checkIn));
+        .innerJoin(collaborators, eq(biometricAttendance.collaboratorId, collaborators.id));
 
+      if (input?.collaboratorId) {
+        const records = await (baseQuery as any)
+          .where(eq(biometricAttendance.collaboratorId, input.collaboratorId))
+          .orderBy(desc(biometricAttendance.checkIn));
+        return records;
+      }
+
+      const records = await (baseQuery as any).orderBy(desc(biometricAttendance.checkIn));
       return records;
     }),
 

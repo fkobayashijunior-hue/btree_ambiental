@@ -266,6 +266,8 @@ var init_schema = __esm({
       city: varchar("city", { length: 100 }),
       state: varchar("state", { length: 2 }),
       notes: text("notes"),
+      password: varchar("password", { length: 255 }),
+      // senha para acesso ao portal
       active: int("active").default(1).notNull(),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -384,6 +386,7 @@ var init_schema = __esm({
       minStock: int("min_stock").default(0),
       unitCost: varchar("unit_cost", { length: 20 }),
       supplier: varchar("supplier", { length: 255 }),
+      photoUrl: text("photo_url"),
       notes: text("notes"),
       active: int("active").default(1).notNull(),
       createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1087,39 +1090,36 @@ var collaboratorsRouter = router({
     await db.update(collaborators).set(updateData).where(eq2(collaborators.id, input.id));
     return { success: true };
   }),
-  // Registrar presença biométrica
+  // Registrar ponto (manual ou biométrico)
   registerAttendance: protectedProcedure.input(z2.object({
     collaboratorId: z2.number(),
+    checkInOverride: z2.string().optional(),
+    // ISO string para registro manual
+    checkOutOverride: z2.string().optional(),
+    // ISO string para saída manual
     location: z2.string().optional(),
     latitude: z2.string().optional(),
     longitude: z2.string().optional(),
-    photoBase64: z2.string().optional(),
-    confidence: z2.string().optional(),
     notes: z2.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    if (input.photoBase64) {
-      try {
-        await cloudinaryUpload(input.photoBase64);
-      } catch {
-      }
-    }
-    const now = /* @__PURE__ */ new Date();
+    const checkInTime = input.checkInOverride ? new Date(input.checkInOverride) : /* @__PURE__ */ new Date();
+    const checkOutTime = input.checkOutOverride ? new Date(input.checkOutOverride) : void 0;
     const [inserted] = await db.insert(biometricAttendance).values({
       collaboratorId: input.collaboratorId,
-      checkIn: now,
+      checkIn: checkInTime,
+      checkOut: checkOutTime,
       location: input.location,
       latitude: input.latitude,
       longitude: input.longitude,
-      confidence: input.confidence,
       registeredBy: ctx.user.id,
       notes: input.notes
     });
     const newId = inserted.insertId;
     return { success: true, id: newId };
   }),
-  // Listar presenças (para o admin/Mary)
+  // Listar registros de ponto
   listAttendance: protectedProcedure.input(z2.object({
     date: z2.string().optional(),
     // YYYY-MM-DD
@@ -1127,7 +1127,7 @@ var collaboratorsRouter = router({
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const records = await db.select({
+    const baseQuery = db.select({
       id: biometricAttendance.id,
       collaboratorId: biometricAttendance.collaboratorId,
       collaboratorName: collaborators.name,
@@ -1138,10 +1138,14 @@ var collaboratorsRouter = router({
       location: biometricAttendance.location,
       latitude: biometricAttendance.latitude,
       longitude: biometricAttendance.longitude,
-      confidence: biometricAttendance.confidence,
       notes: biometricAttendance.notes,
       createdAt: biometricAttendance.createdAt
-    }).from(biometricAttendance).innerJoin(collaborators, eq2(biometricAttendance.collaboratorId, collaborators.id)).orderBy(desc(biometricAttendance.checkIn));
+    }).from(biometricAttendance).innerJoin(collaborators, eq2(biometricAttendance.collaboratorId, collaborators.id));
+    if (input?.collaboratorId) {
+      const records2 = await baseQuery.where(eq2(biometricAttendance.collaboratorId, input.collaboratorId)).orderBy(desc(biometricAttendance.checkIn));
+      return records2;
+    }
+    const records = await baseQuery.orderBy(desc(biometricAttendance.checkIn));
     return records;
   }),
   // Buscar todos os descritores faciais (para reconhecimento)
@@ -1786,11 +1790,18 @@ var partsRouter = router({
     minStock: z8.number().optional(),
     unitCost: z8.string().optional(),
     supplier: z8.string().optional(),
+    photoBase64: z8.string().optional(),
     notes: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    await db.insert(parts).values({ ...input, createdBy: ctx.user.id });
+    let photoUrl;
+    if (input.photoBase64) {
+      const result = await cloudinaryUpload(input.photoBase64, "btree/parts");
+      photoUrl = result.url;
+    }
+    const { photoBase64, ...rest } = input;
+    await db.insert(parts).values({ ...rest, photoUrl, createdBy: ctx.user.id });
     return { success: true };
   }),
   updatePart: protectedProcedure.input(z8.object({
@@ -1803,13 +1814,19 @@ var partsRouter = router({
     minStock: z8.number().optional(),
     unitCost: z8.string().optional(),
     supplier: z8.string().optional(),
+    photoBase64: z8.string().optional(),
     notes: z8.string().optional(),
     active: z8.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, ...rest } = input;
-    await db.update(parts).set({ ...rest, updatedAt: /* @__PURE__ */ new Date() }).where(eq8(parts.id, id));
+    const { id, photoBase64, ...rest } = input;
+    const updateData = { ...rest, updatedAt: /* @__PURE__ */ new Date() };
+    if (photoBase64) {
+      const result = await cloudinaryUpload(photoBase64, "btree/parts");
+      updateData.photoUrl = result.url;
+    }
+    await db.update(parts).set(updateData).where(eq8(parts.id, id));
     return { success: true };
   }),
   deletePart: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
@@ -1945,67 +1962,60 @@ import { z as z10 } from "zod";
 init_db();
 init_schema();
 import { eq as eq10, and as and4, desc as desc8 } from "drizzle-orm";
-import crypto from "crypto";
+import bcrypt3 from "bcryptjs";
 var clientPortalRouter = router({
   // ── LOGIN DO CLIENTE (público) ──
-  login: publicProcedure.input(z10.object({ accessCode: z10.string().min(4) })).mutation(async ({ input }) => {
+  login: publicProcedure.input(z10.object({
+    email: z10.string().email(),
+    password: z10.string().min(1)
+  })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const [access] = await db.select({
-      id: clientPortalAccess.id,
-      clientId: clientPortalAccess.clientId,
-      active: clientPortalAccess.active,
-      clientName: clients.name,
-      clientPhone: clients.phone,
-      clientEmail: clients.email,
-      clientCity: clients.city
-    }).from(clientPortalAccess).innerJoin(clients, eq10(clientPortalAccess.clientId, clients.id)).where(
+    const [client] = await db.select().from(clients).where(
       and4(
-        eq10(clientPortalAccess.accessCode, input.accessCode.trim().toUpperCase()),
-        eq10(clientPortalAccess.active, 1),
+        eq10(clients.email, input.email.trim().toLowerCase()),
         eq10(clients.active, 1)
       )
     ).limit(1);
-    if (!access) throw new Error("C\xF3digo de acesso inv\xE1lido ou inativo.");
-    await db.update(clientPortalAccess).set({ lastAccessAt: /* @__PURE__ */ new Date() }).where(eq10(clientPortalAccess.id, access.id));
+    if (!client) throw new Error("E-mail ou senha incorretos.");
+    if (!client.password) throw new Error("Acesso n\xE3o configurado. Entre em contato com a BTREE Ambiental.");
+    const valid = await bcrypt3.compare(input.password, client.password);
+    if (!valid) throw new Error("E-mail ou senha incorretos.");
     return {
-      clientId: access.clientId,
-      clientName: access.clientName,
-      clientPhone: access.clientPhone,
-      clientEmail: access.clientEmail,
-      clientCity: access.clientCity
+      clientId: client.id,
+      clientName: client.name,
+      clientPhone: client.phone,
+      clientEmail: client.email,
+      clientCity: client.city
     };
   }),
   // ── DADOS DO PORTAL (público — requer clientId validado no frontend) ──
-  getPortalData: publicProcedure.input(z10.object({ clientId: z10.number(), accessCode: z10.string() })).query(async ({ input }) => {
+  getPortalData: publicProcedure.input(z10.object({ clientId: z10.number(), email: z10.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const [access] = await db.select({ id: clientPortalAccess.id }).from(clientPortalAccess).where(
+    const [client] = await db.select().from(clients).where(
       and4(
-        eq10(clientPortalAccess.clientId, input.clientId),
-        eq10(clientPortalAccess.accessCode, input.accessCode.trim().toUpperCase()),
-        eq10(clientPortalAccess.active, 1)
+        eq10(clients.id, input.clientId),
+        eq10(clients.email, input.email.trim().toLowerCase()),
+        eq10(clients.active, 1)
       )
     ).limit(1);
-    if (!access) throw new Error("Acesso n\xE3o autorizado.");
-    const [client] = await db.select().from(clients).where(eq10(clients.id, input.clientId)).limit(1);
+    if (!client) throw new Error("Acesso n\xE3o autorizado.");
     const loads = await db.select().from(cargoLoads).where(eq10(cargoLoads.clientId, input.clientId)).orderBy(desc8(cargoLoads.date)).limit(50);
     const replanting = await db.select().from(replantingRecords).where(eq10(replantingRecords.clientId, input.clientId)).orderBy(desc8(replantingRecords.date)).limit(50);
     const payments = await db.select().from(clientPayments).where(eq10(clientPayments.clientId, input.clientId)).orderBy(desc8(clientPayments.referenceDate)).limit(50);
     return { client, loads, replanting, payments };
   }),
-  // ── GERAR CÓDIGO DE ACESSO (admin) ──
-  generateAccessCode: protectedProcedure.input(z10.object({ clientId: z10.number() })).mutation(async ({ input }) => {
+  // ── DEFINIR/ALTERAR SENHA DO CLIENTE (admin) ──
+  setClientPassword: protectedProcedure.input(z10.object({
+    clientId: z10.number(),
+    password: z10.string().min(4)
+  })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(clientPortalAccess).set({ active: 0 }).where(eq10(clientPortalAccess.clientId, input.clientId));
-    const code = crypto.randomInt(1e5, 999999).toString();
-    await db.insert(clientPortalAccess).values({
-      clientId: input.clientId,
-      accessCode: code,
-      active: 1
-    });
-    return { accessCode: code };
+    const hash = await bcrypt3.hash(input.password, 10);
+    await db.update(clients).set({ password: hash }).where(eq10(clients.id, input.clientId));
+    return { success: true };
   }),
   // ── REGISTRAR REPLANTIO (admin) ──
   addReplanting: protectedProcedure.input(z10.object({
@@ -2066,20 +2076,6 @@ var clientPortalRouter = router({
       registeredBy: ctx.user.id
     });
     return { success: true };
-  }),
-  // ── LISTAR ACESSOS ATIVOS (admin) ──
-  listAccesses: protectedProcedure.query(async () => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    return db.select({
-      id: clientPortalAccess.id,
-      clientId: clientPortalAccess.clientId,
-      clientName: clients.name,
-      accessCode: clientPortalAccess.accessCode,
-      active: clientPortalAccess.active,
-      lastAccessAt: clientPortalAccess.lastAccessAt,
-      createdAt: clientPortalAccess.createdAt
-    }).from(clientPortalAccess).innerJoin(clients, eq10(clientPortalAccess.clientId, clients.id)).orderBy(desc8(clientPortalAccess.createdAt));
   })
 });
 
@@ -2346,7 +2342,7 @@ Se n\xE3o solicitou, ignore este email.`
 }
 
 // server/routers.ts
-import crypto2 from "crypto";
+import crypto from "crypto";
 async function createSessionToken(userId, email, name) {
   const secret = new TextEncoder().encode(process.env.JWT_SECRET || "btree-secret-key");
   const expiresAt = Math.floor((Date.now() + 365 * 24 * 60 * 60 * 1e3) / 1e3);
@@ -2415,7 +2411,7 @@ var appRouter = router({
       if (!user) {
         return { success: true };
       }
-      const token = crypto2.randomBytes(48).toString("hex");
+      const token = crypto.randomBytes(48).toString("hex");
       await createPasswordResetToken(user.id, token);
       const baseUrl = input.origin || "https://btreeambiental.com";
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;

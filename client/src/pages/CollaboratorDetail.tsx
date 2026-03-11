@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, FileText, Upload, Trash2, Eye, Download,
   User, Phone, MapPin, Calendar, Briefcase, Award,
-  Car, Shield, Plus, Loader2, FileImage, FileBadge, Camera, CheckCircle, RefreshCw, Fingerprint
+  Car, Shield, Plus, Loader2, FileImage, FileBadge, Clock, CheckCircle, LogIn, LogOut
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,26 +27,7 @@ const DOC_TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode; co
 
 const DOC_TYPES = ["cnh", "certificado", "aso", "contrato", "rg", "cpf", "outros"] as const;
 
-type Tab = "dados" | "documentos" | "biometria";
-
-// Carrega o face-api.js de forma segura
-let faceApiLoadPromise: Promise<void> | null = null;
-function loadFaceApiScript(): Promise<void> {
-  if (faceApiLoadPromise) return faceApiLoadPromise;
-  faceApiLoadPromise = new Promise((resolve, reject) => {
-    if ((window as any).faceapi) { resolve(); return; }
-    const existing = document.querySelector('script[data-faceapi]');
-    if (existing) { existing.addEventListener('load', () => resolve()); existing.addEventListener('error', reject); return; }
-    const script = document.createElement("script");
-    script.setAttribute('data-faceapi', 'true');
-    script.src = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js";
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = reject;
-    document.body.appendChild(script);
-  });
-  return faceApiLoadPromise;
-}
+type Tab = "dados" | "documentos" | "ponto";
 
 export default function CollaboratorDetail() {
   const params = useParams<{ id: string }>();
@@ -64,18 +45,18 @@ export default function CollaboratorDetail() {
   const [docExpiryDate, setDocExpiryDate] = useState("");
   const [docNotes, setDocNotes] = useState("");
   const [previewDoc, setPreviewDoc] = useState<{ url: string; type: string; title: string } | null>(null);
-  // --- Biometria ---
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [bioStream, setBioStream] = useState<MediaStream | null>(null);
-  const [bioCameraActive, setBioCameraActive] = useState(false);
-  const [bioCapturing, setBioCapturing] = useState(false);
-  const [bioFaceApiLoaded, setBioFaceApiLoaded] = useState(false);
-  const [bioLoadingModels, setBioLoadingModels] = useState(false);
-  const [bioCaptured, setBioCaptured] = useState<{ photo: string; descriptor: string } | null>(null);
+
+  // --- Registro de Ponto ---
+  const [pontoDate, setPontoDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [pontoCheckIn, setPontoCheckIn] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+  const [pontoCheckOut, setPontoCheckOut] = useState("");
+  const [pontoNotes, setPontoNotes] = useState("");
 
   // Buscar dados do colaborador
-  const { data: collabData, isLoading: loadingCollab, refetch: refetchCollab } = trpc.collaborators.getById.useQuery(
+  const { data: collabData, isLoading: loadingCollab } = trpc.collaborators.getById.useQuery(
     { id: collaboratorId },
     { enabled: collaboratorId > 0 }
   );
@@ -84,6 +65,12 @@ export default function CollaboratorDetail() {
   const { data: documents = [], refetch: refetchDocs } = trpc.collaboratorDocuments.list.useQuery(
     { collaboratorId },
     { enabled: collaboratorId > 0 }
+  );
+
+  // Buscar registros de ponto
+  const { data: attendanceRecords = [], refetch: refetchAttendance } = trpc.collaborators.listAttendance.useQuery(
+    { collaboratorId },
+    { enabled: collaboratorId > 0 && activeTab === "ponto" }
   );
 
   const addDocMutation = trpc.collaboratorDocuments.add.useMutation({
@@ -101,14 +88,13 @@ export default function CollaboratorDetail() {
     onError: (e) => toast.error(e.message || "Erro ao remover documento"),
   });
 
-  const saveFaceDescriptorMutation = trpc.collaborators.saveFaceDescriptor.useMutation({
+  const registerAttendanceMutation = trpc.collaborators.registerAttendance.useMutation({
     onSuccess: () => {
-      toast.success("Biometria facial cadastrada com sucesso!");
-      refetchCollab();
-      setBioCaptured(null);
-      stopBioCamera();
+      toast.success("Ponto registrado com sucesso!");
+      refetchAttendance();
+      setPontoNotes("");
     },
-    onError: (e) => toast.error(e.message || "Erro ao salvar biometria"),
+    onError: (e) => toast.error(e.message || "Erro ao registrar ponto"),
   });
 
   const resetDocForm = () => {
@@ -124,18 +110,24 @@ export default function CollaboratorDetail() {
     reader.onload = (ev) => setDocFile(ev.target?.result as string);
     reader.readAsDataURL(file);
   };
-  // Abre seletor de arquivo de forma segura no mobile (evita NotFoundError insertBefore)
+
+  // Abre seletor de arquivo de forma segura no mobile (evita NotFoundError insertBefore/removeChild)
   const openFilePicker = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*,application/pdf";
-    input.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;";
+    input.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;";
     document.body.appendChild(input);
+    const cleanup = () => {
+      setTimeout(() => { try { if (document.body.contains(input)) document.body.removeChild(input); } catch {} }, 300);
+    };
     input.addEventListener("change", () => {
       const file = input.files?.[0];
       if (file) handleFileSelect(file);
-      try { document.body.removeChild(input); } catch {}
+      cleanup();
     });
+    input.addEventListener("cancel", cleanup);
+    setTimeout(cleanup, 60000);
     input.click();
   };
 
@@ -151,84 +143,25 @@ export default function CollaboratorDetail() {
     });
   };
 
-  // --- Biometria: carregar face-api ---
-  useEffect(() => {
-    if (activeTab !== "biometria") return;
-    if (bioFaceApiLoaded) return;
-    setBioLoadingModels(true);
-    loadFaceApiScript().then(async () => {
-      const faceapi = (window as any).faceapi;
-      const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/";
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-      ]);
-      setBioFaceApiLoaded(true);
-    }).catch(() => {
-      toast.error("Erro ao carregar IA de reconhecimento");
-    }).finally(() => setBioLoadingModels(false));
-  }, [activeTab]);
-
-  const startBioCamera = async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        await videoRef.current.play().catch(() => {});
-      }
-      setBioStream(mediaStream);
-      setBioCameraActive(true);
-    } catch {
-      toast.error("Não foi possível acessar a câmera");
+  const handleRegistrarPonto = () => {
+    if (!pontoDate || !pontoCheckIn) {
+      toast.error("Informe a data e hora de entrada");
+      return;
     }
-  };
-
-  const stopBioCamera = () => {
-    bioStream?.getTracks().forEach(t => t.stop());
-    setBioStream(null);
-    setBioCameraActive(false);
-  };
-
-  const captureBiometric = async () => {
-    if (!videoRef.current || !canvasRef.current || !bioFaceApiLoaded) return;
-    const faceapi = (window as any).faceapi;
-    setBioCapturing(true);
-    try {
-      const detection = await faceapi
-        .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-
-      if (!detection) {
-        toast.warning("Nenhum rosto detectado. Posicione o rosto na frente da câmera.");
-        setBioCapturing(false);
+    const checkInDate = new Date(`${pontoDate}T${pontoCheckIn}:00`);
+    let checkOutDate: Date | undefined;
+    if (pontoCheckOut) {
+      checkOutDate = new Date(`${pontoDate}T${pontoCheckOut}:00`);
+      if (checkOutDate <= checkInDate) {
+        toast.error("Hora de saída deve ser após a entrada");
         return;
       }
-
-      const canvas = canvasRef.current;
-      canvas.width = videoRef.current.videoWidth || 640;
-      canvas.height = videoRef.current.videoHeight || 480;
-      canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
-      const photo = canvas.toDataURL("image/jpeg", 0.8);
-      const descriptor = JSON.stringify(Array.from(detection.descriptor));
-
-      setBioCaptured({ photo, descriptor });
-      toast.success("Rosto capturado! Confirme para salvar.");
-    } catch (e) {
-      toast.error("Erro ao capturar rosto");
     }
-    setBioCapturing(false);
-  };
-
-  const saveBiometric = () => {
-    if (!bioCaptured) return;
-    saveFaceDescriptorMutation.mutate({
-      id: collaboratorId,
-      faceDescriptor: bioCaptured.descriptor,
-      photoBase64: bioCaptured.photo,
+    registerAttendanceMutation.mutate({
+      collaboratorId,
+      checkInOverride: checkInDate.toISOString(),
+      checkOutOverride: checkOutDate?.toISOString(),
+      notes: pontoNotes || undefined,
     });
   };
 
@@ -297,7 +230,6 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
   }
 
   const collab = collabData;
-  const hasBiometric = !!(collab as any).faceDescriptor;
 
   return (
     <DashboardLayout>
@@ -334,18 +266,13 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
               <Badge className={collab.active === 1 ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}>
                 {collab.active === 1 ? "Ativo" : "Inativo"}
               </Badge>
-              {hasBiometric && (
-                <Badge className="bg-blue-100 text-blue-800">
-                  <Fingerprint className="h-3 w-3 mr-1" /> Biometria ✓
-                </Badge>
-              )}
             </div>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="flex gap-1 border-b overflow-x-auto">
-          {(["dados", "documentos", "biometria"] as Tab[]).map(tab => (
+          {(["dados", "documentos", "ponto"] as Tab[]).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -355,7 +282,7 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {tab === "dados" ? "Dados Pessoais" : tab === "documentos" ? `Documentos (${documents.length})` : "Biometria Facial"}
+              {tab === "dados" ? "Dados Pessoais" : tab === "documentos" ? `Documentos (${documents.length})` : "Registro de Ponto"}
             </button>
           ))}
         </div>
@@ -463,147 +390,110 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
           </div>
         )}
 
-        {/* Tab: Biometria */}
-        {activeTab === "biometria" && (
+        {/* Tab: Registro de Ponto */}
+        {activeTab === "ponto" && (
           <div className="space-y-4">
-            <Card className="border-emerald-100">
+            {/* Formulário de registro */}
+            <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base text-emerald-800 flex items-center gap-2">
-                  <Fingerprint className="h-5 w-5" /> Biometria Facial
+                  <Clock className="h-5 w-5" /> Registrar Ponto
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Status atual */}
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${hasBiometric ? "bg-emerald-50 border border-emerald-200" : "bg-amber-50 border border-amber-200"}`}>
-                  {hasBiometric ? (
-                    <>
-                      <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-emerald-800 text-sm">Biometria cadastrada</p>
-                        <p className="text-xs text-emerald-600">Este colaborador pode usar o reconhecimento facial para registro de presença.</p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <Fingerprint className="h-5 w-5 text-amber-600 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-amber-800 text-sm">Biometria não cadastrada</p>
-                        <p className="text-xs text-amber-600">Capture o rosto do colaborador para habilitar o reconhecimento facial.</p>
-                      </div>
-                    </>
-                  )}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Data *</label>
+                    <input
+                      type="date"
+                      value={pontoDate}
+                      onChange={e => setPontoDate(e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block flex items-center gap-1">
+                      <LogIn className="h-3.5 w-3.5 text-emerald-600" /> Entrada *
+                    </label>
+                    <input
+                      type="time"
+                      value={pontoCheckIn}
+                      onChange={e => setPontoCheckIn(e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block flex items-center gap-1">
+                      <LogOut className="h-3.5 w-3.5 text-gray-500" /> Saída (opcional)
+                    </label>
+                    <input
+                      type="time"
+                      value={pontoCheckOut}
+                      onChange={e => setPontoCheckOut(e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
                 </div>
-
-                {/* Instruções */}
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p className="font-medium text-foreground">Como cadastrar:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-xs">
-                    <li>Clique em "Ativar Câmera"</li>
-                    <li>Posicione o rosto do colaborador centralizado na câmera</li>
-                    <li>Clique em "Capturar Rosto"</li>
-                    <li>Confirme se o rosto foi capturado corretamente</li>
-                    <li>Clique em "Salvar Biometria"</li>
-                  </ol>
-                </div>
-
-                {/* Câmera */}
-                <div className="relative bg-gray-900 rounded-xl overflow-hidden aspect-video flex items-center justify-center">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className={`w-full h-full object-cover ${bioCameraActive ? "block" : "hidden"}`}
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Observações</label>
+                  <input
+                    type="text"
+                    value={pontoNotes}
+                    onChange={e => setPontoNotes(e.target.value)}
+                    placeholder="Ex: Trabalhou em campo, horas extras..."
+                    className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
-                  <canvas ref={canvasRef} className="hidden" />
-
-                  {!bioCameraActive && (
-                    <div className="text-center text-gray-400 p-4">
-                      {bioLoadingModels ? (
-                        <>
-                          <RefreshCw className="h-12 w-12 mx-auto mb-3 opacity-40 animate-spin" />
-                          <p className="text-sm">Carregando IA...</p>
-                        </>
-                      ) : (
-                        <>
-                          <Camera className="h-16 w-16 mx-auto mb-3 opacity-40" />
-                          <p className="text-sm">Câmera desativada</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {bioCaptured && (
-                    <div className="absolute inset-0 bg-emerald-900/80 flex items-center justify-center">
-                      <div className="text-center text-white p-4">
-                        <CheckCircle className="h-16 w-16 mx-auto mb-3 text-emerald-300" />
-                        <p className="font-bold">Rosto capturado!</p>
-                        <p className="text-sm text-emerald-300">Clique em "Salvar" para confirmar</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
-
-                {/* Controles */}
-                <div className="flex gap-2 flex-wrap">
-                  {!bioCameraActive ? (
-                    <Button
-                      onClick={startBioCamera}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                      disabled={bioLoadingModels}
-                    >
-                      {bioLoadingModels ? (
-                        <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Carregando IA...</>
-                      ) : (
-                        <><Camera className="h-4 w-4 mr-2" /> Ativar Câmera</>
-                      )}
-                    </Button>
+                <Button
+                  onClick={handleRegistrarPonto}
+                  disabled={registerAttendanceMutation.isPending}
+                  className="w-full bg-emerald-700 hover:bg-emerald-800 text-white"
+                >
+                  {registerAttendanceMutation.isPending ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Registrando...</>
                   ) : (
-                    <>
-                      {!bioCaptured ? (
-                        <Button
-                          onClick={captureBiometric}
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                          disabled={bioCapturing || !bioFaceApiLoaded}
-                        >
-                          {bioCapturing ? (
-                            <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Detectando...</>
-                          ) : (
-                            <><Camera className="h-4 w-4 mr-2" /> Capturar Rosto</>
-                          )}
-                        </Button>
-                      ) : (
-                        <>
-                          <Button
-                            onClick={saveBiometric}
-                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                            disabled={saveFaceDescriptorMutation.isPending}
-                          >
-                            {saveFaceDescriptorMutation.isPending ? (
-                              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</>
-                            ) : (
-                              <><CheckCircle className="h-4 w-4 mr-2" /> Salvar Biometria</>
-                            )}
-                          </Button>
-                          <Button variant="outline" onClick={() => setBioCaptured(null)} className="flex-1">
-                            Recapturar
-                          </Button>
-                        </>
-                      )}
-                      <Button variant="outline" onClick={stopBioCamera} className="px-3">
-                        Parar
-                      </Button>
-                    </>
+                    <><CheckCircle className="h-4 w-4 mr-2" /> Registrar Ponto</>
                   )}
-                </div>
-
-                {hasBiometric && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Para atualizar a biometria, capture um novo rosto e salve novamente.
-                  </p>
-                )}
+                </Button>
               </CardContent>
             </Card>
+
+            {/* Histórico */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Histórico de Ponto</h3>
+              {attendanceRecords.length === 0 ? (
+                <div className="text-center py-10 border-2 border-dashed rounded-xl text-muted-foreground">
+                  <Clock className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Nenhum registro de ponto ainda</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {attendanceRecords.map((rec: any) => {
+                    const checkIn = new Date(rec.checkInTime);
+                    const checkOut = rec.checkOutTime ? new Date(rec.checkOutTime) : null;
+                    const hoursWorked = checkOut
+                      ? ((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60)).toFixed(1)
+                      : null;
+                    return (
+                      <div key={rec.id} className="flex items-center gap-3 p-3 border rounded-xl bg-card">
+                        <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                          <Clock className="h-5 w-5 text-emerald-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{checkIn.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</p>
+                          <p className="text-xs text-muted-foreground">
+                            <span className="text-emerald-700 font-medium">Entrada: {checkIn.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+                            {checkOut && <span className="ml-2 text-gray-500">Saída: {checkOut.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>}
+                            {hoursWorked && <span className="ml-2 text-blue-600 font-medium">{hoursWorked}h trabalhadas</span>}
+                          </p>
+                          {rec.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate">{rec.notes}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

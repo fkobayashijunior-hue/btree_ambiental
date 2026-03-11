@@ -3,15 +3,22 @@ set -e
 
 echo "=== BTREE Ambiental Build ==="
 echo "Node: $(node --version)"
-echo "npm: $(npm --version)"
 
-# Sempre instalar todas as dependências (incluindo devDependencies para o build)
-echo "Installing all dependencies..."
-npm install --include=dev --legacy-peer-deps
+# Usar pnpm (já disponível no ambiente) para instalar dependências
+# pnpm usa o pnpm-lock.yaml que não tem o problema workspace:* do npm
+if command -v pnpm &> /dev/null; then
+  echo "Using pnpm..."
+  pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+else
+  echo "pnpm not found, installing..."
+  npm install -g pnpm@latest --legacy-peer-deps
+  pnpm install
+fi
 
-# Garantir que o vite e plugin-react estão instalados
+# Garantir que o vite está instalado
 if ! [ -f "./node_modules/.bin/vite" ]; then
   echo "Vite not found, installing explicitly..."
+  pnpm add -D vite@7.1.9 @vitejs/plugin-react@4.3.4 esbuild@0.25.0 --no-save 2>/dev/null || \
   npm install vite@7.1.9 @vitejs/plugin-react@4.3.4 esbuild@0.25.0 --legacy-peer-deps --no-save
 fi
 

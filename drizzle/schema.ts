@@ -257,6 +257,7 @@ export const clients = mysqlTable("clients", {
   city: varchar("city", { length: 100 }),
   state: varchar("state", { length: 2 }),
   notes: text("notes"),
+  password: varchar("password", { length: 255 }), // senha para acesso ao portal
   active: int("active").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -396,6 +397,7 @@ export const parts = mysqlTable("parts", {
   minStock: int("min_stock").default(0),
   unitCost: varchar("unit_cost", { length: 20 }),
   supplier: varchar("supplier", { length: 255 }),
+  photoUrl: text("photo_url"),
   notes: text("notes"),
   active: int("active").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

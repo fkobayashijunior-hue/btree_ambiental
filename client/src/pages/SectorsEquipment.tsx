@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
+import { useFilePicker } from "@/hooks/useFilePicker";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,7 @@ export default function SectorsEquipment() {
   const [equipPhotoPreview, setEquipPhotoPreview] = useState<string | null>(null);
   const [equipPhotoBase64, setEquipPhotoBase64] = useState<string | null>(null);
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { openFilePicker } = useFilePicker();
 
   // Tipo de equipamento state
   const [typeOpen, setTypeOpen] = useState(false);
@@ -125,8 +126,8 @@ export default function SectorsEquipment() {
     setEquipOpen(true);
   };
 
-  const handlePhotoChange = (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const file = ev.target.files?.[0];
+  const handlePhotoChange = (files: FileList) => {
+    const file = files[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Foto muito grande. Máximo 5MB.");
@@ -140,6 +141,7 @@ export default function SectorsEquipment() {
     };
     reader.readAsDataURL(file);
   };
+  const pickEquipPhoto = () => openFilePicker({ accept: "image/*" }, handlePhotoChange);
 
   const handleSectorSubmit = (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -320,14 +322,6 @@ export default function SectorsEquipment() {
                     {/* Upload de Foto */}
                     <div>
                       <Label className="mb-2 block">Foto do Equipamento</Label>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={handlePhotoChange}
-                      />
                       {equipPhotoPreview ? (
                         <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-200">
                           <img src={equipPhotoPreview} alt="Preview" className="w-full h-full object-cover" />
@@ -340,7 +334,7 @@ export default function SectorsEquipment() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => fileInputRef.current?.click()}
+                            onClick={pickEquipPhoto}
                             className="absolute bottom-2 right-2 bg-black/60 text-white rounded-lg px-3 py-1 text-xs flex items-center gap-1 hover:bg-black/80"
                           >
                             <Camera className="h-3 w-3" /> Trocar foto
@@ -349,7 +343,7 @@ export default function SectorsEquipment() {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => fileInputRef.current?.click()}
+                          onClick={pickEquipPhoto}
                           className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
                         >
                           <ImageIcon className="h-8 w-8" />
