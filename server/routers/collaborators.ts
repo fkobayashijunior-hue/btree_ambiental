@@ -235,21 +235,18 @@ export const collaboratorsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      let photoUrl: string | undefined;
+      // Upload da foto (opcional, apenas para log)
       if (input.photoBase64) {
-        const result = await cloudinaryUpload(input.photoBase64, "btree/attendance");
-        photoUrl = result.url;
+        try { await cloudinaryUpload(input.photoBase64); } catch {}
       }
 
       const now = new Date();
       const [inserted] = await db.insert(biometricAttendance).values({
         collaboratorId: input.collaboratorId,
-        date: now,
-        checkInTime: now,
+        checkIn: now,
         location: input.location,
         latitude: input.latitude,
         longitude: input.longitude,
-        photoUrl,
         confidence: input.confidence,
         registeredBy: ctx.user.id,
         notes: input.notes,
@@ -276,20 +273,18 @@ export const collaboratorsRouter = router({
           collaboratorName: collaborators.name,
           collaboratorRole: collaborators.role,
           collaboratorPhoto: collaborators.photoUrl,
-          date: biometricAttendance.date,
-          checkInTime: biometricAttendance.checkInTime,
-          checkOutTime: biometricAttendance.checkOutTime,
+          checkInTime: biometricAttendance.checkIn,
+          checkOutTime: biometricAttendance.checkOut,
           location: biometricAttendance.location,
           latitude: biometricAttendance.latitude,
           longitude: biometricAttendance.longitude,
-          photoUrl: biometricAttendance.photoUrl,
           confidence: biometricAttendance.confidence,
           notes: biometricAttendance.notes,
           createdAt: biometricAttendance.createdAt,
         })
         .from(biometricAttendance)
         .innerJoin(collaborators, eq(biometricAttendance.collaboratorId, collaborators.id))
-        .orderBy(desc(biometricAttendance.checkInTime));
+        .orderBy(desc(biometricAttendance.checkIn));
 
       return records;
     }),

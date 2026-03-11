@@ -116,7 +116,7 @@ export const clientPortalRouter = router({
   // ── GERAR CÓDIGO DE ACESSO (admin) ──
   generateAccessCode: protectedProcedure
     .input(z.object({ clientId: z.number() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -133,7 +133,6 @@ export const clientPortalRouter = router({
         clientId: input.clientId,
         accessCode: code,
         active: 1,
-        createdBy: ctx.user.id,
       });
 
       return { accessCode: code };

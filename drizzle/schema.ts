@@ -89,16 +89,14 @@ export type InsertCollaborator = typeof collaborators.$inferInsert;
 // Registro de presença biométrica
 export const biometricAttendance = mysqlTable("biometric_attendance", {
   id: int("id").autoincrement().primaryKey(),
-  collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
-  date: timestamp("date").notNull(),
-  checkInTime: timestamp("check_in_time").notNull(),
-  checkOutTime: timestamp("check_out_time"),
-  location: varchar("location", { length: 255 }), // Nome do local (fazenda, talhao)
+  collaboratorId: int("collaborator_id").notNull(),
+  checkIn: timestamp("check_in").notNull(),
+  checkOut: timestamp("check_out"),
+  location: varchar("location", { length: 255 }),
   latitude: varchar("latitude", { length: 20 }),
   longitude: varchar("longitude", { length: 20 }),
-  photoUrl: text("photo_url"), // Foto tirada no momento da presença
-  confidence: varchar("confidence", { length: 10 }), // % de confiança do reconhecimento
-  registeredBy: int("registered_by").notNull().references(() => users.id),
+  confidence: varchar("confidence", { length: 10 }),
+  registeredBy: int("registered_by"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -439,7 +437,7 @@ export const clientPortalAccess = mysqlTable("client_portal_access", {
   lastAccessAt: timestamp("last_access_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-  createdBy: int("created_by").references(() => users.id),
+  createdBy: int("created_by"),
 });
 export type ClientPortalAccess = typeof clientPortalAccess.$inferSelect;
 export type InsertClientPortalAccess = typeof clientPortalAccess.$inferInsert;
