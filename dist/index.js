@@ -874,8 +874,8 @@ import { eq as eq2, desc, and as and2, like, or } from "drizzle-orm";
 
 // server/cloudinary.ts
 var CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "djob7pxme";
-var CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "azaconnect";
-async function cloudinaryUpload(data, folder = "btree") {
+var CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "btree_ambiental";
+async function cloudinaryUpload(data, _folder = "btree") {
   let base64;
   let contentType = "image/jpeg";
   if (Buffer.isBuffer(data)) {
@@ -896,7 +896,6 @@ async function cloudinaryUpload(data, folder = "btree") {
   const params = new URLSearchParams();
   params.append("file", dataUri);
   params.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-  params.append("folder", folder);
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
     {

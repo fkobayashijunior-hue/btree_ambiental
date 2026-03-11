@@ -1,11 +1,14 @@
 /**
  * Upload de arquivos para o Cloudinary usando upload preset unsigned.
  * Cloud Name: djob7pxme
- * Upload Preset: azaconnect (unsigned, public, auto resource type)
+ * Upload Preset: btree_ambiental (unsigned, public, auto resource type)
+ *
+ * NOTA: O parâmetro `folder` foi removido pois o Cloudinary rejeita
+ * nomes de pasta com barras ("Display name cannot contain slashes").
  */
 
 const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "djob7pxme";
-const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "azaconnect";
+const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "btree_ambiental";
 
 /**
  * Faz upload de uma imagem (Buffer ou base64 string) para o Cloudinary.
@@ -13,7 +16,7 @@ const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "azacon
  */
 export async function cloudinaryUpload(
   data: Buffer | string,
-  folder = "btree"
+  _folder = "btree" // aceito por compatibilidade, mas não enviado ao Cloudinary
 ): Promise<{ url: string; publicId: string }> {
   let base64: string;
   let contentType = "image/jpeg";
@@ -38,7 +41,7 @@ export async function cloudinaryUpload(
   const params = new URLSearchParams();
   params.append("file", dataUri);
   params.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-  params.append("folder", folder);
+  // NÃO enviar o parâmetro "folder" — causa erro "Display name cannot contain slashes"
 
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
