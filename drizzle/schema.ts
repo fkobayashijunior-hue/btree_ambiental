@@ -532,3 +532,35 @@ export const equipmentMaintenance = mysqlTable("equipment_maintenance", {
 });
 export type EquipmentMaintenance = typeof equipmentMaintenance.$inferSelect;
 export type InsertEquipmentMaintenance = typeof equipmentMaintenance.$inferInsert;
+
+// ===== PEDIDOS DE COMPRA (Carrinho de Peças) =====
+export const purchaseOrders = mysqlTable("purchase_orders", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(), // ex: "Pedido 001 - Filtros"
+  status: mysqlEnum("status", ["rascunho", "enviado", "aprovado", "rejeitado", "comprado"]).default("rascunho").notNull(),
+  notes: text("notes"),
+  createdBy: int("created_by").references(() => users.id),
+  approvedBy: int("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type InsertPurchaseOrder = typeof purchaseOrders.$inferInsert;
+
+export const purchaseOrderItems = mysqlTable("purchase_order_items", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  partId: int("part_id").references(() => parts.id),
+  partName: varchar("part_name", { length: 255 }).notNull(),
+  partCode: varchar("part_code", { length: 50 }),
+  partCategory: varchar("part_category", { length: 100 }),
+  supplier: varchar("supplier", { length: 255 }),
+  unit: varchar("unit", { length: 20 }).default("un"),
+  quantity: int("quantity").notNull(),
+  unitCost: varchar("unit_cost", { length: 20 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+export type InsertPurchaseOrderItem = typeof purchaseOrderItems.$inferInsert;

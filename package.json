@@ -16,8 +16,6 @@
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.1.14",
-    "vite-plugin-manus-runtime": "^0.0.57",
     "@aws-sdk/client-s3": "^3.693.0",
     "@aws-sdk/s3-request-presigner": "^3.693.0",
     "@hookform/resolvers": "^5.2.2",
@@ -48,6 +46,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/typography": "^0.5.15",
+    "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.90.2",
     "@trpc/client": "^11.6.0",
     "@trpc/react-query": "^11.6.0",
@@ -68,8 +67,8 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.2",
     "drizzle-orm": "^0.44.5",
-    "esbuild": "^0.25.0",
     "embla-carousel-react": "^8.6.0",
+    "esbuild": "^0.25.0",
     "express": "^4.21.2",
     "framer-motion": "^12.23.22",
     "input-otp": "^1.4.2",
@@ -97,9 +96,12 @@
     "typescript": "5.9.3",
     "vaul": "^1.1.2",
     "vite": "^7.1.9",
+    "vite-plugin-manus-runtime": "^0.0.57",
     "vitest": "^2.1.4",
     "wouter": "^3.3.5",
     "zod": "^4.1.12"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "drizzle-kit": "0.30.0"
+  }
 }

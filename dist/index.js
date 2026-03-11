@@ -49,6 +49,8 @@ __export(schema_exports, {
   parts: () => parts,
   partsRequests: () => partsRequests,
   passwordResetTokens: () => passwordResetTokens,
+  purchaseOrderItems: () => purchaseOrderItems,
+  purchaseOrders: () => purchaseOrders,
   replantingRecords: () => replantingRecords,
   rolePermissions: () => rolePermissions,
   sectors: () => sectors,
@@ -57,7 +59,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance;
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -523,6 +525,32 @@ var init_schema = __esm({
       registeredBy: int("registered_by").references(() => users.id),
       performedAt: timestamp("performed_at").notNull(),
       // data da manutenção
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    purchaseOrders = mysqlTable("purchase_orders", {
+      id: int("id").autoincrement().primaryKey(),
+      title: varchar("title", { length: 255 }).notNull(),
+      // ex: "Pedido 001 - Filtros"
+      status: mysqlEnum("status", ["rascunho", "enviado", "aprovado", "rejeitado", "comprado"]).default("rascunho").notNull(),
+      notes: text("notes"),
+      createdBy: int("created_by").references(() => users.id),
+      approvedBy: int("approved_by").references(() => users.id),
+      approvedAt: timestamp("approved_at"),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    purchaseOrderItems = mysqlTable("purchase_order_items", {
+      id: int("id").autoincrement().primaryKey(),
+      orderId: int("order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+      partId: int("part_id").references(() => parts.id),
+      partName: varchar("part_name", { length: 255 }).notNull(),
+      partCode: varchar("part_code", { length: 50 }),
+      partCategory: varchar("part_category", { length: 100 }),
+      supplier: varchar("supplier", { length: 255 }),
+      unit: varchar("unit", { length: 20 }).default("un"),
+      quantity: int("quantity").notNull(),
+      unitCost: varchar("unit_cost", { length: 20 }),
+      notes: text("notes"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
   }
@@ -2244,8 +2272,89 @@ var equipmentDetailRouter = router({
   })
 });
 
-// server/routers.ts
+// server/routers/purchaseOrders.ts
 import { z as z13 } from "zod";
+init_db();
+init_schema();
+import { TRPCError as TRPCError9 } from "@trpc/server";
+import { eq as eq13, desc as desc11 } from "drizzle-orm";
+var purchaseOrdersRouter = router({
+  // Listar todos os pedidos
+  listOrders: protectedProcedure.input(z13.object({ status: z13.string().optional() }).optional()).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const orders = await db.select().from(purchaseOrders).orderBy(desc11(purchaseOrders.createdAt));
+    if (input?.status) return orders.filter((o) => o.status === input.status);
+    return orders;
+  }),
+  // Buscar pedido com itens
+  getOrder: protectedProcedure.input(z13.object({ id: z13.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [order] = await db.select().from(purchaseOrders).where(eq13(purchaseOrders.id, input.id));
+    if (!order) throw new TRPCError9({ code: "NOT_FOUND" });
+    const items = await db.select().from(purchaseOrderItems).where(eq13(purchaseOrderItems.orderId, input.id));
+    return { ...order, items };
+  }),
+  // Criar pedido com itens
+  createOrder: protectedProcedure.input(z13.object({
+    title: z13.string().min(2),
+    notes: z13.string().optional(),
+    items: z13.array(z13.object({
+      partId: z13.number().optional(),
+      partName: z13.string(),
+      partCode: z13.string().optional(),
+      partCategory: z13.string().optional(),
+      supplier: z13.string().optional(),
+      unit: z13.string().optional(),
+      quantity: z13.number().min(1),
+      unitCost: z13.string().optional(),
+      notes: z13.string().optional()
+    })).min(1)
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [result] = await db.insert(purchaseOrders).values({
+      title: input.title,
+      notes: input.notes,
+      status: "rascunho",
+      createdBy: ctx.user.id
+    });
+    const orderId = result.insertId;
+    if (input.items.length > 0) {
+      await db.insert(purchaseOrderItems).values(
+        input.items.map((item) => ({ ...item, orderId }))
+      );
+    }
+    return { success: true, orderId };
+  }),
+  // Atualizar status do pedido
+  updateOrderStatus: protectedProcedure.input(z13.object({
+    id: z13.number(),
+    status: z13.enum(["rascunho", "enviado", "aprovado", "rejeitado", "comprado"])
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const updateData = { status: input.status, updatedAt: /* @__PURE__ */ new Date() };
+    if (input.status === "aprovado") {
+      updateData.approvedBy = ctx.user.id;
+      updateData.approvedAt = /* @__PURE__ */ new Date();
+    }
+    await db.update(purchaseOrders).set(updateData).where(eq13(purchaseOrders.id, input.id));
+    return { success: true };
+  }),
+  // Deletar pedido
+  deleteOrder: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError9({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.delete(purchaseOrders).where(eq13(purchaseOrders.id, input.id));
+    return { success: true };
+  })
+});
+
+// server/routers.ts
+import { z as z14 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -2353,10 +2462,10 @@ var appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z13.object({
-      name: z13.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z13.string().email("Email inv\xE1lido"),
-      password: z13.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z14.object({
+      name: z14.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z14.string().email("Email inv\xE1lido"),
+      password: z14.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -2371,9 +2480,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z13.object({
-      email: z13.string().email("Email inv\xE1lido"),
-      password: z13.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z14.object({
+      email: z14.string().email("Email inv\xE1lido"),
+      password: z14.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -2389,11 +2498,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z13.object({
-      seedKey: z13.string(),
-      email: z13.string().email(),
-      name: z13.string(),
-      password: z13.string().min(4)
+    seedAdmin: publicProcedure.input(z14.object({
+      seedKey: z14.string(),
+      email: z14.string().email(),
+      name: z14.string(),
+      password: z14.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -2403,9 +2512,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z13.object({
-      email: z13.string().email("Email inv\xE1lido"),
-      origin: z13.string().url().optional()
+    forgotPassword: publicProcedure.input(z14.object({
+      email: z14.string().email("Email inv\xE1lido"),
+      origin: z14.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -2419,9 +2528,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z13.object({
-      token: z13.string().min(1),
-      password: z13.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z14.object({
+      token: z14.string().min(1),
+      password: z14.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -2430,10 +2539,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq13 } = await import("drizzle-orm");
+      const { eq: eq14 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users2).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq13(users2.id, resetToken.userId));
+      await dbInstance.update(users2).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq14(users2.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -2455,7 +2564,8 @@ var appRouter = router({
   clients: clientsRouter,
   clientPortal: clientPortalRouter,
   collaboratorDocuments: collaboratorDocumentsRouter,
-  equipmentDetail: equipmentDetailRouter
+  equipmentDetail: equipmentDetailRouter,
+  purchaseOrders: purchaseOrdersRouter
   // TODO: add feature routers here, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>

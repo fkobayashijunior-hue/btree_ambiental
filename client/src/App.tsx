@@ -10,7 +10,6 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Collaborators from "./pages/Collaborators";
-import BiometricAttendancePage from "./pages/BiometricAttendance";
 import AttendanceList from "./pages/AttendanceList";
 import Landing from "./pages/Landing";
 import SectorsEquipment from "./pages/SectorsEquipment";
@@ -34,7 +33,6 @@ function Router() {
       <Route path={"/colaboradores"} component={Collaborators} />
       <Route path={"/colaboradores/:id"} component={CollaboratorDetail} />
       <Route path={"/equipamento/:id"} component={EquipmentDetail} />
-      <Route path={"/presenca"} component={BiometricAttendancePage} />
       <Route path={"/presencas"} component={AttendanceList} />
       <Route path={"/setores"} component={SectorsEquipment} />
       <Route path={"/controle-acesso"} component={AccessControl} />

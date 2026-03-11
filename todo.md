@@ -557,3 +557,17 @@
 - [x] SQL de atualização para Hostinger: ATUALIZACAO_BANCO_HOSTINGER_v2.sql
 - [x] build.sh: corrigido para usar pnpm (evita erro workspace:* do drizzle-kit no npm)
 - [x] package.json: drizzle-kit removido das dependências (apenas usado localmente via pnpm)
+
+---
+
+## 🐛 CORREÇÕES URGENTES (11/03/2026 - v2)
+
+- [x] PartsPage: adicionar campo de upload de foto no formulário (estava faltando no deploy)
+- [x] PartsPage: remover campo "Código" do formulário de nova peça
+- [x] ClientPortal: substituir campo "Código de Acesso" por e-mail + senha
+- [x] Presença: remover biometria facial e cadastro de biometria do menu/aba
+- [x] Solicitações de Peças: reformular como carrinho de compras (selecionar peças + quantidade)
+- [x] Solicitações de Peças: seleção de itens por fornecedor para PDF separado
+- [x] PDF padrão: logo BTREE, QR code do site, contato, rodapé com logo Kobayashi
+- [x] PDF padrão: aplicar em todos os PDFs gerados pelo sistema
+- [x] Compilar frontend e preparar zip para Hostinger

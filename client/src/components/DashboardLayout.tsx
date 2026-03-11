@@ -28,7 +28,6 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/app" },
   { icon: UserCheck, label: "Colaboradores", path: "/colaboradores" },
-  { icon: Camera, label: "Presença Facial", path: "/presenca" },
   { icon: ClipboardList, label: "Presenças", path: "/presencas" },
   { icon: Layers, label: "Setores & Equipamentos", path: "/setores" },
   { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso" },
