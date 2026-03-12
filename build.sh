@@ -4,31 +4,45 @@ set -e
 echo "=== BTREE Ambiental Build ==="
 echo "Node: $(node --version)"
 
-# Usar pnpm (já disponível no ambiente) para instalar dependências
-# pnpm usa o pnpm-lock.yaml que não tem o problema workspace:* do npm
+# ─── Estratégia de build ──────────────────────────────────────────────────────
+#
+# HOSTINGER (produção):
+#   - O dist/ já vem pré-compilado no repositório (frontend + backend)
+#   - Instalamos APENAS as dependências de runtime (sem vite, sem plugin-react)
+#   - Usamos package.hostinger.json que não tem dependências com workspace:*
+#
+# MANUS / LOCAL (desenvolvimento):
+#   - Usa pnpm para instalar tudo e compilar normalmente
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
 if command -v pnpm &> /dev/null; then
-  echo "Using pnpm..."
+  # ── Ambiente de desenvolvimento (Manus / local) ──
+  echo "Dev environment (pnpm). Full build..."
   pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+  export PATH="./node_modules/.bin:$PATH"
+  echo "Building frontend..."
+  vite build
+  echo "Building backend..."
+  esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js
 else
-  echo "pnpm not found, installing..."
-  npm install -g pnpm@latest --legacy-peer-deps
-  pnpm install
+  # ── Ambiente de produção (Hostinger) ──
+  # dist/ já está pré-compilado no repositório
+  echo "Production environment (Hostinger). Installing runtime deps only..."
+
+  if [ -f "package.hostinger.json" ]; then
+    # Usar package.hostinger.json (sem dependências de build com workspace:*)
+    cp package.json package.json.bak
+    cp package.hostinger.json package.json
+    npm install --legacy-peer-deps
+    cp package.json.bak package.json
+    rm -f package.json.bak
+  else
+    # Fallback: instalar com legacy-peer-deps
+    npm install --legacy-peer-deps
+  fi
+
+  echo "Using pre-built dist/ from repository."
 fi
-
-# Garantir que o vite está instalado
-if ! [ -f "./node_modules/.bin/vite" ]; then
-  echo "Vite not found, installing explicitly..."
-  pnpm add -D vite@7.1.9 @vitejs/plugin-react@4.3.4 esbuild@0.25.0 --no-save 2>/dev/null || \
-  npm install vite@7.1.9 @vitejs/plugin-react@4.3.4 esbuild@0.25.0 --legacy-peer-deps --no-save
-fi
-
-# Usar o vite local
-export PATH="./node_modules/.bin:$PATH"
-
-echo "Building frontend..."
-vite build
-
-echo "Building backend..."
-esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js
 
 echo "Build complete!"
