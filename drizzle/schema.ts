@@ -141,6 +141,7 @@ export const equipment = mysqlTable("equipment", {
   year: int("year"),
   serialNumber: varchar("serial_number", { length: 100 }),
   imageUrl: text("image_url"),
+  sectorId: int("sector_id"),
   status: mysqlEnum("status", ["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -379,6 +380,7 @@ export const vehicleRecords = mysqlTable("vehicle_records", {
   mechanicName: varchar("mechanic_name", { length: 255 }),
   // Geral
   driverCollaboratorId: int("driver_collaborator_id").references(() => collaborators.id),
+  photoUrl: text("photo_url"),
   notes: text("notes"),
   registeredBy: int("registered_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),

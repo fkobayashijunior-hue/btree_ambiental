@@ -78,6 +78,9 @@ export default function MachineHoursPage() {
   const { data: maintenance = [], isLoading: loadingMaint } = trpc.machineHours.listMaintenance.useQuery({});
   const { data: fuel = [], isLoading: loadingFuel } = trpc.machineHours.listFuel.useQuery({});
 
+  // Mapa de equipamentos para lookup rápido pelo id
+  const equipMap = Object.fromEntries((equipmentList as any[]).map((eq: any) => [eq.id, eq.name]));
+
   const createHoursMutation = trpc.machineHours.createHours.useMutation({
     onSuccess: () => {
       toast.success("Horas registradas!");
@@ -206,7 +209,7 @@ export default function MachineHoursPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-semibold text-gray-800">Equipamento #{h.equipmentId}</p>
+                    <p className="font-semibold text-gray-800">{equipMap[h.equipmentId] || `Equipamento #${h.equipmentId}`}</p>
                     <p className="text-sm text-gray-500">{h.activity || "Atividade não informada"} · {h.location || ""}</p>
                     <p className="text-xs text-gray-400 mt-1">
                       <Calendar className="h-3 w-3 inline mr-1" />
@@ -239,7 +242,7 @@ export default function MachineHoursPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-gray-800">Equipamento #{m.equipmentId}</p>
+                      <p className="font-semibold text-gray-800">{equipMap[m.equipmentId] || `Equipamento #${m.equipmentId}`}</p>
                       <Badge className="text-xs bg-orange-100 text-orange-800">{MAINTENANCE_TYPE_LABELS[m.type]}</Badge>
                       <Badge className="text-xs bg-blue-100 text-blue-800">{SERVICE_TYPE_LABELS[m.serviceType]}</Badge>
                     </div>
@@ -276,7 +279,7 @@ export default function MachineHoursPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-semibold text-gray-800">Equipamento #{f.equipmentId}</p>
+                    <p className="font-semibold text-gray-800">{equipMap[f.equipmentId] || `Equipamento #${f.equipmentId}`}</p>
                     <p className="text-sm text-gray-500">{f.fuelType} · {f.supplier || "Fornecedor não informado"}</p>
                     <p className="text-xs text-gray-400">
                       {new Date(f.date).toLocaleDateString("pt-BR")}

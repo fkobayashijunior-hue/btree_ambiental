@@ -92,6 +92,7 @@ export const sectorsRouter = router({
           imageUrl: equipment.imageUrl,
           status: equipment.status,
           typeId: equipment.typeId,
+          sectorId: equipment.sectorId,
           typeName: equipmentTypes.name,
           createdAt: equipment.createdAt,
         })
@@ -117,6 +118,7 @@ export const sectorsRouter = router({
     .input(z.object({
       name: z.string().min(1),
       typeId: z.number(),
+      sectorId: z.number().optional(),
       brand: z.string().optional(),
       model: z.string().optional(),
       year: z.number().optional(),
@@ -146,6 +148,7 @@ export const sectorsRouter = router({
       id: z.number(),
       name: z.string().optional(),
       typeId: z.number().optional(),
+      sectorId: z.number().optional().nullable(),
       brand: z.string().optional(),
       model: z.string().optional(),
       year: z.number().optional(),

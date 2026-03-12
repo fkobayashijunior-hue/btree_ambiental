@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE vehicle_records ADD COLUMN IF NOT EXISTS photo_url TEXT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute ALTER TABLE vehicle_records ADD COLUMN IF NOT EXISTS photo_url TEXT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 998
+}

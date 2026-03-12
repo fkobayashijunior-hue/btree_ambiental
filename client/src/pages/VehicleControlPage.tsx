@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Car, Plus, Fuel, Wrench, MapPin, Calendar } from "lucide-react";
+import { Car, Plus, Fuel, Wrench, MapPin, Calendar, Camera, X, ImageIcon } from "lucide-react";
+import { useFilePicker } from "@/hooks/useFilePicker";
 
 type RecordType = "abastecimento" | "manutencao" | "km";
 
@@ -26,6 +27,8 @@ const RECORD_COLORS: Record<RecordType, string> = {
 export default function VehicleControlPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [filterEquipment, setFilterEquipment] = useState<string>("");
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [form, setForm] = useState({
     equipmentId: "",
     date: new Date().toISOString().slice(0, 10),
@@ -44,6 +47,7 @@ export default function VehicleControlPage() {
     notes: "",
   });
 
+  const { openFilePicker } = useFilePicker();
   const utils = trpc.useUtils();
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
   const { data: records = [], isLoading } = trpc.vehicleRecords.list.useQuery({
@@ -55,12 +59,39 @@ export default function VehicleControlPage() {
       toast.success("Registro salvo!");
       utils.vehicleRecords.list.invalidate();
       setIsOpen(false);
+      resetForm();
     },
     onError: (e) => toast.error(e.message),
   });
 
+  const resetForm = () => {
+    setForm({
+      equipmentId: "", date: new Date().toISOString().slice(0, 10),
+      recordType: "abastecimento", fuelType: "diesel",
+      liters: "", fuelCost: "", pricePerLiter: "", supplier: "",
+      odometer: "", kmDriven: "", maintenanceType: "", maintenanceCost: "",
+      serviceType: "proprio", mechanicName: "", notes: "",
+    });
+    setPhotoPreview(null);
+    setPhotoBase64(null);
+  };
+
+  const handlePhotoChange = (files: FileList) => {
+    const file = files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Foto muito grande. Máximo 5MB."); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = e.target?.result as string;
+      setPhotoPreview(b64);
+      setPhotoBase64(b64);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.equipmentId) { toast.error("Selecione o veículo"); return; }
     createMutation.mutate({
       equipmentId: parseInt(form.equipmentId),
       date: form.date,
@@ -77,18 +108,12 @@ export default function VehicleControlPage() {
       serviceType: form.recordType === "manutencao" ? form.serviceType : undefined,
       mechanicName: form.mechanicName || undefined,
       notes: form.notes || undefined,
+      photoBase64: photoBase64 || undefined,
     });
   };
 
-  // Vehicles only (filter by type)
-  const vehicles = equipmentList.filter((eq: any) =>
-    eq.name?.toLowerCase().includes("caminhão") ||
-    eq.name?.toLowerCase().includes("caminhao") ||
-    eq.name?.toLowerCase().includes("carro") ||
-    eq.name?.toLowerCase().includes("pickup") ||
-    eq.name?.toLowerCase().includes("van") ||
-    true // show all for now
-  );
+  // Mapa de equipamentos para lookup rápido pelo id
+  const equipMap = Object.fromEntries(equipmentList.map((eq: any) => [eq.id, eq.name]));
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -112,7 +137,7 @@ export default function VehicleControlPage() {
           className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="">Todos os veículos</option>
-          {vehicles.map((eq: any) => (
+          {equipmentList.map((eq: any) => (
             <option key={eq.id} value={eq.id}>{eq.name}</option>
           ))}
         </select>
@@ -131,13 +156,34 @@ export default function VehicleControlPage() {
           {records.map((r: any) => (
             <Card key={r.id}>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-800">Veículo #{r.equipmentId}</span>
-                      <Badge className={`text-xs ${RECORD_COLORS[r.recordType as RecordType]}`}>
-                        {RECORD_LABELS[r.recordType as RecordType]}
-                      </Badge>
+                <div className="flex items-start gap-3">
+                  {r.photoUrl && (
+                    <img src={r.photoUrl} alt="Foto" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-800">
+                          {equipMap[r.equipmentId] || `Veículo #${r.equipmentId}`}
+                        </span>
+                        <Badge className={`text-xs ${RECORD_COLORS[r.recordType as RecordType]}`}>
+                          {RECORD_LABELS[r.recordType as RecordType]}
+                        </Badge>
+                      </div>
+                      <div className="text-right">
+                        {r.recordType === "abastecimento" && r.liters && (
+                          <>
+                            <p className="font-bold text-blue-700">{r.liters}L</p>
+                            {r.fuelCost && <p className="text-xs text-gray-500">R$ {r.fuelCost}</p>}
+                          </>
+                        )}
+                        {r.recordType === "km" && r.kmDriven && (
+                          <p className="font-bold text-green-700">{r.kmDriven} km</p>
+                        )}
+                        {r.recordType === "manutencao" && r.maintenanceCost && (
+                          <p className="font-bold text-orange-700">R$ {r.maintenanceCost}</p>
+                        )}
+                      </div>
                     </div>
                     <div className="text-xs text-gray-500 mt-1 flex gap-3 flex-wrap">
                       <span className="flex items-center gap-1">
@@ -147,21 +193,9 @@ export default function VehicleControlPage() {
                       {r.odometer && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{r.odometer} km</span>}
                       {r.supplier && <span>{r.supplier}</span>}
                       {r.maintenanceType && <span>{r.maintenanceType}</span>}
+                      {r.fuelType && r.recordType === "abastecimento" && <span className="capitalize">{r.fuelType}</span>}
                     </div>
-                  </div>
-                  <div className="text-right">
-                    {r.recordType === "abastecimento" && r.liters && (
-                      <>
-                        <p className="font-bold text-blue-700">{r.liters}L</p>
-                        {r.fuelCost && <p className="text-xs text-gray-500">R$ {r.fuelCost}</p>}
-                      </>
-                    )}
-                    {r.recordType === "km" && r.kmDriven && (
-                      <p className="font-bold text-green-700">{r.kmDriven} km</p>
-                    )}
-                    {r.recordType === "manutencao" && r.maintenanceCost && (
-                      <p className="font-bold text-orange-700">R$ {r.maintenanceCost}</p>
-                    )}
+                    {r.notes && <p className="text-xs text-gray-400 mt-1 italic">{r.notes}</p>}
                   </div>
                 </div>
               </CardContent>
@@ -171,7 +205,7 @@ export default function VehicleControlPage() {
       )}
 
       {/* Sheet */}
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <Sheet open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) resetForm(); }}>
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-emerald-800">Novo Registro de Veículo</SheetTitle>
@@ -182,7 +216,7 @@ export default function VehicleControlPage() {
               <Label>Veículo *</Label>
               <select value={form.equipmentId} onChange={e => setForm(f => ({ ...f, equipmentId: e.target.value }))} required className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                 <option value="">Selecione o veículo</option>
-                {vehicles.map((eq: any) => (
+                {equipmentList.map((eq: any) => (
                   <option key={eq.id} value={eq.id}>{eq.name}</option>
                 ))}
               </select>
@@ -245,6 +279,31 @@ export default function VehicleControlPage() {
                 <div><Label>Custo (R$)</Label><Input value={form.maintenanceCost} onChange={e => setForm(f => ({ ...f, maintenanceCost: e.target.value }))} placeholder="0,00" /></div>
               </>
             )}
+
+            {/* Foto */}
+            <div>
+              <Label className="mb-2 block">Foto do Registro</Label>
+              {photoPreview ? (
+                <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-200">
+                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => { setPhotoPreview(null); setPhotoBase64(null); }}
+                    className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 hover:bg-black/80">
+                    <X className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={() => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoChange)}
+                    className="absolute bottom-2 right-2 bg-black/60 text-white rounded-lg px-3 py-1 text-xs flex items-center gap-1 hover:bg-black/80">
+                    <Camera className="h-3 w-3" /> Trocar foto
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoChange)}
+                  className="w-full h-28 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors">
+                  <Camera className="h-7 w-7" />
+                  <span className="text-sm font-medium">Tirar foto ou escolher da galeria</span>
+                  <span className="text-xs">JPG, PNG até 5MB (opcional)</span>
+                </button>
+              )}
+            </div>
 
             <div>
               <Label>Observações</Label>

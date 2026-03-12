@@ -39,7 +39,7 @@ export default function SectorsEquipment() {
   const [editEquipId, setEditEquipId] = useState<number | null>(null);
   const [equipSearch, setEquipSearch] = useState("");
   const [equipForm, setEquipForm] = useState({
-    name: "", typeId: 0, brand: "", model: "",
+    name: "", typeId: 0, sectorId: 0, brand: "", model: "",
     year: "", serialNumber: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
   });
   // Upload de foto do equipamento
@@ -94,7 +94,7 @@ export default function SectorsEquipment() {
   });
 
   const resetEquipForm = () => {
-    setEquipForm({ name: "", typeId: 0, brand: "", model: "", year: "", serialNumber: "", status: "ativo" });
+    setEquipForm({ name: "", typeId: 0, sectorId: 0, brand: "", model: "", year: "", serialNumber: "", status: "ativo" });
     setEquipPhotoPreview(null);
     setEquipPhotoBase64(null);
     setExistingImageUrl(null);
@@ -109,7 +109,7 @@ export default function SectorsEquipment() {
   const openEditEquip = (e: typeof equipList[number]) => {
     setEditEquipId(e.id);
     setEquipForm({
-      name: e.name, typeId: e.typeId, brand: e.brand || "",
+      name: e.name, typeId: e.typeId, sectorId: (e as any).sectorId || 0, brand: e.brand || "",
       model: e.model || "", year: e.year?.toString() || "",
       serialNumber: e.serialNumber || "", status: e.status as any,
     });
@@ -158,6 +158,7 @@ export default function SectorsEquipment() {
     const data = {
       name: equipForm.name,
       typeId: equipForm.typeId,
+      sectorId: equipForm.sectorId || undefined,
       brand: equipForm.brand || undefined,
       model: equipForm.model || undefined,
       year: equipForm.year ? parseInt(equipForm.year) : undefined,
@@ -357,6 +358,19 @@ export default function SectorsEquipment() {
                       <div className="col-span-2">
                         <Label>Nome / Identificação *</Label>
                         <Input value={equipForm.name} onChange={e => setEquipForm(f => ({ ...f, name: e.target.value }))} required placeholder="ex: Motosserra #01, Trator Valtra" />
+                      </div>
+                      <div className="col-span-2">
+                        <Label>Setor</Label>
+                        <select
+                          value={equipForm.sectorId}
+                          onChange={e => setEquipForm(f => ({ ...f, sectorId: parseInt(e.target.value) }))}
+                          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value={0}>Sem setor definido</option>
+                          {sectorsList.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="col-span-2">
                         <Label>Tipo de Equipamento *</Label>

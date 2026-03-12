@@ -179,6 +179,7 @@ var init_schema = __esm({
       year: int("year"),
       serialNumber: varchar("serial_number", { length: 100 }),
       imageUrl: text("image_url"),
+      sectorId: int("sector_id"),
       status: mysqlEnum("status", ["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
@@ -374,6 +375,7 @@ var init_schema = __esm({
       mechanicName: varchar("mechanic_name", { length: 255 }),
       // Geral
       driverCollaboratorId: int("driver_collaborator_id").references(() => collaborators.id),
+      photoUrl: text("photo_url"),
       notes: text("notes"),
       registeredBy: int("registered_by").references(() => users.id),
       createdAt: timestamp("created_at").defaultNow().notNull()
@@ -718,6 +720,59 @@ var init_db = __esm({
   }
 });
 
+// server/cloudinary.ts
+var cloudinary_exports = {};
+__export(cloudinary_exports, {
+  cloudinaryUpload: () => cloudinaryUpload
+});
+async function cloudinaryUpload(data, _folder = "btree") {
+  let base64;
+  let contentType = "image/jpeg";
+  if (Buffer.isBuffer(data)) {
+    base64 = data.toString("base64");
+    contentType = "image/jpeg";
+  } else if (data.startsWith("data:")) {
+    const match = data.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      contentType = match[1];
+      base64 = match[2];
+    } else {
+      base64 = data.replace(/^data:[^;]+;base64,/, "");
+    }
+  } else {
+    base64 = data;
+  }
+  const dataUri = `data:${contentType};base64,${base64}`;
+  const params = new URLSearchParams();
+  params.append("file", dataUri);
+  params.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString()
+    }
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Cloudinary upload failed: ${response.status} - ${errorText}`);
+  }
+  const result = await response.json();
+  return {
+    url: result.secure_url,
+    publicId: result.public_id
+  };
+}
+var CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET;
+var init_cloudinary = __esm({
+  "server/cloudinary.ts"() {
+    "use strict";
+    CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "djob7pxme";
+    CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "btree_ambiental";
+  }
+});
+
 // server/_core/index.ts
 import "dotenv/config";
 import express2 from "express";
@@ -895,53 +950,9 @@ var systemRouter = router({
 // server/routers/collaborators.ts
 init_db();
 init_schema();
+init_cloudinary();
 import { z as z2 } from "zod";
 import { eq as eq2, desc, and as and2, like, or } from "drizzle-orm";
-
-// server/cloudinary.ts
-var CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "djob7pxme";
-var CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "btree_ambiental";
-async function cloudinaryUpload(data, _folder = "btree") {
-  let base64;
-  let contentType = "image/jpeg";
-  if (Buffer.isBuffer(data)) {
-    base64 = data.toString("base64");
-    contentType = "image/jpeg";
-  } else if (data.startsWith("data:")) {
-    const match = data.match(/^data:([^;]+);base64,(.+)$/);
-    if (match) {
-      contentType = match[1];
-      base64 = match[2];
-    } else {
-      base64 = data.replace(/^data:[^;]+;base64,/, "");
-    }
-  } else {
-    base64 = data;
-  }
-  const dataUri = `data:${contentType};base64,${base64}`;
-  const params = new URLSearchParams();
-  params.append("file", dataUri);
-  params.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString()
-    }
-  );
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Cloudinary upload failed: ${response.status} - ${errorText}`);
-  }
-  const result = await response.json();
-  return {
-    url: result.secure_url,
-    publicId: result.public_id
-  };
-}
-
-// server/routers/collaborators.ts
 import bcrypt from "bcryptjs";
 var collaboratorRoles = [
   "administrativo",
@@ -1195,6 +1206,7 @@ var collaboratorsRouter = router({
 import { z as z3 } from "zod";
 init_db();
 init_schema();
+init_cloudinary();
 import { eq as eq3 } from "drizzle-orm";
 var sectorsRouter = router({
   // --- SETORES ---
@@ -1267,6 +1279,7 @@ var sectorsRouter = router({
       imageUrl: equipment.imageUrl,
       status: equipment.status,
       typeId: equipment.typeId,
+      sectorId: equipment.sectorId,
       typeName: equipmentTypes.name,
       createdAt: equipment.createdAt
     }).from(equipment).leftJoin(equipmentTypes, eq3(equipment.typeId, equipmentTypes.id)).orderBy(equipment.name);
@@ -1283,6 +1296,7 @@ var sectorsRouter = router({
   createEquipment: protectedProcedure.input(z3.object({
     name: z3.string().min(1),
     typeId: z3.number(),
+    sectorId: z3.number().optional(),
     brand: z3.string().optional(),
     model: z3.string().optional(),
     year: z3.number().optional(),
@@ -1308,6 +1322,7 @@ var sectorsRouter = router({
     id: z3.number(),
     name: z3.string().optional(),
     typeId: z3.number().optional(),
+    sectorId: z3.number().optional().nullable(),
     brand: z3.string().optional(),
     model: z3.string().optional(),
     year: z3.number().optional(),
@@ -1485,6 +1500,7 @@ var usersManagementRouter = router({
 import { z as z5 } from "zod";
 init_db();
 init_schema();
+init_cloudinary();
 import { TRPCError as TRPCError4 } from "@trpc/server";
 import { eq as eq5, desc as desc3 } from "drizzle-orm";
 var cargoLoadsRouter = router({
@@ -1769,13 +1785,22 @@ var vehicleRecordsRouter = router({
     serviceType: z7.enum(["proprio", "terceirizado"]).optional(),
     mechanicName: z7.string().optional(),
     driverCollaboratorId: z7.number().optional(),
+    photoBase64: z7.string().optional(),
     notes: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    let photoUrl;
+    if (input.photoBase64 && input.photoBase64.startsWith("data:")) {
+      const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
+      const result = await cloudinaryUpload2(input.photoBase64, "btree/vehicle-records");
+      photoUrl = result.url;
+    }
+    const { photoBase64, ...rest } = input;
     await db.insert(vehicleRecords).values({
-      ...input,
+      ...rest,
       date: new Date(input.date),
+      photoUrl,
       registeredBy: ctx.user.id
     });
     return { success: true };
@@ -1793,6 +1818,7 @@ var vehicleRecordsRouter = router({
 import { z as z8 } from "zod";
 init_db();
 init_schema();
+init_cloudinary();
 import { TRPCError as TRPCError7 } from "@trpc/server";
 import { eq as eq8, desc as desc6 } from "drizzle-orm";
 var partsRouter = router({
@@ -2110,6 +2136,7 @@ var clientPortalRouter = router({
 // server/routers/collaboratorDocuments.ts
 init_db();
 init_schema();
+init_cloudinary();
 import { z as z11 } from "zod";
 import { eq as eq11, desc as desc9 } from "drizzle-orm";
 var DOC_TYPES = ["cnh", "certificado", "aso", "contrato", "rg", "cpf", "outros"];
@@ -2174,6 +2201,7 @@ var collaboratorDocumentsRouter = router({
 import { z as z12 } from "zod";
 init_db();
 init_schema();
+init_cloudinary();
 import { eq as eq12, desc as desc10 } from "drizzle-orm";
 var equipmentDetailRouter = router({
   // Buscar equipamento por ID

@@ -571,3 +571,19 @@
 - [x] PDF padrão: logo BTREE, QR code do site, contato, rodapé com logo Kobayashi
 - [x] PDF padrão: aplicar em todos os PDFs gerados pelo sistema
 - [x] Compilar frontend e preparar zip para Hostinger
+
+---
+
+## 🐛 CORREÇÕES URGENTES (12/03/2026)
+
+- [ ] DashboardLayout: remover "Presença Facial" do menu
+- [ ] DashboardLayout: renomear "Horas preparadas" → "Abastecimento"
+- [ ] DashboardLayout: renomear "Cerco de Cargas" → "Controle de Cargas"
+- [ ] Equipamentos: adicionar campo "Setor" no formulário de cadastro/edição
+- [ ] Abastecimento de veículo: adicionar campo de imagem no registro
+- [ ] Abastecimento: corrigir exibição do veículo (mostrando "Veículo 2" em vez do nome)
+- [ ] Novo módulo: Controle de Horas de Máquinas (início/fim horímetro + registro de falhas)
+- [ ] Controle de Cargas: restaurar campos de peso e separação por cliente
+- [ ] Peças e Acessórios: restaurar campo de foto no formulário
+- [ ] Peças e Acessórios: restaurar carrinho de pedidos + PDF por fornecedor
+- [ ] Portal do Cliente: login com e-mail+senha (sem código de acesso)

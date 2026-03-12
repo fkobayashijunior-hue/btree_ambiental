@@ -38,14 +38,23 @@ export const vehicleRecordsRouter = router({
       serviceType: z.enum(["proprio", "terceirizado"]).optional(),
       mechanicName: z.string().optional(),
       driverCollaboratorId: z.number().optional(),
+      photoBase64: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      let photoUrl: string | undefined;
+      if (input.photoBase64 && input.photoBase64.startsWith("data:")) {
+        const { cloudinaryUpload } = await import("../cloudinary");
+        const result = await cloudinaryUpload(input.photoBase64, "btree/vehicle-records");
+        photoUrl = result.url;
+      }
+      const { photoBase64, ...rest } = input;
       await db.insert(vehicleRecords).values({
-        ...input,
+        ...rest,
         date: new Date(input.date),
+        photoUrl,
         registeredBy: ctx.user.id,
       });
       return { success: true };
