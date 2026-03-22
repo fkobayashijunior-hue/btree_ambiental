@@ -639,3 +639,10 @@
 - [ ] DashboardLayout: logo Kobayashi clicável visível com texto "Desenvolvedor"
 - [ ] ClientsPage: remover campo "Gerar código de acesso" do formulário
 - [ ] Portal do cliente: logo Kobayashi visível (não "Kobayashi Dev")
+
+---
+
+## 🚀 MELHORIAS 22/03/2026 (Sessão 3)
+- [x] Painel com dados reais: cards conectados ao banco (total cargas, colaboradores, abastecimentos do mês)
+- [x] Relatório de presenças em PDF com totais a pagar por colaborador
+- [x] Notificação automática ao administrador ao cadastrar presença

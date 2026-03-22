@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { collaboratorAttendance, collaborators, users } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
+import { notifyOwner } from "../_core/notification";
 
 export const attendanceRouter = router({
   // Listar presenças com filtros
@@ -85,6 +86,10 @@ export const attendanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      // Buscar nome do colaborador para a notificação
+      const [collaborator] = await db.select({ name: collaborators.name }).from(collaborators).where(eq(collaborators.id, input.collaboratorId));
+      const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
+
       await db.insert(collaboratorAttendance).values({
         collaboratorId: input.collaboratorId,
         date: new Date(input.date + "T12:00:00"),
@@ -95,6 +100,16 @@ export const attendanceRouter = router({
         observations: input.observations || null,
         registeredBy: ctx.user.id,
       });
+
+      // Notificar o administrador
+      const dateFormatted = new Date(input.date + "T12:00:00").toLocaleDateString("pt-BR");
+      const activityInfo = input.activity ? ` (${input.activity})` : "";
+      const employmentLabel = input.employmentType === "clt" ? "CLT" : input.employmentType === "terceirizado" ? "Terceirizado" : "Diarista";
+      await notifyOwner({
+        title: `✅ Presença registrada — ${collaboratorName}`,
+        content: `${collaboratorName}${activityInfo} teve presença registrada em ${dateFormatted}.\nVínculo: ${employmentLabel} | Diária: R$ ${input.dailyValue}${input.pixKey ? " | PIX: " + input.pixKey : ""}\nRegistrado por: ${ctx.user.name}`,
+      }).catch(() => {}); // Silencia erros de notificação para não bloquear o cadastro
+
       return { success: true };
     }),
 

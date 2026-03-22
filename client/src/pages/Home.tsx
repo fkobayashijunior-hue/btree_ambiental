@@ -1,178 +1,262 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Package, Fuel, Users, TrendingUp, Calendar } from "lucide-react";
+import { Truck, Package, Fuel, Users, TrendingUp, Calendar, Leaf, DollarSign, Wrench, AlertTriangle, ShoppingCart, CheckCircle2, Clock } from "lucide-react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+
+function formatCurrency(value: number) {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function StatCard({
+  title, value, description, icon: Icon, color, loading
+}: {
+  title: string; value: string | number; description: string; icon: React.ElementType; color: string; loading?: boolean;
+}) {
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className={`h-5 w-5 ${color}`} />
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="h-8 w-20 bg-muted animate-pulse rounded" />
+        ) : (
+          <div className="text-2xl font-bold">{value}</div>
+        )}
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Home() {
   const [, setLocation] = useLocation();
-  const stats = [
-    {
-      title: "Equipamentos Ativos",
-      value: "24",
-      description: "+2 este mês",
-      icon: Truck,
-      color: "text-primary",
-    },
-    {
-      title: "Cargas Hoje",
-      value: "8",
-      description: "156.5 m³ total",
-      icon: Package,
-      color: "text-chart-2",
-    },
-    {
-      title: "Combustível (mês)",
-      value: "2.450 L",
-      description: "R$ 14.700,00",
-      icon: Fuel,
-      color: "text-chart-3",
-    },
-    {
-      title: "Colaboradores",
-      value: "45",
-      description: "32 presentes hoje",
-      icon: Users,
-      color: "text-chart-4",
-    },
-  ];
+  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery(undefined, {
+    refetchInterval: 60_000, // atualiza a cada 1 minuto
+  });
 
-  const recentActivities = [
-    {
-      title: "Nova carga registrada",
-      description: "Caminhão MB 1620 - 12.5 m³",
-      time: "Há 15 minutos",
-    },
-    {
-      title: "Abastecimento realizado",
-      description: "Trator John Deere - 120L diesel",
-      time: "Há 1 hora",
-    },
-    {
-      title: "Presença registrada",
-      description: "8 colaboradores marcados",
-      time: "Há 2 horas",
-    },
-  ];
+  const today = new Date().toLocaleDateString("pt-BR", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric"
+  });
+
+  const month = stats?.month ?? new Date().toLocaleString("pt-BR", { month: "long", year: "numeric" });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Dashboard
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Visão geral das operações BTREE Ambiental
-          </p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Painel</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Visão geral das operações BTREE Ambiental</p>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
-          <span>{new Date().toLocaleDateString("pt-BR", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric"
-          })}</span>
+          <span className="capitalize">{today}</span>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.title} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
-                </CardTitle>
-                <Icon className={`h-5 w-5 ${stat.color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stat.description}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+      {/* Stats Grid — Linha 1: Pessoas e Clientes */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pessoas</p>
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <StatCard
+            title="Colaboradores"
+            value={stats?.totalCollaborators ?? "—"}
+            description="cadastrados no sistema"
+            icon={Users}
+            color="text-emerald-600"
+            loading={isLoading}
+          />
+          <StatCard
+            title="Clientes"
+            value={stats?.totalClients ?? "—"}
+            description="contratos ativos"
+            icon={Leaf}
+            color="text-green-600"
+            loading={isLoading}
+          />
+          <StatCard
+            title="Presenças Hoje"
+            value={stats?.attendanceToday ?? "—"}
+            description={`${stats?.attendanceThisMonth ?? "—"} no mês de ${month}`}
+            icon={CheckCircle2}
+            color="text-blue-600"
+            loading={isLoading}
+          />
+          <StatCard
+            title="A Pagar (Presenças)"
+            value={isLoading ? "—" : formatCurrency(stats?.pendingPaymentThisMonth ?? 0)}
+            description={`pendente em ${month}`}
+            icon={DollarSign}
+            color="text-orange-500"
+            loading={isLoading}
+          />
+        </div>
       </div>
 
-      {/* Charts and Activity */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-full lg:col-span-4">
+      {/* Stats Grid — Linha 2: Operações */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Operações do Mês — {month}</p>
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <StatCard
+            title="Cargas Registradas"
+            value={stats?.cargoThisMonth ?? "—"}
+            description={`${stats?.cargoVolumeThisMonth?.toFixed(1) ?? "—"} m³ total`}
+            icon={Package}
+            color="text-teal-600"
+            loading={isLoading}
+          />
+          <StatCard
+            title="Abastecimentos"
+            value={stats?.fuelThisMonth ?? "—"}
+            description={isLoading ? "carregando..." : formatCurrency(stats?.fuelCostThisMonth ?? 0)}
+            icon={Fuel}
+            color="text-yellow-600"
+            loading={isLoading}
+          />
+          <StatCard
+            title="Equipamentos"
+            value={stats?.totalEquipment ?? "—"}
+            description="cadastrados no sistema"
+            icon={Wrench}
+            color="text-purple-600"
+            loading={isLoading}
+          />
+          <StatCard
+            title="Peças Estoque Baixo"
+            value={stats?.lowStockParts ?? "—"}
+            description="itens com menos de 5 unidades"
+            icon={AlertTriangle}
+            color={stats?.lowStockParts && stats.lowStockParts > 0 ? "text-red-500" : "text-gray-400"}
+            loading={isLoading}
+          />
+        </div>
+      </div>
+
+      {/* Atividades Recentes + Pedidos Pendentes */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Últimas Cargas */}
+        <Card>
           <CardHeader>
-            <CardTitle>Volume de Cargas (Últimos 7 dias)</CardTitle>
-            <CardDescription>
-              Acompanhamento diário do volume transportado
-            </CardDescription>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4 text-teal-600" /> Últimas Cargas
+            </CardTitle>
+            <CardDescription>5 registros mais recentes</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px] flex items-center justify-center bg-muted/20 rounded-lg">
-              <div className="text-center space-y-2">
-                <TrendingUp className="h-12 w-12 text-primary mx-auto" />
-                <p className="text-sm text-muted-foreground">
-                  Gráfico de volume será implementado
-                </p>
+            {isLoading ? (
+              <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-muted animate-pulse rounded" />)}</div>
+            ) : !stats?.recentCargos?.length ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                Nenhuma carga registrada ainda
               </div>
-            </div>
+            ) : (
+              <div className="space-y-3">
+                {stats.recentCargos.map((c: any) => (
+                  <div key={c.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <div>
+                      <p className="text-sm font-medium">{c.destination || "Destino não informado"}</p>
+                      <p className="text-xs text-muted-foreground">{c.vehiclePlate || "Sem placa"} · {c.volumeM3} m³</p>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      c.status === "entregue" ? "bg-green-100 text-green-700" :
+                      c.status === "cancelado" ? "bg-red-100 text-red-700" :
+                      "bg-yellow-100 text-yellow-700"
+                    }`}>{c.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="col-span-full lg:col-span-3">
+        {/* Últimas Presenças */}
+        <Card>
           <CardHeader>
-            <CardTitle>Atividades Recentes</CardTitle>
-            <CardDescription>
-              Últimas movimentações do sistema
-            </CardDescription>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-600" /> Últimas Presenças
+            </CardTitle>
+            <CardDescription>5 registros mais recentes</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentActivities.map((activity, index) => (
-                <div
-                  key={index}
-                  className="flex flex-col space-y-1 border-b border-border pb-4 last:border-0 last:pb-0"
-                >
-                  <p className="text-sm font-medium">{activity.title}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {activity.description}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {activity.time}
-                  </p>
-                </div>
-              ))}
-            </div>
+            {isLoading ? (
+              <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-muted animate-pulse rounded" />)}</div>
+            ) : !stats?.recentAttendance?.length ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                Nenhuma presença registrada ainda
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {stats.recentAttendance.map((a: any) => (
+                  <div key={a.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <div>
+                      <p className="text-sm font-medium">{a.activity || "Atividade não informada"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(a.date).toLocaleDateString("pt-BR")} · R$ {a.dailyValue}
+                      </p>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      a.paymentStatus === "pago" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
+                    }`}>{a.paymentStatus}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Actions */}
+      {/* Alertas */}
+      {(stats?.lowStockParts ?? 0) > 0 || (stats?.pendingOrders ?? 0) > 0 ? (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-orange-800 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Alertas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(stats?.lowStockParts ?? 0) > 0 && (
+              <div className="flex items-center gap-2 text-sm text-orange-700">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                <span><strong>{stats?.lowStockParts}</strong> peça(s) com estoque abaixo de 5 unidades</span>
+              </div>
+            )}
+            {(stats?.pendingOrders ?? 0) > 0 && (
+              <div className="flex items-center gap-2 text-sm text-orange-700">
+                <ShoppingCart className="h-4 w-4 flex-shrink-0" />
+                <span><strong>{stats?.pendingOrders}</strong> pedido(s) de compra aguardando aprovação</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Ações Rápidas */}
       <Card>
         <CardHeader>
-          <CardTitle>Ações Rápidas</CardTitle>
-          <CardDescription>
-            Acesso rápido às funcionalidades principais
-          </CardDescription>
+          <CardTitle className="text-base">Ações Rápidas</CardTitle>
+          <CardDescription>Acesso rápido às funcionalidades principais</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <button onClick={() => setLocation("/cargas")} className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Package className="h-8 w-8 text-primary mb-2" />
-              <span className="text-sm font-medium">Nova Carga</span>
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+            <button onClick={() => setLocation("/cargas")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+              <Package className="h-7 w-7 text-teal-600 mb-1.5" />
+              <span className="text-xs font-medium text-center">Nova Carga</span>
             </button>
-            <button onClick={() => setLocation("/maquinas")} className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Fuel className="h-8 w-8 text-primary mb-2" />
-              <span className="text-sm font-medium">Horas Máquinas</span>
+            <button onClick={() => setLocation("/presencas")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+              <CheckCircle2 className="h-7 w-7 text-blue-600 mb-1.5" />
+              <span className="text-xs font-medium text-center">Registrar Presença</span>
             </button>
-            <button onClick={() => setLocation("/presencas")} className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Users className="h-8 w-8 text-primary mb-2" />
-              <span className="text-sm font-medium">Registrar Presença</span>
+            <button onClick={() => setLocation("/veiculos")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+              <Fuel className="h-7 w-7 text-yellow-600 mb-1.5" />
+              <span className="text-xs font-medium text-center">Abastecimento</span>
             </button>
-            <button onClick={() => setLocation("/setores")} className="flex flex-col items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Truck className="h-8 w-8 text-primary mb-2" />
-              <span className="text-sm font-medium">Setores & Equipamentos</span>
+            <button onClick={() => setLocation("/colaboradores")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+              <Users className="h-7 w-7 text-emerald-600 mb-1.5" />
+              <span className="text-xs font-medium text-center">Colaboradores</span>
             </button>
           </div>
         </CardContent>

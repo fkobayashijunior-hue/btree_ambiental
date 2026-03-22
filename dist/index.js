@@ -2514,6 +2514,8 @@ var attendanceRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [collaborator] = await db.select({ name: collaborators.name }).from(collaborators).where(eq14(collaborators.id, input.collaboratorId));
+    const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
     await db.insert(collaboratorAttendance).values({
       collaboratorId: input.collaboratorId,
       date: /* @__PURE__ */ new Date(input.date + "T12:00:00"),
@@ -2523,6 +2525,16 @@ var attendanceRouter = router({
       activity: input.activity || null,
       observations: input.observations || null,
       registeredBy: ctx.user.id
+    });
+    const dateFormatted = (/* @__PURE__ */ new Date(input.date + "T12:00:00")).toLocaleDateString("pt-BR");
+    const activityInfo = input.activity ? ` (${input.activity})` : "";
+    const employmentLabel = input.employmentType === "clt" ? "CLT" : input.employmentType === "terceirizado" ? "Terceirizado" : "Diarista";
+    await notifyOwner({
+      title: `\u2705 Presen\xE7a registrada \u2014 ${collaboratorName}`,
+      content: `${collaboratorName}${activityInfo} teve presen\xE7a registrada em ${dateFormatted}.
+V\xEDnculo: ${employmentLabel} | Di\xE1ria: R$ ${input.dailyValue}${input.pixKey ? " | PIX: " + input.pixKey : ""}
+Registrado por: ${ctx.user.name}`
+    }).catch(() => {
     });
     return { success: true };
   }),
@@ -2546,6 +2558,80 @@ var attendanceRouter = router({
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(collaboratorAttendance).where(eq14(collaboratorAttendance.id, input.id));
     return { success: true };
+  })
+});
+
+// server/routers/dashboard.ts
+init_db();
+init_schema();
+import { sql, gte as gte3, and as and6 } from "drizzle-orm";
+var dashboardRouter = router({
+  stats: protectedProcedure.query(async () => {
+    const now = /* @__PURE__ */ new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const db = await getDb();
+    if (!db) throw new Error("Banco indispon\xEDvel");
+    const [{ count: totalCollaborators }] = await db.select({ count: sql`count(*)` }).from(collaborators);
+    const [{ count: totalClients }] = await db.select({ count: sql`count(*)` }).from(clients);
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql`count(*)` }).from(cargoLoads).where(gte3(cargoLoads.createdAt, startOfMonth));
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(gte3(cargoLoads.createdAt, startOfMonth));
+    const [{ count: fuelThisMonth }] = await db.select({ count: sql`count(*)` }).from(vehicleRecords).where(
+      and6(
+        gte3(vehicleRecords.createdAt, startOfMonth),
+        sql`record_type = 'abastecimento'`
+      )
+    );
+    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
+      and6(
+        gte3(vehicleRecords.createdAt, startOfMonth),
+        sql`record_type = 'abastecimento'`
+      )
+    );
+    const [{ count: attendanceToday }] = await db.select({ count: sql`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfMonth));
+    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
+      and6(
+        gte3(collaboratorAttendance.date, startOfMonth),
+        sql`payment_status_ca = 'pendente'`
+      )
+    );
+    const [{ count: totalEquipment }] = await db.select({ count: sql`count(*)` }).from(equipment);
+    const [{ count: lowStockParts }] = await db.select({ count: sql`count(*)` }).from(parts).where(sql`stock_quantity < 5`);
+    const recentCargos = await db.select({
+      id: cargoLoads.id,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      destination: cargoLoads.destination,
+      volumeM3: cargoLoads.volumeM3,
+      createdAt: cargoLoads.createdAt,
+      status: cargoLoads.status
+    }).from(cargoLoads).orderBy(sql`created_at desc`).limit(5);
+    const recentAttendance = await db.select({
+      id: collaboratorAttendance.id,
+      collaboratorId: collaboratorAttendance.collaboratorId,
+      date: collaboratorAttendance.date,
+      dailyValue: collaboratorAttendance.dailyValue,
+      paymentStatus: collaboratorAttendance.paymentStatus,
+      activity: collaboratorAttendance.activity
+    }).from(collaboratorAttendance).orderBy(sql`created_at desc`).limit(5);
+    const [{ count: pendingOrders }] = await db.select({ count: sql`count(*)` }).from(purchaseOrders).where(sql`status = 'pending'`);
+    return {
+      totalCollaborators: Number(totalCollaborators),
+      totalClients: Number(totalClients),
+      cargoThisMonth: Number(cargoThisMonth),
+      cargoVolumeThisMonth: Number(cargoVolumeThisMonth),
+      fuelThisMonth: Number(fuelThisMonth),
+      fuelCostThisMonth: Number(fuelCostThisMonth),
+      attendanceToday: Number(attendanceToday),
+      attendanceThisMonth: Number(attendanceThisMonth),
+      pendingPaymentThisMonth: Number(pendingPaymentThisMonth),
+      totalEquipment: Number(totalEquipment),
+      lowStockParts: Number(lowStockParts),
+      pendingOrders: Number(pendingOrders),
+      recentCargos,
+      recentAttendance,
+      month: now.toLocaleString("pt-BR", { month: "long", year: "numeric" })
+    };
   })
 });
 
@@ -2656,6 +2742,7 @@ async function createSessionToken(userId, email, name) {
 var appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+  dashboard: dashboardRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     register: publicProcedure.input(z15.object({

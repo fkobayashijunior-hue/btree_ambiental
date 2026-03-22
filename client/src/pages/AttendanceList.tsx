@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { toast } from "sonner";
 import {
   Users, Plus, Calendar, Search, CheckCircle2, Clock, DollarSign,
-  User, ChevronDown, ChevronUp, Loader2, Filter
+  User, ChevronDown, ChevronUp, Loader2, Filter, FileDown
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -118,6 +118,71 @@ export default function AttendanceList() {
   const totalValor = filtered.reduce((acc, r) => acc + parseFloat(r.dailyValue || "0"), 0);
   const totalPendente = pendentes.reduce((acc, r) => acc + parseFloat(r.dailyValue || "0"), 0);
 
+  // Gerar PDF do relatório de presenças
+  const handleExportPDF = async () => {
+    if (filtered.length === 0) { toast.error("Nenhuma presença para exportar"); return; }
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF();
+
+      // Cabeçalho
+      doc.setFontSize(16);
+      doc.setTextColor(22, 101, 52); // verde escuro
+      doc.text("BTREE Ambiental", 14, 18);
+      doc.setFontSize(11);
+      doc.setTextColor(80, 80, 80);
+      doc.text("Relatório de Presenças — " + dateLabel, 14, 26);
+
+      // Resumo
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Total de presenças: ${totalDiarias}`, 14, 36);
+      doc.text(`Total a pagar (pendentes): R$ ${totalPendente.toFixed(2)}`, 14, 42);
+      doc.text(`Total geral: R$ ${totalValor.toFixed(2)}`, 14, 48);
+
+      // Tabela
+      const rows = filtered.map((r: any) => [
+        r.collaboratorName || "-",
+        r.activity || "-",
+        r.employmentType === "clt" ? "CLT" : r.employmentType === "terceirizado" ? "Terceirizado" : "Diarista",
+        `R$ ${parseFloat(r.dailyValue || "0").toFixed(2)}`,
+        r.pixKey || "-",
+        r.paymentStatus === "pago" ? "Pago" : "Pendente",
+        r.registeredByName || "-",
+      ]);
+
+      autoTable(doc, {
+        startY: 55,
+        head: [["Colaborador", "Atividade", "Vínculo", "Valor", "PIX", "Status", "Registrado por"]],
+        body: rows,
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [240, 253, 244] },
+        columnStyles: {
+          3: { halign: "right" },
+          5: { halign: "center" },
+        },
+      });
+
+      // Rodapé
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} — Kobayashi Desenvolvimento`, 14, doc.internal.pageSize.height - 8);
+        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+      }
+
+      doc.save(`presencas-${searchDate}.pdf`);
+      toast.success("PDF gerado com sucesso!");
+    } catch (err) {
+      toast.error("Erro ao gerar PDF");
+      console.error(err);
+    }
+  };
+
   const toggleGroup = (key: string) => {
     setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -138,9 +203,14 @@ export default function AttendanceList() {
           </h1>
           <p className="text-gray-500 text-sm mt-1">{dateLabel}</p>
         </div>
-        <Button onClick={() => { setForm({ ...emptyForm }); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-          <Plus className="h-4 w-4" /> Registrar Presença
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+            <FileDown className="h-4 w-4" /> Exportar PDF
+          </Button>
+          <Button onClick={() => { setForm({ ...emptyForm }); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+            <Plus className="h-4 w-4" /> Registrar Presença
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

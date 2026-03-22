@@ -15,6 +15,7 @@ import { collaboratorDocumentsRouter } from "./routers/collaboratorDocuments";
 import { equipmentDetailRouter } from "./routers/equipmentDetail";
 import { purchaseOrdersRouter } from "./routers/purchaseOrders";
 import { attendanceRouter } from "./routers/attendance";
+import { dashboardRouter } from "./routers/dashboard";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { SignJWT } from "jose";
@@ -34,6 +35,7 @@ async function createSessionToken(userId: number, email: string, name: string): 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+  dashboard: dashboardRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     
