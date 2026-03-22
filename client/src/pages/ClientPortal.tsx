@@ -1,9 +1,88 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X } from "lucide-react";
 
 const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_5d1c1c12.png";
+
+function DevContactButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity group"
+        title="Desenvolvido por Kobayashi"
+      >
+        <span className="text-xs text-green-200 group-hover:text-white transition-colors">Desenvolvido por</span>
+        <img
+          src={KOBAYASHI_LOGO}
+          alt="Kobayashi Desenvolvimento"
+          className="h-7 w-auto object-contain filter brightness-0 invert"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+            (e.target as HTMLImageElement).previousElementSibling!.textContent = 'Kobayashi Dev';
+          }}
+        />
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setOpen(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button onClick={() => setOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <X className="h-5 w-5" />
+            </button>
+            <div className="text-center mb-5">
+              <img
+                src={KOBAYASHI_LOGO}
+                alt="Kobayashi Desenvolvimento"
+                className="h-12 w-auto object-contain mx-auto mb-3"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              <h3 className="font-black text-gray-900 text-lg">Kobayashi Desenvolvimento</h3>
+              <p className="text-gray-500 text-sm">Sistemas para o agronegócio</p>
+            </div>
+            <div className="space-y-3">
+              <a
+                href="https://wa.me/5544988334679"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-2xl bg-green-50 hover:bg-green-100 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                  <Phone className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 text-sm">WhatsApp</p>
+                  <p className="text-gray-500 text-xs">(44) 98833-4679</p>
+                </div>
+              </a>
+              <a
+                href="mailto:fernando@kobayashidev.com.br"
+                className="flex items-center gap-3 p-3 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                  <Mail className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 text-sm">E-mail</p>
+                  <p className="text-gray-500 text-xs">fernando@kobayashidev.com.br</p>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 type ClientSession = {
   clientId: number;
@@ -131,9 +210,12 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
           </p>
         </div>
 
-        <p className="text-center text-green-300/60 text-xs mt-6">
+        <p className="text-center text-green-300/60 text-xs mt-4">
           Confiança que floresce, futuro que se constrói.
         </p>
+        <div className="flex justify-center mt-4">
+          <DevContactButton />
+        </div>
       </div>
     </div>
   );
@@ -376,6 +458,12 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
           </div>
         </div>
       </div>
+      {/* Rodapé com logo do desenvolvedor */}
+      <footer className="bg-[#1b5e20] py-4 px-4 mt-4">
+        <div className="max-w-2xl mx-auto flex justify-center">
+          <DevContactButton />
+        </div>
+      </footer>
     </div>
   );
 }
