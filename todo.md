@@ -587,3 +587,44 @@
 - [ ] Peças e Acessórios: restaurar campo de foto no formulário
 - [ ] Peças e Acessórios: restaurar carrinho de pedidos + PDF por fornecedor
 - [ ] Portal do Cliente: login com e-mail+senha (sem código de acesso)
+
+---
+
+## 🐛 CORREÇÕES URGENTES v5 (22/03/2026)
+
+- [ ] VehicleControlPage: botão editar registro de abastecimento
+- [ ] VehicleControlPage: visualizar foto do registro
+- [ ] VehicleControlPage: upload de foto da galeria (não só câmera)
+- [ ] VehicleControlPage: mostrar quem cadastrou o registro (usuário logado)
+- [ ] MachineHoursPage: corrigir título "direção dePons" → nome real do equipamento selecionado
+- [ ] MachineHoursPage: aba Abastecimentos separada de veículos (combustível de máquinas)
+- [ ] DashboardLayout: menu hambúrguer visível no mobile
+- [ ] Todas as páginas internas: botão Voltar para navegação sem usar botão do navegador
+- [ ] PWA: ícone da BTREE como favicon e ícone de tela inicial (manifest.json)
+- [ ] Card do desenvolvedor: clicável com informações de contato (Fernando Kobayashi)
+- [ ] Logo do desenvolvedor: maior e mais visível no Portal do Cliente
+- [ ] AttendancePage: campo local de trabalho no registro de presença
+- [ ] AttendancePage: formulário de cadastro de presença funcional
+- [ ] CargoControl: rastreamento em tempo real com status (Em andamento / Na fábrica / Aguardando descarga / Entregue)
+- [ ] CargoControl: campo de hora de saída e hora de chegada
+- [ ] CargoControl: registro de atrasos/problemas com observação
+- [ ] Portal do Cliente: cargas em andamento com status atualizado em tempo real
+
+---
+
+## 🐛 CORREÇÕES 22/03/2026
+
+- [x] VehicleControlPage: galeria de fotos funcional (câmera + galeria)
+- [x] VehicleControlPage: botão editar com modal
+- [x] VehicleControlPage: mostrar "Cadastrado por" na listagem
+- [x] DashboardLayout: centralizado no App.tsx para todas as rotas protegidas
+- [x] CollaboratorDetail: removido DashboardLayout interno (evitar aninhamento)
+- [x] EquipmentDetail: removido DashboardLayout interno (evitar aninhamento)
+- [x] Home: removido DashboardLayout interno
+- [x] DashboardLayout: logo Kobayashi maior e clicável com dialog de contato
+- [x] manifest.json: criado com ícone BTREE para PWA (ícone na área de trabalho)
+- [x] AttendanceList: formulário de cadastro de presença manual implementado
+- [x] AttendanceList: tabela collaborator_attendance criada no banco
+- [x] AttendanceList: router de presença com list, create, markPaid, delete
+- [x] AttendanceList: mostrar quem cadastrou cada presença
+- [x] AttendanceList: gestão de pagamento (marcar pago/pendente)

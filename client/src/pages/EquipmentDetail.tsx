@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { useParams, useLocation } from "wouter";
-import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -216,22 +215,18 @@ export default function EquipmentDetail() {
 
   if (loadingEquip) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </DashboardLayout>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (!equip) {
     return (
-      <DashboardLayout>
-        <div className="text-center py-16 text-muted-foreground">
-          Equipamento não encontrado.
-          <Button variant="link" onClick={() => setLocation("/setores")}>Voltar</Button>
-        </div>
-      </DashboardLayout>
+      <div className="text-center py-16 text-muted-foreground">
+        Equipamento não encontrado.
+        <Button variant="link" onClick={() => setLocation("/setores")}>Voltar</Button>
+      </div>
     );
   }
 
@@ -245,8 +240,7 @@ export default function EquipmentDetail() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-4">
+    <div className="max-w-4xl mx-auto space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -412,7 +406,6 @@ export default function EquipmentDetail() {
             )}
           </div>
         )}
-      </div>
 
       {/* Dialog: Adicionar Foto */}
       <Dialog open={showAddPhoto} onOpenChange={setShowAddPhoto}>
@@ -553,6 +546,6 @@ export default function EquipmentDetail() {
           </DialogContent>
         </Dialog>
       )}
-    </DashboardLayout>
+    </div>
   );
 }

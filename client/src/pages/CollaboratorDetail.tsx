@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -210,30 +209,25 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
 
   if (loadingCollab) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </DashboardLayout>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (!collabData) {
     return (
-      <DashboardLayout>
-        <div className="text-center py-16 text-muted-foreground">
-          Colaborador não encontrado.
-          <Button variant="link" onClick={() => setLocation("/colaboradores")}>Voltar</Button>
-        </div>
-      </DashboardLayout>
+      <div className="text-center py-16 text-muted-foreground">
+        Colaborador não encontrado.
+        <Button variant="link" onClick={() => setLocation("/colaboradores")}>Voltar</Button>
+      </div>
     );
   }
 
   const collab = collabData;
 
   return (
-    <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-4">
+    <div className="max-w-4xl mx-auto space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3">
@@ -496,7 +490,6 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
             </div>
           </div>
         )}
-      </div>
 
       {/* Dialog: Adicionar Documento */}
       <Dialog open={showAddDoc} onOpenChange={setShowAddDoc}>
@@ -585,6 +578,6 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
           </DialogContent>
         </Dialog>
       )}
-    </DashboardLayout>
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import DashboardLayout from "./components/DashboardLayout";
 import Home from "./pages/Home";
 import UsersPage from "./pages/UsersPage";
 import Login from "./pages/Login";
@@ -23,47 +24,75 @@ import ClientPortal from "./pages/ClientPortal";
 import CollaboratorDetail from "./pages/CollaboratorDetail";
 import EquipmentDetail from "./pages/EquipmentDetail";
 
+// Wrapper que aplica DashboardLayout a páginas protegidas
+function WithLayout({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <DashboardLayout>
+      <Component />
+    </DashboardLayout>
+  );
+}
+
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
+      {/* Rotas públicas — sem DashboardLayout */}
+      <Route path={"/"} component={Landing} />
       <Route path={"/login"} component={Login} />
       <Route path={"/forgot-password"} component={ForgotPassword} />
       <Route path={"/reset-password"} component={ResetPassword} />
-      <Route path={"/colaboradores"} component={Collaborators} />
-      <Route path={"/colaboradores/:id"} component={CollaboratorDetail} />
-      <Route path={"/equipamento/:id"} component={EquipmentDetail} />
-      <Route path={"/presencas"} component={AttendanceList} />
-      <Route path={"/setores"} component={SectorsEquipment} />
-      <Route path={"/controle-acesso"} component={AccessControl} />
-      <Route path={"/cargas"} component={CargoControl} />
-      <Route path={"/maquinas"} component={MachineHoursPage} />
-      <Route path={"/veiculos"} component={VehicleControlPage} />
-      <Route path={"/pecas"} component={PartsPage} />
-      <Route path={"/clientes"} component={ClientsPage} />
       <Route path={"/client-portal"} component={ClientPortal} />
-      <Route path={"/"} component={Landing} />
-      <Route path={"/app"} component={Home} />
-      <Route path={"/usuarios"} component={UsersPage} />
+
+      {/* Rotas protegidas — com DashboardLayout centralizado */}
+      <Route path={"/app"}>
+        {() => <WithLayout component={Home} />}
+      </Route>
+      <Route path={"/colaboradores"}>
+        {() => <WithLayout component={Collaborators} />}
+      </Route>
+      <Route path={"/colaboradores/:id"}>
+        {() => <WithLayout component={CollaboratorDetail} />}
+      </Route>
+      <Route path={"/equipamento/:id"}>
+        {() => <WithLayout component={EquipmentDetail} />}
+      </Route>
+      <Route path={"/presencas"}>
+        {() => <WithLayout component={AttendanceList} />}
+      </Route>
+      <Route path={"/setores"}>
+        {() => <WithLayout component={SectorsEquipment} />}
+      </Route>
+      <Route path={"/controle-acesso"}>
+        {() => <WithLayout component={AccessControl} />}
+      </Route>
+      <Route path={"/cargas"}>
+        {() => <WithLayout component={CargoControl} />}
+      </Route>
+      <Route path={"/maquinas"}>
+        {() => <WithLayout component={MachineHoursPage} />}
+      </Route>
+      <Route path={"/veiculos"}>
+        {() => <WithLayout component={VehicleControlPage} />}
+      </Route>
+      <Route path={"/pecas"}>
+        {() => <WithLayout component={PartsPage} />}
+      </Route>
+      <Route path={"/clientes"}>
+        {() => <WithLayout component={ClientsPage} />}
+      </Route>
+      <Route path={"/usuarios"}>
+        {() => <WithLayout component={UsersPage} />}
+      </Route>
       <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />

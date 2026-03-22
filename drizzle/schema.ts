@@ -566,3 +566,22 @@ export const purchaseOrderItems = mysqlTable("purchase_order_items", {
 });
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
 export type InsertPurchaseOrderItem = typeof purchaseOrderItems.$inferInsert;
+
+// ===== REGISTRO DE PRESENÇA DE COLABORADORES =====
+export const collaboratorAttendance = mysqlTable("collaborator_attendance", {
+  id: int("id").autoincrement().primaryKey(),
+  collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
+  date: timestamp("date").notNull(),
+  employmentType: mysqlEnum("employment_type_ca", ["clt", "terceirizado", "diarista"]).notNull().default("diarista"),
+  dailyValue: varchar("daily_value", { length: 20 }).notNull().default("0"),
+  pixKey: varchar("pix_key", { length: 255 }),
+  activity: varchar("activity", { length: 255 }), // função/atividade do dia
+  observations: text("observations"),
+  paymentStatus: mysqlEnum("payment_status_ca", ["pendente", "pago"]).default("pendente").notNull(),
+  paidAt: timestamp("paid_at"),
+  registeredBy: int("registered_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type CollaboratorAttendance = typeof collaboratorAttendance.$inferSelect;
+export type InsertCollaboratorAttendance = typeof collaboratorAttendance.$inferInsert;

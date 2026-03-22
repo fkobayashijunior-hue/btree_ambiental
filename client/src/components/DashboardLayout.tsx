@@ -20,10 +20,11 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/app" },
@@ -111,6 +112,7 @@ function DashboardLayoutContent({
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
+  const [showDevContact, setShowDevContact] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
@@ -227,11 +229,18 @@ function DashboardLayoutContent({
           <SidebarFooter className="p-3 space-y-3">
             {!isCollapsed && (
               <div className="flex items-center justify-center pb-2 border-t border-white/20 pt-3">
-                <img
-                  src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png"
-                  alt="Desenvolvido por Kobayashi"
-                  className="h-6 object-contain opacity-80 hover:opacity-100 transition-opacity"
-                />
+                <button
+                  onClick={() => setShowDevContact(true)}
+                  className="flex flex-col items-center gap-1 hover:opacity-100 transition-opacity opacity-80 group"
+                  title="Desenvolvido por Kobayashi Dev"
+                >
+                  <img
+                    src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png"
+                    alt="Desenvolvido por Kobayashi"
+                    className="h-10 object-contain group-hover:scale-105 transition-transform"
+                  />
+                  <span className="text-[10px] text-white/50 group-hover:text-white/80">Clique para contato</span>
+                </button>
               </div>
             )}
             <DropdownMenu>
@@ -273,6 +282,44 @@ function DashboardLayoutContent({
           style={{ zIndex: 50 }}
         />
       </div>
+
+      {/* Dialog: Contato do Desenvolvedor */}
+      <Dialog open={showDevContact} onOpenChange={setShowDevContact}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Code2 className="h-5 w-5 text-emerald-600" />
+              Desenvolvido por Kobayashi Dev
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex justify-center">
+              <img
+                src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png"
+                alt="Kobayashi Dev"
+                className="h-16 object-contain"
+              />
+            </div>
+            <div className="space-y-3 text-sm">
+              <a href="tel:+5515997056890" className="flex items-center gap-3 p-3 rounded-lg border hover:bg-emerald-50 transition-colors">
+                <Phone className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-gray-800">(15) 99705-6890</p>
+                  <p className="text-xs text-gray-500">Ligar ou WhatsApp</p>
+                </div>
+              </a>
+              <a href="mailto:fkobayashijunior@gmail.com" className="flex items-center gap-3 p-3 rounded-lg border hover:bg-emerald-50 transition-colors">
+                <Mail className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-gray-800">fkobayashijunior@gmail.com</p>
+                  <p className="text-xs text-gray-500">E-mail</p>
+                </div>
+              </a>
+            </div>
+            <p className="text-xs text-center text-gray-400">Sistema BTREE Ambiental &copy; {new Date().getFullYear()}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <SidebarInset>
         {/* Header fixo — sempre visível com botão menu e botão voltar */}

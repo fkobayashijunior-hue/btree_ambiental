@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Car, Plus, Fuel, Wrench, MapPin, Calendar, Camera, X, ImageIcon } from "lucide-react";
+import { Car, Plus, Calendar, Camera, X, User, Pencil, ImageIcon } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 
 type RecordType = "abastecimento" | "manutencao" | "km";
@@ -24,28 +25,32 @@ const RECORD_COLORS: Record<RecordType, string> = {
   km: "bg-green-100 text-green-800",
 };
 
+const emptyForm = {
+  equipmentId: "",
+  date: new Date().toISOString().slice(0, 10),
+  recordType: "abastecimento" as RecordType,
+  fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv",
+  liters: "",
+  fuelCost: "",
+  pricePerLiter: "",
+  supplier: "",
+  odometer: "",
+  kmDriven: "",
+  maintenanceType: "",
+  maintenanceCost: "",
+  serviceType: "proprio" as "proprio" | "terceirizado",
+  mechanicName: "",
+  notes: "",
+};
+
 export default function VehicleControlPage() {
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [filterEquipment, setFilterEquipment] = useState<string>("");
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    equipmentId: "",
-    date: new Date().toISOString().slice(0, 10),
-    recordType: "abastecimento" as RecordType,
-    fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv",
-    liters: "",
-    fuelCost: "",
-    pricePerLiter: "",
-    supplier: "",
-    odometer: "",
-    kmDriven: "",
-    maintenanceType: "",
-    maintenanceCost: "",
-    serviceType: "proprio" as "proprio" | "terceirizado",
-    mechanicName: "",
-    notes: "",
-  });
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+  const [form, setForm] = useState({ ...emptyForm });
 
   const { openFilePicker } = useFilePicker();
   const utils = trpc.useUtils();
@@ -64,16 +69,45 @@ export default function VehicleControlPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const updateMutation = trpc.vehicleRecords.update.useMutation({
+    onSuccess: () => {
+      toast.success("Registro atualizado!");
+      utils.vehicleRecords.list.invalidate();
+      setIsOpen(false);
+      resetForm();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const resetForm = () => {
-    setForm({
-      equipmentId: "", date: new Date().toISOString().slice(0, 10),
-      recordType: "abastecimento", fuelType: "diesel",
-      liters: "", fuelCost: "", pricePerLiter: "", supplier: "",
-      odometer: "", kmDriven: "", maintenanceType: "", maintenanceCost: "",
-      serviceType: "proprio", mechanicName: "", notes: "",
-    });
+    setForm({ ...emptyForm });
     setPhotoPreview(null);
     setPhotoBase64(null);
+    setEditingId(null);
+  };
+
+  const openEdit = (r: any) => {
+    setEditingId(r.id);
+    setForm({
+      equipmentId: String(r.equipmentId || ""),
+      date: r.date ? new Date(r.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      recordType: r.recordType || "abastecimento",
+      fuelType: r.fuelType || "diesel",
+      liters: r.liters || "",
+      fuelCost: r.fuelCost || "",
+      pricePerLiter: r.pricePerLiter || "",
+      supplier: r.supplier || "",
+      odometer: r.odometer || "",
+      kmDriven: r.kmDriven || "",
+      maintenanceType: r.maintenanceType || "",
+      maintenanceCost: r.maintenanceCost || "",
+      serviceType: r.serviceType || "proprio",
+      mechanicName: r.mechanicName || "",
+      notes: r.notes || "",
+    });
+    setPhotoPreview(r.photoUrl || null);
+    setPhotoBase64(null);
+    setIsOpen(true);
   };
 
   const handlePhotoChange = (files: FileList) => {
@@ -89,15 +123,20 @@ export default function VehicleControlPage() {
     reader.readAsDataURL(file);
   };
 
+  // Abrir galeria sem capture para permitir selecionar da galeria no mobile
+  const openGallery = () => openFilePicker({ accept: "image/*" }, handlePhotoChange);
+  const openCamera = () => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoChange);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.equipmentId) { toast.error("Selecione o veículo"); return; }
-    createMutation.mutate({
+
+    const payload = {
       equipmentId: parseInt(form.equipmentId),
       date: form.date,
       recordType: form.recordType,
       fuelType: form.recordType === "abastecimento" ? form.fuelType : undefined,
-      liters: form.recordType === "abastecimento" ? form.liters : undefined,
+      liters: form.recordType === "abastecimento" ? form.liters || undefined : undefined,
       fuelCost: form.fuelCost || undefined,
       pricePerLiter: form.pricePerLiter || undefined,
       supplier: form.supplier || undefined,
@@ -109,11 +148,17 @@ export default function VehicleControlPage() {
       mechanicName: form.mechanicName || undefined,
       notes: form.notes || undefined,
       photoBase64: photoBase64 || undefined,
-    });
+    };
+
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, ...payload });
+    } else {
+      createMutation.mutate(payload);
+    }
   };
 
-  // Mapa de equipamentos para lookup rápido pelo id
   const equipMap = Object.fromEntries(equipmentList.map((eq: any) => [eq.id, eq.name]));
+  const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -124,7 +169,7 @@ export default function VehicleControlPage() {
           </h1>
           <p className="text-gray-500 text-sm mt-1">Abastecimentos, km e manutenções de veículos</p>
         </div>
-        <Button onClick={() => setIsOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+        <Button onClick={() => { resetForm(); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
           <Plus className="h-4 w-4" /> Novo Registro
         </Button>
       </div>
@@ -157,8 +202,19 @@ export default function VehicleControlPage() {
             <Card key={r.id}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  {r.photoUrl && (
-                    <img src={r.photoUrl} alt="Foto" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+                  {/* Foto clicável */}
+                  {r.photoUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setViewPhoto(r.photoUrl)}
+                      className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 hover:opacity-80 transition-opacity"
+                    >
+                      <img src={r.photoUrl} alt="Foto" className="w-full h-full object-cover" />
+                    </button>
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg flex-shrink-0 border border-gray-100 bg-gray-50 flex items-center justify-center">
+                      <ImageIcon className="h-6 w-6 text-gray-300" />
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -170,19 +226,29 @@ export default function VehicleControlPage() {
                           {RECORD_LABELS[r.recordType as RecordType]}
                         </Badge>
                       </div>
-                      <div className="text-right">
-                        {r.recordType === "abastecimento" && r.liters && (
-                          <>
-                            <p className="font-bold text-blue-700">{r.liters}L</p>
-                            {r.fuelCost && <p className="text-xs text-gray-500">R$ {r.fuelCost}</p>}
-                          </>
-                        )}
-                        {r.recordType === "km" && r.kmDriven && (
-                          <p className="font-bold text-green-700">{r.kmDriven} km</p>
-                        )}
-                        {r.recordType === "manutencao" && r.maintenanceCost && (
-                          <p className="font-bold text-orange-700">R$ {r.maintenanceCost}</p>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          {r.recordType === "abastecimento" && r.liters && (
+                            <>
+                              <p className="font-bold text-blue-700">{r.liters}L</p>
+                              {r.fuelCost && <p className="text-xs text-gray-500">R$ {r.fuelCost}</p>}
+                            </>
+                          )}
+                          {r.recordType === "km" && r.kmDriven && (
+                            <p className="font-bold text-green-700">{r.kmDriven} km</p>
+                          )}
+                          {r.recordType === "manutencao" && r.maintenanceCost && (
+                            <p className="font-bold text-orange-700">R$ {r.maintenanceCost}</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-400 hover:text-emerald-600"
+                          onClick={() => openEdit(r)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                     <div className="text-xs text-gray-500 mt-1 flex gap-3 flex-wrap">
@@ -190,10 +256,15 @@ export default function VehicleControlPage() {
                         <Calendar className="h-3 w-3" />
                         {new Date(r.createdAt).toLocaleDateString("pt-BR")}
                       </span>
-                      {r.odometer && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{r.odometer} km</span>}
+                      {r.odometer && <span>{r.odometer} km</span>}
                       {r.supplier && <span>{r.supplier}</span>}
                       {r.maintenanceType && <span>{r.maintenanceType}</span>}
                       {r.fuelType && r.recordType === "abastecimento" && <span className="capitalize">{r.fuelType}</span>}
+                      {r.registeredByName && (
+                        <span className="flex items-center gap-1 text-gray-400">
+                          <User className="h-3 w-3" /> {r.registeredByName}
+                        </span>
+                      )}
                     </div>
                     {r.notes && <p className="text-xs text-gray-400 mt-1 italic">{r.notes}</p>}
                   </div>
@@ -204,11 +275,22 @@ export default function VehicleControlPage() {
         </div>
       )}
 
-      {/* Sheet */}
+      {/* Modal visualização de foto */}
+      <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
+        <DialogContent className="max-w-lg p-2">
+          {viewPhoto && (
+            <img src={viewPhoto} alt="Foto do registro" className="w-full rounded-lg object-contain max-h-[80vh]" />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sheet de cadastro/edição */}
       <Sheet open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) resetForm(); }}>
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader className="mb-4">
-            <SheetTitle className="text-emerald-800">Novo Registro de Veículo</SheetTitle>
+            <SheetTitle className="text-emerald-800">
+              {editingId ? "Editar Registro" : "Novo Registro de Veículo"}
+            </SheetTitle>
           </SheetHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 pb-8">
@@ -253,7 +335,7 @@ export default function VehicleControlPage() {
                   </select>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <div><Label>Litros *</Label><Input value={form.liters} onChange={e => setForm(f => ({ ...f, liters: e.target.value }))} placeholder="0,0" required /></div>
+                  <div><Label>Litros</Label><Input value={form.liters} onChange={e => setForm(f => ({ ...f, liters: e.target.value }))} placeholder="0,0" /></div>
                   <div><Label>Preço/L</Label><Input value={form.pricePerLiter} onChange={e => setForm(f => ({ ...f, pricePerLiter: e.target.value }))} placeholder="0,00" /></div>
                   <div><Label>Total R$</Label><Input value={form.fuelCost} onChange={e => setForm(f => ({ ...f, fuelCost: e.target.value }))} placeholder="0,00" /></div>
                 </div>
@@ -290,18 +372,30 @@ export default function VehicleControlPage() {
                     className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 hover:bg-black/80">
                     <X className="h-4 w-4" />
                   </button>
-                  <button type="button" onClick={() => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoChange)}
-                    className="absolute bottom-2 right-2 bg-black/60 text-white rounded-lg px-3 py-1 text-xs flex items-center gap-1 hover:bg-black/80">
-                    <Camera className="h-3 w-3" /> Trocar foto
-                  </button>
+                  <div className="absolute bottom-2 right-2 flex gap-2">
+                    <button type="button" onClick={openCamera}
+                      className="bg-black/60 text-white rounded-lg px-3 py-1 text-xs flex items-center gap-1 hover:bg-black/80">
+                      <Camera className="h-3 w-3" /> Câmera
+                    </button>
+                    <button type="button" onClick={openGallery}
+                      className="bg-black/60 text-white rounded-lg px-3 py-1 text-xs flex items-center gap-1 hover:bg-black/80">
+                      <ImageIcon className="h-3 w-3" /> Galeria
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <button type="button" onClick={() => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoChange)}
-                  className="w-full h-28 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors">
-                  <Camera className="h-7 w-7" />
-                  <span className="text-sm font-medium">Tirar foto ou escolher da galeria</span>
-                  <span className="text-xs">JPG, PNG até 5MB (opcional)</span>
-                </button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={openCamera}
+                    className="flex-1 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors">
+                    <Camera className="h-6 w-6" />
+                    <span className="text-xs font-medium">Câmera</span>
+                  </button>
+                  <button type="button" onClick={openGallery}
+                    className="flex-1 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors">
+                    <ImageIcon className="h-6 w-6" />
+                    <span className="text-xs font-medium">Galeria</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -312,8 +406,8 @@ export default function VehicleControlPage() {
 
             <div className="flex gap-3 pt-4 border-t">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setIsOpen(false)}>Cancelar</Button>
-              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Salvando..." : "Registrar"}
+              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={isPending}>
+                {isPending ? "Salvando..." : editingId ? "Atualizar" : "Registrar"}
               </Button>
             </div>
           </form>

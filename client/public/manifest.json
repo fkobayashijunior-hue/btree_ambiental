@@ -1,0 +1,24 @@
+{
+  "name": "BTREE Ambiental",
+  "short_name": "BTREE",
+  "description": "Sistema de Gestão BTREE Ambiental",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#0d4f2e",
+  "theme_color": "#0d4f2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

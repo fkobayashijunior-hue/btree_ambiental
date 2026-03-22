@@ -2,8 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { vehicleRecords } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { vehicleRecords, users } from "../../drizzle/schema";
+import { eq, desc, inArray } from "drizzle-orm";
 
 export const vehicleRecordsRouter = router({
   list: protectedProcedure
@@ -18,7 +18,15 @@ export const vehicleRecordsRouter = router({
       let filtered = results;
       if (input?.equipmentId) filtered = filtered.filter(r => r.equipmentId === input.equipmentId);
       if (input?.recordType) filtered = filtered.filter(r => r.recordType === input.recordType);
-      return filtered;
+      // Buscar nomes dos usuários que cadastraram
+      const userIdsRaw = filtered.map(r => r.registeredBy).filter((id): id is number => id !== null && id !== undefined);
+      const userIds = Array.from(new Set(userIdsRaw));
+      let userMap: Record<number, string> = {};
+      if (userIds.length > 0) {
+        const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds));
+        userMap = Object.fromEntries(usersData.map(u => [u.id, u.name]));
+      }
+      return filtered.map(r => ({ ...r, registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null }));
     }),
 
   create: protectedProcedure
@@ -57,6 +65,44 @@ export const vehicleRecordsRouter = router({
         photoUrl,
         registeredBy: ctx.user.id,
       });
+      return { success: true };
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      date: z.string().optional(),
+      recordType: z.enum(["abastecimento", "manutencao", "km"]).optional(),
+      fuelType: z.enum(["diesel", "gasolina", "etanol", "gnv"]).optional().nullable(),
+      liters: z.string().optional().nullable(),
+      fuelCost: z.string().optional().nullable(),
+      pricePerLiter: z.string().optional().nullable(),
+      supplier: z.string().optional().nullable(),
+      odometer: z.string().optional().nullable(),
+      kmDriven: z.string().optional().nullable(),
+      maintenanceType: z.string().optional().nullable(),
+      maintenanceCost: z.string().optional().nullable(),
+      serviceType: z.enum(["proprio", "terceirizado"]).optional().nullable(),
+      mechanicName: z.string().optional().nullable(),
+      driverCollaboratorId: z.number().optional().nullable(),
+      photoBase64: z.string().optional().nullable(),
+      notes: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const { id, photoBase64, date, ...rest } = input;
+      let photoUrl: string | undefined;
+      if (photoBase64 && photoBase64.startsWith("data:")) {
+        const { cloudinaryUpload } = await import("../cloudinary");
+        const result = await cloudinaryUpload(photoBase64, "btree/vehicle-records");
+        photoUrl = result.url;
+      }
+      await db.update(vehicleRecords).set({
+        ...rest,
+        ...(date ? { date: new Date(date) } : {}),
+        ...(photoUrl ? { photoUrl } : {}),
+      }).where(eq(vehicleRecords.id, id));
       return { success: true };
     }),
 
