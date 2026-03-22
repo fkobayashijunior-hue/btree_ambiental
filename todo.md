@@ -628,3 +628,14 @@
 - [x] AttendanceList: router de presença com list, create, markPaid, delete
 - [x] AttendanceList: mostrar quem cadastrou cada presença
 - [x] AttendanceList: gestão de pagamento (marcar pago/pendente)
+
+---
+
+## 🐛 CORREÇÕES 22/03/2026 (Sessão 2)
+
+- [ ] Menu lateral: reordenar e renomear conforme lista do usuário
+- [ ] VehicleControlPage: corrigir título "drama de abas" → "Controle de Abastecimento"
+- [ ] DashboardLayout: dados dev corretos (tel: (15) 99705-6890, email: fkobayashijunior@gmail.com, desc: "Sistemas para seu negócio")
+- [ ] DashboardLayout: logo Kobayashi clicável visível com texto "Desenvolvedor"
+- [ ] ClientsPage: remover campo "Gerar código de acesso" do formulário
+- [ ] Portal do cliente: logo Kobayashi visível (não "Kobayashi Dev")

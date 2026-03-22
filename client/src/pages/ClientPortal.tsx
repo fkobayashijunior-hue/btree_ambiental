@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X } from "lucide-react";
 
 const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_5d1c1c12.png";
+const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 
 function DevContactButton() {
   const [open, setOpen] = useState(false);
@@ -19,10 +19,14 @@ function DevContactButton() {
         <img
           src={KOBAYASHI_LOGO}
           alt="Kobayashi Desenvolvimento"
-          className="h-7 w-auto object-contain filter brightness-0 invert"
+          className="h-8 w-auto object-contain filter brightness-0 invert"
           onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-            (e.target as HTMLImageElement).previousElementSibling!.textContent = 'Kobayashi Dev';
+            const img = e.target as HTMLImageElement;
+            img.style.display = 'none';
+            const span = document.createElement('span');
+            span.textContent = 'Kobayashi';
+            span.className = 'text-xs font-bold text-white';
+            img.parentNode?.appendChild(span);
           }}
         />
       </button>
@@ -47,11 +51,11 @@ function DevContactButton() {
                 }}
               />
               <h3 className="font-black text-gray-900 text-lg">Kobayashi Desenvolvimento</h3>
-              <p className="text-gray-500 text-sm">Sistemas para o agronegócio</p>
+              <p className="text-gray-500 text-sm">Sistemas para seu negócio</p>
             </div>
             <div className="space-y-3">
               <a
-                href="https://wa.me/5544988334679"
+                href="https://wa.me/5515997056890"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 rounded-2xl bg-green-50 hover:bg-green-100 transition-colors"
@@ -61,11 +65,11 @@ function DevContactButton() {
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900 text-sm">WhatsApp</p>
-                  <p className="text-gray-500 text-xs">(44) 98833-4679</p>
+                  <p className="text-gray-500 text-xs">(15) 99705-6890</p>
                 </div>
               </a>
               <a
-                href="mailto:fernando@kobayashidev.com.br"
+                href="mailto:fkobayashijunior@gmail.com"
                 className="flex items-center gap-3 p-3 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-colors"
               >
                 <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
@@ -73,7 +77,7 @@ function DevContactButton() {
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900 text-sm">E-mail</p>
-                  <p className="text-gray-500 text-xs">fernando@kobayashidev.com.br</p>
+                  <p className="text-gray-500 text-xs">fkobayashijunior@gmail.com</p>
                 </div>
               </a>
             </div>

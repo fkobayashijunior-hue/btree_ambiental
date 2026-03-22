@@ -27,18 +27,18 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/app" },
-  { icon: UserCheck, label: "Colaboradores", path: "/colaboradores" },
+  { icon: LayoutDashboard, label: "Painel", path: "/app" },
   { icon: ClipboardList, label: "Presenças", path: "/presencas" },
-  { icon: Layers, label: "Setores & Equipamentos", path: "/setores" },
-  { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso" },
-  { icon: Truck, label: "Controle de Cargas", path: "/cargas" },
-  { icon: ClipboardList, label: "Horas Máquinas", path: "/maquinas" },
-  { icon: Car, label: "Veículos", path: "/veiculos" },
-  { icon: Package, label: "Peças & Acessórios", path: "/pecas" },
+  { icon: UserCheck, label: "Colaboradores", path: "/colaboradores" },
   { icon: Users, label: "Clientes", path: "/clientes" },
-  { icon: Globe, label: "Portal do Cliente", path: "/client-portal" },
   { icon: Users, label: "Usuários", path: "/usuarios" },
+  { icon: Layers, label: "Setores e Equipamentos", path: "/setores" },
+  { icon: Truck, label: "Controle de Cargas", path: "/cargas" },
+  { icon: ClipboardList, label: "Controle de Equipamentos", path: "/maquinas" },
+  { icon: Car, label: "Controle de Abastecimento", path: "/veiculos" },
+  { icon: Package, label: "Peças e Acessórios", path: "/pecas" },
+  { icon: Globe, label: "Portal do Cliente", path: "/client-portal" },
+  { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso" },
 ];
 
 // Rotas que são subpáginas (não estão no menu principal)
@@ -239,7 +239,7 @@ function DashboardLayoutContent({
                     alt="Desenvolvido por Kobayashi"
                     className="h-10 object-contain group-hover:scale-105 transition-transform"
                   />
-                  <span className="text-[10px] text-white/50 group-hover:text-white/80">Clique para contato</span>
+                  <span className="text-[10px] text-white/50 group-hover:text-white/80">Desenvolvedor</span>
                 </button>
               </div>
             )}
@@ -289,7 +289,7 @@ function DashboardLayoutContent({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Code2 className="h-5 w-5 text-emerald-600" />
-              Desenvolvido por Kobayashi Dev
+              Kobayashi Desenvolvimento
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -316,6 +316,7 @@ function DashboardLayoutContent({
                 </div>
               </a>
             </div>
+            <p className="text-xs text-center text-gray-500 font-medium">Sistemas para seu negócio</p>
             <p className="text-xs text-center text-gray-400">Sistema BTREE Ambiental &copy; {new Date().getFullYear()}</p>
           </div>
         </DialogContent>
