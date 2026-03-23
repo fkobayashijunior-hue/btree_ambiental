@@ -646,3 +646,11 @@
 - [x] Painel com dados reais: cards conectados ao banco (total cargas, colaboradores, abastecimentos do mês)
 - [x] Relatório de presenças em PDF com totais a pagar por colaborador
 - [x] Notificação automática ao administrador ao cadastrar presença
+
+---
+
+## 🐛 CORREÇÕES 23/03/2026
+- [ ] Bug: setor salvando nome errado (sempre salva "churrascos" em vez do nome digitado)
+- [ ] Menu: "cerco de Cargas" → "Controle de Cargas" e "coração de Abastecimento" → "Controle de Abastecimento"
+- [ ] Painel sem dados (dashboard router não retorna dados)
+- [ ] Portal do cliente: simplificar fluxo de cadastro de senha de acesso

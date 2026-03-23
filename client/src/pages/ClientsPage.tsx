@@ -160,9 +160,12 @@ export default function ClientsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => { setPasswordDialog({ clientId: c.id, clientName: c.name }); setNewPassword(""); setShowPassword(false); }}
-                      className="text-blue-700 border-blue-200 hover:bg-blue-50 text-xs gap-1"
-                      title="Definir senha do Portal do Cliente"
+                      onClick={() => {
+                        if (!c.email) { toast.error("Cadastre um e-mail para este cliente antes de definir a senha do portal."); return; }
+                        setPasswordDialog({ clientId: c.id, clientName: c.name }); setNewPassword(""); setShowPassword(false);
+                      }}
+                      className={`text-xs gap-1 ${c.email ? 'text-blue-700 border-blue-200 hover:bg-blue-50' : 'text-gray-400 border-gray-200 hover:bg-gray-50'}`}
+                      title={c.email ? "Definir senha do Portal do Cliente" : "Cadastre um e-mail primeiro"}
                     >
                       <Key className="h-3 w-3" />
                       <span className="hidden sm:inline">Senha Portal</span>

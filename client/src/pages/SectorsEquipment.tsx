@@ -195,7 +195,7 @@ export default function SectorsEquipment() {
           <div className="flex justify-end">
             <Dialog open={sectorOpen} onOpenChange={(v) => { setSectorOpen(v); if (!v) { setEditSectorId(null); setSectorForm({ name: "", description: "", color: "#16a34a" }); } }}>
               <DialogTrigger asChild>
-                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => { setEditSectorId(null); setSectorForm({ name: "", description: "", color: "#16a34a" }); }}>
                   <Plus className="h-4 w-4" /> Novo Setor
                 </Button>
               </DialogTrigger>
