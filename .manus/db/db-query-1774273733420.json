@@ -1,0 +1,103 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "attendance_records"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "biometric_attendance"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "cargo_loads"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "cargo_shipments"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "client_contracts"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "client_payment_receipts"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "client_payments"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "client_portal_access"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "clients"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "collaborator_documents"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "collaborators"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "equipment"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "equipment_maintenance"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "equipment_photos"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "equipment_types"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "fuel_records"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "machine_fuel"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "machine_hours"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "machine_maintenance"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "parts"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "parts_requests"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "password_reset_tokens"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "purchase_order_items"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "purchase_orders"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "replanting_records"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "role_permissions"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "sectors"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "user_profiles"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "users"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH": "vehicle_records"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_MXrNdjKBoryW8SZbHmjeHH\n__drizzle_migrations\nattendance_records\nbiometric_attendance\ncargo_loads\ncargo_shipments\nclient_contracts\nclient_payment_receipts\nclient_payments\nclient_portal_access\nclients\ncollaborator_documents\ncollaborators\nequipment\nequipment_maintenance\nequipment_photos\nequipment_types\nfuel_records\nmachine_fuel\nmachine_hours\nmachine_maintenance\nparts\nparts_requests\npassword_reset_tokens\npurchase_order_items\npurchase_orders\nreplanting_records\nrole_permissions\nsectors\nuser_profiles\nusers\nvehicle_records\n",
+  "stderr": "",
+  "execution_time_ms": 441
+}

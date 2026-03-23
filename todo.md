@@ -662,3 +662,6 @@
 - [x] Relatório de abastecimentos em PDF/Excel por veículo e período
 - [x] Filtro por período (mês/ano) no Painel
 - [x] Controle de horas de equipamentos com manutenções preventivas
+
+## 🐛 CORREÇÕES 23/03/2026 (Sessão 2)
+- [x] Erro ao registrar presença: tabela collaborator_attendance criada no banco Manus via SQL direto; script SQL gerado para rodar no banco de produção Hostinger

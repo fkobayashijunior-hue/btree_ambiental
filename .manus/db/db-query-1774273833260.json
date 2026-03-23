@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `collaborator_attendance` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `collaborator_id` int NOT NULL,\n  `date` timestamp NOT NULL,\n  `employment_type_ca` enum('clt','terceirizado','diarista') NOT NULL DEFAULT 'diarista',\n  `daily_value` varchar(20) NOT NULL DEFAULT '0',\n  `pix_key` varchar(255),\n  `activity` varchar(255),\n  `observations` text,\n  `payment_status_ca` enum('pendente','pago') NOT NULL DEFAULT 'pendente',\n  `paid_at` timestamp,\n  `registered_by` int,\n  `created_at` timestamp NOT NULL DEFAULT (now()),\n  `updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `collaborator_attendance_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute CREATE TABLE IF NOT EXISTS `collaborator_attendance` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `collaborator_id` int NOT NULL,\n  `date` timestamp NOT NULL,\n  `employment_type_ca` enum('clt','terceirizado','diarista') NOT NULL DEFAULT 'diarista',\n  `daily_value` varchar(20) NOT NULL DEFAULT '0',\n  `pix_key` varchar(255),\n  `activity` varchar(255),\n  `observations` text,\n  `payment_status_ca` enum('pendente','pago') NOT NULL DEFAULT 'pendente',\n  `paid_at` timestamp,\n  `registered_by` int,\n  `created_at` timestamp NOT NULL DEFAULT (now()),\n  `updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `collaborator_attendance_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 377
+}

@@ -1,0 +1,8 @@
+{
+  "query": "DESCRIBE collaborator_attendance;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute DESCRIBE collaborator_attendance;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'mxrndjkboryw8szbhmjehh.collaborator_attendance' doesn't exist"
+  ]
+}
