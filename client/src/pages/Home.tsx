@@ -1,11 +1,18 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Package, Fuel, Users, TrendingUp, Calendar, Leaf, DollarSign, Wrench, AlertTriangle, ShoppingCart, CheckCircle2, Clock } from "lucide-react";
+import { Truck, Package, Fuel, Users, Calendar, Leaf, DollarSign, Wrench, AlertTriangle, ShoppingCart, CheckCircle2, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+const MONTHS_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+];
 
 function StatCard({
   title, value, description, icon: Icon, color, loading
@@ -32,15 +39,44 @@ function StatCard({
 
 export default function Home() {
   const [, setLocation] = useLocation();
-  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery(undefined, {
-    refetchInterval: 60_000, // atualiza a cada 1 minuto
-  });
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth()); // 0-indexed
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
+  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery(
+    { month: selectedMonth, year: selectedYear },
+    { refetchInterval: 60_000 }
+  );
 
   const today = new Date().toLocaleDateString("pt-BR", {
     weekday: "long", year: "numeric", month: "long", day: "numeric"
   });
 
-  const month = stats?.month ?? new Date().toLocaleString("pt-BR", { month: "long", year: "numeric" });
+  const periodLabel = `${MONTHS_PT[selectedMonth]} de ${selectedYear}`;
+  const isCurrentMonth = selectedMonth === now.getMonth() && selectedYear === now.getFullYear();
+
+  const goToPrevMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear(y => y - 1);
+    } else {
+      setSelectedMonth(m => m - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear(y => y + 1);
+    } else {
+      setSelectedMonth(m => m + 1);
+    }
+  };
+
+  const goToCurrentMonth = () => {
+    setSelectedMonth(now.getMonth());
+    setSelectedYear(now.getFullYear());
+  };
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -54,6 +90,34 @@ export default function Home() {
           <Calendar className="h-4 w-4" />
           <span className="capitalize">{today}</span>
         </div>
+      </div>
+
+      {/* Seletor de Período */}
+      <div className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 w-fit">
+        <button
+          onClick={goToPrevMonth}
+          className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="text-center min-w-[160px]">
+          <p className="font-semibold text-foreground capitalize">{periodLabel}</p>
+          {!isCurrentMonth && (
+            <button
+              onClick={goToCurrentMonth}
+              className="text-xs text-primary hover:underline mt-0.5"
+            >
+              Voltar ao mês atual
+            </button>
+          )}
+        </div>
+        <button
+          onClick={goToNextMonth}
+          disabled={isCurrentMonth}
+          className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Stats Grid — Linha 1: Pessoas e Clientes */}
@@ -79,7 +143,7 @@ export default function Home() {
           <StatCard
             title="Presenças Hoje"
             value={stats?.attendanceToday ?? "—"}
-            description={`${stats?.attendanceThisMonth ?? "—"} no mês de ${month}`}
+            description={`${stats?.attendanceThisMonth ?? "—"} em ${periodLabel}`}
             icon={CheckCircle2}
             color="text-blue-600"
             loading={isLoading}
@@ -87,7 +151,7 @@ export default function Home() {
           <StatCard
             title="A Pagar (Presenças)"
             value={isLoading ? "—" : formatCurrency(stats?.pendingPaymentThisMonth ?? 0)}
-            description={`pendente em ${month}`}
+            description={`pendente em ${periodLabel}`}
             icon={DollarSign}
             color="text-orange-500"
             loading={isLoading}
@@ -97,7 +161,7 @@ export default function Home() {
 
       {/* Stats Grid — Linha 2: Operações */}
       <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Operações do Mês — {month}</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Operações — {periodLabel}</p>
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <StatCard
             title="Cargas Registradas"
@@ -250,7 +314,7 @@ export default function Home() {
               <CheckCircle2 className="h-7 w-7 text-blue-600 mb-1.5" />
               <span className="text-xs font-medium text-center">Registrar Presença</span>
             </button>
-            <button onClick={() => setLocation("/veiculos")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+            <button onClick={() => setLocation("/abastecimento")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
               <Fuel className="h-7 w-7 text-yellow-600 mb-1.5" />
               <span className="text-xs font-medium text-center">Abastecimento</span>
             </button>

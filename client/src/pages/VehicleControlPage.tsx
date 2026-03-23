@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Car, Plus, Calendar, Camera, X, User, Pencil, ImageIcon } from "lucide-react";
+import { Car, Plus, Calendar, Camera, X, User, Pencil, ImageIcon, FileDown, FileSpreadsheet } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 
 type RecordType = "abastecimento" | "manutencao" | "km";
@@ -43,10 +43,19 @@ const emptyForm = {
   notes: "",
 };
 
+// Meses em português
+const MONTHS = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+];
+
 export default function VehicleControlPage() {
+  const now = new Date();
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [filterEquipment, setFilterEquipment] = useState<string>("");
+  const [filterMonth, setFilterMonth] = useState<number>(now.getMonth()); // 0-indexed
+  const [filterYear, setFilterYear] = useState<number>(now.getFullYear());
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [viewPhoto, setViewPhoto] = useState<string | null>(null);
@@ -58,6 +67,19 @@ export default function VehicleControlPage() {
   const { data: records = [], isLoading } = trpc.vehicleRecords.list.useQuery({
     equipmentId: filterEquipment ? parseInt(filterEquipment) : undefined,
   });
+
+  // Filtrar por mês/ano no frontend
+  const filteredRecords = useMemo(() => {
+    return (records as any[]).filter((r: any) => {
+      const d = new Date(r.createdAt);
+      return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+    });
+  }, [records, filterMonth, filterYear]);
+
+  // Totais do período filtrado (apenas abastecimentos)
+  const fuelRecords = useMemo(() => filteredRecords.filter((r: any) => r.recordType === "abastecimento"), [filteredRecords]);
+  const totalLiters = useMemo(() => fuelRecords.reduce((sum: number, r: any) => sum + (parseFloat(r.liters) || 0), 0), [fuelRecords]);
+  const totalCost = useMemo(() => fuelRecords.reduce((sum: number, r: any) => sum + (parseFloat(r.fuelCost) || 0), 0), [fuelRecords]);
 
   const createMutation = trpc.vehicleRecords.create.useMutation({
     onSuccess: () => {
@@ -75,6 +97,14 @@ export default function VehicleControlPage() {
       utils.vehicleRecords.list.invalidate();
       setIsOpen(false);
       resetForm();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteMutation = trpc.vehicleRecords.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Registro excluído!");
+      utils.vehicleRecords.list.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -123,7 +153,6 @@ export default function VehicleControlPage() {
     reader.readAsDataURL(file);
   };
 
-  // Abrir galeria sem capture para permitir selecionar da galeria no mobile
   const openGallery = () => openFilePicker({ accept: "image/*" }, handlePhotoChange);
   const openCamera = () => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoChange);
 
@@ -157,8 +186,151 @@ export default function VehicleControlPage() {
     }
   };
 
+  const periodLabel = `${MONTHS[filterMonth]} ${filterYear}`;
+
+  // ===== EXPORTAR PDF =====
+  const handleExportPDF = async () => {
+    if (filteredRecords.length === 0) { toast.error("Nenhum registro para exportar no período"); return; }
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF();
+
+      // Cabeçalho
+      doc.setFontSize(16);
+      doc.setTextColor(22, 101, 52);
+      doc.text("BTREE Ambiental", 14, 18);
+      doc.setFontSize(11);
+      doc.setTextColor(80, 80, 80);
+      const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos os veículos") : "Todos os veículos";
+      doc.text(`Relatório de Abastecimentos — ${periodLabel}`, 14, 26);
+      doc.text(`Veículo: ${vehicleName}`, 14, 33);
+
+      // Resumo
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Total de registros: ${filteredRecords.length}`, 14, 43);
+      doc.text(`Total de abastecimentos: ${fuelRecords.length}`, 14, 49);
+      doc.text(`Total de litros: ${totalLiters.toFixed(1)} L`, 14, 55);
+      doc.text(`Custo total: R$ ${totalCost.toFixed(2)}`, 14, 61);
+
+      // Tabela
+      const rows = filteredRecords.map((r: any) => [
+        new Date(r.createdAt).toLocaleDateString("pt-BR"),
+        equipMap[r.equipmentId] || `#${r.equipmentId}`,
+        RECORD_LABELS[r.recordType as RecordType] || r.recordType,
+        r.recordType === "abastecimento" ? (r.fuelType || "-") : "-",
+        r.recordType === "abastecimento" ? `${r.liters || "0"} L` : (r.kmDriven ? `${r.kmDriven} km` : "-"),
+        r.fuelCost || r.maintenanceCost || "-",
+        r.supplier || r.maintenanceType || "-",
+        r.registeredByName || "-",
+      ]);
+
+      autoTable(doc, {
+        startY: 68,
+        head: [["Data", "Veículo", "Tipo", "Combustível", "Litros/KM", "Valor (R$)", "Posto/Tipo", "Registrado por"]],
+        body: rows,
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [240, 253, 244] },
+        columnStyles: {
+          5: { halign: "right" },
+        },
+      });
+
+      // Totais no rodapé da tabela
+      const finalY = (doc as any).lastAutoTable.finalY + 6;
+      doc.setFontSize(10);
+      doc.setTextColor(22, 101, 52);
+      doc.setFont(undefined as any, "bold");
+      doc.text(`Total de litros abastecidos: ${totalLiters.toFixed(1)} L`, 14, finalY);
+      doc.text(`Custo total de abastecimento: R$ ${totalCost.toFixed(2)}`, 14, finalY + 6);
+
+      // Rodapé de página
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont(undefined as any, "normal");
+        doc.setTextColor(150);
+        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} — Kobayashi Desenvolvimento`, 14, doc.internal.pageSize.height - 8);
+        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+      }
+
+      doc.save(`abastecimentos-${filterYear}-${String(filterMonth + 1).padStart(2, "0")}.pdf`);
+      toast.success("PDF gerado com sucesso!");
+    } catch (err) {
+      toast.error("Erro ao gerar PDF");
+      console.error(err);
+    }
+  };
+
+  // ===== EXPORTAR EXCEL =====
+  const handleExportExcel = async () => {
+    if (filteredRecords.length === 0) { toast.error("Nenhum registro para exportar no período"); return; }
+    try {
+      const XLSX = await import("xlsx");
+      const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos") : "Todos";
+
+      const rows = filteredRecords.map((r: any) => ({
+        "Data": new Date(r.createdAt).toLocaleDateString("pt-BR"),
+        "Veículo": equipMap[r.equipmentId] || `#${r.equipmentId}`,
+        "Tipo": RECORD_LABELS[r.recordType as RecordType] || r.recordType,
+        "Combustível": r.fuelType || "",
+        "Litros": r.liters || "",
+        "KM Percorridos": r.kmDriven || "",
+        "Hodômetro": r.odometer || "",
+        "Preço/L (R$)": r.pricePerLiter || "",
+        "Custo Total (R$)": r.fuelCost || r.maintenanceCost || "",
+        "Posto/Fornecedor": r.supplier || "",
+        "Tipo Manutenção": r.maintenanceType || "",
+        "Mecânico": r.mechanicName || "",
+        "Observações": r.notes || "",
+        "Registrado por": r.registeredByName || "",
+      }));
+
+      // Linha de totais
+      rows.push({
+        "Data": `TOTAIS — ${periodLabel} — ${vehicleName}`,
+        "Veículo": "",
+        "Tipo": `${filteredRecords.length} registros`,
+        "Combustível": "",
+        "Litros": `${totalLiters.toFixed(1)} L`,
+        "KM Percorridos": "",
+        "Hodômetro": "",
+        "Preço/L (R$)": "",
+        "Custo Total (R$)": `R$ ${totalCost.toFixed(2)}`,
+        "Posto/Fornecedor": "",
+        "Tipo Manutenção": "",
+        "Mecânico": "",
+        "Observações": "",
+        "Registrado por": "",
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Abastecimentos");
+
+      // Ajustar largura das colunas
+      ws["!cols"] = [
+        { wch: 12 }, { wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 10 },
+        { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 20 },
+        { wch: 20 }, { wch: 18 }, { wch: 25 }, { wch: 18 },
+      ];
+
+      XLSX.writeFile(wb, `abastecimentos-${filterYear}-${String(filterMonth + 1).padStart(2, "0")}.xlsx`);
+      toast.success("Excel gerado com sucesso!");
+    } catch (err) {
+      toast.error("Erro ao gerar Excel");
+      console.error(err);
+    }
+  };
+
   const equipMap = Object.fromEntries(equipmentList.map((eq: any) => [eq.id, eq.name]));
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  // Anos disponíveis (últimos 3 anos)
+  const years = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -169,36 +341,98 @@ export default function VehicleControlPage() {
           </h1>
           <p className="text-gray-500 text-sm mt-1">Abastecimentos, km e manutenções de veículos</p>
         </div>
-        <Button onClick={() => { resetForm(); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-          <Plus className="h-4 w-4" /> Novo Registro
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleExportPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+            <FileDown className="h-4 w-4" /> PDF
+          </Button>
+          <Button variant="outline" onClick={handleExportExcel} className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50">
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </Button>
+          <Button onClick={() => { resetForm(); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+            <Plus className="h-4 w-4" /> Novo Registro
+          </Button>
+        </div>
       </div>
 
-      {/* Filter */}
-      <div className="max-w-xs">
-        <select
-          value={filterEquipment}
-          onChange={e => setFilterEquipment(e.target.value)}
-          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">Todos os veículos</option>
-          {equipmentList.map((eq: any) => (
-            <option key={eq.id} value={eq.id}>{eq.name}</option>
-          ))}
-        </select>
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-3 items-end">
+        {/* Mês */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-gray-500">Mês</label>
+          <select
+            value={filterMonth}
+            onChange={e => setFilterMonth(parseInt(e.target.value))}
+            className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            {MONTHS.map((m, i) => (
+              <option key={i} value={i}>{m}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Ano */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-gray-500">Ano</label>
+          <select
+            value={filterYear}
+            onChange={e => setFilterYear(parseInt(e.target.value))}
+            className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            {years.map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Veículo */}
+        <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+          <label className="text-xs font-medium text-gray-500">Veículo</label>
+          <select
+            value={filterEquipment}
+            onChange={e => setFilterEquipment(e.target.value)}
+            className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Todos os veículos</option>
+            {equipmentList.map((eq: any) => (
+              <option key={eq.id} value={eq.id}>{eq.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Cards de resumo do período */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-emerald-700">{filteredRecords.length}</p>
+            <p className="text-xs text-gray-500">Registros em {periodLabel}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-blue-700">{totalLiters.toFixed(1)} L</p>
+            <p className="text-xs text-gray-500">Total abastecido</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-orange-600">R$ {totalCost.toFixed(2)}</p>
+            <p className="text-xs text-gray-500">Custo de combustível</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Records */}
       {isLoading ? (
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}</div>
-      ) : records.length === 0 ? (
+      ) : filteredRecords.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <Car className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p>Nenhum registro de veículo</p>
+          <p>Nenhum registro em {periodLabel}</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {records.map((r: any) => (
+          {filteredRecords.map((r: any) => (
             <Card key={r.id}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">

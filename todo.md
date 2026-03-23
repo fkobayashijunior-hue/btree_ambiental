@@ -654,3 +654,11 @@
 - [ ] Menu: "cerco de Cargas" → "Controle de Cargas" e "coração de Abastecimento" → "Controle de Abastecimento"
 - [ ] Painel sem dados (dashboard router não retorna dados)
 - [ ] Portal do cliente: simplificar fluxo de cadastro de senha de acesso
+
+---
+
+## 🚀 MELHORIAS 23/03/2026
+
+- [x] Relatório de abastecimentos em PDF/Excel por veículo e período
+- [x] Filtro por período (mês/ano) no Painel
+- [x] Controle de horas de equipamentos com manutenções preventivas

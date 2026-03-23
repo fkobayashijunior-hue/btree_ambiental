@@ -1683,6 +1683,25 @@ var machineHoursRouter = router({
     });
     return { success: true };
   }),
+  updateHours: protectedProcedure.input(z6.object({
+    id: z6.number(),
+    date: z6.string().optional(),
+    startHourMeter: z6.string().optional(),
+    endHourMeter: z6.string().optional(),
+    hoursWorked: z6.string().optional(),
+    activity: z6.string().optional().nullable(),
+    location: z6.string().optional().nullable(),
+    notes: z6.string().optional().nullable()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const { id, date, ...rest } = input;
+    await db.update(machineHours).set({
+      ...rest,
+      ...date ? { date: new Date(date) } : {}
+    }).where(eq6(machineHours.id, id));
+    return { success: true };
+  }),
   deleteHours: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError5({ code: "FORBIDDEN" });
     const db = await getDb();
@@ -1721,6 +1740,28 @@ var machineHoursRouter = router({
       date: new Date(input.date),
       registeredBy: ctx.user.id
     });
+    return { success: true };
+  }),
+  updateMaintenance: protectedProcedure.input(z6.object({
+    id: z6.number(),
+    date: z6.string().optional(),
+    hourMeter: z6.string().optional().nullable(),
+    type: z6.enum(["preventiva", "corretiva", "revisao"]).optional(),
+    serviceType: z6.enum(["proprio", "terceirizado"]).optional(),
+    mechanicName: z6.string().optional().nullable(),
+    thirdPartyCompany: z6.string().optional().nullable(),
+    description: z6.string().optional().nullable(),
+    laborCost: z6.string().optional().nullable(),
+    totalCost: z6.string().optional().nullable(),
+    nextMaintenanceHours: z6.string().optional().nullable()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const { id, date, ...rest } = input;
+    await db.update(machineMaintenance).set({
+      ...rest,
+      ...date ? { date: new Date(date) } : {}
+    }).where(eq6(machineMaintenance.id, id));
     return { success: true };
   }),
   deleteMaintenance: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ ctx, input }) => {
@@ -1764,6 +1805,82 @@ var machineHoursRouter = router({
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(machineFuel).where(eq6(machineFuel.id, input.id));
     return { success: true };
+  }),
+  // === ALERTAS DE MANUTENÇÃO PREVENTIVA ===
+  // Retorna equipamentos que estão próximos ou passaram da próxima manutenção programada
+  maintenanceAlerts: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
+    const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
+    const equipmentList = await db.select().from(equipment);
+    const equipMap = Object.fromEntries(equipmentList.map((e) => [e.id, e.name]));
+    const lastMaintByEquip = {};
+    for (const m of maintenances) {
+      if (m.nextMaintenanceHours && !lastMaintByEquip[m.equipmentId]) {
+        lastMaintByEquip[m.equipmentId] = m;
+      }
+    }
+    const lastHourByEquip = {};
+    for (const h of hoursRecords) {
+      if (!lastHourByEquip[h.equipmentId]) {
+        lastHourByEquip[h.equipmentId] = h.endHourMeter;
+      }
+    }
+    const alerts = [];
+    for (const [equipIdStr, maint] of Object.entries(lastMaintByEquip)) {
+      const equipId = parseInt(equipIdStr);
+      const currentHour = parseFloat(lastHourByEquip[equipId] || "0");
+      const nextMaintHour = parseFloat(maint.nextMaintenanceHours);
+      if (isNaN(nextMaintHour)) continue;
+      const hoursRemaining = nextMaintHour - currentHour;
+      if (hoursRemaining <= 50) {
+        alerts.push({
+          equipmentId: equipId,
+          equipmentName: equipMap[equipId] || `Equipamento #${equipId}`,
+          currentHourMeter: currentHour,
+          nextMaintenanceHours: nextMaintHour,
+          hoursRemaining,
+          isOverdue: hoursRemaining < 0,
+          lastMaintenanceDate: maint.date,
+          maintenanceType: maint.type
+        });
+      }
+    }
+    return alerts.sort((a, b) => a.hoursRemaining - b.hoursRemaining);
+  }),
+  // === RESUMO POR EQUIPAMENTO ===
+  equipmentSummary: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const equipmentList = await db.select().from(equipment);
+    const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
+    const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
+    const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
+    return equipmentList.map((eq15) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq15.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq15.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq15.id);
+      const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
+      const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
+      const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
+      const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
+      const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
+      return {
+        equipmentId: eq15.id,
+        equipmentName: eq15.name,
+        brand: eq15.brand,
+        model: eq15.model,
+        status: eq15.status,
+        totalHoursWorked: totalHours,
+        lastHourMeter,
+        totalFuelLiters,
+        totalFuelCost,
+        maintenanceCount: eqMaint.length,
+        lastMaintenanceDate: lastMaintenance?.date || null,
+        nextMaintenanceHours: lastMaintenance?.nextMaintenanceHours || null
+      };
+    });
   })
 });
 
@@ -2564,40 +2681,60 @@ Registrado por: ${ctx.user.name}`
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql, gte as gte3, and as and6 } from "drizzle-orm";
+import { sql as sql2, gte as gte3, lte as lte3, and as and6 } from "drizzle-orm";
+import { z as z15 } from "zod";
 var dashboardRouter = router({
-  stats: protectedProcedure.query(async () => {
+  stats: protectedProcedure.input(z15.object({
+    month: z15.number().min(0).max(11).optional(),
+    // 0-indexed
+    year: z15.number().min(2020).max(2100).optional()
+  }).optional()).query(async ({ input }) => {
     const now = /* @__PURE__ */ new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const targetMonth = input?.month ?? now.getMonth();
+    const targetYear = input?.year ?? now.getFullYear();
+    const startOfMonth = new Date(targetYear, targetMonth, 1);
+    const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
-    const [{ count: totalCollaborators }] = await db.select({ count: sql`count(*)` }).from(collaborators);
-    const [{ count: totalClients }] = await db.select({ count: sql`count(*)` }).from(clients);
-    const [{ count: cargoThisMonth }] = await db.select({ count: sql`count(*)` }).from(cargoLoads).where(gte3(cargoLoads.createdAt, startOfMonth));
-    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(gte3(cargoLoads.createdAt, startOfMonth));
-    const [{ count: fuelThisMonth }] = await db.select({ count: sql`count(*)` }).from(vehicleRecords).where(
+    const [{ count: totalCollaborators }] = await db.select({ count: sql2`count(*)` }).from(collaborators);
+    const [{ count: totalClients }] = await db.select({ count: sql2`count(*)` }).from(clients);
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql2`count(*)` }).from(cargoLoads).where(and6(
+      gte3(cargoLoads.createdAt, startOfMonth),
+      lte3(cargoLoads.createdAt, endOfMonth)
+    ));
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql2`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and6(
+      gte3(cargoLoads.createdAt, startOfMonth),
+      lte3(cargoLoads.createdAt, endOfMonth)
+    ));
+    const [{ count: fuelThisMonth }] = await db.select({ count: sql2`count(*)` }).from(vehicleRecords).where(
       and6(
         gte3(vehicleRecords.createdAt, startOfMonth),
-        sql`record_type = 'abastecimento'`
+        lte3(vehicleRecords.createdAt, endOfMonth),
+        sql2`record_type = 'abastecimento'`
       )
     );
-    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
+    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql2`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
       and6(
         gte3(vehicleRecords.createdAt, startOfMonth),
-        sql`record_type = 'abastecimento'`
+        lte3(vehicleRecords.createdAt, endOfMonth),
+        sql2`record_type = 'abastecimento'`
       )
     );
-    const [{ count: attendanceToday }] = await db.select({ count: sql`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
-    const [{ count: attendanceThisMonth }] = await db.select({ count: sql`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfMonth));
-    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
+    const [{ count: attendanceToday }] = await db.select({ count: sql2`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql2`count(*)` }).from(collaboratorAttendance).where(and6(
+      gte3(collaboratorAttendance.date, startOfMonth),
+      lte3(collaboratorAttendance.date, endOfMonth)
+    ));
+    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql2`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
       and6(
         gte3(collaboratorAttendance.date, startOfMonth),
-        sql`payment_status_ca = 'pendente'`
+        lte3(collaboratorAttendance.date, endOfMonth),
+        sql2`payment_status_ca = 'pendente'`
       )
     );
-    const [{ count: totalEquipment }] = await db.select({ count: sql`count(*)` }).from(equipment);
-    const [{ count: lowStockParts }] = await db.select({ count: sql`count(*)` }).from(parts).where(sql`stock_quantity < 5`);
+    const [{ count: totalEquipment }] = await db.select({ count: sql2`count(*)` }).from(equipment);
+    const [{ count: lowStockParts }] = await db.select({ count: sql2`count(*)` }).from(parts).where(sql2`stock_quantity < 5`);
     const recentCargos = await db.select({
       id: cargoLoads.id,
       vehiclePlate: cargoLoads.vehiclePlate,
@@ -2605,7 +2742,7 @@ var dashboardRouter = router({
       volumeM3: cargoLoads.volumeM3,
       createdAt: cargoLoads.createdAt,
       status: cargoLoads.status
-    }).from(cargoLoads).orderBy(sql`created_at desc`).limit(5);
+    }).from(cargoLoads).orderBy(sql2`created_at desc`).limit(5);
     const recentAttendance = await db.select({
       id: collaboratorAttendance.id,
       collaboratorId: collaboratorAttendance.collaboratorId,
@@ -2613,8 +2750,22 @@ var dashboardRouter = router({
       dailyValue: collaboratorAttendance.dailyValue,
       paymentStatus: collaboratorAttendance.paymentStatus,
       activity: collaboratorAttendance.activity
-    }).from(collaboratorAttendance).orderBy(sql`created_at desc`).limit(5);
-    const [{ count: pendingOrders }] = await db.select({ count: sql`count(*)` }).from(purchaseOrders).where(sql`status = 'pending'`);
+    }).from(collaboratorAttendance).orderBy(sql2`created_at desc`).limit(5);
+    const [{ count: pendingOrders }] = await db.select({ count: sql2`count(*)` }).from(purchaseOrders).where(sql2`status = 'pending'`);
+    const MONTHS_PT = [
+      "janeiro",
+      "fevereiro",
+      "mar\xE7o",
+      "abril",
+      "maio",
+      "junho",
+      "julho",
+      "agosto",
+      "setembro",
+      "outubro",
+      "novembro",
+      "dezembro"
+    ];
     return {
       totalCollaborators: Number(totalCollaborators),
       totalClients: Number(totalClients),
@@ -2630,13 +2781,15 @@ var dashboardRouter = router({
       pendingOrders: Number(pendingOrders),
       recentCargos,
       recentAttendance,
-      month: now.toLocaleString("pt-BR", { month: "long", year: "numeric" })
+      month: `${MONTHS_PT[targetMonth]} de ${targetYear}`,
+      selectedMonth: targetMonth,
+      selectedYear: targetYear
     };
   })
 });
 
 // server/routers.ts
-import { z as z15 } from "zod";
+import { z as z16 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -2745,10 +2898,10 @@ var appRouter = router({
   dashboard: dashboardRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z15.object({
-      name: z15.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z15.string().email("Email inv\xE1lido"),
-      password: z15.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z16.object({
+      name: z16.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z16.string().email("Email inv\xE1lido"),
+      password: z16.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -2763,9 +2916,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z15.object({
-      email: z15.string().email("Email inv\xE1lido"),
-      password: z15.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z16.object({
+      email: z16.string().email("Email inv\xE1lido"),
+      password: z16.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -2781,11 +2934,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z15.object({
-      seedKey: z15.string(),
-      email: z15.string().email(),
-      name: z15.string(),
-      password: z15.string().min(4)
+    seedAdmin: publicProcedure.input(z16.object({
+      seedKey: z16.string(),
+      email: z16.string().email(),
+      name: z16.string(),
+      password: z16.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -2795,9 +2948,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z15.object({
-      email: z15.string().email("Email inv\xE1lido"),
-      origin: z15.string().url().optional()
+    forgotPassword: publicProcedure.input(z16.object({
+      email: z16.string().email("Email inv\xE1lido"),
+      origin: z16.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -2811,9 +2964,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z15.object({
-      token: z15.string().min(1),
-      password: z15.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z16.object({
+      token: z16.string().min(1),
+      password: z16.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
