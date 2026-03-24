@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { parts, partsRequests } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
+import { notifyTeam } from "../notifyTeam";
 
 export const partsRouter = router({
   // === PEÇAS ===
@@ -126,6 +127,23 @@ export const partsRouter = router({
         status: "pendente",
         requestedBy: ctx.user.id,
       });
+
+      // Notificação por e-mail para a equipe
+      const urgencyLabels: Record<string, string> = { baixa: "Baixa", media: "Média", alta: "Alta ⚠️" };
+      notifyTeam({
+        event: "pedido_pecas_criado",
+        title: `Nova solicitação de peça/acessório: ${input.partName}.`,
+        details: {
+          "Peça / Acessório": input.partName,
+          "Quantidade": input.quantity,
+          "Urgência": urgencyLabels[input.urgency] || input.urgency,
+          "Equipamento": input.equipmentName || "—",
+          "Motivo": input.reason || "—",
+          "Custo Estimado": input.estimatedCost ? `R$ ${input.estimatedCost}` : "—",
+        },
+        registeredBy: ctx.user.name,
+      }).catch(() => {});
+
       return { success: true };
     }),
 

@@ -665,3 +665,21 @@
 
 ## 🐛 CORREÇÕES 23/03/2026 (Sessão 2)
 - [x] Erro ao registrar presença: tabela collaborator_attendance criada no banco Manus via SQL direto; script SQL gerado para rodar no banco de produção Hostinger
+
+## 🔔 NOTIFICAÇÕES AUTOMÁTICAS — Mary (23/03/2026)
+- [x] Sistema de notificação por e-mail para múltiplos destinatários (owner + Mary)
+- [x] Notificação automática ao registrar presença (e-mail para Mary + owner)
+- [x] Notificação automática ao registrar abastecimento de veículo (e-mail para Mary + owner)
+- [x] Notificação automática ao criar pedido de peças/acessórios (e-mail para Mary + owner)
+- [x] Notificação automática ao criar pedido de compra (e-mail para Mary + owner)
+- [x] Script SQL completo para sincronizar tabelas faltantes no banco de produção (Hostinger)
+
+## 🛰️ MÓDULO GPS — EC33 QUECTEL + TRACCAR (24/03/2026)
+- [x] Guia de instalação do Traccar no VPS Hostinger
+- [x] Módulo de Rastreamento GPS no BTREE (mapa em tempo real, histórico de rotas, alertas)
+- [x] Integração API Traccar → BTREE (posições, velocidade, ignição, km rodados)
+- [x] Configuração dos rastreadores EC33 via SMS (comandos APN, servidor, fuso horário) — incluso no guia
+- [x] Contagem automática de horas de máquinas via GPS (ignição ligada = hora trabalhada)
+- [x] Geração automática de alertas de manutenção preventiva por horas acumuladas (engraxamento, abastecimento, troca de óleo)
+- [x] Vinculação de dispositivo GPS a equipamento/máquina cadastrada no sistema
+- [x] Alerta visual e notificação quando máquina atingir limiar de horas para manutenção

@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { collaboratorAttendance, collaborators, users } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
-
+import { notifyTeam } from "../notifyTeam";
 export const attendanceRouter = router({
   // Listar presenças com filtros
   list: protectedProcedure
@@ -108,7 +108,22 @@ export const attendanceRouter = router({
       await notifyOwner({
         title: `✅ Presença registrada — ${collaboratorName}`,
         content: `${collaboratorName}${activityInfo} teve presença registrada em ${dateFormatted}.\nVínculo: ${employmentLabel} | Diária: R$ ${input.dailyValue}${input.pixKey ? " | PIX: " + input.pixKey : ""}\nRegistrado por: ${ctx.user.name}`,
-      }).catch(() => {}); // Silencia erros de notificação para não bloquear o cadastro
+      }).catch(() => {});
+
+      // Notificação por e-mail para a equipe (Mary + owner)
+      notifyTeam({
+        event: "presenca_registrada",
+        title: `Presença de ${collaboratorName} registrada em ${dateFormatted}.`,
+        details: {
+          "Colaborador": collaboratorName,
+          "Data": dateFormatted,
+          "Vínculo": employmentLabel,
+          "Função / Atividade": input.activity || "—",
+          "Valor da Diária": `R$ ${input.dailyValue}`,
+          "Chave PIX": input.pixKey || "—",
+        },
+        registeredBy: ctx.user.name,
+      }).catch(() => {});
 
       return { success: true };
     }),

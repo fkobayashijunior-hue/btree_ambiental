@@ -44,12 +44,16 @@ __export(schema_exports, {
   equipmentPhotos: () => equipmentPhotos,
   equipmentTypes: () => equipmentTypes,
   fuelRecords: () => fuelRecords,
+  gpsDeviceLinks: () => gpsDeviceLinks,
+  gpsHoursLog: () => gpsHoursLog,
   machineFuel: () => machineFuel,
   machineHours: () => machineHours,
   machineMaintenance: () => machineMaintenance,
   parts: () => parts,
   partsRequests: () => partsRequests,
   passwordResetTokens: () => passwordResetTokens,
+  preventiveMaintenanceAlerts: () => preventiveMaintenanceAlerts,
+  preventiveMaintenancePlans: () => preventiveMaintenancePlans,
   purchaseOrderItems: () => purchaseOrderItems,
   purchaseOrders: () => purchaseOrders,
   replantingRecords: () => replantingRecords,
@@ -60,7 +64,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance;
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -571,6 +575,81 @@ var init_schema = __esm({
       registeredBy: int("registered_by").references(() => users.id),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    gpsDeviceLinks = mysqlTable("gps_device_links", {
+      id: int("id").autoincrement().primaryKey(),
+      equipmentId: int("equipment_id").notNull().references(() => equipment.id, { onDelete: "cascade" }),
+      traccarDeviceId: int("traccar_device_id").notNull(),
+      // ID do dispositivo no Traccar
+      traccarDeviceName: varchar("traccar_device_name", { length: 255 }),
+      // nome no Traccar (cache)
+      traccarUniqueId: varchar("traccar_unique_id", { length: 100 }),
+      // IMEI/ID único do rastreador
+      active: int("active").default(1).notNull(),
+      createdBy: int("created_by").references(() => users.id),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    gpsHoursLog = mysqlTable("gps_hours_log", {
+      id: int("id").autoincrement().primaryKey(),
+      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+      gpsDeviceLinkId: int("gps_device_link_id").references(() => gpsDeviceLinks.id),
+      date: timestamp("date").notNull(),
+      // dia do registro
+      hoursWorked: varchar("hours_worked", { length: 20 }).notNull(),
+      // horas com ignição ligada
+      hourMeterStart: varchar("hour_meter_start", { length: 20 }),
+      // horímetro início do dia
+      hourMeterEnd: varchar("hour_meter_end", { length: 20 }),
+      // horímetro fim do dia
+      distanceKm: varchar("distance_km", { length: 20 }),
+      // km rodados no dia
+      source: mysqlEnum("source", ["gps_auto", "manual"]).default("gps_auto").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    preventiveMaintenancePlans = mysqlTable("preventive_maintenance_plans", {
+      id: int("id").autoincrement().primaryKey(),
+      equipmentId: int("equipment_id").notNull().references(() => equipment.id, { onDelete: "cascade" }),
+      name: varchar("name", { length: 255 }).notNull(),
+      // ex: "Troca de óleo", "Engraxamento"
+      type: mysqlEnum("type", [
+        "troca_oleo",
+        "engraxamento",
+        "filtro_ar",
+        "filtro_combustivel",
+        "correia",
+        "revisao_geral",
+        "abastecimento",
+        "outros"
+      ]).notNull().default("outros"),
+      intervalHours: int("interval_hours").notNull(),
+      // a cada X horas de uso
+      lastDoneHours: varchar("last_done_hours", { length: 20 }).default("0"),
+      // horímetro da última execução
+      lastDoneAt: timestamp("last_done_at"),
+      // data da última execução
+      alertThresholdHours: int("alert_threshold_hours").default(10),
+      // alertar X horas antes
+      active: int("active").default(1).notNull(),
+      notes: text("notes"),
+      createdBy: int("created_by").references(() => users.id),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    preventiveMaintenanceAlerts = mysqlTable("preventive_maintenance_alerts", {
+      id: int("id").autoincrement().primaryKey(),
+      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+      planId: int("plan_id").notNull().references(() => preventiveMaintenancePlans.id),
+      status: mysqlEnum("status", ["pendente", "em_andamento", "concluido", "ignorado"]).default("pendente").notNull(),
+      currentHours: varchar("current_hours", { length: 20 }).notNull(),
+      // horímetro quando gerado
+      dueHours: varchar("due_hours", { length: 20 }).notNull(),
+      // horímetro alvo
+      generatedAt: timestamp("generated_at").defaultNow().notNull(),
+      resolvedAt: timestamp("resolved_at"),
+      resolvedBy: int("resolved_by").references(() => users.id),
+      notes: text("notes"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
     });
   }
 });
@@ -1857,21 +1936,21 @@ var machineHoursRouter = router({
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
-    return equipmentList.map((eq15) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq15.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq15.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq15.id);
+    return equipmentList.map((eq16) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq16.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq16.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq16.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq15.id,
-        equipmentName: eq15.name,
-        brand: eq15.brand,
-        model: eq15.model,
-        status: eq15.status,
+        equipmentId: eq16.id,
+        equipmentName: eq16.name,
+        brand: eq16.brand,
+        model: eq16.model,
+        status: eq16.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -1890,6 +1969,104 @@ init_db();
 init_schema();
 import { TRPCError as TRPCError6 } from "@trpc/server";
 import { eq as eq7, desc as desc5, inArray } from "drizzle-orm";
+
+// server/notifyTeam.ts
+import nodemailer from "nodemailer";
+async function createTransporter() {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (host && user && pass) {
+    return nodemailer.createTransport({
+      host,
+      port: parseInt(process.env.SMTP_PORT || "587"),
+      secure: process.env.SMTP_SECURE === "true",
+      auth: { user, pass }
+    });
+  }
+  return null;
+}
+var EVENT_LABELS = {
+  presenca_registrada: { icon: "\u2705", color: "#059669", label: "Presen\xE7a Registrada" },
+  abastecimento_registrado: { icon: "\u26FD", color: "#0284c7", label: "Abastecimento Registrado" },
+  pedido_pecas_criado: { icon: "\u{1F527}", color: "#d97706", label: "Pedido de Pe\xE7as Criado" },
+  pedido_compra_criado: { icon: "\u{1F6D2}", color: "#7c3aed", label: "Pedido de Compra Criado" },
+  pedido_compra_enviado: { icon: "\u{1F4E4}", color: "#0891b2", label: "Pedido de Compra Enviado" },
+  pedido_pecas_aprovado: { icon: "\u2714\uFE0F", color: "#16a34a", label: "Pedido de Pe\xE7as Aprovado" },
+  pedido_pecas_rejeitado: { icon: "\u274C", color: "#dc2626", label: "Pedido de Pe\xE7as Rejeitado" }
+};
+function buildHtml(payload) {
+  const meta = EVENT_LABELS[payload.event];
+  const rows = Object.entries(payload.details).filter(([, v]) => v !== null && v !== void 0 && v !== "").map(([k, v]) => `
+      <tr>
+        <td style="padding:8px 12px;font-weight:600;color:#374151;background:#f9fafb;border-bottom:1px solid #e5e7eb;white-space:nowrap;">${k}</td>
+        <td style="padding:8px 12px;color:#111827;border-bottom:1px solid #e5e7eb;">${v}</td>
+      </tr>`).join("");
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f3f4f6;margin:0;padding:24px;">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1);">
+    <!-- Header -->
+    <div style="background:${meta.color};padding:24px 32px;">
+      <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree_2d00f2da.png"
+           alt="BTREE Ambiental" style="height:40px;margin-bottom:12px;display:block;" />
+      <h2 style="margin:0;color:#fff;font-size:20px;">${meta.icon} ${meta.label}</h2>
+    </div>
+    <!-- Body -->
+    <div style="padding:24px 32px;">
+      <p style="color:#374151;margin:0 0 20px;">${payload.title}</p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        ${rows}
+      </table>
+      ${payload.registeredBy ? `<p style="margin:16px 0 0;font-size:13px;color:#6b7280;">Registrado por: <strong>${payload.registeredBy}</strong></p>` : ""}
+    </div>
+    <!-- Footer -->
+    <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;text-align:center;">
+      BTREE Ambiental \u2014 Sistema de Gest\xE3o Operacional<br/>
+      Este \xE9 um e-mail autom\xE1tico, n\xE3o responda.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+async function notifyTeam(payload) {
+  const rawEmails = process.env.NOTIFY_EMAILS || "";
+  const recipients = rawEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@"));
+  if (recipients.length === 0) {
+    console.log(`[notifyTeam] NOTIFY_EMAILS n\xE3o configurado \u2014 evento ${payload.event} n\xE3o enviado por e-mail.`);
+    return;
+  }
+  try {
+    const transporter = await createTransporter();
+    if (!transporter) {
+      console.log(`[notifyTeam] SMTP n\xE3o configurado \u2014 evento ${payload.event} n\xE3o enviado.`);
+      return;
+    }
+    const meta = EVENT_LABELS[payload.event];
+    const subject = `${meta.icon} ${meta.label} \u2014 BTREE Ambiental`;
+    const html = buildHtml(payload);
+    const text2 = [
+      payload.title,
+      "",
+      ...Object.entries(payload.details).filter(([, v]) => v !== null && v !== void 0 && v !== "").map(([k, v]) => `${k}: ${v}`),
+      payload.registeredBy ? `
+Registrado por: ${payload.registeredBy}` : ""
+    ].join("\n");
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || '"BTREE Ambiental" <noreply@btreeambiental.com>',
+      to: recipients.join(", "),
+      subject,
+      html,
+      text: text2
+    });
+    console.log(`[notifyTeam] E-mail enviado (${payload.event}) para: ${recipients.join(", ")}`);
+  } catch (err) {
+    console.error(`[notifyTeam] Erro ao enviar e-mail (${payload.event}):`, err);
+  }
+}
+
+// server/routers/vehicleRecords.ts
 var vehicleRecordsRouter = router({
   list: protectedProcedure.input(z7.object({
     equipmentId: z7.number().optional(),
@@ -1944,6 +2121,26 @@ var vehicleRecordsRouter = router({
       photoUrl,
       registeredBy: ctx.user.id
     });
+    if (input.recordType === "abastecimento") {
+      const dateFormatted = new Date(input.date).toLocaleDateString("pt-BR");
+      const fuelLabels = { diesel: "Diesel", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV" };
+      notifyTeam({
+        event: "abastecimento_registrado",
+        title: `Abastecimento registrado em ${dateFormatted}.`,
+        details: {
+          "Data": dateFormatted,
+          "Combust\xEDvel": input.fuelType ? fuelLabels[input.fuelType] || input.fuelType : "\u2014",
+          "Litros": input.liters ? `${input.liters} L` : "\u2014",
+          "Valor Total": input.fuelCost ? `R$ ${input.fuelCost}` : "\u2014",
+          "Pre\xE7o / Litro": input.pricePerLiter ? `R$ ${input.pricePerLiter}` : "\u2014",
+          "Fornecedor": input.supplier || "\u2014",
+          "Od\xF4metro": input.odometer ? `${input.odometer} km` : "\u2014",
+          "Observa\xE7\xF5es": input.notes || "\u2014"
+        },
+        registeredBy: ctx.user.name
+      }).catch(() => {
+      });
+    }
     return { success: true };
   }),
   update: protectedProcedure.input(z7.object({
@@ -2092,6 +2289,21 @@ var partsRouter = router({
       ...input,
       status: "pendente",
       requestedBy: ctx.user.id
+    });
+    const urgencyLabels = { baixa: "Baixa", media: "M\xE9dia", alta: "Alta \u26A0\uFE0F" };
+    notifyTeam({
+      event: "pedido_pecas_criado",
+      title: `Nova solicita\xE7\xE3o de pe\xE7a/acess\xF3rio: ${input.partName}.`,
+      details: {
+        "Pe\xE7a / Acess\xF3rio": input.partName,
+        "Quantidade": input.quantity,
+        "Urg\xEAncia": urgencyLabels[input.urgency] || input.urgency,
+        "Equipamento": input.equipmentName || "\u2014",
+        "Motivo": input.reason || "\u2014",
+        "Custo Estimado": input.estimatedCost ? `R$ ${input.estimatedCost}` : "\u2014"
+      },
+      registeredBy: ctx.user.name
+    }).catch(() => {
     });
     return { success: true };
   }),
@@ -2530,6 +2742,19 @@ var purchaseOrdersRouter = router({
         input.items.map((item) => ({ ...item, orderId }))
       );
     }
+    const itemsList = input.items.map((i) => `${i.quantity}x ${i.partName}${i.supplier ? " (" + i.supplier + ")" : ""}`).join(", ");
+    notifyTeam({
+      event: "pedido_compra_criado",
+      title: `Novo pedido de compra criado: ${input.title}.`,
+      details: {
+        "T\xEDtulo do Pedido": input.title,
+        "Itens": itemsList,
+        "Qtd. de Itens": input.items.length,
+        "Observa\xE7\xF5es": input.notes || "\u2014"
+      },
+      registeredBy: ctx.user.name
+    }).catch(() => {
+    });
     return { success: true, orderId };
   }),
   // Atualizar status do pedido
@@ -2545,6 +2770,19 @@ var purchaseOrdersRouter = router({
       updateData.approvedAt = /* @__PURE__ */ new Date();
     }
     await db.update(purchaseOrders).set(updateData).where(eq13(purchaseOrders.id, input.id));
+    if (input.status === "enviado") {
+      const [order] = await db.select({ title: purchaseOrders.title }).from(purchaseOrders).where(eq13(purchaseOrders.id, input.id));
+      notifyTeam({
+        event: "pedido_compra_enviado",
+        title: `Pedido de compra enviado para aprova\xE7\xE3o: ${order?.title || `#${input.id}`}.`,
+        details: {
+          "Pedido": order?.title || `#${input.id}`,
+          "Status": "Enviado para aprova\xE7\xE3o"
+        },
+        registeredBy: ctx.user.name
+      }).catch(() => {
+      });
+    }
     return { success: true };
   }),
   // Deletar pedido
@@ -2653,6 +2891,20 @@ V\xEDnculo: ${employmentLabel} | Di\xE1ria: R$ ${input.dailyValue}${input.pixKey
 Registrado por: ${ctx.user.name}`
     }).catch(() => {
     });
+    notifyTeam({
+      event: "presenca_registrada",
+      title: `Presen\xE7a de ${collaboratorName} registrada em ${dateFormatted}.`,
+      details: {
+        "Colaborador": collaboratorName,
+        "Data": dateFormatted,
+        "V\xEDnculo": employmentLabel,
+        "Fun\xE7\xE3o / Atividade": input.activity || "\u2014",
+        "Valor da Di\xE1ria": `R$ ${input.dailyValue}`,
+        "Chave PIX": input.pixKey || "\u2014"
+      },
+      registeredBy: ctx.user.name
+    }).catch(() => {
+    });
     return { success: true };
   }),
   // Atualizar status de pagamento
@@ -2678,16 +2930,364 @@ Registrado por: ${ctx.user.name}`
   })
 });
 
+// server/routers/traccar.ts
+import { z as z15 } from "zod";
+import { TRPCError as TRPCError11 } from "@trpc/server";
+init_db();
+init_schema();
+import { eq as eq15, and as and6, desc as desc13, gte as gte3, lte as lte3, sql as sql2 } from "drizzle-orm";
+var TRACCAR_URL = process.env.TRACCAR_URL || "";
+var TRACCAR_EMAIL = process.env.TRACCAR_EMAIL || "";
+var TRACCAR_PASSWORD = process.env.TRACCAR_PASSWORD || "";
+function traccarAuth() {
+  const credentials = Buffer.from(`${TRACCAR_EMAIL}:${TRACCAR_PASSWORD}`).toString("base64");
+  return {
+    Authorization: `Basic ${credentials}`,
+    "Content-Type": "application/json"
+  };
+}
+async function traccarFetch(path2, options) {
+  if (!TRACCAR_URL) {
+    throw new Error("Traccar nao configurado. Configure TRACCAR_URL, TRACCAR_EMAIL e TRACCAR_PASSWORD.");
+  }
+  const url = `${TRACCAR_URL}/api${path2}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...traccarAuth(), ...options?.headers || {} }
+  });
+  if (!res.ok) {
+    const text2 = await res.text().catch(() => "");
+    throw new Error(`Traccar API error ${res.status}: ${text2}`);
+  }
+  return res.json();
+}
+async function calcIgnitionHours(deviceId, from, to) {
+  try {
+    const params = new URLSearchParams({ deviceId: String(deviceId), from, to });
+    const summary = await traccarFetch(`/reports/summary?${params}`);
+    if (Array.isArray(summary) && summary.length > 0) {
+      const engineMs = summary[0].engineHours || 0;
+      return Math.round(engineMs / 36e5 * 10) / 10;
+    }
+  } catch {
+  }
+  return 0;
+}
+async function checkAndGenerateAlerts(equipmentId, currentHourMeter) {
+  const db = await getDb();
+  if (!db) return;
+  const plans = await db.select().from(preventiveMaintenancePlans).where(and6(
+    eq15(preventiveMaintenancePlans.equipmentId, equipmentId),
+    eq15(preventiveMaintenancePlans.active, 1)
+  ));
+  for (const plan of plans) {
+    const lastDone = parseFloat(plan.lastDoneHours || "0");
+    const dueAt = lastDone + plan.intervalHours;
+    const alertAt = dueAt - (plan.alertThresholdHours || 10);
+    const existingAlert = await db.select().from(preventiveMaintenanceAlerts).where(and6(
+      eq15(preventiveMaintenanceAlerts.planId, plan.id),
+      eq15(preventiveMaintenanceAlerts.status, "pendente")
+    )).limit(1);
+    if (existingAlert.length > 0) continue;
+    if (currentHourMeter >= alertAt) {
+      await db.insert(preventiveMaintenanceAlerts).values({
+        equipmentId,
+        planId: plan.id,
+        status: "pendente",
+        currentHours: String(currentHourMeter),
+        dueHours: String(dueAt)
+      });
+    }
+  }
+}
+var traccarRouter = router({
+  /** Verifica se o Traccar esta configurado e acessivel */
+  status: protectedProcedure.query(async () => {
+    if (!TRACCAR_URL) {
+      return { configured: false, message: "Traccar nao configurado" };
+    }
+    try {
+      await traccarFetch("/server");
+      return { configured: true, message: "Conectado" };
+    } catch (e) {
+      return { configured: true, message: `Erro de conexao: ${e instanceof Error ? e.message : "desconhecido"}` };
+    }
+  }),
+  /** Lista todos os dispositivos cadastrados no Traccar */
+  devices: protectedProcedure.query(async () => {
+    return traccarFetch("/devices");
+  }),
+  /** Posicao mais recente de todos os dispositivos */
+  positions: protectedProcedure.input(z15.object({ deviceId: z15.number().optional() }).optional()).query(async ({ input }) => {
+    const params = input?.deviceId ? `?deviceId=${input.deviceId}` : "";
+    return traccarFetch(`/positions${params}`);
+  }),
+  /** Historico de posicoes de um dispositivo em um periodo */
+  history: protectedProcedure.input(z15.object({ deviceId: z15.number(), from: z15.string(), to: z15.string() })).query(async ({ input }) => {
+    const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
+    return traccarFetch(`/reports/route?${params}`);
+  }),
+  /** Resumo de viagens de um dispositivo */
+  trips: protectedProcedure.input(z15.object({ deviceId: z15.number(), from: z15.string(), to: z15.string() })).query(async ({ input }) => {
+    const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
+    return traccarFetch(`/reports/trips?${params}`);
+  }),
+  /** Resumo de paradas de um dispositivo */
+  stops: protectedProcedure.input(z15.object({ deviceId: z15.number(), from: z15.string(), to: z15.string() })).query(async ({ input }) => {
+    const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
+    return traccarFetch(`/reports/stops?${params}`);
+  }),
+  /** Resumo de km e horas por dispositivo no periodo */
+  summary: protectedProcedure.input(z15.object({ deviceId: z15.number().optional(), from: z15.string(), to: z15.string() })).query(async ({ input }) => {
+    const params = new URLSearchParams({ from: input.from, to: input.to });
+    if (input.deviceId) params.set("deviceId", String(input.deviceId));
+    return traccarFetch(`/reports/summary?${params}`);
+  }),
+  /** Geofences (cercas virtuais) */
+  geofences: protectedProcedure.query(async () => {
+    return traccarFetch("/geofences");
+  }),
+  /** Eventos recentes (alertas de velocidade, ignicao, geofence) */
+  events: protectedProcedure.input(z15.object({ deviceId: z15.number(), from: z15.string(), to: z15.string(), type: z15.string().optional() })).query(async ({ input }) => {
+    const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
+    if (input.type) params.set("type", input.type);
+    return traccarFetch(`/reports/events?${params}`);
+  }),
+  // ─── VINCULACAO GPS <-> EQUIPAMENTO ─────────────────────────────────────────
+  /** Lista todos os vinculos GPS-equipamento */
+  listDeviceLinks: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    return db.select({
+      id: gpsDeviceLinks.id,
+      equipmentId: gpsDeviceLinks.equipmentId,
+      equipmentName: equipment.name,
+      traccarDeviceId: gpsDeviceLinks.traccarDeviceId,
+      traccarDeviceName: gpsDeviceLinks.traccarDeviceName,
+      traccarUniqueId: gpsDeviceLinks.traccarUniqueId,
+      active: gpsDeviceLinks.active,
+      createdAt: gpsDeviceLinks.createdAt
+    }).from(gpsDeviceLinks).innerJoin(equipment, eq15(gpsDeviceLinks.equipmentId, equipment.id)).where(eq15(gpsDeviceLinks.active, 1)).orderBy(equipment.name);
+  }),
+  /** Vincula um dispositivo GPS a um equipamento */
+  linkDevice: protectedProcedure.input(z15.object({
+    equipmentId: z15.number(),
+    traccarDeviceId: z15.number(),
+    traccarDeviceName: z15.string().optional(),
+    traccarUniqueId: z15.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq15(gpsDeviceLinks.equipmentId, input.equipmentId));
+    const [result] = await db.insert(gpsDeviceLinks).values({
+      equipmentId: input.equipmentId,
+      traccarDeviceId: input.traccarDeviceId,
+      traccarDeviceName: input.traccarDeviceName,
+      traccarUniqueId: input.traccarUniqueId,
+      active: 1,
+      createdBy: ctx.user.id
+    });
+    return { id: result.insertId };
+  }),
+  /** Remove vinculo GPS de um equipamento */
+  unlinkDevice: protectedProcedure.input(z15.object({ linkId: z15.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq15(gpsDeviceLinks.id, input.linkId));
+    return { ok: true };
+  }),
+  // ─── HORAS AUTOMATICAS VIA GPS ───────────────────────────────────────────────
+  /**
+   * Sincroniza as horas de ignicao do dia anterior para todos os equipamentos vinculados.
+   * Deve ser chamado diariamente (cron) ou manualmente pelo admin.
+   */
+  syncDailyHours: protectedProcedure.input(z15.object({ date: z15.string().optional() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
+    const from = new Date(targetDate);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(targetDate);
+    to.setHours(23, 59, 59, 999);
+    const links = await db.select().from(gpsDeviceLinks).where(eq15(gpsDeviceLinks.active, 1));
+    const results = [];
+    for (const link of links) {
+      try {
+        const hours = await calcIgnitionHours(
+          link.traccarDeviceId,
+          from.toISOString(),
+          to.toISOString()
+        );
+        if (hours > 0) {
+          const existing = await db.select().from(gpsHoursLog).where(and6(
+            eq15(gpsHoursLog.equipmentId, link.equipmentId),
+            gte3(gpsHoursLog.date, from),
+            lte3(gpsHoursLog.date, to)
+          )).limit(1);
+          if (existing.length === 0) {
+            await db.insert(gpsHoursLog).values({
+              equipmentId: link.equipmentId,
+              gpsDeviceLinkId: link.id,
+              date: from,
+              hoursWorked: String(hours),
+              source: "gps_auto"
+            });
+          }
+          const totalResult = await db.select({ total: sql2`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq15(gpsHoursLog.equipmentId, link.equipmentId));
+          const totalHours = parseFloat(totalResult[0]?.total || "0");
+          await checkAndGenerateAlerts(link.equipmentId, totalHours);
+          results.push({ equipmentId: link.equipmentId, hours });
+        }
+      } catch {
+      }
+    }
+    return { synced: results.length, results };
+  }),
+  /** Horas acumuladas por equipamento (GPS + manual) */
+  equipmentHoursSummary: protectedProcedure.input(z15.object({ equipmentId: z15.number().optional() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    const baseQuery = db.select({
+      equipmentId: gpsHoursLog.equipmentId,
+      equipmentName: equipment.name,
+      totalHours: sql2`SUM(CAST(hours_worked AS DECIMAL(10,2)))`,
+      lastDate: sql2`MAX(date)`,
+      recordCount: sql2`COUNT(*)`
+    }).from(gpsHoursLog).innerJoin(equipment, eq15(gpsHoursLog.equipmentId, equipment.id)).groupBy(gpsHoursLog.equipmentId, equipment.name).orderBy(equipment.name);
+    if (input?.equipmentId) {
+      return baseQuery.where(eq15(gpsHoursLog.equipmentId, input.equipmentId));
+    }
+    return baseQuery;
+  }),
+  /** Log de horas de um equipamento especifico */
+  hoursLog: protectedProcedure.input(z15.object({ equipmentId: z15.number(), limit: z15.number().default(30) })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    return db.select().from(gpsHoursLog).where(eq15(gpsHoursLog.equipmentId, input.equipmentId)).orderBy(desc13(gpsHoursLog.date)).limit(input.limit);
+  }),
+  // ─── PLANOS DE MANUTENCAO PREVENTIVA ────────────────────────────────────────
+  /** Lista planos de manutencao de um equipamento */
+  listMaintenancePlans: protectedProcedure.input(z15.object({ equipmentId: z15.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    return db.select().from(preventiveMaintenancePlans).where(and6(
+      eq15(preventiveMaintenancePlans.equipmentId, input.equipmentId),
+      eq15(preventiveMaintenancePlans.active, 1)
+    )).orderBy(preventiveMaintenancePlans.name);
+  }),
+  /** Cria ou atualiza um plano de manutencao preventiva */
+  upsertMaintenancePlan: protectedProcedure.input(z15.object({
+    id: z15.number().optional(),
+    equipmentId: z15.number(),
+    name: z15.string(),
+    type: z15.enum(["troca_oleo", "engraxamento", "filtro_ar", "filtro_combustivel", "correia", "revisao_geral", "abastecimento", "outros"]),
+    intervalHours: z15.number().min(1),
+    lastDoneHours: z15.string().optional(),
+    alertThresholdHours: z15.number().default(10),
+    notes: z15.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (input.id) {
+      await db.update(preventiveMaintenancePlans).set({
+        name: input.name,
+        type: input.type,
+        intervalHours: input.intervalHours,
+        lastDoneHours: input.lastDoneHours,
+        alertThresholdHours: input.alertThresholdHours,
+        notes: input.notes
+      }).where(eq15(preventiveMaintenancePlans.id, input.id));
+      return { id: input.id };
+    }
+    const [result] = await db.insert(preventiveMaintenancePlans).values({
+      equipmentId: input.equipmentId,
+      name: input.name,
+      type: input.type,
+      intervalHours: input.intervalHours,
+      lastDoneHours: input.lastDoneHours || "0",
+      alertThresholdHours: input.alertThresholdHours,
+      notes: input.notes,
+      active: 1,
+      createdBy: ctx.user.id
+    });
+    return { id: result.insertId };
+  }),
+  /** Remove um plano de manutencao */
+  deleteMaintenancePlan: protectedProcedure.input(z15.object({ id: z15.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    await db.update(preventiveMaintenancePlans).set({ active: 0 }).where(eq15(preventiveMaintenancePlans.id, input.id));
+    return { ok: true };
+  }),
+  // ─── ALERTAS DE MANUTENCAO PREVENTIVA ───────────────────────────────────────
+  /** Lista alertas pendentes (todos ou por equipamento) */
+  listAlerts: protectedProcedure.input(z15.object({ equipmentId: z15.number().optional(), status: z15.string().optional() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    const conditions = [];
+    if (input.equipmentId) conditions.push(eq15(preventiveMaintenanceAlerts.equipmentId, input.equipmentId));
+    if (input.status) conditions.push(eq15(preventiveMaintenanceAlerts.status, input.status));
+    return db.select({
+      id: preventiveMaintenanceAlerts.id,
+      equipmentId: preventiveMaintenanceAlerts.equipmentId,
+      equipmentName: equipment.name,
+      planId: preventiveMaintenanceAlerts.planId,
+      planName: preventiveMaintenancePlans.name,
+      planType: preventiveMaintenancePlans.type,
+      status: preventiveMaintenanceAlerts.status,
+      currentHours: preventiveMaintenanceAlerts.currentHours,
+      dueHours: preventiveMaintenanceAlerts.dueHours,
+      generatedAt: preventiveMaintenanceAlerts.generatedAt,
+      resolvedAt: preventiveMaintenanceAlerts.resolvedAt,
+      notes: preventiveMaintenanceAlerts.notes
+    }).from(preventiveMaintenanceAlerts).innerJoin(equipment, eq15(preventiveMaintenanceAlerts.equipmentId, equipment.id)).innerJoin(preventiveMaintenancePlans, eq15(preventiveMaintenanceAlerts.planId, preventiveMaintenancePlans.id)).where(conditions.length > 0 ? and6(...conditions) : void 0).orderBy(desc13(preventiveMaintenanceAlerts.generatedAt));
+  }),
+  /** Resolve (conclui) um alerta e atualiza o horimetro do plano */
+  resolveAlert: protectedProcedure.input(z15.object({
+    alertId: z15.number(),
+    status: z15.enum(["concluido", "ignorado"]),
+    notes: z15.string().optional(),
+    resolvedHourMeter: z15.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    const now = /* @__PURE__ */ new Date();
+    await db.update(preventiveMaintenanceAlerts).set({
+      status: input.status,
+      resolvedAt: now,
+      resolvedBy: ctx.user.id,
+      notes: input.notes
+    }).where(eq15(preventiveMaintenanceAlerts.id, input.alertId));
+    if (input.status === "concluido") {
+      const alert = await db.select().from(preventiveMaintenanceAlerts).where(eq15(preventiveMaintenanceAlerts.id, input.alertId)).limit(1);
+      if (alert.length > 0) {
+        await db.update(preventiveMaintenancePlans).set({
+          lastDoneHours: input.resolvedHourMeter || alert[0].currentHours,
+          lastDoneAt: now
+        }).where(eq15(preventiveMaintenancePlans.id, alert[0].planId));
+      }
+    }
+    return { ok: true };
+  }),
+  /** Contagem de alertas pendentes (para badge na sidebar) */
+  alertCount: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { count: 0 };
+    const result = await db.select({ count: sql2`COUNT(*)` }).from(preventiveMaintenanceAlerts).where(eq15(preventiveMaintenanceAlerts.status, "pendente"));
+    return { count: Number(result[0]?.count || 0) };
+  })
+});
+
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql as sql2, gte as gte3, lte as lte3, and as and6 } from "drizzle-orm";
-import { z as z15 } from "zod";
+import { sql as sql3, gte as gte4, lte as lte4, and as and7 } from "drizzle-orm";
+import { z as z16 } from "zod";
 var dashboardRouter = router({
-  stats: protectedProcedure.input(z15.object({
-    month: z15.number().min(0).max(11).optional(),
+  stats: protectedProcedure.input(z16.object({
+    month: z16.number().min(0).max(11).optional(),
     // 0-indexed
-    year: z15.number().min(2020).max(2100).optional()
+    year: z16.number().min(2020).max(2100).optional()
   }).optional()).query(async ({ input }) => {
     const now = /* @__PURE__ */ new Date();
     const targetMonth = input?.month ?? now.getMonth();
@@ -2697,44 +3297,44 @@ var dashboardRouter = router({
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
-    const [{ count: totalCollaborators }] = await db.select({ count: sql2`count(*)` }).from(collaborators);
-    const [{ count: totalClients }] = await db.select({ count: sql2`count(*)` }).from(clients);
-    const [{ count: cargoThisMonth }] = await db.select({ count: sql2`count(*)` }).from(cargoLoads).where(and6(
-      gte3(cargoLoads.createdAt, startOfMonth),
-      lte3(cargoLoads.createdAt, endOfMonth)
+    const [{ count: totalCollaborators }] = await db.select({ count: sql3`count(*)` }).from(collaborators);
+    const [{ count: totalClients }] = await db.select({ count: sql3`count(*)` }).from(clients);
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql3`count(*)` }).from(cargoLoads).where(and7(
+      gte4(cargoLoads.createdAt, startOfMonth),
+      lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql2`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and6(
-      gte3(cargoLoads.createdAt, startOfMonth),
-      lte3(cargoLoads.createdAt, endOfMonth)
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql3`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and7(
+      gte4(cargoLoads.createdAt, startOfMonth),
+      lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ count: fuelThisMonth }] = await db.select({ count: sql2`count(*)` }).from(vehicleRecords).where(
-      and6(
-        gte3(vehicleRecords.createdAt, startOfMonth),
-        lte3(vehicleRecords.createdAt, endOfMonth),
-        sql2`record_type = 'abastecimento'`
+    const [{ count: fuelThisMonth }] = await db.select({ count: sql3`count(*)` }).from(vehicleRecords).where(
+      and7(
+        gte4(vehicleRecords.createdAt, startOfMonth),
+        lte4(vehicleRecords.createdAt, endOfMonth),
+        sql3`record_type = 'abastecimento'`
       )
     );
-    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql2`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
-      and6(
-        gte3(vehicleRecords.createdAt, startOfMonth),
-        lte3(vehicleRecords.createdAt, endOfMonth),
-        sql2`record_type = 'abastecimento'`
+    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql3`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
+      and7(
+        gte4(vehicleRecords.createdAt, startOfMonth),
+        lte4(vehicleRecords.createdAt, endOfMonth),
+        sql3`record_type = 'abastecimento'`
       )
     );
-    const [{ count: attendanceToday }] = await db.select({ count: sql2`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
-    const [{ count: attendanceThisMonth }] = await db.select({ count: sql2`count(*)` }).from(collaboratorAttendance).where(and6(
-      gte3(collaboratorAttendance.date, startOfMonth),
-      lte3(collaboratorAttendance.date, endOfMonth)
+    const [{ count: attendanceToday }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(and7(
+      gte4(collaboratorAttendance.date, startOfMonth),
+      lte4(collaboratorAttendance.date, endOfMonth)
     ));
-    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql2`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
-      and6(
-        gte3(collaboratorAttendance.date, startOfMonth),
-        lte3(collaboratorAttendance.date, endOfMonth),
-        sql2`payment_status_ca = 'pendente'`
+    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql3`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
+      and7(
+        gte4(collaboratorAttendance.date, startOfMonth),
+        lte4(collaboratorAttendance.date, endOfMonth),
+        sql3`payment_status_ca = 'pendente'`
       )
     );
-    const [{ count: totalEquipment }] = await db.select({ count: sql2`count(*)` }).from(equipment);
-    const [{ count: lowStockParts }] = await db.select({ count: sql2`count(*)` }).from(parts).where(sql2`stock_quantity < 5`);
+    const [{ count: totalEquipment }] = await db.select({ count: sql3`count(*)` }).from(equipment);
+    const [{ count: lowStockParts }] = await db.select({ count: sql3`count(*)` }).from(parts).where(sql3`stock_quantity < 5`);
     const recentCargos = await db.select({
       id: cargoLoads.id,
       vehiclePlate: cargoLoads.vehiclePlate,
@@ -2742,7 +3342,7 @@ var dashboardRouter = router({
       volumeM3: cargoLoads.volumeM3,
       createdAt: cargoLoads.createdAt,
       status: cargoLoads.status
-    }).from(cargoLoads).orderBy(sql2`created_at desc`).limit(5);
+    }).from(cargoLoads).orderBy(sql3`created_at desc`).limit(5);
     const recentAttendance = await db.select({
       id: collaboratorAttendance.id,
       collaboratorId: collaboratorAttendance.collaboratorId,
@@ -2750,8 +3350,8 @@ var dashboardRouter = router({
       dailyValue: collaboratorAttendance.dailyValue,
       paymentStatus: collaboratorAttendance.paymentStatus,
       activity: collaboratorAttendance.activity
-    }).from(collaboratorAttendance).orderBy(sql2`created_at desc`).limit(5);
-    const [{ count: pendingOrders }] = await db.select({ count: sql2`count(*)` }).from(purchaseOrders).where(sql2`status = 'pending'`);
+    }).from(collaboratorAttendance).orderBy(sql3`created_at desc`).limit(5);
+    const [{ count: pendingOrders }] = await db.select({ count: sql3`count(*)` }).from(purchaseOrders).where(sql3`status = 'pending'`);
     const MONTHS_PT = [
       "janeiro",
       "fevereiro",
@@ -2789,18 +3389,18 @@ var dashboardRouter = router({
 });
 
 // server/routers.ts
-import { z as z16 } from "zod";
+import { z as z17 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
 // server/email.ts
-import nodemailer from "nodemailer";
-async function createTransporter() {
+import nodemailer2 from "nodemailer";
+async function createTransporter2() {
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
   if (smtpHost && smtpUser && smtpPass) {
-    return nodemailer.createTransport({
+    return nodemailer2.createTransport({
       host: smtpHost,
       port: parseInt(process.env.SMTP_PORT || "587"),
       secure: process.env.SMTP_SECURE === "true",
@@ -2810,9 +3410,9 @@ async function createTransporter() {
       }
     });
   }
-  const testAccount = await nodemailer.createTestAccount();
+  const testAccount = await nodemailer2.createTestAccount();
   console.log("[Email] Usando conta de teste Ethereal:", testAccount.user);
-  return nodemailer.createTransport({
+  return nodemailer2.createTransport({
     host: "smtp.ethereal.email",
     port: 587,
     secure: false,
@@ -2824,7 +3424,7 @@ async function createTransporter() {
 }
 async function sendPasswordResetEmail(to, name, resetUrl) {
   try {
-    const transporter = await createTransporter();
+    const transporter = await createTransporter2();
     const info = await transporter.sendMail({
       from: process.env.SMTP_FROM || '"BTREE Ambiental" <noreply@btreeambiental.com>',
       to,
@@ -2874,7 +3474,7 @@ Este link expira em 1 hora.
 
 Se n\xE3o solicitou, ignore este email.`
     });
-    const previewUrl = nodemailer.getTestMessageUrl(info) || void 0;
+    const previewUrl = nodemailer2.getTestMessageUrl(info) || void 0;
     if (previewUrl) {
       console.log("[Email] Preview URL:", previewUrl);
     }
@@ -2898,10 +3498,10 @@ var appRouter = router({
   dashboard: dashboardRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z16.object({
-      name: z16.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z16.string().email("Email inv\xE1lido"),
-      password: z16.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z17.object({
+      name: z17.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z17.string().email("Email inv\xE1lido"),
+      password: z17.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -2916,9 +3516,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z16.object({
-      email: z16.string().email("Email inv\xE1lido"),
-      password: z16.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z17.object({
+      email: z17.string().email("Email inv\xE1lido"),
+      password: z17.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -2934,11 +3534,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z16.object({
-      seedKey: z16.string(),
-      email: z16.string().email(),
-      name: z16.string(),
-      password: z16.string().min(4)
+    seedAdmin: publicProcedure.input(z17.object({
+      seedKey: z17.string(),
+      email: z17.string().email(),
+      name: z17.string(),
+      password: z17.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -2948,9 +3548,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z16.object({
-      email: z16.string().email("Email inv\xE1lido"),
-      origin: z16.string().url().optional()
+    forgotPassword: publicProcedure.input(z17.object({
+      email: z17.string().email("Email inv\xE1lido"),
+      origin: z17.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -2964,9 +3564,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z16.object({
-      token: z16.string().min(1),
-      password: z16.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z17.object({
+      token: z17.string().min(1),
+      password: z17.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -2975,10 +3575,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq15 } = await import("drizzle-orm");
+      const { eq: eq16 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users2).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq15(users2.id, resetToken.userId));
+      await dbInstance.update(users2).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq16(users2.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -3002,7 +3602,8 @@ var appRouter = router({
   collaboratorDocuments: collaboratorDocumentsRouter,
   equipmentDetail: equipmentDetailRouter,
   purchaseOrders: purchaseOrdersRouter,
-  attendance: attendanceRouter
+  attendance: attendanceRouter,
+  traccar: traccarRouter
   // TODO: add feature routers here, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>

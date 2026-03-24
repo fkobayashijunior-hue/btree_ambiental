@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { purchaseOrders, purchaseOrderItems, parts } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
+import { notifyTeam } from "../notifyTeam";
 
 export const purchaseOrdersRouter = router({
   // Listar todos os pedidos
@@ -61,6 +62,20 @@ export const purchaseOrdersRouter = router({
           input.items.map(item => ({ ...item, orderId }))
         );
       }
+      // Notificação por e-mail ao criar pedido de compra
+      const itemsList = input.items.map(i => `${i.quantity}x ${i.partName}${i.supplier ? " (" + i.supplier + ")" : ""}`).join(", ");
+      notifyTeam({
+        event: "pedido_compra_criado",
+        title: `Novo pedido de compra criado: ${input.title}.`,
+        details: {
+          "Título do Pedido": input.title,
+          "Itens": itemsList,
+          "Qtd. de Itens": input.items.length,
+          "Observações": input.notes || "—",
+        },
+        registeredBy: ctx.user.name,
+      }).catch(() => {});
+
       return { success: true, orderId };
     }),
 
@@ -79,6 +94,21 @@ export const purchaseOrdersRouter = router({
         updateData.approvedAt = new Date();
       }
       await db.update(purchaseOrders).set(updateData).where(eq(purchaseOrders.id, input.id));
+
+      // Notificação quando pedido é enviado para aprovação
+      if (input.status === "enviado") {
+        const [order] = await db.select({ title: purchaseOrders.title }).from(purchaseOrders).where(eq(purchaseOrders.id, input.id));
+        notifyTeam({
+          event: "pedido_compra_enviado",
+          title: `Pedido de compra enviado para aprovação: ${order?.title || `#${input.id}`}.`,
+          details: {
+            "Pedido": order?.title || `#${input.id}`,
+            "Status": "Enviado para aprovação",
+          },
+          registeredBy: ctx.user.name,
+        }).catch(() => {});
+      }
+
       return { success: true };
     }),
 

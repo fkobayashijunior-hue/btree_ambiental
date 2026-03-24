@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { vehicleRecords, users } from "../../drizzle/schema";
 import { eq, desc, inArray } from "drizzle-orm";
+import { notifyTeam } from "../notifyTeam";
 
 export const vehicleRecordsRouter = router({
   list: protectedProcedure
@@ -65,6 +66,28 @@ export const vehicleRecordsRouter = router({
         photoUrl,
         registeredBy: ctx.user.id,
       });
+
+      // Notificação por e-mail apenas para abastecimentos
+      if (input.recordType === "abastecimento") {
+        const dateFormatted = new Date(input.date).toLocaleDateString("pt-BR");
+        const fuelLabels: Record<string, string> = { diesel: "Diesel", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV" };
+        notifyTeam({
+          event: "abastecimento_registrado",
+          title: `Abastecimento registrado em ${dateFormatted}.`,
+          details: {
+            "Data": dateFormatted,
+            "Combustível": input.fuelType ? fuelLabels[input.fuelType] || input.fuelType : "—",
+            "Litros": input.liters ? `${input.liters} L` : "—",
+            "Valor Total": input.fuelCost ? `R$ ${input.fuelCost}` : "—",
+            "Preço / Litro": input.pricePerLiter ? `R$ ${input.pricePerLiter}` : "—",
+            "Fornecedor": input.supplier || "—",
+            "Odômetro": input.odometer ? `${input.odometer} km` : "—",
+            "Observações": input.notes || "—",
+          },
+          registeredBy: ctx.user.name,
+        }).catch(() => {});
+      }
+
       return { success: true };
     }),
 

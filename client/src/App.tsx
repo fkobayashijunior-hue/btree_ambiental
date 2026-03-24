@@ -23,6 +23,7 @@ import ClientsPage from "./pages/ClientsPage";
 import ClientPortal from "./pages/ClientPortal";
 import CollaboratorDetail from "./pages/CollaboratorDetail";
 import EquipmentDetail from "./pages/EquipmentDetail";
+import GpsTrackingPage from "./pages/GpsTrackingPage";
 
 // Wrapper que aplica DashboardLayout a páginas protegidas
 function WithLayout({ component: Component }: { component: React.ComponentType }) {
@@ -82,6 +83,9 @@ function Router() {
       </Route>
       <Route path={"/usuarios"}>
         {() => <WithLayout component={UsersPage} />}
+      </Route>
+      <Route path={"/rastreamento-gps"}>
+        {() => <WithLayout component={GpsTrackingPage} />}
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

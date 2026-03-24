@@ -585,3 +585,77 @@ export const collaboratorAttendance = mysqlTable("collaborator_attendance", {
 });
 export type CollaboratorAttendance = typeof collaboratorAttendance.$inferSelect;
 export type InsertCollaboratorAttendance = typeof collaboratorAttendance.$inferInsert;
+
+// ===== VINCULAÇÃO GPS (Traccar) ↔ EQUIPAMENTO =====
+// Vincula um dispositivo Traccar a um equipamento cadastrado no sistema
+export const gpsDeviceLinks = mysqlTable("gps_device_links", {
+  id: int("id").autoincrement().primaryKey(),
+  equipmentId: int("equipment_id").notNull().references(() => equipment.id, { onDelete: "cascade" }),
+  traccarDeviceId: int("traccar_device_id").notNull(), // ID do dispositivo no Traccar
+  traccarDeviceName: varchar("traccar_device_name", { length: 255 }), // nome no Traccar (cache)
+  traccarUniqueId: varchar("traccar_unique_id", { length: 100 }), // IMEI/ID único do rastreador
+  active: int("active").default(1).notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type GpsDeviceLink = typeof gpsDeviceLinks.$inferSelect;
+export type InsertGpsDeviceLink = typeof gpsDeviceLinks.$inferInsert;
+
+// ===== HORAS ACUMULADAS VIA GPS =====
+// Registra as horas de ignição ligada por dia (calculado automaticamente via GPS)
+export const gpsHoursLog = mysqlTable("gps_hours_log", {
+  id: int("id").autoincrement().primaryKey(),
+  equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+  gpsDeviceLinkId: int("gps_device_link_id").references(() => gpsDeviceLinks.id),
+  date: timestamp("date").notNull(), // dia do registro
+  hoursWorked: varchar("hours_worked", { length: 20 }).notNull(), // horas com ignição ligada
+  hourMeterStart: varchar("hour_meter_start", { length: 20 }), // horímetro início do dia
+  hourMeterEnd: varchar("hour_meter_end", { length: 20 }),   // horímetro fim do dia
+  distanceKm: varchar("distance_km", { length: 20 }),         // km rodados no dia
+  source: mysqlEnum("source", ["gps_auto", "manual"]).default("gps_auto").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type GpsHoursLog = typeof gpsHoursLog.$inferSelect;
+export type InsertGpsHoursLog = typeof gpsHoursLog.$inferInsert;
+
+// ===== PLANOS DE MANUTENÇÃO PREVENTIVA =====
+// Define os intervalos de manutenção para cada equipamento
+export const preventiveMaintenancePlans = mysqlTable("preventive_maintenance_plans", {
+  id: int("id").autoincrement().primaryKey(),
+  equipmentId: int("equipment_id").notNull().references(() => equipment.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(), // ex: "Troca de óleo", "Engraxamento"
+  type: mysqlEnum("type", [
+    "troca_oleo", "engraxamento", "filtro_ar", "filtro_combustivel",
+    "correia", "revisao_geral", "abastecimento", "outros"
+  ]).notNull().default("outros"),
+  intervalHours: int("interval_hours").notNull(), // a cada X horas de uso
+  lastDoneHours: varchar("last_done_hours", { length: 20 }).default("0"), // horímetro da última execução
+  lastDoneAt: timestamp("last_done_at"), // data da última execução
+  alertThresholdHours: int("alert_threshold_hours").default(10), // alertar X horas antes
+  active: int("active").default(1).notNull(),
+  notes: text("notes"),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type PreventiveMaintenancePlan = typeof preventiveMaintenancePlans.$inferSelect;
+export type InsertPreventiveMaintenancePlan = typeof preventiveMaintenancePlans.$inferInsert;
+
+// ===== ALERTAS DE MANUTENÇÃO PREVENTIVA =====
+// Gerado automaticamente quando o equipamento atinge o limiar de horas
+export const preventiveMaintenanceAlerts = mysqlTable("preventive_maintenance_alerts", {
+  id: int("id").autoincrement().primaryKey(),
+  equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+  planId: int("plan_id").notNull().references(() => preventiveMaintenancePlans.id),
+  status: mysqlEnum("status", ["pendente", "em_andamento", "concluido", "ignorado"]).default("pendente").notNull(),
+  currentHours: varchar("current_hours", { length: 20 }).notNull(), // horímetro quando gerado
+  dueHours: varchar("due_hours", { length: 20 }).notNull(), // horímetro alvo
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: int("resolved_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type PreventiveMaintenanceAlert = typeof preventiveMaintenanceAlerts.$inferSelect;
+export type InsertPreventiveMaintenanceAlert = typeof preventiveMaintenanceAlerts.$inferInsert;

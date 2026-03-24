@@ -15,6 +15,7 @@ import { collaboratorDocumentsRouter } from "./routers/collaboratorDocuments";
 import { equipmentDetailRouter } from "./routers/equipmentDetail";
 import { purchaseOrdersRouter } from "./routers/purchaseOrders";
 import { attendanceRouter } from "./routers/attendance";
+import { traccarRouter } from "./routers/traccar";
 import { dashboardRouter } from "./routers/dashboard";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
@@ -180,6 +181,7 @@ export const appRouter = router({
   equipmentDetail: equipmentDetailRouter,
   purchaseOrders: purchaseOrdersRouter,
   attendance: attendanceRouter,
+  traccar: traccarRouter,
 
   // TODO: add feature routers here, e.g.
   // todo: router({
