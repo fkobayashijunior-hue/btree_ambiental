@@ -108,6 +108,8 @@
     "@types/cors": "^2.8.19",
     "@types/google.maps": "^3.58.1",
     "@types/nodemailer": "^7.0.11",
-    "drizzle-kit": "0.30.0"
+    "drizzle-kit": "0.30.0",
+    "vite-plugin-pwa": "^1.2.0",
+    "workbox-window": "^7.4.0"
   }
 }

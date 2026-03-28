@@ -40,8 +40,9 @@ export default function SectorsEquipment() {
   const [equipSearch, setEquipSearch] = useState("");
   const [equipForm, setEquipForm] = useState({
     name: "", typeId: 0, sectorId: 0, brand: "", model: "",
-    year: "", serialNumber: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
+    year: "", serialNumber: "", licensePlate: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
   });
+  const [filterSectorId, setFilterSectorId] = useState(0);
   // Upload de foto do equipamento
   const [equipPhotoPreview, setEquipPhotoPreview] = useState<string | null>(null);
   const [equipPhotoBase64, setEquipPhotoBase64] = useState<string | null>(null);
@@ -94,11 +95,20 @@ export default function SectorsEquipment() {
   });
 
   const resetEquipForm = () => {
-    setEquipForm({ name: "", typeId: 0, sectorId: 0, brand: "", model: "", year: "", serialNumber: "", status: "ativo" });
+    setEquipForm({ name: "", typeId: 0, sectorId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", status: "ativo" });
     setEquipPhotoPreview(null);
     setEquipPhotoBase64(null);
     setExistingImageUrl(null);
   };
+
+  // Detectar se o tipo selecionado é veículo/caminhão (campo dinâmico)
+  const selectedTypeName = equipTypes.find(t => t.id === equipForm.typeId)?.name?.toLowerCase() || "";
+  const isVehicleType = selectedTypeName.includes("caminhão") || selectedTypeName.includes("caminhao") ||
+    selectedTypeName.includes("veículo") || selectedTypeName.includes("veiculo") ||
+    selectedTypeName.includes("carro") || selectedTypeName.includes("moto") ||
+    selectedTypeName.includes("van") || selectedTypeName.includes("ônibus") ||
+    selectedTypeName.includes("onibus") || selectedTypeName.includes("pickup") ||
+    selectedTypeName.includes("utilitário") || selectedTypeName.includes("utilitario");
 
   const openEditSector = (s: typeof sectorsList[number]) => {
     setEditSectorId(s.id);
@@ -111,7 +121,7 @@ export default function SectorsEquipment() {
     setEquipForm({
       name: e.name, typeId: e.typeId, sectorId: (e as any).sectorId || 0, brand: e.brand || "",
       model: e.model || "", year: e.year?.toString() || "",
-      serialNumber: e.serialNumber || "", status: e.status as any,
+      serialNumber: e.serialNumber || "", licensePlate: (e as any).licensePlate || "", status: e.status as any,
     });
     // Carregar imagem existente
     const imgUrl = (e as any).imageUrl;
@@ -162,7 +172,8 @@ export default function SectorsEquipment() {
       brand: equipForm.brand || undefined,
       model: equipForm.model || undefined,
       year: equipForm.year ? parseInt(equipForm.year) : undefined,
-      serialNumber: equipForm.serialNumber || undefined,
+      serialNumber: isVehicleType ? undefined : (equipForm.serialNumber || undefined),
+      licensePlate: isVehicleType ? (equipForm.licensePlate || undefined) : undefined,
       status: equipForm.status,
       imageUrl: equipPhotoBase64 || existingImageUrl || undefined,
     };
@@ -280,8 +291,18 @@ export default function SectorsEquipment() {
           <div className="flex flex-wrap gap-3 justify-between">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input placeholder="Buscar equipamento..." value={equipSearch} onChange={e => setEquipSearch(e.target.value)} className="pl-10" />
+              <Input placeholder="Buscar equipamento, placa..." value={equipSearch} onChange={e => setEquipSearch(e.target.value)} className="pl-10" />
             </div>
+            <select
+              value={filterSectorId}
+              onChange={e => setFilterSectorId(parseInt(e.target.value))}
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value={0}>Todos os setores</option>
+              {sectorsList.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
             <div className="flex gap-2">
               {/* Botão para criar novo tipo */}
               <Dialog open={typeOpen} onOpenChange={setTypeOpen}>
@@ -402,8 +423,23 @@ export default function SectorsEquipment() {
                         <Input type="number" value={equipForm.year} onChange={e => setEquipForm(f => ({ ...f, year: e.target.value }))} placeholder="ex: 2022" min={1990} max={2030} />
                       </div>
                       <div>
-                        <Label>Nº de Série / Patrimônio</Label>
-                        <Input value={equipForm.serialNumber} onChange={e => setEquipForm(f => ({ ...f, serialNumber: e.target.value }))} placeholder="ex: SN-001234" />
+                        {isVehicleType ? (
+                          <>
+                            <Label>Placa do Veículo</Label>
+                            <Input
+                              value={equipForm.licensePlate}
+                              onChange={e => setEquipForm(f => ({ ...f, licensePlate: e.target.value.toUpperCase() }))}
+                              placeholder="ex: ABC-1234 ou ABC1D23"
+                              maxLength={8}
+                              className="uppercase"
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <Label>Nº de Série / Patrimônio</Label>
+                            <Input value={equipForm.serialNumber} onChange={e => setEquipForm(f => ({ ...f, serialNumber: e.target.value }))} placeholder="ex: SN-001234" />
+                          </>
+                        )}
                       </div>
                       <div className="col-span-2">
                         <Label>Status</Label>
@@ -434,7 +470,7 @@ export default function SectorsEquipment() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />)}
             </div>
-          ) : equipList.length === 0 ? (
+          ) : (filterSectorId ? equipList.filter(e => (e as any).sectorId === filterSectorId) : equipList).length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Tractor className="h-16 w-16 mx-auto mb-4 opacity-30" />
               <p className="text-lg font-medium">Nenhum equipamento cadastrado</p>
@@ -442,7 +478,7 @@ export default function SectorsEquipment() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {equipList.map(e => {
+              {(filterSectorId ? equipList.filter(e => (e as any).sectorId === filterSectorId) : equipList).map(e => {
                 const sc = STATUS_CONFIG[e.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.ativo;
                 const Icon = sc.icon;
                 return (
@@ -461,6 +497,7 @@ export default function SectorsEquipment() {
                           {(e.brand || e.model) && (
                             <p className="text-xs text-gray-500 mt-1">{[e.brand, e.model].filter(Boolean).join(" · ")}{e.year ? ` · ${e.year}` : ""}</p>
                           )}
+                          {(e as any).licensePlate && <p className="text-xs text-blue-600 font-medium">🚗 Placa: {(e as any).licensePlate}</p>}
                           {e.serialNumber && <p className="text-xs text-gray-400">Série: {e.serialNumber}</p>}
                         </div>
                         <div className="flex flex-col items-end gap-2 flex-shrink-0">

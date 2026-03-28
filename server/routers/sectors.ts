@@ -89,6 +89,7 @@ export const sectorsRouter = router({
           model: equipment.model,
           year: equipment.year,
           serialNumber: equipment.serialNumber,
+          licensePlate: equipment.licensePlate,
           imageUrl: equipment.imageUrl,
           status: equipment.status,
           typeId: equipment.typeId,
@@ -108,7 +109,8 @@ export const sectorsRouter = router({
           return r.name.toLowerCase().includes(s) ||
             (r.brand || "").toLowerCase().includes(s) ||
             (r.model || "").toLowerCase().includes(s) ||
-            (r.serialNumber || "").toLowerCase().includes(s);
+            (r.serialNumber || "").toLowerCase().includes(s) ||
+            (r.licensePlate || "").toLowerCase().includes(s);
         }
         return true;
       });
@@ -123,6 +125,7 @@ export const sectorsRouter = router({
       model: z.string().optional(),
       year: z.number().optional(),
       serialNumber: z.string().optional(),
+      licensePlate: z.string().optional(),
       imageUrl: z.string().optional(),
       status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
     }))
@@ -153,6 +156,7 @@ export const sectorsRouter = router({
       model: z.string().optional(),
       year: z.number().optional(),
       serialNumber: z.string().optional(),
+      licensePlate: z.string().optional(),
       imageUrl: z.string().optional(),
       status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
     }))

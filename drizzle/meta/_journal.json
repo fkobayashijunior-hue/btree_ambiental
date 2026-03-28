@@ -78,6 +78,20 @@
       "when": 1774376254300,
       "tag": "0010_glossy_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1774691322535,
+      "tag": "0011_common_naoko",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1774691529780,
+      "tag": "0012_handy_black_crow",
+      "breakpoints": true
     }
   ]
 }

@@ -31,6 +31,7 @@ var schema_exports = {};
 __export(schema_exports, {
   attendanceRecords: () => attendanceRecords,
   biometricAttendance: () => biometricAttendance,
+  cargoDestinations: () => cargoDestinations,
   cargoLoads: () => cargoLoads,
   cargoShipments: () => cargoShipments,
   clientPayments: () => clientPayments,
@@ -64,7 +65,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts;
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -183,6 +184,7 @@ var init_schema = __esm({
       model: varchar("model", { length: 100 }),
       year: int("year"),
       serialNumber: varchar("serial_number", { length: 100 }),
+      licensePlate: varchar("license_plate", { length: 20 }),
       imageUrl: text("image_url"),
       sectorId: int("sector_id"),
       status: mysqlEnum("status", ["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
@@ -281,6 +283,17 @@ var init_schema = __esm({
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
       createdBy: int("created_by").references(() => users.id)
     });
+    cargoDestinations = mysqlTable("cargo_destinations", {
+      id: int("id").autoincrement().primaryKey(),
+      name: varchar("name", { length: 255 }).notNull(),
+      address: varchar("address", { length: 500 }),
+      city: varchar("city", { length: 100 }),
+      state: varchar("state", { length: 2 }),
+      notes: text("notes"),
+      active: int("active").default(1).notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      createdBy: int("created_by").references(() => users.id)
+    });
     cargoLoads = mysqlTable("cargo_loads", {
       id: int("id").autoincrement().primaryKey(),
       date: timestamp("date").notNull(),
@@ -298,7 +311,18 @@ var init_schema = __esm({
       // Informações da carga
       woodType: varchar("wood_type", { length: 100 }),
       destination: varchar("destination", { length: 255 }),
+      destinationId: int("destination_id").references(() => cargoDestinations.id),
+      weightKg: varchar("weight_kg", { length: 20 }),
+      // peso em kg
       invoiceNumber: varchar("invoice_number", { length: 100 }),
+      // Acompanhamento em tempo real
+      trackingStatus: mysqlEnum("tracking_status", ["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).default("aguardando"),
+      trackingUpdatedAt: timestamp("tracking_updated_at"),
+      trackingNotes: text("tracking_notes"),
+      weightOutPhotoUrl: text("weight_out_photo_url"),
+      // foto da pesagem na saída
+      weightInPhotoUrl: text("weight_in_photo_url"),
+      // foto da pesagem na chegada/destino
       // Cliente
       clientId: int("client_id").references(() => clients.id),
       clientName: varchar("client_name", { length: 255 }),
@@ -1372,6 +1396,7 @@ var sectorsRouter = router({
       model: equipment.model,
       year: equipment.year,
       serialNumber: equipment.serialNumber,
+      licensePlate: equipment.licensePlate,
       imageUrl: equipment.imageUrl,
       status: equipment.status,
       typeId: equipment.typeId,
@@ -1384,7 +1409,7 @@ var sectorsRouter = router({
       if (input.status && r.status !== input.status) return false;
       if (input.search) {
         const s = input.search.toLowerCase();
-        return r.name.toLowerCase().includes(s) || (r.brand || "").toLowerCase().includes(s) || (r.model || "").toLowerCase().includes(s) || (r.serialNumber || "").toLowerCase().includes(s);
+        return r.name.toLowerCase().includes(s) || (r.brand || "").toLowerCase().includes(s) || (r.model || "").toLowerCase().includes(s) || (r.serialNumber || "").toLowerCase().includes(s) || (r.licensePlate || "").toLowerCase().includes(s);
       }
       return true;
     });
@@ -1397,6 +1422,7 @@ var sectorsRouter = router({
     model: z3.string().optional(),
     year: z3.number().optional(),
     serialNumber: z3.string().optional(),
+    licensePlate: z3.string().optional(),
     imageUrl: z3.string().optional(),
     status: z3.enum(["ativo", "manutencao", "inativo"]).optional()
   })).mutation(async ({ input }) => {
@@ -1423,6 +1449,7 @@ var sectorsRouter = router({
     model: z3.string().optional(),
     year: z3.number().optional(),
     serialNumber: z3.string().optional(),
+    licensePlate: z3.string().optional(),
     imageUrl: z3.string().optional(),
     status: z3.enum(["ativo", "manutencao", "inativo"]).optional()
   })).mutation(async ({ input }) => {
@@ -1600,6 +1627,31 @@ init_cloudinary();
 import { TRPCError as TRPCError4 } from "@trpc/server";
 import { eq as eq5, desc as desc3 } from "drizzle-orm";
 var cargoLoadsRouter = router({
+  // ===== DESTINOS =====
+  listDestinations: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    return db.select().from(cargoDestinations).where(eq5(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
+  }),
+  createDestination: protectedProcedure.input(z5.object({
+    name: z5.string().min(1),
+    address: z5.string().optional(),
+    city: z5.string().optional(),
+    state: z5.string().optional(),
+    notes: z5.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.insert(cargoDestinations).values({ ...input, createdBy: ctx.user.id });
+    return { success: true };
+  }),
+  deleteDestination: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.update(cargoDestinations).set({ active: 0 }).where(eq5(cargoDestinations.id, input.id));
+    return { success: true };
+  }),
+  // ===== CARGAS =====
   list: protectedProcedure.input(z5.object({
     search: z5.string().optional(),
     clientId: z5.number().optional(),
@@ -1609,43 +1661,129 @@ var cargoLoadsRouter = router({
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const results = await db.select().from(cargoLoads).orderBy(desc3(cargoLoads.createdAt));
+    const results = await db.select({
+      id: cargoLoads.id,
+      date: cargoLoads.date,
+      vehicleId: cargoLoads.vehicleId,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      driverCollaboratorId: cargoLoads.driverCollaboratorId,
+      driverName: cargoLoads.driverName,
+      heightM: cargoLoads.heightM,
+      widthM: cargoLoads.widthM,
+      lengthM: cargoLoads.lengthM,
+      volumeM3: cargoLoads.volumeM3,
+      woodType: cargoLoads.woodType,
+      destination: cargoLoads.destination,
+      destinationId: cargoLoads.destinationId,
+      weightKg: cargoLoads.weightKg,
+      invoiceNumber: cargoLoads.invoiceNumber,
+      clientId: cargoLoads.clientId,
+      clientName: cargoLoads.clientName,
+      photosJson: cargoLoads.photosJson,
+      notes: cargoLoads.notes,
+      status: cargoLoads.status,
+      trackingStatus: cargoLoads.trackingStatus,
+      trackingUpdatedAt: cargoLoads.trackingUpdatedAt,
+      trackingNotes: cargoLoads.trackingNotes,
+      weightOutPhotoUrl: cargoLoads.weightOutPhotoUrl,
+      weightInPhotoUrl: cargoLoads.weightInPhotoUrl,
+      registeredBy: cargoLoads.registeredBy,
+      createdAt: cargoLoads.createdAt,
+      updatedAt: cargoLoads.updatedAt,
+      // Joins
+      clientNameJoined: clients.name,
+      destinationNameJoined: cargoDestinations.name,
+      vehicleNameJoined: equipment.name,
+      vehiclePlateJoined: equipment.licensePlate
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).orderBy(desc3(cargoLoads.createdAt));
     let filtered = results;
     if (input?.search) {
       const s = input.search.toLowerCase();
       filtered = filtered.filter(
-        (r) => r.driverName?.toLowerCase().includes(s) || r.clientName?.toLowerCase().includes(s) || r.destination?.toLowerCase().includes(s) || r.invoiceNumber?.toLowerCase().includes(s) || r.vehiclePlate?.toLowerCase().includes(s)
+        (r) => r.driverName?.toLowerCase().includes(s) || r.clientName?.toLowerCase().includes(s) || r.clientNameJoined?.toLowerCase().includes(s) || r.destination?.toLowerCase().includes(s) || r.destinationNameJoined?.toLowerCase().includes(s) || r.invoiceNumber?.toLowerCase().includes(s) || r.vehiclePlate?.toLowerCase().includes(s) || r.vehiclePlateJoined?.toLowerCase().includes(s)
       );
     }
     if (input?.clientId) filtered = filtered.filter((r) => r.clientId === input.clientId);
     if (input?.status) filtered = filtered.filter((r) => r.status === input.status);
-    return filtered;
+    return filtered.map((r) => ({
+      ...r,
+      clientName: r.clientNameJoined || r.clientName,
+      destination: r.destinationNameJoined || r.destination,
+      vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
+      vehicleName: r.vehicleNameJoined
+    }));
   }),
   getById: protectedProcedure.input(z5.object({ id: z5.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const result = await db.select().from(cargoLoads).where(eq5(cargoLoads.id, input.id)).limit(1);
+    const result = await db.select({
+      id: cargoLoads.id,
+      date: cargoLoads.date,
+      vehicleId: cargoLoads.vehicleId,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      driverCollaboratorId: cargoLoads.driverCollaboratorId,
+      driverName: cargoLoads.driverName,
+      heightM: cargoLoads.heightM,
+      widthM: cargoLoads.widthM,
+      lengthM: cargoLoads.lengthM,
+      volumeM3: cargoLoads.volumeM3,
+      woodType: cargoLoads.woodType,
+      destination: cargoLoads.destination,
+      destinationId: cargoLoads.destinationId,
+      weightKg: cargoLoads.weightKg,
+      invoiceNumber: cargoLoads.invoiceNumber,
+      clientId: cargoLoads.clientId,
+      clientName: cargoLoads.clientName,
+      photosJson: cargoLoads.photosJson,
+      notes: cargoLoads.notes,
+      status: cargoLoads.status,
+      trackingStatus: cargoLoads.trackingStatus,
+      trackingUpdatedAt: cargoLoads.trackingUpdatedAt,
+      trackingNotes: cargoLoads.trackingNotes,
+      weightOutPhotoUrl: cargoLoads.weightOutPhotoUrl,
+      weightInPhotoUrl: cargoLoads.weightInPhotoUrl,
+      registeredBy: cargoLoads.registeredBy,
+      createdAt: cargoLoads.createdAt,
+      updatedAt: cargoLoads.updatedAt,
+      clientNameJoined: clients.name,
+      destinationNameJoined: cargoDestinations.name,
+      vehicleNameJoined: equipment.name,
+      vehiclePlateJoined: equipment.licensePlate
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).where(eq5(cargoLoads.id, input.id)).limit(1);
     if (!result.length) throw new TRPCError4({ code: "NOT_FOUND" });
-    return result[0];
-  }),
-  // Upload de foto de documento de carga (preenchimento manual dos dados)
-  analyzePhoto: protectedProcedure.input(z5.object({
-    photoBase64: z5.string()
-  })).mutation(async ({ input }) => {
-    const uploaded = await cloudinaryUpload(input.photoBase64, "btree/cargo-analysis");
+    const r = result[0];
     return {
-      photoUrl: uploaded.url,
-      extracted: {}
+      ...r,
+      clientName: r.clientNameJoined || r.clientName,
+      destination: r.destinationNameJoined || r.destination,
+      vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
+      vehicleName: r.vehicleNameJoined
     };
   }),
-  // Upload de foto para uma carga existente
+  // Listagem pública para portal do cliente (por token)
+  getByClientToken: publicProcedure.input(z5.object({ clientId: z5.number(), token: z5.string() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    const client = await db.select().from(clients).where(eq5(clients.id, input.clientId)).limit(1);
+    if (!client.length) throw new TRPCError4({ code: "NOT_FOUND" });
+    const loads = await db.select().from(cargoLoads).where(eq5(cargoLoads.clientId, input.clientId)).orderBy(desc3(cargoLoads.createdAt));
+    return loads;
+  }),
   uploadPhoto: protectedProcedure.input(z5.object({
     cargoId: z5.number(),
-    photoBase64: z5.string()
+    photoBase64: z5.string(),
+    photoType: z5.enum(["cargo", "weight_out", "weight_in"]).default("cargo")
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const uploaded = await cloudinaryUpload(input.photoBase64, `btree/cargo/${input.cargoId}`);
+    if (input.photoType === "weight_out") {
+      await db.update(cargoLoads).set({ weightOutPhotoUrl: uploaded.url, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(cargoLoads.id, input.cargoId));
+      return { url: uploaded.url };
+    } else if (input.photoType === "weight_in") {
+      await db.update(cargoLoads).set({ weightInPhotoUrl: uploaded.url, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(cargoLoads.id, input.cargoId));
+      return { url: uploaded.url };
+    }
     const existing = await db.select({ photosJson: cargoLoads.photosJson }).from(cargoLoads).where(eq5(cargoLoads.id, input.cargoId)).limit(1);
     let photos = [];
     if (existing[0]?.photosJson) {
@@ -1669,8 +1807,10 @@ var cargoLoadsRouter = router({
     widthM: z5.string(),
     lengthM: z5.string(),
     volumeM3: z5.string(),
+    weightKg: z5.string().optional(),
     woodType: z5.string().optional(),
     destination: z5.string().optional(),
+    destinationId: z5.number().optional(),
     invoiceNumber: z5.string().optional(),
     clientId: z5.number().optional(),
     clientName: z5.string().optional(),
@@ -1684,6 +1824,7 @@ var cargoLoadsRouter = router({
       ...input,
       date: new Date(input.date),
       status: input.status || "pendente",
+      trackingStatus: "aguardando",
       registeredBy: ctx.user.id
     });
     return { success: true };
@@ -1699,21 +1840,43 @@ var cargoLoadsRouter = router({
     widthM: z5.string().optional(),
     lengthM: z5.string().optional(),
     volumeM3: z5.string().optional(),
+    weightKg: z5.string().optional(),
     woodType: z5.string().optional(),
     destination: z5.string().optional(),
+    destinationId: z5.number().optional(),
     invoiceNumber: z5.string().optional(),
     clientId: z5.number().optional(),
     clientName: z5.string().optional(),
     photosJson: z5.string().optional(),
     notes: z5.string().optional(),
-    status: z5.enum(["pendente", "entregue", "cancelado"]).optional()
+    status: z5.enum(["pendente", "entregue", "cancelado"]).optional(),
+    trackingStatus: z5.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).optional(),
+    trackingNotes: z5.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, date, ...rest } = input;
     const updateData = { ...rest, updatedAt: /* @__PURE__ */ new Date() };
     if (date) updateData.date = new Date(date);
+    if (rest.trackingStatus) updateData.trackingUpdatedAt = /* @__PURE__ */ new Date();
     await db.update(cargoLoads).set(updateData).where(eq5(cargoLoads.id, id));
+    return { success: true };
+  }),
+  updateTracking: protectedProcedure.input(z5.object({
+    id: z5.number(),
+    trackingStatus: z5.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
+    trackingNotes: z5.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.update(cargoLoads).set({
+      trackingStatus: input.trackingStatus,
+      trackingNotes: input.trackingNotes,
+      trackingUpdatedAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date(),
+      // Finalizar carga quando tracking chega em "finalizado"
+      status: input.trackingStatus === "finalizado" ? "entregue" : void 0
+    }).where(eq5(cargoLoads.id, input.id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ ctx, input }) => {
@@ -1724,6 +1887,30 @@ var cargoLoadsRouter = router({
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(cargoLoads).where(eq5(cargoLoads.id, input.id));
     return { success: true };
+  }),
+  // Listar caminhões disponíveis (tipo veículo)
+  listTrucks: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const all = await db.select({
+      id: equipment.id,
+      name: equipment.name,
+      licensePlate: equipment.licensePlate,
+      brand: equipment.brand,
+      model: equipment.model,
+      status: equipment.status
+    }).from(equipment).orderBy(equipment.name);
+    return all.filter((e) => e.licensePlate || e.name.toLowerCase().includes("caminh") || e.name.toLowerCase().includes("ve\xEDculo") || e.name.toLowerCase().includes("veiculo") || e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van"));
+  }),
+  // Listar motoristas (colaboradores)
+  listDrivers: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    return db.select({
+      id: collaborators.id,
+      name: collaborators.name,
+      role: collaborators.role
+    }).from(collaborators).orderBy(collaborators.name);
   })
 });
 
@@ -2935,7 +3122,7 @@ import { z as z15 } from "zod";
 import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq15, and as and6, desc as desc13, gte as gte3, lte as lte3, sql as sql2 } from "drizzle-orm";
+import { eq as eq15, and as and6, desc as desc13, gte as gte2, lte as lte2, sql as sql2 } from "drizzle-orm";
 var TRACCAR_URL = process.env.TRACCAR_URL || "";
 var TRACCAR_TOKEN = process.env.TRACCAR_TOKEN || "";
 function traccarAuth() {
@@ -3128,8 +3315,8 @@ var traccarRouter = router({
         if (hours > 0) {
           const existing = await db.select().from(gpsHoursLog).where(and6(
             eq15(gpsHoursLog.equipmentId, link.equipmentId),
-            gte3(gpsHoursLog.date, from),
-            lte3(gpsHoursLog.date, to)
+            gte2(gpsHoursLog.date, from),
+            lte2(gpsHoursLog.date, to)
           )).limit(1);
           if (existing.length === 0) {
             await db.insert(gpsHoursLog).values({
@@ -3288,7 +3475,7 @@ var traccarRouter = router({
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql as sql3, gte as gte4, lte as lte4, and as and7 } from "drizzle-orm";
+import { sql as sql3, gte as gte3, lte as lte3, and as and7 } from "drizzle-orm";
 import { z as z16 } from "zod";
 var dashboardRouter = router({
   stats: protectedProcedure.input(z16.object({
@@ -3307,36 +3494,36 @@ var dashboardRouter = router({
     const [{ count: totalCollaborators }] = await db.select({ count: sql3`count(*)` }).from(collaborators);
     const [{ count: totalClients }] = await db.select({ count: sql3`count(*)` }).from(clients);
     const [{ count: cargoThisMonth }] = await db.select({ count: sql3`count(*)` }).from(cargoLoads).where(and7(
-      gte4(cargoLoads.createdAt, startOfMonth),
-      lte4(cargoLoads.createdAt, endOfMonth)
+      gte3(cargoLoads.createdAt, startOfMonth),
+      lte3(cargoLoads.createdAt, endOfMonth)
     ));
     const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql3`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and7(
-      gte4(cargoLoads.createdAt, startOfMonth),
-      lte4(cargoLoads.createdAt, endOfMonth)
+      gte3(cargoLoads.createdAt, startOfMonth),
+      lte3(cargoLoads.createdAt, endOfMonth)
     ));
     const [{ count: fuelThisMonth }] = await db.select({ count: sql3`count(*)` }).from(vehicleRecords).where(
       and7(
-        gte4(vehicleRecords.createdAt, startOfMonth),
-        lte4(vehicleRecords.createdAt, endOfMonth),
+        gte3(vehicleRecords.createdAt, startOfMonth),
+        lte3(vehicleRecords.createdAt, endOfMonth),
         sql3`record_type = 'abastecimento'`
       )
     );
     const [{ total: fuelCostThisMonth }] = await db.select({ total: sql3`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
       and7(
-        gte4(vehicleRecords.createdAt, startOfMonth),
-        lte4(vehicleRecords.createdAt, endOfMonth),
+        gte3(vehicleRecords.createdAt, startOfMonth),
+        lte3(vehicleRecords.createdAt, endOfMonth),
         sql3`record_type = 'abastecimento'`
       )
     );
-    const [{ count: attendanceToday }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceToday }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
     const [{ count: attendanceThisMonth }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(and7(
-      gte4(collaboratorAttendance.date, startOfMonth),
-      lte4(collaboratorAttendance.date, endOfMonth)
+      gte3(collaboratorAttendance.date, startOfMonth),
+      lte3(collaboratorAttendance.date, endOfMonth)
     ));
     const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql3`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
       and7(
-        gte4(collaboratorAttendance.date, startOfMonth),
-        lte4(collaboratorAttendance.date, endOfMonth),
+        gte3(collaboratorAttendance.date, startOfMonth),
+        lte3(collaboratorAttendance.date, endOfMonth),
         sql3`payment_status_ca = 'pendente'`
       )
     );
@@ -3581,11 +3768,11 @@ var appRouter = router({
       }
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
-      const { users: users2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+      const { users: users3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
       const { eq: eq16 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users2).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq16(users2.id, resetToken.userId));
+      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq16(users3.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),

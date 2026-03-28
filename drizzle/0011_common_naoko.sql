@@ -1,0 +1,1 @@
+ALTER TABLE `equipment` ADD `license_plate` varchar(20);

@@ -5,14 +5,18 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import {
-  Users, Plus, Calendar, Search, CheckCircle2, Clock, DollarSign,
-  User, ChevronDown, ChevronUp, Loader2, Filter, FileDown
+  Users, Plus, Calendar, ChevronDown, ChevronUp, Loader2,
+  FileDown, ChevronLeft, ChevronRight, CheckCircle2, Clock,
+  DollarSign, User, CalendarDays, LayoutList
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
   clt: "CLT",
@@ -20,10 +24,19 @@ const EMPLOYMENT_LABELS: Record<string, string> = {
   diarista: "Diarista",
 };
 
-const PAYMENT_COLORS: Record<string, string> = {
-  pendente: "bg-yellow-100 text-yellow-800",
-  pago: "bg-green-100 text-green-800",
-};
+function weekRange(ref: Date) {
+  const start = startOfWeek(ref, { weekStartsOn: 0 }); // domingo
+  const end = endOfWeek(ref, { weekStartsOn: 0 });       // sábado
+  return { start, end };
+}
+
+function fmtDate(d: Date | string) {
+  return format(typeof d === "string" ? parseISO(d) : d, "dd/MM", { locale: ptBR });
+}
+
+function fmtDateFull(d: Date | string) {
+  return format(typeof d === "string" ? parseISO(d) : d, "EEE dd/MM", { locale: ptBR });
+}
 
 const emptyForm = {
   collaboratorId: "",
@@ -35,24 +48,32 @@ const emptyForm = {
   observations: "",
 };
 
+// ─── Componente principal ────────────────────────────────────────────────────
+
 export default function AttendanceList() {
+  const [tab, setTab] = useState<"semanal" | "diario">("semanal");
+  const [weekRef, setWeekRef] = useState(new Date());
   const [searchDate, setSearchDate] = useState(new Date().toISOString().slice(0, 10));
-  const [searchName, setSearchName] = useState("");
-  const [filterPayment, setFilterPayment] = useState<"" | "pendente" | "pago">("");
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
+  const [expandedCollab, setExpandedCollab] = useState<Record<number, boolean>>({});
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const utils = trpc.useUtils();
-
-  // Buscar colaboradores para o select
   const { data: collaboratorsList = [] } = trpc.collaborators.list.useQuery({});
 
-  // Buscar presenças
-  const { data: records = [], isLoading } = trpc.attendance.list.useQuery({
+  // ── Dados da semana ──────────────────────────────────────────────────────
+  const { start: weekStart, end: weekEnd } = weekRange(weekRef);
+
+  const { data: weekRecords = [], isLoading: weekLoading } = trpc.attendance.list.useQuery({
+    dateFrom: weekStart.toISOString().slice(0, 10),
+    dateTo: weekEnd.toISOString().slice(0, 10),
+  });
+
+  // ── Dados do dia ────────────────────────────────────────────────────────
+  const { data: dayRecords = [], isLoading: dayLoading } = trpc.attendance.list.useQuery({
     dateFrom: searchDate,
     dateTo: searchDate,
-    paymentStatus: filterPayment || undefined,
   });
 
   const createMutation = trpc.attendance.create.useMutation({
@@ -88,7 +109,6 @@ export default function AttendanceList() {
     });
   };
 
-  // Preencher dados do colaborador ao selecionar
   const handleCollaboratorChange = (id: string) => {
     const collab = (collaboratorsList as any[]).find((c: any) => String(c.id) === id);
     setForm(f => ({
@@ -100,68 +120,102 @@ export default function AttendanceList() {
     }));
   };
 
-  // Filtrar por nome
-  const filtered = useMemo(() => {
-    let result = records as any[];
-    if (searchName) {
-      result = result.filter(r => r.collaboratorName?.toLowerCase().includes(searchName.toLowerCase()));
+  // ── Agrupamento semanal por colaborador ──────────────────────────────────
+  const weekByCollab = useMemo(() => {
+    const map: Record<number, {
+      id: number; name: string; photo: string | null; role: string;
+      pixKey: string | null; employmentType: string;
+      days: any[]; total: number; pendente: number; pago: number;
+    }> = {};
+
+    for (const r of weekRecords as any[]) {
+      if (!map[r.collaboratorId]) {
+        map[r.collaboratorId] = {
+          id: r.collaboratorId, name: r.collaboratorName,
+          photo: r.collaboratorPhoto, role: r.collaboratorRole,
+          pixKey: r.pixKey, employmentType: r.employmentType,
+          days: [], total: 0, pendente: 0, pago: 0,
+        };
+      }
+      const v = parseFloat(r.dailyValue || "0");
+      map[r.collaboratorId].days.push(r);
+      map[r.collaboratorId].total += v;
+      if (r.paymentStatus === "pago") map[r.collaboratorId].pago += v;
+      else map[r.collaboratorId].pendente += v;
     }
-    return result;
-  }, [records, searchName]);
 
-  // Agrupar por status de pagamento
-  const pendentes = filtered.filter(r => r.paymentStatus === "pendente");
-  const pagos = filtered.filter(r => r.paymentStatus === "pago");
+    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name));
+  }, [weekRecords]);
 
-  // Totais
-  const totalDiarias = filtered.length;
-  const totalValor = filtered.reduce((acc, r) => acc + parseFloat(r.dailyValue || "0"), 0);
-  const totalPendente = pendentes.reduce((acc, r) => acc + parseFloat(r.dailyValue || "0"), 0);
+  const weekTotals = useMemo(() => ({
+    diarias: (weekRecords as any[]).length,
+    total: weekByCollab.reduce((s, c) => s + c.total, 0),
+    pendente: weekByCollab.reduce((s, c) => s + c.pendente, 0),
+    pago: weekByCollab.reduce((s, c) => s + c.pago, 0),
+  }), [weekByCollab, weekRecords]);
 
-  // Gerar PDF do relatório de presenças
-  const handleExportPDF = async () => {
-    if (filtered.length === 0) { toast.error("Nenhuma presença para exportar"); return; }
+  // ── Agrupamento diário ───────────────────────────────────────────────────
+  const dayPendentes = (dayRecords as any[]).filter(r => r.paymentStatus === "pendente");
+  const dayPagos = (dayRecords as any[]).filter(r => r.paymentStatus === "pago");
+  const dayTotal = (dayRecords as any[]).reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
+  const dayPendenteTotal = dayPendentes.reduce((s: number, r: any) => s + parseFloat(r.dailyValue || "0"), 0);
+
+  // ── Marcar todos como pago (semana de um colaborador) ───────────────────
+  const markAllPaid = async (collab: typeof weekByCollab[0]) => {
+    const pending = collab.days.filter(d => d.paymentStatus === "pendente");
+    for (const d of pending) {
+      await markPaidMutation.mutateAsync({ id: d.id, paid: true });
+    }
+    toast.success(`${collab.name} marcado como pago!`);
+  };
+
+  // ── Exportar PDF semanal ─────────────────────────────────────────────────
+  const handleExportWeekPDF = async () => {
+    if (weekByCollab.length === 0) { toast.error("Nenhuma presença na semana"); return; }
     try {
       const { default: jsPDF } = await import("jspdf");
       const { default: autoTable } = await import("jspdf-autotable");
       const doc = new jsPDF();
 
-      // Cabeçalho
+      const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;
+
       doc.setFontSize(16);
-      doc.setTextColor(22, 101, 52); // verde escuro
+      doc.setTextColor(22, 101, 52);
       doc.text("BTREE Ambiental", 14, 18);
       doc.setFontSize(11);
       doc.setTextColor(80, 80, 80);
-      doc.text("Relatório de Presenças — " + dateLabel, 14, 26);
+      doc.text(`Relatório Semanal de Presenças — Semana ${weekLabel}`, 14, 26);
 
-      // Resumo
       doc.setFontSize(10);
       doc.setTextColor(40, 40, 40);
-      doc.text(`Total de presenças: ${totalDiarias}`, 14, 36);
-      doc.text(`Total a pagar (pendentes): R$ ${totalPendente.toFixed(2)}`, 14, 42);
-      doc.text(`Total geral: R$ ${totalValor.toFixed(2)}`, 14, 48);
+      doc.text(`Total de presenças: ${weekTotals.diarias}`, 14, 36);
+      doc.text(`Total a pagar (pendentes): R$ ${weekTotals.pendente.toFixed(2)}`, 14, 42);
+      doc.text(`Total pago: R$ ${weekTotals.pago.toFixed(2)}`, 14, 48);
+      doc.text(`Total geral: R$ ${weekTotals.total.toFixed(2)}`, 14, 54);
 
-      // Tabela
-      const rows = filtered.map((r: any) => [
-        r.collaboratorName || "-",
-        r.activity || "-",
-        r.employmentType === "clt" ? "CLT" : r.employmentType === "terceirizado" ? "Terceirizado" : "Diarista",
-        `R$ ${parseFloat(r.dailyValue || "0").toFixed(2)}`,
-        r.pixKey || "-",
-        r.paymentStatus === "pago" ? "Pago" : "Pendente",
-        r.registeredByName || "-",
+      // Tabela por colaborador
+      const rows = weekByCollab.map(c => [
+        c.name,
+        c.days.length.toString(),
+        c.days.map(d => fmtDateFull(d.date)).join(", "),
+        EMPLOYMENT_LABELS[c.employmentType] || c.employmentType,
+        c.pixKey || "—",
+        `R$ ${c.total.toFixed(2)}`,
+        c.pendente > 0 ? `R$ ${c.pendente.toFixed(2)}` : "—",
+        c.pago > 0 ? `R$ ${c.pago.toFixed(2)}` : "—",
       ]);
 
       autoTable(doc, {
-        startY: 55,
-        head: [["Colaborador", "Atividade", "Vínculo", "Valor", "PIX", "Status", "Registrado por"]],
+        startY: 62,
+        head: [["Colaborador", "Dias", "Datas", "Vínculo", "PIX", "Total", "A Pagar", "Pago"]],
         body: rows,
-        styles: { fontSize: 9, cellPadding: 3 },
+        styles: { fontSize: 8, cellPadding: 2.5 },
         headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [240, 253, 244] },
         columnStyles: {
-          3: { halign: "right" },
-          5: { halign: "center" },
+          5: { halign: "right" },
+          6: { halign: "right" },
+          7: { halign: "right" },
         },
       });
 
@@ -175,158 +229,341 @@ export default function AttendanceList() {
         doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
       }
 
-      doc.save(`presencas-${searchDate}.pdf`);
-      toast.success("PDF gerado com sucesso!");
+      doc.save(`presencas-semana-${format(weekStart, "dd-MM")}-a-${format(weekEnd, "dd-MM-yyyy")}.pdf`);
+      toast.success("PDF semanal gerado!");
     } catch (err) {
       toast.error("Erro ao gerar PDF");
       console.error(err);
     }
   };
 
-  const toggleGroup = (key: string) => {
-    setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }));
+  // ── Exportar PDF diário ──────────────────────────────────────────────────
+  const handleExportDayPDF = async () => {
+    if ((dayRecords as any[]).length === 0) { toast.error("Nenhuma presença para exportar"); return; }
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF();
+      const dateLabel = format(parseISO(searchDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+
+      doc.setFontSize(16);
+      doc.setTextColor(22, 101, 52);
+      doc.text("BTREE Ambiental", 14, 18);
+      doc.setFontSize(11);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Relatório de Presenças — ${dateLabel}`, 14, 26);
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Total: ${(dayRecords as any[]).length} presenças | A pagar: R$ ${dayPendenteTotal.toFixed(2)} | Total: R$ ${dayTotal.toFixed(2)}`, 14, 36);
+
+      const rows = (dayRecords as any[]).map((r: any) => [
+        r.collaboratorName || "-",
+        r.activity || "-",
+        EMPLOYMENT_LABELS[r.employmentType] || r.employmentType,
+        `R$ ${parseFloat(r.dailyValue || "0").toFixed(2)}`,
+        r.pixKey || "-",
+        r.paymentStatus === "pago" ? "Pago" : "Pendente",
+      ]);
+
+      autoTable(doc, {
+        startY: 44,
+        head: [["Colaborador", "Atividade", "Vínculo", "Valor", "PIX", "Status"]],
+        body: rows,
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [240, 253, 244] },
+        columnStyles: { 3: { halign: "right" }, 5: { halign: "center" } },
+      });
+
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} — Kobayashi Desenvolvimento`, 14, doc.internal.pageSize.height - 8);
+        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+      }
+
+      doc.save(`presencas-${searchDate}.pdf`);
+      toast.success("PDF gerado!");
+    } catch (err) {
+      toast.error("Erro ao gerar PDF");
+    }
   };
 
-  const dateLabel = (() => {
-    try {
-      return format(new Date(searchDate + "T12:00:00"), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-    } catch { return searchDate; }
-  })();
+  const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-emerald-800 flex items-center gap-2">
             <Users className="h-7 w-7" /> Controle de Presenças
           </h1>
-          <p className="text-gray-500 text-sm mt-1">{dateLabel}</p>
+          <p className="text-gray-500 text-sm mt-0.5">Registro e pagamento de colaboradores</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
-            <FileDown className="h-4 w-4" /> Exportar PDF
-          </Button>
-          <Button onClick={() => { setForm({ ...emptyForm }); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-            <Plus className="h-4 w-4" /> Registrar Presença
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-emerald-700">{totalDiarias}</p>
-            <p className="text-xs text-gray-500">Presenças</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-yellow-600">R$ {totalPendente.toFixed(2)}</p>
-            <p className="text-xs text-gray-500">A Pagar</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-blue-600">R$ {totalValor.toFixed(2)}</p>
-            <p className="text-xs text-gray-500">Total</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            type="date"
-            value={searchDate}
-            onChange={e => setSearchDate(e.target.value)}
-            className="pl-10 w-44"
-          />
-        </div>
-        <div className="relative flex-1 min-w-40">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Buscar colaborador..."
-            value={searchName}
-            onChange={e => setSearchName(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <select
-          value={filterPayment}
-          onChange={e => setFilterPayment(e.target.value as any)}
-          className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        <Button
+          onClick={() => { setForm({ ...emptyForm }); setIsOpen(true); }}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
         >
-          <option value="">Todos</option>
-          <option value="pendente">Pendente</option>
-          <option value="pago">Pago</option>
-        </select>
+          <Plus className="h-4 w-4" /> Registrar Presença
+        </Button>
       </div>
 
-      {/* Lista */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <Users className="h-16 w-16 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">Nenhuma presença nesta data</p>
-          <p className="text-sm mt-1">Clique em "Registrar Presença" para começar</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {/* Pendentes */}
-          {pendentes.length > 0 && (
-            <div>
-              <button
-                className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-yellow-50 hover:bg-yellow-100 transition-colors text-yellow-800 font-semibold text-sm mb-2"
-                onClick={() => toggleGroup("pendente")}
-              >
-                <span className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" /> Pendente de Pagamento ({pendentes.length})
-                  <span className="font-bold">R$ {totalPendente.toFixed(2)}</span>
-                </span>
-                {expandedGroups["pendente"] === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </button>
-              {expandedGroups["pendente"] !== false && (
-                <div className="space-y-2">
-                  {pendentes.map((r: any) => (
-                    <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} />
-                  ))}
+      {/* Tabs */}
+      <Tabs value={tab} onValueChange={v => setTab(v as any)}>
+        <TabsList className="grid w-full grid-cols-2 max-w-xs">
+          <TabsTrigger value="semanal" className="gap-1.5">
+            <CalendarDays className="h-4 w-4" /> Semanal
+          </TabsTrigger>
+          <TabsTrigger value="diario" className="gap-1.5">
+            <LayoutList className="h-4 w-4" /> Por Dia
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ─── ABA SEMANAL ─────────────────────────────────────────────── */}
+        <TabsContent value="semanal" className="space-y-4 mt-4">
+          {/* Navegação de semana */}
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="outline" size="sm" onClick={() => setWeekRef(w => subWeeks(w, 1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="text-center">
+              <p className="font-semibold text-gray-800">{weekLabel}</p>
+              <p className="text-xs text-gray-400">
+                {format(weekStart, "EEEE", { locale: ptBR })} → {format(weekEnd, "EEEE", { locale: ptBR })}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setWeekRef(w => addWeeks(w, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Cards de resumo */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card><CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-emerald-700">{weekTotals.diarias}</p>
+              <p className="text-xs text-gray-500">Presenças</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-gray-700">{weekByCollab.length}</p>
+              <p className="text-xs text-gray-500">Colaboradores</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-yellow-600">R$ {weekTotals.pendente.toFixed(2)}</p>
+              <p className="text-xs text-gray-500">A Pagar</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-blue-600">R$ {weekTotals.total.toFixed(2)}</p>
+              <p className="text-xs text-gray-500">Total Semana</p>
+            </CardContent></Card>
+          </div>
+
+          {/* Botão PDF */}
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={handleExportWeekPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+              <FileDown className="h-4 w-4" /> Exportar PDF Semanal
+            </Button>
+          </div>
+
+          {/* Lista por colaborador */}
+          {weekLoading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : weekByCollab.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <CalendarDays className="h-16 w-16 mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-medium">Nenhuma presença nesta semana</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {weekByCollab.map(collab => (
+                <Card key={collab.id} className={`border-l-4 ${collab.pendente > 0 ? "border-l-yellow-400" : "border-l-green-400"}`}>
+                  <CardContent className="p-4">
+                    {/* Linha principal do colaborador */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-emerald-100 flex-shrink-0 flex items-center justify-center">
+                        {collab.photo ? (
+                          <img src={collab.photo} alt={collab.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-emerald-600 font-bold text-sm">{collab.name.charAt(0)}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div>
+                            <p className="font-semibold text-gray-800">{collab.name}</p>
+                            <p className="text-xs text-gray-500">{collab.days.length} dia{collab.days.length !== 1 ? "s" : ""} · {EMPLOYMENT_LABELS[collab.employmentType] || collab.employmentType}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-emerald-700 text-lg">R$ {collab.total.toFixed(2)}</p>
+                            {collab.pendente > 0 && (
+                              <p className="text-xs text-yellow-600 font-medium">R$ {collab.pendente.toFixed(2)} pendente</p>
+                            )}
+                            {collab.pago > 0 && collab.pendente === 0 && (
+                              <Badge className="bg-green-100 text-green-700 text-xs">Pago</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* PIX */}
+                        {collab.pixKey && (
+                          <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                            <DollarSign className="h-3 w-3" /> PIX: {collab.pixKey}
+                          </p>
+                        )}
+
+                        {/* Ações */}
+                        <div className="flex items-center gap-2 mt-3 flex-wrap">
+                          {collab.pendente > 0 && (
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white gap-1"
+                              onClick={() => markAllPaid(collab)}
+                              disabled={markPaidMutation.isPending}
+                            >
+                              <CheckCircle2 className="h-3 w-3" /> Marcar Semana Paga
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-gray-500 gap-1"
+                            onClick={() => setExpandedCollab(prev => ({ ...prev, [collab.id]: !prev[collab.id] }))}
+                          >
+                            {expandedCollab[collab.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            {expandedCollab[collab.id] ? "Ocultar dias" : "Ver dias"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Detalhes dos dias */}
+                    {expandedCollab[collab.id] && (
+                      <div className="mt-3 pt-3 border-t space-y-2">
+                        {collab.days.map((d: any) => (
+                          <div key={d.id} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
+                            <div>
+                              <span className="font-medium text-gray-700">{fmtDateFull(d.date)}</span>
+                              {d.activity && <span className="text-gray-400 ml-2 text-xs">· {d.activity}</span>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-emerald-700">R$ {parseFloat(d.dailyValue || "0").toFixed(2)}</span>
+                              <button
+                                className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
+                                  d.paymentStatus === "pago"
+                                    ? "bg-green-100 text-green-700 hover:bg-yellow-100 hover:text-yellow-700"
+                                    : "bg-yellow-100 text-yellow-700 hover:bg-green-100 hover:text-green-700"
+                                }`}
+                                onClick={() => markPaidMutation.mutate({ id: d.id, paid: d.paymentStatus !== "pago" })}
+                              >
+                                {d.paymentStatus === "pago" ? "✓ Pago" : "Pendente"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── ABA DIÁRIA ──────────────────────────────────────────────── */}
+        <TabsContent value="diario" className="space-y-4 mt-4">
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="date"
+                value={searchDate}
+                onChange={e => setSearchDate(e.target.value)}
+                className="pl-10 w-44"
+              />
+            </div>
+            <Button variant="outline" onClick={handleExportDayPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+              <FileDown className="h-4 w-4" /> Exportar PDF
+            </Button>
+          </div>
+
+          {/* Resumo do dia */}
+          <div className="grid grid-cols-3 gap-3">
+            <Card><CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-emerald-700">{(dayRecords as any[]).length}</p>
+              <p className="text-xs text-gray-500">Presenças</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-yellow-600">R$ {dayPendenteTotal.toFixed(2)}</p>
+              <p className="text-xs text-gray-500">A Pagar</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-blue-600">R$ {dayTotal.toFixed(2)}</p>
+              <p className="text-xs text-gray-500">Total</p>
+            </CardContent></Card>
+          </div>
+
+          {dayLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : (dayRecords as any[]).length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Users className="h-16 w-16 mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-medium">Nenhuma presença neste dia</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {dayPendentes.length > 0 && (
+                <div>
+                  <button
+                    className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-yellow-50 hover:bg-yellow-100 transition-colors text-yellow-800 font-semibold text-sm mb-2"
+                    onClick={() => setExpandedGroups(p => ({ ...p, pendente: !p.pendente }))}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Pendente de Pagamento ({dayPendentes.length}) — R$ {dayPendenteTotal.toFixed(2)}
+                    </span>
+                    {expandedGroups.pendente === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                  </button>
+                  {expandedGroups.pendente !== false && (
+                    <div className="space-y-2">
+                      {dayPendentes.map((r: any) => (
+                        <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {dayPagos.length > 0 && (
+                <div>
+                  <button
+                    className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors text-green-800 font-semibold text-sm mb-2"
+                    onClick={() => setExpandedGroups(p => ({ ...p, pago: !p.pago }))}
+                  >
+                    <span className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" /> Pagos ({dayPagos.length})
+                    </span>
+                    {expandedGroups.pago === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                  </button>
+                  {expandedGroups.pago !== false && (
+                    <div className="space-y-2">
+                      {dayPagos.map((r: any) => (
+                        <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
+        </TabsContent>
+      </Tabs>
 
-          {/* Pagos */}
-          {pagos.length > 0 && (
-            <div>
-              <button
-                className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors text-green-800 font-semibold text-sm mb-2"
-                onClick={() => toggleGroup("pago")}
-              >
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" /> Pagos ({pagos.length})
-                </span>
-                {expandedGroups["pago"] === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </button>
-              {expandedGroups["pago"] !== false && (
-                <div className="space-y-2">
-                  {pagos.map((r: any) => (
-                    <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Sheet de cadastro */}
+      {/* ─── Sheet de cadastro ───────────────────────────────────────────── */}
       <Sheet open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) setForm({ ...emptyForm }); }}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader className="mb-4">
@@ -423,23 +660,21 @@ export default function AttendanceList() {
   );
 }
 
+// ─── Card de presença individual ─────────────────────────────────────────────
+
 function AttendanceCard({ record, onMarkPaid }: { record: any; onMarkPaid: (paid: boolean) => void }) {
   const isPago = record.paymentStatus === "pago";
   return (
     <Card className="hover:shadow-sm transition-shadow">
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          {/* Avatar */}
           <div className="w-10 h-10 rounded-full overflow-hidden bg-emerald-100 flex-shrink-0 flex items-center justify-center">
             {record.collaboratorPhoto ? (
               <img src={record.collaboratorPhoto} alt={record.collaboratorName} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-emerald-600 font-bold text-sm">
-                {record.collaboratorName?.charAt(0)}
-              </span>
+              <span className="text-emerald-600 font-bold text-sm">{record.collaboratorName?.charAt(0)}</span>
             )}
           </div>
-
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
@@ -448,12 +683,11 @@ function AttendanceCard({ record, onMarkPaid }: { record: any; onMarkPaid: (paid
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-emerald-700">R$ {parseFloat(record.dailyValue || "0").toFixed(2)}</span>
-                <Badge className={`text-xs ${PAYMENT_COLORS[record.paymentStatus]}`}>
+                <Badge className={`text-xs ${isPago ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
                   {isPago ? "Pago" : "Pendente"}
                 </Badge>
               </div>
             </div>
-
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               <span className="text-xs text-gray-400">{EMPLOYMENT_LABELS[record.employmentType]}</span>
               {record.pixKey && (
@@ -467,12 +701,9 @@ function AttendanceCard({ record, onMarkPaid }: { record: any; onMarkPaid: (paid
                 </span>
               )}
             </div>
-
             {record.observations && (
               <p className="text-xs text-gray-400 mt-1 italic">{record.observations}</p>
             )}
-
-            {/* Botão marcar pago/pendente */}
             <div className="mt-2">
               <Button
                 size="sm"
@@ -480,11 +711,7 @@ function AttendanceCard({ record, onMarkPaid }: { record: any; onMarkPaid: (paid
                 className={`text-xs h-7 gap-1 ${isPago ? "text-yellow-600 border-yellow-200 hover:bg-yellow-50" : "text-green-600 border-green-200 hover:bg-green-50"}`}
                 onClick={() => onMarkPaid(!isPago)}
               >
-                {isPago ? (
-                  <><Clock className="h-3 w-3" /> Marcar Pendente</>
-                ) : (
-                  <><CheckCircle2 className="h-3 w-3" /> Marcar Pago</>
-                )}
+                {isPago ? <><Clock className="h-3 w-3" /> Marcar Pendente</> : <><CheckCircle2 className="h-3 w-3" /> Marcar Pago</>}
               </Button>
             </div>
           </div>

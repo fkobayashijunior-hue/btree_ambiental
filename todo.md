@@ -696,3 +696,50 @@
 - [ ] Cadastrar 9 dispositivos restantes no Traccar
 - [ ] Vincular GPS aos equipamentos no BTREE
 - [ ] Renovar token Traccar antes de 03/04/2026
+
+## 📋 RELATÓRIO DE PRESENÇA SEMANAL (28/03/2026)
+- [x] Relatório de presença agrupado por semana (domingo a sábado)
+- [x] Listagem por colaborador: dias trabalhados, total de diárias, total a pagar
+- [x] Filtro por semana com navegação (anterior/próxima)
+- [x] Indicador visual de status de pagamento por colaborador na semana
+- [x] Exportar relatório semanal em PDF para Mary
+- [ ] Exportar relatório semanal em Excel
+
+## 🚜 EQUIPAMENTOS POR SETOR (28/03/2026)
+- [x] Separar equipamentos por setor no cadastro e listagem
+- [x] Campos dinâmicos por tipo: veículos/caminhões exibem campo "Placa" ao invés de "Número de Série"
+- [x] Campo license_plate adicionado na tabela equipment
+- [ ] Filtro de equipamentos por setor nas páginas que usam equipamentos
+- [ ] Migrar equipamentos existentes para setores
+
+## 🚛 MÓDULO DE CARGAS REFORMULADO (28/03/2026)
+- [x] Cadastro de destinos (tabela cargo_destinations) para seleção no formulário
+- [x] Formulário de carga: selecionar caminhão cadastrado (não digitar)
+- [x] Formulário de carga: selecionar motorista cadastrado (não digitar)
+- [x] Formulário de carga: selecionar cliente cadastrado (não digitar)
+- [x] Formulário de carga: selecionar destino cadastrado (não digitar)
+- [x] Adicionar campo de peso (kg/ton) no registro de carga
+- [x] Relatório completo de cargas para a empresa (PDF) com filtros
+- [x] Relatório de cargas separado para clientes na área do cliente
+- [x] Geração de PDF individual por carga para envio externo (sem precisar de login)
+- [x] Upload de fotos de peso na saída e na chegada
+- [x] Upload de fotos da carga (múltiplas fotos)
+- [ ] Relatório em Excel
+
+## 📍 ACOMPANHAMENTO EM TEMPO REAL DE CARGAS (28/03/2026)
+- [x] Status de carga: Aguardando → Carregando → Em Trânsito → Pesagem Saída → Descarregando → Pesagem Chegada → Finalizado
+- [x] Registro de status com data/hora e notas
+- [x] Upload de fotos por etapa (peso saída, peso chegada, fotos da carga)
+- [x] Área do cliente: timeline visual do status da carga em tempo real
+- [x] Fotos de pesagem visíveis para o cliente no portal
+- [ ] Notificação automática ao cliente quando status muda
+- [ ] PDF final da entrega com fotos de peso e medidas para envio ao cliente
+
+## 📵 MODO OFFLINE / PWA (28/03/2026)
+- [x] Configurar Service Worker (vite-plugin-pwa + Workbox) para cache de assets e páginas
+- [x] Fila de cadastros offline: salvar localmente quando sem internet (useOfflineQueue)
+- [x] Sincronização automática quando a internet voltar
+- [x] Indicador visual de modo offline na interface (OfflineIndicator)
+- [x] Ícones PWA gerados (pwa-192.png, pwa-512.png)
+- [ ] Integrar useOfflineQueue nos formulários de presença, abastecimento, horas de máquina e cargas
+- [ ] Suporte offline completo testado em campo

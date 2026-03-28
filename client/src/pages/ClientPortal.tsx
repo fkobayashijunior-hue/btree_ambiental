@@ -1,7 +1,19 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X } from "lucide-react";
+import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon } from "lucide-react";
+
+type TrackingStatus = "aguardando" | "carregando" | "em_transito" | "pesagem_saida" | "descarregando" | "pesagem_chegada" | "finalizado";
+
+const TRACKING_STEPS: { key: TrackingStatus; label: string; icon: string; desc: string }[] = [
+  { key: "aguardando", label: "Aguardando", icon: "⏳", desc: "Carga aguardando início do carregamento" },
+  { key: "carregando", label: "Carregando", icon: "📦", desc: "Carga sendo carregada no caminhão" },
+  { key: "em_transito", label: "Em Trânsito", icon: "🚛", desc: "Caminhão a caminho do destino" },
+  { key: "pesagem_saida", label: "Pesagem Saída", icon: "⚖️", desc: "Realizando pesagem na saída" },
+  { key: "descarregando", label: "Descarregando", icon: "🏭", desc: "Carga sendo descarregada no destino" },
+  { key: "pesagem_chegada", label: "Pesagem Chegada", icon: "⚖️", desc: "Realizando pesagem na chegada" },
+  { key: "finalizado", label: "Finalizado", icon: "✅", desc: "Entrega concluída com sucesso" },
+];
 
 const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
 const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
@@ -369,25 +381,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       <EmptyState icon={<Truck />} text="Nenhuma carga registrada ainda." />
                     ) : (
                       data?.loads.map((load) => (
-                        <div key={load.id} className="border border-gray-100 rounded-xl p-4 hover:border-[#2e7d32]/30 transition-colors">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-gray-900 text-sm">
-                                  {load.destination || "Destino não informado"}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(load.status)}`}>
-                                  {load.status}
-                                </span>
-                              </div>
-                              <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
-                                <span>{formatDate(load.date)}</span>
-                                {load.volumeM3 && <span>{load.volumeM3} m³</span>}
-                                {load.woodType && <span>{load.woodType}</span>}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                        <CargoCard key={load.id} load={load} formatDate={formatDate} statusColor={statusColor} />
                       ))
                     )}
                   </div>
@@ -477,6 +471,177 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
     <div className="text-center py-10 text-gray-400">
       <div className="w-10 h-10 mx-auto mb-3 opacity-30">{icon}</div>
       <p className="text-sm">{text}</p>
+    </div>
+  );
+}
+
+// ── CARGO CARD COM TRACKING ──
+type CargoLoad = {
+  id: number;
+  date: Date | string | null;
+  destination: string | null;
+  status: string;
+  volumeM3: string | null;
+  woodType: string | null;
+  weightKg: string | null;
+  driverName: string | null;
+  vehiclePlate: string | null;
+  invoiceNumber: string | null;
+  trackingStatus: string | null;
+  trackingNotes: string | null;
+  trackingUpdatedAt: Date | string | null;
+  weightOutPhotoUrl: string | null;
+  weightInPhotoUrl: string | null;
+  photosJson: string | null;
+};
+
+function CargoCard({ load, formatDate, statusColor }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string }) {
+  const [expanded, setExpanded] = useState(false);
+  const currentStep = TRACKING_STEPS.find(s => s.key === load.trackingStatus);
+  const currentIdx = TRACKING_STEPS.findIndex(s => s.key === load.trackingStatus);
+  const photos: string[] = load.photosJson ? (() => { try { return JSON.parse(load.photosJson); } catch { return []; } })() : [];
+
+  return (
+    <div className="border border-gray-100 rounded-xl overflow-hidden hover:border-[#2e7d32]/30 transition-colors">
+      {/* Header da carga */}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-gray-900 text-sm">
+                {load.destination || "Destino não informado"}
+              </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(load.status)}`}>
+                {load.status}
+              </span>
+              {currentStep && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700">
+                  {currentStep.icon} {currentStep.label}
+                </span>
+              )}
+            </div>
+            <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
+              <span>{formatDate(load.date)}</span>
+              {load.volumeM3 && <span>{load.volumeM3} m³</span>}
+              {load.weightKg && <span className="flex items-center gap-0.5"><Weight className="h-3 w-3" />{load.weightKg} kg</span>}
+              {load.woodType && <span>{load.woodType}</span>}
+              {load.vehiclePlate && <span className="flex items-center gap-0.5"><Truck className="h-3 w-3" />{load.vehiclePlate}</span>}
+            </div>
+          </div>
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="text-gray-400 hover:text-[#2e7d32] transition-colors p-1"
+          >
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Detalhes expandidos */}
+      {expanded && (
+        <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
+          {/* Timeline de tracking */}
+          {load.trackingStatus && (
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Acompanhamento</p>
+              <div className="relative">
+                {TRACKING_STEPS.map((step, idx) => {
+                  const isDone = idx < currentIdx;
+                  const isCurrent = idx === currentIdx;
+                  const isPending = idx > currentIdx;
+                  return (
+                    <div key={step.key} className="flex items-start gap-3 mb-2 last:mb-0">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 mt-0.5 ${
+                        isDone ? "bg-green-500 text-white" : isCurrent ? "bg-[#2e7d32] text-white ring-4 ring-green-100" : "bg-gray-200 text-gray-400"
+                      }`}>
+                        {isDone ? "✓" : step.icon}
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm font-medium ${
+                          isDone ? "text-green-700" : isCurrent ? "text-[#2e7d32] font-bold" : "text-gray-400"
+                        }`}>{step.label}</p>
+                        {isCurrent && load.trackingNotes && (
+                          <p className="text-xs text-gray-500 italic mt-0.5">"{load.trackingNotes}"</p>
+                        )}
+                        {isCurrent && load.trackingUpdatedAt && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            Atualizado em {formatDate(load.trackingUpdatedAt)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Fotos de pesagem */}
+          {(load.weightOutPhotoUrl || load.weightInPhotoUrl) && (
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Fotos de Pesagem</p>
+              <div className="flex gap-3">
+                {load.weightOutPhotoUrl && (
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Saída</p>
+                    <img
+                      src={load.weightOutPhotoUrl}
+                      alt="Pesagem saída"
+                      className="w-full h-28 object-cover rounded-lg border border-gray-200 cursor-pointer"
+                      onClick={() => window.open(load.weightOutPhotoUrl!, "_blank")}
+                    />
+                  </div>
+                )}
+                {load.weightInPhotoUrl && (
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Chegada</p>
+                    <img
+                      src={load.weightInPhotoUrl}
+                      alt="Pesagem chegada"
+                      className="w-full h-28 object-cover rounded-lg border border-gray-200 cursor-pointer"
+                      onClick={() => window.open(load.weightInPhotoUrl!, "_blank")}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Fotos da carga */}
+          {photos.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Fotos da Carga ({photos.length})</p>
+              <div className="flex gap-2 flex-wrap">
+                {photos.map((p, i) => (
+                  <img
+                    key={i}
+                    src={p}
+                    alt={`Foto ${i + 1}`}
+                    className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90"
+                    onClick={() => window.open(p, "_blank")}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Dados adicionais */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {load.driverName && (
+              <div className="bg-white rounded-lg p-2">
+                <p className="text-gray-400">Motorista</p>
+                <p className="font-medium text-gray-700">{load.driverName}</p>
+              </div>
+            )}
+            {load.invoiceNumber && (
+              <div className="bg-white rounded-lg p-2">
+                <p className="text-gray-400">Nota Fiscal</p>
+                <p className="font-medium text-gray-700">{load.invoiceNumber}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

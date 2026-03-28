@@ -140,6 +140,7 @@ export const equipment = mysqlTable("equipment", {
   model: varchar("model", { length: 100 }),
   year: int("year"),
   serialNumber: varchar("serial_number", { length: 100 }),
+  licensePlate: varchar("license_plate", { length: 20 }),
   imageUrl: text("image_url"),
   sectorId: int("sector_id"),
   status: mysqlEnum("status", ["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
@@ -267,6 +268,21 @@ export const clients = mysqlTable("clients", {
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = typeof clients.$inferInsert;
 
+// ===== DESTINOS DE CARGA =====
+export const cargoDestinations = mysqlTable("cargo_destinations", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  address: varchar("address", { length: 500 }),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 2 }),
+  notes: text("notes"),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdBy: int("created_by").references(() => users.id),
+});
+export type CargoDestination = typeof cargoDestinations.$inferSelect;
+export type InsertCargoDestination = typeof cargoDestinations.$inferInsert;
+
 // ===== CONTROLE DE CARGAS =====
 export const cargoLoads = mysqlTable("cargo_loads", {
   id: int("id").autoincrement().primaryKey(),
@@ -284,7 +300,15 @@ export const cargoLoads = mysqlTable("cargo_loads", {
   // Informações da carga
   woodType: varchar("wood_type", { length: 100 }),
   destination: varchar("destination", { length: 255 }),
+  destinationId: int("destination_id").references(() => cargoDestinations.id),
+  weightKg: varchar("weight_kg", { length: 20 }), // peso em kg
   invoiceNumber: varchar("invoice_number", { length: 100 }),
+  // Acompanhamento em tempo real
+  trackingStatus: mysqlEnum("tracking_status", ["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).default("aguardando"),
+  trackingUpdatedAt: timestamp("tracking_updated_at"),
+  trackingNotes: text("tracking_notes"),
+  weightOutPhotoUrl: text("weight_out_photo_url"), // foto da pesagem na saída
+  weightInPhotoUrl: text("weight_in_photo_url"),   // foto da pesagem na chegada/destino
   // Cliente
   clientId: int("client_id").references(() => clients.id),
   clientName: varchar("client_name", { length: 255 }),

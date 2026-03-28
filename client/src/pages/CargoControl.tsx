@@ -3,47 +3,31 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Truck, Plus, Search, Package, Calendar, User, MapPin, FileText,
-  ChevronDown, ChevronUp, Camera, Loader2, Download, X, Image as ImageIcon,
-  BarChart3, Filter
+  Camera, Loader2, X, Image as ImageIcon, Weight, Navigation,
+  CheckCircle2, Clock, AlertCircle, ChevronRight, Pencil, Trash2,
+  BarChart3, Download, Eye, RefreshCw, Building2
 } from "lucide-react";
+import { useFilePicker } from "@/hooks/useFilePicker";
 
-type FormData = {
-  date: string;
-  vehiclePlate: string;
-  driverName: string;
-  heightM: string;
-  widthM: string;
-  lengthM: string;
-  woodType: string;
-  destination: string;
-  invoiceNumber: string;
-  clientName: string;
-  notes: string;
-  status: "pendente" | "entregue" | "cancelado";
-  photosJson?: string;
-};
+// ===== TIPOS =====
+type TrackingStatus = "aguardando" | "carregando" | "em_transito" | "pesagem_saida" | "descarregando" | "pesagem_chegada" | "finalizado";
 
-const emptyForm: FormData = {
-  date: new Date().toISOString().slice(0, 10),
-  vehiclePlate: "",
-  driverName: "",
-  heightM: "",
-  widthM: "",
-  lengthM: "",
-  woodType: "",
-  destination: "",
-  invoiceNumber: "",
-  clientName: "",
-  notes: "",
-  status: "pendente",
-};
+const TRACKING_STEPS: { key: TrackingStatus; label: string; icon: string }[] = [
+  { key: "aguardando", label: "Aguardando", icon: "⏳" },
+  { key: "carregando", label: "Carregando", icon: "📦" },
+  { key: "em_transito", label: "Em Trânsito", icon: "🚛" },
+  { key: "pesagem_saida", label: "Pesagem Saída", icon: "⚖️" },
+  { key: "descarregando", label: "Descarregando", icon: "🏭" },
+  { key: "pesagem_chegada", label: "Pesagem Chegada", icon: "⚖️" },
+  { key: "finalizado", label: "Finalizado", icon: "✅" },
+];
 
 const STATUS_COLORS: Record<string, string> = {
   pendente: "bg-yellow-100 text-yellow-800",
@@ -51,10 +35,14 @@ const STATUS_COLORS: Record<string, string> = {
   cancelado: "bg-red-100 text-red-800",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pendente: "Pendente",
-  entregue: "Entregue",
-  cancelado: "Cancelado",
+const TRACKING_COLORS: Record<TrackingStatus, string> = {
+  aguardando: "bg-gray-100 text-gray-700",
+  carregando: "bg-blue-100 text-blue-700",
+  em_transito: "bg-orange-100 text-orange-700",
+  pesagem_saida: "bg-purple-100 text-purple-700",
+  descarregando: "bg-yellow-100 text-yellow-700",
+  pesagem_chegada: "bg-indigo-100 text-indigo-700",
+  finalizado: "bg-green-100 text-green-700",
 };
 
 function calcVolume(h: string, w: string, l: string): string {
@@ -63,19 +51,6 @@ function calcVolume(h: string, w: string, l: string): string {
   const lN = parseFloat(l.replace(",", "."));
   if (isNaN(hN) || isNaN(wN) || isNaN(lN)) return "";
   return (hN * wN * lN).toFixed(3);
-}
-
-function SectionTitle({ icon, title, open, onToggle }: { icon: React.ReactNode; title: string; open: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors text-emerald-800 font-semibold text-sm"
-    >
-      <span className="flex items-center gap-2">{icon}{title}</span>
-      {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-    </button>
-  );
 }
 
 function compressImage(file: File): Promise<string> {
@@ -100,117 +75,248 @@ function compressImage(file: File): Promise<string> {
   });
 }
 
+// ===== GERAÇÃO DE PDF =====
+function generateCargoPDF(cargo: Record<string, unknown>, companyName = "BTREE Ambiental") {
+  const date = cargo.date ? new Date(cargo.date as string).toLocaleDateString("pt-BR") : "-";
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Relatório de Carga #${cargo.id}</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #1a1a1a; }
+  .header { background: #16a34a; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+  .header h1 { margin: 0; font-size: 22px; }
+  .header p { margin: 4px 0 0; font-size: 13px; opacity: 0.85; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .badge-pendente { background: #fef9c3; color: #854d0e; }
+  .badge-entregue { background: #dcfce7; color: #166534; }
+  .badge-cancelado { background: #fee2e2; color: #991b1b; }
+  .section { margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 14px; color: #166534; border-bottom: 1px solid #e5e7eb; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .field { padding: 10px 16px; border-bottom: 1px solid #f3f4f6; }
+  .field:last-child { border-bottom: none; }
+  .field-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-value { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .tracking { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .tracking-step { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+  .step-done { background: #dcfce7; color: #166534; }
+  .step-current { background: #16a34a; color: white; }
+  .step-pending { background: #f3f4f6; color: #9ca3af; }
+  .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 16px; }
+  .photos { display: flex; gap: 10px; flex-wrap: wrap; padding: 12px 16px; }
+  .photos img { width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>${companyName} — Relatório de Carga #${cargo.id}</h1>
+  <p>Emitido em ${new Date().toLocaleString("pt-BR")} · Status: <span class="badge badge-${cargo.status}">${cargo.status === "entregue" ? "Entregue" : cargo.status === "cancelado" ? "Cancelado" : "Pendente"}</span></p>
+</div>
+
+<div class="section">
+  <div class="section-title">🚛 Veículo e Motorista</div>
+  <div class="grid">
+    <div class="field"><div class="field-label">Data</div><div class="field-value">${date}</div></div>
+    <div class="field"><div class="field-label">Placa / Veículo</div><div class="field-value">${cargo.vehiclePlate || cargo.vehicleName || "-"}</div></div>
+    <div class="field"><div class="field-label">Motorista</div><div class="field-value">${cargo.driverName || "-"}</div></div>
+    <div class="field"><div class="field-label">Nº Nota Fiscal</div><div class="field-value">${cargo.invoiceNumber || "-"}</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">📦 Informações da Carga</div>
+  <div class="grid">
+    <div class="field"><div class="field-label">Tipo de Madeira</div><div class="field-value">${cargo.woodType || "-"}</div></div>
+    <div class="field"><div class="field-label">Peso (kg)</div><div class="field-value">${cargo.weightKg ? cargo.weightKg + " kg" : "-"}</div></div>
+    <div class="field"><div class="field-label">Altura (m)</div><div class="field-value">${cargo.heightM || "-"}</div></div>
+    <div class="field"><div class="field-label">Largura (m)</div><div class="field-value">${cargo.widthM || "-"}</div></div>
+    <div class="field"><div class="field-label">Comprimento (m)</div><div class="field-value">${cargo.lengthM || "-"}</div></div>
+    <div class="field"><div class="field-label">Volume (m³)</div><div class="field-value"><strong>${cargo.volumeM3 || "-"} m³</strong></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">👤 Cliente e Destino</div>
+  <div class="grid">
+    <div class="field"><div class="field-label">Cliente</div><div class="field-value">${cargo.clientName || "-"}</div></div>
+    <div class="field"><div class="field-label">Destino</div><div class="field-value">${cargo.destination || "-"}</div></div>
+  </div>
+  ${cargo.notes ? `<div class="field"><div class="field-label">Observações</div><div class="field-value">${cargo.notes}</div></div>` : ""}
+</div>
+
+${cargo.trackingStatus ? `
+<div class="section">
+  <div class="section-title">📍 Acompanhamento</div>
+  <div style="padding: 12px 16px;">
+    <div class="tracking">
+      ${TRACKING_STEPS.map(step => {
+        const idx = TRACKING_STEPS.findIndex(s => s.key === cargo.trackingStatus);
+        const stepIdx = TRACKING_STEPS.findIndex(s => s.key === step.key);
+        const cls = stepIdx < idx ? "step-done" : stepIdx === idx ? "step-current" : "step-pending";
+        return `<span class="tracking-step ${cls}">${step.icon} ${step.label}</span>`;
+      }).join("")}
+    </div>
+    ${cargo.trackingNotes ? `<p style="margin-top:10px;font-size:13px;color:#374151;">${cargo.trackingNotes}</p>` : ""}
+  </div>
+</div>` : ""}
+
+${(cargo.weightOutPhotoUrl || cargo.weightInPhotoUrl) ? `
+<div class="section">
+  <div class="section-title">⚖️ Fotos de Pesagem</div>
+  <div class="photos">
+    ${cargo.weightOutPhotoUrl ? `<div><div class="field-label" style="padding:0 0 4px">Pesagem Saída</div><img src="${cargo.weightOutPhotoUrl}" alt="Pesagem saída"/></div>` : ""}
+    ${cargo.weightInPhotoUrl ? `<div><div class="field-label" style="padding:0 0 4px">Pesagem Chegada</div><img src="${cargo.weightInPhotoUrl}" alt="Pesagem chegada"/></div>` : ""}
+  </div>
+</div>` : ""}
+
+<div class="footer">
+  ${companyName} · Relatório gerado automaticamente pelo sistema BTREE
+</div>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 500);
+  }
+}
+
+// ===== COMPONENTE PRINCIPAL =====
 export default function CargoControl() {
-  const [search, setSearch] = useState("");
-  const [filterClient, setFilterClient] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("");
-  const [viewMode, setViewMode] = useState<"lista" | "relatorio">("lista");
-  const [isOpen, setIsOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState<FormData>(emptyForm);
-  const [openSections, setOpenSections] = useState({ veiculo: true, carga: true, cliente: false });
-  const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
-  const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
-  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-
   const utils = trpc.useUtils();
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("");
+  const [viewMode, setViewMode] = useState<"lista" | "tracking">("lista");
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [trackingCargoId, setTrackingCargoId] = useState<number | null>(null);
+  const [isDestinationOpen, setIsDestinationOpen] = useState(false);
+  const [newDestName, setNewDestName] = useState("");
+  const [newDestCity, setNewDestCity] = useState("");
+  const [newDestState, setNewDestState] = useState("");
+  const { openFilePicker } = useFilePicker();
 
-  const { data: loads = [], isLoading } = trpc.cargoLoads.list.useQuery({
-    search: search || undefined,
+  // Form state
+  const [form, setForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    vehicleId: 0,
+    vehiclePlate: "",
+    driverCollaboratorId: 0,
+    driverName: "",
+    heightM: "", widthM: "", lengthM: "",
+    weightKg: "",
+    woodType: "",
+    destinationId: 0,
+    destination: "",
+    invoiceNumber: "",
+    clientId: 0,
+    clientName: "",
+    notes: "",
+    status: "pendente" as "pendente" | "entregue" | "cancelado",
   });
+  const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  const analyzePhotoMutation = trpc.cargoLoads.analyzePhoto.useMutation({
-    onSuccess: (result) => {
-      const d = result.extracted;
-      setForm(f => ({
-        ...f,
-        date: d.date || f.date,
-        vehiclePlate: d.vehiclePlate || f.vehiclePlate,
-        driverName: d.driverName || f.driverName,
-        heightM: d.heightM || f.heightM,
-        widthM: d.widthM || f.widthM,
-        lengthM: d.lengthM || f.lengthM,
-        woodType: d.woodType || f.woodType,
-        destination: d.destination || f.destination,
-        invoiceNumber: d.invoiceNumber || f.invoiceNumber,
-        clientName: d.clientName || f.clientName,
-        notes: d.notes || f.notes,
-      }));
-      // Adicionar foto ao array de fotos pendentes
-      setPendingPhotos(prev => [...prev, result.photoUrl]);
-      toast.success("Dados extraídos com sucesso! Verifique e ajuste se necessário.");
-    },
-    onError: (e) => toast.error(e.message || "Erro ao analisar foto"),
-    onSettled: () => setAnalyzingPhoto(false),
-  });
+  // Tracking state
+  const [trackingStatus, setTrackingStatus] = useState<TrackingStatus>("aguardando");
+  const [trackingNotes, setTrackingNotes] = useState("");
+  const [weightPhotoType, setWeightPhotoType] = useState<"weight_out" | "weight_in" | null>(null);
 
+  // Queries
+  const { data: loads = [], isLoading } = trpc.cargoLoads.list.useQuery({ search: search || undefined });
+  const { data: trucks = [] } = trpc.cargoLoads.listTrucks.useQuery();
+  const { data: drivers = [] } = trpc.cargoLoads.listDrivers.useQuery();
+  const { data: clientsList = [] } = trpc.clients.list.useQuery();
+  const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
+  const { data: detailCargo } = trpc.cargoLoads.getById.useQuery(
+    { id: detailId! }, { enabled: !!detailId }
+  );
+
+  // Mutations
   const createMutation = trpc.cargoLoads.create.useMutation({
-    onSuccess: () => {
-      toast.success("Carga registrada com sucesso!");
-      utils.cargoLoads.list.invalidate();
-      setIsOpen(false);
-      setForm(emptyForm);
-      setPendingPhotos([]);
-    },
+    onSuccess: () => { toast.success("Carga registrada!"); utils.cargoLoads.list.invalidate(); setIsFormOpen(false); resetForm(); },
     onError: (e) => toast.error(e.message),
   });
-
   const updateMutation = trpc.cargoLoads.update.useMutation({
-    onSuccess: () => {
-      toast.success("Carga atualizada!");
-      utils.cargoLoads.list.invalidate();
-      setIsOpen(false);
-      setEditId(null);
-      setForm(emptyForm);
-      setPendingPhotos([]);
-    },
+    onSuccess: () => { toast.success("Carga atualizada!"); utils.cargoLoads.list.invalidate(); setIsFormOpen(false); setEditId(null); resetForm(); },
     onError: (e) => toast.error(e.message),
   });
-
   const deleteMutation = trpc.cargoLoads.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Carga removida!");
-      utils.cargoLoads.list.invalidate();
+    onSuccess: () => { toast.success("Carga removida!"); utils.cargoLoads.list.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateTracking = trpc.cargoLoads.updateTracking.useMutation({
+    onSuccess: () => { toast.success("Status atualizado!"); utils.cargoLoads.list.invalidate(); utils.cargoLoads.getById.invalidate(); setTrackingCargoId(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const uploadPhotoMutation = trpc.cargoLoads.uploadPhoto.useMutation({
+    onSuccess: (data) => {
+      if (weightPhotoType) {
+        toast.success("Foto de pesagem salva!");
+        utils.cargoLoads.getById.invalidate();
+        utils.cargoLoads.list.invalidate();
+      } else {
+        setPendingPhotos(prev => [...prev, data.url]);
+        toast.success("Foto adicionada!");
+      }
+      setUploadingPhoto(false);
+      setWeightPhotoType(null);
     },
+    onError: (e) => { toast.error(e.message); setUploadingPhoto(false); },
+  });
+  const createDestination = trpc.cargoLoads.createDestination.useMutation({
+    onSuccess: () => { toast.success("Destino cadastrado!"); utils.cargoLoads.listDestinations.invalidate(); setIsDestinationOpen(false); setNewDestName(""); setNewDestCity(""); setNewDestState(""); },
     onError: (e) => toast.error(e.message),
   });
 
   const volume = useMemo(() => calcVolume(form.heightM, form.widthM, form.lengthM), [form.heightM, form.widthM, form.lengthM]);
 
-  const handlePhotoForAnalysis = async (file: File) => {
-    setAnalyzingPhoto(true);
-    try {
-      const compressed = await compressImage(file);
-      analyzePhotoMutation.mutate({ photoBase64: compressed });
-    } catch {
-      toast.error("Erro ao processar imagem");
-      setAnalyzingPhoto(false);
-    }
+  const resetForm = () => {
+    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: 0, clientName: "", notes: "", status: "pendente" });
+    setPendingPhotos([]);
+  };
+
+  const openEdit = (cargo: typeof loads[number]) => {
+    setEditId(cargo.id);
+    setForm({
+      date: cargo.date ? new Date(cargo.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      vehicleId: cargo.vehicleId || 0,
+      vehiclePlate: cargo.vehiclePlate || "",
+      driverCollaboratorId: cargo.driverCollaboratorId || 0,
+      driverName: cargo.driverName || "",
+      heightM: cargo.heightM || "",
+      widthM: cargo.widthM || "",
+      lengthM: cargo.lengthM || "",
+      weightKg: cargo.weightKg || "",
+      woodType: cargo.woodType || "",
+      destinationId: cargo.destinationId || 0,
+      destination: cargo.destination || "",
+      invoiceNumber: cargo.invoiceNumber || "",
+      clientId: cargo.clientId || 0,
+      clientName: cargo.clientName || "",
+      notes: cargo.notes || "",
+      status: cargo.status as "pendente" | "entregue" | "cancelado",
+    });
+    setIsFormOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const allPhotos = [
-      ...(form.photosJson ? JSON.parse(form.photosJson) : []),
-      ...pendingPhotos,
-    ];
     const data = {
-      date: form.date,
-      vehiclePlate: form.vehiclePlate || undefined,
-      driverName: form.driverName || undefined,
-      heightM: form.heightM,
-      widthM: form.widthM,
-      lengthM: form.lengthM,
+      ...form,
+      vehicleId: form.vehicleId || undefined,
+      driverCollaboratorId: form.driverCollaboratorId || undefined,
+      destinationId: form.destinationId || undefined,
+      clientId: form.clientId || undefined,
       volumeM3: volume || "0",
-      woodType: form.woodType || undefined,
-      destination: form.destination || undefined,
-      invoiceNumber: form.invoiceNumber || undefined,
-      clientName: form.clientName || undefined,
-      notes: form.notes || undefined,
-      status: form.status,
-      photosJson: allPhotos.length > 0 ? JSON.stringify(allPhotos) : undefined,
+      photosJson: pendingPhotos.length ? JSON.stringify(pendingPhotos) : undefined,
     };
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
@@ -219,243 +325,101 @@ export default function CargoControl() {
     }
   };
 
-  const openEdit = (load: any) => {
-    setEditId(load.id);
-    setForm({
-      date: load.date ? new Date(load.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-      vehiclePlate: load.vehiclePlate || "",
-      driverName: load.driverName || "",
-      heightM: load.heightM || "",
-      widthM: load.widthM || "",
-      lengthM: load.lengthM || "",
-      woodType: load.woodType || "",
-      destination: load.destination || "",
-      invoiceNumber: load.invoiceNumber || "",
-      clientName: load.clientName || "",
-      notes: load.notes || "",
-      status: load.status || "pendente",
-      photosJson: load.photosJson,
-    });
-    setPendingPhotos([]);
-    setOpenSections({ veiculo: true, carga: true, cliente: true });
-    setIsOpen(true);
+  const handleAddPhoto = async (files: FileList) => {
+    const file = files[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const compressed = await compressImage(file);
+      if (editId && weightPhotoType) {
+        uploadPhotoMutation.mutate({ cargoId: editId, photoBase64: compressed, photoType: weightPhotoType });
+      } else if (editId) {
+        uploadPhotoMutation.mutate({ cargoId: editId, photoBase64: compressed, photoType: "cargo" });
+      } else {
+        setPendingPhotos(prev => [...prev, compressed]);
+        setUploadingPhoto(false);
+      }
+    } catch {
+      toast.error("Erro ao processar imagem");
+      setUploadingPhoto(false);
+    }
   };
 
-  const openNew = () => {
-    setEditId(null);
-    setForm(emptyForm);
-    setPendingPhotos([]);
-    setOpenSections({ veiculo: true, carga: true, cliente: false });
-    setIsOpen(true);
+  const handleWeightPhoto = (type: "weight_out" | "weight_in", cargoId: number) => {
+    setWeightPhotoType(type);
+    setEditId(cargoId);
+    openFilePicker({ accept: "image/*" }, handleAddPhoto);
   };
-
-  const toggleSection = (s: keyof typeof openSections) => {
-    setOpenSections(prev => ({ ...prev, [s]: !prev[s] }));
-  };
-
-  const isPending = createMutation.isPending || updateMutation.isPending;
 
   // Filtrar cargas
-  const filteredLoads = useMemo(() => {
-    let result = loads as any[];
-    if (filterClient) result = result.filter(l => l.clientName?.toLowerCase().includes(filterClient.toLowerCase()));
-    if (filterStatus) result = result.filter(l => l.status === filterStatus);
-    return result;
-  }, [loads, filterClient, filterStatus]);
-
-  // Stats
-  const totalVolume = filteredLoads.reduce((acc: number, l: any) => acc + parseFloat(l.volumeM3 || "0"), 0);
-  const pendentes = filteredLoads.filter((l: any) => l.status === "pendente").length;
-  const entregues = filteredLoads.filter((l: any) => l.status === "entregue").length;
-
-  // Agrupar por cliente para relatório
-  const byClient = useMemo(() => {
-    const map: Record<string, { loads: any[]; totalVolume: number }> = {};
-    filteredLoads.forEach((l: any) => {
-      const key = l.clientName || "Sem cliente";
-      if (!map[key]) map[key] = { loads: [], totalVolume: 0 };
-      map[key].loads.push(l);
-      map[key].totalVolume += parseFloat(l.volumeM3 || "0");
+  const filtered = useMemo(() => {
+    return loads.filter(c => {
+      if (filterStatus && c.status !== filterStatus) return false;
+      return true;
     });
-    return Object.entries(map).sort((a, b) => b[1].totalVolume - a[1].totalVolume);
-  }, [filteredLoads]);
+  }, [loads, filterStatus]);
 
-  const logoUrl = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-
-  const handleGenerateReport = (clientFilter?: string) => {
-    const reportLoads = clientFilter
-      ? filteredLoads.filter((l: any) => l.clientName === clientFilter)
-      : filteredLoads;
-
-    const rows = reportLoads.map((l: any) => `
-      <tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${l.date ? new Date(l.date).toLocaleDateString("pt-BR") : "-"}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${l.vehiclePlate || "-"}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${l.driverName || "-"}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${l.woodType || "-"}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${l.heightM || "-"} × ${l.widthM || "-"} × ${l.lengthM || "-"}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#065f46;">${parseFloat(l.volumeM3 || "0").toFixed(3)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${l.invoiceNumber || "-"}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${l.clientName || "-"}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">
-          <span style="padding:2px 8px;border-radius:999px;font-size:11px;background:${l.status === "entregue" ? "#d1fae5" : l.status === "cancelado" ? "#fee2e2" : "#fef3c7"};color:${l.status === "entregue" ? "#065f46" : l.status === "cancelado" ? "#991b1b" : "#92400e"};">${STATUS_LABELS[l.status] || l.status}</span>
-        </td>
-      </tr>`).join("");
-
-    const totalVol = reportLoads.reduce((acc: number, l: any) => acc + parseFloat(l.volumeM3 || "0"), 0);
-
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>Relatório de Cargas — BTREE Ambiental</title>
-<style>
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 0; padding: 0; }
-  .header { background: linear-gradient(135deg, #0d4f2e, #1a7a4a); color: white; padding: 20px 30px; display: flex; align-items: center; gap: 20px; }
-  .header img { height: 60px; filter: brightness(0) invert(1); }
-  .header-text h1 { margin: 0; font-size: 20px; }
-  .header-text p { margin: 4px 0 0; opacity: 0.8; font-size: 12px; }
-  .content { padding: 20px 30px; }
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-  .stat { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; text-align: center; }
-  .stat .value { font-size: 22px; font-weight: bold; color: #065f46; }
-  .stat .label { font-size: 11px; color: #6b7280; margin-top: 2px; }
-  .section-title { font-size: 13px; font-weight: bold; color: #0d4f2e; border-bottom: 2px solid #0d4f2e; padding-bottom: 4px; margin: 16px 0 10px; text-transform: uppercase; letter-spacing: 0.05em; }
-  table { width: 100%; border-collapse: collapse; font-size: 11px; }
-  th { background: #f3f4f6; padding: 8px; text-align: left; font-size: 10px; color: #374151; text-transform: uppercase; letter-spacing: 0.03em; }
-  .footer { background: #f9fafb; border-top: 1px solid #e5e7eb; padding: 12px 30px; text-align: center; font-size: 11px; color: #9ca3af; margin-top: 20px; }
-  .footer strong { color: #0d4f2e; }
-  .qr-note { font-size: 10px; color: #9ca3af; }
-  @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-</style>
-</head>
-<body>
-<div class="header">
-  <img src="${logoUrl}" alt="BTREE Ambiental" />
-  <div class="header-text">
-    <h1>Relatório de Controle de Cargas</h1>
-    <p>${clientFilter ? `Cliente: ${clientFilter} · ` : ""}${reportLoads.length} carga(s) · Gerado em ${new Date().toLocaleDateString("pt-BR")}</p>
-    <p>BTREE Empreendimentos LTDA · CNPJ: 47.714.027/0001-52 · Astorga, Paraná</p>
-  </div>
-</div>
-<div class="content">
-  <div class="stats">
-    <div class="stat"><div class="value">${reportLoads.length}</div><div class="label">Total de Cargas</div></div>
-    <div class="stat"><div class="value">${totalVol.toFixed(2)}</div><div class="label">Volume Total (m³)</div></div>
-    <div class="stat"><div class="value">${reportLoads.filter((l: any) => l.status === "entregue").length}</div><div class="label">Entregues</div></div>
-    <div class="stat"><div class="value">${reportLoads.filter((l: any) => l.status === "pendente").length}</div><div class="label">Pendentes</div></div>
-  </div>
-  <div class="section-title">Detalhamento das Cargas</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Data</th><th>Placa</th><th>Motorista</th><th>Tipo</th>
-        <th>Dimensões (m)</th><th>Volume (m³)</th><th>NF</th><th>Cliente</th><th>Status</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-    <tfoot>
-      <tr style="background:#f0fdf4;">
-        <td colspan="5" style="padding:8px;font-weight:bold;color:#065f46;">TOTAL</td>
-        <td style="padding:8px;font-weight:bold;color:#065f46;font-size:13px;">${totalVol.toFixed(3)} m³</td>
-        <td colspan="3"></td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
-<div class="footer">
-  <strong>BTREE Empreendimentos LTDA</strong> · btreeambiental.com · Astorga, Paraná · (44) XXXX-XXXX
-  <br/><span class="qr-note">Acesse btreeambiental.com para verificar autenticidade deste documento</span>
-</div>
-</body></html>`;
-
-    const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita pop-ups para gerar o relatório"); return; }
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 500);
-  };
-
-  const existingPhotos: string[] = useMemo(() => {
-    if (!form.photosJson) return [];
-    try { return JSON.parse(form.photosJson); } catch { return []; }
-  }, [form.photosJson]);
+  // Estatísticas
+  const stats = useMemo(() => ({
+    total: loads.length,
+    pendente: loads.filter(c => c.status === "pendente").length,
+    entregue: loads.filter(c => c.status === "entregue").length,
+    volumeTotal: loads.reduce((acc, c) => acc + parseFloat(c.volumeM3 || "0"), 0).toFixed(2),
+  }), [loads]);
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-emerald-800 flex items-center gap-2">
             <Truck className="h-7 w-7" /> Controle de Cargas
           </h1>
-          <p className="text-gray-500 text-sm mt-1">{loads.length} carga{loads.length !== 1 ? "s" : ""} registrada{loads.length !== 1 ? "s" : ""}</p>
+          <p className="text-gray-500 text-sm mt-1">Registre e acompanhe as saídas de carga</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
-            onClick={() => setViewMode(v => v === "lista" ? "relatorio" : "lista")}
-            className="gap-2 border-emerald-300 text-emerald-700"
+            className={`gap-2 ${viewMode === "tracking" ? "bg-emerald-50 border-emerald-300" : ""}`}
+            onClick={() => setViewMode(v => v === "lista" ? "tracking" : "lista")}
           >
-            <BarChart3 className="h-4 w-4" />
-            {viewMode === "lista" ? "Acompanhamento" : "Lista"}
+            <Navigation className="h-4 w-4" />
+            {viewMode === "lista" ? "Ver Tracking" : "Ver Lista"}
           </Button>
-          <Button onClick={() => handleGenerateReport()} variant="outline" className="gap-2 border-emerald-300 text-emerald-700">
-            <Download className="h-4 w-4" /> Relatório PDF
-          </Button>
-          <Button onClick={openNew} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+          <Button
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+            onClick={() => { resetForm(); setEditId(null); setIsFormOpen(true); }}
+          >
             <Plus className="h-4 w-4" /> Nova Carga
           </Button>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-emerald-700">{totalVolume.toFixed(1)}</p>
-            <p className="text-xs text-gray-500">m³ total</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-yellow-600">{pendentes}</p>
-            <p className="text-xs text-gray-500">Pendentes</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-green-600">{entregues}</p>
-            <p className="text-xs text-gray-500">Entregues</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total", value: stats.total, color: "text-gray-700", bg: "bg-gray-50" },
+          { label: "Pendentes", value: stats.pendente, color: "text-yellow-700", bg: "bg-yellow-50" },
+          { label: "Entregues", value: stats.entregue, color: "text-green-700", bg: "bg-green-50" },
+          { label: "Volume Total", value: `${stats.volumeTotal} m³`, color: "text-emerald-700", bg: "bg-emerald-50" },
+        ].map(s => (
+          <div key={s.label} className={`${s.bg} rounded-xl p-3`}>
+            <p className="text-xs text-gray-500">{s.label}</p>
+            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
       </div>
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Buscar por motorista, cliente, destino..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <div className="relative">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Filtrar por cliente..."
-            value={filterClient}
-            onChange={e => setFilterClient(e.target.value)}
-            className="pl-10 w-48"
-          />
+          <Input placeholder="Buscar placa, cliente, destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
         </div>
         <select
           value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value as any)}
-          className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}
+          className="h-10 px-3 rounded-md border border-input bg-background text-sm"
         >
           <option value="">Todos os status</option>
           <option value="pendente">Pendente</option>
@@ -464,330 +428,478 @@ export default function CargoControl() {
         </select>
       </div>
 
-      {/* Vista de Acompanhamento por Cliente */}
-      {viewMode === "relatorio" && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-emerald-800">Acompanhamento por Cliente</h2>
-          {byClient.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">Nenhuma carga encontrada</p>
-          ) : (
-            byClient.map(([clientName, data]) => (
-              <Card key={clientName} className="border-l-4 border-l-emerald-500">
+      {/* Lista de Cargas */}
+      {isLoading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <Truck className="h-16 w-16 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium">Nenhuma carga encontrada</p>
+          <p className="text-sm mt-1">Registre a primeira saída de carga</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(cargo => {
+            const trackStep = TRACKING_STEPS.find(s => s.key === cargo.trackingStatus);
+            const photos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson); } catch { return []; } })() : [];
+            return (
+              <Card key={cargo.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div>
-                      <p className="font-bold text-emerald-800">{clientName}</p>
-                      <p className="text-sm text-gray-500">{data.loads.length} carga(s)</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-emerald-700">{data.totalVolume.toFixed(2)}</p>
-                        <p className="text-xs text-gray-400">m³ total</p>
+                  <div className="flex items-start gap-3">
+                    {/* Foto principal */}
+                    {photos[0] ? (
+                      <img src={photos[0]} alt="Carga" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 border border-gray-200" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                        <Package className="h-7 w-7 text-emerald-400" />
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleGenerateReport(clientName)}
-                        className="gap-1 border-emerald-300 text-emerald-700"
-                      >
-                        <Download className="h-3.5 w-3.5" /> PDF
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="font-semibold text-gray-800">
+                          {cargo.vehiclePlate || cargo.vehicleName || "Veículo não informado"}
+                        </span>
+                        <Badge className={`text-xs ${STATUS_COLORS[cargo.status]}`}>{cargo.status}</Badge>
+                        {trackStep && (
+                          <Badge className={`text-xs ${TRACKING_COLORS[cargo.trackingStatus as TrackingStatus]}`}>
+                            {trackStep.icon} {trackStep.label}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                        <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{cargo.date ? new Date(cargo.date).toLocaleDateString("pt-BR") : "-"}</span>
+                        {cargo.driverName && <span className="flex items-center gap-1"><User className="h-3 w-3" />{cargo.driverName}</span>}
+                        {cargo.clientName && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{cargo.clientName}</span>}
+                        {cargo.destination && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{cargo.destination}</span>}
+                        <span className="flex items-center gap-1"><Package className="h-3 w-3" />{cargo.volumeM3} m³{cargo.weightKg ? ` · ${cargo.weightKg} kg` : ""}</span>
+                      </div>
+                    </div>
+                    {/* Ações */}
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Ver detalhes" onClick={() => setDetailId(cargo.id)}>
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" title="Atualizar tracking" onClick={() => { setTrackingCargoId(cargo.id); setTrackingStatus((cargo.trackingStatus as TrackingStatus) || "aguardando"); setTrackingNotes(""); }}>
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Editar" onClick={() => openEdit(cargo)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Gerar PDF" onClick={() => generateCargoPDF(cargo as unknown as Record<string, unknown>)}>
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" title="Excluir" onClick={() => { if (confirm("Remover esta carga?")) deleteMutation.mutate({ id: cargo.id }); }}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-3 space-y-1">
-                    {data.loads.slice(0, 5).map((l: any) => (
-                      <div key={l.id} className="flex items-center justify-between text-xs text-gray-600 py-1 border-b border-gray-100 last:border-0">
-                        <span>{l.date ? new Date(l.date).toLocaleDateString("pt-BR") : "-"} · {l.vehiclePlate || "-"} · {l.driverName || "-"}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-emerald-700">{parseFloat(l.volumeM3 || "0").toFixed(2)} m³</span>
-                          <Badge className={`text-xs ${STATUS_COLORS[l.status]}`}>{STATUS_LABELS[l.status]}</Badge>
-                        </div>
-                      </div>
-                    ))}
-                    {data.loads.length > 5 && (
-                      <p className="text-xs text-gray-400 pt-1">+{data.loads.length - 5} carga(s) adicionais</p>
-                    )}
-                  </div>
                 </CardContent>
               </Card>
-            ))
-          )}
+            );
+          })}
         </div>
       )}
 
-      {/* Lista */}
-      {viewMode === "lista" && (
-        <>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
-            </div>
-          ) : filteredLoads.length === 0 ? (
-            <div className="text-center py-20 text-gray-400">
-              <Truck className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <p className="text-lg font-medium">Nenhuma carga encontrada</p>
-              <p className="text-sm mt-1">Clique em "Nova Carga" para começar</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredLoads.map((load: any) => {
-                const photos: string[] = load.photosJson ? JSON.parse(load.photosJson) : [];
-                return (
-                  <Card key={load.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => openEdit(load)}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-gray-800">
-                              {load.vehiclePlate || "Placa não informada"}
-                            </span>
-                            <Badge className={`text-xs ${STATUS_COLORS[load.status]}`}>
-                              {STATUS_LABELS[load.status]}
-                            </Badge>
-                            {photos.length > 0 && (
-                              <span className="text-xs text-emerald-600 flex items-center gap-1">
-                                <ImageIcon className="h-3 w-3" />{photos.length}
-                              </span>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-xs text-gray-500">
-                            {load.driverName && (
-                              <span className="flex items-center gap-1"><User className="h-3 w-3" />{load.driverName}</span>
-                            )}
-                            {load.destination && (
-                              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{load.destination}</span>
-                            )}
-                            {load.clientName && (
-                              <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{load.clientName}</span>
-                            )}
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {load.date ? new Date(load.date).toLocaleDateString("pt-BR") : "—"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-xl font-bold text-emerald-700">{parseFloat(load.volumeM3 || "0").toFixed(2)}</p>
-                          <p className="text-xs text-gray-400">m³</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Sheet de formulário */}
-      <Sheet open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) { setEditId(null); setForm(emptyForm); setPendingPhotos([]); } }}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader className="mb-4">
-            <SheetTitle className="text-emerald-800">
-              {editId ? "Editar Carga" : "Registrar Nova Carga"}
-            </SheetTitle>
+      {/* ===== DIALOG: FORMULÁRIO DE CARGA ===== */}
+      <Sheet open={isFormOpen} onOpenChange={(v) => { setIsFormOpen(v); if (!v) { setEditId(null); resetForm(); } }}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-emerald-800">{editId ? "Editar Carga" : "Nova Carga"}</SheetTitle>
           </SheetHeader>
-
-          {/* Botão de análise por foto */}
-          <div className="mb-4 p-3 bg-emerald-50 rounded-xl border border-emerald-200">
-            <p className="text-sm font-semibold text-emerald-800 mb-2 flex items-center gap-2">
-              <Camera className="h-4 w-4" /> Preencher por Foto (IA)
-            </p>
-            <p className="text-xs text-emerald-600 mb-3">
-              Tire foto do formulário de recebimento ou ticket de pesagem. A IA vai extrair os dados automaticamente.
-            </p>
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoForAnalysis(f); e.target.value = ""; }}
-            />
-            <input
-              ref={photoInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoForAnalysis(f); e.target.value = ""; }}
-            />
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 gap-2 border-emerald-400 text-emerald-700"
-                disabled={analyzingPhoto}
-                onClick={() => cameraInputRef.current?.click()}
-              >
-                {analyzingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                {analyzingPhoto ? "Analisando..." : "Câmera"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 gap-2 border-emerald-400 text-emerald-700"
-                disabled={analyzingPhoto}
-                onClick={() => photoInputRef.current?.click()}
-              >
-                {analyzingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
-                {analyzingPhoto ? "Analisando..." : "Galeria"}
-              </Button>
-            </div>
-            {(pendingPhotos.length > 0 || existingPhotos.length > 0) && (
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {[...existingPhotos, ...pendingPhotos].map((url, i) => (
-                  <img
-                    key={i}
-                    src={url}
-                    alt="Foto"
-                    className="w-14 h-10 object-cover rounded cursor-pointer hover:opacity-80 border"
-                    onClick={() => setPreviewPhoto(url)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4 pb-8">
+          <form onSubmit={handleSubmit} className="space-y-5 pt-4 pb-8">
+            {/* Data */}
             <div>
               <Label>Data *</Label>
               <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
             </div>
 
-            {/* Veículo e Motorista */}
-            <SectionTitle icon={<Truck className="h-4 w-4" />} title="Veículo e Motorista" open={openSections.veiculo} onToggle={() => toggleSection("veiculo")} />
-            {openSections.veiculo && (
-              <div className="space-y-3 px-1">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Placa do Veículo</Label>
-                    <Input value={form.vehiclePlate} onChange={e => setForm(f => ({ ...f, vehiclePlate: e.target.value.toUpperCase() }))} placeholder="ABC-1234" />
-                  </div>
-                  <div>
-                    <Label>Motorista</Label>
-                    <Input value={form.driverName} onChange={e => setForm(f => ({ ...f, driverName: e.target.value }))} placeholder="Nome do motorista" />
-                  </div>
+            {/* Veículo */}
+            <div className="space-y-3 p-3 bg-blue-50 rounded-xl">
+              <p className="text-sm font-semibold text-blue-800 flex items-center gap-2"><Truck className="h-4 w-4" /> Veículo e Motorista</p>
+              <div>
+                <Label>Caminhão</Label>
+                <select
+                  value={form.vehicleId}
+                  onChange={e => {
+                    const id = parseInt(e.target.value);
+                    const truck = trucks.find(t => t.id === id);
+                    setForm(f => ({ ...f, vehicleId: id, vehiclePlate: truck?.licensePlate || f.vehiclePlate }));
+                  }}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value={0}>Selecionar caminhão cadastrado...</option>
+                  {trucks.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{t.licensePlate ? ` — ${t.licensePlate}` : ""}</option>
+                  ))}
+                </select>
+              </div>
+              {!form.vehicleId && (
+                <div>
+                  <Label>Placa (manual)</Label>
+                  <Input value={form.vehiclePlate} onChange={e => setForm(f => ({ ...f, vehiclePlate: e.target.value.toUpperCase() }))} placeholder="ABC-1234" className="uppercase" />
+                </div>
+              )}
+              <div>
+                <Label>Motorista</Label>
+                <select
+                  value={form.driverCollaboratorId}
+                  onChange={e => {
+                    const id = parseInt(e.target.value);
+                    const driver = drivers.find(d => d.id === id);
+                    setForm(f => ({ ...f, driverCollaboratorId: id, driverName: driver?.name || f.driverName }));
+                  }}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value={0}>Selecionar motorista cadastrado...</option>
+                  {drivers.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              {!form.driverCollaboratorId && (
+                <div>
+                  <Label>Motorista (manual)</Label>
+                  <Input value={form.driverName} onChange={e => setForm(f => ({ ...f, driverName: e.target.value }))} placeholder="Nome do motorista" />
+                </div>
+              )}
+            </div>
+
+            {/* Carga */}
+            <div className="space-y-3 p-3 bg-emerald-50 rounded-xl">
+              <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2"><Package className="h-4 w-4" /> Informações da Carga</p>
+              <div>
+                <Label>Tipo de Madeira</Label>
+                <Input value={form.woodType} onChange={e => setForm(f => ({ ...f, woodType: e.target.value }))} placeholder="ex: Eucalipto, Pinus" />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label>Altura (m) *</Label>
+                  <Input value={form.heightM} onChange={e => setForm(f => ({ ...f, heightM: e.target.value }))} placeholder="0.00" required />
+                </div>
+                <div>
+                  <Label>Largura (m) *</Label>
+                  <Input value={form.widthM} onChange={e => setForm(f => ({ ...f, widthM: e.target.value }))} placeholder="0.00" required />
+                </div>
+                <div>
+                  <Label>Comp. (m) *</Label>
+                  <Input value={form.lengthM} onChange={e => setForm(f => ({ ...f, lengthM: e.target.value }))} placeholder="0.00" required />
                 </div>
               </div>
-            )}
-
-            {/* Medidas da Carga */}
-            <SectionTitle icon={<Package className="h-4 w-4" />} title="Medidas da Carga" open={openSections.carga} onToggle={() => toggleSection("carga")} />
-            {openSections.carga && (
-              <div className="space-y-3 px-1">
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <Label>Altura (m) *</Label>
-                    <Input value={form.heightM} onChange={e => setForm(f => ({ ...f, heightM: e.target.value }))} placeholder="ex: 2.5" required />
-                  </div>
-                  <div>
-                    <Label>Largura (m) *</Label>
-                    <Input value={form.widthM} onChange={e => setForm(f => ({ ...f, widthM: e.target.value }))} placeholder="ex: 2.4" required />
-                  </div>
-                  <div>
-                    <Label>Comprimento (m) *</Label>
-                    <Input value={form.lengthM} onChange={e => setForm(f => ({ ...f, lengthM: e.target.value }))} placeholder="ex: 7.0" required />
-                  </div>
+              {volume && (
+                <div className="bg-white rounded-lg p-2 text-center">
+                  <span className="text-xs text-gray-500">Volume calculado: </span>
+                  <span className="font-bold text-emerald-700">{volume} m³</span>
                 </div>
-
-                {volume && (
-                  <div className="bg-emerald-50 rounded-lg p-3 text-center">
-                    <p className="text-sm text-emerald-600 font-medium">Volume calculado</p>
-                    <p className="text-3xl font-bold text-emerald-700">{volume} <span className="text-lg">m³</span></p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Tipo de Madeira</Label>
-                    <Input value={form.woodType} onChange={e => setForm(f => ({ ...f, woodType: e.target.value }))} placeholder="ex: Eucalipto" />
-                  </div>
-                  <div>
-                    <Label>Nota Fiscal</Label>
-                    <Input value={form.invoiceNumber} onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="Número da NF" />
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Destino</Label>
-                  <Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} placeholder="Cidade ou empresa de destino" />
-                </div>
+              )}
+              <div>
+                <Label className="flex items-center gap-1"><Weight className="h-3.5 w-3.5" /> Peso (kg)</Label>
+                <Input value={form.weightKg} onChange={e => setForm(f => ({ ...f, weightKg: e.target.value }))} placeholder="ex: 15000" type="number" />
               </div>
-            )}
+              <div>
+                <Label>Nº Nota Fiscal</Label>
+                <Input value={form.invoiceNumber} onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="ex: NF-001234" />
+              </div>
+            </div>
 
-            {/* Cliente */}
-            <SectionTitle icon={<FileText className="h-4 w-4" />} title="Cliente" open={openSections.cliente} onToggle={() => toggleSection("cliente")} />
-            {openSections.cliente && (
-              <div className="space-y-3 px-1">
+            {/* Cliente e Destino */}
+            <div className="space-y-3 p-3 bg-purple-50 rounded-xl">
+              <p className="text-sm font-semibold text-purple-800 flex items-center gap-2"><Building2 className="h-4 w-4" /> Cliente e Destino</p>
+              <div>
+                <Label>Cliente</Label>
+                <select
+                  value={form.clientId}
+                  onChange={e => {
+                    const id = parseInt(e.target.value);
+                    const client = clientsList.find((c: { id: number; name: string }) => c.id === id);
+                    setForm(f => ({ ...f, clientId: id, clientName: client?.name || f.clientName }));
+                  }}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value={0}>Selecionar cliente cadastrado...</option>
+                  {clientsList.map((c: { id: number; name: string }) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              {!form.clientId && (
                 <div>
-                  <Label>Nome do Cliente</Label>
+                  <Label>Cliente (manual)</Label>
                   <Input value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} placeholder="Nome do cliente" />
                 </div>
-                <div>
-                  <Label>Observações</Label>
-                  <textarea
-                    value={form.notes}
-                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="Observações adicionais..."
-                    className="w-full min-h-[80px] px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                  />
+              )}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label>Destino</Label>
+                  <button type="button" onClick={() => setIsDestinationOpen(true)} className="text-xs text-purple-600 hover:underline flex items-center gap-1">
+                    <Plus className="h-3 w-3" /> Cadastrar novo
+                  </button>
                 </div>
+                <select
+                  value={form.destinationId}
+                  onChange={e => {
+                    const id = parseInt(e.target.value);
+                    const dest = destinations.find(d => d.id === id);
+                    setForm(f => ({ ...f, destinationId: id, destination: dest?.name || f.destination }));
+                  }}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value={0}>Selecionar destino cadastrado...</option>
+                  {destinations.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}</option>
+                  ))}
+                </select>
               </div>
-            )}
+              {!form.destinationId && (
+                <div>
+                  <Label>Destino (manual)</Label>
+                  <Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} placeholder="Nome do destino" />
+                </div>
+              )}
+            </div>
 
-            {/* Status */}
+            {/* Status e Observações */}
+            <div className="space-y-3">
+              <div>
+                <Label>Status</Label>
+                <select
+                  value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value as typeof form.status }))}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value="pendente">Pendente</option>
+                  <option value="entregue">Entregue</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+              <div>
+                <Label>Observações</Label>
+                <textarea
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Observações sobre a carga..."
+                  className="w-full min-h-[80px] px-3 py-2 rounded-md border border-input bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+
+            {/* Fotos */}
             <div>
-              <Label>Status</Label>
-              <select
-                value={form.status}
-                onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="pendente">Pendente</option>
-                <option value="entregue">Entregue</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
+              <Label className="flex items-center gap-2 mb-2"><Camera className="h-4 w-4" /> Fotos da Carga</Label>
+              <div className="flex flex-wrap gap-2">
+                {pendingPhotos.map((p, i) => (
+                  <div key={i} className="relative w-20 h-20">
+                    <img src={p} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border border-gray-200" />
+                    <button type="button" onClick={() => setPendingPhotos(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">×</button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => openFilePicker({ accept: "image/*" }, handleAddPhoto)}
+                  disabled={uploadingPhoto}
+                  className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
+                >
+                  {uploadingPhoto ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Camera className="h-5 w-5" /><span className="text-xs mt-1">Foto</span></>}
+                </button>
+              </div>
             </div>
 
-            <div className="flex gap-3 pt-4 border-t">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setIsOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={isPending || analyzingPhoto}>
-                {isPending ? "Salvando..." : editId ? "Salvar" : "Registrar Carga"}
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setIsFormOpen(false)}>Cancelar</Button>
+              <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={createMutation.isPending || updateMutation.isPending}>
+                {createMutation.isPending || updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : editId ? "Salvar" : "Registrar Carga"}
               </Button>
             </div>
-
-            {editId && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full text-red-600 border-red-200 hover:bg-red-50"
-                onClick={() => {
-                  if (confirm("Remover esta carga?")) {
-                    deleteMutation.mutate({ id: editId });
-                    setIsOpen(false);
-                  }
-                }}
-              >
-                Remover Carga
-              </Button>
-            )}
           </form>
         </SheetContent>
       </Sheet>
 
-      {/* Preview de foto */}
-      {previewPhoto && (
-        <Dialog open={!!previewPhoto} onOpenChange={() => setPreviewPhoto(null)}>
-          <DialogContent className="max-w-2xl">
-            <div className="flex items-center justify-center">
-              <img src={previewPhoto} alt="Preview" className="max-w-full max-h-[75vh] object-contain rounded" />
+      {/* ===== DIALOG: DETALHE DA CARGA ===== */}
+      <Dialog open={!!detailId} onOpenChange={v => { if (!v) setDetailId(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-800">Detalhes da Carga #{detailId}</DialogTitle>
+          </DialogHeader>
+          {detailCargo && (
+            <div className="space-y-4">
+              {/* Tracking timeline */}
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Acompanhamento</p>
+                <div className="flex flex-wrap gap-2">
+                  {TRACKING_STEPS.map((step, idx) => {
+                    const currentIdx = TRACKING_STEPS.findIndex(s => s.key === detailCargo.trackingStatus);
+                    const cls = idx < currentIdx ? "bg-green-100 text-green-700" : idx === currentIdx ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-400";
+                    return (
+                      <span key={step.key} className={`text-xs px-3 py-1.5 rounded-full font-medium flex items-center gap-1 ${cls}`}>
+                        {step.icon} {step.label}
+                      </span>
+                    );
+                  })}
+                </div>
+                {detailCargo.trackingNotes && <p className="text-sm text-gray-600 mt-2 italic">"{detailCargo.trackingNotes}"</p>}
+              </div>
+
+              {/* Dados */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {[
+                  ["Data", detailCargo.date ? new Date(detailCargo.date).toLocaleDateString("pt-BR") : "-"],
+                  ["Veículo", detailCargo.vehiclePlate || detailCargo.vehicleName || "-"],
+                  ["Motorista", detailCargo.driverName || "-"],
+                  ["Cliente", detailCargo.clientName || "-"],
+                  ["Destino", detailCargo.destination || "-"],
+                  ["Tipo de Madeira", detailCargo.woodType || "-"],
+                  ["Volume", `${detailCargo.volumeM3} m³`],
+                  ["Peso", detailCargo.weightKg ? `${detailCargo.weightKg} kg` : "-"],
+                  ["Nota Fiscal", detailCargo.invoiceNumber || "-"],
+                  ["Status", detailCargo.status],
+                ].map(([label, value]) => (
+                  <div key={label} className="bg-gray-50 rounded-lg p-2">
+                    <p className="text-xs text-gray-500">{label}</p>
+                    <p className="font-medium text-gray-800">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Fotos de pesagem */}
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Fotos de Pesagem</p>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Pesagem Saída</p>
+                    {detailCargo.weightOutPhotoUrl ? (
+                      <img src={detailCargo.weightOutPhotoUrl} alt="Pesagem saída" className="w-full h-32 object-cover rounded-lg border" />
+                    ) : (
+                      <button onClick={() => handleWeightPhoto("weight_out", detailCargo.id)} className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-emerald-400 text-xs gap-1">
+                        <Camera className="h-5 w-5" /> Adicionar foto
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Pesagem Chegada</p>
+                    {detailCargo.weightInPhotoUrl ? (
+                      <img src={detailCargo.weightInPhotoUrl} alt="Pesagem chegada" className="w-full h-32 object-cover rounded-lg border" />
+                    ) : (
+                      <button onClick={() => handleWeightPhoto("weight_in", detailCargo.id)} className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-emerald-400 text-xs gap-1">
+                        <Camera className="h-5 w-5" /> Adicionar foto
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fotos da carga */}
+              {detailCargo.photosJson && (() => {
+                try {
+                  const photos: string[] = JSON.parse(detailCargo.photosJson);
+                  if (!photos.length) return null;
+                  return (
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 mb-2">Fotos da Carga ({photos.length})</p>
+                      <div className="flex flex-wrap gap-2">
+                        {photos.map((p, i) => (
+                          <img key={i} src={p} alt={`Foto ${i + 1}`} className="w-24 h-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90" onClick={() => window.open(p, "_blank")} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                } catch { return null; }
+              })()}
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1 gap-2" onClick={() => { setDetailId(null); openEdit(detailCargo as unknown as typeof loads[number]); }}>
+                  <Pencil className="h-4 w-4" /> Editar
+                </Button>
+                <Button className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => generateCargoPDF(detailCargo as unknown as Record<string, unknown>)}>
+                  <Download className="h-4 w-4" /> Gerar PDF
+                </Button>
+              </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: ATUALIZAR TRACKING ===== */}
+      <Dialog open={!!trackingCargoId} onOpenChange={v => { if (!v) setTrackingCargoId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-800">Atualizar Acompanhamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              {TRACKING_STEPS.map(step => (
+                <button
+                  key={step.key}
+                  type="button"
+                  onClick={() => setTrackingStatus(step.key)}
+                  className={`p-3 rounded-xl border-2 text-sm font-medium transition-all text-left ${trackingStatus === step.key ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-gray-200 hover:border-emerald-300"}`}
+                >
+                  <span className="text-lg">{step.icon}</span>
+                  <p className="mt-1">{step.label}</p>
+                </button>
+              ))}
+            </div>
+            <div>
+              <Label>Observação (opcional)</Label>
+              <textarea
+                value={trackingNotes}
+                onChange={e => setTrackingNotes(e.target.value)}
+                placeholder="ex: Saiu da fazenda às 14h30..."
+                className="w-full min-h-[80px] px-3 py-2 rounded-md border border-input bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring mt-1"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setTrackingCargoId(null)}>Cancelar</Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={updateTracking.isPending}
+                onClick={() => {
+                  if (trackingCargoId) {
+                    updateTracking.mutate({ id: trackingCargoId, trackingStatus, trackingNotes: trackingNotes || undefined });
+                  }
+                }}
+              >
+                {updateTracking.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: CADASTRAR DESTINO ===== */}
+      <Dialog open={isDestinationOpen} onOpenChange={setIsDestinationOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cadastrar Destino</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nome do Destino *</Label>
+              <Input value={newDestName} onChange={e => setNewDestName(e.target.value)} placeholder="ex: Fazenda São João, Usina Boa Vista" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Cidade</Label>
+                <Input value={newDestCity} onChange={e => setNewDestCity(e.target.value)} placeholder="Cidade" />
+              </div>
+              <div>
+                <Label>Estado</Label>
+                <Input value={newDestState} onChange={e => setNewDestState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} className="uppercase" />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setIsDestinationOpen(false)}>Cancelar</Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!newDestName || createDestination.isPending}
+                onClick={() => createDestination.mutate({ name: newDestName, city: newDestCity || undefined, state: newDestState || undefined })}
+              >
+                {createDestination.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
