@@ -1,0 +1,25 @@
+{
+  "query": "SHOW TABLES LIKE 'gps%'; SHOW TABLES LIKE 'preventive%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute SHOW TABLES LIKE 'gps%'; SHOW TABLES LIKE 'preventive%';",
+  "rows": [
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (gps%)": "gps_device_links"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (gps%)": "gps_hours_log"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (gps%)": "Tables_in_MXrNdjKBoryW8SZbHmjeHH (preventive%)"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (gps%)": "preventive_maintenance_alerts"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (gps%)": "preventive_maintenance_plans"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_MXrNdjKBoryW8SZbHmjeHH (gps%)\ngps_device_links\ngps_hours_log\nTables_in_MXrNdjKBoryW8SZbHmjeHH (preventive%)\npreventive_maintenance_alerts\npreventive_maintenance_plans\n",
+  "stderr": "",
+  "execution_time_ms": 1566
+}

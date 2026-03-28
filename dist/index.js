@@ -2937,10 +2937,17 @@ init_db();
 init_schema();
 import { eq as eq15, and as and6, desc as desc13, gte as gte3, lte as lte3, sql as sql2 } from "drizzle-orm";
 var TRACCAR_URL = process.env.TRACCAR_URL || "";
-var TRACCAR_EMAIL = process.env.TRACCAR_EMAIL || "";
-var TRACCAR_PASSWORD = process.env.TRACCAR_PASSWORD || "";
+var TRACCAR_TOKEN = process.env.TRACCAR_TOKEN || "";
 function traccarAuth() {
-  const credentials = Buffer.from(`${TRACCAR_EMAIL}:${TRACCAR_PASSWORD}`).toString("base64");
+  if (TRACCAR_TOKEN) {
+    return {
+      Authorization: `Bearer ${TRACCAR_TOKEN}`,
+      "Content-Type": "application/json"
+    };
+  }
+  const email = process.env.TRACCAR_EMAIL || "";
+  const password = process.env.TRACCAR_PASSWORD || "";
+  const credentials = Buffer.from(`${email}:${password}`).toString("base64");
   return {
     Authorization: `Basic ${credentials}`,
     "Content-Type": "application/json"
@@ -2948,7 +2955,7 @@ function traccarAuth() {
 }
 async function traccarFetch(path2, options) {
   if (!TRACCAR_URL) {
-    throw new Error("Traccar nao configurado. Configure TRACCAR_URL, TRACCAR_EMAIL e TRACCAR_PASSWORD.");
+    throw new Error("Traccar nao configurado. Configure TRACCAR_URL e TRACCAR_TOKEN.");
   }
   const url = `${TRACCAR_URL}/api${path2}`;
   const res = await fetch(url, {

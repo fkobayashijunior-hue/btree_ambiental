@@ -683,3 +683,16 @@
 - [x] Geração automática de alertas de manutenção preventiva por horas acumuladas (engraxamento, abastecimento, troca de óleo)
 - [x] Vinculação de dispositivo GPS a equipamento/máquina cadastrada no sistema
 - [x] Alerta visual e notificação quando máquina atingir limiar de horas para manutenção
+
+## 🔗 INTEGRAÇÃO TRACCAR → BTREE (28/03/2026)
+- [x] Configurar secrets TRACCAR_URL e TRACCAR_TOKEN no sistema BTREE (configurado na Hostinger)
+- [x] Atualizar router traccar.ts para usar Bearer Token (TRACCAR_TOKEN) em vez de Basic Auth
+- [x] Instalar @types/cors para resolver erros de TypeScript
+- [x] Criar script SQL para tabelas GPS no banco de produção (ATUALIZACAO_GPS_HOSTINGER.sql)
+- [x] Criar guia de próximos passos: chips EMnify, configuração EC33, cadastro de dispositivos (GUIA_GPS_PROXIMOS_PASSOS.md)
+- [ ] Executar ATUALIZACAO_GPS_HOSTINGER.sql no phpMyAdmin da Hostinger
+- [ ] Ativar chips EMnify e obter números + APN
+- [ ] Configurar 10 dispositivos EC33 via SMS
+- [ ] Cadastrar 9 dispositivos restantes no Traccar
+- [ ] Vincular GPS aos equipamentos no BTREE
+- [ ] Renovar token Traccar antes de 03/04/2026
