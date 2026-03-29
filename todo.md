@@ -770,3 +770,7 @@
 
 ### SQL para Hostinger
 - [x] Script SQL gerado: 4 novas tabelas (maintenance_templates, maintenance_template_parts, maintenance_parts, parts_stock_movements)
+
+## 🐛 BUGS PRODUÇÃO (29/03/2026)
+- [ ] Equipamentos não aparecem em Setores e Equipamentos (sectorId nulo nos registros antigos)
+- [ ] Formulário de manutenção avançado (peças/templates) não aparece na página /maquinas (EquipmentControlPage) — foi implementado no EquipmentDetail mas a página usada é outra

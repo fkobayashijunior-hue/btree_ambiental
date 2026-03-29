@@ -195,7 +195,7 @@ export default function SectorsEquipment() {
         <p className="text-gray-500 text-sm mt-1">Gerencie os setores da empresa e seus equipamentos</p>
       </div>
 
-      <Tabs defaultValue="setores">
+      <Tabs defaultValue="equipamentos">
         <TabsList className="grid w-full grid-cols-2 max-w-sm">
           <TabsTrigger value="setores">Setores</TabsTrigger>
           <TabsTrigger value="equipamentos">Equipamentos</TabsTrigger>

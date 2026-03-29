@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { toast } from "sonner";
 import {
   Settings, Plus, Clock, Wrench, Fuel, Calendar, AlertTriangle,
-  CheckCircle2, FileDown, Pencil, ChevronDown, ChevronUp
+  CheckCircle2, FileDown, Pencil, ChevronDown, ChevronUp,
+  Package, Search, Trash2
 } from "lucide-react";
 
 type ActiveTab = "resumo" | "horas" | "manutencao" | "abastecimento";
@@ -64,6 +65,19 @@ const emptyMaintForm = {
   nextMaintenanceHours: "",
 };
 
+type PartLine = {
+  partId?: number;
+  partCode: string;
+  partName: string;
+  partPhotoUrl?: string;
+  quantity: number;
+  unit: string;
+  unitCost: string;
+  totalCost: string;
+  fromStock: number; // 1 = do estoque, 0 = externo
+  stockQty?: number;
+};
+
 const emptyFuelForm = {
   equipmentId: "",
   date: new Date().toISOString().slice(0, 10),
@@ -88,6 +102,11 @@ export default function MachineHoursPage() {
   const [maintForm, setMaintForm] = useState({ ...emptyMaintForm });
   const [fuelForm, setFuelForm] = useState({ ...emptyFuelForm });
 
+  // Peças da manutenção
+  const [partLines, setPartLines] = useState<PartLine[]>([]);
+  const [partSearch, setPartSearch] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+
   const utils = trpc.useUtils();
 
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
@@ -96,6 +115,72 @@ export default function MachineHoursPage() {
   const { data: fuel = [], isLoading: loadingFuel } = trpc.machineHours.listFuel.useQuery({});
   const { data: alerts = [] } = trpc.machineHours.maintenanceAlerts.useQuery();
   const { data: summary = [] } = trpc.machineHours.equipmentSummary.useQuery();
+
+  // Peças e templates
+  const { data: allParts = [] } = trpc.parts.listParts.useQuery({});
+  const { data: templates = [] } = trpc.equipmentDetail.listTemplates.useQuery();
+  const addMaintenanceParts = trpc.equipmentDetail.addMaintenance.useMutation();
+
+  // Busca de peças por código/nome
+  const partResults = useMemo(() => {
+    if (!partSearch || partSearch.length < 2) return [];
+    const s = partSearch.toLowerCase();
+    return (allParts as any[]).filter((p: any) =>
+      (p.code?.toLowerCase() ?? "").includes(s) || (p.name?.toLowerCase() ?? "").includes(s)
+    ).slice(0, 5);
+  }, [allParts, partSearch]);
+
+  const addPartFromSearch = useCallback((p: any) => {
+    setPartLines(prev => [...prev, {
+      partId: p.id,
+      partCode: p.code || "",
+      partName: p.name,
+      partPhotoUrl: p.imageUrl || undefined,
+      quantity: 1,
+      unit: p.unit || "un",
+      unitCost: p.unitCost || "0",
+      totalCost: p.unitCost || "0",
+      fromStock: 1,
+      stockQty: p.stockQuantity ?? 0,
+    }]);
+    setPartSearch("");
+  }, []);
+
+  const loadTemplate = useCallback((templateId: string) => {
+    const tmpl = (templates as any[]).find((t: any) => String(t.id) === templateId);
+    if (!tmpl?.parts) return;
+    const lines: PartLine[] = (tmpl.parts as any[]).map((tp: any) => {
+      const part = (allParts as any[]).find((p: any) => p.id === tp.partId);
+      return {
+        partId: tp.partId || undefined,
+        partCode: tp.partCode || part?.code || "",
+        partName: tp.partName || part?.name || "",
+        partPhotoUrl: part?.imageUrl || undefined,
+        quantity: tp.quantity || 1,
+        unit: tp.unit || "un",
+        unitCost: part?.unitCost || "0",
+        totalCost: String(parseFloat(part?.unitCost || "0") * (tp.quantity || 1)),
+        fromStock: 1,
+        stockQty: part?.stockQuantity ?? 0,
+      };
+    });
+    setPartLines(lines);
+  }, [templates, allParts]);
+
+  const updatePartLine = (idx: number, field: keyof PartLine, value: any) => {
+    setPartLines(prev => prev.map((p, i) => {
+      if (i !== idx) return p;
+      const updated = { ...p, [field]: value };
+      if (field === "quantity" || field === "unitCost") {
+        updated.totalCost = String(parseFloat(updated.unitCost || "0") * (parseFloat(String(updated.quantity)) || 1));
+      }
+      return updated;
+    }));
+  };
+
+  const totalPartsCost = useMemo(() =>
+    partLines.reduce((sum, p) => sum + parseFloat(p.totalCost || "0"), 0)
+  , [partLines]);
 
   const equipMap = Object.fromEntries((equipmentList as any[]).map((eq: any) => [eq.id, eq.name]));
 
@@ -133,6 +218,9 @@ export default function MachineHoursPage() {
     setHoursForm({ ...emptyHoursForm });
     setMaintForm({ ...emptyMaintForm });
     setFuelForm({ ...emptyFuelForm });
+    setPartLines([]);
+    setPartSearch("");
+    setSelectedTemplateId("");
     setEditingId(null);
   };
 
@@ -217,10 +305,24 @@ export default function MachineHoursPage() {
         totalCost: maintForm.totalCost || undefined,
         nextMaintenanceHours: maintForm.nextMaintenanceHours || undefined,
       };
+      // Incluir peças como JSON no campo partsReplaced
+      const payloadWithParts = {
+        ...payload,
+        partsReplaced: partLines.length > 0 ? JSON.stringify(partLines.map(p => ({
+          partId: p.partId,
+          code: p.partCode,
+          name: p.partName,
+          qty: p.quantity,
+          unit: p.unit,
+          unitCost: p.unitCost,
+          totalCost: p.totalCost,
+        }))) : undefined,
+        totalCost: maintForm.totalCost || String(totalPartsCost + parseFloat(maintForm.laborCost || "0")),
+      };
       if (editingId) {
         updateMaintMutation.mutate({ id: editingId, ...payload });
       } else {
-        createMaintMutation.mutate(payload);
+        createMaintMutation.mutate(payloadWithParts);
       }
     } else {
       createFuelMutation.mutate({
@@ -737,6 +839,117 @@ export default function MachineHoursPage() {
                   <Label>Descrição do Serviço</Label>
                   <textarea value={maintForm.description} onChange={e => setMaintForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o serviço realizado..." className="w-full min-h-[80px] px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
                 </div>
+
+                {/* ===== SEÇÃO DE PEÇAS ===== */}
+                <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-emerald-600" />
+                    <span className="font-medium text-sm">Peças Utilizadas</span>
+                    {partLines.length > 0 && (
+                      <span className="ml-auto text-xs text-emerald-700 font-semibold">
+                        Total peças: R$ {totalPartsCost.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Carregar template */}
+                  {(templates as any[]).length > 0 && (
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedTemplateId}
+                        onChange={e => { setSelectedTemplateId(e.target.value); if (e.target.value) loadTemplate(e.target.value); }}
+                        className="flex-1 h-8 px-2 rounded-md border border-input bg-white text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        <option value="">📋 Carregar template de manutenção...</option>
+                        {(templates as any[]).map((t: any) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Busca de peça */}
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
+                    <Input
+                      value={partSearch}
+                      onChange={e => setPartSearch(e.target.value)}
+                      placeholder="Buscar peça por código ou nome..."
+                      className="pl-7 h-8 text-xs"
+                    />
+                    {partResults.length > 0 && (
+                      <div className="absolute z-50 top-9 left-0 right-0 bg-white border rounded-md shadow-lg">
+                        {partResults.map((p: any) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => addPartFromSearch(p)}
+                            className="w-full text-left px-3 py-2 hover:bg-emerald-50 flex items-center gap-2 text-xs border-b last:border-0"
+                          >
+                            {p.imageUrl && <img src={p.imageUrl} className="h-6 w-6 rounded object-cover" />}
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium">{p.name}</span>
+                              {p.code && <span className="text-gray-400 ml-1">({p.code})</span>}
+                            </div>
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                              (p.stockQuantity ?? 0) > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                            }`}>
+                              {(p.stockQuantity ?? 0) > 0 ? `${p.stockQuantity} em estoque` : "Sem estoque"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Lista de peças adicionadas */}
+                  {partLines.length > 0 && (
+                    <div className="space-y-2">
+                      {partLines.map((p, idx) => (
+                        <div key={idx} className="flex items-center gap-2 bg-white border rounded-md p-2">
+                          {p.partPhotoUrl && <img src={p.partPhotoUrl} className="h-8 w-8 rounded object-cover flex-shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{p.partName}</p>
+                            {p.partCode && <p className="text-xs text-gray-400">{p.partCode}</p>}
+                            {p.stockQty !== undefined && (
+                              <span className={`text-xs ${
+                                p.stockQty >= p.quantity ? "text-green-600" : "text-orange-500"
+                              }`}>
+                                {p.stockQty >= p.quantity ? "✓ Estoque ok" : `⚠ Estoque: ${p.stockQty}`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={p.quantity}
+                              onChange={e => updatePartLine(idx, "quantity", parseInt(e.target.value) || 1)}
+                              className="h-7 w-14 text-xs text-center"
+                            />
+                            <Input
+                              value={p.unitCost}
+                              onChange={e => updatePartLine(idx, "unitCost", e.target.value)}
+                              className="h-7 w-20 text-xs"
+                              placeholder="R$"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setPartLines(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-red-400 hover:text-red-600 p-1"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {partLines.length === 0 && (
+                    <p className="text-xs text-gray-400 text-center py-1">Nenhuma peça adicionada</p>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Mão de Obra (R$)</Label>
@@ -744,7 +957,11 @@ export default function MachineHoursPage() {
                   </div>
                   <div>
                     <Label>Custo Total (R$)</Label>
-                    <Input value={maintForm.totalCost} onChange={e => setMaintForm(f => ({ ...f, totalCost: e.target.value }))} placeholder="0,00" />
+                    <Input
+                      value={maintForm.totalCost || (totalPartsCost + parseFloat(maintForm.laborCost || "0")).toFixed(2)}
+                      onChange={e => setMaintForm(f => ({ ...f, totalCost: e.target.value }))}
+                      placeholder="0,00"
+                    />
                   </div>
                 </div>
                 <div>
