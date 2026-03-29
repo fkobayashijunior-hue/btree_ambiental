@@ -82,10 +82,10 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "revision": "1872c500de691dce40960bb85481de07"
   }, {
     "url": "pwa-512.png",
-    "revision": "466fc952a5046a5b8f5ace502edbd1e0"
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
   }, {
     "url": "pwa-192.png",
-    "revision": "f8ee9d917e0e220bdeee675f08103058"
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "index.html",
     "revision": "202dc9e43b969806c3d065e642cc5e11"
@@ -118,13 +118,13 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "revision": "45b1e83bacf2dc3d3b20bb18b465abe0"
   }, {
     "url": "pwa-192.png",
-    "revision": "f8ee9d917e0e220bdeee675f08103058"
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "pwa-512.png",
-    "revision": "466fc952a5046a5b8f5ace502edbd1e0"
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
   }, {
     "url": "manifest.webmanifest",
-    "revision": "fc43f11ce0631d701d8af05ca3310afc"
+    "revision": "ad7e55b2c666b2f4c43abc020a19470b"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));

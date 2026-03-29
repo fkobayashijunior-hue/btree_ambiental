@@ -173,7 +173,7 @@ const plugins = [
       short_name: "BTREE",
       description: "Sistema de gestão BTREE Ambiental",
       theme_color: "#1b5e20",
-      background_color: "#ffffff",
+      background_color: "#1c3a28",
       display: "standalone",
       orientation: "portrait",
       start_url: "/dashboard",

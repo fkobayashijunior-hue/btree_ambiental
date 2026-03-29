@@ -774,3 +774,8 @@
 ## 🐛 BUGS PRODUÇÃO (29/03/2026)
 - [ ] Equipamentos não aparecem em Setores e Equipamentos (sectorId nulo nos registros antigos)
 - [ ] Formulário de manutenção avançado (peças/templates) não aparece na página /maquinas (EquipmentControlPage) — foi implementado no EquipmentDetail mas a página usada é outra
+
+## 🎨 ÍCONE PWA SIMPLIFICADO (29/03/2026)
+- [x] Gerar ícone PWA com símbolo de árvores + BTREE AMBIENTAL em branco sobre fundo verde escuro
+- [x] Substituir pwa-192.png (192x192, 34KB) e pwa-512.png (512x512, 217KB) no projeto
+- [x] Atualizar manifest PWA com background_color #1c3a28
