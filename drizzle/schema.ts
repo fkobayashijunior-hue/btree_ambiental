@@ -683,3 +683,71 @@ export const preventiveMaintenanceAlerts = mysqlTable("preventive_maintenance_al
 });
 export type PreventiveMaintenanceAlert = typeof preventiveMaintenanceAlerts.$inferSelect;
 export type InsertPreventiveMaintenanceAlert = typeof preventiveMaintenanceAlerts.$inferInsert;
+
+// ===== TEMPLATES DE MANUTENÇÃO =====
+// Define quais peças são necessárias para cada tipo de manutenção
+export const maintenanceTemplates = mysqlTable("maintenance_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(), // ex: "Troca de Óleo Motor"
+  type: mysqlEnum("type", ["preventiva", "corretiva", "revisao"]).notNull().default("preventiva"),
+  description: text("description"),
+  estimatedCost: varchar("estimated_cost", { length: 20 }),
+  active: int("active").default(1).notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type MaintenanceTemplate = typeof maintenanceTemplates.$inferSelect;
+export type InsertMaintenanceTemplate = typeof maintenanceTemplates.$inferInsert;
+
+// ===== PEÇAS DO TEMPLATE =====
+// Peças que compõem cada template de manutenção
+export const maintenanceTemplateParts = mysqlTable("maintenance_template_parts", {
+  id: int("id").autoincrement().primaryKey(),
+  templateId: int("template_id").notNull().references(() => maintenanceTemplates.id, { onDelete: "cascade" }),
+  partId: int("part_id").references(() => parts.id, { onDelete: "set null" }),
+  partCode: varchar("part_code", { length: 50 }), // cache do código
+  partName: varchar("part_name", { length: 255 }).notNull(), // cache do nome
+  quantity: int("quantity").notNull().default(1),
+  unit: varchar("unit", { length: 20 }).default("un"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type MaintenanceTemplatePart = typeof maintenanceTemplateParts.$inferSelect;
+export type InsertMaintenanceTemplatePart = typeof maintenanceTemplateParts.$inferInsert;
+
+// ===== PEÇAS USADAS EM MANUTENÇÃO =====
+// Registra cada peça utilizada em uma manutenção executada
+export const maintenanceParts = mysqlTable("maintenance_parts", {
+  id: int("id").autoincrement().primaryKey(),
+  maintenanceId: int("maintenance_id").notNull().references(() => equipmentMaintenance.id, { onDelete: "cascade" }),
+  partId: int("part_id").references(() => parts.id, { onDelete: "set null" }),
+  partCode: varchar("part_code", { length: 50 }),
+  partName: varchar("part_name", { length: 255 }).notNull(),
+  partPhotoUrl: text("part_photo_url"),
+  quantity: int("quantity").notNull().default(1),
+  unit: varchar("unit", { length: 20 }).default("un"),
+  unitCost: varchar("unit_cost", { length: 20 }),
+  totalCost: varchar("total_cost", { length: 20 }),
+  fromStock: int("from_stock").default(1), // 1 = baixou do estoque, 0 = compra avulsa
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type MaintenancePart = typeof maintenanceParts.$inferSelect;
+export type InsertMaintenancePart = typeof maintenanceParts.$inferInsert;
+
+// ===== MOVIMENTAÇÃO DE ESTOQUE DE PEÇAS =====
+export const partsStockMovements = mysqlTable("parts_stock_movements", {
+  id: int("id").autoincrement().primaryKey(),
+  partId: int("part_id").notNull().references(() => parts.id, { onDelete: "cascade" }),
+  type: mysqlEnum("type", ["entrada", "saida"]).notNull(),
+  quantity: int("quantity").notNull(),
+  reason: varchar("reason", { length: 255 }), // ex: "Compra", "Uso em manutenção #42"
+  referenceId: int("reference_id"), // ID da manutenção ou pedido de compra
+  referenceType: varchar("reference_type", { length: 50 }), // "maintenance" | "purchase_order"
+  unitCost: varchar("unit_cost", { length: 20 }),
+  notes: text("notes"),
+  registeredBy: int("registered_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type PartsStockMovement = typeof partsStockMovements.$inferSelect;
+export type InsertPartsStockMovement = typeof partsStockMovements.$inferInsert;

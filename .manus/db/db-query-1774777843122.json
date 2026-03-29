@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COUNT(*) as total FROM equipment;\nSELECT e.id, e.name, e.brand, e.model, e.serial_number, e.license_plate, e.status, e.sector_id, et.name as type_name \nFROM equipment e \nLEFT JOIN equipment_types et ON e.type_id = et.id \nORDER BY e.id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute SELECT COUNT(*) as total FROM equipment;\nSELECT e.id, e.name, e.brand, e.model, e.serial_number, e.license_plate, e.status, e.sector_id, et.name as type_name \nFROM equipment e \nLEFT JOIN equipment_types et ON e.type_id = et.id \nORDER BY e.id;",
+  "rows": [
+    {
+      "total": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\n0\n",
+  "stderr": "",
+  "execution_time_ms": 402
+}

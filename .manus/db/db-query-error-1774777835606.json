@@ -1,0 +1,10 @@
+{
+  "query": "SELECT COUNT(*) as total FROM equipment;\nSELECT id, name, type, sector_id, serial_number, license_plate, active FROM equipment LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute SELECT COUNT(*) as total FROM equipment;\nSELECT id, name, type, sector_id, serial_number, license_plate, active FROM equipment LIMIT 20;",
+  "returncode": 1,
+  "logs": [
+    "total",
+    "0",
+    "ERROR 1054 (42S22) at line 2: Unknown column 'type' in 'field list'"
+  ]
+}

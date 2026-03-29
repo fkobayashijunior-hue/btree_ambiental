@@ -743,3 +743,30 @@
 - [x] Ícones PWA gerados (pwa-192.png, pwa-512.png)
 - [ ] Integrar useOfflineQueue nos formulários de presença, abastecimento, horas de máquina e cargas
 - [ ] Suporte offline completo testado em campo
+
+## 🔩 SISTEMA DE PEÇAS E MANUTENÇÃO AVANÇADO (29/03/2026)
+
+### Cadastro de Peças
+- [x] Cadastro de peça com: código, nome, descrição, categoria, valor unitário, imagem, estoque atual
+- [x] Busca de peça por código (autocomplete) no formulário de manutenção
+- [x] Ao selecionar código, preencher automaticamente nome, valor e imagem da peça
+- [x] Controle de estoque: entrada (compra) e saída (uso em manutenção) com movimentação automática
+- [x] Indicador visual: "Em estoque" / "Sem estoque" / "Estoque baixo" no formulário de manutenção
+
+### Templates de Manutenção por Tipo
+- [x] Cadastro de templates: ex. "Troca de Óleo Motor" → lista de peças necessárias
+- [x] Ao selecionar template, sistema carrega automaticamente as peças com consulta de estoque
+- [x] Sistema indica disponibilidade de cada peça (verde = tem estoque, laranja = insuficiente)
+- [x] Peças adicionadas automaticamente com código, valor e imagem
+
+### Ficha Completa de Manutenção
+- [x] Ficha de manutenção com: equipamento, data, tipo, mecânico responsável
+- [x] Lista de peças utilizadas: código, nome, quantidade, valor unitário, valor total, imagem
+- [x] Campo de mão de obra (serviços): valor
+- [x] Custo total automático (peças + mão de obra)
+- [x] Fotos da manutenção
+- [x] Geração de PDF da ficha completa de manutenção com fotos das peças
+- [x] Ao salvar, baixar estoque automaticamente das peças utilizadas + registrar movimentação
+
+### SQL para Hostinger
+- [x] Script SQL gerado: 4 novas tabelas (maintenance_templates, maintenance_template_parts, maintenance_parts, parts_stock_movements)

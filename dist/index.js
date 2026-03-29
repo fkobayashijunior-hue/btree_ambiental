@@ -50,8 +50,12 @@ __export(schema_exports, {
   machineFuel: () => machineFuel,
   machineHours: () => machineHours,
   machineMaintenance: () => machineMaintenance,
+  maintenanceParts: () => maintenanceParts,
+  maintenanceTemplateParts: () => maintenanceTemplateParts,
+  maintenanceTemplates: () => maintenanceTemplates,
   parts: () => parts,
   partsRequests: () => partsRequests,
+  partsStockMovements: () => partsStockMovements,
   passwordResetTokens: () => passwordResetTokens,
   preventiveMaintenanceAlerts: () => preventiveMaintenanceAlerts,
   preventiveMaintenancePlans: () => preventiveMaintenancePlans,
@@ -65,7 +69,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts;
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -673,6 +677,62 @@ var init_schema = __esm({
       resolvedAt: timestamp("resolved_at"),
       resolvedBy: int("resolved_by").references(() => users.id),
       notes: text("notes"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    maintenanceTemplates = mysqlTable("maintenance_templates", {
+      id: int("id").autoincrement().primaryKey(),
+      name: varchar("name", { length: 255 }).notNull(),
+      // ex: "Troca de Óleo Motor"
+      type: mysqlEnum("type", ["preventiva", "corretiva", "revisao"]).notNull().default("preventiva"),
+      description: text("description"),
+      estimatedCost: varchar("estimated_cost", { length: 20 }),
+      active: int("active").default(1).notNull(),
+      createdBy: int("created_by").references(() => users.id),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    maintenanceTemplateParts = mysqlTable("maintenance_template_parts", {
+      id: int("id").autoincrement().primaryKey(),
+      templateId: int("template_id").notNull().references(() => maintenanceTemplates.id, { onDelete: "cascade" }),
+      partId: int("part_id").references(() => parts.id, { onDelete: "set null" }),
+      partCode: varchar("part_code", { length: 50 }),
+      // cache do código
+      partName: varchar("part_name", { length: 255 }).notNull(),
+      // cache do nome
+      quantity: int("quantity").notNull().default(1),
+      unit: varchar("unit", { length: 20 }).default("un"),
+      notes: text("notes"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    maintenanceParts = mysqlTable("maintenance_parts", {
+      id: int("id").autoincrement().primaryKey(),
+      maintenanceId: int("maintenance_id").notNull().references(() => equipmentMaintenance.id, { onDelete: "cascade" }),
+      partId: int("part_id").references(() => parts.id, { onDelete: "set null" }),
+      partCode: varchar("part_code", { length: 50 }),
+      partName: varchar("part_name", { length: 255 }).notNull(),
+      partPhotoUrl: text("part_photo_url"),
+      quantity: int("quantity").notNull().default(1),
+      unit: varchar("unit", { length: 20 }).default("un"),
+      unitCost: varchar("unit_cost", { length: 20 }),
+      totalCost: varchar("total_cost", { length: 20 }),
+      fromStock: int("from_stock").default(1),
+      // 1 = baixou do estoque, 0 = compra avulsa
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    partsStockMovements = mysqlTable("parts_stock_movements", {
+      id: int("id").autoincrement().primaryKey(),
+      partId: int("part_id").notNull().references(() => parts.id, { onDelete: "cascade" }),
+      type: mysqlEnum("type", ["entrada", "saida"]).notNull(),
+      quantity: int("quantity").notNull(),
+      reason: varchar("reason", { length: 255 }),
+      // ex: "Compra", "Uso em manutenção #42"
+      referenceId: int("reference_id"),
+      // ID da manutenção ou pedido de compra
+      referenceType: varchar("reference_type", { length: 50 }),
+      // "maintenance" | "purchase_order"
+      unitCost: varchar("unit_cost", { length: 20 }),
+      notes: text("notes"),
+      registeredBy: int("registered_by").references(() => users.id),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
   }
@@ -2777,22 +2837,21 @@ import { z as z12 } from "zod";
 init_db();
 init_schema();
 init_cloudinary();
-import { eq as eq12, desc as desc10 } from "drizzle-orm";
+import { eq as eq12, desc as desc10, and as and5 } from "drizzle-orm";
 var equipmentDetailRouter = router({
-  // Buscar equipamento por ID
+  // ─── Equipamento ────────────────────────────────────────────────────────────
   getById: protectedProcedure.input(z12.object({ id: z12.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const result = await db.select().from(equipment).where(eq12(equipment.id, input.id)).limit(1);
     return result[0] || null;
   }),
-  // Listar fotos do equipamento
+  // ─── Fotos ──────────────────────────────────────────────────────────────────
   listPhotos: protectedProcedure.input(z12.object({ equipmentId: z12.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     return db.select().from(equipmentPhotos).where(eq12(equipmentPhotos.equipmentId, input.equipmentId)).orderBy(desc10(equipmentPhotos.createdAt));
   }),
-  // Adicionar foto ao equipamento
   addPhoto: protectedProcedure.input(z12.object({
     equipmentId: z12.number(),
     photoBase64: z12.string(),
@@ -2809,20 +2868,103 @@ var equipmentDetailRouter = router({
     });
     return { id: ins.insertId, url: result.url };
   }),
-  // Remover foto
   removePhoto: protectedProcedure.input(z12.object({ id: z12.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.delete(equipmentPhotos).where(eq12(equipmentPhotos.id, input.id));
     return { success: true };
   }),
-  // Listar histórico de manutenções
+  updateMainPhoto: protectedProcedure.input(z12.object({ id: z12.number(), photoBase64: z12.string() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const result = await cloudinaryUpload(input.photoBase64, `btree/equipment/main`);
+    await db.update(equipment).set({ imageUrl: result.url }).where(eq12(equipment.id, input.id));
+    return { url: result.url };
+  }),
+  // ─── Templates de Manutenção ────────────────────────────────────────────────
+  listTemplates: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const templates = await db.select().from(maintenanceTemplates).where(eq12(maintenanceTemplates.active, 1)).orderBy(maintenanceTemplates.name);
+    return templates;
+  }),
+  getTemplateWithParts: protectedProcedure.input(z12.object({ templateId: z12.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [template] = await db.select().from(maintenanceTemplates).where(eq12(maintenanceTemplates.id, input.templateId)).limit(1);
+    if (!template) return null;
+    const templateParts = await db.select().from(maintenanceTemplateParts).where(eq12(maintenanceTemplateParts.templateId, input.templateId));
+    const partsWithStock = await Promise.all(templateParts.map(async (tp) => {
+      if (!tp.partId) return { ...tp, stockQuantity: 0, unitCost: null, photoUrl: null };
+      const [part] = await db.select().from(parts).where(eq12(parts.id, tp.partId)).limit(1);
+      return {
+        ...tp,
+        stockQuantity: part?.stockQuantity ?? 0,
+        unitCost: part?.unitCost ?? null,
+        photoUrl: part?.photoUrl ?? null,
+        minStock: part?.minStock ?? 0
+      };
+    }));
+    return { ...template, parts: partsWithStock };
+  }),
+  createTemplate: protectedProcedure.input(z12.object({
+    name: z12.string().min(2),
+    type: z12.enum(["preventiva", "corretiva", "revisao"]),
+    description: z12.string().optional(),
+    estimatedCost: z12.string().optional(),
+    parts: z12.array(z12.object({
+      partId: z12.number().optional(),
+      partCode: z12.string().optional(),
+      partName: z12.string(),
+      quantity: z12.number().min(1),
+      unit: z12.string().optional(),
+      notes: z12.string().optional()
+    }))
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [ins] = await db.insert(maintenanceTemplates).values({
+      name: input.name,
+      type: input.type,
+      description: input.description,
+      estimatedCost: input.estimatedCost,
+      createdBy: ctx.user.id
+    });
+    const templateId = ins.insertId;
+    if (input.parts.length > 0) {
+      await db.insert(maintenanceTemplateParts).values(
+        input.parts.map((p) => ({ templateId, ...p }))
+      );
+    }
+    return { id: templateId };
+  }),
+  deleteTemplate: protectedProcedure.input(z12.object({ id: z12.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(maintenanceTemplates).where(eq12(maintenanceTemplates.id, input.id));
+    return { success: true };
+  }),
+  // ─── Busca de Peça por Código ────────────────────────────────────────────────
+  searchPartByCode: protectedProcedure.input(z12.object({ code: z12.string() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const results = await db.select().from(parts).where(and5(eq12(parts.active, 1)));
+    const code = input.code.toLowerCase();
+    return results.filter(
+      (p) => p.code?.toLowerCase().includes(code) || p.name.toLowerCase().includes(code)
+    ).slice(0, 10);
+  }),
+  // ─── Manutenções ────────────────────────────────────────────────────────────
   listMaintenance: protectedProcedure.input(z12.object({ equipmentId: z12.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    return db.select().from(equipmentMaintenance).where(eq12(equipmentMaintenance.equipmentId, input.equipmentId)).orderBy(desc10(equipmentMaintenance.performedAt));
+    const maintenances = await db.select().from(equipmentMaintenance).where(eq12(equipmentMaintenance.equipmentId, input.equipmentId)).orderBy(desc10(equipmentMaintenance.performedAt));
+    const result = await Promise.all(maintenances.map(async (m) => {
+      const usedParts = await db.select().from(maintenanceParts).where(eq12(maintenanceParts.maintenanceId, m.id));
+      return { ...m, parts: usedParts };
+    }));
+    return result;
   }),
-  // Registrar manutenção
   addMaintenance: protectedProcedure.input(z12.object({
     equipmentId: z12.number(),
     type: z12.enum(["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]),
@@ -2830,10 +2972,23 @@ var equipmentDetailRouter = router({
     performedBy: z12.string().optional(),
     cost: z12.string().optional(),
     nextMaintenanceDate: z12.string().optional(),
-    // ISO date string
     performedAt: z12.string(),
-    // ISO date string
-    photoBase64: z12.string().optional()
+    photoBase64: z12.string().optional(),
+    templateId: z12.number().optional(),
+    // Peças utilizadas
+    parts: z12.array(z12.object({
+      partId: z12.number().optional(),
+      partCode: z12.string().optional(),
+      partName: z12.string(),
+      partPhotoUrl: z12.string().optional(),
+      quantity: z12.number().min(1),
+      unit: z12.string().optional(),
+      unitCost: z12.string().optional(),
+      fromStock: z12.number().optional()
+      // 1 = baixou estoque, 0 = avulso
+    })).optional(),
+    // Serviços externos
+    laborCost: z12.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -2842,36 +2997,97 @@ var equipmentDetailRouter = router({
       const result = await cloudinaryUpload(input.photoBase64, `btree/maintenance/${input.equipmentId}`);
       photosJson = JSON.stringify([result.url]);
     }
+    let totalParts = 0;
+    const usedParts = input.parts || [];
+    for (const p of usedParts) {
+      if (p.unitCost) {
+        totalParts += parseFloat(p.unitCost.replace(",", ".")) * p.quantity;
+      }
+    }
+    const laborCostNum = input.laborCost ? parseFloat(input.laborCost.replace(",", ".")) : 0;
+    const totalCost = (totalParts + laborCostNum).toFixed(2);
     const [ins] = await db.insert(equipmentMaintenance).values({
       equipmentId: input.equipmentId,
       type: input.type,
       description: input.description,
       performedBy: input.performedBy,
-      cost: input.cost,
+      cost: totalCost,
       nextMaintenanceDate: input.nextMaintenanceDate ? new Date(input.nextMaintenanceDate) : void 0,
       performedAt: new Date(input.performedAt),
       photosJson,
       registeredBy: ctx.user.id
     });
-    return { id: ins.insertId };
+    const maintenanceId = ins.insertId;
+    if (usedParts.length > 0) {
+      for (const p of usedParts) {
+        const totalCostPart = p.unitCost ? (parseFloat(p.unitCost.replace(",", ".")) * p.quantity).toFixed(2) : void 0;
+        await db.insert(maintenanceParts).values({
+          maintenanceId,
+          partId: p.partId,
+          partCode: p.partCode,
+          partName: p.partName,
+          partPhotoUrl: p.partPhotoUrl,
+          quantity: p.quantity,
+          unit: p.unit || "un",
+          unitCost: p.unitCost,
+          totalCost: totalCostPart,
+          fromStock: p.fromStock ?? 1
+        });
+        if (p.partId && (p.fromStock ?? 1) === 1) {
+          const [part] = await db.select().from(parts).where(eq12(parts.id, p.partId)).limit(1);
+          if (part) {
+            const newQty = Math.max(0, (part.stockQuantity ?? 0) - p.quantity);
+            await db.update(parts).set({ stockQuantity: newQty }).where(eq12(parts.id, p.partId));
+            await db.insert(partsStockMovements).values({
+              partId: p.partId,
+              type: "saida",
+              quantity: p.quantity,
+              reason: `Uso em manuten\xE7\xE3o #${maintenanceId} - ${input.equipmentId}`,
+              referenceId: maintenanceId,
+              referenceType: "maintenance",
+              unitCost: p.unitCost,
+              registeredBy: ctx.user.id
+            });
+          }
+        }
+      }
+    }
+    return { id: maintenanceId };
   }),
-  // Remover manutenção
   removeMaintenance: protectedProcedure.input(z12.object({ id: z12.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.delete(equipmentMaintenance).where(eq12(equipmentMaintenance.id, input.id));
     return { success: true };
   }),
-  // Atualizar foto principal do equipamento
-  updateMainPhoto: protectedProcedure.input(z12.object({
-    id: z12.number(),
-    photoBase64: z12.string()
-  })).mutation(async ({ input }) => {
+  // ─── Estoque de Peças ────────────────────────────────────────────────────────
+  addStockEntry: protectedProcedure.input(z12.object({
+    partId: z12.number(),
+    quantity: z12.number().min(1),
+    unitCost: z12.string().optional(),
+    notes: z12.string().optional()
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const result = await cloudinaryUpload(input.photoBase64, `btree/equipment/main`);
-    await db.update(equipment).set({ imageUrl: result.url }).where(eq12(equipment.id, input.id));
-    return { url: result.url };
+    const [part] = await db.select().from(parts).where(eq12(parts.id, input.partId)).limit(1);
+    if (!part) throw new Error("Pe\xE7a n\xE3o encontrada");
+    const newQty = (part.stockQuantity ?? 0) + input.quantity;
+    await db.update(parts).set({ stockQuantity: newQty }).where(eq12(parts.id, input.partId));
+    await db.insert(partsStockMovements).values({
+      partId: input.partId,
+      type: "entrada",
+      quantity: input.quantity,
+      reason: "Entrada de estoque (compra)",
+      unitCost: input.unitCost,
+      notes: input.notes,
+      registeredBy: ctx.user.id
+    });
+    return { success: true, newStock: newQty };
+  }),
+  listStockMovements: protectedProcedure.input(z12.object({ partId: z12.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return db.select().from(partsStockMovements).where(eq12(partsStockMovements.partId, input.partId)).orderBy(desc10(partsStockMovements.createdAt)).limit(50);
   })
 });
 
@@ -3122,7 +3338,7 @@ import { z as z15 } from "zod";
 import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq15, and as and6, desc as desc13, gte as gte2, lte as lte2, sql as sql2 } from "drizzle-orm";
+import { eq as eq15, and as and7, desc as desc13, gte as gte2, lte as lte2, sql as sql2 } from "drizzle-orm";
 var TRACCAR_URL = process.env.TRACCAR_URL || "";
 var TRACCAR_TOKEN = process.env.TRACCAR_TOKEN || "";
 function traccarAuth() {
@@ -3170,7 +3386,7 @@ async function calcIgnitionHours(deviceId, from, to) {
 async function checkAndGenerateAlerts(equipmentId, currentHourMeter) {
   const db = await getDb();
   if (!db) return;
-  const plans = await db.select().from(preventiveMaintenancePlans).where(and6(
+  const plans = await db.select().from(preventiveMaintenancePlans).where(and7(
     eq15(preventiveMaintenancePlans.equipmentId, equipmentId),
     eq15(preventiveMaintenancePlans.active, 1)
   ));
@@ -3178,7 +3394,7 @@ async function checkAndGenerateAlerts(equipmentId, currentHourMeter) {
     const lastDone = parseFloat(plan.lastDoneHours || "0");
     const dueAt = lastDone + plan.intervalHours;
     const alertAt = dueAt - (plan.alertThresholdHours || 10);
-    const existingAlert = await db.select().from(preventiveMaintenanceAlerts).where(and6(
+    const existingAlert = await db.select().from(preventiveMaintenanceAlerts).where(and7(
       eq15(preventiveMaintenanceAlerts.planId, plan.id),
       eq15(preventiveMaintenanceAlerts.status, "pendente")
     )).limit(1);
@@ -3313,7 +3529,7 @@ var traccarRouter = router({
           to.toISOString()
         );
         if (hours > 0) {
-          const existing = await db.select().from(gpsHoursLog).where(and6(
+          const existing = await db.select().from(gpsHoursLog).where(and7(
             eq15(gpsHoursLog.equipmentId, link.equipmentId),
             gte2(gpsHoursLog.date, from),
             lte2(gpsHoursLog.date, to)
@@ -3364,7 +3580,7 @@ var traccarRouter = router({
   listMaintenancePlans: protectedProcedure.input(z15.object({ equipmentId: z15.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
-    return db.select().from(preventiveMaintenancePlans).where(and6(
+    return db.select().from(preventiveMaintenancePlans).where(and7(
       eq15(preventiveMaintenancePlans.equipmentId, input.equipmentId),
       eq15(preventiveMaintenancePlans.active, 1)
     )).orderBy(preventiveMaintenancePlans.name);
@@ -3434,7 +3650,7 @@ var traccarRouter = router({
       generatedAt: preventiveMaintenanceAlerts.generatedAt,
       resolvedAt: preventiveMaintenanceAlerts.resolvedAt,
       notes: preventiveMaintenanceAlerts.notes
-    }).from(preventiveMaintenanceAlerts).innerJoin(equipment, eq15(preventiveMaintenanceAlerts.equipmentId, equipment.id)).innerJoin(preventiveMaintenancePlans, eq15(preventiveMaintenanceAlerts.planId, preventiveMaintenancePlans.id)).where(conditions.length > 0 ? and6(...conditions) : void 0).orderBy(desc13(preventiveMaintenanceAlerts.generatedAt));
+    }).from(preventiveMaintenanceAlerts).innerJoin(equipment, eq15(preventiveMaintenanceAlerts.equipmentId, equipment.id)).innerJoin(preventiveMaintenancePlans, eq15(preventiveMaintenanceAlerts.planId, preventiveMaintenancePlans.id)).where(conditions.length > 0 ? and7(...conditions) : void 0).orderBy(desc13(preventiveMaintenanceAlerts.generatedAt));
   }),
   /** Resolve (conclui) um alerta e atualiza o horimetro do plano */
   resolveAlert: protectedProcedure.input(z15.object({
@@ -3475,7 +3691,7 @@ var traccarRouter = router({
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql as sql3, gte as gte3, lte as lte3, and as and7 } from "drizzle-orm";
+import { sql as sql3, gte as gte3, lte as lte3, and as and8 } from "drizzle-orm";
 import { z as z16 } from "zod";
 var dashboardRouter = router({
   stats: protectedProcedure.input(z16.object({
@@ -3493,35 +3709,35 @@ var dashboardRouter = router({
     if (!db) throw new Error("Banco indispon\xEDvel");
     const [{ count: totalCollaborators }] = await db.select({ count: sql3`count(*)` }).from(collaborators);
     const [{ count: totalClients }] = await db.select({ count: sql3`count(*)` }).from(clients);
-    const [{ count: cargoThisMonth }] = await db.select({ count: sql3`count(*)` }).from(cargoLoads).where(and7(
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql3`count(*)` }).from(cargoLoads).where(and8(
       gte3(cargoLoads.createdAt, startOfMonth),
       lte3(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql3`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and7(
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql3`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and8(
       gte3(cargoLoads.createdAt, startOfMonth),
       lte3(cargoLoads.createdAt, endOfMonth)
     ));
     const [{ count: fuelThisMonth }] = await db.select({ count: sql3`count(*)` }).from(vehicleRecords).where(
-      and7(
+      and8(
         gte3(vehicleRecords.createdAt, startOfMonth),
         lte3(vehicleRecords.createdAt, endOfMonth),
         sql3`record_type = 'abastecimento'`
       )
     );
     const [{ total: fuelCostThisMonth }] = await db.select({ total: sql3`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
-      and7(
+      and8(
         gte3(vehicleRecords.createdAt, startOfMonth),
         lte3(vehicleRecords.createdAt, endOfMonth),
         sql3`record_type = 'abastecimento'`
       )
     );
     const [{ count: attendanceToday }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
-    const [{ count: attendanceThisMonth }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(and7(
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(and8(
       gte3(collaboratorAttendance.date, startOfMonth),
       lte3(collaboratorAttendance.date, endOfMonth)
     ));
     const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql3`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
-      and7(
+      and8(
         gte3(collaboratorAttendance.date, startOfMonth),
         lte3(collaboratorAttendance.date, endOfMonth),
         sql3`payment_status_ca = 'pendente'`
