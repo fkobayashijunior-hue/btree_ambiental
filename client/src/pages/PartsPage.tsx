@@ -15,7 +15,7 @@ import {
 
 // ─── Logos e dados de contato ────────────────────────────────────────────────
 const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1741107516/btree/logos/logo-kobayashi_ycxsqj.png";
 const BTREE_SITE = "https://btreeambiental.com";
 const BTREE_CONTATO = "(44) 99999-9999 | contato@btreeambiental.com";
 const BTREE_ENDERECO = "Astorga - PR | BTREE Ambiental";

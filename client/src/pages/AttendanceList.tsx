@@ -16,13 +16,6 @@ import {
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-// ─── Logos e dados de contato ────────────────────────────────────────────────
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
-const BTREE_SITE = "https://btreeambiental.com";
-const BTREE_CONTATO = "(44) 99999-9999 | contato@btreeambiental.com";
-const BTREE_ENDERECO = "Astorga - PR | BTREE Ambiental";
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
@@ -176,195 +169,195 @@ export default function AttendanceList() {
     toast.success(`${collab.name} marcado como pago!`);
   };
 
-  // ── Exportar PDF semanal (HTML) ──────────────────────────────────────────────
+  // ── Constantes de logo para PDF ────────────────────────────────────────────
+  const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+  const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+  const BTREE_SITE = "btreeambiental.com";
+  const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
+
+  // ── Exportar PDF semanal ─────────────────────────────────────────────────
   const handleExportWeekPDF = () => {
     if (weekByCollab.length === 0) { toast.error("Nenhuma presença na semana"); return; }
     const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(BTREE_SITE)}`;
     const rows = weekByCollab.map(c => `
       <tr>
         <td>${c.name}</td>
         <td style="text-align:center">${c.days.length}</td>
-        <td style="font-size:10px">${c.days.map(d => fmtDateFull(d.date)).join(", ")}</td>
-        <td>${EMPLOYMENT_LABELS[c.employmentType] || c.employmentType}</td>
-        <td>${c.pixKey || "—"}</td>
+        <td style="font-size:11px">${c.days.map(d => fmtDateFull(d.date)).join(", ")}</td>
+        <td style="text-align:center">${EMPLOYMENT_LABELS[c.employmentType] || c.employmentType}</td>
+        <td style="font-size:11px">${c.pixKey || "—"}</td>
         <td style="text-align:right">R$ ${c.total.toFixed(2)}</td>
-        <td style="text-align:right;color:${c.pendente > 0 ? "#dc2626" : "#6b7280"}">${c.pendente > 0 ? `R$ ${c.pendente.toFixed(2)}` : "—"}</td>
-        <td style="text-align:right;color:${c.pago > 0 ? "#16a34a" : "#6b7280"}">${c.pago > 0 ? `R$ ${c.pago.toFixed(2)}` : "—"}</td>
-      </tr>`).join("");
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Relatório Semanal de Presenças</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 20px; }
-    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #2e7d32; padding-bottom: 12px; margin-bottom: 16px; }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .header-left img { height: 50px; object-fit: contain; }
-    .header-info h1 { font-size: 18px; color: #2e7d32; font-weight: bold; }
-    .header-info p { font-size: 11px; color: #555; margin-top: 2px; }
-    .summary { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-    .summary-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 16px; flex: 1; min-width: 120px; }
-    .summary-card .label { font-size: 10px; color: #6b7280; text-transform: uppercase; }
-    .summary-card .value { font-size: 16px; font-weight: bold; color: #2e7d32; margin-top: 2px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    th { background: #2e7d32; color: white; padding: 8px; text-align: left; font-size: 11px; }
-    td { padding: 7px 8px; border-bottom: 1px solid #e0e0e0; font-size: 11px; }
-    tr:nth-child(even) td { background: #f5f5f5; }
-    .footer { margin-top: 20px; border-top: 2px solid #2e7d32; padding-top: 12px; display: flex; align-items: flex-end; justify-content: space-between; }
-    .footer-left { font-size: 10px; color: #555; line-height: 1.6; }
-    .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .footer-right img.qr { width: 70px; height: 70px; }
-    .footer-right .qr-label { font-size: 9px; color: #888; }
-    .dev-credit { font-size: 9px; color: #aaa; margin-top: 8px; }
-    .dev-credit img { height: 18px; vertical-align: middle; opacity: 0.6; }
-    @media print { body { padding: 10px; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-left">
-      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
-      <div class="header-info">
-        <h1>Relatório Semanal de Presenças</h1>
-        <p>Semana: ${weekLabel}</p>
-        <p>${BTREE_CONTATO}</p>
+        <td style="text-align:right;color:${c.pendente > 0 ? "#b91c1c" : "#15803d"}">${c.pendente > 0 ? `R$ ${c.pendente.toFixed(2)}` : "—"}</td>
+        <td style="text-align:right;color:#15803d">${c.pago > 0 ? `R$ ${c.pago.toFixed(2)}` : "—"}</td>
+      </tr>
+    `).join("");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+      <title>Presenças Semanal - BTREE Ambiental</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
+        .header { background: #14532d; color: white; padding: 18px 24px; display: flex; align-items: center; gap: 18px; }
+        .header img { height: 50px; }
+        .header-text h1 { font-size: 20px; font-weight: bold; }
+        .header-text p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+        .content { padding: 20px 24px; }
+        .title { font-size: 15px; font-weight: bold; color: #14532d; margin-bottom: 6px; }
+        .subtitle { font-size: 12px; color: #555; margin-bottom: 14px; }
+        .summary { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .summary-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 14px; min-width: 120px; }
+        .summary-card .label { font-size: 10px; color: #555; text-transform: uppercase; }
+        .summary-card .value { font-size: 14px; font-weight: bold; color: #15803d; }
+        .summary-card.red .value { color: #b91c1c; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { background: #14532d; color: white; padding: 7px 8px; text-align: left; font-size: 11px; }
+        td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+        tr:nth-child(even) td { background: #f0fdf4; }
+        .footer { margin-top: 24px; padding: 14px 24px; border-top: 2px solid #14532d; display: flex; align-items: center; justify-content: space-between; }
+        .footer-left { display: flex; align-items: center; gap: 10px; }
+        .footer-left img.kobayashi { height: 28px; }
+        .footer-text { font-size: 10px; color: #555; }
+        .footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+        .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .footer-right img { width: 60px; height: 60px; }
+        .footer-right span { font-size: 9px; color: #555; }
+        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      </style></head><body>
+      <div class="header">
+        <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+        <div class="header-text">
+          <h1>BTREE Ambiental</h1>
+          <p>Relatório Semanal de Presenças — Semana ${weekLabel}</p>
+        </div>
       </div>
-    </div>
-    <div style="text-align:right; font-size:11px; color:#555;">
-      Emitido em: <strong>${new Date().toLocaleDateString("pt-BR")}</strong>
-    </div>
-  </div>
-  <div class="summary">
-    <div class="summary-card"><div class="label">Total de Presenças</div><div class="value">${weekTotals.diarias}</div></div>
-    <div class="summary-card"><div class="label">A Pagar (Pendente)</div><div class="value" style="color:#dc2626">R$ ${weekTotals.pendente.toFixed(2)}</div></div>
-    <div class="summary-card"><div class="label">Total Pago</div><div class="value">R$ ${weekTotals.pago.toFixed(2)}</div></div>
-    <div class="summary-card"><div class="label">Total Geral</div><div class="value">R$ ${weekTotals.total.toFixed(2)}</div></div>
-  </div>
-  <table>
-    <thead><tr>
-      <th>Colaborador</th><th style="text-align:center">Dias</th><th>Datas Trabalhadas</th>
-      <th>Vínculo</th><th>PIX</th><th style="text-align:right">Total</th>
-      <th style="text-align:right">A Pagar</th><th style="text-align:right">Pago</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div class="footer">
-    <div class="footer-left">
-      <strong>BTREE Ambiental</strong><br/>
-      ${BTREE_ENDERECO}<br/>
-      ${BTREE_CONTATO}<br/>
-      <a href="${BTREE_SITE}" style="color:#2e7d32;">${BTREE_SITE}</a>
-      <div class="dev-credit">
-        Desenvolvido por <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" /> Kobayashi Desenvolvimento de Sistemas
+      <div class="content">
+        <div class="title">Controle de Presença Semanal</div>
+        <div class="subtitle">Semana: ${weekLabel} | Gerado em: ${new Date().toLocaleString("pt-BR")}</div>
+        <div class="summary">
+          <div class="summary-card"><div class="label">Presenças</div><div class="value">${weekTotals.diarias}</div></div>
+          <div class="summary-card"><div class="label">Total Geral</div><div class="value">R$ ${weekTotals.total.toFixed(2)}</div></div>
+          <div class="summary-card red"><div class="label">A Pagar</div><div class="value">R$ ${weekTotals.pendente.toFixed(2)}</div></div>
+          <div class="summary-card"><div class="label">Pago</div><div class="value">R$ ${weekTotals.pago.toFixed(2)}</div></div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Colaborador</th><th>Dias</th><th>Datas</th><th>Vínculo</th>
+            <th>PIX</th><th>Total</th><th>A Pagar</th><th>Pago</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>
-    </div>
-    <div class="footer-right">
-      <img class="qr" src="${qrUrl}" alt="QR Code" />
-      <span class="qr-label">Acesse nosso site</span>
-    </div>
-  </div>
-</body></html>`;
+      <div class="footer">
+        <div class="footer-left">
+          <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+          <div class="footer-text">
+            Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+            <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
+          </div>
+        </div>
+        <div class="footer-right">
+          <img src="${BTREE_QR}" alt="QR Code" />
+          <span>Acesse nosso site</span>
+        </div>
+      </div>
+      <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
+    </body></html>`;
     const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita pop-ups para gerar o PDF"); return; }
+    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
     win.document.write(html);
     win.document.close();
-    setTimeout(() => win.print(), 600);
-    toast.success("PDF semanal gerado!");
   };
 
-  // ── Exportar PDF diário (HTML) ────────────────────────────────────────────────
+  // ── Exportar PDF diário ──────────────────────────────────────────────────
   const handleExportDayPDF = () => {
     if ((dayRecords as any[]).length === 0) { toast.error("Nenhuma presença para exportar"); return; }
     const dateLabel = format(parseISO(searchDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(BTREE_SITE)}`;
     const rows = (dayRecords as any[]).map((r: any) => `
       <tr>
-        <td>${r.collaboratorName || "-"}</td>
-        <td>${r.activity || "-"}</td>
-        <td>${EMPLOYMENT_LABELS[r.employmentType] || r.employmentType}</td>
+        <td>${r.collaboratorName || "—"}</td>
+        <td>${r.activity || "—"}</td>
+        <td style="text-align:center">${EMPLOYMENT_LABELS[r.employmentType] || r.employmentType}</td>
         <td style="text-align:right">R$ ${parseFloat(r.dailyValue || "0").toFixed(2)}</td>
-        <td>${r.pixKey || "-"}</td>
-        <td style="text-align:center;color:${r.paymentStatus === "pago" ? "#16a34a" : "#dc2626"}">${r.paymentStatus === "pago" ? "Pago" : "Pendente"}</td>
-      </tr>`).join("");
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Presenças - ${searchDate}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 20px; }
-    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #2e7d32; padding-bottom: 12px; margin-bottom: 16px; }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .header-left img { height: 50px; object-fit: contain; }
-    .header-info h1 { font-size: 18px; color: #2e7d32; font-weight: bold; }
-    .header-info p { font-size: 11px; color: #555; margin-top: 2px; }
-    .meta { font-size: 11px; color: #444; margin-bottom: 12px; padding: 8px 12px; background: #f0fdf4; border-radius: 6px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    th { background: #2e7d32; color: white; padding: 8px; text-align: left; font-size: 11px; }
-    td { padding: 7px 8px; border-bottom: 1px solid #e0e0e0; font-size: 11px; }
-    tr:nth-child(even) td { background: #f5f5f5; }
-    .footer { margin-top: 20px; border-top: 2px solid #2e7d32; padding-top: 12px; display: flex; align-items: flex-end; justify-content: space-between; }
-    .footer-left { font-size: 10px; color: #555; line-height: 1.6; }
-    .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .footer-right img.qr { width: 70px; height: 70px; }
-    .footer-right .qr-label { font-size: 9px; color: #888; }
-    .dev-credit { font-size: 9px; color: #aaa; margin-top: 8px; }
-    .dev-credit img { height: 18px; vertical-align: middle; opacity: 0.6; }
-    @media print { body { padding: 10px; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-left">
-      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
-      <div class="header-info">
-        <h1>Relatório de Presenças</h1>
-        <p>${dateLabel}</p>
-        <p>${BTREE_CONTATO}</p>
+        <td style="font-size:11px">${r.pixKey || "—"}</td>
+        <td style="text-align:center">
+          <span style="background:${r.paymentStatus === "pago" ? "#dcfce7" : "#fee2e2"};color:${r.paymentStatus === "pago" ? "#15803d" : "#b91c1c"};padding:2px 8px;border-radius:4px;font-size:10px">
+            ${r.paymentStatus === "pago" ? "Pago" : "Pendente"}
+          </span>
+        </td>
+      </tr>
+    `).join("");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+      <title>Presenças ${searchDate} - BTREE Ambiental</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
+        .header { background: #14532d; color: white; padding: 18px 24px; display: flex; align-items: center; gap: 18px; }
+        .header img { height: 50px; }
+        .header-text h1 { font-size: 20px; font-weight: bold; }
+        .header-text p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+        .content { padding: 20px 24px; }
+        .title { font-size: 15px; font-weight: bold; color: #14532d; margin-bottom: 6px; }
+        .subtitle { font-size: 12px; color: #555; margin-bottom: 14px; }
+        .summary { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .summary-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 14px; min-width: 120px; }
+        .summary-card .label { font-size: 10px; color: #555; text-transform: uppercase; }
+        .summary-card .value { font-size: 14px; font-weight: bold; color: #15803d; }
+        .summary-card.red .value { color: #b91c1c; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { background: #14532d; color: white; padding: 7px 8px; text-align: left; font-size: 11px; }
+        td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+        tr:nth-child(even) td { background: #f0fdf4; }
+        .footer { margin-top: 24px; padding: 14px 24px; border-top: 2px solid #14532d; display: flex; align-items: center; justify-content: space-between; }
+        .footer-left { display: flex; align-items: center; gap: 10px; }
+        .footer-left img.kobayashi { height: 28px; }
+        .footer-text { font-size: 10px; color: #555; }
+        .footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+        .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .footer-right img { width: 60px; height: 60px; }
+        .footer-right span { font-size: 9px; color: #555; }
+        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      </style></head><body>
+      <div class="header">
+        <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+        <div class="header-text">
+          <h1>BTREE Ambiental</h1>
+          <p>Relatório de Presenças — ${dateLabel}</p>
+        </div>
       </div>
-    </div>
-    <div style="text-align:right; font-size:11px; color:#555;">
-      Emitido em: <strong>${new Date().toLocaleDateString("pt-BR")}</strong>
-    </div>
-  </div>
-  <div class="meta">
-    Total: <strong>${(dayRecords as any[]).length} presenças</strong> &nbsp;|
-    A pagar: <strong style="color:#dc2626">R$ ${dayPendenteTotal.toFixed(2)}</strong> &nbsp;|
-    Total geral: <strong>R$ ${dayTotal.toFixed(2)}</strong>
-  </div>
-  <table>
-    <thead><tr>
-      <th>Colaborador</th><th>Atividade</th><th>Vínculo</th>
-      <th style="text-align:right">Valor Diária</th><th>PIX</th><th style="text-align:center">Status</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div class="footer">
-    <div class="footer-left">
-      <strong>BTREE Ambiental</strong><br/>
-      ${BTREE_ENDERECO}<br/>
-      ${BTREE_CONTATO}<br/>
-      <a href="${BTREE_SITE}" style="color:#2e7d32;">${BTREE_SITE}</a>
-      <div class="dev-credit">
-        Desenvolvido por <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" /> Kobayashi Desenvolvimento de Sistemas
+      <div class="content">
+        <div class="title">Controle de Presença Diário</div>
+        <div class="subtitle">Data: ${dateLabel} | Gerado em: ${new Date().toLocaleString("pt-BR")}</div>
+        <div class="summary">
+          <div class="summary-card"><div class="label">Presenças</div><div class="value">${(dayRecords as any[]).length}</div></div>
+          <div class="summary-card"><div class="label">Total Geral</div><div class="value">R$ ${dayTotal.toFixed(2)}</div></div>
+          <div class="summary-card red"><div class="label">A Pagar</div><div class="value">R$ ${dayPendenteTotal.toFixed(2)}</div></div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Colaborador</th><th>Atividade</th><th>Vínculo</th>
+            <th>Valor</th><th>PIX</th><th>Status</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>
-    </div>
-    <div class="footer-right">
-      <img class="qr" src="${qrUrl}" alt="QR Code" />
-      <span class="qr-label">Acesse nosso site</span>
-    </div>
-  </div>
-</body></html>`;
+      <div class="footer">
+        <div class="footer-left">
+          <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+          <div class="footer-text">
+            Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+            <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
+          </div>
+        </div>
+        <div class="footer-right">
+          <img src="${BTREE_QR}" alt="QR Code" />
+          <span>Acesse nosso site</span>
+        </div>
+      </div>
+      <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
+    </body></html>`;
     const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita pop-ups para gerar o PDF"); return; }
+    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
     win.document.write(html);
     win.document.close();
-    setTimeout(() => win.print(), 600);
-    toast.success("PDF gerado!");
   };
 
   const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;

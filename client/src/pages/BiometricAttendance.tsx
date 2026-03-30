@@ -18,7 +18,7 @@ const ROLE_LABELS: Record<string, string> = {
   motorista: "Motorista", terceirizado: "Terceirizado",
 };
 
-// Carrega o face-api.js de forma segura (sem appendChild em React)
+// Carrega o face-api.js de forma segura (sem conflito com React DOM)
 let faceApiLoadPromise: Promise<void> | null = null;
 
 function loadFaceApiScript(): Promise<void> {
@@ -34,8 +34,13 @@ function loadFaceApiScript(): Promise<void> {
     // Verificar se o script já existe no DOM
     const existingScript = document.querySelector('script[data-faceapi]');
     if (existingScript) {
-      existingScript.addEventListener('load', () => resolve());
-      existingScript.addEventListener('error', reject);
+      // Se já existe mas ainda está carregando
+      if ((window as any).faceapi) {
+        resolve();
+      } else {
+        existingScript.addEventListener('load', () => resolve());
+        existingScript.addEventListener('error', reject);
+      }
       return;
     }
     
@@ -45,7 +50,8 @@ function loadFaceApiScript(): Promise<void> {
     script.async = true;
     script.onload = () => resolve();
     script.onerror = reject;
-    document.body.appendChild(script); // usar body em vez de head
+    // Usar document.head para não conflitar com React que gerencia o body
+    document.head.appendChild(script);
   });
   
   return faceApiLoadPromise;
@@ -212,14 +218,15 @@ export default function BiometricAttendancePage() {
       location: locationText || undefined,
       latitude: gpsCoords?.lat,
       longitude: gpsCoords?.lng,
-      notes: recognized.confidence ? `Confiança: ${(recognized.confidence * 100).toFixed(0)}%` : undefined,
+      notes: recognized.confidence ? `Confiança: ${recognized.confidence}%` : undefined,
     });
   };
 
   // Filtrar presenças de hoje
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
-  const todayRecords = todayAttendance.filter((r: (typeof todayAttendance)[0]) => {
+  type AttendanceRecord = { id: number; collaboratorId: number; collaboratorName: string; collaboratorRole: string; collaboratorPhoto: string | null; checkInTime: Date | string; checkOutTime: Date | string | null; location: string | null; latitude: string | null; longitude: string | null; notes: string | null; createdAt: Date | string };
+  const todayRecords = (todayAttendance as AttendanceRecord[]).filter((r: AttendanceRecord) => {
     const d = new Date(r.checkInTime);
     return format(d, "yyyy-MM-dd") === todayStr;
   });
@@ -419,7 +426,7 @@ export default function BiometricAttendancePage() {
               </div>
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {todayRecords.map((r: (typeof todayAttendance)[0]) => (
+                {(todayRecords as AttendanceRecord[]).map((r: AttendanceRecord) => (
                   <div key={r.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-emerald-100 flex-shrink-0 flex items-center justify-center">
                       {r.collaboratorPhoto ? (
@@ -443,8 +450,8 @@ export default function BiometricAttendancePage() {
                       <p className="text-xs font-semibold text-emerald-700">
                         {format(new Date(r.checkInTime), "HH:mm")}
                       </p>
-                      {r.confidence && (
-                        <p className="text-xs text-gray-400">{r.confidence}%</p>
+                      {r.notes && r.notes.startsWith('Confiança:') && (
+                        <p className="text-xs text-gray-400">{r.notes.replace('Confiança: ', '')}</p>
                       )}
                     </div>
                   </div>

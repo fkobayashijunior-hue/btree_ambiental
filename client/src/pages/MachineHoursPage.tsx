@@ -13,13 +13,6 @@ import {
   Package, Search, Trash2
 } from "lucide-react";
 
-// ===== LOGOS E DADOS DE CONTATO =====
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
-const BTREE_SITE = "https://btreeambiental.com";
-const BTREE_CONTATO = "(44) 99999-9999 | contato@btreeambiental.com";
-const BTREE_ENDERECO = "Astorga - PR | BTREE Ambiental";
-
 type ActiveTab = "resumo" | "horas" | "manutencao" | "abastecimento";
 type SheetMode = "horas" | "manutencao" | "abastecimento";
 
@@ -346,154 +339,89 @@ export default function MachineHoursPage() {
     }
   };
 
-  // ===== EXPORTAR PDF (HTML) =====
-  const handleExportPDF = () => {
+  // ===== EXPORTAR PDF =====
+  const handleExportPDF = async () => {
     const allRecords = [...filteredHours, ...filteredMaint, ...filteredFuel];
     if (allRecords.length === 0) { toast.error("Nenhum registro para exportar"); return; }
-    const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos") : "Todos os equipamentos";
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(BTREE_SITE)}`;
-    const now = new Date().toLocaleDateString("pt-BR");
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF();
 
-    const hoursRows = filteredHours.map((h: any) => `
-      <tr>
-        <td>${new Date(h.date).toLocaleDateString("pt-BR")}</td>
-        <td>${equipMap[h.equipmentId] || `#${h.equipmentId}`}</td>
-        <td style="text-align:center">${h.startHourMeter || "-"}</td>
-        <td style="text-align:center">${h.endHourMeter || "-"}</td>
-        <td style="text-align:center;font-weight:bold">${h.hoursWorked}h</td>
-        <td>${h.activity || "-"}</td>
-        <td>${h.location || "-"}</td>
-      </tr>`).join("");
+      const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos") : "Todos os equipamentos";
 
-    const maintRows = filteredMaint.map((m: any) => `
-      <tr>
-        <td>${new Date(m.date).toLocaleDateString("pt-BR")}</td>
-        <td>${equipMap[m.equipmentId] || `#${m.equipmentId}`}</td>
-        <td>${MAINTENANCE_TYPE_LABELS[m.type] || m.type}</td>
-        <td>${SERVICE_TYPE_LABELS[m.serviceType] || m.serviceType}</td>
-        <td>${m.mechanicName || m.thirdPartyCompany || "-"}</td>
-        <td>${m.description || "-"}</td>
-        <td style="text-align:right">${m.totalCost ? `R$ ${m.totalCost}` : "-"}</td>
-        <td style="text-align:center">${m.nextMaintenanceHours || "-"}</td>
-      </tr>`).join("");
+      doc.setFontSize(16);
+      doc.setTextColor(22, 101, 52);
+      doc.text("BTREE Ambiental", 14, 18);
+      doc.setFontSize(11);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Relatório de Controle de Máquinas`, 14, 26);
+      doc.text(`Equipamento: ${vehicleName}`, 14, 33);
 
-    const fuelRows = filteredFuel.map((f: any) => `
-      <tr>
-        <td>${new Date(f.date).toLocaleDateString("pt-BR")}</td>
-        <td>${equipMap[f.equipmentId] || `#${f.equipmentId}`}</td>
-        <td style="text-align:center">${f.liters}L</td>
-        <td style="text-align:right">${f.totalCost ? `R$ ${f.totalCost}` : "-"}</td>
-        <td>${f.supplier || "-"}</td>
-        <td>${f.notes || "-"}</td>
-      </tr>`).join("");
+      // Horas
+      if (filteredHours.length > 0) {
+        doc.setFontSize(12);
+        doc.setTextColor(22, 101, 52);
+        doc.text("Horas Trabalhadas", 14, 43);
+        autoTable(doc, {
+          startY: 47,
+          head: [["Data", "Equipamento", "Horímetro Inicial", "Horímetro Final", "Horas", "Atividade", "Local"]],
+          body: filteredHours.map((h: any) => [
+            new Date(h.date).toLocaleDateString("pt-BR"),
+            equipMap[h.equipmentId] || `#${h.equipmentId}`,
+            h.startHourMeter,
+            h.endHourMeter,
+            `${h.hoursWorked}h`,
+            h.activity || "-",
+            h.location || "-",
+          ]),
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [22, 101, 52], textColor: 255 },
+          alternateRowStyles: { fillColor: [240, 253, 244] },
+        });
+      }
 
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Controle de Máquinas</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 20px; }
-    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #2e7d32; padding-bottom: 12px; margin-bottom: 16px; }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .header-left img { height: 50px; object-fit: contain; }
-    .header-info h1 { font-size: 18px; color: #2e7d32; font-weight: bold; }
-    .header-info p { font-size: 11px; color: #555; margin-top: 2px; }
-    .section { margin-bottom: 20px; }
-    .section-title { font-size: 14px; font-weight: bold; padding: 8px 12px; border-radius: 6px 6px 0 0; margin-bottom: 0; }
-    .section-title.green { background: #2e7d32; color: white; }
-    .section-title.orange { background: #ea580c; color: white; }
-    .section-title.blue { background: #1d4ed8; color: white; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    th { background: #f0fdf4; color: #166534; padding: 7px 8px; text-align: left; font-size: 10px; border-bottom: 2px solid #2e7d32; }
-    td { padding: 6px 8px; border-bottom: 1px solid #e0e0e0; font-size: 10px; }
-    tr:nth-child(even) td { background: #f9f9f9; }
-    .footer { margin-top: 20px; border-top: 2px solid #2e7d32; padding-top: 12px; display: flex; align-items: flex-end; justify-content: space-between; }
-    .footer-left { font-size: 10px; color: #555; line-height: 1.6; }
-    .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .footer-right img.qr { width: 70px; height: 70px; }
-    .footer-right .qr-label { font-size: 9px; color: #888; }
-    .dev-credit { font-size: 9px; color: #aaa; margin-top: 8px; }
-    .dev-credit img { height: 18px; vertical-align: middle; opacity: 0.6; }
-    @media print { body { padding: 10px; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-left">
-      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
-      <div class="header-info">
-        <h1>Relatório de Controle de Máquinas</h1>
-        <p>Equipamento: ${vehicleName}</p>
-        <p>${BTREE_CONTATO}</p>
-      </div>
-    </div>
-    <div style="text-align:right; font-size:11px; color:#555;">
-      Emitido em: <strong>${now}</strong>
-    </div>
-  </div>
+      // Manutenções
+      if (filteredMaint.length > 0) {
+        const startY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 47;
+        doc.setFontSize(12);
+        doc.setTextColor(234, 88, 12);
+        doc.text("Manutenções", 14, startY);
+        autoTable(doc, {
+          startY: startY + 4,
+          head: [["Data", "Equipamento", "Tipo", "Serviço", "Responsável", "Descrição", "Custo (R$)", "Próx. Horímetro"]],
+          body: filteredMaint.map((m: any) => [
+            new Date(m.date).toLocaleDateString("pt-BR"),
+            equipMap[m.equipmentId] || `#${m.equipmentId}`,
+            MAINTENANCE_TYPE_LABELS[m.type] || m.type,
+            SERVICE_TYPE_LABELS[m.serviceType] || m.serviceType,
+            m.mechanicName || m.thirdPartyCompany || "-",
+            m.description || "-",
+            m.totalCost || "-",
+            m.nextMaintenanceHours || "-",
+          ]),
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [234, 88, 12], textColor: 255 },
+          alternateRowStyles: { fillColor: [255, 247, 237] },
+        });
+      }
 
-  ${filteredHours.length > 0 ? `
-  <div class="section">
-    <div class="section-title green">⏱ Horas Trabalhadas (${filteredHours.length} registros)</div>
-    <table>
-      <thead><tr>
-        <th>Data</th><th>Equipamento</th><th style="text-align:center">Horímetro Inicial</th>
-        <th style="text-align:center">Horímetro Final</th><th style="text-align:center">Horas</th>
-        <th>Atividade</th><th>Local</th>
-      </tr></thead>
-      <tbody>${hoursRows}</tbody>
-    </table>
-  </div>` : ""}
+      // Rodapé
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} — Kobayashi Desenvolvimento`, 14, doc.internal.pageSize.height - 8);
+        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+      }
 
-  ${filteredMaint.length > 0 ? `
-  <div class="section">
-    <div class="section-title orange">🔧 Manutenções (${filteredMaint.length} registros)</div>
-    <table>
-      <thead><tr>
-        <th>Data</th><th>Equipamento</th><th>Tipo</th><th>Serviço</th>
-        <th>Responsável</th><th>Descrição</th><th style="text-align:right">Custo</th>
-        <th style="text-align:center">Próx. Horímetro</th>
-      </tr></thead>
-      <tbody>${maintRows}</tbody>
-    </table>
-  </div>` : ""}
-
-  ${filteredFuel.length > 0 ? `
-  <div class="section">
-    <div class="section-title blue">⛽ Abastecimentos (${filteredFuel.length} registros)</div>
-    <table>
-      <thead><tr>
-        <th>Data</th><th>Equipamento</th><th style="text-align:center">Litros</th>
-        <th style="text-align:right">Custo Total</th><th>Fornecedor</th><th>Observações</th>
-      </tr></thead>
-      <tbody>${fuelRows}</tbody>
-    </table>
-  </div>` : ""}
-
-  <div class="footer">
-    <div class="footer-left">
-      <strong>BTREE Ambiental</strong><br/>
-      ${BTREE_ENDERECO}<br/>
-      ${BTREE_CONTATO}<br/>
-      <a href="${BTREE_SITE}" style="color:#2e7d32;">${BTREE_SITE}</a>
-      <div class="dev-credit">
-        Desenvolvido por <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" /> Kobayashi Desenvolvimento de Sistemas
-      </div>
-    </div>
-    <div class="footer-right">
-      <img class="qr" src="${qrUrl}" alt="QR Code" />
-      <span class="qr-label">Acesse nosso site</span>
-    </div>
-  </div>
-</body></html>`;
-    const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita pop-ups para gerar o PDF"); return; }
-    win.document.write(html);
-    win.document.close();
-    setTimeout(() => win.print(), 600);
-    toast.success("PDF gerado com sucesso!");
+      doc.save(`maquinas-${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success("PDF gerado com sucesso!");
+    } catch (err) {
+      toast.error("Erro ao gerar PDF");
+      console.error(err);
+    }
   };
 
   const isPending = createHoursMutation.isPending || createMaintMutation.isPending || createFuelMutation.isPending || updateHoursMutation.isPending || updateMaintMutation.isPending;

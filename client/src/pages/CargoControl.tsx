@@ -16,13 +16,6 @@ import {
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 
-// ===== LOGOS E DADOS DE CONTATO =====
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
-const BTREE_SITE = "https://btreeambiental.com";
-const BTREE_CONTATO = "(44) 99999-9999 | contato@btreeambiental.com";
-const BTREE_ENDERECO = "Astorga - PR | BTREE Ambiental";
-
 // ===== TIPOS =====
 type TrackingStatus = "aguardando" | "carregando" | "em_transito" | "pesagem_saida" | "descarregando" | "pesagem_chegada" | "finalizado";
 
@@ -85,82 +78,43 @@ function compressImage(file: File): Promise<string> {
 // ===== GERAÇÃO DE PDF =====
 function generateCargoPDF(cargo: Record<string, unknown>, companyName = "BTREE Ambiental") {
   const date = cargo.date ? new Date(cargo.date as string).toLocaleDateString("pt-BR") : "-";
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(BTREE_SITE)}`;
-  const statusLabel = cargo.status === "entregue" ? "Entregue" : cargo.status === "cancelado" ? "Cancelado" : "Pendente";
-  const statusColor = cargo.status === "entregue" ? "#16a34a" : cargo.status === "cancelado" ? "#dc2626" : "#d97706";
-
-  const trackingHtml = cargo.trackingStatus ? `
-  <div class="section">
-    <div class="section-title">📍 Acompanhamento</div>
-    <div style="padding:12px 16px; display:flex; gap:8px; flex-wrap:wrap;">
-      ${TRACKING_STEPS.map(step => {
-        const idx = TRACKING_STEPS.findIndex(s => s.key === cargo.trackingStatus);
-        const stepIdx = TRACKING_STEPS.findIndex(s => s.key === step.key);
-        const cls = stepIdx < idx ? "step-done" : stepIdx === idx ? "step-current" : "step-pending";
-        return `<span class="tracking-step ${cls}">${step.icon} ${step.label}</span>`;
-      }).join("")}
-    </div>
-    ${cargo.trackingNotes ? `<div style="padding:0 16px 12px;font-size:12px;color:#374151;">${cargo.trackingNotes}</div>` : ""}
-  </div>` : "";
-
-  const photosHtml = (cargo.weightOutPhotoUrl || cargo.weightInPhotoUrl) ? `
-  <div class="section">
-    <div class="section-title">⚖️ Fotos de Pesagem</div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap; padding:12px 16px;">
-      ${cargo.weightOutPhotoUrl ? `<div><div style="font-size:10px;color:#6b7280;margin-bottom:4px;">Pesagem Saída</div><img src="${cargo.weightOutPhotoUrl}" style="width:120px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" /></div>` : ""}
-      ${cargo.weightInPhotoUrl ? `<div><div style="font-size:10px;color:#6b7280;margin-bottom:4px;">Pesagem Chegada</div><img src="${cargo.weightInPhotoUrl}" style="width:120px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" /></div>` : ""}
-    </div>
-  </div>` : "";
-
-  const html = `<!DOCTYPE html>
+  const html = `
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <title>Relatório de Carga #${cargo.id}</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; padding: 20px; }
-  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #2e7d32; padding-bottom: 12px; margin-bottom: 16px; }
-  .header-left { display: flex; align-items: center; gap: 12px; }
-  .header-left img { height: 50px; object-fit: contain; }
-  .header-info h1 { font-size: 18px; color: #2e7d32; font-weight: bold; }
-  .header-info p { font-size: 11px; color: #555; margin-top: 2px; }
-  .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; background: #f0fdf4; color: ${statusColor}; border: 1px solid ${statusColor}; }
-  .section { margin-bottom: 16px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-  .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 13px; color: #166534; border-bottom: 1px solid #e5e7eb; }
+  body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #1a1a1a; }
+  .header { background: #16a34a; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+  .header h1 { margin: 0; font-size: 22px; }
+  .header p { margin: 4px 0 0; font-size: 13px; opacity: 0.85; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .badge-pendente { background: #fef9c3; color: #854d0e; }
+  .badge-entregue { background: #dcfce7; color: #166534; }
+  .badge-cancelado { background: #fee2e2; color: #991b1b; }
+  .section { margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 14px; color: #166534; border-bottom: 1px solid #e5e7eb; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
   .field { padding: 10px 16px; border-bottom: 1px solid #f3f4f6; }
   .field:last-child { border-bottom: none; }
-  .field-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
-  .field-value { font-size: 13px; font-weight: 500; margin-top: 2px; }
-  .tracking-step { padding: 5px 10px; border-radius: 16px; font-size: 11px; font-weight: 500; }
+  .field-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-value { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .tracking { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .tracking-step { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
   .step-done { background: #dcfce7; color: #166534; }
   .step-current { background: #16a34a; color: white; }
   .step-pending { background: #f3f4f6; color: #9ca3af; }
-  .footer { margin-top: 20px; border-top: 2px solid #2e7d32; padding-top: 12px; display: flex; align-items: flex-end; justify-content: space-between; }
-  .footer-left { font-size: 10px; color: #555; line-height: 1.6; }
-  .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .footer-right img.qr { width: 70px; height: 70px; }
-  .footer-right .qr-label { font-size: 9px; color: #888; }
-  .dev-credit { font-size: 9px; color: #aaa; margin-top: 8px; }
-  .dev-credit img { height: 18px; vertical-align: middle; opacity: 0.6; }
-  @media print { body { padding: 10px; } }
+  .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 16px; }
+  .photos { display: flex; gap: 10px; flex-wrap: wrap; padding: 12px 16px; }
+  .photos img { width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; }
+  @media print { body { padding: 0; } }
 </style>
 </head>
 <body>
 <div class="header">
-  <div class="header-left">
-    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
-    <div class="header-info">
-      <h1>Relatório de Carga #${cargo.id}</h1>
-      <p>${BTREE_CONTATO}</p>
-      <p>${BTREE_ENDERECO}</p>
-    </div>
-  </div>
-  <div style="text-align:right; font-size:11px; color:#555;">
-    <div>Emitido em: <strong>${new Date().toLocaleDateString("pt-BR")}</strong></div>
-    <div style="margin-top:6px;"><span class="status-badge">${statusLabel}</span></div>
-  </div>
+  <h1>${companyName} — Relatório de Carga #${cargo.id}</h1>
+  <p>Emitido em ${new Date().toLocaleString("pt-BR")} · Status: <span class="badge badge-${cargo.status}">${cargo.status === "entregue" ? "Entregue" : cargo.status === "cancelado" ? "Cancelado" : "Pendente"}</span></p>
 </div>
 
 <div class="section">
@@ -189,28 +143,38 @@ function generateCargoPDF(cargo: Record<string, unknown>, companyName = "BTREE A
   <div class="section-title">👤 Cliente e Destino</div>
   <div class="grid">
     <div class="field"><div class="field-label">Cliente</div><div class="field-value">${cargo.clientName || "-"}</div></div>
-    <div class="field"><div class="field-label">Destino</div><div class="field-value">${cargo.destinationName || cargo.destination || "-"}</div></div>
+    <div class="field"><div class="field-label">Destino</div><div class="field-value">${cargo.destination || "-"}</div></div>
   </div>
   ${cargo.notes ? `<div class="field"><div class="field-label">Observações</div><div class="field-value">${cargo.notes}</div></div>` : ""}
 </div>
 
-${trackingHtml}
-${photosHtml}
+${cargo.trackingStatus ? `
+<div class="section">
+  <div class="section-title">📍 Acompanhamento</div>
+  <div style="padding: 12px 16px;">
+    <div class="tracking">
+      ${TRACKING_STEPS.map(step => {
+        const idx = TRACKING_STEPS.findIndex(s => s.key === cargo.trackingStatus);
+        const stepIdx = TRACKING_STEPS.findIndex(s => s.key === step.key);
+        const cls = stepIdx < idx ? "step-done" : stepIdx === idx ? "step-current" : "step-pending";
+        return `<span class="tracking-step ${cls}">${step.icon} ${step.label}</span>`;
+      }).join("")}
+    </div>
+    ${cargo.trackingNotes ? `<p style="margin-top:10px;font-size:13px;color:#374151;">${cargo.trackingNotes}</p>` : ""}
+  </div>
+</div>` : ""}
+
+${(cargo.weightOutPhotoUrl || cargo.weightInPhotoUrl) ? `
+<div class="section">
+  <div class="section-title">⚖️ Fotos de Pesagem</div>
+  <div class="photos">
+    ${cargo.weightOutPhotoUrl ? `<div><div class="field-label" style="padding:0 0 4px">Pesagem Saída</div><img src="${cargo.weightOutPhotoUrl}" alt="Pesagem saída"/></div>` : ""}
+    ${cargo.weightInPhotoUrl ? `<div><div class="field-label" style="padding:0 0 4px">Pesagem Chegada</div><img src="${cargo.weightInPhotoUrl}" alt="Pesagem chegada"/></div>` : ""}
+  </div>
+</div>` : ""}
 
 <div class="footer">
-  <div class="footer-left">
-    <strong>BTREE Ambiental</strong><br/>
-    ${BTREE_ENDERECO}<br/>
-    ${BTREE_CONTATO}<br/>
-    <a href="${BTREE_SITE}" style="color:#2e7d32;">${BTREE_SITE}</a>
-    <div class="dev-credit">
-      Desenvolvido por <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" /> Kobayashi Desenvolvimento de Sistemas
-    </div>
-  </div>
-  <div class="footer-right">
-    <img class="qr" src="${qrUrl}" alt="QR Code" />
-    <span class="qr-label">Acesse nosso site</span>
-  </div>
+  ${companyName} · Relatório gerado automaticamente pelo sistema BTREE
 </div>
 </body>
 </html>`;
@@ -219,7 +183,7 @@ ${photosHtml}
   if (win) {
     win.document.write(html);
     win.document.close();
-    setTimeout(() => win.print(), 600);
+    setTimeout(() => win.print(), 500);
   }
 }
 
