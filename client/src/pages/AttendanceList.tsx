@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   Users, Plus, Calendar, ChevronDown, ChevronUp, Loader2,
   FileDown, ChevronLeft, ChevronRight, CheckCircle2, Clock,
-  DollarSign, User, CalendarDays, LayoutList
+  DollarSign, User, CalendarDays, LayoutList, Trash2
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -93,6 +93,19 @@ export default function AttendanceList() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const deleteMutation = trpc.attendance.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Presença excluída!");
+      utils.attendance.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "Erro ao excluir"),
+  });
+
+  const handleDelete = (id: number, name: string) => {
+    if (!confirm(`Excluir a presença de ${name}?`)) return;
+    deleteMutation.mutate({ id });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -601,7 +614,7 @@ export default function AttendanceList() {
                   {expandedGroups.pendente !== false && (
                     <div className="space-y-2">
                       {dayPendentes.map((r: any) => (
-                        <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} />
+                        <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} onDelete={() => handleDelete(r.id, r.collaboratorName)} />
                       ))}
                     </div>
                   )}
@@ -621,7 +634,7 @@ export default function AttendanceList() {
                   {expandedGroups.pago !== false && (
                     <div className="space-y-2">
                       {dayPagos.map((r: any) => (
-                        <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} />
+                        <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} onDelete={() => handleDelete(r.id, r.collaboratorName)} />
                       ))}
                     </div>
                   )}
@@ -731,7 +744,7 @@ export default function AttendanceList() {
 
 // ─── Card de presença individual ─────────────────────────────────────────────
 
-function AttendanceCard({ record, onMarkPaid }: { record: any; onMarkPaid: (paid: boolean) => void }) {
+function AttendanceCard({ record, onMarkPaid, onDelete }: { record: any; onMarkPaid: (paid: boolean) => void; onDelete?: () => void }) {
   const isPago = record.paymentStatus === "pago";
   return (
     <Card className="hover:shadow-sm transition-shadow">
@@ -773,7 +786,7 @@ function AttendanceCard({ record, onMarkPaid }: { record: any; onMarkPaid: (paid
             {record.observations && (
               <p className="text-xs text-gray-400 mt-1 italic">{record.observations}</p>
             )}
-            <div className="mt-2">
+            <div className="mt-2 flex items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -782,6 +795,16 @@ function AttendanceCard({ record, onMarkPaid }: { record: any; onMarkPaid: (paid
               >
                 {isPago ? <><Clock className="h-3 w-3" /> Marcar Pendente</> : <><CheckCircle2 className="h-3 w-3" /> Marcar Pago</>}
               </Button>
+              {onDelete && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-7 gap-1 text-red-500 border-red-200 hover:bg-red-50"
+                  onClick={onDelete}
+                >
+                  <Trash2 className="h-3 w-3" /> Excluir
+                </Button>
+              )}
             </div>
           </div>
         </div>

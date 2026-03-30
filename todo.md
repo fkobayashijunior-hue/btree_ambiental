@@ -780,3 +780,17 @@
 - [x] Substituir pwa-192.png (192x192, 34KB) e pwa-512.png (512x512, 217KB) no projeto
 - [x] Atualizar manifest PWA com background_color #1c3a28
 - [x] Corrigir erro NotFoundError (removeChild) ao cadastrar presença no BiometricAttendance
+
+## CORREÇÕES 30/03/2026 (Sessão 2)
+- [x] Adicionar botão de excluir presença na listagem diária (AttendanceList)
+- [x] Adicionar procedure deleteAttendance no router de attendance
+- [x] Corrigir ícone PWA que não atualiza no celular (cache busting)
+- [x] Implementar controle de acesso ao app (permissões por usuário/módulo)
+
+## CONTROLE DE ACESSO (RBAC) - 30/03/2026
+- [x] Criar tabela user_permissions no schema (userId + módulos permitidos em JSON)
+- [x] Criar router de permissões (getPermissions, setPermissions, listUsers)
+- [x] Criar tela /acesso com lista de usuários e checkboxes por módulo
+- [x] Aplicar restrições no menu lateral (DashboardLayout) baseado nas permissões
+- [x] Aplicar restrições nas rotas (redirecionar para /app se sem permissão)
+- [ ] Módulos controlados: equipamentos, pecas, manutencao, horas-maquina, colaboradores, presencas, reflorestamento, cargas, clientes, portal-cliente, gps, relatorios

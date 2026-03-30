@@ -20,6 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
+import { usePermissions } from "@/hooks/usePermissions";
 import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -27,19 +28,19 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Painel", path: "/app" },
-  { icon: ClipboardList, label: "Presenças", path: "/presencas" },
-  { icon: UserCheck, label: "Colaboradores", path: "/colaboradores" },
-  { icon: Users, label: "Clientes", path: "/clientes" },
-  { icon: Users, label: "Usuários", path: "/usuarios" },
-  { icon: Layers, label: "Setores e Equipamentos", path: "/setores" },
-  { icon: Truck, label: "Controle de Cargas", path: "/cargas" },
-  { icon: ClipboardList, label: "Controle de Equipamentos", path: "/maquinas" },
-  { icon: Car, label: "Controle de Abastecimento", path: "/veiculos" },
-  { icon: Package, label: "Peças e Acessórios", path: "/pecas" },
-  { icon: Globe, label: "Portal do Cliente", path: "/client-portal" },
-  { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso" },
-  { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps" },
+  { icon: LayoutDashboard, label: "Painel", path: "/app", slug: null }, // sempre visível
+  { icon: ClipboardList, label: "Presenças", path: "/presencas", slug: "presencas" },
+  { icon: UserCheck, label: "Colaboradores", path: "/colaboradores", slug: "colaboradores" },
+  { icon: Users, label: "Clientes", path: "/clientes", slug: "clientes" },
+  { icon: Users, label: "Usuários", path: "/usuarios", slug: null }, // admin only - controlado pelo role
+  { icon: Layers, label: "Setores e Equipamentos", path: "/setores", slug: "equipamentos" },
+  { icon: Truck, label: "Controle de Cargas", path: "/cargas", slug: "cargas" },
+  { icon: ClipboardList, label: "Controle de Equipamentos", path: "/maquinas", slug: "manutencao" },
+  { icon: Car, label: "Controle de Abastecimento", path: "/veiculos", slug: "equipamentos" },
+  { icon: Package, label: "Peças e Acessórios", path: "/pecas", slug: "pecas" },
+  { icon: Globe, label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente" },
+  { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },
+  { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps" },
 ];
 
 // Rotas que são subpáginas (não estão no menu principal)
@@ -109,6 +110,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const { hasAccess, isAdmin } = usePermissions();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -206,7 +208,15 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
+              {menuItems.filter(item => {
+                // Painel sempre visível
+                if (item.slug === null) {
+                  // Usuários: apenas admin
+                  if (item.path === "/usuarios") return isAdmin;
+                  return true;
+                }
+                return hasAccess(item.slug);
+              }).map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>

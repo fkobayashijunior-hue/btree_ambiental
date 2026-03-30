@@ -1,197 +1,265 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { ShieldCheck, Save, Info } from "lucide-react";
+import { Shield, User, ChevronDown, ChevronUp, Check, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-// Funções disponíveis no sistema
-const ROLES = [
-  { key: "administrativo", label: "Administrativo", color: "bg-blue-100 text-blue-800" },
-  { key: "encarregado", label: "Encarregado", color: "bg-purple-100 text-purple-800" },
-  { key: "mecanico", label: "Mecânico", color: "bg-orange-100 text-orange-800" },
-  { key: "motosserrista", label: "Motosserrista", color: "bg-red-100 text-red-800" },
-  { key: "carregador", label: "Carregador", color: "bg-yellow-100 text-yellow-800" },
-  { key: "operador", label: "Operador", color: "bg-green-100 text-green-800" },
-  { key: "motorista", label: "Motorista", color: "bg-teal-100 text-teal-800" },
-  { key: "terceirizado", label: "Terceirizado", color: "bg-gray-100 text-gray-800" },
-];
-
-// Módulos do sistema com descrição
-const MODULES = [
-  { key: "colaboradores", label: "Colaboradores", desc: "Ficha e cadastro de colaboradores" },
-  { key: "presenca", label: "Presença Biométrica", desc: "Registro de presença por reconhecimento facial" },
-  { key: "presencas_lista", label: "Relatório de Presenças", desc: "Visualizar lista de presenças registradas" },
-  { key: "setores_equipamentos", label: "Setores & Equipamentos", desc: "Gerenciar setores e equipamentos" },
-  { key: "controle_acesso", label: "Controle de Acesso", desc: "Configurar permissões de acesso" },
-];
-
-// Permissões padrão por função (usadas quando não há configuração salva)
-const DEFAULT_PERMISSIONS: Record<string, Record<string, boolean>> = {
-  administrativo: { colaboradores: true, presenca: true, presencas_lista: true, setores_equipamentos: true, controle_acesso: true },
-  encarregado: { colaboradores: false, presenca: true, presencas_lista: true, setores_equipamentos: false, controle_acesso: false },
-  mecanico: { colaboradores: false, presenca: false, presencas_lista: false, setores_equipamentos: true, controle_acesso: false },
-  motosserrista: { colaboradores: false, presenca: false, presencas_lista: false, setores_equipamentos: false, controle_acesso: false },
-  carregador: { colaboradores: false, presenca: false, presencas_lista: false, setores_equipamentos: false, controle_acesso: false },
-  operador: { colaboradores: false, presenca: false, presencas_lista: false, setores_equipamentos: false, controle_acesso: false },
-  motorista: { colaboradores: false, presenca: false, presencas_lista: false, setores_equipamentos: false, controle_acesso: false },
-  terceirizado: { colaboradores: false, presenca: false, presencas_lista: false, setores_equipamentos: false, controle_acesso: false },
+const PROFILE_COLORS: Record<string, string> = {
+  admin:         "bg-red-100 text-red-800 border-red-200",
+  mecanico:      "bg-blue-100 text-blue-800 border-blue-200",
+  operador:      "bg-orange-100 text-orange-800 border-orange-200",
+  motorista:     "bg-purple-100 text-purple-800 border-purple-200",
+  motosserrista: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  custom:        "bg-gray-100 text-gray-700 border-gray-200",
 };
 
 export default function AccessControl() {
-  const [permissions, setPermissions] = useState<Record<string, Record<string, boolean>>>(DEFAULT_PERMISSIONS);
-  const [saving, setSaving] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [expandedUser, setExpandedUser] = useState<number | null>(null);
+  const [pendingModules, setPendingModules] = useState<Record<number, string[]>>({});
+  const [pendingProfiles, setPendingProfiles] = useState<Record<number, string>>({});
 
-  const toggle = (role: string, module: string) => {
-    setPermissions(prev => ({
-      ...prev,
-      [role]: {
-        ...prev[role],
-        [module]: !prev[role]?.[module],
-      },
-    }));
+  const utils = trpc.useUtils();
+  const { data: usersList = [], isLoading: loadingUsers } = trpc.permissions.listUsers.useQuery();
+  const { data: modulesList = [] } = trpc.permissions.listModules.useQuery();
+  const { data: profilesList = [] } = trpc.permissions.listProfiles.useQuery();
+
+  const setPermsMutation = trpc.permissions.setPermissions.useMutation({
+    onSuccess: () => {
+      toast.success("Permissões salvas!");
+      utils.permissions.listUsers.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "Erro ao salvar"),
+  });
+
+  // Agrupar módulos por grupo
+  const groups = (modulesList as Array<{ slug: string; label: string; group: string }>).reduce((acc, m) => {
+    if (!acc[m.group]) acc[m.group] = [];
+    acc[m.group].push(m);
+    return acc;
+  }, {} as Record<string, Array<{ slug: string; label: string; group: string }>>);
+
+  const getUserModules = (userId: number, userModules: string[] | null): string[] => {
+    if (pendingModules[userId] !== undefined) return pendingModules[userId];
+    return userModules || [];
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    // Simula salvamento (backend RBAC será implementado na próxima fase)
-    await new Promise(r => setTimeout(r, 800));
-    setSaving(false);
-    toast.success("Permissões salvas com sucesso!");
+  const getUserProfile = (userId: number, userProfile: string): string => {
+    return pendingProfiles[userId] ?? userProfile;
   };
 
-  const setAllForRole = (role: string, value: boolean) => {
-    setPermissions(prev => ({
-      ...prev,
-      [role]: Object.fromEntries(MODULES.map(m => [m.key, value])),
-    }));
+  const toggleModule = (userId: number, slug: string, currentModules: string[] | null) => {
+    const current = getUserModules(userId, currentModules);
+    const updated = current.includes(slug)
+      ? current.filter(m => m !== slug)
+      : [...current, slug];
+    setPendingModules(p => ({ ...p, [userId]: updated }));
+    setPendingProfiles(p => ({ ...p, [userId]: "custom" }));
   };
+
+  const handleApplyProfile = (userId: number, profileKey: string) => {
+    const profile = profilesList.find(p => p.key === profileKey);
+    if (!profile) return;
+    setPendingProfiles(p => ({ ...p, [userId]: profileKey }));
+    if (profileKey === "admin") {
+      setPendingModules(p => { const n = { ...p }; delete n[userId]; return n; });
+    } else {
+      setPendingModules(p => ({ ...p, [userId]: [...profile.modules] }));
+    }
+  };
+
+  const handleSave = (userId: number, currentModules: string[] | null, currentProfile: string) => {
+    const modules = pendingModules[userId] !== undefined ? pendingModules[userId] : currentModules;
+    const profile = pendingProfiles[userId] ?? currentProfile;
+    const isAdminProfile = profile === "admin";
+    setPermsMutation.mutate({
+      userId,
+      modules: isAdminProfile ? null : (modules || []),
+      profile,
+    });
+    setPendingModules(p => { const n = { ...p }; delete n[userId]; return n; });
+    setPendingProfiles(p => { const n = { ...p }; delete n[userId]; return n; });
+  };
+
+  const hasPendingChanges = (userId: number) =>
+    pendingModules[userId] !== undefined || pendingProfiles[userId] !== undefined;
+
+  if (loadingUsers) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-emerald-800 flex items-center gap-2">
-            <ShieldCheck className="h-7 w-7" /> Controle de Acesso
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">Defina o que cada função pode visualizar no sistema</p>
+    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+          <Shield className="h-5 w-5 text-emerald-700" />
         </div>
-        <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-          <Save className="h-4 w-4" /> {saving ? "Salvando..." : "Salvar Permissões"}
-        </Button>
-      </div>
-
-      {/* Info box */}
-      <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-        <Info className="h-5 w-5 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="font-semibold">Como funciona o controle de acesso</p>
-          <p className="mt-1 text-blue-700">Marque os módulos que cada função pode acessar. O <strong>Administrador</strong> sempre tem acesso total. As permissões entram em vigor imediatamente após salvar.</p>
+          <h1 className="text-xl font-bold text-gray-900">Controle de Acesso</h1>
+          <p className="text-sm text-gray-500">Defina quais módulos cada usuário pode acessar</p>
         </div>
       </div>
 
-      {/* Seletor de função (mobile) */}
-      <div className="flex flex-wrap gap-2 md:hidden">
-        {ROLES.map(r => (
-          <button
-            key={r.key}
-            onClick={() => setSelectedRole(selectedRole === r.key ? null : r.key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${selectedRole === r.key ? r.color + " ring-2 ring-offset-1 ring-emerald-500" : "bg-gray-100 text-gray-600"}`}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
+      {/* Legenda de perfis */}
+      <Card className="border-emerald-100">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm font-semibold text-gray-700">Perfis Disponíveis</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <div className="flex flex-wrap gap-2">
+            {profilesList.map(p => (
+              <div key={p.key} className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${PROFILE_COLORS[p.key] || PROFILE_COLORS.custom}`}>
+                <span>{p.label}</span>
+                <span className="opacity-60">({p.key === "admin" ? "todos" : p.modules.length} módulos)</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Tabela de permissões - Desktop */}
-      <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left p-4 font-semibold text-gray-700 w-48">Módulo</th>
-              {ROLES.map(r => (
-                <th key={r.key} className="p-3 text-center">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.color}`}>{r.label}</span>
-                    <div className="flex gap-1 mt-1">
-                      <button onClick={() => setAllForRole(r.key, true)} className="text-xs text-emerald-600 hover:underline">Tudo</button>
-                      <span className="text-gray-300">|</span>
-                      <button onClick={() => setAllForRole(r.key, false)} className="text-xs text-red-500 hover:underline">Nada</button>
+      {/* Lista de usuários */}
+      <div className="space-y-3">
+        {(usersList as any[]).map((user: any) => {
+          const isExpanded = expandedUser === user.id;
+          const currentProfile = getUserProfile(user.id, user.profile);
+          const currentModules = getUserModules(user.id, user.modules);
+          const isAdminProfile = currentProfile === "admin" || user.role === "admin";
+          const changed = hasPendingChanges(user.id);
+
+          return (
+            <Card key={user.id} className={`transition-all ${changed ? "border-emerald-400 shadow-sm" : "border-gray-200"}`}>
+              <CardContent className="p-0">
+                <button
+                  className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors rounded-xl"
+                  onClick={() => setExpandedUser(isExpanded ? null : user.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <User className="h-4 w-4 text-emerald-700" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900 text-sm">{user.name}</p>
+                      <p className="text-xs text-gray-500">{user.email}</p>
                     </div>
                   </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {MODULES.map((m, idx) => (
-              <tr key={m.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
-                <td className="p-4">
-                  <p className="font-medium text-gray-800">{m.label}</p>
-                  <p className="text-xs text-gray-400">{m.desc}</p>
-                </td>
-                {ROLES.map(r => (
-                  <td key={r.key} className="p-3 text-center">
-                    <button
-                      onClick={() => toggle(r.key, m.key)}
-                      className={`w-10 h-6 rounded-full transition-all duration-200 relative ${permissions[r.key]?.[m.key] ? "bg-emerald-500" : "bg-gray-200"}`}
-                    >
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-200 ${permissions[r.key]?.[m.key] ? "left-4.5 translate-x-0" : "left-0.5"}`} />
-                    </button>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Cards de permissão - Mobile */}
-      <div className="md:hidden space-y-4">
-        {ROLES.filter(r => !selectedRole || r.key === selectedRole).map(r => (
-          <Card key={r.key}>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center justify-between">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${r.color}`}>{r.label}</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setAllForRole(r.key, true)} className="text-xs text-emerald-600 hover:underline">Tudo</button>
-                  <button onClick={() => setAllForRole(r.key, false)} className="text-xs text-red-500 hover:underline">Nada</button>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {MODULES.map(m => (
-                <div key={m.key} className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{m.label}</p>
-                    <p className="text-xs text-gray-400">{m.desc}</p>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {changed && (
+                      <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                        Alterado
+                      </Badge>
+                    )}
+                    <Badge className={`text-xs border ${PROFILE_COLORS[currentProfile] || PROFILE_COLORS.custom}`}>
+                      {profilesList.find(p => p.key === currentProfile)?.label || "Personalizado"}
+                    </Badge>
+                    {isAdminProfile ? (
+                      <Badge className="bg-gray-100 text-gray-600 text-xs">Acesso total</Badge>
+                    ) : (
+                      <Badge className="bg-gray-100 text-gray-600 text-xs">{currentModules.length} módulos</Badge>
+                    )}
+                    {isExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                   </div>
-                  <button
-                    onClick={() => toggle(r.key, m.key)}
-                    className={`flex-shrink-0 w-12 h-6 rounded-full transition-all duration-200 relative ${permissions[r.key]?.[m.key] ? "bg-emerald-500" : "bg-gray-200"}`}
-                  >
-                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-200 ${permissions[r.key]?.[m.key] ? "left-6" : "left-0.5"}`} />
-                  </button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
+                </button>
+
+                {isExpanded && (
+                  <div className="border-t border-gray-100 p-4 space-y-4">
+                    {/* Seletor de perfil */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Aplicar perfil:</span>
+                      <Select
+                        value={currentProfile}
+                        onValueChange={(val) => handleApplyProfile(user.id, val)}
+                      >
+                        <SelectTrigger className="h-8 text-sm w-48">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profilesList.map(p => (
+                            <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <span className="text-xs text-gray-400">ou selecione módulos individualmente</span>
+                    </div>
+
+                    {/* Módulos por grupo */}
+                    {isAdminProfile ? (
+                      <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 flex items-center gap-2">
+                        <Check className="h-4 w-4" />
+                        Administrador — acesso completo a todos os módulos
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {Object.entries(groups).map(([group, mods]) => (
+                          <div key={group}>
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{group}</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {mods.map((mod: any) => (
+                                <label
+                                  key={mod.slug}
+                                  className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                                    currentModules.includes(mod.slug)
+                                      ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                      : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                                  }`}
+                                >
+                                  <Checkbox
+                                    checked={currentModules.includes(mod.slug)}
+                                    onCheckedChange={() => toggleModule(user.id, mod.slug, user.modules)}
+                                    className="h-4 w-4 flex-shrink-0"
+                                  />
+                                  <span className="font-medium leading-tight">{mod.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Botão salvar */}
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        size="sm"
+                        className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
+                        onClick={() => handleSave(user.id, user.modules, user.profile)}
+                        disabled={setPermsMutation.isPending}
+                      >
+                        {setPermsMutation.isPending ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3" />
+                        )}
+                        Salvar Permissões
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Legenda */}
-      <div className="flex flex-wrap gap-4 text-xs text-gray-500 pt-2">
-        <div className="flex items-center gap-1.5">
-          <div className="w-8 h-4 rounded-full bg-emerald-500" />
-          <span>Acesso liberado</span>
+      {(usersList as any[]).length === 0 && (
+        <div className="text-center py-16 text-gray-400">
+          <Shield className="h-16 w-16 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium">Nenhum usuário encontrado</p>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-8 h-4 rounded-full bg-gray-200" />
-          <span>Acesso bloqueado</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

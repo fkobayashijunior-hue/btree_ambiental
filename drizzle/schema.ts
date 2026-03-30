@@ -751,3 +751,21 @@ export const partsStockMovements = mysqlTable("parts_stock_movements", {
 });
 export type PartsStockMovement = typeof partsStockMovements.$inferSelect;
 export type InsertPartsStockMovement = typeof partsStockMovements.$inferInsert;
+
+// ===== PERMISSÕES DE ACESSO POR MÓDULO =====
+// Controla quais módulos cada usuário pode acessar no sistema
+// modules é um JSON array com os slugs dos módulos permitidos
+// Ex: ["equipamentos","pecas","manutencao","horas-maquina"]
+export const userPermissions = mysqlTable("user_permissions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  // JSON array de módulos permitidos. null = admin (acesso total)
+  modules: text("modules"), // JSON: string[]
+  // Perfil pré-definido para referência (não restringe, apenas label)
+  profile: varchar("profile", { length: 64 }).default("custom"),
+  updatedBy: int("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type UserPermission = typeof userPermissions.$inferSelect;
+export type InsertUserPermission = typeof userPermissions.$inferInsert;

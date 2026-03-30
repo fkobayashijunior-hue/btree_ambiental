@@ -64,12 +64,13 @@ __export(schema_exports, {
   replantingRecords: () => replantingRecords,
   rolePermissions: () => rolePermissions,
   sectors: () => sectors,
+  userPermissions: () => userPermissions,
   userProfiles: () => userProfiles,
   users: () => users,
   vehicleRecords: () => vehicleRecords
 });
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements;
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements, userPermissions;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -733,6 +734,18 @@ var init_schema = __esm({
       unitCost: varchar("unit_cost", { length: 20 }),
       notes: text("notes"),
       registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    userPermissions = mysqlTable("user_permissions", {
+      id: int("id").autoincrement().primaryKey(),
+      userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+      // JSON array de módulos permitidos. null = admin (acesso total)
+      modules: text("modules"),
+      // JSON: string[]
+      // Perfil pré-definido para referência (não restringe, apenas label)
+      profile: varchar("profile", { length: 64 }).default("custom"),
+      updatedBy: int("updated_by").references(() => users.id),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
   }
@@ -2183,21 +2196,21 @@ var machineHoursRouter = router({
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
-    return equipmentList.map((eq16) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq16.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq16.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq16.id);
+    return equipmentList.map((eq17) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq17.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq17.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq17.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq16.id,
-        equipmentName: eq16.name,
-        brand: eq16.brand,
-        model: eq16.model,
-        status: eq16.status,
+        equipmentId: eq17.id,
+        equipmentName: eq17.name,
+        brand: eq17.brand,
+        model: eq17.model,
+        status: eq17.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -3688,16 +3701,167 @@ var traccarRouter = router({
   })
 });
 
+// server/routers/permissions.ts
+import { z as z16 } from "zod";
+init_db();
+init_schema();
+import { TRPCError as TRPCError12 } from "@trpc/server";
+import { eq as eq16 } from "drizzle-orm";
+var SYSTEM_MODULES = [
+  { slug: "equipamentos", label: "Equipamentos", group: "Maquin\xE1rio" },
+  { slug: "pecas", label: "Pe\xE7as / Estoque", group: "Maquin\xE1rio" },
+  { slug: "manutencao", label: "Manuten\xE7\xE3o", group: "Maquin\xE1rio" },
+  { slug: "horas-maquina", label: "Horas de M\xE1quina", group: "Maquin\xE1rio" },
+  { slug: "colaboradores", label: "Colaboradores", group: "Pessoas" },
+  { slug: "presencas", label: "Presen\xE7as", group: "Pessoas" },
+  { slug: "reflorestamento", label: "Reflorestamento", group: "Opera\xE7\xF5es" },
+  { slug: "cargas", label: "Controle de Cargas", group: "Opera\xE7\xF5es" },
+  { slug: "clientes", label: "Clientes", group: "Comercial" },
+  { slug: "portal-cliente", label: "Portal do Cliente", group: "Comercial" },
+  { slug: "gps", label: "Rastreamento GPS", group: "Opera\xE7\xF5es" },
+  { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
+  { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" }
+];
+var PROFILES = {
+  admin: {
+    label: "Administrador",
+    modules: SYSTEM_MODULES.map((m) => m.slug)
+  },
+  mecanico: {
+    label: "Mec\xE2nico",
+    modules: ["equipamentos", "pecas", "manutencao", "horas-maquina"]
+  },
+  operador: {
+    label: "Operador",
+    modules: ["equipamentos", "horas-maquina"]
+  },
+  motorista: {
+    label: "Motorista",
+    modules: ["equipamentos", "cargas"]
+  },
+  motosserrista: {
+    label: "Motosserrista",
+    modules: ["equipamentos", "manutencao"]
+  },
+  custom: {
+    label: "Personalizado",
+    modules: []
+  }
+};
+var permissionsRouter = router({
+  // Listar módulos disponíveis
+  listModules: protectedProcedure.query(() => {
+    return SYSTEM_MODULES;
+  }),
+  // Listar perfis pré-definidos
+  listProfiles: protectedProcedure.query(() => {
+    return Object.entries(PROFILES).map(([key, val]) => ({
+      key,
+      label: val.label,
+      modules: val.modules
+    }));
+  }),
+  // Listar todos os usuários com suas permissões
+  listUsers: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+    const allUsers = await db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      createdAt: users.createdAt
+    }).from(users).orderBy(users.name);
+    const allPerms = await db.select().from(userPermissions);
+    const permMap = Object.fromEntries(allPerms.map((p) => [p.userId, p]));
+    return allUsers.map((u) => ({
+      ...u,
+      permissions: permMap[u.id] || null,
+      modules: u.role === "admin" ? null : permMap[u.id]?.modules ? JSON.parse(permMap[u.id].modules) : [],
+      profile: permMap[u.id]?.profile || "custom"
+    }));
+  }),
+  // Buscar permissões do usuário atual
+  myPermissions: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role === "admin") return { modules: null, profile: "admin" };
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+    const [perm] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, ctx.user.id));
+    if (!perm) return { modules: [], profile: "custom" };
+    return {
+      modules: perm.modules ? JSON.parse(perm.modules) : [],
+      profile: perm.profile || "custom"
+    };
+  }),
+  // Definir permissões de um usuário (apenas admin)
+  setPermissions: protectedProcedure.input(z16.object({
+    userId: z16.number(),
+    modules: z16.array(z16.string()).nullable(),
+    // null = acesso total
+    profile: z16.string().default("custom")
+  })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+    const modulesJson = input.modules === null ? null : JSON.stringify(input.modules);
+    const [existing] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, input.userId));
+    if (existing) {
+      await db.update(userPermissions).set({
+        modules: modulesJson,
+        profile: input.profile,
+        updatedBy: ctx.user.id
+      }).where(eq16(userPermissions.userId, input.userId));
+    } else {
+      await db.insert(userPermissions).values({
+        userId: input.userId,
+        modules: modulesJson,
+        profile: input.profile,
+        updatedBy: ctx.user.id
+      });
+    }
+    return { success: true };
+  }),
+  // Aplicar perfil pré-definido a um usuário
+  applyProfile: protectedProcedure.input(z16.object({
+    userId: z16.number(),
+    profileKey: z16.string()
+  })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+    const profile = PROFILES[input.profileKey];
+    if (!profile) throw new TRPCError12({ code: "BAD_REQUEST", message: "Perfil inv\xE1lido" });
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+    const modulesJson = input.profileKey === "admin" ? null : JSON.stringify(profile.modules);
+    const [existing] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, input.userId));
+    if (existing) {
+      await db.update(userPermissions).set({
+        modules: modulesJson,
+        profile: input.profileKey,
+        updatedBy: ctx.user.id
+      }).where(eq16(userPermissions.userId, input.userId));
+    } else {
+      await db.insert(userPermissions).values({
+        userId: input.userId,
+        modules: modulesJson,
+        profile: input.profileKey,
+        updatedBy: ctx.user.id
+      });
+    }
+    return { success: true };
+  })
+});
+
 // server/routers/dashboard.ts
 init_db();
 init_schema();
 import { sql as sql3, gte as gte3, lte as lte3, and as and8 } from "drizzle-orm";
-import { z as z16 } from "zod";
+import { z as z17 } from "zod";
 var dashboardRouter = router({
-  stats: protectedProcedure.input(z16.object({
-    month: z16.number().min(0).max(11).optional(),
+  stats: protectedProcedure.input(z17.object({
+    month: z17.number().min(0).max(11).optional(),
     // 0-indexed
-    year: z16.number().min(2020).max(2100).optional()
+    year: z17.number().min(2020).max(2100).optional()
   }).optional()).query(async ({ input }) => {
     const now = /* @__PURE__ */ new Date();
     const targetMonth = input?.month ?? now.getMonth();
@@ -3799,7 +3963,7 @@ var dashboardRouter = router({
 });
 
 // server/routers.ts
-import { z as z17 } from "zod";
+import { z as z18 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -3908,10 +4072,10 @@ var appRouter = router({
   dashboard: dashboardRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z17.object({
-      name: z17.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z17.string().email("Email inv\xE1lido"),
-      password: z17.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z18.object({
+      name: z18.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z18.string().email("Email inv\xE1lido"),
+      password: z18.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -3926,9 +4090,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z17.object({
-      email: z17.string().email("Email inv\xE1lido"),
-      password: z17.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z18.object({
+      email: z18.string().email("Email inv\xE1lido"),
+      password: z18.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -3944,11 +4108,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z17.object({
-      seedKey: z17.string(),
-      email: z17.string().email(),
-      name: z17.string(),
-      password: z17.string().min(4)
+    seedAdmin: publicProcedure.input(z18.object({
+      seedKey: z18.string(),
+      email: z18.string().email(),
+      name: z18.string(),
+      password: z18.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -3958,9 +4122,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z17.object({
-      email: z17.string().email("Email inv\xE1lido"),
-      origin: z17.string().url().optional()
+    forgotPassword: publicProcedure.input(z18.object({
+      email: z18.string().email("Email inv\xE1lido"),
+      origin: z18.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -3974,9 +4138,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z17.object({
-      token: z17.string().min(1),
-      password: z17.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z18.object({
+      token: z18.string().min(1),
+      password: z18.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -3985,10 +4149,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq16 } = await import("drizzle-orm");
+      const { eq: eq17 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq16(users3.id, resetToken.userId));
+      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq17(users3.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -4013,7 +4177,8 @@ var appRouter = router({
   equipmentDetail: equipmentDetailRouter,
   purchaseOrders: purchaseOrdersRouter,
   attendance: attendanceRouter,
-  traccar: traccarRouter
+  traccar: traccarRouter,
+  permissions: permissionsRouter
   // TODO: add feature routers here, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>
