@@ -16,6 +16,13 @@ import {
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+// ─── Logos e dados de contato ────────────────────────────────────────────────
+const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+const BTREE_SITE = "https://btreeambiental.com";
+const BTREE_CONTATO = "(44) 99999-9999 | contato@btreeambiental.com";
+const BTREE_ENDERECO = "Astorga - PR | BTREE Ambiental";
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
@@ -169,126 +176,195 @@ export default function AttendanceList() {
     toast.success(`${collab.name} marcado como pago!`);
   };
 
-  // ── Exportar PDF semanal ─────────────────────────────────────────────────
-  const handleExportWeekPDF = async () => {
+  // ── Exportar PDF semanal (HTML) ──────────────────────────────────────────────
+  const handleExportWeekPDF = () => {
     if (weekByCollab.length === 0) { toast.error("Nenhuma presença na semana"); return; }
-    try {
-      const { default: jsPDF } = await import("jspdf");
-      const { default: autoTable } = await import("jspdf-autotable");
-      const doc = new jsPDF();
-
-      const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;
-
-      doc.setFontSize(16);
-      doc.setTextColor(22, 101, 52);
-      doc.text("BTREE Ambiental", 14, 18);
-      doc.setFontSize(11);
-      doc.setTextColor(80, 80, 80);
-      doc.text(`Relatório Semanal de Presenças — Semana ${weekLabel}`, 14, 26);
-
-      doc.setFontSize(10);
-      doc.setTextColor(40, 40, 40);
-      doc.text(`Total de presenças: ${weekTotals.diarias}`, 14, 36);
-      doc.text(`Total a pagar (pendentes): R$ ${weekTotals.pendente.toFixed(2)}`, 14, 42);
-      doc.text(`Total pago: R$ ${weekTotals.pago.toFixed(2)}`, 14, 48);
-      doc.text(`Total geral: R$ ${weekTotals.total.toFixed(2)}`, 14, 54);
-
-      // Tabela por colaborador
-      const rows = weekByCollab.map(c => [
-        c.name,
-        c.days.length.toString(),
-        c.days.map(d => fmtDateFull(d.date)).join(", "),
-        EMPLOYMENT_LABELS[c.employmentType] || c.employmentType,
-        c.pixKey || "—",
-        `R$ ${c.total.toFixed(2)}`,
-        c.pendente > 0 ? `R$ ${c.pendente.toFixed(2)}` : "—",
-        c.pago > 0 ? `R$ ${c.pago.toFixed(2)}` : "—",
-      ]);
-
-      autoTable(doc, {
-        startY: 62,
-        head: [["Colaborador", "Dias", "Datas", "Vínculo", "PIX", "Total", "A Pagar", "Pago"]],
-        body: rows,
-        styles: { fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
-        alternateRowStyles: { fillColor: [240, 253, 244] },
-        columnStyles: {
-          5: { halign: "right" },
-          6: { halign: "right" },
-          7: { halign: "right" },
-        },
-      });
-
-      // Rodapé
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} — Kobayashi Desenvolvimento`, 14, doc.internal.pageSize.height - 8);
-        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
-      }
-
-      doc.save(`presencas-semana-${format(weekStart, "dd-MM")}-a-${format(weekEnd, "dd-MM-yyyy")}.pdf`);
-      toast.success("PDF semanal gerado!");
-    } catch (err) {
-      toast.error("Erro ao gerar PDF");
-      console.error(err);
-    }
+    const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(BTREE_SITE)}`;
+    const rows = weekByCollab.map(c => `
+      <tr>
+        <td>${c.name}</td>
+        <td style="text-align:center">${c.days.length}</td>
+        <td style="font-size:10px">${c.days.map(d => fmtDateFull(d.date)).join(", ")}</td>
+        <td>${EMPLOYMENT_LABELS[c.employmentType] || c.employmentType}</td>
+        <td>${c.pixKey || "—"}</td>
+        <td style="text-align:right">R$ ${c.total.toFixed(2)}</td>
+        <td style="text-align:right;color:${c.pendente > 0 ? "#dc2626" : "#6b7280"}">${c.pendente > 0 ? `R$ ${c.pendente.toFixed(2)}` : "—"}</td>
+        <td style="text-align:right;color:${c.pago > 0 ? "#16a34a" : "#6b7280"}">${c.pago > 0 ? `R$ ${c.pago.toFixed(2)}` : "—"}</td>
+      </tr>`).join("");
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório Semanal de Presenças</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 20px; }
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #2e7d32; padding-bottom: 12px; margin-bottom: 16px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-left img { height: 50px; object-fit: contain; }
+    .header-info h1 { font-size: 18px; color: #2e7d32; font-weight: bold; }
+    .header-info p { font-size: 11px; color: #555; margin-top: 2px; }
+    .summary { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+    .summary-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 16px; flex: 1; min-width: 120px; }
+    .summary-card .label { font-size: 10px; color: #6b7280; text-transform: uppercase; }
+    .summary-card .value { font-size: 16px; font-weight: bold; color: #2e7d32; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    th { background: #2e7d32; color: white; padding: 8px; text-align: left; font-size: 11px; }
+    td { padding: 7px 8px; border-bottom: 1px solid #e0e0e0; font-size: 11px; }
+    tr:nth-child(even) td { background: #f5f5f5; }
+    .footer { margin-top: 20px; border-top: 2px solid #2e7d32; padding-top: 12px; display: flex; align-items: flex-end; justify-content: space-between; }
+    .footer-left { font-size: 10px; color: #555; line-height: 1.6; }
+    .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .footer-right img.qr { width: 70px; height: 70px; }
+    .footer-right .qr-label { font-size: 9px; color: #888; }
+    .dev-credit { font-size: 9px; color: #aaa; margin-top: 8px; }
+    .dev-credit img { height: 18px; vertical-align: middle; opacity: 0.6; }
+    @media print { body { padding: 10px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
+      <div class="header-info">
+        <h1>Relatório Semanal de Presenças</h1>
+        <p>Semana: ${weekLabel}</p>
+        <p>${BTREE_CONTATO}</p>
+      </div>
+    </div>
+    <div style="text-align:right; font-size:11px; color:#555;">
+      Emitido em: <strong>${new Date().toLocaleDateString("pt-BR")}</strong>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="summary-card"><div class="label">Total de Presenças</div><div class="value">${weekTotals.diarias}</div></div>
+    <div class="summary-card"><div class="label">A Pagar (Pendente)</div><div class="value" style="color:#dc2626">R$ ${weekTotals.pendente.toFixed(2)}</div></div>
+    <div class="summary-card"><div class="label">Total Pago</div><div class="value">R$ ${weekTotals.pago.toFixed(2)}</div></div>
+    <div class="summary-card"><div class="label">Total Geral</div><div class="value">R$ ${weekTotals.total.toFixed(2)}</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Colaborador</th><th style="text-align:center">Dias</th><th>Datas Trabalhadas</th>
+      <th>Vínculo</th><th>PIX</th><th style="text-align:right">Total</th>
+      <th style="text-align:right">A Pagar</th><th style="text-align:right">Pago</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">
+    <div class="footer-left">
+      <strong>BTREE Ambiental</strong><br/>
+      ${BTREE_ENDERECO}<br/>
+      ${BTREE_CONTATO}<br/>
+      <a href="${BTREE_SITE}" style="color:#2e7d32;">${BTREE_SITE}</a>
+      <div class="dev-credit">
+        Desenvolvido por <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" /> Kobayashi Desenvolvimento de Sistemas
+      </div>
+    </div>
+    <div class="footer-right">
+      <img class="qr" src="${qrUrl}" alt="QR Code" />
+      <span class="qr-label">Acesse nosso site</span>
+    </div>
+  </div>
+</body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Permita pop-ups para gerar o PDF"); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 600);
+    toast.success("PDF semanal gerado!");
   };
 
-  // ── Exportar PDF diário ──────────────────────────────────────────────────
-  const handleExportDayPDF = async () => {
+  // ── Exportar PDF diário (HTML) ────────────────────────────────────────────────
+  const handleExportDayPDF = () => {
     if ((dayRecords as any[]).length === 0) { toast.error("Nenhuma presença para exportar"); return; }
-    try {
-      const { default: jsPDF } = await import("jspdf");
-      const { default: autoTable } = await import("jspdf-autotable");
-      const doc = new jsPDF();
-      const dateLabel = format(parseISO(searchDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-
-      doc.setFontSize(16);
-      doc.setTextColor(22, 101, 52);
-      doc.text("BTREE Ambiental", 14, 18);
-      doc.setFontSize(11);
-      doc.setTextColor(80, 80, 80);
-      doc.text(`Relatório de Presenças — ${dateLabel}`, 14, 26);
-      doc.setFontSize(10);
-      doc.setTextColor(40, 40, 40);
-      doc.text(`Total: ${(dayRecords as any[]).length} presenças | A pagar: R$ ${dayPendenteTotal.toFixed(2)} | Total: R$ ${dayTotal.toFixed(2)}`, 14, 36);
-
-      const rows = (dayRecords as any[]).map((r: any) => [
-        r.collaboratorName || "-",
-        r.activity || "-",
-        EMPLOYMENT_LABELS[r.employmentType] || r.employmentType,
-        `R$ ${parseFloat(r.dailyValue || "0").toFixed(2)}`,
-        r.pixKey || "-",
-        r.paymentStatus === "pago" ? "Pago" : "Pendente",
-      ]);
-
-      autoTable(doc, {
-        startY: 44,
-        head: [["Colaborador", "Atividade", "Vínculo", "Valor", "PIX", "Status"]],
-        body: rows,
-        styles: { fontSize: 9, cellPadding: 3 },
-        headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
-        alternateRowStyles: { fillColor: [240, 253, 244] },
-        columnStyles: { 3: { halign: "right" }, 5: { halign: "center" } },
-      });
-
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} — Kobayashi Desenvolvimento`, 14, doc.internal.pageSize.height - 8);
-        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
-      }
-
-      doc.save(`presencas-${searchDate}.pdf`);
-      toast.success("PDF gerado!");
-    } catch (err) {
-      toast.error("Erro ao gerar PDF");
-    }
+    const dateLabel = format(parseISO(searchDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(BTREE_SITE)}`;
+    const rows = (dayRecords as any[]).map((r: any) => `
+      <tr>
+        <td>${r.collaboratorName || "-"}</td>
+        <td>${r.activity || "-"}</td>
+        <td>${EMPLOYMENT_LABELS[r.employmentType] || r.employmentType}</td>
+        <td style="text-align:right">R$ ${parseFloat(r.dailyValue || "0").toFixed(2)}</td>
+        <td>${r.pixKey || "-"}</td>
+        <td style="text-align:center;color:${r.paymentStatus === "pago" ? "#16a34a" : "#dc2626"}">${r.paymentStatus === "pago" ? "Pago" : "Pendente"}</td>
+      </tr>`).join("");
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Presenças - ${searchDate}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 20px; }
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #2e7d32; padding-bottom: 12px; margin-bottom: 16px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-left img { height: 50px; object-fit: contain; }
+    .header-info h1 { font-size: 18px; color: #2e7d32; font-weight: bold; }
+    .header-info p { font-size: 11px; color: #555; margin-top: 2px; }
+    .meta { font-size: 11px; color: #444; margin-bottom: 12px; padding: 8px 12px; background: #f0fdf4; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    th { background: #2e7d32; color: white; padding: 8px; text-align: left; font-size: 11px; }
+    td { padding: 7px 8px; border-bottom: 1px solid #e0e0e0; font-size: 11px; }
+    tr:nth-child(even) td { background: #f5f5f5; }
+    .footer { margin-top: 20px; border-top: 2px solid #2e7d32; padding-top: 12px; display: flex; align-items: flex-end; justify-content: space-between; }
+    .footer-left { font-size: 10px; color: #555; line-height: 1.6; }
+    .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .footer-right img.qr { width: 70px; height: 70px; }
+    .footer-right .qr-label { font-size: 9px; color: #888; }
+    .dev-credit { font-size: 9px; color: #aaa; margin-top: 8px; }
+    .dev-credit img { height: 18px; vertical-align: middle; opacity: 0.6; }
+    @media print { body { padding: 10px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
+      <div class="header-info">
+        <h1>Relatório de Presenças</h1>
+        <p>${dateLabel}</p>
+        <p>${BTREE_CONTATO}</p>
+      </div>
+    </div>
+    <div style="text-align:right; font-size:11px; color:#555;">
+      Emitido em: <strong>${new Date().toLocaleDateString("pt-BR")}</strong>
+    </div>
+  </div>
+  <div class="meta">
+    Total: <strong>${(dayRecords as any[]).length} presenças</strong> &nbsp;|
+    A pagar: <strong style="color:#dc2626">R$ ${dayPendenteTotal.toFixed(2)}</strong> &nbsp;|
+    Total geral: <strong>R$ ${dayTotal.toFixed(2)}</strong>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Colaborador</th><th>Atividade</th><th>Vínculo</th>
+      <th style="text-align:right">Valor Diária</th><th>PIX</th><th style="text-align:center">Status</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">
+    <div class="footer-left">
+      <strong>BTREE Ambiental</strong><br/>
+      ${BTREE_ENDERECO}<br/>
+      ${BTREE_CONTATO}<br/>
+      <a href="${BTREE_SITE}" style="color:#2e7d32;">${BTREE_SITE}</a>
+      <div class="dev-credit">
+        Desenvolvido por <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" /> Kobayashi Desenvolvimento de Sistemas
+      </div>
+    </div>
+    <div class="footer-right">
+      <img class="qr" src="${qrUrl}" alt="QR Code" />
+      <span class="qr-label">Acesse nosso site</span>
+    </div>
+  </div>
+</body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Permita pop-ups para gerar o PDF"); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 600);
+    toast.success("PDF gerado!");
   };
 
   const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;

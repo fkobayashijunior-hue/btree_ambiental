@@ -16,7 +16,7 @@ const TRACKING_STEPS: { key: TrackingStatus; label: string; icon: string; desc: 
 ];
 
 const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
+const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
 
 function DevContactButton() {
   const [open, setOpen] = useState(false);
@@ -31,7 +31,7 @@ function DevContactButton() {
         <img
           src={KOBAYASHI_LOGO}
           alt="Kobayashi Desenvolvimento"
-          className="h-8 w-auto object-contain filter brightness-0 invert"
+          className="h-8 w-auto object-contain bg-white rounded px-1 py-0.5"
           onError={(e) => {
             const img = e.target as HTMLImageElement;
             img.style.display = 'none';
@@ -57,7 +57,7 @@ function DevContactButton() {
               <img
                 src={KOBAYASHI_LOGO}
                 alt="Kobayashi Desenvolvimento"
-                className="h-12 w-auto object-contain mx-auto mb-3"
+                className="h-12 w-auto object-contain mx-auto mb-3 bg-white rounded-lg p-2"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}

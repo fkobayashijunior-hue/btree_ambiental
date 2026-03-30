@@ -212,15 +212,14 @@ export default function BiometricAttendancePage() {
       location: locationText || undefined,
       latitude: gpsCoords?.lat,
       longitude: gpsCoords?.lng,
-      photoBase64: recognized.photoBase64,
-      confidence: recognized.confidence,
+      notes: recognized.confidence ? `Confiança: ${(recognized.confidence * 100).toFixed(0)}%` : undefined,
     });
   };
 
   // Filtrar presenças de hoje
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
-  const todayRecords = todayAttendance.filter(r => {
+  const todayRecords = todayAttendance.filter((r: (typeof todayAttendance)[0]) => {
     const d = new Date(r.checkInTime);
     return format(d, "yyyy-MM-dd") === todayStr;
   });
@@ -420,7 +419,7 @@ export default function BiometricAttendancePage() {
               </div>
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {todayRecords.map((r) => (
+                {todayRecords.map((r: (typeof todayAttendance)[0]) => (
                   <div key={r.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-emerald-100 flex-shrink-0 flex items-center justify-center">
                       {r.collaboratorPhoto ? (
