@@ -794,3 +794,35 @@
 - [x] Aplicar restrições no menu lateral (DashboardLayout) baseado nas permissões
 - [x] Aplicar restrições nas rotas (redirecionar para /app se sem permissão)
 - [ ] Módulos controlados: equipamentos, pecas, manutencao, horas-maquina, colaboradores, presencas, reflorestamento, cargas, clientes, portal-cliente, gps, relatorios
+
+## 🪚 MÓDULO MOTOSSERRA COMPLETO (30/03/2026)
+
+### Schema / Banco de Dados
+- [x] Tabela `chainsaws` — cadastro de motosserras (modelo, número série, status)
+- [x] Tabela `fuel_containers` — galões (tipo: puro/mistura, capacidade, volume atual)
+- [x] Tabela `fuel_supply_events` — abastecimento de galões (data, litros, tipo, custo, financeiro)
+- [x] Tabela `chainsaw_fuel_usage` — uso de combustível por motosserra no campo
+- [x] Tabela `chainsaw_chains` — estoque de correntes (tipo: 30/34 dentes, qtd afiadas, qtd em campo)
+- [x] Tabela `chainsaw_chain_events` — movimentações de correntes (campo→oficina→caixa, baixa estoque)
+- [x] Tabela `chainsaw_parts` — peças/consumíveis do setor motosserra
+- [x] Tabela `chainsaw_stock_movements` — movimentações de estoque (entrada/saída por OS ou uso)
+- [x] Tabela `chainsaw_service_orders` — OS abertas (problema reportado, status, mecânico, conclusão)
+- [x] Tabela `chainsaw_service_parts` — peças usadas por OS
+
+### Backend (routers tRPC)
+- [x] Router `chainsaws` — CRUD de motosserras
+- [x] Router `chainsawFuel` — abastecimento de galões, uso no campo, baixa automática óleo 2T
+- [x] Router `chainsawChains` — movimentação de correntes (campo/oficina/caixa/baixa estoque)
+- [x] Router `chainsawParts` — CRUD de peças + movimentação de estoque
+- [x] Router `chainsawServiceOrders` — abertura, atribuição, conclusão de OS
+
+### Frontend (interface)
+- [x] Página principal com abas: Motosserras | Abastecimento | Correntes | Peças/Estoque | OS
+- [x] Aba Motosserras: lista de motores com status (campo/oficina/inativa)
+- [x] Aba Abastecimento: painel dos galões (vermelho/verde) com volume atual, botão abastecer
+- [x] Aba Abastecimento: ao abastecer galão verde → baixa automática 400ml óleo 2T no estoque
+- [x] Aba Correntes: painel com saldo (afiadas em caixa / em campo / na oficina) por tipo (30/34 dentes)
+- [x] Aba Correntes: enviar correntes para campo, registrar retorno para oficina, confirmar afiação, baixa de estoque
+- [x] Aba Peças/Estoque: lista de peças com saldo, entrada e saída manual
+- [x] Aba OS: lista de OS abertas/em andamento/concluídas, abertura de nova OS, conclusão pelo mecânico
+- [x] Relatório de consumo para ADM (combustível, correntes, peças por período)

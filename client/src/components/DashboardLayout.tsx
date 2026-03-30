@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -41,6 +41,7 @@ const menuItems = [
   { icon: Globe, label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente" },
   { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },
   { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps" },
+  { icon: Scissors, label: "Motosserras", path: "/motosserras", slug: "motosserras" },
 ];
 
 // Rotas que são subpáginas (não estão no menu principal)

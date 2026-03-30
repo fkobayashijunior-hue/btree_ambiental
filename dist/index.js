@@ -34,6 +34,13 @@ __export(schema_exports, {
   cargoDestinations: () => cargoDestinations,
   cargoLoads: () => cargoLoads,
   cargoShipments: () => cargoShipments,
+  chainsawChainEvents: () => chainsawChainEvents,
+  chainsawChainStock: () => chainsawChainStock,
+  chainsawPartMovements: () => chainsawPartMovements,
+  chainsawParts: () => chainsawParts,
+  chainsawServiceOrders: () => chainsawServiceOrders,
+  chainsawServiceParts: () => chainsawServiceParts,
+  chainsaws: () => chainsaws,
   clientPayments: () => clientPayments,
   clientPortalAccess: () => clientPortalAccess,
   clients: () => clients,
@@ -44,6 +51,8 @@ __export(schema_exports, {
   equipmentMaintenance: () => equipmentMaintenance,
   equipmentPhotos: () => equipmentPhotos,
   equipmentTypes: () => equipmentTypes,
+  fuelContainerEvents: () => fuelContainerEvents,
+  fuelContainers: () => fuelContainers,
   fuelRecords: () => fuelRecords,
   gpsDeviceLinks: () => gpsDeviceLinks,
   gpsHoursLog: () => gpsHoursLog,
@@ -70,7 +79,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements, userPermissions;
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements, userPermissions, chainsaws, fuelContainers, fuelContainerEvents, chainsawChainStock, chainsawChainEvents, chainsawParts, chainsawPartMovements, chainsawServiceOrders, chainsawServiceParts;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -746,6 +755,167 @@ var init_schema = __esm({
       profile: varchar("profile", { length: 64 }).default("custom"),
       updatedBy: int("updated_by").references(() => users.id),
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    chainsaws = mysqlTable("chainsaws", {
+      id: int("id").autoincrement().primaryKey(),
+      name: varchar("name", { length: 100 }).notNull(),
+      // ex: "Motosserra 1 - Stihl MS 250"
+      brand: varchar("brand", { length: 100 }),
+      model: varchar("model", { length: 100 }),
+      serialNumber: varchar("serial_number", { length: 100 }),
+      chainType: varchar("chain_type", { length: 20 }).default("30"),
+      // "30" | "34" | outro
+      status: mysqlEnum("status", ["ativa", "oficina", "inativa"]).default("ativa").notNull(),
+      notes: text("notes"),
+      createdBy: int("created_by").references(() => users.id),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    fuelContainers = mysqlTable("fuel_containers", {
+      id: int("id").autoincrement().primaryKey(),
+      name: varchar("name", { length: 100 }).notNull(),
+      // ex: "Galão Vermelho", "Galão Verde"
+      color: varchar("color", { length: 30 }).default("vermelho"),
+      // "vermelho" | "verde"
+      type: mysqlEnum("type", ["puro", "mistura"]).notNull(),
+      // puro=gasolina, mistura=gasolina+2T
+      capacityLiters: varchar("capacity_liters", { length: 10 }).default("20"),
+      // capacidade total
+      currentVolumeLiters: varchar("current_volume_liters", { length: 10 }).default("0"),
+      // volume atual
+      isActive: int("is_active").default(1),
+      notes: text("notes"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    fuelContainerEvents = mysqlTable("fuel_container_events", {
+      id: int("id").autoincrement().primaryKey(),
+      containerId: int("container_id").notNull().references(() => fuelContainers.id, { onDelete: "cascade" }),
+      eventType: mysqlEnum("event_type", ["abastecimento", "uso", "transferencia"]).notNull(),
+      // abastecimento = galão foi reabastecido (compra)
+      // uso = galão foi usado para abastecer motosserra no campo
+      // transferencia = galão vermelho → galão verde
+      volumeLiters: varchar("volume_liters", { length: 10 }).notNull(),
+      // litros movimentados
+      costPerLiter: varchar("cost_per_liter", { length: 20 }),
+      // custo por litro (para financeiro)
+      totalCost: varchar("total_cost", { length: 20 }),
+      // custo total
+      oil2tMl: varchar("oil2t_ml", { length: 10 }),
+      // ml de óleo 2T usados (só para mistura)
+      sourceContainerId: int("source_container_id").references(() => fuelContainers.id),
+      // para transferência
+      chainsawId: int("chainsaw_id").references(() => chainsaws.id),
+      // motosserra abastecida (para uso)
+      registeredBy: int("registered_by").references(() => users.id),
+      notes: text("notes"),
+      eventDate: timestamp("event_date").defaultNow().notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    chainsawChainStock = mysqlTable("chainsaw_chain_stock", {
+      id: int("id").autoincrement().primaryKey(),
+      chainType: varchar("chain_type", { length: 20 }).notNull(),
+      // "30", "34", ou outro
+      sharpenedInBox: int("sharpened_in_box").default(0).notNull(),
+      // afiadas na caixa (prontas)
+      inField: int("in_field").default(0).notNull(),
+      // em campo
+      inWorkshop: int("in_workshop").default(0).notNull(),
+      // na oficina (para afiar)
+      totalStock: int("total_stock").default(0).notNull(),
+      // total em estoque (compradas)
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    chainsawChainEvents = mysqlTable("chainsaw_chain_events", {
+      id: int("id").autoincrement().primaryKey(),
+      chainType: varchar("chain_type", { length: 20 }).notNull(),
+      eventType: mysqlEnum("event_type", [
+        "envio_campo",
+        // caixa → campo
+        "retorno_oficina",
+        // campo → oficina (para afiar)
+        "afiacao_concluida",
+        // oficina → caixa (afiadas)
+        "baixa_estoque",
+        // descarte ou substituição definitiva
+        "entrada_estoque"
+        // compra de novas correntes
+      ]).notNull(),
+      quantity: int("quantity").notNull(),
+      chainsawId: int("chainsaw_id").references(() => chainsaws.id),
+      registeredBy: int("registered_by").references(() => users.id),
+      notes: text("notes"),
+      // observações para o mecânico
+      eventDate: timestamp("event_date").defaultNow().notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    chainsawParts = mysqlTable("chainsaw_parts", {
+      id: int("id").autoincrement().primaryKey(),
+      code: varchar("code", { length: 50 }),
+      name: varchar("name", { length: 255 }).notNull(),
+      category: varchar("category", { length: 100 }),
+      // ex: "Filtro", "Corrente", "Sabre", "Óleo"
+      unit: varchar("unit", { length: 20 }).default("un"),
+      // un, L, ml, m
+      currentStock: varchar("current_stock", { length: 20 }).default("0"),
+      minStock: varchar("min_stock", { length: 20 }).default("0"),
+      // estoque mínimo para alerta
+      unitCost: varchar("unit_cost", { length: 20 }),
+      notes: text("notes"),
+      isActive: int("is_active").default(1),
+      createdBy: int("created_by").references(() => users.id),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    chainsawPartMovements = mysqlTable("chainsaw_part_movements", {
+      id: int("id").autoincrement().primaryKey(),
+      partId: int("part_id").notNull().references(() => chainsawParts.id, { onDelete: "cascade" }),
+      type: mysqlEnum("type", ["entrada", "saida"]).notNull(),
+      quantity: varchar("quantity", { length: 20 }).notNull(),
+      reason: varchar("reason", { length: 255 }),
+      // ex: "Compra", "Uso em OS #12"
+      serviceOrderId: int("service_order_id"),
+      // referência à OS
+      unitCost: varchar("unit_cost", { length: 20 }),
+      registeredBy: int("registered_by").references(() => users.id),
+      notes: text("notes"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    chainsawServiceOrders = mysqlTable("chainsaw_service_orders", {
+      id: int("id").autoincrement().primaryKey(),
+      chainsawId: int("chainsaw_id").notNull().references(() => chainsaws.id, { onDelete: "cascade" }),
+      // Problema reportado (pelo operador no campo ou pelo encarregado)
+      problemType: mysqlEnum("problem_type", [
+        "motor_falhando",
+        "nao_liga",
+        "superaquecimento",
+        "vazamento",
+        "corrente_problema",
+        "sabre_problema",
+        "manutencao_preventiva",
+        "outro"
+      ]).notNull(),
+      problemDescription: text("problem_description"),
+      priority: mysqlEnum("priority", ["baixa", "media", "alta", "urgente"]).default("media").notNull(),
+      status: mysqlEnum("status", ["aberta", "em_andamento", "concluida", "cancelada"]).default("aberta").notNull(),
+      // Execução pelo mecânico
+      mechanicId: int("mechanic_id").references(() => users.id),
+      serviceDescription: text("service_description"),
+      // o que foi feito
+      completedAt: timestamp("completed_at"),
+      // Metadados
+      openedBy: int("opened_by").references(() => users.id),
+      openedAt: timestamp("opened_at").defaultNow().notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    chainsawServiceParts = mysqlTable("chainsaw_service_parts", {
+      id: int("id").autoincrement().primaryKey(),
+      serviceOrderId: int("service_order_id").notNull().references(() => chainsawServiceOrders.id, { onDelete: "cascade" }),
+      partId: int("part_id").references(() => chainsawParts.id, { onDelete: "set null" }),
+      partName: varchar("part_name", { length: 255 }).notNull(),
+      quantity: varchar("quantity", { length: 20 }).notNull(),
+      unit: varchar("unit", { length: 20 }).default("un"),
+      unitCost: varchar("unit_cost", { length: 20 }),
+      fromStock: int("from_stock").default(1),
+      // 1 = baixou do estoque, 0 = compra avulsa
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
   }
@@ -2196,21 +2366,21 @@ var machineHoursRouter = router({
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
-    return equipmentList.map((eq17) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq17.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq17.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq17.id);
+    return equipmentList.map((eq18) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq18.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq18.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq18.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq17.id,
-        equipmentName: eq17.name,
-        brand: eq17.brand,
-        model: eq17.model,
-        status: eq17.status,
+        equipmentId: eq18.id,
+        equipmentName: eq18.name,
+        brand: eq18.brand,
+        model: eq18.model,
+        status: eq18.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -3852,16 +4022,506 @@ var permissionsRouter = router({
   })
 });
 
+// server/routers/chainsaws.ts
+import { z as z17 } from "zod";
+init_db();
+init_schema();
+import { eq as eq17, desc as desc14, and as and8, sql as sql3 } from "drizzle-orm";
+var chainsawsRouter = router({
+  list: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(chainsaws).orderBy(chainsaws.name);
+  }),
+  create: protectedProcedure.input(z17.object({
+    name: z17.string().min(1),
+    brand: z17.string().optional(),
+    model: z17.string().optional(),
+    serialNumber: z17.string().optional(),
+    chainType: z17.string().default("30"),
+    notes: z17.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.insert(chainsaws).values({
+      name: input.name,
+      brand: input.brand,
+      model: input.model,
+      serialNumber: input.serialNumber,
+      chainType: input.chainType,
+      notes: input.notes,
+      createdBy: ctx.user.id
+    });
+    return { success: true };
+  }),
+  update: protectedProcedure.input(z17.object({
+    id: z17.number(),
+    name: z17.string().min(1).optional(),
+    brand: z17.string().optional(),
+    model: z17.string().optional(),
+    serialNumber: z17.string().optional(),
+    chainType: z17.string().optional(),
+    status: z17.enum(["ativa", "oficina", "inativa"]).optional(),
+    notes: z17.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const { id, ...data } = input;
+    await db.update(chainsaws).set(data).where(eq17(chainsaws.id, id));
+    return { success: true };
+  }),
+  delete: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.delete(chainsaws).where(eq17(chainsaws.id, input.id));
+    return { success: true };
+  })
+});
+var fuelRouter = router({
+  listContainers: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(fuelContainers).where(eq17(fuelContainers.isActive, 1)).orderBy(fuelContainers.name);
+  }),
+  createContainer: protectedProcedure.input(z17.object({
+    name: z17.string().min(1),
+    color: z17.string().default("vermelho"),
+    type: z17.enum(["puro", "mistura"]),
+    capacityLiters: z17.string().default("20"),
+    notes: z17.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.insert(fuelContainers).values({
+      name: input.name,
+      color: input.color,
+      type: input.type,
+      capacityLiters: input.capacityLiters,
+      currentVolumeLiters: "0",
+      notes: input.notes
+    });
+    return { success: true };
+  }),
+  // Abastecer galão (compra de combustível)
+  supplyContainer: protectedProcedure.input(z17.object({
+    containerId: z17.number(),
+    volumeLiters: z17.string(),
+    costPerLiter: z17.string().optional(),
+    totalCost: z17.string().optional(),
+    notes: z17.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const [container] = await db.select().from(fuelContainers).where(eq17(fuelContainers.id, input.containerId));
+    if (!container) throw new Error("Gal\xE3o n\xE3o encontrado");
+    const newVolume = (parseFloat(container.currentVolumeLiters || "0") + parseFloat(input.volumeLiters)).toFixed(2);
+    await db.update(fuelContainers).set({ currentVolumeLiters: newVolume }).where(eq17(fuelContainers.id, input.containerId));
+    let oil2tMl;
+    if (container.type === "mistura") {
+      const oil2t = (parseFloat(input.volumeLiters) * 20).toFixed(0);
+      oil2tMl = oil2t;
+      const oil2tParts = await db.select().from(chainsawParts).where(and8(
+        eq17(chainsawParts.isActive, 1),
+        sql3`(LOWER(${chainsawParts.name}) LIKE '%2t%' OR LOWER(${chainsawParts.name}) LIKE '%dois tempos%')`
+      )).limit(1);
+      const oil2tPart = oil2tParts[0];
+      if (oil2tPart) {
+        const currentStock = parseFloat(oil2tPart.currentStock || "0");
+        const usedMl = parseFloat(oil2t);
+        const newStock = Math.max(0, currentStock - usedMl).toFixed(0);
+        await db.update(chainsawParts).set({ currentStock: newStock }).where(eq17(chainsawParts.id, oil2tPart.id));
+        await db.insert(chainsawPartMovements).values({
+          partId: oil2tPart.id,
+          type: "saida",
+          quantity: oil2t,
+          reason: `Mistura gal\xE3o ${container.name}`,
+          registeredBy: ctx.user.id
+        });
+      }
+    }
+    await db.insert(fuelContainerEvents).values({
+      containerId: input.containerId,
+      eventType: "abastecimento",
+      volumeLiters: input.volumeLiters,
+      costPerLiter: input.costPerLiter,
+      totalCost: input.totalCost,
+      oil2tMl,
+      registeredBy: ctx.user.id,
+      notes: input.notes
+    });
+    return { success: true, oil2tMl };
+  }),
+  // Registrar uso de combustível no campo (baixa no galão)
+  useFuel: protectedProcedure.input(z17.object({
+    containerId: z17.number(),
+    volumeLiters: z17.string(),
+    chainsawId: z17.number().optional(),
+    notes: z17.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const [container] = await db.select().from(fuelContainers).where(eq17(fuelContainers.id, input.containerId));
+    if (!container) throw new Error("Gal\xE3o n\xE3o encontrado");
+    const currentVol = parseFloat(container.currentVolumeLiters || "0");
+    const usedVol = parseFloat(input.volumeLiters);
+    if (usedVol > currentVol) throw new Error("Volume insuficiente no gal\xE3o");
+    const newVolume = (currentVol - usedVol).toFixed(2);
+    await db.update(fuelContainers).set({ currentVolumeLiters: newVolume }).where(eq17(fuelContainers.id, input.containerId));
+    await db.insert(fuelContainerEvents).values({
+      containerId: input.containerId,
+      eventType: "uso",
+      volumeLiters: input.volumeLiters,
+      chainsawId: input.chainsawId,
+      registeredBy: ctx.user.id,
+      notes: input.notes
+    });
+    return { success: true };
+  }),
+  // Transferir combustível entre galões (vermelho → verde)
+  transferFuel: protectedProcedure.input(z17.object({
+    sourceContainerId: z17.number(),
+    targetContainerId: z17.number(),
+    volumeLiters: z17.string(),
+    notes: z17.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const [source] = await db.select().from(fuelContainers).where(eq17(fuelContainers.id, input.sourceContainerId));
+    const [target] = await db.select().from(fuelContainers).where(eq17(fuelContainers.id, input.targetContainerId));
+    if (!source || !target) throw new Error("Gal\xE3o n\xE3o encontrado");
+    const sourceVol = parseFloat(source.currentVolumeLiters || "0");
+    const transferVol = parseFloat(input.volumeLiters);
+    if (transferVol > sourceVol) throw new Error("Volume insuficiente no gal\xE3o de origem");
+    const targetVol = parseFloat(target.currentVolumeLiters || "0");
+    await db.update(fuelContainers).set({ currentVolumeLiters: (sourceVol - transferVol).toFixed(2) }).where(eq17(fuelContainers.id, input.sourceContainerId));
+    await db.update(fuelContainers).set({ currentVolumeLiters: (targetVol + transferVol).toFixed(2) }).where(eq17(fuelContainers.id, input.targetContainerId));
+    await db.insert(fuelContainerEvents).values({
+      containerId: input.targetContainerId,
+      eventType: "transferencia",
+      volumeLiters: input.volumeLiters,
+      sourceContainerId: input.sourceContainerId,
+      registeredBy: ctx.user.id,
+      notes: input.notes
+    });
+    return { success: true };
+  }),
+  listEvents: protectedProcedure.input(z17.object({ containerId: z17.number().optional() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    if (input.containerId) {
+      return db.select().from(fuelContainerEvents).where(eq17(fuelContainerEvents.containerId, input.containerId)).orderBy(desc14(fuelContainerEvents.eventDate)).limit(50);
+    }
+    return db.select().from(fuelContainerEvents).orderBy(desc14(fuelContainerEvents.eventDate)).limit(100);
+  })
+});
+var chainsChainRouter = router({
+  listStock: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
+  }),
+  upsertStock: protectedProcedure.input(z17.object({
+    chainType: z17.string(),
+    sharpenedInBox: z17.number().optional(),
+    inField: z17.number().optional(),
+    inWorkshop: z17.number().optional(),
+    totalStock: z17.number().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const existing = await db.select().from(chainsawChainStock).where(eq17(chainsawChainStock.chainType, input.chainType));
+    if (existing.length > 0) {
+      const e = existing[0];
+      await db.update(chainsawChainStock).set({
+        sharpenedInBox: input.sharpenedInBox ?? e.sharpenedInBox,
+        inField: input.inField ?? e.inField,
+        inWorkshop: input.inWorkshop ?? e.inWorkshop,
+        totalStock: input.totalStock ?? e.totalStock
+      }).where(eq17(chainsawChainStock.chainType, input.chainType));
+    } else {
+      await db.insert(chainsawChainStock).values({
+        chainType: input.chainType,
+        sharpenedInBox: input.sharpenedInBox ?? 0,
+        inField: input.inField ?? 0,
+        inWorkshop: input.inWorkshop ?? 0,
+        totalStock: input.totalStock ?? 0
+      });
+    }
+    return { success: true };
+  }),
+  registerEvent: protectedProcedure.input(z17.object({
+    chainType: z17.string(),
+    eventType: z17.enum(["envio_campo", "retorno_oficina", "afiacao_concluida", "baixa_estoque", "entrada_estoque"]),
+    quantity: z17.number().min(1),
+    chainsawId: z17.number().optional(),
+    notes: z17.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const stockRows = await db.select().from(chainsawChainStock).where(eq17(chainsawChainStock.chainType, input.chainType));
+    if (stockRows.length === 0) throw new Error(`Tipo de corrente '${input.chainType}' n\xE3o encontrado. Inicialize o estoque primeiro.`);
+    const stock = stockRows[0];
+    let updates = {};
+    switch (input.eventType) {
+      case "envio_campo":
+        if (stock.sharpenedInBox < input.quantity) throw new Error("Correntes afiadas insuficientes na caixa");
+        updates = { sharpenedInBox: stock.sharpenedInBox - input.quantity, inField: stock.inField + input.quantity };
+        break;
+      case "retorno_oficina":
+        if (stock.inField < input.quantity) throw new Error("Quantidade em campo insuficiente");
+        updates = { inField: stock.inField - input.quantity, inWorkshop: stock.inWorkshop + input.quantity };
+        break;
+      case "afiacao_concluida":
+        if (stock.inWorkshop < input.quantity) throw new Error("Quantidade na oficina insuficiente");
+        updates = { inWorkshop: stock.inWorkshop - input.quantity, sharpenedInBox: stock.sharpenedInBox + input.quantity };
+        break;
+      case "baixa_estoque":
+        updates = { totalStock: Math.max(0, stock.totalStock - input.quantity) };
+        break;
+      case "entrada_estoque":
+        updates = {
+          totalStock: stock.totalStock + input.quantity,
+          sharpenedInBox: stock.sharpenedInBox + input.quantity
+        };
+        break;
+    }
+    await db.update(chainsawChainStock).set(updates).where(eq17(chainsawChainStock.chainType, input.chainType));
+    await db.insert(chainsawChainEvents).values({
+      chainType: input.chainType,
+      eventType: input.eventType,
+      quantity: input.quantity,
+      chainsawId: input.chainsawId,
+      registeredBy: ctx.user.id,
+      notes: input.notes
+    });
+    return { success: true };
+  }),
+  listEvents: protectedProcedure.input(z17.object({ chainType: z17.string().optional() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    if (input.chainType) {
+      return db.select().from(chainsawChainEvents).where(eq17(chainsawChainEvents.chainType, input.chainType)).orderBy(desc14(chainsawChainEvents.eventDate)).limit(50);
+    }
+    return db.select().from(chainsawChainEvents).orderBy(desc14(chainsawChainEvents.eventDate)).limit(100);
+  })
+});
+var chainsawPartsRouter = router({
+  list: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(chainsawParts).where(eq17(chainsawParts.isActive, 1)).orderBy(chainsawParts.category, chainsawParts.name);
+  }),
+  create: protectedProcedure.input(z17.object({
+    code: z17.string().optional(),
+    name: z17.string().min(1),
+    category: z17.string().optional(),
+    unit: z17.string().default("un"),
+    currentStock: z17.string().default("0"),
+    minStock: z17.string().default("0"),
+    unitCost: z17.string().optional(),
+    notes: z17.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.insert(chainsawParts).values({ ...input, createdBy: ctx.user.id });
+    return { success: true };
+  }),
+  update: protectedProcedure.input(z17.object({
+    id: z17.number(),
+    code: z17.string().optional(),
+    name: z17.string().optional(),
+    category: z17.string().optional(),
+    unit: z17.string().optional(),
+    currentStock: z17.string().optional(),
+    minStock: z17.string().optional(),
+    unitCost: z17.string().optional(),
+    notes: z17.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const { id, ...data } = input;
+    await db.update(chainsawParts).set(data).where(eq17(chainsawParts.id, id));
+    return { success: true };
+  }),
+  delete: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.update(chainsawParts).set({ isActive: 0 }).where(eq17(chainsawParts.id, input.id));
+    return { success: true };
+  }),
+  stockEntry: protectedProcedure.input(z17.object({
+    partId: z17.number(),
+    quantity: z17.string(),
+    unitCost: z17.string().optional(),
+    notes: z17.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const parts3 = await db.select().from(chainsawParts).where(eq17(chainsawParts.id, input.partId));
+    if (parts3.length === 0) throw new Error("Pe\xE7a n\xE3o encontrada");
+    const part = parts3[0];
+    const newStock = (parseFloat(part.currentStock || "0") + parseFloat(input.quantity)).toFixed(2);
+    await db.update(chainsawParts).set({ currentStock: newStock }).where(eq17(chainsawParts.id, input.partId));
+    await db.insert(chainsawPartMovements).values({
+      partId: input.partId,
+      type: "entrada",
+      quantity: input.quantity,
+      reason: "Compra/entrada manual",
+      unitCost: input.unitCost,
+      registeredBy: ctx.user.id,
+      notes: input.notes
+    });
+    return { success: true };
+  }),
+  listMovements: protectedProcedure.input(z17.object({ partId: z17.number().optional() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    if (input.partId) {
+      return db.select().from(chainsawPartMovements).where(eq17(chainsawPartMovements.partId, input.partId)).orderBy(desc14(chainsawPartMovements.createdAt)).limit(50);
+    }
+    return db.select().from(chainsawPartMovements).orderBy(desc14(chainsawPartMovements.createdAt)).limit(100);
+  })
+});
+var chainsawOSRouter = router({
+  list: protectedProcedure.input(z17.object({
+    status: z17.enum(["aberta", "em_andamento", "concluida", "cancelada", "todas"]).default("todas")
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db.select({
+      id: chainsawServiceOrders.id,
+      chainsawId: chainsawServiceOrders.chainsawId,
+      problemType: chainsawServiceOrders.problemType,
+      problemDescription: chainsawServiceOrders.problemDescription,
+      priority: chainsawServiceOrders.priority,
+      status: chainsawServiceOrders.status,
+      mechanicId: chainsawServiceOrders.mechanicId,
+      serviceDescription: chainsawServiceOrders.serviceDescription,
+      completedAt: chainsawServiceOrders.completedAt,
+      openedBy: chainsawServiceOrders.openedBy,
+      openedAt: chainsawServiceOrders.openedAt,
+      chainsawName: chainsaws.name
+    }).from(chainsawServiceOrders).leftJoin(chainsaws, eq17(chainsawServiceOrders.chainsawId, chainsaws.id)).where(
+      input.status === "todas" ? void 0 : eq17(chainsawServiceOrders.status, input.status)
+    ).orderBy(desc14(chainsawServiceOrders.openedAt));
+    return rows;
+  }),
+  getById: protectedProcedure.input(z17.object({ id: z17.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const rows = await db.select().from(chainsawServiceOrders).where(eq17(chainsawServiceOrders.id, input.id));
+    if (rows.length === 0) throw new Error("OS n\xE3o encontrada");
+    const parts3 = await db.select().from(chainsawServiceParts).where(eq17(chainsawServiceParts.serviceOrderId, input.id));
+    return { ...rows[0], parts: parts3 };
+  }),
+  open: protectedProcedure.input(z17.object({
+    chainsawId: z17.number(),
+    problemType: z17.enum(["motor_falhando", "nao_liga", "superaquecimento", "vazamento", "corrente_problema", "sabre_problema", "manutencao_preventiva", "outro"]),
+    problemDescription: z17.string().optional(),
+    priority: z17.enum(["baixa", "media", "alta", "urgente"]).default("media")
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.update(chainsaws).set({ status: "oficina" }).where(eq17(chainsaws.id, input.chainsawId));
+    await db.insert(chainsawServiceOrders).values({
+      chainsawId: input.chainsawId,
+      problemType: input.problemType,
+      problemDescription: input.problemDescription,
+      priority: input.priority,
+      status: "aberta",
+      openedBy: ctx.user.id
+    });
+    return { success: true };
+  }),
+  startService: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.update(chainsawServiceOrders).set({ status: "em_andamento", mechanicId: ctx.user.id }).where(eq17(chainsawServiceOrders.id, input.id));
+    return { success: true };
+  }),
+  complete: protectedProcedure.input(z17.object({
+    id: z17.number(),
+    serviceDescription: z17.string().min(1),
+    parts: z17.array(z17.object({
+      partId: z17.number().optional(),
+      partName: z17.string(),
+      quantity: z17.string(),
+      unit: z17.string().default("un"),
+      unitCost: z17.string().optional(),
+      fromStock: z17.number().default(1)
+    })).default([])
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const osRows = await db.select().from(chainsawServiceOrders).where(eq17(chainsawServiceOrders.id, input.id));
+    if (osRows.length === 0) throw new Error("OS n\xE3o encontrada");
+    const os = osRows[0];
+    for (const part of input.parts) {
+      await db.insert(chainsawServiceParts).values({
+        serviceOrderId: input.id,
+        partId: part.partId,
+        partName: part.partName,
+        quantity: part.quantity,
+        unit: part.unit,
+        unitCost: part.unitCost,
+        fromStock: part.fromStock
+      });
+      if (part.fromStock === 1 && part.partId) {
+        const pRows = await db.select().from(chainsawParts).where(eq17(chainsawParts.id, part.partId));
+        if (pRows.length > 0) {
+          const p = pRows[0];
+          const newStock = Math.max(0, parseFloat(p.currentStock || "0") - parseFloat(part.quantity)).toFixed(2);
+          await db.update(chainsawParts).set({ currentStock: newStock }).where(eq17(chainsawParts.id, part.partId));
+          await db.insert(chainsawPartMovements).values({
+            partId: part.partId,
+            type: "saida",
+            quantity: part.quantity,
+            reason: `OS #${input.id}`,
+            serviceOrderId: input.id,
+            unitCost: part.unitCost,
+            registeredBy: ctx.user.id
+          });
+        }
+      }
+    }
+    await db.update(chainsawServiceOrders).set({
+      status: "concluida",
+      serviceDescription: input.serviceDescription,
+      completedAt: /* @__PURE__ */ new Date(),
+      mechanicId: ctx.user.id
+    }).where(eq17(chainsawServiceOrders.id, input.id));
+    await db.update(chainsaws).set({ status: "ativa" }).where(eq17(chainsaws.id, os.chainsawId));
+    return { success: true };
+  }),
+  cancel: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const osRows = await db.select().from(chainsawServiceOrders).where(eq17(chainsawServiceOrders.id, input.id));
+    if (osRows.length === 0) throw new Error("OS n\xE3o encontrada");
+    const os = osRows[0];
+    await db.update(chainsawServiceOrders).set({ status: "cancelada" }).where(eq17(chainsawServiceOrders.id, input.id));
+    await db.update(chainsaws).set({ status: "ativa" }).where(eq17(chainsaws.id, os.chainsawId));
+    return { success: true };
+  })
+});
+var chainsawModuleRouter = router({
+  chainsaws: chainsawsRouter,
+  fuel: fuelRouter,
+  chains: chainsChainRouter,
+  parts: chainsawPartsRouter,
+  os: chainsawOSRouter
+});
+
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql as sql3, gte as gte3, lte as lte3, and as and8 } from "drizzle-orm";
-import { z as z17 } from "zod";
+import { sql as sql4, gte as gte3, lte as lte3, and as and9 } from "drizzle-orm";
+import { z as z18 } from "zod";
 var dashboardRouter = router({
-  stats: protectedProcedure.input(z17.object({
-    month: z17.number().min(0).max(11).optional(),
+  stats: protectedProcedure.input(z18.object({
+    month: z18.number().min(0).max(11).optional(),
     // 0-indexed
-    year: z17.number().min(2020).max(2100).optional()
+    year: z18.number().min(2020).max(2100).optional()
   }).optional()).query(async ({ input }) => {
     const now = /* @__PURE__ */ new Date();
     const targetMonth = input?.month ?? now.getMonth();
@@ -3871,44 +4531,44 @@ var dashboardRouter = router({
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
-    const [{ count: totalCollaborators }] = await db.select({ count: sql3`count(*)` }).from(collaborators);
-    const [{ count: totalClients }] = await db.select({ count: sql3`count(*)` }).from(clients);
-    const [{ count: cargoThisMonth }] = await db.select({ count: sql3`count(*)` }).from(cargoLoads).where(and8(
+    const [{ count: totalCollaborators }] = await db.select({ count: sql4`count(*)` }).from(collaborators);
+    const [{ count: totalClients }] = await db.select({ count: sql4`count(*)` }).from(clients);
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql4`count(*)` }).from(cargoLoads).where(and9(
       gte3(cargoLoads.createdAt, startOfMonth),
       lte3(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql3`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and8(
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql4`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and9(
       gte3(cargoLoads.createdAt, startOfMonth),
       lte3(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ count: fuelThisMonth }] = await db.select({ count: sql3`count(*)` }).from(vehicleRecords).where(
-      and8(
+    const [{ count: fuelThisMonth }] = await db.select({ count: sql4`count(*)` }).from(vehicleRecords).where(
+      and9(
         gte3(vehicleRecords.createdAt, startOfMonth),
         lte3(vehicleRecords.createdAt, endOfMonth),
-        sql3`record_type = 'abastecimento'`
+        sql4`record_type = 'abastecimento'`
       )
     );
-    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql3`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
-      and8(
+    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql4`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
+      and9(
         gte3(vehicleRecords.createdAt, startOfMonth),
         lte3(vehicleRecords.createdAt, endOfMonth),
-        sql3`record_type = 'abastecimento'`
+        sql4`record_type = 'abastecimento'`
       )
     );
-    const [{ count: attendanceToday }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
-    const [{ count: attendanceThisMonth }] = await db.select({ count: sql3`count(*)` }).from(collaboratorAttendance).where(and8(
+    const [{ count: attendanceToday }] = await db.select({ count: sql4`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql4`count(*)` }).from(collaboratorAttendance).where(and9(
       gte3(collaboratorAttendance.date, startOfMonth),
       lte3(collaboratorAttendance.date, endOfMonth)
     ));
-    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql3`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
-      and8(
+    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql4`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
+      and9(
         gte3(collaboratorAttendance.date, startOfMonth),
         lte3(collaboratorAttendance.date, endOfMonth),
-        sql3`payment_status_ca = 'pendente'`
+        sql4`payment_status_ca = 'pendente'`
       )
     );
-    const [{ count: totalEquipment }] = await db.select({ count: sql3`count(*)` }).from(equipment);
-    const [{ count: lowStockParts }] = await db.select({ count: sql3`count(*)` }).from(parts).where(sql3`stock_quantity < 5`);
+    const [{ count: totalEquipment }] = await db.select({ count: sql4`count(*)` }).from(equipment);
+    const [{ count: lowStockParts }] = await db.select({ count: sql4`count(*)` }).from(parts).where(sql4`stock_quantity < 5`);
     const recentCargos = await db.select({
       id: cargoLoads.id,
       vehiclePlate: cargoLoads.vehiclePlate,
@@ -3916,7 +4576,7 @@ var dashboardRouter = router({
       volumeM3: cargoLoads.volumeM3,
       createdAt: cargoLoads.createdAt,
       status: cargoLoads.status
-    }).from(cargoLoads).orderBy(sql3`created_at desc`).limit(5);
+    }).from(cargoLoads).orderBy(sql4`created_at desc`).limit(5);
     const recentAttendance = await db.select({
       id: collaboratorAttendance.id,
       collaboratorId: collaboratorAttendance.collaboratorId,
@@ -3924,8 +4584,8 @@ var dashboardRouter = router({
       dailyValue: collaboratorAttendance.dailyValue,
       paymentStatus: collaboratorAttendance.paymentStatus,
       activity: collaboratorAttendance.activity
-    }).from(collaboratorAttendance).orderBy(sql3`created_at desc`).limit(5);
-    const [{ count: pendingOrders }] = await db.select({ count: sql3`count(*)` }).from(purchaseOrders).where(sql3`status = 'pending'`);
+    }).from(collaboratorAttendance).orderBy(sql4`created_at desc`).limit(5);
+    const [{ count: pendingOrders }] = await db.select({ count: sql4`count(*)` }).from(purchaseOrders).where(sql4`status = 'pending'`);
     const MONTHS_PT = [
       "janeiro",
       "fevereiro",
@@ -3963,7 +4623,7 @@ var dashboardRouter = router({
 });
 
 // server/routers.ts
-import { z as z18 } from "zod";
+import { z as z19 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -4072,10 +4732,10 @@ var appRouter = router({
   dashboard: dashboardRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z18.object({
-      name: z18.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z18.string().email("Email inv\xE1lido"),
-      password: z18.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z19.object({
+      name: z19.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z19.string().email("Email inv\xE1lido"),
+      password: z19.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -4090,9 +4750,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z18.object({
-      email: z18.string().email("Email inv\xE1lido"),
-      password: z18.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z19.object({
+      email: z19.string().email("Email inv\xE1lido"),
+      password: z19.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -4108,11 +4768,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z18.object({
-      seedKey: z18.string(),
-      email: z18.string().email(),
-      name: z18.string(),
-      password: z18.string().min(4)
+    seedAdmin: publicProcedure.input(z19.object({
+      seedKey: z19.string(),
+      email: z19.string().email(),
+      name: z19.string(),
+      password: z19.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -4122,9 +4782,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z18.object({
-      email: z18.string().email("Email inv\xE1lido"),
-      origin: z18.string().url().optional()
+    forgotPassword: publicProcedure.input(z19.object({
+      email: z19.string().email("Email inv\xE1lido"),
+      origin: z19.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -4138,9 +4798,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z18.object({
-      token: z18.string().min(1),
-      password: z18.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z19.object({
+      token: z19.string().min(1),
+      password: z19.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -4149,10 +4809,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq17 } = await import("drizzle-orm");
+      const { eq: eq18 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq17(users3.id, resetToken.userId));
+      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq18(users3.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -4178,7 +4838,8 @@ var appRouter = router({
   purchaseOrders: purchaseOrdersRouter,
   attendance: attendanceRouter,
   traccar: traccarRouter,
-  permissions: permissionsRouter
+  permissions: permissionsRouter,
+  chainsawModule: chainsawModuleRouter
   // TODO: add feature routers here, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>

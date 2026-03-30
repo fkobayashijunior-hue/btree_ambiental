@@ -769,3 +769,178 @@ export const userPermissions = mysqlTable("user_permissions", {
 });
 export type UserPermission = typeof userPermissions.$inferSelect;
 export type InsertUserPermission = typeof userPermissions.$inferInsert;
+
+// ============================================================
+// MÓDULO MOTOSSERRA
+// ============================================================
+
+// ===== CADASTRO DE MOTOSSERRAS =====
+export const chainsaws = mysqlTable("chainsaws", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(), // ex: "Motosserra 1 - Stihl MS 250"
+  brand: varchar("brand", { length: 100 }),
+  model: varchar("model", { length: 100 }),
+  serialNumber: varchar("serial_number", { length: 100 }),
+  chainType: varchar("chain_type", { length: 20 }).default("30"), // "30" | "34" | outro
+  status: mysqlEnum("status", ["ativa", "oficina", "inativa"]).default("ativa").notNull(),
+  notes: text("notes"),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type Chainsaw = typeof chainsaws.$inferSelect;
+export type InsertChainsaw = typeof chainsaws.$inferInsert;
+
+// ===== GALÕES DE COMBUSTÍVEL =====
+// Cada galão tem tipo (puro=gasolina, mistura=gasolina+2T) e volume atual
+export const fuelContainers = mysqlTable("fuel_containers", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(), // ex: "Galão Vermelho", "Galão Verde"
+  color: varchar("color", { length: 30 }).default("vermelho"), // "vermelho" | "verde"
+  type: mysqlEnum("type", ["puro", "mistura"]).notNull(), // puro=gasolina, mistura=gasolina+2T
+  capacityLiters: varchar("capacity_liters", { length: 10 }).default("20"), // capacidade total
+  currentVolumeLiters: varchar("current_volume_liters", { length: 10 }).default("0"), // volume atual
+  isActive: int("is_active").default(1),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type FuelContainer = typeof fuelContainers.$inferSelect;
+export type InsertFuelContainer = typeof fuelContainers.$inferInsert;
+
+// ===== EVENTOS DE ABASTECIMENTO DE GALÕES =====
+// Registra quando um galão é abastecido (reabastecimento) ou usado (baixa)
+export const fuelContainerEvents = mysqlTable("fuel_container_events", {
+  id: int("id").autoincrement().primaryKey(),
+  containerId: int("container_id").notNull().references(() => fuelContainers.id, { onDelete: "cascade" }),
+  eventType: mysqlEnum("event_type", ["abastecimento", "uso", "transferencia"]).notNull(),
+  // abastecimento = galão foi reabastecido (compra)
+  // uso = galão foi usado para abastecer motosserra no campo
+  // transferencia = galão vermelho → galão verde
+  volumeLiters: varchar("volume_liters", { length: 10 }).notNull(), // litros movimentados
+  costPerLiter: varchar("cost_per_liter", { length: 20 }), // custo por litro (para financeiro)
+  totalCost: varchar("total_cost", { length: 20 }), // custo total
+  oil2tMl: varchar("oil2t_ml", { length: 10 }), // ml de óleo 2T usados (só para mistura)
+  sourceContainerId: int("source_container_id").references(() => fuelContainers.id), // para transferência
+  chainsawId: int("chainsaw_id").references(() => chainsaws.id), // motosserra abastecida (para uso)
+  registeredBy: int("registered_by").references(() => users.id),
+  notes: text("notes"),
+  eventDate: timestamp("event_date").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type FuelContainerEvent = typeof fuelContainerEvents.$inferSelect;
+export type InsertFuelContainerEvent = typeof fuelContainerEvents.$inferInsert;
+
+// ===== ESTOQUE DE CORRENTES =====
+// Saldo de correntes por tipo (30 ou 34 dentes)
+export const chainsawChainStock = mysqlTable("chainsaw_chain_stock", {
+  id: int("id").autoincrement().primaryKey(),
+  chainType: varchar("chain_type", { length: 20 }).notNull(), // "30", "34", ou outro
+  sharpenedInBox: int("sharpened_in_box").default(0).notNull(),   // afiadas na caixa (prontas)
+  inField: int("in_field").default(0).notNull(),                   // em campo
+  inWorkshop: int("in_workshop").default(0).notNull(),             // na oficina (para afiar)
+  totalStock: int("total_stock").default(0).notNull(),             // total em estoque (compradas)
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type ChainsawChainStock = typeof chainsawChainStock.$inferSelect;
+export type InsertChainsawChainStock = typeof chainsawChainStock.$inferInsert;
+
+// ===== MOVIMENTAÇÕES DE CORRENTES =====
+// Histórico de cada movimentação (campo, oficina, afiação, baixa)
+export const chainsawChainEvents = mysqlTable("chainsaw_chain_events", {
+  id: int("id").autoincrement().primaryKey(),
+  chainType: varchar("chain_type", { length: 20 }).notNull(),
+  eventType: mysqlEnum("event_type", [
+    "envio_campo",       // caixa → campo
+    "retorno_oficina",   // campo → oficina (para afiar)
+    "afiacao_concluida", // oficina → caixa (afiadas)
+    "baixa_estoque",     // descarte ou substituição definitiva
+    "entrada_estoque",   // compra de novas correntes
+  ]).notNull(),
+  quantity: int("quantity").notNull(),
+  chainsawId: int("chainsaw_id").references(() => chainsaws.id),
+  registeredBy: int("registered_by").references(() => users.id),
+  notes: text("notes"), // observações para o mecânico
+  eventDate: timestamp("event_date").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type ChainsawChainEvent = typeof chainsawChainEvents.$inferSelect;
+export type InsertChainsawChainEvent = typeof chainsawChainEvents.$inferInsert;
+
+// ===== PEÇAS E CONSUMÍVEIS DO SETOR MOTOSSERRA =====
+// Catálogo de peças específicas para motosserras
+export const chainsawParts = mysqlTable("chainsaw_parts", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 100 }), // ex: "Filtro", "Corrente", "Sabre", "Óleo"
+  unit: varchar("unit", { length: 20 }).default("un"), // un, L, ml, m
+  currentStock: varchar("current_stock", { length: 20 }).default("0"),
+  minStock: varchar("min_stock", { length: 20 }).default("0"), // estoque mínimo para alerta
+  unitCost: varchar("unit_cost", { length: 20 }),
+  notes: text("notes"),
+  isActive: int("is_active").default(1),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type ChainsawPart = typeof chainsawParts.$inferSelect;
+export type InsertChainsawPart = typeof chainsawParts.$inferInsert;
+
+// ===== MOVIMENTAÇÕES DE ESTOQUE DE PEÇAS MOTOSSERRA =====
+export const chainsawPartMovements = mysqlTable("chainsaw_part_movements", {
+  id: int("id").autoincrement().primaryKey(),
+  partId: int("part_id").notNull().references(() => chainsawParts.id, { onDelete: "cascade" }),
+  type: mysqlEnum("type", ["entrada", "saida"]).notNull(),
+  quantity: varchar("quantity", { length: 20 }).notNull(),
+  reason: varchar("reason", { length: 255 }), // ex: "Compra", "Uso em OS #12"
+  serviceOrderId: int("service_order_id"), // referência à OS
+  unitCost: varchar("unit_cost", { length: 20 }),
+  registeredBy: int("registered_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type ChainsawPartMovement = typeof chainsawPartMovements.$inferSelect;
+export type InsertChainsawPartMovement = typeof chainsawPartMovements.$inferInsert;
+
+// ===== ORDENS DE SERVIÇO (OS) PARA MOTOSSERRAS =====
+export const chainsawServiceOrders = mysqlTable("chainsaw_service_orders", {
+  id: int("id").autoincrement().primaryKey(),
+  chainsawId: int("chainsaw_id").notNull().references(() => chainsaws.id, { onDelete: "cascade" }),
+  // Problema reportado (pelo operador no campo ou pelo encarregado)
+  problemType: mysqlEnum("problem_type", [
+    "motor_falhando",
+    "nao_liga",
+    "superaquecimento",
+    "vazamento",
+    "corrente_problema",
+    "sabre_problema",
+    "manutencao_preventiva",
+    "outro",
+  ]).notNull(),
+  problemDescription: text("problem_description"),
+  priority: mysqlEnum("priority", ["baixa", "media", "alta", "urgente"]).default("media").notNull(),
+  status: mysqlEnum("status", ["aberta", "em_andamento", "concluida", "cancelada"]).default("aberta").notNull(),
+  // Execução pelo mecânico
+  mechanicId: int("mechanic_id").references(() => users.id),
+  serviceDescription: text("service_description"), // o que foi feito
+  completedAt: timestamp("completed_at"),
+  // Metadados
+  openedBy: int("opened_by").references(() => users.id),
+  openedAt: timestamp("opened_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type ChainsawServiceOrder = typeof chainsawServiceOrders.$inferSelect;
+export type InsertChainsawServiceOrder = typeof chainsawServiceOrders.$inferInsert;
+
+// ===== PEÇAS USADAS EM OS DE MOTOSSERRA =====
+export const chainsawServiceParts = mysqlTable("chainsaw_service_parts", {
+  id: int("id").autoincrement().primaryKey(),
+  serviceOrderId: int("service_order_id").notNull().references(() => chainsawServiceOrders.id, { onDelete: "cascade" }),
+  partId: int("part_id").references(() => chainsawParts.id, { onDelete: "set null" }),
+  partName: varchar("part_name", { length: 255 }).notNull(),
+  quantity: varchar("quantity", { length: 20 }).notNull(),
+  unit: varchar("unit", { length: 20 }).default("un"),
+  unitCost: varchar("unit_cost", { length: 20 }),
+  fromStock: int("from_stock").default(1), // 1 = baixou do estoque, 0 = compra avulsa
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type ChainsawServicePart = typeof chainsawServiceParts.$inferSelect;
+export type InsertChainsawServicePart = typeof chainsawServiceParts.$inferInsert;
