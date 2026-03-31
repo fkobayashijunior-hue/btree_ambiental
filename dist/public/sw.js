@@ -84,11 +84,23 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "url": "pwa-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
   }, {
+    "url": "pwa-512-v3.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
     "url": "pwa-192.png",
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
+    "url": "pwa-192-v3.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
     "url": "index.html",
-    "revision": "28621880dae79a280566a03969f108b0"
+    "revision": "3f5d47658867038cc43a01e9bbda7191"
+  }, {
+    "url": "icon-btree-512.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "icon-btree-192.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "assets/xlsx-DGuHH-KN.js",
     "revision": null
@@ -117,14 +129,26 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "url": "__manus__/debug-collector.js",
     "revision": "45b1e83bacf2dc3d3b20bb18b465abe0"
   }, {
+    "url": "icon-btree-192.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "icon-btree-512.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "pwa-192-v3.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
     "url": "pwa-192.png",
     "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "pwa-512-v3.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
   }, {
     "url": "pwa-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
   }, {
     "url": "manifest.webmanifest",
-    "revision": "ad7e55b2c666b2f4c43abc020a19470b"
+    "revision": "3b0d06f7fb4c4f99f80bd6a344cdbead"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));

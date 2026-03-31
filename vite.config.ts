@@ -177,9 +177,12 @@ const plugins = [
       display: "standalone",
       orientation: "portrait",
       start_url: "/dashboard",
+      id: "btree-ambiental-v3",
       icons: [
-        { src: "/pwa-192.png", sizes: "192x192", type: "image/png" },
-        { src: "/pwa-512.png", sizes: "512x512", type: "image/png" },
+        { src: "/icon-btree-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/icon-btree-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+        { src: "/icon-btree-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: "/icon-btree-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       ],
     },
     workbox: {
