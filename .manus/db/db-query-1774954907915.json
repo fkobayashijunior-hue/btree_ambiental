@@ -1,0 +1,9 @@
+{
+  "query": "SELECT * FROM chainsaws LIMIT 10; SELECT e.id, e.name, e.brand, e.model, e.serial_number, et.name as type_name FROM equipment e JOIN equipment_types et ON e.type_id = et.id WHERE LOWER(et.name) LIKE '%motosserra%' OR LOWER(e.name) LIKE '%motosserra%' OR LOWER(e.name) LIKE '%chainsaw%' LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute SELECT * FROM chainsaws LIMIT 10; SELECT e.id, e.name, e.brand, e.model, e.serial_number, et.name as type_name FROM equipment e JOIN equipment_types et ON e.type_id = et.id WHERE LOWER(et.name) LIKE '%motosserra%' OR LOWER(e.name) LIKE '%motosserra%' OR LOWER(e.name) LIKE '%chainsaw%' LIMIT 20;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 464
+}

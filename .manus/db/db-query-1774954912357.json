@@ -1,0 +1,9 @@
+{
+  "query": "SELECT * FROM equipment_types; SELECT e.id, e.name, e.brand, e.model, e.serial_number, et.name as type_name FROM equipment e JOIN equipment_types et ON e.type_id = et.id ORDER BY et.name, e.name LIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute SELECT * FROM equipment_types; SELECT e.id, e.name, e.brand, e.model, e.serial_number, et.name as type_name FROM equipment e JOIN equipment_types et ON e.type_id = et.id ORDER BY et.name, e.name LIMIT 50;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 399
+}

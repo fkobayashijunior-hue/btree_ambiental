@@ -1,0 +1,37 @@
+{
+  "query": "SHOW TABLES LIKE '%chainsaw%'; SELECT COUNT(*) as total FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'chainsaws';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user uoGYrCikfcCE2Hk.root --database MXrNdjKBoryW8SZbHmjeHH --execute SHOW TABLES LIKE '%chainsaw%'; SELECT COUNT(*) as total FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'chainsaws';",
+  "rows": [
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "chainsaw_chain_events"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "chainsaw_chain_stock"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "chainsaw_part_movements"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "chainsaw_parts"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "chainsaw_service_orders"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "chainsaw_service_parts"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "chainsaws"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "total"
+    },
+    {
+      "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_MXrNdjKBoryW8SZbHmjeHH (%chainsaw%)\nchainsaw_chain_events\nchainsaw_chain_stock\nchainsaw_part_movements\nchainsaw_parts\nchainsaw_service_orders\nchainsaw_service_parts\nchainsaws\ntotal\n1\n",
+  "stderr": "",
+  "execution_time_ms": 2478
+}

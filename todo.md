@@ -829,3 +829,13 @@
 
 ## 🔧 CORREÇÕES 31/03/2026
 - [x] Corrigir ícone PWA que não atualiza no celular mesmo após reinstalação do app (renomeado para pwa-192-v3.png e pwa-512-v3.png)
+
+---
+
+## 🔧 CORREÇÕES MÓDULO MOTOSSERRAS (31/03/2026)
+
+- [ ] Corrigir tabelas na Hostinger (SQL_MOTOSSERRAS_CORRECAO_HOSTINGER.sql)
+- [ ] Migrar motosserras do módulo antigo (equipment) para tabela chainsaws
+- [ ] Testar cadastro de nova motosserra após correção do SQL
+- [ ] Testar abastecimento de combustível
+- [ ] Testar controle de correntes
