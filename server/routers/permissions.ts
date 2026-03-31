@@ -18,6 +18,7 @@ export const SYSTEM_MODULES = [
   { slug: "clientes",        label: "Clientes",              group: "Comercial" },
   { slug: "portal-cliente",  label: "Portal do Cliente",     group: "Comercial" },
   { slug: "gps",             label: "Rastreamento GPS",      group: "Operações" },
+  { slug: "motosserras",    label: "Motosserras",           group: "Maquinário" },
   { slug: "relatorios",      label: "Relatórios",            group: "Administrativo" },
   { slug: "acesso",          label: "Controle de Acesso",    group: "Administrativo" },
 ] as const;
@@ -32,7 +33,7 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
   },
   mecanico: {
     label: "Mecânico",
-    modules: ["equipamentos", "pecas", "manutencao", "horas-maquina"],
+    modules: ["equipamentos", "pecas", "manutencao", "horas-maquina", "motosserras"],
   },
   operador: {
     label: "Operador",
@@ -44,7 +45,7 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
   },
   motosserrista: {
     label: "Motosserrista",
-    modules: ["equipamentos", "manutencao"],
+    modules: ["equipamentos", "manutencao", "motosserras"],
   },
   custom: {
     label: "Personalizado",
