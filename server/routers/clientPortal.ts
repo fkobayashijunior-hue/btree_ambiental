@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { clients, cargoLoads, replantingRecords, clientPayments } from "../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, or, isNull, like, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 /**
@@ -70,11 +70,19 @@ export const clientPortalRouter = router({
 
       if (!client) throw new Error("Acesso não autorizado.");
 
-      // Cargas vinculadas ao cliente
+      // Cargas vinculadas ao cliente (por clientId OU por clientName como fallback para cargas antigas)
       const loads = await db
         .select()
         .from(cargoLoads)
-        .where(eq(cargoLoads.clientId, input.clientId))
+        .where(
+          or(
+            eq(cargoLoads.clientId, input.clientId),
+            and(
+              isNull(cargoLoads.clientId),
+              like(cargoLoads.clientName, `%${client.name}%`)
+            )
+          )
+        )
         .orderBy(desc(cargoLoads.date))
         .limit(50);
 
