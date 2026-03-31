@@ -826,3 +826,6 @@
 - [x] Aba Peças/Estoque: lista de peças com saldo, entrada e saída manual
 - [x] Aba OS: lista de OS abertas/em andamento/concluídas, abertura de nova OS, conclusão pelo mecânico
 - [x] Relatório de consumo para ADM (combustível, correntes, peças por período)
+
+## 🔧 CORREÇÕES 31/03/2026
+- [x] Corrigir ícone PWA que não atualiza no celular mesmo após reinstalação do app (renomeado para pwa-192-v3.png e pwa-512-v3.png)
