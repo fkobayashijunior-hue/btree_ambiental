@@ -23,11 +23,30 @@ export const cargoLoadsRouter = router({
       city: z.string().optional(),
       state: z.string().optional(),
       notes: z.string().optional(),
+      clientId: z.number().optional(), // cliente vinculado ao destino
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      await db.insert(cargoDestinations).values({ ...input, createdBy: ctx.user.id });
+      const result = await db.insert(cargoDestinations).values({ ...input, createdBy: ctx.user.id });
+      return { success: true, id: (result as { insertId?: number }).insertId };
+    }),
+
+  updateDestination: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(1).optional(),
+      address: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      notes: z.string().optional(),
+      clientId: z.number().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const { id, ...rest } = input;
+      await db.update(cargoDestinations).set(rest as Record<string, unknown>).where(eq(cargoDestinations.id, id));
       return { success: true };
     }),
 

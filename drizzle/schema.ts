@@ -277,6 +277,7 @@ export const cargoDestinations = mysqlTable("cargo_destinations", {
   state: varchar("state", { length: 2 }),
   notes: text("notes"),
   active: int("active").default(1).notNull(),
+  clientId: int("client_id").references(() => clients.id), // cliente vinculado ao destino
   createdAt: timestamp("created_at").defaultNow().notNull(),
   createdBy: int("created_by").references(() => users.id),
 });

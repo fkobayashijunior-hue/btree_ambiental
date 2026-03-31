@@ -839,3 +839,14 @@
 - [ ] Testar cadastro de nova motosserra após correção do SQL
 - [ ] Testar abastecimento de combustível
 - [ ] Testar controle de correntes
+
+---
+
+## 🔗 VINCULAR DESTINO AO CLIENTE (31/03/2026)
+
+- [ ] Adicionar campo client_id na tabela cargo_destinations (schema + SQL Hostinger)
+- [ ] Atualizar router listDestinations para retornar clientId vinculado
+- [ ] Atualizar formulário de cadastro de destino para selecionar cliente
+- [ ] Ao selecionar destino no formulário de carga, preencher clientId automaticamente
+- [ ] Portal do cliente: mostrar cargas vinculadas via clientId do destino
+- [ ] Gerar SQL de ALTER TABLE cargo_destinations ADD COLUMN client_id para Hostinger

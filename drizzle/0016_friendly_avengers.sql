@@ -1,0 +1,2 @@
+ALTER TABLE `cargo_destinations` ADD `client_id` int;--> statement-breakpoint
+ALTER TABLE `cargo_destinations` ADD CONSTRAINT `cargo_destinations_client_id_clients_id_fk` FOREIGN KEY (`client_id`) REFERENCES `clients`(`id`) ON DELETE no action ON UPDATE no action;

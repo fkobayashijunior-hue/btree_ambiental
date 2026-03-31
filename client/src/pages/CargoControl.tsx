@@ -201,6 +201,7 @@ export default function CargoControl() {
   const [newDestName, setNewDestName] = useState("");
   const [newDestCity, setNewDestCity] = useState("");
   const [newDestState, setNewDestState] = useState("");
+  const [newDestClientId, setNewDestClientId] = useState(0);
   const { openFilePicker } = useFilePicker();
 
   // Form state
@@ -640,8 +641,16 @@ export default function CargoControl() {
                   value={form.destinationId}
                   onChange={e => {
                     const id = parseInt(e.target.value);
-                    const dest = destinations.find(d => d.id === id);
-                    setForm(f => ({ ...f, destinationId: id, destination: dest?.name || f.destination }));
+                    const dest = destinations.find(d => d.id === id) as (typeof destinations[number] & { clientId?: number | null }) | undefined;
+                    // Auto-preencher clientId se o destino tiver cliente vinculado
+                    const linkedClientId = dest?.clientId;
+                    const linkedClient = linkedClientId ? (clientsList as { id: number; name: string }[]).find(c => c.id === linkedClientId) : null;
+                    setForm(f => ({
+                      ...f,
+                      destinationId: id,
+                      destination: dest?.name || f.destination,
+                      ...(linkedClientId ? { clientId: linkedClientId, clientName: linkedClient?.name || f.clientName } : {}),
+                    }));
                   }}
                   className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
                 >
@@ -867,7 +876,7 @@ export default function CargoControl() {
       </Dialog>
 
       {/* ===== DIALOG: CADASTRAR DESTINO ===== */}
-      <Dialog open={isDestinationOpen} onOpenChange={setIsDestinationOpen}>
+      <Dialog open={isDestinationOpen} onOpenChange={v => { setIsDestinationOpen(v); if (!v) { setNewDestName(""); setNewDestCity(""); setNewDestState(""); setNewDestClientId(0); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Cadastrar Destino</DialogTitle>
@@ -887,12 +896,26 @@ export default function CargoControl() {
                 <Input value={newDestState} onChange={e => setNewDestState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} className="uppercase" />
               </div>
             </div>
+            <div>
+              <Label>Vincular ao Cliente (Portal)</Label>
+              <select
+                value={newDestClientId}
+                onChange={e => setNewDestClientId(parseInt(e.target.value))}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              >
+                <option value={0}>Nenhum (sem portal)</option>
+                {(clientsList as { id: number; name: string }[]).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">Se vinculado, o cliente verá as cargas deste destino no portal automaticamente.</p>
+            </div>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setIsDestinationOpen(false)}>Cancelar</Button>
               <Button
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={!newDestName || createDestination.isPending}
-                onClick={() => createDestination.mutate({ name: newDestName, city: newDestCity || undefined, state: newDestState || undefined })}
+                onClick={() => createDestination.mutate({ name: newDestName, city: newDestCity || undefined, state: newDestState || undefined, clientId: newDestClientId || undefined })}
               >
                 {createDestination.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar"}
               </Button>
