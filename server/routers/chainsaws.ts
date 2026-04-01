@@ -26,17 +26,25 @@ const chainsawsRouter = router({
       model: z.string().optional(),
       serialNumber: z.string().optional(),
       chainType: z.string().default("30"),
+      imageUrl: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
+      const { cloudinaryUpload } = await import("../cloudinary");
+      let imageUrl = input.imageUrl;
+      if (imageUrl && imageUrl.startsWith("data:")) {
+        const result = await cloudinaryUpload(imageUrl, "btree/chainsaws");
+        imageUrl = result.url;
+      }
       await db.insert(chainsaws).values({
         name: input.name,
         brand: input.brand,
         model: input.model,
         serialNumber: input.serialNumber,
         chainType: input.chainType,
+        imageUrl,
         notes: input.notes,
         createdBy: ctx.user.id,
       });
@@ -52,13 +60,20 @@ const chainsawsRouter = router({
       serialNumber: z.string().optional(),
       chainType: z.string().optional(),
       status: z.enum(["ativa", "oficina", "inativa"]).optional(),
+      imageUrl: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      const { id, ...data } = input;
-      await db.update(chainsaws).set(data).where(eq(chainsaws.id, id));
+      const { id, imageUrl: rawImageUrl, ...data } = input;
+      let imageUrl = rawImageUrl;
+      if (imageUrl && imageUrl.startsWith("data:")) {
+        const { cloudinaryUpload } = await import("../cloudinary");
+        const result = await cloudinaryUpload(imageUrl, "btree/chainsaws");
+        imageUrl = result.url;
+      }
+      await db.update(chainsaws).set({ ...data, ...(imageUrl !== undefined ? { imageUrl } : {}) }).where(eq(chainsaws.id, id));
       return { success: true };
     }),
 
@@ -264,7 +279,16 @@ const chainsChainRouter = router({
   listStock: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
+    const rows = await db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
+    // Se não houver tipos cadastrados, inicializar com os padrões (30 e 34 dentes)
+    if (rows.length === 0) {
+      await db.insert(chainsawChainStock).values([
+        { chainType: "30", sharpenedInBox: 0, inField: 0, inWorkshop: 0, totalStock: 0 },
+        { chainType: "34", sharpenedInBox: 0, inField: 0, inWorkshop: 0, totalStock: 0 },
+      ]);
+      return db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
+    }
+    return rows;
   }),
 
   upsertStock: protectedProcedure
@@ -390,7 +414,7 @@ const chainsawPartsRouter = router({
       .orderBy(chainsawParts.category, chainsawParts.name);
   }),
 
-  create: protectedProcedure
+   create: protectedProcedure
     .input(z.object({
       code: z.string().optional(),
       name: z.string().min(1),
@@ -399,15 +423,21 @@ const chainsawPartsRouter = router({
       currentStock: z.string().default("0"),
       minStock: z.string().default("0"),
       unitCost: z.string().optional(),
+      imageUrl: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      await db.insert(chainsawParts).values({ ...input, createdBy: ctx.user.id });
+      let imageUrl = input.imageUrl;
+      if (imageUrl && imageUrl.startsWith("data:")) {
+        const { cloudinaryUpload } = await import("../cloudinary");
+        const result = await cloudinaryUpload(imageUrl, "btree/chainsaw-parts");
+        imageUrl = result.url;
+      }
+      await db.insert(chainsawParts).values({ ...input, imageUrl, createdBy: ctx.user.id });
       return { success: true };
     }),
-
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
@@ -418,13 +448,21 @@ const chainsawPartsRouter = router({
       currentStock: z.string().optional(),
       minStock: z.string().optional(),
       unitCost: z.string().optional(),
+      imageUrl: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      const { id, ...data } = input;
-      await db.update(chainsawParts).set(data).where(eq(chainsawParts.id, id));
+      const { id, imageUrl: rawImageUrl, ...data } = input;
+      let imageUrl = rawImageUrl;
+      if (imageUrl && imageUrl.startsWith("data:")) {
+        const { cloudinaryUpload } = await import("../cloudinary");
+        const result = await cloudinaryUpload(imageUrl, "btree/chainsaw-parts");
+        imageUrl = result.url;
+      }
+      const updateData = { ...data, ...(imageUrl !== undefined ? { imageUrl } : {}) };
+      await db.update(chainsawParts).set(updateData).where(eq(chainsawParts.id, id));
       return { success: true };
     }),
 
@@ -543,22 +581,27 @@ const chainsawOSRouter = router({
       problemType: z.enum(["motor_falhando", "nao_liga", "superaquecimento", "vazamento", "corrente_problema", "sabre_problema", "manutencao_preventiva", "outro"]),
       problemDescription: z.string().optional(),
       priority: z.enum(["baixa", "media", "alta", "urgente"]).default("media"),
+      imageUrl: z.string().optional(), // foto do problema tirada no campo
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-
+      let imageUrl = input.imageUrl;
+      if (imageUrl && imageUrl.startsWith("data:")) {
+        const { cloudinaryUpload } = await import("../cloudinary");
+        const result = await cloudinaryUpload(imageUrl, "btree/chainsaw-os");
+        imageUrl = result.url;
+      }
       await db.update(chainsaws).set({ status: "oficina" }).where(eq(chainsaws.id, input.chainsawId));
-
       await db.insert(chainsawServiceOrders).values({
         chainsawId: input.chainsawId,
         problemType: input.problemType,
         problemDescription: input.problemDescription,
         priority: input.priority,
         status: "aberta",
+        imageUrl,
         openedBy: ctx.user.id,
       });
-
       return { success: true };
     }),
 

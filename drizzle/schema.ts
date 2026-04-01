@@ -784,6 +784,7 @@ export const chainsaws = mysqlTable("chainsaws", {
   serialNumber: varchar("serial_number", { length: 100 }),
   chainType: varchar("chain_type", { length: 20 }).default("30"), // "30" | "34" | outro
   status: mysqlEnum("status", ["ativa", "oficina", "inativa"]).default("ativa").notNull(),
+  imageUrl: text("image_url"), // foto da motosserra
   notes: text("notes"),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -877,6 +878,7 @@ export const chainsawParts = mysqlTable("chainsaw_parts", {
   currentStock: varchar("current_stock", { length: 20 }).default("0"),
   minStock: varchar("min_stock", { length: 20 }).default("0"), // estoque mínimo para alerta
   unitCost: varchar("unit_cost", { length: 20 }),
+  imageUrl: text("image_url"), // foto da peça
   notes: text("notes"),
   isActive: int("is_active").default(1),
   createdBy: int("created_by").references(() => users.id),
@@ -923,6 +925,8 @@ export const chainsawServiceOrders = mysqlTable("chainsaw_service_orders", {
   mechanicId: int("mechanic_id").references(() => users.id),
   serviceDescription: text("service_description"), // o que foi feito
   completedAt: timestamp("completed_at"),
+  // Imagem do problema (foto tirada no campo)
+  imageUrl: text("image_url"),
   // Metadados
   openedBy: int("opened_by").references(() => users.id),
   openedAt: timestamp("opened_at").defaultNow().notNull(),

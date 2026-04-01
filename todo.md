@@ -850,3 +850,15 @@
 - [x] Ao selecionar destino no formulário de carga, preencher clientId automaticamente
 - [x] Portal do cliente: mostrar cargas vinculadas via clientId do destino
 - [x] Gerar SQL de ALTER TABLE cargo_destinations ADD COLUMN client_id para Hostinger
+
+---
+
+## 🔧 CORREÇÕES E MELHORIAS - 01/04/2026
+
+- [x] Corrigir erro chainsaw_chain_stock (tabela faltando na Hostinger - query 500)
+- [x] Corrigir seleção de tipo de corrente no modal de movimentação (auto-inicializa 30 e 34 dentes)
+- [x] Adicionar upload de imagem nas motosserras (igual Setores e Equipamentos)
+- [x] Adicionar upload de imagem nas peças/consumíveis do módulo motosserras
+- [x] Adicionar campo de imagem na abertura de OS
+- [x] Corrigir portal do cliente Fazenda GW (SQL de vinculação gerado + query melhorada)
+- [x] Gerar SQL completo com todas as tabelas faltantes na Hostinger (hostinger_update_v2.sql)

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useFilePicker } from "@/hooks/useFilePicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -68,13 +69,48 @@ function ChainsawsTab() {
   const deleteMutation = trpc.chainsawModule.chainsaws.delete.useMutation({ onSuccess: () => { refetch(); toast.success('Removida!'); } });
   const openOSMutation = trpc.chainsawModule.os.open.useMutation({ onSuccess: () => { refetch(); setOSDialog(null); toast.success('OS aberta com sucesso!'); } });
 
+  const { openFilePicker } = useFilePicker();
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [osDialog, setOSDialog] = useState<any>(null);
   const [form, setForm] = useState({ name: "", brand: "", model: "", serialNumber: "", chainType: "30", notes: "" });
   const [osForm, setOSForm] = useState({ problemType: "motor_falhando", problemDescription: "", priority: "media" });
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  const [osPhotoPreview, setOSPhotoPreview] = useState<string | null>(null);
+  const [osPhotoBase64, setOSPhotoBase64] = useState<string | null>(null);
 
-  function resetForm() { setForm({ name: "", brand: "", model: "", serialNumber: "", chainType: "30", notes: "" }); }
+  function resetForm() {
+    setForm({ name: "", brand: "", model: "", serialNumber: "", chainType: "30", notes: "" });
+    setPhotoPreview(null);
+    setPhotoBase64(null);
+  }
+
+  function handlePhotoChange(files: FileList) {
+    const file = files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Foto muito grande. Máximo 5MB."); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = e.target?.result as string;
+      setPhotoPreview(b64);
+      setPhotoBase64(b64);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleOSPhotoChange(files: FileList) {
+    const file = files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Foto muito grande. Máximo 5MB."); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = e.target?.result as string;
+      setOSPhotoPreview(b64);
+      setOSPhotoBase64(b64);
+    };
+    reader.readAsDataURL(file);
+  }
 
   return (
     <div className="space-y-4">
@@ -93,10 +129,15 @@ function ChainsawsTab() {
           <Card key={cs.id} className="border-l-4" style={{ borderLeftColor: cs.status === "ativa" ? "#2d6a4f" : cs.status === "oficina" ? "#f97316" : "#94a3b8" }}>
             <CardContent className="py-3 px-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <p className="font-semibold text-[#1a3a2a]">{cs.name}</p>
-                  <p className="text-sm text-slate-500">{cs.brand} {cs.model} {cs.serialNumber ? `· Série: ${cs.serialNumber}` : ""}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Corrente: {cs.chainType} dentes</p>
+                <div className="flex items-center gap-3">
+                  {cs.imageUrl && (
+                    <img src={cs.imageUrl} alt={cs.name} className="w-14 h-14 object-cover rounded-lg border flex-shrink-0" onClick={() => window.open(cs.imageUrl, '_blank')} style={{cursor:'pointer'}} />
+                  )}
+                  <div>
+                    <p className="font-semibold text-[#1a3a2a]">{cs.name}</p>
+                    <p className="text-sm text-slate-500">{cs.brand} {cs.model} {cs.serialNumber ? `· Série: ${cs.serialNumber}` : ""}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Corrente: {cs.chainType} dentes</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge className={STATUS_COLORS[cs.status]}>{STATUS_LABELS[cs.status]}</Badge>
@@ -141,18 +182,32 @@ function ChainsawsTab() {
               </div>
             </div>
             <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+            <div>
+              <Label>Foto da Motosserra</Label>
+              <div className="mt-1 flex items-center gap-3">
+                {(photoPreview || editItem?.imageUrl) && (
+                  <img src={photoPreview || editItem?.imageUrl} alt="Foto" className="w-20 h-20 object-cover rounded-lg border" onClick={() => window.open(photoPreview || editItem?.imageUrl, '_blank')} style={{cursor:'pointer'}} />
+                )}
+                <Button type="button" variant="outline" size="sm" onClick={() => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoChange)}>
+                  📷 {photoPreview || editItem?.imageUrl ? "Trocar Foto" : "Adicionar Foto"}
+                </Button>
+                {(photoPreview || editItem?.imageUrl) && (
+                  <Button type="button" variant="outline" size="sm" className="text-red-500" onClick={() => { setPhotoPreview(null); setPhotoBase64(null); if (editItem) setEditItem((e: any) => ({ ...e, imageUrl: null })); }}>✕</Button>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancelar</Button>
-            <Button className="bg-[#2d6a4f] hover:bg-[#1b4332] text-white" onClick={() => {
+            <Button className="bg-[#2d6a4f] hover:bg-[#1b4332] text-white" disabled={createMutation.isPending || updateMutation.isPending} onClick={() => {
               if (!form.name) return toast.error('Nome obrigatório');
-              if (editItem) updateMutation.mutate({ id: editItem.id, ...form });
-              else createMutation.mutate(form);
+              const imageUrl = photoBase64 || (editItem?.imageUrl ?? undefined);
+              if (editItem) updateMutation.mutate({ id: editItem.id, ...form, imageUrl });
+              else createMutation.mutate({ ...form, imageUrl });
             }}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Dialog Abrir OS */}
       <Dialog open={!!osDialog} onOpenChange={(o) => { if (!o) setOSDialog(null); }}>
         <DialogContent>
@@ -180,12 +235,26 @@ function ChainsawsTab() {
             <div><Label>Descrição do Problema</Label>
               <Textarea value={osForm.problemDescription} onChange={e => setOSForm(f => ({ ...f, problemDescription: e.target.value }))} rows={3} placeholder="Descreva o problema para o mecânico..." />
             </div>
+            <div>
+              <Label>Foto do Problema (opcional)</Label>
+              <div className="mt-1 flex items-center gap-3">
+                {osPhotoPreview && (
+                  <img src={osPhotoPreview} alt="Foto" className="w-20 h-20 object-cover rounded-lg border" />
+                )}
+                <Button type="button" variant="outline" size="sm" onClick={() => openFilePicker({ accept: "image/*", capture: "environment" }, handleOSPhotoChange)}>
+                  📷 {osPhotoPreview ? "Trocar Foto" : "Adicionar Foto"}
+                </Button>
+                {osPhotoPreview && (
+                  <Button type="button" variant="outline" size="sm" className="text-red-500" onClick={() => { setOSPhotoPreview(null); setOSPhotoBase64(null); }}>✕</Button>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOSDialog(null)}>Cancelar</Button>
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={() => {
+            <Button variant="outline" onClick={() => { setOSDialog(null); setOSPhotoPreview(null); setOSPhotoBase64(null); }}>Cancelar</Button>
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={openOSMutation.isPending} onClick={() => {
               if (!osDialog) return;
-              openOSMutation.mutate({ chainsawId: osDialog.id, problemType: osForm.problemType as any, problemDescription: osForm.problemDescription, priority: osForm.priority as any });
+              openOSMutation.mutate({ chainsawId: osDialog.id, problemType: osForm.problemType as any, problemDescription: osForm.problemDescription, priority: osForm.priority as any, imageUrl: osPhotoBase64 || undefined });
             }}>Abrir OS</Button>
           </DialogFooter>
         </DialogContent>
@@ -607,12 +676,27 @@ function PartsTab() {
   const updateMutation = trpc.chainsawModule.parts.update.useMutation({ onSuccess: () => { refetch(); setEditItem(null); toast.success('Atualizado!'); } });
   const deleteMutation = trpc.chainsawModule.parts.delete.useMutation({ onSuccess: () => { refetch(); toast.success('Removida!'); } });
   const entryMutation = trpc.chainsawModule.parts.stockEntry.useMutation({ onSuccess: () => { refetch(); setEntryDialog(null); toast.success('Entrada registrada!'); } });
-
+  const { openFilePicker } = useFilePicker();
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [entryDialog, setEntryDialog] = useState<any>(null);
   const [form, setForm] = useState({ code: "", name: "", category: "", unit: "un", currentStock: "0", minStock: "0", unitCost: "", notes: "" });
   const [entryForm, setEntryForm] = useState({ quantity: "", unitCost: "", notes: "" });
+  const [partPhotoPreview, setPartPhotoPreview] = useState<string | null>(null);
+  const [partPhotoBase64, setPartPhotoBase64] = useState<string | null>(null);
+
+  function handlePartPhotoChange(files: FileList) {
+    const file = files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Foto muito grande. Máximo 5MB."); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = e.target?.result as string;
+      setPartPhotoPreview(b64);
+      setPartPhotoBase64(b64);
+    };
+    reader.readAsDataURL(file);
+  }
 
   const CATEGORIES = ["Corrente", "Sabre", "Filtro", "Vela", "Óleo", "Carburador", "Embreagem", "Outros"];
 
@@ -647,13 +731,18 @@ function PartsTab() {
                 <Card key={p.id} className={isLow ? "border-red-300 bg-red-50" : ""}>
                   <CardContent className="py-2 px-4">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div>
-                        <p className="font-medium text-[#1a3a2a]">{p.name} {p.code && <span className="text-xs text-slate-400">({p.code})</span>}</p>
-                        <p className="text-sm text-slate-500">
-                          Estoque: <strong className={isLow ? "text-red-600" : "text-green-700"}>{p.currentStock} {p.unit}</strong>
-                          {p.minStock && parseFloat(p.minStock) > 0 && <span className="text-slate-400 ml-2">· Mínimo: {p.minStock}</span>}
-                          {p.unitCost && <span className="text-slate-400 ml-2">· R$ {p.unitCost}/{p.unit}</span>}
-                        </p>
+                      <div className="flex items-center gap-3">
+                        {p.imageUrl && (
+                          <img src={p.imageUrl} alt={p.name} className="w-12 h-12 object-cover rounded-lg border flex-shrink-0" onClick={() => window.open(p.imageUrl, '_blank')} style={{cursor:'pointer'}} />
+                        )}
+                        <div>
+                          <p className="font-medium text-[#1a3a2a]">{p.name} {p.code && <span className="text-xs text-slate-400">({p.code})</span>}</p>
+                          <p className="text-sm text-slate-500">
+                            Estoque: <strong className={isLow ? "text-red-600" : "text-green-700"}>{p.currentStock} {p.unit}</strong>
+                            {p.minStock && parseFloat(p.minStock) > 0 && <span className="text-slate-400 ml-2">· Mínimo: {p.minStock}</span>}
+                            {p.unitCost && <span className="text-slate-400 ml-2">· R$ {p.unitCost}/{p.unit}</span>}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         {isLow && <Badge className="bg-red-100 text-red-700"><AlertTriangle className="w-3 h-3 mr-1" />Estoque baixo</Badge>}
@@ -709,18 +798,32 @@ function PartsTab() {
             </div>
             <div><Label>Custo unitário (R$)</Label><Input type="number" step="0.01" value={form.unitCost} onChange={e => setForm(f => ({ ...f, unitCost: e.target.value }))} /></div>
             <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+            <div>
+              <Label>Foto da Peça (opcional)</Label>
+              <div className="mt-1 flex items-center gap-3">
+                {(partPhotoPreview || editItem?.imageUrl) && (
+                  <img src={partPhotoPreview || editItem?.imageUrl} alt="Foto" className="w-20 h-20 object-cover rounded-lg border" onClick={() => window.open(partPhotoPreview || editItem?.imageUrl, '_blank')} style={{cursor:'pointer'}} />
+                )}
+                <Button type="button" variant="outline" size="sm" onClick={() => openFilePicker({ accept: "image/*" }, handlePartPhotoChange)}>
+                  📷 {partPhotoPreview || editItem?.imageUrl ? "Trocar Foto" : "Adicionar Foto"}
+                </Button>
+                {(partPhotoPreview || editItem?.imageUrl) && (
+                  <Button type="button" variant="outline" size="sm" className="text-red-500" onClick={() => { setPartPhotoPreview(null); setPartPhotoBase64(null); if (editItem) setEditItem((e: any) => ({ ...e, imageUrl: null })); }}>✕</Button>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancelar</Button>
-            <Button className="bg-[#2d6a4f] hover:bg-[#1b4332] text-white" onClick={() => {
+            <Button variant="outline" onClick={() => { setShowCreate(false); setEditItem(null); setPartPhotoPreview(null); setPartPhotoBase64(null); }}>Cancelar</Button>
+            <Button className="bg-[#2d6a4f] hover:bg-[#1b4332] text-white" disabled={createMutation.isPending || updateMutation.isPending} onClick={() => {
               if (!form.name) return toast.error('Nome obrigatório');
-              if (editItem) updateMutation.mutate({ id: editItem.id, ...form });
-              else createMutation.mutate(form);
+              const imageUrl = partPhotoBase64 || (editItem?.imageUrl ?? undefined);
+              if (editItem) updateMutation.mutate({ id: editItem.id, ...form, imageUrl });
+              else createMutation.mutate({ ...form, imageUrl });
             }}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Dialog Entrada de Estoque */}
       <Dialog open={!!entryDialog} onOpenChange={(o) => { if (!o) setEntryDialog(null); }}>
         <DialogContent>
