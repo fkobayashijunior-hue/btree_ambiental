@@ -15,7 +15,7 @@ import {
   Plus, Wrench, Fuel, Link2, Package, ClipboardList,
   AlertTriangle, CheckCircle2, Clock, XCircle, Trash2,
   ArrowRight, ArrowLeft, RotateCcw, TrendingDown, TrendingUp,
-  ChevronDown, ChevronUp, Edit
+  ChevronDown, ChevronUp, Edit, Camera, ImageOff
 } from "lucide-react";
 
 // ─────────────────────────────────────────────
@@ -121,42 +121,61 @@ function ChainsawsTab() {
         </Button>
       </div>
 
-      <div className="grid gap-3">
-        {chainsawList.length === 0 && (
-          <Card><CardContent className="py-8 text-center text-slate-500">Nenhuma motosserra cadastrada.</CardContent></Card>
-        )}
-        {chainsawList.map((cs: any) => (
-          <Card key={cs.id} className="border-l-4" style={{ borderLeftColor: cs.status === "ativa" ? "#2d6a4f" : cs.status === "oficina" ? "#f97316" : "#94a3b8" }}>
-            <CardContent className="py-3 px-4">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-3">
-                  {cs.imageUrl && (
-                    <img src={cs.imageUrl} alt={cs.name} className="w-14 h-14 object-cover rounded-lg border flex-shrink-0" onClick={() => window.open(cs.imageUrl, '_blank')} style={{cursor:'pointer'}} />
-                  )}
-                  <div>
-                    <p className="font-semibold text-[#1a3a2a]">{cs.name}</p>
-                    <p className="text-sm text-slate-500">{cs.brand} {cs.model} {cs.serialNumber ? `· Série: ${cs.serialNumber}` : ""}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Corrente: {cs.chainType} dentes</p>
+      {chainsawList.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <Wrench className="h-16 w-16 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium">Nenhuma motosserra cadastrada</p>
+          <p className="text-sm mt-1">Clique em "Nova Motosserra" para começar</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {chainsawList.map((cs: any) => (
+            <Card key={cs.id} className="hover:shadow-md transition-shadow overflow-hidden">
+              {/* Foto da motosserra */}
+              {cs.imageUrl ? (
+                <div className="h-36 w-full overflow-hidden bg-slate-100 cursor-pointer" onClick={() => window.open(cs.imageUrl, '_blank')}>
+                  <img src={cs.imageUrl} alt={cs.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                </div>
+              ) : (
+                <div className="h-36 w-full bg-gradient-to-br from-slate-100 to-slate-200 flex flex-col items-center justify-center gap-1">
+                  <Wrench className="w-10 h-10 text-slate-300" />
+                  <span className="text-xs text-slate-400">Sem foto</span>
+                </div>
+              )}
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-[#1a3a2a] truncate">{cs.name}</p>
+                    {(cs.brand || cs.model) && (
+                      <p className="text-xs text-emerald-700 font-medium">{[cs.brand, cs.model].filter(Boolean).join(" · ")}</p>
+                    )}
+                    {cs.serialNumber && <p className="text-xs text-slate-400 mt-0.5">Série: {cs.serialNumber}</p>}
+                    <p className="text-xs text-slate-500 mt-0.5">Corrente: <strong>{cs.chainType} dentes</strong></p>
+                    {cs.notes && <p className="text-xs text-slate-400 italic mt-1 line-clamp-2">{cs.notes}</p>}
+                  </div>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <Badge className={STATUS_COLORS[cs.status]}>{STATUS_LABELS[cs.status]}</Badge>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400 hover:text-emerald-600" title="Editar" onClick={() => { setEditItem(cs); setForm({ name: cs.name, brand: cs.brand || "", model: cs.model || "", serialNumber: cs.serialNumber || "", chainType: cs.chainType || "30", notes: cs.notes || "" }); setPhotoPreview(cs.imageUrl || null); setPhotoBase64(null); }}>
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-orange-500 hover:text-orange-700" title="Abrir OS" onClick={() => setOSDialog(cs)}>
+                        <Wrench className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400 hover:text-red-500" title="Remover" onClick={() => { if (confirm("Remover motosserra?")) deleteMutation.mutate({ id: cs.id }); }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={STATUS_COLORS[cs.status]}>{STATUS_LABELS[cs.status]}</Badge>
-                  <Button size="sm" variant="outline" onClick={() => { setEditItem(cs); setForm({ name: cs.name, brand: cs.brand || "", model: cs.model || "", serialNumber: cs.serialNumber || "", chainType: cs.chainType || "30", notes: cs.notes || "" }); }}>
-                    <Edit className="w-3 h-3" />
-                  </Button>
-                  <Button size="sm" variant="outline" className="text-orange-600 border-orange-200 hover:bg-orange-50" onClick={() => setOSDialog(cs)}>
-                    <Wrench className="w-3 h-3 mr-1" /> Abrir OS
-                  </Button>
-                  <Button size="sm" variant="outline" className="text-red-500 border-red-200 hover:bg-red-50" onClick={() => { if (confirm("Remover motosserra?")) deleteMutation.mutate({ id: cs.id }); }}>
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-              </div>
-              {cs.notes && <p className="text-xs text-slate-500 mt-1 italic">{cs.notes}</p>}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <Button size="sm" variant="outline" className="w-full mt-3 text-orange-600 border-orange-200 hover:bg-orange-50 gap-1" onClick={() => setOSDialog(cs)}>
+                  <Wrench className="w-3 h-3" /> Abrir Ordem de Serviço
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Dialog Criar/Editar */}
       <Dialog open={showCreate || !!editItem} onOpenChange={(o) => { if (!o) { setShowCreate(false); setEditItem(null); } }}>
@@ -718,45 +737,68 @@ function PartsTab() {
       </div>
 
       {parts.length === 0 && (
-        <Card><CardContent className="py-8 text-center text-slate-500">Nenhuma peça cadastrada.</CardContent></Card>
+        <div className="text-center py-16 text-slate-400">
+          <Package className="h-16 w-16 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium">Nenhuma peça cadastrada</p>
+          <p className="text-sm mt-1">Clique em "Nova Peça" para começar</p>
+        </div>
       )}
 
       {Object.entries(grouped).map(([cat, catParts]: [string, any]) => (
         <div key={cat}>
-          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">{cat}</h3>
-          <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span className="h-px flex-1 bg-slate-200" />
+            {cat}
+            <span className="h-px flex-1 bg-slate-200" />
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {catParts.map((p: any) => {
               const isLow = parseFloat(p.currentStock) <= parseFloat(p.minStock || "0") && parseFloat(p.minStock || "0") > 0;
               return (
-                <Card key={p.id} className={isLow ? "border-red-300 bg-red-50" : ""}>
-                  <CardContent className="py-2 px-4">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3">
-                        {p.imageUrl && (
-                          <img src={p.imageUrl} alt={p.name} className="w-12 h-12 object-cover rounded-lg border flex-shrink-0" onClick={() => window.open(p.imageUrl, '_blank')} style={{cursor:'pointer'}} />
+                <Card key={p.id} className={`hover:shadow-md transition-shadow overflow-hidden ${isLow ? "ring-2 ring-red-300" : ""}`}>
+                  {/* Foto da peça */}
+                  {p.imageUrl ? (
+                    <div className="h-32 w-full overflow-hidden bg-slate-100 cursor-pointer" onClick={() => window.open(p.imageUrl, '_blank')}>
+                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                    </div>
+                  ) : (
+                    <div className="h-32 w-full bg-gradient-to-br from-slate-100 to-slate-200 flex flex-col items-center justify-center gap-1">
+                      <Package className="w-8 h-8 text-slate-300" />
+                      <span className="text-xs text-slate-400">Sem foto</span>
+                    </div>
+                  )}
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-[#1a3a2a] truncate">{p.name}</p>
+                        {p.code && <p className="text-xs text-slate-400">{p.code}</p>}
+                        <p className="text-sm mt-1">
+                          Estoque: <strong className={isLow ? "text-red-600" : "text-green-700"}>{p.currentStock} {p.unit}</strong>
+                        </p>
+                        {p.minStock && parseFloat(p.minStock) > 0 && (
+                          <p className="text-xs text-slate-400">Mínimo: {p.minStock} {p.unit}</p>
                         )}
-                        <div>
-                          <p className="font-medium text-[#1a3a2a]">{p.name} {p.code && <span className="text-xs text-slate-400">({p.code})</span>}</p>
-                          <p className="text-sm text-slate-500">
-                            Estoque: <strong className={isLow ? "text-red-600" : "text-green-700"}>{p.currentStock} {p.unit}</strong>
-                            {p.minStock && parseFloat(p.minStock) > 0 && <span className="text-slate-400 ml-2">· Mínimo: {p.minStock}</span>}
-                            {p.unitCost && <span className="text-slate-400 ml-2">· R$ {p.unitCost}/{p.unit}</span>}
-                          </p>
+                        {p.unitCost && <p className="text-xs text-slate-400">R$ {p.unitCost}/{p.unit}</p>}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        {isLow && (
+                          <Badge className="bg-red-100 text-red-700 text-xs">
+                            <AlertTriangle className="w-3 h-3 mr-1" />Baixo
+                          </Badge>
+                        )}
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400 hover:text-emerald-600" title="Editar" onClick={() => { setEditItem(p); setPartPhotoPreview(p.imageUrl || null); setPartPhotoBase64(null); setForm({ code: p.code || "", name: p.name, category: p.category || "", unit: p.unit || "un", currentStock: p.currentStock || "0", minStock: p.minStock || "0", unitCost: p.unitCost || "", notes: p.notes || "" }); }}>
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400 hover:text-red-500" title="Remover" onClick={() => { if (confirm("Remover peça?")) deleteMutation.mutate({ id: p.id }); }}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        {isLow && <Badge className="bg-red-100 text-red-700"><AlertTriangle className="w-3 h-3 mr-1" />Estoque baixo</Badge>}
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => { setEntryDialog(p); setEntryForm({ quantity: "", unitCost: "", notes: "" }); }}>
-                          <TrendingUp className="w-3 h-3 mr-1" /> Entrada
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => { setEditItem(p); setForm({ code: p.code || "", name: p.name, category: p.category || "", unit: p.unit || "un", currentStock: p.currentStock || "0", minStock: p.minStock || "0", unitCost: p.unitCost || "", notes: p.notes || "" }); }}>
-                          <Edit className="w-3 h-3" />
-                        </Button>
-                        <Button size="sm" variant="outline" className="text-red-500 border-red-200" onClick={() => { if (confirm("Remover peça?")) deleteMutation.mutate({ id: p.id }); }}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
                     </div>
+                    <Button size="sm" className="w-full mt-3 bg-green-600 hover:bg-green-700 text-white gap-1" onClick={() => { setEntryDialog(p); setEntryForm({ quantity: "", unitCost: "", notes: "" }); }}>
+                      <TrendingUp className="w-3 h-3" /> Registrar Entrada
+                    </Button>
                   </CardContent>
                 </Card>
               );
