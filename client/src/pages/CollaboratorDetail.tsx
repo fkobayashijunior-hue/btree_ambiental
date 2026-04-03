@@ -196,7 +196,7 @@ export default function CollaboratorDetail() {
 <div class="section"><div class="section-title">Documentos</div>
 ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emissão</th><th>Validade</th></tr></thead><tbody>${docList}</tbody></table>` : "<p style='color:#9ca3af;font-size:12px;'>Nenhum documento cadastrado.</p>"}
 </div></div>
-<div class="footer">Gerado em ${new Date().toLocaleDateString("pt-BR")} · <strong>BTREE Empreendimentos LTDA</strong></div>
+<div style="margin-top:24px;padding:12px 30px;border-top:2px solid #0d4f2e;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px;"><img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png" alt="Kobayashi" style="height:28px;" onerror="this.style.display='none'"/><div style="font-size:10px;color:#555;">Desenvolvido por <strong style="color:#0d4f2e;">Kobayashi Desenvolvimento de Sistemas</strong><br/><a href="https://btreeambiental.com" style="color:#15803d;text-decoration:none;font-weight:bold;">btreeambiental.com</a></div></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com" alt="QR" style="width:60px;height:60px;"/><span style="font-size:9px;color:#555;">Acesse nosso site</span></div></div>
 </body></html>`;
 
     const win = window.open("", "_blank");

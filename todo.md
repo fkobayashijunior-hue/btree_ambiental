@@ -924,3 +924,67 @@
 - [ ] Controle financeiro completo: cadastro de todos os gastos e entradas para relatórios e planilhas
 - [ ] Campos específicos por tipo de equipamento (eliminar campo genérico de motosserra no futuro)
 - [ ] Destino: remover vínculo obrigatório com cliente (mesmo destino pode receber carga de vários clientes)
+
+---
+
+## SPRINT 04/04/2026
+
+### PDFs — Padronização de Cabeçalho/Rodapé
+- [ ] Criar utilitário pdfTemplate.ts com cabeçalho BTREE (logo + título + subtítulo) e rodapé (logo Kobayashi + btreeambiental.com + QR Code)
+- [ ] Aplicar template em: Ficha do Colaborador
+- [ ] Aplicar template em: Relatório de Presenças
+- [ ] Aplicar template em: Relatório de Cargas
+- [ ] Aplicar template em: Relatório de Abastecimento
+- [ ] Aplicar template em: Relatório de Peças/OS Motosserras
+- [ ] Verificar e aplicar em todos os demais PDFs do sistema
+
+### Cargo de Líder
+- [ ] Adicionar role "lider" no enum de roles do schema (collaborators)
+- [ ] Líder pode registrar presença mas não vê valores financeiros
+- [ ] Registro de presença captura GPS automaticamente
+- [ ] GPS identifica fazenda/sede mais próxima e pré-preenche o local
+- [ ] Permite alterar manualmente o local
+- [ ] Migração SQL para Hostinger
+
+### Módulo Financeiro
+- [ ] Schema: tabelas financial_entries (entradas) e financial_expenses (saídas)
+- [ ] Categorias configuráveis
+- [ ] Tela de lançamentos com filtro por período e categoria
+- [ ] Dashboard financeiro: receitas x despesas x saldo
+- [ ] Exportação para Excel e PDF
+- [ ] Acesso restrito a admin
+
+### Vincular Cargas Antigas ao Cliente
+- [ ] Gerar SQL para atualizar clientId das cargas com clientName = 'Fazenda GW'
+
+---
+
+## 💰 MÓDULO FINANCEIRO (03/04/2026)
+
+- [x] Schema DB: tabela financial_entries (tipo, categoria, valor, data, forma de pagamento, status)
+- [x] Router backend: financial.ts com list, monthlySummary, categoryBreakdown, monthlyHistory, create, update, delete
+- [x] Registrar router financeiro no routers.ts principal
+- [x] Adicionar slug "financeiro" na lista de módulos do sistema (permissions.ts)
+- [x] Página FinancialModule.tsx com 3 abas: Dashboard, Lançamentos, Relatório
+- [x] Dashboard com cards de resumo (receitas, despesas, saldo)
+- [x] Gráfico de barras - histórico mensal (últimos 12 meses)
+- [x] Gráficos de pizza - receitas e despesas por categoria
+- [x] Breakdown por categoria com totais
+- [x] Formulário de cadastro de receitas e despesas (Sheet lateral)
+- [x] Edição e exclusão de lançamentos
+- [x] Exportação de relatório mensal em PDF com cabeçalho/rodapé padrão BTREE
+- [x] Rota /financeiro no App.tsx
+- [x] Item "Financeiro" no menu lateral (DashboardLayout)
+- [x] Testes unitários: 29 testes passando (financial.test.ts)
+
+## 📍 GPS NA TELA DE PRESENÇAS (03/04/2026)
+
+- [x] Captura automática de GPS ao abrir formulário de registro de presença
+- [x] Detecção do nome do local baseada nas coordenadas (Fazenda GW, Sede, etc.)
+- [x] Ocultar valores financeiros (diária, PIX) quando perfil é "Líder"
+- [x] Exibição do local GPS nos cards de presença
+- [x] Schema já tinha campos latitude, longitude, locationName na tabela collaborator_attendance
+
+---
+
+**Última atualização:** 03/04/2026

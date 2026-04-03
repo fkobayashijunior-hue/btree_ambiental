@@ -195,24 +195,27 @@ export default function VehicleControlPage() {
       const { default: jsPDF } = await import("jspdf");
       const { default: autoTable } = await import("jspdf-autotable");
       const doc = new jsPDF();
-
-      // Cabeçalho
-      doc.setFontSize(16);
-      doc.setTextColor(22, 101, 52);
-      doc.text("BTREE Ambiental", 14, 18);
-      doc.setFontSize(11);
-      doc.setTextColor(80, 80, 80);
       const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos os veículos") : "Todos os veículos";
-      doc.text(`Relatório de Abastecimentos — ${periodLabel}`, 14, 26);
-      doc.text(`Veículo: ${vehicleName}`, 14, 33);
-
+      const pageW = doc.internal.pageSize.width;
+      const nowStr = new Date().toLocaleDateString("pt-BR");
+      // Cabeçalho verde BTREE
+      doc.setFillColor(13, 79, 46);
+      doc.rect(0, 0, pageW, 28, "F");
+      doc.setFontSize(16);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Relatório de Abastecimentos — ${periodLabel}`, 14, 12);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`BTREE Empreendimentos LTDA · btreeambiental.com · Veículo: ${vehicleName}`, 14, 22);
+      doc.setTextColor(0, 0, 0);
       // Resumo
       doc.setFontSize(10);
       doc.setTextColor(40, 40, 40);
-      doc.text(`Total de registros: ${filteredRecords.length}`, 14, 43);
-      doc.text(`Total de abastecimentos: ${fuelRecords.length}`, 14, 49);
-      doc.text(`Total de litros: ${totalLiters.toFixed(1)} L`, 14, 55);
-      doc.text(`Custo total: R$ ${totalCost.toFixed(2)}`, 14, 61);
+      doc.text(`Total de registros: ${filteredRecords.length}`, 14, 38);
+      doc.text(`Total de abastecimentos: ${fuelRecords.length}`, 14, 44);
+      doc.text(`Total de litros: ${totalLiters.toFixed(1)} L`, 14, 50);
+      doc.text(`Custo total: R$ ${totalCost.toFixed(2)}`, 14, 56);
 
       // Tabela
       const rows = filteredRecords.map((r: any) => [
@@ -227,7 +230,7 @@ export default function VehicleControlPage() {
       ]);
 
       autoTable(doc, {
-        startY: 68,
+        startY: 62,
         head: [["Data", "Veículo", "Tipo", "Combustível", "Litros/KM", "Valor (R$)", "Posto/Tipo", "Registrado por"]],
         body: rows,
         styles: { fontSize: 8, cellPadding: 2.5 },
@@ -250,11 +253,16 @@ export default function VehicleControlPage() {
       const pageCount = (doc as any).internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
+        const pH = doc.internal.pageSize.height;
+        const pW2 = doc.internal.pageSize.width;
+        doc.setDrawColor(13, 79, 46);
+        doc.setLineWidth(0.5);
+        doc.line(14, pH - 16, pW2 - 14, pH - 16);
         doc.setFontSize(8);
-        doc.setFont(undefined as any, "normal");
-        doc.setTextColor(150);
-        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} — Kobayashi Desenvolvimento`, 14, doc.internal.pageSize.height - 8);
-        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Desenvolvido por Kobayashi Desenvolvimento de Sistemas · btreeambiental.com`, 14, pH - 10);
+        doc.text(`Gerado em ${nowStr} · Pág ${i}/${pageCount}`, pW2 - 14, pH - 10, { align: "right" });
       }
 
       doc.save(`abastecimentos-${filterYear}-${String(filterMonth + 1).padStart(2, "0")}.pdf`);

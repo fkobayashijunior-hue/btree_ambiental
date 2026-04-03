@@ -20,6 +20,7 @@ import { permissionsRouter } from "./routers/permissions";
 import { chainsawModuleRouter } from "./routers/chainsaws";
 import { extraExpensesRouter } from "./routers/extraExpenses";
 import { dashboardRouter } from "./routers/dashboard";
+import { financialRouter } from "./routers/financial";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { SignJWT } from "jose";
@@ -188,8 +189,8 @@ export const appRouter = router({
   permissions: permissionsRouter,
   chainsawModule: chainsawModuleRouter,
   extraExpenses: extraExpensesRouter,
-
-  // TODO: add feature routers here, e.g.
+  financial: financialRouter,
+  // TODO: add feature routers heree, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>
   //     db.getUserTodos(ctx.user.id)

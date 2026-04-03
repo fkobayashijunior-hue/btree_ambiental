@@ -349,20 +349,25 @@ export default function MachineHoursPage() {
       const doc = new jsPDF();
 
       const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos") : "Todos os equipamentos";
-
+      const pageW = doc.internal.pageSize.width;
+      const now = new Date().toLocaleDateString("pt-BR");
+      // Cabeçalho verde BTREE
+      doc.setFillColor(13, 79, 46);
+      doc.rect(0, 0, pageW, 28, "F");
       doc.setFontSize(16);
-      doc.setTextColor(22, 101, 52);
-      doc.text("BTREE Ambiental", 14, 18);
-      doc.setFontSize(11);
-      doc.setTextColor(80, 80, 80);
-      doc.text(`Relatório de Controle de Máquinas`, 14, 26);
-      doc.text(`Equipamento: ${vehicleName}`, 14, 33);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.text("Relatório de Controle de Máquinas", 14, 12);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`BTREE Empreendimentos LTDA · btreeambiental.com · Equipamento: ${vehicleName}`, 14, 22);
+      doc.setTextColor(0, 0, 0);
 
       // Horas
       if (filteredHours.length > 0) {
         doc.setFontSize(12);
         doc.setTextColor(22, 101, 52);
-        doc.text("Horas Trabalhadas", 14, 43);
+        doc.text("Horas Trabalhadas", 14, 38);
         autoTable(doc, {
           startY: 47,
           head: [["Data", "Equipamento", "Horímetro Inicial", "Horímetro Final", "Horas", "Atividade", "Local"]],
@@ -410,10 +415,15 @@ export default function MachineHoursPage() {
       const pageCount = (doc as any).internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
+        const pH = doc.internal.pageSize.height;
+        const pW2 = doc.internal.pageSize.width;
+        doc.setDrawColor(13, 79, 46);
+        doc.setLineWidth(0.5);
+        doc.line(14, pH - 16, pW2 - 14, pH - 16);
         doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} — Kobayashi Desenvolvimento`, 14, doc.internal.pageSize.height - 8);
-        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Desenvolvido por Kobayashi Desenvolvimento de Sistemas · btreeambiental.com`, 14, pH - 10);
+        doc.text(`Gerado em ${now} · Pág ${i}/${pageCount}`, pW2 - 14, pH - 10, { align: "right" });
       }
 
       doc.save(`maquinas-${new Date().toISOString().slice(0, 10)}.pdf`);

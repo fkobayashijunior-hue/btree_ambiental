@@ -36,6 +36,9 @@ export const attendanceRouter = router({
           paidAt: collaboratorAttendance.paidAt,
           registeredBy: collaboratorAttendance.registeredBy,
           createdAt: collaboratorAttendance.createdAt,
+          latitude: collaboratorAttendance.latitude,
+          longitude: collaboratorAttendance.longitude,
+          locationName: collaboratorAttendance.locationName,
         })
         .from(collaboratorAttendance)
         .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
@@ -82,6 +85,10 @@ export const attendanceRouter = router({
       pixKey: z.string().optional(),
       activity: z.string().optional(),
       observations: z.string().optional(),
+      // GPS
+      latitude: z.string().optional(),
+      longitude: z.string().optional(),
+      locationName: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -99,6 +106,9 @@ export const attendanceRouter = router({
         activity: input.activity || null,
         observations: input.observations || null,
         registeredBy: ctx.user.id,
+        latitude: input.latitude || null,
+        longitude: input.longitude || null,
+        locationName: input.locationName || null,
       });
 
       // Notificar o administrador
@@ -107,7 +117,7 @@ export const attendanceRouter = router({
       const employmentLabel = input.employmentType === "clt" ? "CLT" : input.employmentType === "terceirizado" ? "Terceirizado" : "Diarista";
       await notifyOwner({
         title: `✅ Presença registrada — ${collaboratorName}`,
-        content: `${collaboratorName}${activityInfo} teve presença registrada em ${dateFormatted}.\nVínculo: ${employmentLabel} | Diária: R$ ${input.dailyValue}${input.pixKey ? " | PIX: " + input.pixKey : ""}\nRegistrado por: ${ctx.user.name}`,
+        content: `${collaboratorName}${activityInfo} teve presença registrada em ${dateFormatted}.\nVínculo: ${employmentLabel} | Diária: R$ ${input.dailyValue}${input.pixKey ? " | PIX: " + input.pixKey : ""}\nLocal: ${input.locationName || "Não informado"}\nRegistrado por: ${ctx.user.name}`,
       }).catch(() => {});
 
       // Notificação por e-mail para a equipe (Mary + owner)

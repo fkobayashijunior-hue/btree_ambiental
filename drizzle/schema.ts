@@ -605,6 +605,10 @@ export const collaboratorAttendance = mysqlTable("collaborator_attendance", {
   paymentStatus: mysqlEnum("payment_status_ca", ["pendente", "pago"]).default("pendente").notNull(),
   paidAt: timestamp("paid_at"),
   registeredBy: int("registered_by").references(() => users.id),
+  // GPS do registro de presença
+  latitude: varchar("latitude", { length: 20 }),
+  longitude: varchar("longitude", { length: 20 }),
+  locationName: varchar("location_name", { length: 255 }), // nome do local (fazenda, sede, etc.)
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
@@ -966,3 +970,28 @@ export const extraExpenses = mysqlTable("extra_expenses", {
 });
 export type ExtraExpense = typeof extraExpenses.$inferSelect;
 export type InsertExtraExpense = typeof extraExpenses.$inferInsert;
+
+// ===== MÓDULO FINANCEIRO =====
+export const financialEntries = mysqlTable("financial_entries", {
+  id: int("id").autoincrement().primaryKey(),
+  type: mysqlEnum("type", ["receita", "despesa"]).notNull(),
+  category: varchar("category", { length: 100 }).notNull(),
+  // Categorias de receita: venda_madeira, servico_corte, servico_plantio, servico_transporte, outro_receita
+  // Categorias de despesa: folha_pagamento, combustivel, manutencao, material, alimentacao, transporte, impostos, aluguel, outro_despesa
+  description: varchar("description", { length: 500 }).notNull(),
+  amount: varchar("amount", { length: 20 }).notNull(), // valor em reais
+  date: timestamp("date").notNull(),
+  referenceMonth: varchar("reference_month", { length: 7 }), // ex: "2026-04" para agrupamento
+  paymentMethod: mysqlEnum("payment_method", ["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).default("pix").notNull(),
+  status: mysqlEnum("status", ["pendente", "confirmado", "cancelado"]).default("confirmado").notNull(),
+  clientId: int("client_id").references(() => clients.id, { onDelete: "set null" }),
+  clientName: varchar("client_name", { length: 255 }),
+  receiptImageUrl: text("receipt_image_url"),
+  notes: text("notes"),
+  registeredBy: int("registered_by").references(() => users.id),
+  registeredByName: varchar("registered_by_name", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type FinancialEntry = typeof financialEntries.$inferSelect;
+export type InsertFinancialEntry = typeof financialEntries.$inferInsert;

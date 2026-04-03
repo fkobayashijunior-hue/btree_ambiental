@@ -72,11 +72,10 @@ function generatePDF(items: CartItem[], title: string, supplierFilter?: string) 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 20px; }
-    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #2e7d32; padding-bottom: 12px; margin-bottom: 16px; }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .header-left img { height: 50px; object-fit: contain; }
-    .header-info h1 { font-size: 18px; color: #2e7d32; font-weight: bold; }
-    .header-info p { font-size: 11px; color: #555; margin-top: 2px; }
+    .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 16px 28px; display: flex; align-items: center; gap: 20px; margin: -20px -20px 16px -20px; }
+    .pdf-header img { height: 52px; filter: brightness(0) invert(1); }
+    .pdf-header-text h1 { font-size: 18px; font-weight: bold; margin: 0; }
+    .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
     .meta { display: flex; justify-content: space-between; margin-bottom: 14px; font-size: 11px; color: #444; }
     .supplier-badge { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 12px; margin-bottom: 10px; display: inline-block; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
@@ -95,18 +94,11 @@ function generatePDF(items: CartItem[], title: string, supplierFilter?: string) 
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="header-left">
-      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
-      <div class="header-info">
-        <h1>Lista de Compras</h1>
-        <p>${BTREE_ENDERECO}</p>
-        <p>${BTREE_CONTATO}</p>
-      </div>
-    </div>
-    <div style="text-align:right; font-size:11px; color:#555;">
-      <strong>${title}</strong><br/>
-      Data: ${now}
+  <div class="pdf-header">
+    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <div class="pdf-header-text">
+      <h1>Lista de Compras — ${title}</h1>
+      <p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${now}</p>
     </div>
   </div>
 
@@ -140,13 +132,11 @@ function generatePDF(items: CartItem[], title: string, supplierFilter?: string) 
   </div>
 
   <div class="footer">
-    <div class="footer-left">
-      <strong>BTREE Ambiental</strong><br/>
-      ${BTREE_ENDERECO}<br/>
-      ${BTREE_CONTATO}<br/>
-      <a href="${BTREE_SITE}" style="color:#2e7d32;">${BTREE_SITE}</a>
-      <div class="dev-credit" style="margin-top:8px;">
-        Desenvolvido por <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" /> Kobayashi Desenvolvimento de Sistemas
+    <div class="footer-left" style="display:flex;align-items:center;gap:10px;">
+      <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" style="height:28px;" onerror="this.style.display='none'" />
+      <div style="font-size:10px;color:#555;">
+        Desenvolvido por <strong style="color:#0d4f2e;">Kobayashi Desenvolvimento de Sistemas</strong><br/>
+        <a href="${BTREE_SITE}" style="color:#15803d;text-decoration:none;font-weight:bold;">${BTREE_SITE}</a>
       </div>
     </div>
     <div class="footer-right">

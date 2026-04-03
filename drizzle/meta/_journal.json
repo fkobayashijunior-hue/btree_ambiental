@@ -134,6 +134,20 @@
       "when": 1775223991950,
       "tag": "0018_clever_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1775256005180,
+      "tag": "0019_fair_aqueduct",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1775256614607,
+      "tag": "0020_furry_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

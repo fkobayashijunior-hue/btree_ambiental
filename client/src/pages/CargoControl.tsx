@@ -76,25 +76,41 @@ function compressImage(file: File): Promise<string> {
 }
 
 // ===== GERAÇÃO DE PDF =====
-function generateCargoPDF(cargo: Record<string, unknown>, companyName = "BTREE Ambiental") {
+function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE Ambiental") {
   const date = cargo.date ? new Date(cargo.date as string).toLocaleDateString("pt-BR") : "-";
+  const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+  const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+  const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
+  const statusBadge = cargo.status === "entregue" ? "Entregue" : cargo.status === "cancelado" ? "Cancelado" : "Pendente";
   const html = `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Relatório de Carga #${cargo.id}</title>
+<title>Relatório de Carga #${cargo.id} - BTREE Ambiental</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #1a1a1a; }
-  .header { background: #16a34a; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-  .header h1 { margin: 0; font-size: 22px; }
-  .header p { margin: 4px 0 0; font-size: 13px; opacity: 0.85; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
+  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 16px 28px; display: flex; align-items: center; gap: 20px; }
+  .pdf-header img { height: 52px; filter: brightness(0) invert(1); }
+  .pdf-header-text h1 { font-size: 18px; font-weight: bold; margin: 0; }
+  .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
+  .pdf-content { padding: 20px 28px; }
+  .pdf-footer { margin-top: 24px; padding: 12px 28px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .pdf-footer-left { display: flex; align-items: center; gap: 10px; }
+  .pdf-footer-left img { height: 28px; }
+  .pdf-footer-text { font-size: 10px; color: #555; }
+  .pdf-footer-text strong { color: #0d4f2e; }
+  .pdf-footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+  .pdf-footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .pdf-footer-right img { width: 60px; height: 60px; }
+  .pdf-footer-right span { font-size: 9px; color: #555; }
   .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
   .badge-pendente { background: #fef9c3; color: #854d0e; }
   .badge-entregue { background: #dcfce7; color: #166534; }
   .badge-cancelado { background: #fee2e2; color: #991b1b; }
   .section { margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-  .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 14px; color: #166534; border-bottom: 1px solid #e5e7eb; }
+  .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 14px; color: #0d4f2e; border-bottom: 1px solid #e5e7eb; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
   .field { padding: 10px 16px; border-bottom: 1px solid #f3f4f6; }
   .field:last-child { border-bottom: none; }
@@ -103,19 +119,22 @@ function generateCargoPDF(cargo: Record<string, unknown>, companyName = "BTREE A
   .tracking { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
   .tracking-step { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
   .step-done { background: #dcfce7; color: #166534; }
-  .step-current { background: #16a34a; color: white; }
+  .step-current { background: #0d4f2e; color: white; }
   .step-pending { background: #f3f4f6; color: #9ca3af; }
-  .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 16px; }
   .photos { display: flex; gap: 10px; flex-wrap: wrap; padding: 12px 16px; }
   .photos img { width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; }
-  @media print { body { padding: 0; } }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style>
 </head>
 <body>
-<div class="header">
-  <h1>${companyName} — Relatório de Carga #${cargo.id}</h1>
-  <p>Emitido em ${new Date().toLocaleString("pt-BR")} · Status: <span class="badge badge-${cargo.status}">${cargo.status === "entregue" ? "Entregue" : cargo.status === "cancelado" ? "Cancelado" : "Pendente"}</span></p>
+<div class="pdf-header">
+  <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+  <div class="pdf-header-text">
+    <h1>Relatório de Carga #${cargo.id}</h1>
+    <p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${new Date().toLocaleString("pt-BR")} · Status: ${statusBadge}</p>
+  </div>
 </div>
+<div class="pdf-content">
 
 <div class="section">
   <div class="section-title">🚛 Veículo e Motorista</div>
@@ -173,9 +192,21 @@ ${(cargo.weightOutPhotoUrl || cargo.weightInPhotoUrl) ? `
   </div>
 </div>` : ""}
 
-<div class="footer">
-  ${companyName} · Relatório gerado automaticamente pelo sistema BTREE
 </div>
+<div class="pdf-footer">
+  <div class="pdf-footer-left">
+    <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+    <div class="pdf-footer-text">
+      Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+      <a href="https://btreeambiental.com">btreeambiental.com</a>
+    </div>
+  </div>
+  <div class="pdf-footer-right">
+    <img src="${BTREE_QR}" alt="QR Code" />
+    <span>Acesse nosso site</span>
+  </div>
+</div>
+<script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
 </body>
 </html>`;
 
@@ -183,7 +214,6 @@ ${(cargo.weightOutPhotoUrl || cargo.weightInPhotoUrl) ? `
   if (win) {
     win.document.write(html);
     win.document.close();
-    setTimeout(() => win.print(), 500);
   }
 }
 

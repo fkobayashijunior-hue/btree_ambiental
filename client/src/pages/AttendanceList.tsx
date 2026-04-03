@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,9 +12,10 @@ import { toast } from "sonner";
 import {
   Users, Plus, Calendar, ChevronDown, ChevronUp, Loader2,
   FileDown, ChevronLeft, ChevronRight, CheckCircle2, Clock,
-  DollarSign, User, CalendarDays, LayoutList, Trash2
+  DollarSign, User, CalendarDays, LayoutList, Trash2,
+  MapPin, Navigation, AlertCircle
 } from "lucide-react";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO, isWithinInterval } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -39,6 +40,32 @@ function fmtDateFull(d: Date | string) {
   return format(typeof d === "string" ? parseISO(d) : d, "EEE dd/MM", { locale: ptBR });
 }
 
+// ─── Locais conhecidos (coordenadas aproximadas) ─────────────────────────────
+// IMPORTANTE: Atualize estas coordenadas com os valores reais das fazendas/sedes
+const KNOWN_LOCATIONS = [
+  { name: "Fazenda GW", lat: -21.5, lng: -48.5, radius: 5000 },   // raio em metros
+  { name: "Sede BTREE", lat: -21.4, lng: -48.4, radius: 2000 },
+  { name: "Escritório", lat: -21.3, lng: -48.3, radius: 1000 },
+];
+
+function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function detectLocationName(lat: number, lng: number): string {
+  for (const loc of KNOWN_LOCATIONS) {
+    const dist = getDistanceMeters(lat, lng, loc.lat, loc.lng);
+    if (dist <= loc.radius) return loc.name;
+  }
+  return "";
+}
+
 const emptyForm = {
   collaboratorId: "",
   date: new Date().toISOString().slice(0, 10),
@@ -47,12 +74,19 @@ const emptyForm = {
   pixKey: "",
   activity: "",
   observations: "",
+  latitude: "",
+  longitude: "",
+  locationName: "",
 };
 
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function AttendanceList() {
-  const { isAdmin } = usePermissions();
+  const { isAdmin, profile } = usePermissions();
+  const isLider = profile === "lider";
+  // Somente admin vê valores financeiros
+  const canSeeFinancial = isAdmin;
+
   const [tab, setTab] = useState<"semanal" | "diario">("semanal");
   const [weekRef, setWeekRef] = useState(new Date());
   const [searchDate, setSearchDate] = useState(new Date().toISOString().slice(0, 10));
@@ -60,6 +94,8 @@ export default function AttendanceList() {
   const [form, setForm] = useState({ ...emptyForm });
   const [expandedCollab, setExpandedCollab] = useState<Record<number, boolean>>({});
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [gpsStatus, setGpsStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [gpsError, setGpsError] = useState("");
 
   const utils = trpc.useUtils();
   const { data: collaboratorsList = [] } = trpc.collaborators.list.useQuery({});
@@ -77,6 +113,45 @@ export default function AttendanceList() {
     dateFrom: searchDate,
     dateTo: searchDate,
   });
+
+  // ── Capturar GPS ─────────────────────────────────────────────────────────
+  const captureGPS = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGpsError("GPS não disponível neste dispositivo");
+      setGpsStatus("error");
+      return;
+    }
+    setGpsStatus("loading");
+    setGpsError("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        const detected = detectLocationName(pos.coords.latitude, pos.coords.longitude);
+        setForm(f => ({
+          ...f,
+          latitude: lat,
+          longitude: lng,
+          locationName: f.locationName || detected,
+        }));
+        setGpsStatus("success");
+      },
+      (err) => {
+        setGpsError(err.message || "Erro ao obter localização");
+        setGpsStatus("error");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      captureGPS();
+    } else {
+      setGpsStatus("idle");
+      setGpsError("");
+    }
+  }, [isOpen, captureGPS]);
 
   const createMutation = trpc.attendance.create.useMutation({
     onSuccess: () => {
@@ -112,15 +187,19 @@ export default function AttendanceList() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.collaboratorId) { toast.error("Selecione o colaborador"); return; }
-    if (!form.dailyValue) { toast.error("Informe o valor da diária"); return; }
+    // Líder não precisa informar valor da diária
+    if (!isLider && !form.dailyValue) { toast.error("Informe o valor da diária"); return; }
     createMutation.mutate({
       collaboratorId: parseInt(form.collaboratorId),
       date: form.date,
       employmentType: form.employmentType,
-      dailyValue: form.dailyValue,
+      dailyValue: isLider ? "0" : form.dailyValue,
       pixKey: form.pixKey || undefined,
       activity: form.activity || undefined,
       observations: form.observations || undefined,
+      latitude: form.latitude || undefined,
+      longitude: form.longitude || undefined,
+      locationName: form.locationName || undefined,
     });
   };
 
@@ -130,8 +209,8 @@ export default function AttendanceList() {
       ...f,
       collaboratorId: id,
       employmentType: collab?.employmentType || "diarista",
-      dailyValue: collab?.dailyRate || "",
-      pixKey: collab?.pixKey || "",
+      dailyValue: isLider ? "" : (collab?.dailyRate || ""),
+      pixKey: isLider ? "" : (collab?.pixKey || ""),
     }));
   };
 
@@ -284,24 +363,20 @@ export default function AttendanceList() {
 
   // ── Exportar PDF diário ──────────────────────────────────────────────────
   const handleExportDayPDF = () => {
-    if ((dayRecords as any[]).length === 0) { toast.error("Nenhuma presença para exportar"); return; }
+    if ((dayRecords as any[]).length === 0) { toast.error("Nenhuma presença neste dia"); return; }
     const dateLabel = format(parseISO(searchDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
     const rows = (dayRecords as any[]).map((r: any) => `
       <tr>
-        <td>${r.collaboratorName || "—"}</td>
+        <td>${r.collaboratorName}</td>
         <td>${r.activity || "—"}</td>
         <td style="text-align:center">${EMPLOYMENT_LABELS[r.employmentType] || r.employmentType}</td>
         <td style="text-align:right">R$ ${parseFloat(r.dailyValue || "0").toFixed(2)}</td>
         <td style="font-size:11px">${r.pixKey || "—"}</td>
-        <td style="text-align:center">
-          <span style="background:${r.paymentStatus === "pago" ? "#dcfce7" : "#fee2e2"};color:${r.paymentStatus === "pago" ? "#15803d" : "#b91c1c"};padding:2px 8px;border-radius:4px;font-size:10px">
-            ${r.paymentStatus === "pago" ? "Pago" : "Pendente"}
-          </span>
-        </td>
+        <td style="text-align:center;color:${r.paymentStatus === "pago" ? "#15803d" : "#b91c1c"}">${r.paymentStatus === "pago" ? "✓ Pago" : "Pendente"}</td>
       </tr>
     `).join("");
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-      <title>Presenças ${searchDate} - BTREE Ambiental</title>
+      <title>Presenças Diárias - BTREE Ambiental</title>
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
@@ -335,7 +410,7 @@ export default function AttendanceList() {
         <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
         <div class="header-text">
           <h1>BTREE Ambiental</h1>
-          <p>Relatório de Presenças — ${dateLabel}</p>
+          <p>Relatório Diário de Presenças</p>
         </div>
       </div>
       <div class="content">
@@ -434,22 +509,24 @@ export default function AttendanceList() {
               <p className="text-xl font-bold text-gray-700">{weekByCollab.length}</p>
               <p className="text-xs text-gray-500">Colaboradores</p>
             </CardContent></Card>
-            {isAdmin && (<Card><CardContent className="p-3 text-center">
+            {canSeeFinancial && (<Card><CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-yellow-600">R$ {weekTotals.pendente.toFixed(2)}</p>
               <p className="text-xs text-gray-500">A Pagar</p>
             </CardContent></Card>)}
-            {isAdmin && (<Card><CardContent className="p-3 text-center">
+            {canSeeFinancial && (<Card><CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-blue-600">R$ {weekTotals.total.toFixed(2)}</p>
               <p className="text-xs text-gray-500">Total Semana</p>
             </CardContent></Card>)}
           </div>
 
           {/* Botão PDF */}
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={handleExportWeekPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
-              <FileDown className="h-4 w-4" /> Exportar PDF Semanal
-            </Button>
-          </div>
+          {canSeeFinancial && (
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={handleExportWeekPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+                <FileDown className="h-4 w-4" /> Exportar PDF Semanal
+              </Button>
+            </div>
+          )}
 
           {/* Lista por colaborador */}
           {weekLoading ? (
@@ -482,7 +559,7 @@ export default function AttendanceList() {
                             <p className="text-xs text-gray-500">{collab.days.length} dia{collab.days.length !== 1 ? "s" : ""} · {EMPLOYMENT_LABELS[collab.employmentType] || collab.employmentType}</p>
                           </div>
                           <div className="text-right">
-                            {isAdmin ? (
+                            {canSeeFinancial ? (
                               <>
                                 <p className="font-bold text-emerald-700 text-lg">R$ {collab.total.toFixed(2)}</p>
                                 {collab.pendente > 0 && (
@@ -500,8 +577,8 @@ export default function AttendanceList() {
                           </div>
                         </div>
 
-                        {/* PIX */}
-                        {isAdmin && collab.pixKey && (
+                        {/* PIX - apenas admin */}
+                        {canSeeFinancial && collab.pixKey && (
                           <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                             <DollarSign className="h-3 w-3" /> PIX: {collab.pixKey}
                           </p>
@@ -509,7 +586,7 @@ export default function AttendanceList() {
 
                         {/* Ações */}
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
-                          {isAdmin && collab.pendente > 0 && (
+                          {canSeeFinancial && collab.pendente > 0 && (
                             <Button
                               size="sm"
                               className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white gap-1"
@@ -540,19 +617,26 @@ export default function AttendanceList() {
                             <div>
                               <span className="font-medium text-gray-700">{fmtDateFull(d.date)}</span>
                               {d.activity && <span className="text-gray-400 ml-2 text-xs">· {d.activity}</span>}
+                              {d.locationName && (
+                                <span className="text-gray-400 ml-2 text-xs flex items-center gap-1 inline-flex">
+                                  <MapPin className="h-3 w-3" /> {d.locationName}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
-                              {isAdmin && <span className="font-semibold text-emerald-700">R$ {parseFloat(d.dailyValue || "0").toFixed(2)}</span>}
-                              <button
-                                className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
-                                  d.paymentStatus === "pago"
-                                    ? "bg-green-100 text-green-700 hover:bg-yellow-100 hover:text-yellow-700"
-                                    : "bg-yellow-100 text-yellow-700 hover:bg-green-100 hover:text-green-700"
-                                }`}
-                                onClick={() => markPaidMutation.mutate({ id: d.id, paid: d.paymentStatus !== "pago" })}
-                              >
-                                {d.paymentStatus === "pago" ? "✓ Pago" : "Pendente"}
-                              </button>
+                              {canSeeFinancial && <span className="font-semibold text-emerald-700">R$ {parseFloat(d.dailyValue || "0").toFixed(2)}</span>}
+                              {canSeeFinancial && (
+                                <button
+                                  className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
+                                    d.paymentStatus === "pago"
+                                      ? "bg-green-100 text-green-700 hover:bg-yellow-100 hover:text-yellow-700"
+                                      : "bg-yellow-100 text-yellow-700 hover:bg-green-100 hover:text-green-700"
+                                  }`}
+                                  onClick={() => markPaidMutation.mutate({ id: d.id, paid: d.paymentStatus !== "pago" })}
+                                >
+                                  {d.paymentStatus === "pago" ? "✓ Pago" : "Pendente"}
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -577,9 +661,11 @@ export default function AttendanceList() {
                 className="pl-10 w-44"
               />
             </div>
-            <Button variant="outline" onClick={handleExportDayPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
-              <FileDown className="h-4 w-4" /> Exportar PDF
-            </Button>
+            {canSeeFinancial && (
+              <Button variant="outline" onClick={handleExportDayPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+                <FileDown className="h-4 w-4" /> Exportar PDF
+              </Button>
+            )}
           </div>
 
           {/* Resumo do dia */}
@@ -588,11 +674,11 @@ export default function AttendanceList() {
               <p className="text-xl font-bold text-emerald-700">{(dayRecords as any[]).length}</p>
               <p className="text-xs text-gray-500">Presenças</p>
             </CardContent></Card>
-            {isAdmin && (<Card><CardContent className="p-3 text-center">
+            {canSeeFinancial && (<Card><CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-yellow-600">R$ {dayPendenteTotal.toFixed(2)}</p>
               <p className="text-xs text-gray-500">A Pagar</p>
             </CardContent></Card>)}
-            {isAdmin && (<Card><CardContent className="p-3 text-center">
+            {canSeeFinancial && (<Card><CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-blue-600">R$ {dayTotal.toFixed(2)}</p>
               <p className="text-xs text-gray-500">Total</p>
             </CardContent></Card>)}
@@ -617,14 +703,20 @@ export default function AttendanceList() {
                   >
                     <span className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
-                      Pendente de Pagamento ({dayPendentes.length}){isAdmin ? ` — R$ ${dayPendenteTotal.toFixed(2)}` : ""}
+                      Pendente de Pagamento ({dayPendentes.length}){canSeeFinancial ? ` — R$ ${dayPendenteTotal.toFixed(2)}` : ""}
                     </span>
                     {expandedGroups.pendente === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                   </button>
                   {expandedGroups.pendente !== false && (
                     <div className="space-y-2">
                       {dayPendentes.map((r: any) => (
-                        <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} onDelete={() => handleDelete(r.id, r.collaboratorName)} />
+                        <AttendanceCard
+                          key={r.id}
+                          record={r}
+                          canSeeFinancial={canSeeFinancial}
+                          onMarkPaid={canSeeFinancial ? (paid) => markPaidMutation.mutate({ id: r.id, paid }) : undefined}
+                          onDelete={isAdmin ? () => handleDelete(r.id, r.collaboratorName) : undefined}
+                        />
                       ))}
                     </div>
                   )}
@@ -644,7 +736,13 @@ export default function AttendanceList() {
                   {expandedGroups.pago !== false && (
                     <div className="space-y-2">
                       {dayPagos.map((r: any) => (
-                        <AttendanceCard key={r.id} record={r} onMarkPaid={(paid) => markPaidMutation.mutate({ id: r.id, paid })} onDelete={() => handleDelete(r.id, r.collaboratorName)} />
+                        <AttendanceCard
+                          key={r.id}
+                          record={r}
+                          canSeeFinancial={canSeeFinancial}
+                          onMarkPaid={canSeeFinancial ? (paid) => markPaidMutation.mutate({ id: r.id, paid }) : undefined}
+                          onDelete={isAdmin ? () => handleDelete(r.id, r.collaboratorName) : undefined}
+                        />
                       ))}
                     </div>
                   )}
@@ -663,6 +761,58 @@ export default function AttendanceList() {
           </SheetHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 pb-8">
+            {/* ─── GPS Status ─────────────────────────────────────────────── */}
+            <div className={`rounded-lg p-3 flex items-start gap-2 text-sm ${
+              gpsStatus === "success" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" :
+              gpsStatus === "loading" ? "bg-blue-50 border border-blue-200 text-blue-800" :
+              gpsStatus === "error" ? "bg-red-50 border border-red-200 text-red-700" :
+              "bg-gray-50 border border-gray-200 text-gray-600"
+            }`}>
+              {gpsStatus === "loading" && <Loader2 className="h-4 w-4 animate-spin flex-shrink-0 mt-0.5" />}
+              {gpsStatus === "success" && <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />}
+              {gpsStatus === "error" && <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />}
+              {gpsStatus === "idle" && <Navigation className="h-4 w-4 flex-shrink-0 mt-0.5" />}
+              <div className="flex-1 min-w-0">
+                {gpsStatus === "loading" && <span>Obtendo localização GPS...</span>}
+                {gpsStatus === "success" && (
+                  <span>
+                    {form.locationName
+                      ? <><strong>{form.locationName}</strong> detectado</>
+                      : "Localização obtida"}
+                    {form.latitude && (
+                      <span className="text-xs opacity-70 block mt-0.5">{form.latitude}, {form.longitude}</span>
+                    )}
+                  </span>
+                )}
+                {gpsStatus === "error" && <span>{gpsError || "Erro ao obter GPS"}</span>}
+                {gpsStatus === "idle" && <span>Aguardando GPS...</span>}
+              </div>
+              <button
+                type="button"
+                onClick={captureGPS}
+                className="text-xs underline opacity-70 hover:opacity-100 flex-shrink-0"
+              >
+                {gpsStatus === "error" ? "Tentar novamente" : "Atualizar"}
+              </button>
+            </div>
+
+            {/* ─── Local (override manual) ────────────────────────────────── */}
+            <div>
+              <Label>Local de Trabalho</Label>
+              <select
+                value={form.locationName}
+                onChange={e => setForm(f => ({ ...f, locationName: e.target.value }))}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Detectado automaticamente pelo GPS</option>
+                <option value="Fazenda GW">Fazenda GW</option>
+                <option value="Sede BTREE">Sede BTREE</option>
+                <option value="Escritório">Escritório</option>
+                <option value="Campo">Campo</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+
             <div>
               <Label>Data *</Label>
               <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
@@ -683,38 +833,43 @@ export default function AttendanceList() {
               </select>
             </div>
 
-            <div>
-              <Label>Tipo de Vínculo *</Label>
-              <select
-                value={form.employmentType}
-                onChange={e => setForm(f => ({ ...f, employmentType: e.target.value as any }))}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="diarista">Diarista</option>
-                <option value="terceirizado">Terceirizado</option>
-                <option value="clt">CLT</option>
-              </select>
-            </div>
+            {/* Tipo de vínculo e valores financeiros — ocultos para Líder */}
+            {!isLider && (
+              <div>
+                <Label>Tipo de Vínculo *</Label>
+                <select
+                  value={form.employmentType}
+                  onChange={e => setForm(f => ({ ...f, employmentType: e.target.value as any }))}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="diarista">Diarista</option>
+                  <option value="terceirizado">Terceirizado</option>
+                  <option value="clt">CLT</option>
+                </select>
+              </div>
+            )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Valor da Diária (R$) *</Label>
-                <Input
-                  value={form.dailyValue}
-                  onChange={e => setForm(f => ({ ...f, dailyValue: e.target.value }))}
-                  placeholder="ex: 150,00"
-                  required
-                />
+            {!isLider && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Valor da Diária (R$) *</Label>
+                  <Input
+                    value={form.dailyValue}
+                    onChange={e => setForm(f => ({ ...f, dailyValue: e.target.value }))}
+                    placeholder="ex: 150,00"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label>Chave PIX</Label>
+                  <Input
+                    value={form.pixKey}
+                    onChange={e => setForm(f => ({ ...f, pixKey: e.target.value }))}
+                    placeholder="CPF, email, telefone..."
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Chave PIX</Label>
-                <Input
-                  value={form.pixKey}
-                  onChange={e => setForm(f => ({ ...f, pixKey: e.target.value }))}
-                  placeholder="CPF, email, telefone..."
-                />
-              </div>
-            </div>
+            )}
 
             <div>
               <Label>Função / Atividade</Label>
@@ -754,7 +909,17 @@ export default function AttendanceList() {
 
 // ─── Card de presença individual ─────────────────────────────────────────────
 
-function AttendanceCard({ record, onMarkPaid, onDelete }: { record: any; onMarkPaid: (paid: boolean) => void; onDelete?: () => void }) {
+function AttendanceCard({
+  record,
+  canSeeFinancial,
+  onMarkPaid,
+  onDelete
+}: {
+  record: any;
+  canSeeFinancial?: boolean;
+  onMarkPaid?: (paid: boolean) => void;
+  onDelete?: () => void;
+}) {
   const isPago = record.paymentStatus === "pago";
   return (
     <Card className="hover:shadow-sm transition-shadow">
@@ -774,7 +939,9 @@ function AttendanceCard({ record, onMarkPaid, onDelete }: { record: any; onMarkP
                 <p className="text-xs text-gray-500">{record.activity || record.collaboratorRole}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-emerald-700">R$ {parseFloat(record.dailyValue || "0").toFixed(2)}</span>
+                {canSeeFinancial && (
+                  <span className="font-bold text-emerald-700">R$ {parseFloat(record.dailyValue || "0").toFixed(2)}</span>
+                )}
                 <Badge className={`text-xs ${isPago ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
                   {isPago ? "Pago" : "Pendente"}
                 </Badge>
@@ -782,9 +949,14 @@ function AttendanceCard({ record, onMarkPaid, onDelete }: { record: any; onMarkP
             </div>
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               <span className="text-xs text-gray-400">{EMPLOYMENT_LABELS[record.employmentType]}</span>
-              {record.pixKey && (
+              {canSeeFinancial && record.pixKey && (
                 <span className="text-xs text-gray-400 flex items-center gap-1">
                   <DollarSign className="h-3 w-3" /> {record.pixKey}
+                </span>
+              )}
+              {record.locationName && (
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <MapPin className="h-3 w-3" /> {record.locationName}
                 </span>
               )}
               {record.registeredByName && (
@@ -797,14 +969,16 @@ function AttendanceCard({ record, onMarkPaid, onDelete }: { record: any; onMarkP
               <p className="text-xs text-gray-400 mt-1 italic">{record.observations}</p>
             )}
             <div className="mt-2 flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className={`text-xs h-7 gap-1 ${isPago ? "text-yellow-600 border-yellow-200 hover:bg-yellow-50" : "text-green-600 border-green-200 hover:bg-green-50"}`}
-                onClick={() => onMarkPaid(!isPago)}
-              >
-                {isPago ? <><Clock className="h-3 w-3" /> Marcar Pendente</> : <><CheckCircle2 className="h-3 w-3" /> Marcar Pago</>}
-              </Button>
+              {onMarkPaid && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`text-xs h-7 gap-1 ${isPago ? "text-yellow-600 border-yellow-200 hover:bg-yellow-50" : "text-green-600 border-green-200 hover:bg-green-50"}`}
+                  onClick={() => onMarkPaid(!isPago)}
+                >
+                  {isPago ? <><Clock className="h-3 w-3" /> Marcar Pendente</> : <><CheckCircle2 className="h-3 w-3" /> Marcar Pago</>}
+                </Button>
+              )}
               {onDelete && (
                 <Button
                   size="sm"

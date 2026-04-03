@@ -21,6 +21,7 @@ export const SYSTEM_MODULES = [
   { slug: "motosserras",    label: "Motosserras",           group: "Maquinário" },
   { slug: "relatorios",      label: "Relatórios",            group: "Administrativo" },
   { slug: "acesso",          label: "Controle de Acesso",    group: "Administrativo" },
+  { slug: "financeiro",      label: "Módulo Financeiro",     group: "Administrativo" },
 ] as const;
 
 export type ModuleSlug = typeof SYSTEM_MODULES[number]["slug"];
@@ -46,6 +47,10 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
   motosserrista: {
     label: "Motosserrista",
     modules: ["equipamentos", "manutencao", "motosserras"],
+  },
+  lider: {
+    label: "Líder",
+    modules: ["presencas", "colaboradores"],
   },
   custom: {
     label: "Personalizado",
