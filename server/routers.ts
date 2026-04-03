@@ -18,6 +18,7 @@ import { attendanceRouter } from "./routers/attendance";
 import { traccarRouter } from "./routers/traccar";
 import { permissionsRouter } from "./routers/permissions";
 import { chainsawModuleRouter } from "./routers/chainsaws";
+import { extraExpensesRouter } from "./routers/extraExpenses";
 import { dashboardRouter } from "./routers/dashboard";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
@@ -186,6 +187,7 @@ export const appRouter = router({
   traccar: traccarRouter,
   permissions: permissionsRouter,
   chainsawModule: chainsawModuleRouter,
+  extraExpenses: extraExpensesRouter,
 
   // TODO: add feature routers here, e.g.
   // todo: router({

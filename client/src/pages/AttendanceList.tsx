@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,7 @@ const emptyForm = {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function AttendanceList() {
+  const { isAdmin } = usePermissions();
   const [tab, setTab] = useState<"semanal" | "diario">("semanal");
   const [weekRef, setWeekRef] = useState(new Date());
   const [searchDate, setSearchDate] = useState(new Date().toISOString().slice(0, 10));
@@ -432,14 +434,14 @@ export default function AttendanceList() {
               <p className="text-xl font-bold text-gray-700">{weekByCollab.length}</p>
               <p className="text-xs text-gray-500">Colaboradores</p>
             </CardContent></Card>
-            <Card><CardContent className="p-3 text-center">
+            {isAdmin && (<Card><CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-yellow-600">R$ {weekTotals.pendente.toFixed(2)}</p>
               <p className="text-xs text-gray-500">A Pagar</p>
-            </CardContent></Card>
-            <Card><CardContent className="p-3 text-center">
+            </CardContent></Card>)}
+            {isAdmin && (<Card><CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-blue-600">R$ {weekTotals.total.toFixed(2)}</p>
               <p className="text-xs text-gray-500">Total Semana</p>
-            </CardContent></Card>
+            </CardContent></Card>)}
           </div>
 
           {/* Botão PDF */}
@@ -480,18 +482,26 @@ export default function AttendanceList() {
                             <p className="text-xs text-gray-500">{collab.days.length} dia{collab.days.length !== 1 ? "s" : ""} · {EMPLOYMENT_LABELS[collab.employmentType] || collab.employmentType}</p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-emerald-700 text-lg">R$ {collab.total.toFixed(2)}</p>
-                            {collab.pendente > 0 && (
-                              <p className="text-xs text-yellow-600 font-medium">R$ {collab.pendente.toFixed(2)} pendente</p>
-                            )}
-                            {collab.pago > 0 && collab.pendente === 0 && (
-                              <Badge className="bg-green-100 text-green-700 text-xs">Pago</Badge>
+                            {isAdmin ? (
+                              <>
+                                <p className="font-bold text-emerald-700 text-lg">R$ {collab.total.toFixed(2)}</p>
+                                {collab.pendente > 0 && (
+                                  <p className="text-xs text-yellow-600 font-medium">R$ {collab.pendente.toFixed(2)} pendente</p>
+                                )}
+                                {collab.pago > 0 && collab.pendente === 0 && (
+                                  <Badge className="bg-green-100 text-green-700 text-xs">Pago</Badge>
+                                )}
+                              </>
+                            ) : (
+                              <Badge className={collab.pendente > 0 ? "bg-yellow-100 text-yellow-700 text-xs" : "bg-green-100 text-green-700 text-xs"}>
+                                {collab.pendente > 0 ? "Pendente" : "Pago"}
+                              </Badge>
                             )}
                           </div>
                         </div>
 
                         {/* PIX */}
-                        {collab.pixKey && (
+                        {isAdmin && collab.pixKey && (
                           <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                             <DollarSign className="h-3 w-3" /> PIX: {collab.pixKey}
                           </p>
@@ -499,7 +509,7 @@ export default function AttendanceList() {
 
                         {/* Ações */}
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
-                          {collab.pendente > 0 && (
+                          {isAdmin && collab.pendente > 0 && (
                             <Button
                               size="sm"
                               className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white gap-1"
@@ -532,7 +542,7 @@ export default function AttendanceList() {
                               {d.activity && <span className="text-gray-400 ml-2 text-xs">· {d.activity}</span>}
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-emerald-700">R$ {parseFloat(d.dailyValue || "0").toFixed(2)}</span>
+                              {isAdmin && <span className="font-semibold text-emerald-700">R$ {parseFloat(d.dailyValue || "0").toFixed(2)}</span>}
                               <button
                                 className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
                                   d.paymentStatus === "pago"
@@ -578,14 +588,14 @@ export default function AttendanceList() {
               <p className="text-xl font-bold text-emerald-700">{(dayRecords as any[]).length}</p>
               <p className="text-xs text-gray-500">Presenças</p>
             </CardContent></Card>
-            <Card><CardContent className="p-3 text-center">
+            {isAdmin && (<Card><CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-yellow-600">R$ {dayPendenteTotal.toFixed(2)}</p>
               <p className="text-xs text-gray-500">A Pagar</p>
-            </CardContent></Card>
-            <Card><CardContent className="p-3 text-center">
+            </CardContent></Card>)}
+            {isAdmin && (<Card><CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-blue-600">R$ {dayTotal.toFixed(2)}</p>
               <p className="text-xs text-gray-500">Total</p>
-            </CardContent></Card>
+            </CardContent></Card>)}
           </div>
 
           {dayLoading ? (
@@ -607,7 +617,7 @@ export default function AttendanceList() {
                   >
                     <span className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
-                      Pendente de Pagamento ({dayPendentes.length}) — R$ {dayPendenteTotal.toFixed(2)}
+                      Pendente de Pagamento ({dayPendentes.length}){isAdmin ? ` — R$ ${dayPendenteTotal.toFixed(2)}` : ""}
                     </span>
                     {expandedGroups.pendente === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                   </button>

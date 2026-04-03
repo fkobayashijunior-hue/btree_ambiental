@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { date, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -949,3 +949,20 @@ export const chainsawServiceParts = mysqlTable("chainsaw_service_parts", {
 });
 export type ChainsawServicePart = typeof chainsawServiceParts.$inferSelect;
 export type InsertChainsawServicePart = typeof chainsawServiceParts.$inferInsert;
+
+// ===== GASTOS EXTRAS =====
+export const extraExpenses = mysqlTable("extra_expenses", {
+  id: int("id").autoincrement().primaryKey(),
+  date: timestamp("date").notNull(),
+  category: mysqlEnum("category", ["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]).notNull(),
+  description: varchar("description", { length: 500 }).notNull(),
+  amount: varchar("amount", { length: 20 }).notNull(), // valor em reais
+  paymentMethod: mysqlEnum("payment_method", ["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro").notNull(),
+  receiptImageUrl: text("receipt_image_url"), // foto da nota fiscal
+  notes: text("notes"),
+  registeredBy: int("registered_by").references(() => users.id),
+  registeredByName: varchar("registered_by_name", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type ExtraExpense = typeof extraExpenses.$inferSelect;
+export type InsertExtraExpense = typeof extraExpenses.$inferInsert;

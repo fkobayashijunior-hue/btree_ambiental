@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2 } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -42,6 +42,7 @@ const menuItems = [
   { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },
   { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps" },
   { icon: Scissors, label: "Motosserras", path: "/motosserras", slug: "motosserras" },
+  { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", slug: null },
 ];
 
 // Rotas que são subpáginas (não estão no menu principal)

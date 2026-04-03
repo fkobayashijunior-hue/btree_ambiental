@@ -866,4 +866,34 @@
 ## 🔧 CORREÇÕES E MELHORIAS - 03/04/2026
 
 - [x] Mover botões de acesso rápido do Painel para o topo da tela (DashboardLayout)
-- [ ] Sincronizar código com GitHub (push do checkpoint atual)
+- [x] Sincronizar código com GitHub (push do checkpoint atual)
+
+## 🔧 MELHORIAS - 03/04/2026 (v2)
+
+- [x] Corrigir portal do cliente Fazenda GW (SQL executado - carga vinculada)
+- [ ] Corrigir campo de destino no controle de cargas (tabela estava vazia - SQL gerado)
+- [ ] Formulário de cargas: substituir campo texto de cliente por select dos clientes cadastrados
+- [ ] Ocultar valores monetários em Presenças para não-admin (líderes de campo)
+- [ ] Criar módulo de Gastos Extras com foto de nota fiscal
+- [ ] Redesenhar Painel como tela de acesso rápido + explicações do sistema
+- [ ] Criar Dashboard ADM com custos e controles para administradores
+- [ ] Vincular motosserras aos equipamentos já cadastrados no sistema (usar imagens existentes)
+
+---
+
+## 💰 MÓDULO: GASTOS EXTRAS (03/04/2026)
+
+- [x] Schema: tabela extra_expenses com categoria, valor, forma de pagamento, foto da nota
+- [x] Backend: router extraExpenses com list, create, delete
+- [x] Frontend: página ExtraExpenses.tsx com filtros, resumo por categoria e upload de foto
+- [x] Rota /gastos-extras registrada no App.tsx
+- [x] Item "Gastos Extras" adicionado ao menu lateral (DashboardLayout)
+- [x] SQL de migração para Hostinger gerado (hostinger_extra_expenses.sql)
+- [x] Valores monetários visíveis apenas para admin
+
+---
+
+## 🔧 MELHORIAS 03/04/2026
+
+- [x] Ícone Receipt adicionado ao menu lateral para Gastos Extras
+- [x] Menu lateral atualizado com item Gastos Extras (slug: null = visível para todos)

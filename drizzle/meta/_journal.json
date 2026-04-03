@@ -127,6 +127,13 @@
       "when": 1775030280073,
       "tag": "0017_violet_sleeper",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1775223991950,
+      "tag": "0018_clever_queen_noir",
+      "breakpoints": true
     }
   ]
 }
