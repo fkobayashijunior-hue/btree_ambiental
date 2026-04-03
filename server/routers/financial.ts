@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { financialEntries, clients } from "../../drizzle/schema";
+import { financialEntries, clients, collaboratorAttendance } from "../../drizzle/schema";
 import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
 
 const INCOME_CATEGORIES = [
@@ -243,7 +243,7 @@ export const financialRouter = router({
       return { success: true };
     }),
 
-  // ── Excluir lançamento ───────────────────────────────────────────────────
+  // ──   // ── Excluir lançamento ───────────────────────────────────────────
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
@@ -251,5 +251,97 @@ export const financialRouter = router({
       if (!db) throw new Error("DB unavailable");
       await db.delete(financialEntries).where(eq(financialEntries.id, input.id));
       return { success: true };
+    }),
+
+  // ── Lançar folha de pagamento automaticamente ──────────────────────
+  launchPayroll: protectedProcedure
+    .input(z.object({
+      referenceMonth: z.string(), // "YYYY-MM"
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+
+      // Verificar se já existe lançamento de folha para este mês
+      const existing = await db.select({ id: financialEntries.id })
+        .from(financialEntries)
+        .where(and(
+          eq(financialEntries.referenceMonth, input.referenceMonth),
+          eq(financialEntries.category, "folha_pagamento"),
+          eq(financialEntries.type, "despesa")
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return { success: false, alreadyExists: true, message: "Folha de pagamento já foi lançada para este mês." };
+      }
+
+      // Buscar todas as presenças do mês
+      const [year, month] = input.referenceMonth.split("-").map(Number);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+
+      const attendances = await db.select()
+        .from(collaboratorAttendance)
+        .where(and(
+          gte(collaboratorAttendance.date, startDate),
+          lte(collaboratorAttendance.date, endDate)
+        ));
+
+      if (attendances.length === 0) {
+        return { success: false, alreadyExists: false, message: "Nenhuma presença registrada neste mês." };
+      }
+
+      // Calcular total de diárias
+      const totalAmount = attendances.reduce((sum, a) => {
+        return sum + parseFloat(a.dailyValue || "0");
+      }, 0);
+
+      const totalDays = attendances.length;
+
+      // Formatar mês para descrição
+      const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+      const monthLabel = `${monthNames[month - 1]} ${year}`;
+
+      // Criar o lançamento
+      await db.insert(financialEntries).values({
+        type: "despesa",
+        category: "folha_pagamento",
+        description: `Folha de Pagamento — ${monthLabel} (${totalDays} diárias)`,
+        amount: totalAmount.toFixed(2),
+        date: endDate,
+        referenceMonth: input.referenceMonth,
+        paymentMethod: "pix",
+        status: "confirmado",
+        notes: `Lançamento automático gerado a partir de ${totalDays} registros de presença em ${monthLabel}.`,
+        registeredBy: ctx.user.id,
+        registeredByName: ctx.user.name,
+      });
+
+      return {
+        success: true,
+        alreadyExists: false,
+        totalAmount: totalAmount.toFixed(2),
+        totalDays,
+        message: `Folha de ${monthLabel} lançada com sucesso: ${totalDays} diárias totalizando R$ ${totalAmount.toFixed(2)}.`,
+      };
+    }),
+
+  // ── Verificar se folha já foi lançada ──────────────────────────────
+  checkPayrollStatus: protectedProcedure
+    .input(z.object({ referenceMonth: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const existing = await db.select({ id: financialEntries.id, amount: financialEntries.amount, description: financialEntries.description })
+        .from(financialEntries)
+        .where(and(
+          eq(financialEntries.referenceMonth, input.referenceMonth),
+          eq(financialEntries.category, "folha_pagamento"),
+          eq(financialEntries.type, "despesa")
+        ))
+        .limit(1);
+      return { launched: existing.length > 0, entry: existing[0] || null };
     }),
 });

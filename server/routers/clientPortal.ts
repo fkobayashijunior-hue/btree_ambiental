@@ -88,9 +88,11 @@ export const clientPortalRouter = router({
         .limit(200);
 
       const clientNameLower = client.name.toLowerCase();
+      // Buscar também nomes alternativos do cliente (ex: apelido, nome da fazenda)
       const loads = allLoads.filter(l =>
         l.clientId === input.clientId ||
         (l.clientName && l.clientName.toLowerCase().includes(clientNameLower)) ||
+        (l.destination && l.destination.toLowerCase().includes(clientNameLower)) ||
         (l.destinationId && destIds.includes(l.destinationId))
       ).slice(0, 50);
 

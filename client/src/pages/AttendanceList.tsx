@@ -13,7 +13,7 @@ import {
   Users, Plus, Calendar, ChevronDown, ChevronUp, Loader2,
   FileDown, ChevronLeft, ChevronRight, CheckCircle2, Clock,
   DollarSign, User, CalendarDays, LayoutList, Trash2,
-  MapPin, Navigation, AlertCircle
+  MapPin, Navigation, AlertCircle, Banknote
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -172,6 +172,26 @@ export default function AttendanceList() {
       utils.attendance.list.invalidate();
     },
     onError: (e) => toast.error(e.message || "Erro ao excluir"),
+  });
+
+  // ── Lançamento automático da folha de pagamento ────────────────────────
+  const currentRefMonth = format(weekRef, "yyyy-MM");
+  const { data: payrollStatus, refetch: refetchPayrollStatus } = trpc.financial.checkPayrollStatus.useQuery(
+    { referenceMonth: currentRefMonth },
+    { enabled: isAdmin }
+  );
+  const launchPayrollMutation = trpc.financial.launchPayroll.useMutation({
+    onSuccess: (result) => {
+      if (result.alreadyExists) {
+        toast.info(result.message);
+      } else if (result.success) {
+        toast.success(result.message);
+        refetchPayrollStatus();
+      } else {
+        toast.error(result.message);
+      }
+    },
+    onError: (e) => toast.error(e.message || "Erro ao lançar folha"),
   });
 
   const handleDelete = (id: number, name: string) => {
@@ -457,12 +477,35 @@ export default function AttendanceList() {
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">Registro e pagamento de colaboradores</p>
         </div>
-        <Button
-          onClick={() => { setForm({ ...emptyForm }); setIsOpen(true); }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-        >
-          <Plus className="h-4 w-4" /> Registrar Presença
-        </Button>
+        <div className="flex gap-2 flex-wrap justify-end">
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={() => launchPayrollMutation.mutate({ referenceMonth: currentRefMonth })}
+              disabled={launchPayrollMutation.isPending || !!payrollStatus?.launched}
+              className={`gap-2 ${
+                payrollStatus?.launched
+                  ? "border-green-400 text-green-700 bg-green-50 cursor-default"
+                  : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              }`}
+            >
+              {launchPayrollMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : payrollStatus?.launched ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <Banknote className="h-4 w-4" />
+              )}
+              {payrollStatus?.launched ? "Folha Lançada" : "Lançar Folha"}
+            </Button>
+          )}
+          <Button
+            onClick={() => { setForm({ ...emptyForm }); setIsOpen(true); }}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+          >
+            <Plus className="h-4 w-4" /> Registrar Presença
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}

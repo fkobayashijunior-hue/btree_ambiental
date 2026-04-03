@@ -906,7 +906,7 @@
 ## BUGS E MELHORIAS 03/04/2026 (noite)
 
 ### BUGS CRÍTICOS
-- [ ] Portal do cliente: cargas da Fazenda GW não aparecem (query filtra por client_id mas cargas usam destino)
+- [x] Portal do cliente: cargas da Fazenda GW não aparecem (corrigido: filtro agora inclui campo destination)
 - [ ] Correntes: erro "Correntes insuficientes na caixa" ao enviar para campo (estoque não atualiza corretamente)
 - [ ] Destino: erro ao cadastrar destino (client_id obrigatório no schema mas deve ser opcional)
 
@@ -1046,3 +1046,21 @@
 - [x] PartsPage — padrão BTREE ✅
 - [x] MachineHoursPage — padrão BTREE ✅ (padronizado nesta sessão)
 - [x] VehicleControlPage — padrão BTREE ✅ (padronizado nesta sessão)
+
+---
+
+## 🔗 SPRINT 04/04/2026 — SESSÃO 3
+
+### Lançamento Automático Folha de Pagamento
+- [x] Botão "Lançar Folha no Financeiro" na tela de Presenças
+- [x] Calcular total de diárias do mês selecionado
+- [x] Criar lançamento automático como despesa "Folha de Pagamento" no módulo financeiro
+- [x] Verificar duplicidade antes de lançar (evitar lançamento duplo)
+- [x] Exibir badge/status indicando se o mês já foi lançado
+
+### Bugs Críticos
+- [x] Portal do cliente: cargas da Fazenda GW não aparecem (corrigido: filtro agora inclui campo destination)
+- [x] Destino: erro ao cadastrar destino sem cliente vinculado (já estava correto no backend e frontend)
+
+### Avatar do Usuário Logado
+- [x] Exibir foto do colaborador logado no menu lateral (já estava implementado via getMyPhoto)
