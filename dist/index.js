@@ -51,6 +51,7 @@ __export(schema_exports, {
   equipmentMaintenance: () => equipmentMaintenance,
   equipmentPhotos: () => equipmentPhotos,
   equipmentTypes: () => equipmentTypes,
+  extraExpenses: () => extraExpenses,
   fuelContainerEvents: () => fuelContainerEvents,
   fuelContainers: () => fuelContainers,
   fuelRecords: () => fuelRecords,
@@ -79,7 +80,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements, userPermissions, chainsaws, fuelContainers, fuelContainerEvents, chainsawChainStock, chainsawChainEvents, chainsawParts, chainsawPartMovements, chainsawServiceOrders, chainsawServiceParts;
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements, userPermissions, chainsaws, fuelContainers, fuelContainerEvents, chainsawChainStock, chainsawChainEvents, chainsawParts, chainsawPartMovements, chainsawServiceOrders, chainsawServiceParts, extraExpenses;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -305,6 +306,8 @@ var init_schema = __esm({
       state: varchar("state", { length: 2 }),
       notes: text("notes"),
       active: int("active").default(1).notNull(),
+      clientId: int("client_id").references(() => clients.id),
+      // cliente vinculado ao destino
       createdAt: timestamp("created_at").defaultNow().notNull(),
       createdBy: int("created_by").references(() => users.id)
     });
@@ -767,6 +770,8 @@ var init_schema = __esm({
       chainType: varchar("chain_type", { length: 20 }).default("30"),
       // "30" | "34" | outro
       status: mysqlEnum("status", ["ativa", "oficina", "inativa"]).default("ativa").notNull(),
+      imageUrl: text("image_url"),
+      // foto da motosserra
       notes: text("notes"),
       createdBy: int("created_by").references(() => users.id),
       createdAt: timestamp("created_at").defaultNow().notNull()
@@ -860,6 +865,8 @@ var init_schema = __esm({
       minStock: varchar("min_stock", { length: 20 }).default("0"),
       // estoque mínimo para alerta
       unitCost: varchar("unit_cost", { length: 20 }),
+      imageUrl: text("image_url"),
+      // foto da peça
       notes: text("notes"),
       isActive: int("is_active").default(1),
       createdBy: int("created_by").references(() => users.id),
@@ -901,6 +908,8 @@ var init_schema = __esm({
       serviceDescription: text("service_description"),
       // o que foi feito
       completedAt: timestamp("completed_at"),
+      // Imagem do problema (foto tirada no campo)
+      imageUrl: text("image_url"),
       // Metadados
       openedBy: int("opened_by").references(() => users.id),
       openedAt: timestamp("opened_at").defaultNow().notNull(),
@@ -916,6 +925,21 @@ var init_schema = __esm({
       unitCost: varchar("unit_cost", { length: 20 }),
       fromStock: int("from_stock").default(1),
       // 1 = baixou do estoque, 0 = compra avulsa
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    extraExpenses = mysqlTable("extra_expenses", {
+      id: int("id").autoincrement().primaryKey(),
+      date: timestamp("date").notNull(),
+      category: mysqlEnum("category", ["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]).notNull(),
+      description: varchar("description", { length: 500 }).notNull(),
+      amount: varchar("amount", { length: 20 }).notNull(),
+      // valor em reais
+      paymentMethod: mysqlEnum("payment_method", ["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro").notNull(),
+      receiptImageUrl: text("receipt_image_url"),
+      // foto da nota fiscal
+      notes: text("notes"),
+      registeredBy: int("registered_by").references(() => users.id),
+      registeredByName: varchar("registered_by_name", { length: 255 }),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
   }
@@ -1881,11 +1905,28 @@ var cargoLoadsRouter = router({
     address: z5.string().optional(),
     city: z5.string().optional(),
     state: z5.string().optional(),
-    notes: z5.string().optional()
+    notes: z5.string().optional(),
+    clientId: z5.number().optional()
+    // cliente vinculado ao destino
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    await db.insert(cargoDestinations).values({ ...input, createdBy: ctx.user.id });
+    const result = await db.insert(cargoDestinations).values({ ...input, createdBy: ctx.user.id });
+    return { success: true, id: result.insertId };
+  }),
+  updateDestination: protectedProcedure.input(z5.object({
+    id: z5.number(),
+    name: z5.string().min(1).optional(),
+    address: z5.string().optional(),
+    city: z5.string().optional(),
+    state: z5.string().optional(),
+    notes: z5.string().optional(),
+    clientId: z5.number().nullable().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const { id, ...rest } = input;
+    await db.update(cargoDestinations).set(rest).where(eq5(cargoDestinations.id, id));
     return { success: true };
   }),
   deleteDestination: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ input }) => {
@@ -2098,9 +2139,9 @@ var cargoLoadsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, date, ...rest } = input;
+    const { id, date: date2, ...rest } = input;
     const updateData = { ...rest, updatedAt: /* @__PURE__ */ new Date() };
-    if (date) updateData.date = new Date(date);
+    if (date2) updateData.date = new Date(date2);
     if (rest.trackingStatus) updateData.trackingUpdatedAt = /* @__PURE__ */ new Date();
     await db.update(cargoLoads).set(updateData).where(eq5(cargoLoads.id, id));
     return { success: true };
@@ -2204,10 +2245,10 @@ var machineHoursRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, date, ...rest } = input;
+    const { id, date: date2, ...rest } = input;
     await db.update(machineHours).set({
       ...rest,
-      ...date ? { date: new Date(date) } : {}
+      ...date2 ? { date: new Date(date2) } : {}
     }).where(eq6(machineHours.id, id));
     return { success: true };
   }),
@@ -2266,10 +2307,10 @@ var machineHoursRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, date, ...rest } = input;
+    const { id, date: date2, ...rest } = input;
     await db.update(machineMaintenance).set({
       ...rest,
-      ...date ? { date: new Date(date) } : {}
+      ...date2 ? { date: new Date(date2) } : {}
     }).where(eq6(machineMaintenance.id, id));
     return { success: true };
   }),
@@ -2366,21 +2407,21 @@ var machineHoursRouter = router({
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
-    return equipmentList.map((eq18) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq18.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq18.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq18.id);
+    return equipmentList.map((eq19) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq19.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq19.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq19.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq18.id,
-        equipmentName: eq18.name,
-        brand: eq18.brand,
-        model: eq18.model,
-        status: eq18.status,
+        equipmentId: eq19.id,
+        equipmentName: eq19.name,
+        brand: eq19.brand,
+        model: eq19.model,
+        status: eq19.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -2594,7 +2635,7 @@ var vehicleRecordsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, photoBase64, date, ...rest } = input;
+    const { id, photoBase64, date: date2, ...rest } = input;
     let photoUrl;
     if (photoBase64 && photoBase64.startsWith("data:")) {
       const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
@@ -2603,7 +2644,7 @@ var vehicleRecordsRouter = router({
     }
     await db.update(vehicleRecords).set({
       ...rest,
-      ...date ? { date: new Date(date) } : {},
+      ...date2 ? { date: new Date(date2) } : {},
       ...photoUrl ? { photoUrl } : {}
     }).where(eq7(vehicleRecords.id, id));
     return { success: true };
@@ -2833,7 +2874,7 @@ var clientsRouter = router({
 import { z as z10 } from "zod";
 init_db();
 init_schema();
-import { eq as eq10, and as and4, desc as desc8 } from "drizzle-orm";
+import { eq as eq10, and as and4, or as or3, isNull, like as like3, desc as desc8 } from "drizzle-orm";
 import bcrypt3 from "bcryptjs";
 var clientPortalRouter = router({
   // ── LOGIN DO CLIENTE (público) ──
@@ -2873,7 +2914,15 @@ var clientPortalRouter = router({
       )
     ).limit(1);
     if (!client) throw new Error("Acesso n\xE3o autorizado.");
-    const loads = await db.select().from(cargoLoads).where(eq10(cargoLoads.clientId, input.clientId)).orderBy(desc8(cargoLoads.date)).limit(50);
+    const loads = await db.select().from(cargoLoads).where(
+      or3(
+        eq10(cargoLoads.clientId, input.clientId),
+        and4(
+          isNull(cargoLoads.clientId),
+          like3(cargoLoads.clientName, `%${client.name}%`)
+        )
+      )
+    ).orderBy(desc8(cargoLoads.date)).limit(50);
     const replanting = await db.select().from(replantingRecords).where(eq10(replantingRecords.clientId, input.clientId)).orderBy(desc8(replantingRecords.date)).limit(50);
     const payments = await db.select().from(clientPayments).where(eq10(clientPayments.clientId, input.clientId)).orderBy(desc8(clientPayments.referenceDate)).limit(50);
     return { client, loads, replanting, payments };
@@ -3889,6 +3938,7 @@ var SYSTEM_MODULES = [
   { slug: "clientes", label: "Clientes", group: "Comercial" },
   { slug: "portal-cliente", label: "Portal do Cliente", group: "Comercial" },
   { slug: "gps", label: "Rastreamento GPS", group: "Opera\xE7\xF5es" },
+  { slug: "motosserras", label: "Motosserras", group: "Maquin\xE1rio" },
   { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
   { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" }
 ];
@@ -3899,7 +3949,7 @@ var PROFILES = {
   },
   mecanico: {
     label: "Mec\xE2nico",
-    modules: ["equipamentos", "pecas", "manutencao", "horas-maquina"]
+    modules: ["equipamentos", "pecas", "manutencao", "horas-maquina", "motosserras"]
   },
   operador: {
     label: "Operador",
@@ -3911,7 +3961,7 @@ var PROFILES = {
   },
   motosserrista: {
     label: "Motosserrista",
-    modules: ["equipamentos", "manutencao"]
+    modules: ["equipamentos", "manutencao", "motosserras"]
   },
   custom: {
     label: "Personalizado",
@@ -4039,16 +4089,24 @@ var chainsawsRouter = router({
     model: z17.string().optional(),
     serialNumber: z17.string().optional(),
     chainType: z17.string().default("30"),
+    imageUrl: z17.string().optional(),
     notes: z17.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
+    const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
+    let imageUrl = input.imageUrl;
+    if (imageUrl && imageUrl.startsWith("data:")) {
+      const result = await cloudinaryUpload2(imageUrl, "btree/chainsaws");
+      imageUrl = result.url;
+    }
     await db.insert(chainsaws).values({
       name: input.name,
       brand: input.brand,
       model: input.model,
       serialNumber: input.serialNumber,
       chainType: input.chainType,
+      imageUrl,
       notes: input.notes,
       createdBy: ctx.user.id
     });
@@ -4062,12 +4120,19 @@ var chainsawsRouter = router({
     serialNumber: z17.string().optional(),
     chainType: z17.string().optional(),
     status: z17.enum(["ativa", "oficina", "inativa"]).optional(),
+    imageUrl: z17.string().optional(),
     notes: z17.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const { id, ...data } = input;
-    await db.update(chainsaws).set(data).where(eq17(chainsaws.id, id));
+    const { id, imageUrl: rawImageUrl, ...data } = input;
+    let imageUrl = rawImageUrl;
+    if (imageUrl && imageUrl.startsWith("data:")) {
+      const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
+      const result = await cloudinaryUpload2(imageUrl, "btree/chainsaws");
+      imageUrl = result.url;
+    }
+    await db.update(chainsaws).set({ ...data, ...imageUrl !== void 0 ? { imageUrl } : {} }).where(eq17(chainsaws.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ input }) => {
@@ -4218,7 +4283,15 @@ var chainsChainRouter = router({
   listStock: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
+    const rows = await db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
+    if (rows.length === 0) {
+      await db.insert(chainsawChainStock).values([
+        { chainType: "30", sharpenedInBox: 0, inField: 0, inWorkshop: 0, totalStock: 0 },
+        { chainType: "34", sharpenedInBox: 0, inField: 0, inWorkshop: 0, totalStock: 0 }
+      ]);
+      return db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
+    }
+    return rows;
   }),
   upsertStock: protectedProcedure.input(z17.object({
     chainType: z17.string(),
@@ -4319,11 +4392,18 @@ var chainsawPartsRouter = router({
     currentStock: z17.string().default("0"),
     minStock: z17.string().default("0"),
     unitCost: z17.string().optional(),
+    imageUrl: z17.string().optional(),
     notes: z17.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    await db.insert(chainsawParts).values({ ...input, createdBy: ctx.user.id });
+    let imageUrl = input.imageUrl;
+    if (imageUrl && imageUrl.startsWith("data:")) {
+      const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
+      const result = await cloudinaryUpload2(imageUrl, "btree/chainsaw-parts");
+      imageUrl = result.url;
+    }
+    await db.insert(chainsawParts).values({ ...input, imageUrl, createdBy: ctx.user.id });
     return { success: true };
   }),
   update: protectedProcedure.input(z17.object({
@@ -4335,12 +4415,20 @@ var chainsawPartsRouter = router({
     currentStock: z17.string().optional(),
     minStock: z17.string().optional(),
     unitCost: z17.string().optional(),
+    imageUrl: z17.string().optional(),
     notes: z17.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const { id, ...data } = input;
-    await db.update(chainsawParts).set(data).where(eq17(chainsawParts.id, id));
+    const { id, imageUrl: rawImageUrl, ...data } = input;
+    let imageUrl = rawImageUrl;
+    if (imageUrl && imageUrl.startsWith("data:")) {
+      const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
+      const result = await cloudinaryUpload2(imageUrl, "btree/chainsaw-parts");
+      imageUrl = result.url;
+    }
+    const updateData = { ...data, ...imageUrl !== void 0 ? { imageUrl } : {} };
+    await db.update(chainsawParts).set(updateData).where(eq17(chainsawParts.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ input }) => {
@@ -4418,10 +4506,18 @@ var chainsawOSRouter = router({
     chainsawId: z17.number(),
     problemType: z17.enum(["motor_falhando", "nao_liga", "superaquecimento", "vazamento", "corrente_problema", "sabre_problema", "manutencao_preventiva", "outro"]),
     problemDescription: z17.string().optional(),
-    priority: z17.enum(["baixa", "media", "alta", "urgente"]).default("media")
+    priority: z17.enum(["baixa", "media", "alta", "urgente"]).default("media"),
+    imageUrl: z17.string().optional()
+    // foto do problema tirada no campo
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
+    let imageUrl = input.imageUrl;
+    if (imageUrl && imageUrl.startsWith("data:")) {
+      const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
+      const result = await cloudinaryUpload2(imageUrl, "btree/chainsaw-os");
+      imageUrl = result.url;
+    }
     await db.update(chainsaws).set({ status: "oficina" }).where(eq17(chainsaws.id, input.chainsawId));
     await db.insert(chainsawServiceOrders).values({
       chainsawId: input.chainsawId,
@@ -4429,6 +4525,7 @@ var chainsawOSRouter = router({
       problemDescription: input.problemDescription,
       priority: input.priority,
       status: "aberta",
+      imageUrl,
       openedBy: ctx.user.id
     });
     return { success: true };
@@ -4512,16 +4609,75 @@ var chainsawModuleRouter = router({
   os: chainsawOSRouter
 });
 
+// server/routers/extraExpenses.ts
+import { z as z18 } from "zod";
+init_db();
+init_schema();
+import { desc as desc15, eq as eq18, and as and9, gte as gte3, lte as lte3 } from "drizzle-orm";
+var extraExpensesRouter = router({
+  list: protectedProcedure.input(z18.object({
+    dateFrom: z18.string().optional(),
+    dateTo: z18.string().optional(),
+    category: z18.string().optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const conditions = [];
+    if (input.dateFrom) {
+      conditions.push(gte3(extraExpenses.date, new Date(input.dateFrom)));
+    }
+    if (input.dateTo) {
+      const to = new Date(input.dateTo);
+      to.setHours(23, 59, 59, 999);
+      conditions.push(lte3(extraExpenses.date, to));
+    }
+    if (input.category) {
+      conditions.push(eq18(extraExpenses.category, input.category));
+    }
+    return db.select().from(extraExpenses).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc15(extraExpenses.date));
+  }),
+  create: protectedProcedure.input(z18.object({
+    date: z18.string(),
+    category: z18.enum(["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]),
+    description: z18.string().min(1),
+    amount: z18.string().min(1),
+    paymentMethod: z18.enum(["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro"),
+    receiptImageUrl: z18.string().optional(),
+    notes: z18.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const [result] = await db.insert(extraExpenses).values({
+      date: new Date(input.date),
+      category: input.category,
+      description: input.description,
+      amount: input.amount,
+      paymentMethod: input.paymentMethod,
+      receiptImageUrl: input.receiptImageUrl,
+      notes: input.notes,
+      registeredBy: ctx.user.id,
+      registeredByName: ctx.user.name
+    });
+    return { id: result.insertId };
+  }),
+  delete: protectedProcedure.input(z18.object({ id: z18.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.delete(extraExpenses).where(eq18(extraExpenses.id, input.id));
+    return { success: true };
+  })
+});
+
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql as sql4, gte as gte3, lte as lte3, and as and9 } from "drizzle-orm";
-import { z as z18 } from "zod";
+import { sql as sql4, gte as gte4, lte as lte4, and as and10 } from "drizzle-orm";
+import { z as z19 } from "zod";
 var dashboardRouter = router({
-  stats: protectedProcedure.input(z18.object({
-    month: z18.number().min(0).max(11).optional(),
+  stats: protectedProcedure.input(z19.object({
+    month: z19.number().min(0).max(11).optional(),
     // 0-indexed
-    year: z18.number().min(2020).max(2100).optional()
+    year: z19.number().min(2020).max(2100).optional()
   }).optional()).query(async ({ input }) => {
     const now = /* @__PURE__ */ new Date();
     const targetMonth = input?.month ?? now.getMonth();
@@ -4533,37 +4689,37 @@ var dashboardRouter = router({
     if (!db) throw new Error("Banco indispon\xEDvel");
     const [{ count: totalCollaborators }] = await db.select({ count: sql4`count(*)` }).from(collaborators);
     const [{ count: totalClients }] = await db.select({ count: sql4`count(*)` }).from(clients);
-    const [{ count: cargoThisMonth }] = await db.select({ count: sql4`count(*)` }).from(cargoLoads).where(and9(
-      gte3(cargoLoads.createdAt, startOfMonth),
-      lte3(cargoLoads.createdAt, endOfMonth)
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql4`count(*)` }).from(cargoLoads).where(and10(
+      gte4(cargoLoads.createdAt, startOfMonth),
+      lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql4`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and9(
-      gte3(cargoLoads.createdAt, startOfMonth),
-      lte3(cargoLoads.createdAt, endOfMonth)
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql4`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and10(
+      gte4(cargoLoads.createdAt, startOfMonth),
+      lte4(cargoLoads.createdAt, endOfMonth)
     ));
     const [{ count: fuelThisMonth }] = await db.select({ count: sql4`count(*)` }).from(vehicleRecords).where(
-      and9(
-        gte3(vehicleRecords.createdAt, startOfMonth),
-        lte3(vehicleRecords.createdAt, endOfMonth),
+      and10(
+        gte4(vehicleRecords.createdAt, startOfMonth),
+        lte4(vehicleRecords.createdAt, endOfMonth),
         sql4`record_type = 'abastecimento'`
       )
     );
     const [{ total: fuelCostThisMonth }] = await db.select({ total: sql4`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
-      and9(
-        gte3(vehicleRecords.createdAt, startOfMonth),
-        lte3(vehicleRecords.createdAt, endOfMonth),
+      and10(
+        gte4(vehicleRecords.createdAt, startOfMonth),
+        lte4(vehicleRecords.createdAt, endOfMonth),
         sql4`record_type = 'abastecimento'`
       )
     );
-    const [{ count: attendanceToday }] = await db.select({ count: sql4`count(*)` }).from(collaboratorAttendance).where(gte3(collaboratorAttendance.date, startOfDay));
-    const [{ count: attendanceThisMonth }] = await db.select({ count: sql4`count(*)` }).from(collaboratorAttendance).where(and9(
-      gte3(collaboratorAttendance.date, startOfMonth),
-      lte3(collaboratorAttendance.date, endOfMonth)
+    const [{ count: attendanceToday }] = await db.select({ count: sql4`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql4`count(*)` }).from(collaboratorAttendance).where(and10(
+      gte4(collaboratorAttendance.date, startOfMonth),
+      lte4(collaboratorAttendance.date, endOfMonth)
     ));
     const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql4`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
-      and9(
-        gte3(collaboratorAttendance.date, startOfMonth),
-        lte3(collaboratorAttendance.date, endOfMonth),
+      and10(
+        gte4(collaboratorAttendance.date, startOfMonth),
+        lte4(collaboratorAttendance.date, endOfMonth),
         sql4`payment_status_ca = 'pendente'`
       )
     );
@@ -4623,7 +4779,7 @@ var dashboardRouter = router({
 });
 
 // server/routers.ts
-import { z as z19 } from "zod";
+import { z as z20 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -4732,10 +4888,10 @@ var appRouter = router({
   dashboard: dashboardRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z19.object({
-      name: z19.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z19.string().email("Email inv\xE1lido"),
-      password: z19.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z20.object({
+      name: z20.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z20.string().email("Email inv\xE1lido"),
+      password: z20.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -4750,9 +4906,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z19.object({
-      email: z19.string().email("Email inv\xE1lido"),
-      password: z19.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z20.object({
+      email: z20.string().email("Email inv\xE1lido"),
+      password: z20.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -4768,11 +4924,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z19.object({
-      seedKey: z19.string(),
-      email: z19.string().email(),
-      name: z19.string(),
-      password: z19.string().min(4)
+    seedAdmin: publicProcedure.input(z20.object({
+      seedKey: z20.string(),
+      email: z20.string().email(),
+      name: z20.string(),
+      password: z20.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -4782,9 +4938,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z19.object({
-      email: z19.string().email("Email inv\xE1lido"),
-      origin: z19.string().url().optional()
+    forgotPassword: publicProcedure.input(z20.object({
+      email: z20.string().email("Email inv\xE1lido"),
+      origin: z20.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -4798,9 +4954,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z19.object({
-      token: z19.string().min(1),
-      password: z19.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z20.object({
+      token: z20.string().min(1),
+      password: z20.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -4809,10 +4965,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq18 } = await import("drizzle-orm");
+      const { eq: eq19 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq18(users3.id, resetToken.userId));
+      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq19(users3.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -4839,7 +4995,8 @@ var appRouter = router({
   attendance: attendanceRouter,
   traccar: traccarRouter,
   permissions: permissionsRouter,
-  chainsawModule: chainsawModuleRouter
+  chainsawModule: chainsawModuleRouter,
+  extraExpenses: extraExpensesRouter
   // TODO: add feature routers here, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>
