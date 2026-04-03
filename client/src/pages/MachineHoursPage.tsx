@@ -340,98 +340,127 @@ export default function MachineHoursPage() {
   };
 
   // ===== EXPORTAR PDF =====
-  const handleExportPDF = async () => {
+  const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+  const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+  const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
+
+  const handleExportPDF = () => {
     const allRecords = [...filteredHours, ...filteredMaint, ...filteredFuel];
     if (allRecords.length === 0) { toast.error("Nenhum registro para exportar"); return; }
-    try {
-      const { default: jsPDF } = await import("jspdf");
-      const { default: autoTable } = await import("jspdf-autotable");
-      const doc = new jsPDF();
+    const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos") : "Todos os equipamentos";
+    const now = new Date().toLocaleString("pt-BR");
 
-      const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos") : "Todos os equipamentos";
-      const pageW = doc.internal.pageSize.width;
-      const now = new Date().toLocaleDateString("pt-BR");
-      // Cabeçalho verde BTREE
-      doc.setFillColor(13, 79, 46);
-      doc.rect(0, 0, pageW, 28, "F");
-      doc.setFontSize(16);
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.text("Relatório de Controle de Máquinas", 14, 12);
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.text(`BTREE Empreendimentos LTDA · btreeambiental.com · Equipamento: ${vehicleName}`, 14, 22);
-      doc.setTextColor(0, 0, 0);
+    const hoursRows = filteredHours.map((h: any) => `
+      <tr>
+        <td>${new Date(h.date).toLocaleDateString("pt-BR")}</td>
+        <td>${equipMap[h.equipmentId] || `#${h.equipmentId}`}</td>
+        <td>${h.startHourMeter || "-"}</td>
+        <td>${h.endHourMeter || "-"}</td>
+        <td><strong>${h.hoursWorked || "-"}h</strong></td>
+        <td>${h.activity || "-"}</td>
+        <td>${h.location || "-"}</td>
+      </tr>`).join("");
 
-      // Horas
-      if (filteredHours.length > 0) {
-        doc.setFontSize(12);
-        doc.setTextColor(22, 101, 52);
-        doc.text("Horas Trabalhadas", 14, 38);
-        autoTable(doc, {
-          startY: 47,
-          head: [["Data", "Equipamento", "Horímetro Inicial", "Horímetro Final", "Horas", "Atividade", "Local"]],
-          body: filteredHours.map((h: any) => [
-            new Date(h.date).toLocaleDateString("pt-BR"),
-            equipMap[h.equipmentId] || `#${h.equipmentId}`,
-            h.startHourMeter,
-            h.endHourMeter,
-            `${h.hoursWorked}h`,
-            h.activity || "-",
-            h.location || "-",
-          ]),
-          styles: { fontSize: 8, cellPadding: 2 },
-          headStyles: { fillColor: [22, 101, 52], textColor: 255 },
-          alternateRowStyles: { fillColor: [240, 253, 244] },
-        });
-      }
+    const maintRows = filteredMaint.map((m: any) => `
+      <tr>
+        <td>${new Date(m.date).toLocaleDateString("pt-BR")}</td>
+        <td>${equipMap[m.equipmentId] || `#${m.equipmentId}`}</td>
+        <td>${MAINTENANCE_TYPE_LABELS[m.type] || m.type}</td>
+        <td>${SERVICE_TYPE_LABELS[m.serviceType] || m.serviceType}</td>
+        <td>${m.mechanicName || m.thirdPartyCompany || "-"}</td>
+        <td>${m.description || "-"}</td>
+        <td>${m.totalCost ? `R$ ${m.totalCost}` : "-"}</td>
+        <td>${m.nextMaintenanceHours || "-"}</td>
+      </tr>`).join("");
 
-      // Manutenções
-      if (filteredMaint.length > 0) {
-        const startY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 47;
-        doc.setFontSize(12);
-        doc.setTextColor(234, 88, 12);
-        doc.text("Manutenções", 14, startY);
-        autoTable(doc, {
-          startY: startY + 4,
-          head: [["Data", "Equipamento", "Tipo", "Serviço", "Responsável", "Descrição", "Custo (R$)", "Próx. Horímetro"]],
-          body: filteredMaint.map((m: any) => [
-            new Date(m.date).toLocaleDateString("pt-BR"),
-            equipMap[m.equipmentId] || `#${m.equipmentId}`,
-            MAINTENANCE_TYPE_LABELS[m.type] || m.type,
-            SERVICE_TYPE_LABELS[m.serviceType] || m.serviceType,
-            m.mechanicName || m.thirdPartyCompany || "-",
-            m.description || "-",
-            m.totalCost || "-",
-            m.nextMaintenanceHours || "-",
-          ]),
-          styles: { fontSize: 8, cellPadding: 2 },
-          headStyles: { fillColor: [234, 88, 12], textColor: 255 },
-          alternateRowStyles: { fillColor: [255, 247, 237] },
-        });
-      }
+    const fuelRows = filteredFuel.map((f: any) => `
+      <tr>
+        <td>${new Date(f.date).toLocaleDateString("pt-BR")}</td>
+        <td>${equipMap[f.equipmentId] || `#${f.equipmentId}`}</td>
+        <td>${FUEL_TYPE_LABELS[f.fuelType] || f.fuelType}</td>
+        <td>${f.liters || "-"} L</td>
+        <td>${f.pricePerLiter ? `R$ ${f.pricePerLiter}` : "-"}</td>
+        <td>${f.totalValue ? `R$ ${f.totalValue}` : "-"}</td>
+        <td>${f.supplier || "-"}</td>
+      </tr>`).join("");
 
-      // Rodapé
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        const pH = doc.internal.pageSize.height;
-        const pW2 = doc.internal.pageSize.width;
-        doc.setDrawColor(13, 79, 46);
-        doc.setLineWidth(0.5);
-        doc.line(14, pH - 16, pW2 - 14, pH - 16);
-        doc.setFontSize(8);
-        doc.setTextColor(80, 80, 80);
-        doc.text(`Desenvolvido por Kobayashi Desenvolvimento de Sistemas · btreeambiental.com`, 14, pH - 10);
-        doc.text(`Gerado em ${now} · Pág ${i}/${pageCount}`, pW2 - 14, pH - 10, { align: "right" });
-      }
-
-      doc.save(`maquinas-${new Date().toISOString().slice(0, 10)}.pdf`);
-      toast.success("PDF gerado com sucesso!");
-    } catch (err) {
-      toast.error("Erro ao gerar PDF");
-      console.error(err);
-    }
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Controle de Máquinas</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; }
+    .header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 24px; display: flex; align-items: center; gap: 18px; }
+    .header img { height: 52px; filter: brightness(0) invert(1); }
+    .header-text h1 { font-size: 20px; font-weight: bold; }
+    .header-text p { font-size: 11px; opacity: 0.85; margin-top: 2px; }
+    .content { padding: 20px 24px; }
+    .section-title { font-size: 14px; font-weight: bold; color: #0d4f2e; border-bottom: 2px solid #0d4f2e; padding-bottom: 4px; margin: 18px 0 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
+    th { background: #0d4f2e; color: white; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+    td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+    tr:nth-child(even) td { background: #f0fdf4; }
+    .footer { margin-top: 24px; padding: 14px 24px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+    .footer-left { display: flex; align-items: center; gap: 10px; }
+    .footer-left img { height: 28px; }
+    .footer-text { font-size: 10px; color: #555; }
+    .footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+    .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .footer-right img { width: 60px; height: 60px; }
+    .footer-right span { font-size: 9px; color: #555; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+<div class="header">
+  <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+  <div class="header-text">
+    <h1>Relatório de Controle de Máquinas</h1>
+    <p>BTREE Empreendimentos LTDA · btreeambiental.com · Equipamento: ${vehicleName} · Emitido em ${now}</p>
+  </div>
+</div>
+<div class="content">
+  ${filteredHours.length > 0 ? `
+  <div class="section-title">Horas Trabalhadas</div>
+  <table>
+    <thead><tr><th>Data</th><th>Equipamento</th><th>Horímetro Inicial</th><th>Horímetro Final</th><th>Horas</th><th>Atividade</th><th>Local</th></tr></thead>
+    <tbody>${hoursRows}</tbody>
+  </table>` : ""}
+  ${filteredMaint.length > 0 ? `
+  <div class="section-title">Manutenções</div>
+  <table>
+    <thead><tr><th>Data</th><th>Equipamento</th><th>Tipo</th><th>Serviço</th><th>Responsável</th><th>Descrição</th><th>Custo</th><th>Próx. Horímetro</th></tr></thead>
+    <tbody>${maintRows}</tbody>
+  </table>` : ""}
+  ${filteredFuel.length > 0 ? `
+  <div class="section-title">Abastecimentos</div>
+  <table>
+    <thead><tr><th>Data</th><th>Equipamento</th><th>Combustível</th><th>Litros</th><th>Preço/L</th><th>Total</th><th>Fornecedor</th></tr></thead>
+    <tbody>${fuelRows}</tbody>
+  </table>` : ""}
+</div>
+<div class="footer">
+  <div class="footer-left">
+    <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+    <div class="footer-text">
+      Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+      <a href="https://btreeambiental.com">btreeambiental.com</a>
+    </div>
+  </div>
+  <div class="footer-right">
+    <img src="${BTREE_QR}" alt="QR Code" />
+    <span>Acesse nosso site</span>
+  </div>
+</div>
+<script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
+</body>
+</html>`;
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
+    win.document.write(html);
+    win.document.close();
   };
 
   const isPending = createHoursMutation.isPending || createMaintMutation.isPending || createFuelMutation.isPending || updateHoursMutation.isPending || updateMaintMutation.isPending;

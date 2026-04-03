@@ -148,6 +148,13 @@
       "when": 1775256614607,
       "tag": "0020_furry_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1775259240569,
+      "tag": "0021_orange_nightcrawler",
+      "breakpoints": true
     }
   ]
 }

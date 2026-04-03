@@ -988,3 +988,61 @@
 ---
 
 **Última atualização:** 03/04/2026
+
+---
+
+## 🔗 INTEGRAÇÃO FOLHA DE PAGAMENTO → FINANCEIRO (03/04/2026)
+
+- [ ] Botão "Lançar no Financeiro" na tela de Presenças (por mês)
+- [ ] Calcular total de diárias do mês por colaborador
+- [ ] Criar lançamento automático de despesa "Folha de Pagamento" no módulo financeiro
+- [ ] Evitar lançamento duplicado (verificar se já existe para o mês)
+- [ ] Mostrar status de lançamento no resumo mensal de presenças
+
+## 📍 CONFIGURAÇÃO DE LOCAIS GPS (03/04/2026)
+
+- [ ] Criar página/modal de configuração de locais GPS (admin)
+- [ ] Tabela gps_locations no schema (nome, latitude, longitude, raio em metros)
+- [ ] Pré-popular com locais conhecidos (Fazenda GW, Sede, etc.)
+- [ ] Usar locais cadastrados na detecção automática da tela de presenças
+- [ ] Permitir adicionar/editar/remover locais pelo admin
+
+## 📄 PADRONIZAÇÃO DE PDFs (03/04/2026)
+
+- [ ] Auditar todos os PDFs do sistema
+- [ ] Padronizar PDF de Presenças com cabeçalho/rodapé BTREE
+- [ ] Padronizar PDF de Cargas com cabeçalho/rodapé BTREE
+- [ ] Padronizar PDF de Motosserras com cabeçalho/rodapé BTREE
+- [ ] Padronizar PDF de Gastos Extras com cabeçalho/rodapé BTREE
+- [ ] Padronizar PDF de Clientes com cabeçalho/rodapé BTREE
+- [ ] Padronizar PDF de Veículos/Abastecimento com cabeçalho/rodapé BTREE
+- [ ] Padronizar PDF de Peças com cabeçalho/rodapé BTREE
+
+---
+
+## ✅ IMPLEMENTAÇÕES 03/04/2026 (SESSÃO 2)
+
+### Cadastro de Locais GPS
+- [x] Tabela gps_locations no banco de dados (criada via SQL direto)
+- [x] Schema gps_locations no drizzle/schema.ts
+- [x] Router gpsLocations.ts com CRUD completo
+- [x] Página GpsLocationsPage.tsx com captura da localização atual
+- [x] Botão "Usar minha localização atual" — captura GPS do dispositivo
+- [x] Rota /locais-gps no App.tsx
+- [x] Item "Locais GPS" no menu lateral (DashboardLayout)
+- [x] AttendanceList atualizado para usar locais do banco (não mais lista fixa)
+
+### Padronização de PDFs
+- [x] MachineHoursPage: PDF convertido para HTML/CSS com logo BTREE no cabeçalho e logo Kobayashi + QR code no rodapé
+- [x] VehicleControlPage: PDF convertido para HTML/CSS com logo BTREE no cabeçalho e logo Kobayashi + QR code no rodapé
+- [x] Todos os PDFs do sistema agora seguem o padrão BTREE (cabeçalho verde com logo + rodapé Kobayashi + QR)
+
+### Status de todos os PDFs do sistema
+- [x] AttendanceList — padrão BTREE ✅
+- [x] CargoControl — padrão BTREE ✅
+- [x] CollaboratorDetail — padrão BTREE ✅
+- [x] EquipmentDetail — padrão BTREE ✅
+- [x] FinancialModule — padrão BTREE ✅
+- [x] PartsPage — padrão BTREE ✅
+- [x] MachineHoursPage — padrão BTREE ✅ (padronizado nesta sessão)
+- [x] VehicleControlPage — padrão BTREE ✅ (padronizado nesta sessão)

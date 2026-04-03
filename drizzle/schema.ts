@@ -1,4 +1,4 @@
-import { date, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, date, int, mysqlEnum, mysqlTable, text, tinyint, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -995,3 +995,20 @@ export const financialEntries = mysqlTable("financial_entries", {
 });
 export type FinancialEntry = typeof financialEntries.$inferSelect;
 export type InsertFinancialEntry = typeof financialEntries.$inferInsert;
+
+// ===== LOCAIS GPS =====
+export const gpsLocations = mysqlTable("gps_locations", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  latitude: varchar("latitude", { length: 30 }).notNull(),
+  longitude: varchar("longitude", { length: 30 }).notNull(),
+  radiusMeters: int("radius_meters").default(2000).notNull(), // raio de detecção em metros
+  isActive: tinyint("is_active").default(1).notNull(),
+  notes: text("notes"),
+  createdBy: int("created_by").references(() => users.id),
+  createdByName: varchar("created_by_name", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+export type GpsLocation = typeof gpsLocations.$inferSelect;
+export type InsertGpsLocation = typeof gpsLocations.$inferInsert;

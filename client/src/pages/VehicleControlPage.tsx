@@ -189,88 +189,99 @@ export default function VehicleControlPage() {
   const periodLabel = `${MONTHS[filterMonth]} ${filterYear}`;
 
   // ===== EXPORTAR PDF =====
-  const handleExportPDF = async () => {
+  const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+  const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+  const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
+
+  const handleExportPDF = () => {
     if (filteredRecords.length === 0) { toast.error("Nenhum registro para exportar no período"); return; }
-    try {
-      const { default: jsPDF } = await import("jspdf");
-      const { default: autoTable } = await import("jspdf-autotable");
-      const doc = new jsPDF();
-      const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos os veículos") : "Todos os veículos";
-      const pageW = doc.internal.pageSize.width;
-      const nowStr = new Date().toLocaleDateString("pt-BR");
-      // Cabeçalho verde BTREE
-      doc.setFillColor(13, 79, 46);
-      doc.rect(0, 0, pageW, 28, "F");
-      doc.setFontSize(16);
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.text(`Relatório de Abastecimentos — ${periodLabel}`, 14, 12);
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.text(`BTREE Empreendimentos LTDA · btreeambiental.com · Veículo: ${vehicleName}`, 14, 22);
-      doc.setTextColor(0, 0, 0);
-      // Resumo
-      doc.setFontSize(10);
-      doc.setTextColor(40, 40, 40);
-      doc.text(`Total de registros: ${filteredRecords.length}`, 14, 38);
-      doc.text(`Total de abastecimentos: ${fuelRecords.length}`, 14, 44);
-      doc.text(`Total de litros: ${totalLiters.toFixed(1)} L`, 14, 50);
-      doc.text(`Custo total: R$ ${totalCost.toFixed(2)}`, 14, 56);
+    const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos os veículos") : "Todos os veículos";
+    const now = new Date().toLocaleString("pt-BR");
 
-      // Tabela
-      const rows = filteredRecords.map((r: any) => [
-        new Date(r.createdAt).toLocaleDateString("pt-BR"),
-        equipMap[r.equipmentId] || `#${r.equipmentId}`,
-        RECORD_LABELS[r.recordType as RecordType] || r.recordType,
-        r.recordType === "abastecimento" ? (r.fuelType || "-") : "-",
-        r.recordType === "abastecimento" ? `${r.liters || "0"} L` : (r.kmDriven ? `${r.kmDriven} km` : "-"),
-        r.fuelCost || r.maintenanceCost || "-",
-        r.supplier || r.maintenanceType || "-",
-        r.registeredByName || "-",
-      ]);
+    const tableRows = filteredRecords.map((r: any) => `
+      <tr>
+        <td>${new Date(r.createdAt).toLocaleDateString("pt-BR")}</td>
+        <td>${equipMap[r.equipmentId] || `#${r.equipmentId}`}</td>
+        <td>${RECORD_LABELS[r.recordType as RecordType] || r.recordType}</td>
+        <td>${r.recordType === "abastecimento" ? (r.fuelType || "-") : "-"}</td>
+        <td>${r.recordType === "abastecimento" ? `${r.liters || "0"} L` : (r.kmDriven ? `${r.kmDriven} km` : "-")}</td>
+        <td>${r.fuelCost || r.maintenanceCost ? `R$ ${r.fuelCost || r.maintenanceCost}` : "-"}</td>
+        <td>${r.supplier || r.maintenanceType || "-"}</td>
+        <td>${r.registeredByName || "-"}</td>
+      </tr>`).join("");
 
-      autoTable(doc, {
-        startY: 62,
-        head: [["Data", "Veículo", "Tipo", "Combustível", "Litros/KM", "Valor (R$)", "Posto/Tipo", "Registrado por"]],
-        body: rows,
-        styles: { fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
-        alternateRowStyles: { fillColor: [240, 253, 244] },
-        columnStyles: {
-          5: { halign: "right" },
-        },
-      });
-
-      // Totais no rodapé da tabela
-      const finalY = (doc as any).lastAutoTable.finalY + 6;
-      doc.setFontSize(10);
-      doc.setTextColor(22, 101, 52);
-      doc.setFont(undefined as any, "bold");
-      doc.text(`Total de litros abastecidos: ${totalLiters.toFixed(1)} L`, 14, finalY);
-      doc.text(`Custo total de abastecimento: R$ ${totalCost.toFixed(2)}`, 14, finalY + 6);
-
-      // Rodapé de página
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        const pH = doc.internal.pageSize.height;
-        const pW2 = doc.internal.pageSize.width;
-        doc.setDrawColor(13, 79, 46);
-        doc.setLineWidth(0.5);
-        doc.line(14, pH - 16, pW2 - 14, pH - 16);
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(80, 80, 80);
-        doc.text(`Desenvolvido por Kobayashi Desenvolvimento de Sistemas · btreeambiental.com`, 14, pH - 10);
-        doc.text(`Gerado em ${nowStr} · Pág ${i}/${pageCount}`, pW2 - 14, pH - 10, { align: "right" });
-      }
-
-      doc.save(`abastecimentos-${filterYear}-${String(filterMonth + 1).padStart(2, "0")}.pdf`);
-      toast.success("PDF gerado com sucesso!");
-    } catch (err) {
-      toast.error("Erro ao gerar PDF");
-      console.error(err);
-    }
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Abastecimentos</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; }
+    .header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 24px; display: flex; align-items: center; gap: 18px; }
+    .header img { height: 52px; filter: brightness(0) invert(1); }
+    .header-text h1 { font-size: 20px; font-weight: bold; }
+    .header-text p { font-size: 11px; opacity: 0.85; margin-top: 2px; }
+    .content { padding: 20px 24px; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .summary-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; text-align: center; }
+    .summary-card .label { font-size: 10px; color: #6b7280; text-transform: uppercase; }
+    .summary-card .value { font-size: 16px; font-weight: bold; color: #0d4f2e; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { background: #0d4f2e; color: white; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+    td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+    tr:nth-child(even) td { background: #f0fdf4; }
+    .footer { margin-top: 24px; padding: 14px 24px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+    .footer-left { display: flex; align-items: center; gap: 10px; }
+    .footer-left img { height: 28px; }
+    .footer-text { font-size: 10px; color: #555; }
+    .footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+    .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .footer-right img { width: 60px; height: 60px; }
+    .footer-right span { font-size: 9px; color: #555; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+<div class="header">
+  <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+  <div class="header-text">
+    <h1>Relatório de Abastecimentos — ${periodLabel}</h1>
+    <p>BTREE Empreendimentos LTDA · btreeambiental.com · Veículo: ${vehicleName} · Emitido em ${now}</p>
+  </div>
+</div>
+<div class="content">
+  <div class="summary">
+    <div class="summary-card"><div class="label">Total de Registros</div><div class="value">${filteredRecords.length}</div></div>
+    <div class="summary-card"><div class="label">Abastecimentos</div><div class="value">${fuelRecords.length}</div></div>
+    <div class="summary-card"><div class="label">Total de Litros</div><div class="value">${totalLiters.toFixed(1)} L</div></div>
+    <div class="summary-card"><div class="label">Custo Total</div><div class="value">R$ ${totalCost.toFixed(2)}</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Data</th><th>Veículo</th><th>Tipo</th><th>Combustível</th><th>Litros/KM</th><th>Valor (R$)</th><th>Posto/Tipo</th><th>Registrado por</th></tr></thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+</div>
+<div class="footer">
+  <div class="footer-left">
+    <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+    <div class="footer-text">
+      Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+      <a href="https://btreeambiental.com">btreeambiental.com</a>
+    </div>
+  </div>
+  <div class="footer-right">
+    <img src="${BTREE_QR}" alt="QR Code" />
+    <span>Acesse nosso site</span>
+  </div>
+</div>
+<script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
+</body>
+</html>`;
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
+    win.document.write(html);
+    win.document.close();
   };
 
   // ===== EXPORTAR EXCEL =====

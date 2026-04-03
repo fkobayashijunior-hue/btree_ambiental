@@ -40,14 +40,7 @@ function fmtDateFull(d: Date | string) {
   return format(typeof d === "string" ? parseISO(d) : d, "EEE dd/MM", { locale: ptBR });
 }
 
-// ─── Locais conhecidos (coordenadas aproximadas) ─────────────────────────────
-// IMPORTANTE: Atualize estas coordenadas com os valores reais das fazendas/sedes
-const KNOWN_LOCATIONS = [
-  { name: "Fazenda GW", lat: -21.5, lng: -48.5, radius: 5000 },   // raio em metros
-  { name: "Sede BTREE", lat: -21.4, lng: -48.4, radius: 2000 },
-  { name: "Escritório", lat: -21.3, lng: -48.3, radius: 1000 },
-];
-
+// ─── Cálculo de distância GPS ─────────────────────────────────────────────────
 function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -57,11 +50,12 @@ function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: numbe
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
-
-function detectLocationName(lat: number, lng: number): string {
-  for (const loc of KNOWN_LOCATIONS) {
-    const dist = getDistanceMeters(lat, lng, loc.lat, loc.lng);
-    if (dist <= loc.radius) return loc.name;
+type KnownLocation = { id: number; name: string; latitude: string; longitude: string; radiusMeters: number; isActive: number };
+function detectLocationName(lat: number, lng: number, locations: KnownLocation[]): string {
+  for (const loc of locations) {
+    if (loc.isActive !== 1) continue;
+    const dist = getDistanceMeters(lat, lng, parseFloat(loc.latitude), parseFloat(loc.longitude));
+    if (dist <= loc.radiusMeters) return loc.name;
   }
   return "";
 }
@@ -98,8 +92,9 @@ export default function AttendanceList() {
   const [gpsError, setGpsError] = useState("");
 
   const utils = trpc.useUtils();
-  const { data: collaboratorsList = [] } = trpc.collaborators.list.useQuery({});
-
+   const { data: collaboratorsList = [] } = trpc.collaborators.list.useQuery({});
+  // ── Locais GPS cadastrados ──────────────────────────────────────
+  const { data: gpsLocationsList = [] } = trpc.gpsLocations.listActive.useQuery();
   // ── Dados da semana ──────────────────────────────────────────────────────
   const { start: weekStart, end: weekEnd } = weekRange(weekRef);
 
@@ -127,7 +122,7 @@ export default function AttendanceList() {
       (pos) => {
         const lat = pos.coords.latitude.toFixed(6);
         const lng = pos.coords.longitude.toFixed(6);
-        const detected = detectLocationName(pos.coords.latitude, pos.coords.longitude);
+        const detected = detectLocationName(pos.coords.latitude, pos.coords.longitude, gpsLocationsList as KnownLocation[]);
         setForm(f => ({
           ...f,
           latitude: lat,

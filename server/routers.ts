@@ -21,6 +21,7 @@ import { chainsawModuleRouter } from "./routers/chainsaws";
 import { extraExpensesRouter } from "./routers/extraExpenses";
 import { dashboardRouter } from "./routers/dashboard";
 import { financialRouter } from "./routers/financial";
+import { gpsLocationsRouter } from "./routers/gpsLocations";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { SignJWT } from "jose";
@@ -190,6 +191,7 @@ export const appRouter = router({
   chainsawModule: chainsawModuleRouter,
   extraExpenses: extraExpensesRouter,
   financial: financialRouter,
+  gpsLocations: gpsLocationsRouter,
   // TODO: add feature routers heree, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>
