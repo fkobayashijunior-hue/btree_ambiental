@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -358,15 +358,41 @@ function DashboardLayoutContent({
             </span>
           </div>
 
-          {/* Botão Home — atalho para dashboard */}
-          <button
-            onClick={() => setLocation("/app")}
-            className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent transition-colors flex-shrink-0"
-            aria-label="Dashboard"
-            title="Ir para o Dashboard"
-          >
-            <Home className="h-4 w-4 text-muted-foreground" />
-          </button>
+          {/* Botões de Acesso Rápido no topo */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setLocation("/cargas")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Nova Carga"
+            >
+              <Truck className="h-4 w-4 text-teal-600" />
+              <span className="text-xs font-medium hidden sm:inline">Cargas</span>
+            </button>
+            <button
+              onClick={() => setLocation("/presencas")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Registrar Presença"
+            >
+              <CheckCircle2 className="h-4 w-4 text-blue-600" />
+              <span className="text-xs font-medium hidden sm:inline">Presenças</span>
+            </button>
+            <button
+              onClick={() => setLocation("/veiculos")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Abastecimento"
+            >
+              <Fuel className="h-4 w-4 text-yellow-600" />
+              <span className="text-xs font-medium hidden sm:inline">Abastec.</span>
+            </button>
+            <button
+              onClick={() => setLocation("/app")}
+              className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent transition-colors flex-shrink-0"
+              aria-label="Dashboard"
+              title="Ir para o Painel"
+            >
+              <Home className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
         </div>
 
         <main className="flex-1 p-4">{children}</main>

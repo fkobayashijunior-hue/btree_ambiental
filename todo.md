@@ -862,3 +862,8 @@
 - [x] Adicionar campo de imagem na abertura de OS
 - [x] Corrigir portal do cliente Fazenda GW (SQL de vinculação gerado + query melhorada)
 - [x] Gerar SQL completo com todas as tabelas faltantes na Hostinger (hostinger_update_v2.sql)
+
+## 🔧 CORREÇÕES E MELHORIAS - 03/04/2026
+
+- [x] Mover botões de acesso rápido do Painel para o topo da tela (DashboardLayout)
+- [ ] Sincronizar código com GitHub (push do checkpoint atual)
