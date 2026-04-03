@@ -897,3 +897,30 @@
 
 - [x] Ícone Receipt adicionado ao menu lateral para Gastos Extras
 - [x] Menu lateral atualizado com item Gastos Extras (slug: null = visível para todos)
+
+## CORREÇÕES 03/04/2026 (tarde)
+
+- [x] Botões de acesso rápido (Cargas, Presenças, Abastecimento) devem aparecer no header fixo (topo), não embaixo — seção "Ações Rápidas" removida do Painel
+- [x] Usuários com role=admin (Fábio Kobayashi e Julia Yui) devem sempre ver todos os módulos — SQL_ADMIN_FABIO_JULIA.sql gerado para corrigir no banco Hostinger
+
+## BUGS E MELHORIAS 03/04/2026 (noite)
+
+### BUGS CRÍTICOS
+- [ ] Portal do cliente: cargas da Fazenda GW não aparecem (query filtra por client_id mas cargas usam destino)
+- [ ] Correntes: erro "Correntes insuficientes na caixa" ao enviar para campo (estoque não atualiza corretamente)
+- [ ] Destino: erro ao cadastrar destino (client_id obrigatório no schema mas deve ser opcional)
+
+### MELHORIAS VISUAIS
+- [ ] Portal do cliente: trocar cor verde escuro pelo tom do portal do colaborador (mais claro/moderno)
+- [ ] Logo do desenvolvedor (Kobayashi) não aparece no portal do cliente
+- [ ] Avatar do usuário logado: mostrar foto do cadastro do colaborador em vez de círculo vazio
+
+### MELHORIAS FUNCIONAIS (SPRINT ATUAL)
+- [ ] Motosserras: campo de imagem deve puxar fotos do cadastro em Setores e Equipamentos
+- [ ] Cargo de Líder: novo perfil que pode registrar presença mas não vê valores financeiros
+- [ ] Presença: registrar localização GPS automática (identifica fazenda/sede) com opção de alterar manualmente
+
+### FUNCIONALIDADES FUTURAS (PRÓXIMAS SPRINTS)
+- [ ] Controle financeiro completo: cadastro de todos os gastos e entradas para relatórios e planilhas
+- [ ] Campos específicos por tipo de equipamento (eliminar campo genérico de motosserra no futuro)
+- [ ] Destino: remover vínculo obrigatório com cliente (mesmo destino pode receber carga de vários clientes)

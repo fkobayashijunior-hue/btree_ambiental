@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Truck, Package, Fuel, Users, Calendar, Leaf, DollarSign, Wrench, AlertTriangle, ShoppingCart, CheckCircle2, Clock, ChevronLeft, ChevronRight } from "lucide-react";
-import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
@@ -38,7 +37,6 @@ function StatCard({
 }
 
 export default function Home() {
-  const [, setLocation] = useLocation();
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth()); // 0-indexed
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -298,33 +296,7 @@ export default function Home() {
         </Card>
       ) : null}
 
-      {/* Ações Rápidas */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Ações Rápidas</CardTitle>
-          <CardDescription>Acesso rápido às funcionalidades principais</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-            <button onClick={() => setLocation("/cargas")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Package className="h-7 w-7 text-teal-600 mb-1.5" />
-              <span className="text-xs font-medium text-center">Nova Carga</span>
-            </button>
-            <button onClick={() => setLocation("/presencas")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <CheckCircle2 className="h-7 w-7 text-blue-600 mb-1.5" />
-              <span className="text-xs font-medium text-center">Registrar Presença</span>
-            </button>
-            <button onClick={() => setLocation("/abastecimento")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Fuel className="h-7 w-7 text-yellow-600 mb-1.5" />
-              <span className="text-xs font-medium text-center">Abastecimento</span>
-            </button>
-            <button onClick={() => setLocation("/colaboradores")} className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
-              <Users className="h-7 w-7 text-emerald-600 mb-1.5" />
-              <span className="text-xs font-medium text-center">Colaboradores</span>
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   );
 }

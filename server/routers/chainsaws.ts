@@ -348,10 +348,22 @@ const chainsChainRouter = router({
 
       let updates: { sharpenedInBox?: number; inField?: number; inWorkshop?: number; totalStock?: number } = {};
       switch (input.eventType) {
-        case "envio_campo":
-          if (stock.sharpenedInBox < input.quantity) throw new Error("Correntes afiadas insuficientes na caixa");
-          updates = { sharpenedInBox: stock.sharpenedInBox - input.quantity, inField: stock.inField + input.quantity };
+        case "envio_campo": {
+          // Calcula disponível: afiadas na caixa + estoque não alocado
+          const allocated = stock.inField + stock.inWorkshop + stock.sharpenedInBox;
+          const unallocated = Math.max(0, stock.totalStock - allocated);
+          const availableToSend = stock.sharpenedInBox + unallocated;
+          if (availableToSend < input.quantity) throw new Error(`Correntes insuficientes disponíveis. Disponível: ${availableToSend}`);
+          // Usa primeiro as afiadas, depois o estoque geral
+          const fromSharpened = Math.min(stock.sharpenedInBox, input.quantity);
+          const fromUnallocated = input.quantity - fromSharpened;
+          updates = {
+            sharpenedInBox: stock.sharpenedInBox - fromSharpened,
+            totalStock: stock.totalStock - fromUnallocated,
+            inField: stock.inField + input.quantity,
+          };
           break;
+        }
         case "retorno_oficina":
           if (stock.inField < input.quantity) throw new Error("Quantidade em campo insuficiente");
           updates = { inField: stock.inField - input.quantity, inWorkshop: stock.inWorkshop + input.quantity };

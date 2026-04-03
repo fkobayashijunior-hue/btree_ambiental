@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { clients, cargoLoads, replantingRecords, clientPayments } from "../../drizzle/schema";
+import { clients, cargoLoads, cargoDestinations, replantingRecords, clientPayments } from "../../drizzle/schema";
 import { eq, and, or, isNull, like, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -70,21 +70,29 @@ export const clientPortalRouter = router({
 
       if (!client) throw new Error("Acesso não autorizado.");
 
-      // Cargas vinculadas ao cliente (por clientId OU por clientName como fallback para cargas antigas)
-      const loads = await db
+      // Buscar destinos vinculados a este cliente
+      const clientDestinations = await db
+        .select({ id: cargoDestinations.id })
+        .from(cargoDestinations)
+        .where(eq(cargoDestinations.clientId, input.clientId));
+      const destIds = clientDestinations.map(d => d.id);
+
+      // Cargas vinculadas ao cliente:
+      // 1. Por clientId direto
+      // 2. Por clientName (fallback para cargas antigas sem clientId)
+      // 3. Por destinationId vinculado ao cliente
+      const allLoads = await db
         .select()
         .from(cargoLoads)
-        .where(
-          or(
-            eq(cargoLoads.clientId, input.clientId),
-            and(
-              isNull(cargoLoads.clientId),
-              like(cargoLoads.clientName, `%${client.name}%`)
-            )
-          )
-        )
         .orderBy(desc(cargoLoads.date))
-        .limit(50);
+        .limit(200);
+
+      const clientNameLower = client.name.toLowerCase();
+      const loads = allLoads.filter(l =>
+        l.clientId === input.clientId ||
+        (l.clientName && l.clientName.toLowerCase().includes(clientNameLower)) ||
+        (l.destinationId && destIds.includes(l.destinationId))
+      ).slice(0, 50);
 
       // Replantios vinculados ao cliente
       const replanting = await db

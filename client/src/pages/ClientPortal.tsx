@@ -24,23 +24,15 @@ function DevContactButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity group"
-        title="Desenvolvido por Kobayashi"
+        className="flex flex-col items-center gap-1 opacity-80 hover:opacity-100 transition-opacity group"
+        title="Desenvolvido por Kobayashi Dev"
       >
-        <span className="text-xs text-green-200 group-hover:text-white transition-colors">Desenvolvido por</span>
         <img
           src={KOBAYASHI_LOGO}
-          alt="Kobayashi Desenvolvimento"
-          className="h-8 w-auto object-contain filter brightness-0 invert"
-          onError={(e) => {
-            const img = e.target as HTMLImageElement;
-            img.style.display = 'none';
-            const span = document.createElement('span');
-            span.textContent = 'Kobayashi';
-            span.className = 'text-xs font-bold text-white';
-            img.parentNode?.appendChild(span);
-          }}
+          alt="Desenvolvido por Kobayashi"
+          className="h-10 object-contain group-hover:scale-105 transition-transform"
         />
+        <span className="text-[10px] text-white/50 group-hover:text-white/80">Desenvolvedor</span>
       </button>
 
       {open && (
@@ -130,7 +122,7 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#1b5e20] to-[#2e7d32] px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#0d4f2e] to-[#1a5c3a] px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -199,7 +191,7 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
               disabled={loginMutation.isPending || !email.trim() || !password.trim()}
               className="w-full h-12 rounded-xl font-bold text-white text-base transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
-                background: "linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)",
+                background: "linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%)",
               }}
             >
               {loginMutation.isPending ? (
@@ -219,7 +211,7 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
               href="https://wa.me/5544988334679?text=Ol%C3%A1%2C+preciso+de+ajuda+para+acessar+o+portal+do+cliente+BTREE!"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#2e7d32] font-semibold hover:underline"
+              className="text-[#0d4f2e] font-semibold hover:underline"
             >
               Fale com a BTREE
             </a>
@@ -277,7 +269,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-[#1b5e20] text-white px-4 py-4 shadow-lg">
+      <header className="bg-gradient-to-r from-[#0d4f2e] to-[#1a5c3a] text-white px-4 py-4 shadow-lg">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
@@ -311,7 +303,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
         ) : (
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
-              <Truck className="h-5 w-5 text-[#2e7d32] mx-auto mb-1" />
+              <Truck className="h-5 w-5 text-[#0d4f2e] mx-auto mb-1" />
               <div className="text-xl font-black text-gray-900">{data?.loads.length ?? 0}</div>
               <div className="text-gray-500 text-xs">Cargas</div>
             </div>
@@ -355,7 +347,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 onClick={() => setActiveTab(id)}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold transition-colors ${
                   activeTab === id
-                    ? "text-[#2e7d32] border-b-2 border-[#2e7d32] bg-green-50/50"
+                    ? "text-[#0d4f2e] border-b-2 border-[#0d4f2e] bg-green-50/50"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
@@ -457,7 +449,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
         </div>
       </div>
       {/* Rodapé com logo do desenvolvedor */}
-      <footer className="bg-[#1b5e20] py-4 px-4 mt-4">
+      <footer className="bg-gradient-to-r from-[#0d4f2e] to-[#1a5c3a] py-4 px-4 mt-4">
         <div className="max-w-2xl mx-auto flex justify-center">
           <DevContactButton />
         </div>

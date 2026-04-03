@@ -293,6 +293,17 @@ export const collaboratorsRouter = router({
     }),
 
   // Buscar todos os descritores faciais (para reconhecimento)
+  getMyPhoto: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const result = await db.select({ photoUrl: collaborators.photoUrl })
+        .from(collaborators)
+        .where(eq(collaborators.userId, ctx.user.id))
+        .limit(1);
+      return result[0]?.photoUrl ?? null;
+    }),
+
   getFaceDescriptors: protectedProcedure
     .query(async () => {
       const db = await getDb();

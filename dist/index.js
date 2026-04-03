@@ -1575,6 +1575,12 @@ var collaboratorsRouter = router({
     return records;
   }),
   // Buscar todos os descritores faciais (para reconhecimento)
+  getMyPhoto: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return null;
+    const result = await db.select({ photoUrl: collaborators.photoUrl }).from(collaborators).where(eq2(collaborators.userId, ctx.user.id)).limit(1);
+    return result[0]?.photoUrl ?? null;
+  }),
   getFaceDescriptors: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -2874,7 +2880,7 @@ var clientsRouter = router({
 import { z as z10 } from "zod";
 init_db();
 init_schema();
-import { eq as eq10, and as and4, or as or3, isNull, like as like3, desc as desc8 } from "drizzle-orm";
+import { eq as eq10, and as and4, desc as desc8 } from "drizzle-orm";
 import bcrypt3 from "bcryptjs";
 var clientPortalRouter = router({
   // ── LOGIN DO CLIENTE (público) ──
@@ -2914,15 +2920,13 @@ var clientPortalRouter = router({
       )
     ).limit(1);
     if (!client) throw new Error("Acesso n\xE3o autorizado.");
-    const loads = await db.select().from(cargoLoads).where(
-      or3(
-        eq10(cargoLoads.clientId, input.clientId),
-        and4(
-          isNull(cargoLoads.clientId),
-          like3(cargoLoads.clientName, `%${client.name}%`)
-        )
-      )
-    ).orderBy(desc8(cargoLoads.date)).limit(50);
+    const clientDestinations = await db.select({ id: cargoDestinations.id }).from(cargoDestinations).where(eq10(cargoDestinations.clientId, input.clientId));
+    const destIds = clientDestinations.map((d) => d.id);
+    const allLoads = await db.select().from(cargoLoads).orderBy(desc8(cargoLoads.date)).limit(200);
+    const clientNameLower = client.name.toLowerCase();
+    const loads = allLoads.filter(
+      (l) => l.clientId === input.clientId || l.clientName && l.clientName.toLowerCase().includes(clientNameLower) || l.destinationId && destIds.includes(l.destinationId)
+    ).slice(0, 50);
     const replanting = await db.select().from(replantingRecords).where(eq10(replantingRecords.clientId, input.clientId)).orderBy(desc8(replantingRecords.date)).limit(50);
     const payments = await db.select().from(clientPayments).where(eq10(clientPayments.clientId, input.clientId)).orderBy(desc8(clientPayments.referenceDate)).limit(50);
     return { client, loads, replanting, payments };
@@ -4336,10 +4340,20 @@ var chainsChainRouter = router({
     const stock = stockRows[0];
     let updates = {};
     switch (input.eventType) {
-      case "envio_campo":
-        if (stock.sharpenedInBox < input.quantity) throw new Error("Correntes afiadas insuficientes na caixa");
-        updates = { sharpenedInBox: stock.sharpenedInBox - input.quantity, inField: stock.inField + input.quantity };
+      case "envio_campo": {
+        const allocated = stock.inField + stock.inWorkshop + stock.sharpenedInBox;
+        const unallocated = Math.max(0, stock.totalStock - allocated);
+        const availableToSend = stock.sharpenedInBox + unallocated;
+        if (availableToSend < input.quantity) throw new Error(`Correntes insuficientes dispon\xEDveis. Dispon\xEDvel: ${availableToSend}`);
+        const fromSharpened = Math.min(stock.sharpenedInBox, input.quantity);
+        const fromUnallocated = input.quantity - fromSharpened;
+        updates = {
+          sharpenedInBox: stock.sharpenedInBox - fromSharpened,
+          totalStock: stock.totalStock - fromUnallocated,
+          inField: stock.inField + input.quantity
+        };
         break;
+      }
       case "retorno_oficina":
         if (stock.inField < input.quantity) throw new Error("Quantidade em campo insuficiente");
         updates = { inField: stock.inField - input.quantity, inWorkshop: stock.inWorkshop + input.quantity };
