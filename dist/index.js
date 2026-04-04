@@ -26,6 +26,99 @@ var init_env = __esm({
   }
 });
 
+// server/_core/notification.ts
+var notification_exports = {};
+__export(notification_exports, {
+  notifyOwner: () => notifyOwner
+});
+import { TRPCError } from "@trpc/server";
+async function notifyOwner(payload) {
+  const { title, content } = validatePayload(payload);
+  if (!ENV.forgeApiUrl) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Notification service URL is not configured."
+    });
+  }
+  if (!ENV.forgeApiKey) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Notification service API key is not configured."
+    });
+  }
+  const endpoint = buildEndpointUrl(ENV.forgeApiUrl);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${ENV.forgeApiKey}`,
+        "content-type": "application/json",
+        "connect-protocol-version": "1"
+      },
+      body: JSON.stringify({ title, content })
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.warn(
+        `[Notification] Failed to notify owner (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
+      );
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn("[Notification] Error calling notification service:", error);
+    return false;
+  }
+}
+var TITLE_MAX_LENGTH, CONTENT_MAX_LENGTH, trimValue, isNonEmptyString, buildEndpointUrl, validatePayload;
+var init_notification = __esm({
+  "server/_core/notification.ts"() {
+    "use strict";
+    init_env();
+    TITLE_MAX_LENGTH = 1200;
+    CONTENT_MAX_LENGTH = 2e4;
+    trimValue = (value) => value.trim();
+    isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
+    buildEndpointUrl = (baseUrl) => {
+      const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+      return new URL(
+        "webdevtoken.v1.WebDevService/SendNotification",
+        normalizedBase
+      ).toString();
+    };
+    validatePayload = (input) => {
+      if (!isNonEmptyString(input.title)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Notification title is required."
+        });
+      }
+      if (!isNonEmptyString(input.content)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Notification content is required."
+        });
+      }
+      const title = trimValue(input.title);
+      const content = trimValue(input.content);
+      if (title.length > TITLE_MAX_LENGTH) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Notification title must be at most ${TITLE_MAX_LENGTH} characters.`
+        });
+      }
+      if (content.length > CONTENT_MAX_LENGTH) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Notification content must be at most ${CONTENT_MAX_LENGTH} characters.`
+        });
+      }
+      return { title, content };
+    };
+  }
+});
+
 // drizzle/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
@@ -1235,90 +1328,8 @@ function getSessionCookieOptions(req) {
 }
 
 // server/_core/systemRouter.ts
+init_notification();
 import { z } from "zod";
-
-// server/_core/notification.ts
-init_env();
-import { TRPCError } from "@trpc/server";
-var TITLE_MAX_LENGTH = 1200;
-var CONTENT_MAX_LENGTH = 2e4;
-var trimValue = (value) => value.trim();
-var isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
-var buildEndpointUrl = (baseUrl) => {
-  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  return new URL(
-    "webdevtoken.v1.WebDevService/SendNotification",
-    normalizedBase
-  ).toString();
-};
-var validatePayload = (input) => {
-  if (!isNonEmptyString(input.title)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Notification title is required."
-    });
-  }
-  if (!isNonEmptyString(input.content)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Notification content is required."
-    });
-  }
-  const title = trimValue(input.title);
-  const content = trimValue(input.content);
-  if (title.length > TITLE_MAX_LENGTH) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Notification title must be at most ${TITLE_MAX_LENGTH} characters.`
-    });
-  }
-  if (content.length > CONTENT_MAX_LENGTH) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Notification content must be at most ${CONTENT_MAX_LENGTH} characters.`
-    });
-  }
-  return { title, content };
-};
-async function notifyOwner(payload) {
-  const { title, content } = validatePayload(payload);
-  if (!ENV.forgeApiUrl) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Notification service URL is not configured."
-    });
-  }
-  if (!ENV.forgeApiKey) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Notification service API key is not configured."
-    });
-  }
-  const endpoint = buildEndpointUrl(ENV.forgeApiUrl);
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${ENV.forgeApiKey}`,
-        "content-type": "application/json",
-        "connect-protocol-version": "1"
-      },
-      body: JSON.stringify({ title, content })
-    });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.warn(
-        `[Notification] Failed to notify owner (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
-      );
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.warn("[Notification] Error calling notification service:", error);
-    return false;
-  }
-}
 
 // server/_core/trpc.ts
 import { initTRPC, TRPCError as TRPCError2 } from "@trpc/server";
@@ -3482,8 +3493,9 @@ var purchaseOrdersRouter = router({
 import { z as z14 } from "zod";
 init_db();
 init_schema();
+init_notification();
 import { TRPCError as TRPCError10 } from "@trpc/server";
-import { eq as eq14, desc as desc12, inArray as inArray2 } from "drizzle-orm";
+import { eq as eq14, desc as desc12, and as and6, inArray as inArray2, lt } from "drizzle-orm";
 var attendanceRouter = router({
   // Listar presenças com filtros
   list: protectedProcedure.input(z14.object({
@@ -3621,6 +3633,54 @@ Registrado por: ${ctx.user.name}`
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(collaboratorAttendance).where(eq14(collaboratorAttendance.id, input.id));
     return { success: true };
+  }),
+  // Verificar e notificar pagamentos pendentes há mais de 7 dias
+  checkPendingPayments: protectedProcedure.mutation(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError10({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const sevenDaysAgo = /* @__PURE__ */ new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const pendingRecords = await db.select({
+      id: collaboratorAttendance.id,
+      collaboratorName: collaborators.name,
+      date: collaboratorAttendance.date,
+      dailyValue: collaboratorAttendance.dailyValue,
+      pixKey: collaboratorAttendance.pixKey,
+      activity: collaboratorAttendance.activity
+    }).from(collaboratorAttendance).innerJoin(collaborators, eq14(collaboratorAttendance.collaboratorId, collaborators.id)).where(
+      and6(
+        eq14(collaboratorAttendance.paymentStatus, "pendente"),
+        lt(collaboratorAttendance.date, sevenDaysAgo)
+      )
+    ).orderBy(collaboratorAttendance.date);
+    if (pendingRecords.length === 0) {
+      return { success: true, count: 0, message: "Nenhum pagamento pendente h\xE1 mais de 7 dias." };
+    }
+    const byCollaborator = {};
+    for (const r of pendingRecords) {
+      const name = r.collaboratorName;
+      if (!byCollaborator[name]) {
+        byCollaborator[name] = { count: 0, total: 0, oldest: new Date(r.date).toLocaleDateString("pt-BR") };
+      }
+      byCollaborator[name].count++;
+      byCollaborator[name].total += parseFloat(r.dailyValue || "0");
+    }
+    const lines = Object.entries(byCollaborator).map(([name, data]) => `\u2022 ${name}: ${data.count} dia(s) \u2014 R$ ${data.total.toFixed(2)} (desde ${data.oldest})`).join("\n");
+    const totalGeral = pendingRecords.reduce((sum, r) => sum + parseFloat(r.dailyValue || "0"), 0);
+    await notifyOwner({
+      title: `\u26A0\uFE0F ${pendingRecords.length} pagamento(s) pendente(s) h\xE1 mais de 7 dias`,
+      content: `Existem ${pendingRecords.length} presen\xE7a(s) com pagamento pendente h\xE1 mais de 7 dias.
+
+Total a pagar: R$ ${totalGeral.toFixed(2)}
+
+Detalhamento:
+${lines}
+
+Acesse o sistema para realizar os pagamentos.`
+    }).catch(() => {
+    });
+    return { success: true, count: pendingRecords.length, total: totalGeral, details: byCollaborator };
   })
 });
 
@@ -5403,7 +5463,58 @@ var appRouter = router({
   chainsawModule: chainsawModuleRouter,
   extraExpenses: extraExpensesRouter,
   financial: financialRouter,
-  gpsLocations: gpsLocationsRouter
+  gpsLocations: gpsLocationsRouter,
+  // Procedure de migração para criar tabelas faltantes na produção
+  migrations: router({
+    run: publicProcedure.input(z22.object({ key: z22.string() })).mutation(async ({ input }) => {
+      if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
+      const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+      const db = await getDb2();
+      if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
+      const results = [];
+      try {
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS financial_entries (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              type ENUM('receita','despesa') NOT NULL,
+              category VARCHAR(100) NOT NULL,
+              description VARCHAR(500) NOT NULL,
+              amount DECIMAL(10,2) NOT NULL,
+              date DATE NOT NULL,
+              reference_month VARCHAR(7) NOT NULL,
+              payment_method VARCHAR(50),
+              notes TEXT,
+              created_by INT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+          `);
+        results.push("financial_entries: OK");
+      } catch (e) {
+        results.push("financial_entries: " + e.message);
+      }
+      try {
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS gps_locations (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              name VARCHAR(200) NOT NULL,
+              latitude DECIMAL(10,8) NOT NULL,
+              longitude DECIMAL(11,8) NOT NULL,
+              radius_meters INT NOT NULL DEFAULT 500,
+              is_active TINYINT(1) NOT NULL DEFAULT 1,
+              notes TEXT,
+              created_by INT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+          `);
+        results.push("gps_locations: OK");
+      } catch (e) {
+        results.push("gps_locations: " + e.message);
+      }
+      return { success: true, results };
+    })
+  })
   // TODO: add feature routers heree, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>
@@ -5545,3 +5656,66 @@ async function startServer() {
   });
 }
 startServer().catch(console.error);
+function schedulePendingPaymentsCheck() {
+  const checkAndSchedule = async () => {
+    const now = /* @__PURE__ */ new Date();
+    const next = new Date(now);
+    const dayOfWeek = next.getDay();
+    const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7 || 7;
+    next.setDate(next.getDate() + daysUntilMonday);
+    next.setHours(8, 0, 0, 0);
+    const msUntilNext = next.getTime() - now.getTime();
+    setTimeout(async () => {
+      try {
+        const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+        const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
+        const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+        const { eq: eq21, and: and13, lt: lt2 } = await import("drizzle-orm");
+        const db = await getDb2();
+        if (!db) return;
+        const sevenDaysAgo = /* @__PURE__ */ new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const pendingRecords = await db.select({
+          id: collaboratorAttendance2.id,
+          collaboratorName: collaborators2.name,
+          date: collaboratorAttendance2.date,
+          dailyValue: collaboratorAttendance2.dailyValue
+        }).from(collaboratorAttendance2).innerJoin(collaborators2, eq21(collaboratorAttendance2.collaboratorId, collaborators2.id)).where(and13(
+          eq21(collaboratorAttendance2.paymentStatus, "pendente"),
+          lt2(collaboratorAttendance2.date, sevenDaysAgo)
+        ));
+        if (pendingRecords.length > 0) {
+          const totalGeral = pendingRecords.reduce((sum, r) => sum + parseFloat(r.dailyValue || "0"), 0);
+          const byCollab = {};
+          for (const r of pendingRecords) {
+            if (!byCollab[r.collaboratorName]) byCollab[r.collaboratorName] = { count: 0, total: 0 };
+            byCollab[r.collaboratorName].count++;
+            byCollab[r.collaboratorName].total += parseFloat(r.dailyValue || "0");
+          }
+          const lines = Object.entries(byCollab).map(([name, d]) => `\u2022 ${name}: ${d.count} dia(s) \u2014 R$ ${d.total.toFixed(2)}`).join("\n");
+          await notifyOwner2({
+            title: `\u26A0\uFE0F Alerta semanal: ${pendingRecords.length} pagamento(s) pendente(s)`,
+            content: `Relat\xF3rio semanal de pagamentos pendentes h\xE1 mais de 7 dias.
+
+Total: R$ ${totalGeral.toFixed(2)}
+
+${lines}
+
+Acesse o sistema para realizar os pagamentos.`
+          }).catch(() => {
+          });
+          console.log(`[CronJob] Notificou ${pendingRecords.length} pagamentos pendentes.`);
+        } else {
+          console.log("[CronJob] Nenhum pagamento pendente h\xE1 mais de 7 dias.");
+        }
+      } catch (err) {
+        console.error("[CronJob] Erro ao verificar pagamentos pendentes:", err);
+      }
+      checkAndSchedule();
+    }, msUntilNext);
+    const nextDate = new Date(now.getTime() + msUntilNext);
+    console.log(`[CronJob] Pr\xF3xima verifica\xE7\xE3o de pagamentos pendentes: ${nextDate.toLocaleString("pt-BR")}`);
+  };
+  checkAndSchedule();
+}
+schedulePendingPaymentsCheck();
