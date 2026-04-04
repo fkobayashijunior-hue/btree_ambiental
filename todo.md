@@ -1157,3 +1157,8 @@
 - [x] Testes vitest para procedures (clientPortal.test.ts)
 
 ---
+
+## 📌 REGRAS DE WORKFLOW
+- [x] Sempre fazer push no GitHub após salvar checkpoint
+- [x] Sempre enviar script SQL ao usuário quando houver alteração no banco de dados
+
