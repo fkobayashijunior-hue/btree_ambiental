@@ -2,10 +2,20 @@
 -- BTREE AMBIENTAL - Migrações para phpMyAdmin (Hostinger)
 -- Data: 04/04/2026
 -- Execute este SQL no phpMyAdmin do banco de dados da Hostinger
+-- IMPORTANTE: Execute TUDO de uma vez (selecione tudo e clique em Executar)
 -- ============================================================
 
 -- ─────────────────────────────────────────────────────────────
--- TABELA: financial_entries (Módulo Financeiro)
+-- 1. COLUNAS GPS na tabela collaborator_attendance
+--    NECESSÁRIO para o módulo de Presenças funcionar!
+-- ─────────────────────────────────────────────────────────────
+ALTER TABLE `collaborator_attendance`
+  ADD COLUMN IF NOT EXISTS `latitude` VARCHAR(20) NULL AFTER `paid_at`,
+  ADD COLUMN IF NOT EXISTS `longitude` VARCHAR(20) NULL AFTER `latitude`,
+  ADD COLUMN IF NOT EXISTS `location_name` VARCHAR(255) NULL AFTER `longitude`;
+
+-- ─────────────────────────────────────────────────────────────
+-- 2. TABELA: financial_entries (Módulo Financeiro)
 -- ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS `financial_entries` (
   `id`                INT NOT NULL AUTO_INCREMENT,
@@ -37,7 +47,7 @@ CREATE TABLE IF NOT EXISTS `financial_entries` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────────────────────
--- TABELA: gps_locations (Locais GPS cadastrados)
+-- 3. TABELA: gps_locations (Locais GPS cadastrados)
 -- ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS `gps_locations` (
   `id`              INT NOT NULL AUTO_INCREMENT,
@@ -58,7 +68,10 @@ CREATE TABLE IF NOT EXISTS `gps_locations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────────────────────
--- VERIFICAÇÃO: confirmar que as tabelas foram criadas
+-- VERIFICAÇÃO: confirmar que as alterações foram aplicadas
 -- ─────────────────────────────────────────────────────────────
+SHOW COLUMNS FROM `collaborator_attendance` LIKE 'latitude';
+SHOW COLUMNS FROM `collaborator_attendance` LIKE 'longitude';
+SHOW COLUMNS FROM `collaborator_attendance` LIKE 'location_name';
 SHOW TABLES LIKE 'financial_entries';
 SHOW TABLES LIKE 'gps_locations';
