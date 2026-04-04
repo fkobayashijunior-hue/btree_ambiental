@@ -81,9 +81,11 @@ export default function AttendanceList() {
   // Somente admin vê valores financeiros
   const canSeeFinancial = isAdmin;
 
-  const [tab, setTab] = useState<"semanal" | "diario">("semanal");
+  const [tab, setTab] = useState<"semanal" | "diario" | "mensal">("semanal");
   const [weekRef, setWeekRef] = useState(new Date());
   const [searchDate, setSearchDate] = useState(new Date().toISOString().slice(0, 10));
+  const _now = new Date();
+  const [monthRef, setMonthRef] = useState(new Date(_now.getFullYear(), _now.getMonth(), 1));
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [expandedCollab, setExpandedCollab] = useState<Record<number, boolean>>({});
@@ -108,6 +110,15 @@ export default function AttendanceList() {
     dateFrom: searchDate,
     dateTo: searchDate,
   });
+
+  // ── Dados do mês ─────────────────────────────────────────────────────────
+  const monthStart = new Date(monthRef.getFullYear(), monthRef.getMonth(), 1);
+  const monthEnd = new Date(monthRef.getFullYear(), monthRef.getMonth() + 1, 0);
+  const monthLabel = format(monthRef, "MMMM 'de' yyyy", { locale: ptBR });
+  const { data: monthRecords = [], isLoading: monthLoading } = trpc.attendance.list.useQuery(
+    { dateFrom: monthStart.toISOString().slice(0, 10), dateTo: monthEnd.toISOString().slice(0, 10) },
+    { enabled: tab === "mensal" }
+  );
 
   // ── Capturar GPS ─────────────────────────────────────────────────────────
   const captureGPS = useCallback(() => {
@@ -537,12 +548,15 @@ export default function AttendanceList() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={v => setTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-2 max-w-xs">
+        <TabsList className="grid w-full grid-cols-3 max-w-sm">
           <TabsTrigger value="semanal" className="gap-1.5">
             <CalendarDays className="h-4 w-4" /> Semanal
           </TabsTrigger>
           <TabsTrigger value="diario" className="gap-1.5">
             <LayoutList className="h-4 w-4" /> Por Dia
+          </TabsTrigger>
+          <TabsTrigger value="mensal" className="gap-1.5">
+            <Calendar className="h-4 w-4" /> Mensal
           </TabsTrigger>
         </TabsList>
 
@@ -813,6 +827,64 @@ export default function AttendanceList() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── ABA MENSAL ───────────────────────────────────────────────────────── */}
+        <TabsContent value="mensal" className="space-y-4 mt-4">
+          {/* Navegação de mês */}
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="outline" size="sm" onClick={() => setMonthRef(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="text-center">
+              <p className="font-semibold text-gray-800 capitalize">{monthLabel}</p>
+              <p className="text-xs text-gray-400">{(monthRecords as any[]).length} presença(s) registrada(s)</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setMonthRef(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Resumo do mês */}
+          {canSeeFinancial && (
+            <div className="grid grid-cols-3 gap-3">
+              <Card><CardContent className="p-3 text-center">
+                <p className="text-xl font-bold text-emerald-700">{(monthRecords as any[]).length}</p>
+                <p className="text-xs text-gray-500">Presenças</p>
+              </CardContent></Card>
+              <Card><CardContent className="p-3 text-center">
+                <p className="text-xl font-bold text-yellow-600">R$ {(monthRecords as any[]).filter((r: any) => r.paymentStatus !== "pago").reduce((s: number, r: any) => s + parseFloat(r.dailyValue || "0"), 0).toFixed(2)}</p>
+                <p className="text-xs text-gray-500">A Pagar</p>
+              </CardContent></Card>
+              <Card><CardContent className="p-3 text-center">
+                <p className="text-xl font-bold text-blue-600">R$ {(monthRecords as any[]).reduce((s: number, r: any) => s + parseFloat(r.dailyValue || "0"), 0).toFixed(2)}</p>
+                <p className="text-xs text-gray-500">Total</p>
+              </CardContent></Card>
+            </div>
+          )}
+
+          {monthLoading ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : (monthRecords as any[]).length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Users className="h-16 w-16 mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-medium">Nenhuma presença em {monthLabel}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(monthRecords as any[]).map((r: any) => (
+                <AttendanceCard
+                  key={r.id}
+                  record={r}
+                  canSeeFinancial={canSeeFinancial}
+                  onMarkPaid={canSeeFinancial ? (paid) => markPaidMutation.mutate({ id: r.id, paid }) : undefined}
+                  onDelete={isAdmin ? () => handleDelete(r.id, r.collaboratorName) : undefined}
+                />
+              ))}
             </div>
           )}
         </TabsContent>
