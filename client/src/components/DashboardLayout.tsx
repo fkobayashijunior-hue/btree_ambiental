@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -44,6 +44,8 @@ const menuItems = [
   { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps" },
   { icon: Scissors, label: "Motosserras", path: "/motosserras", slug: "motosserras" },
   { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", slug: null },
+  { icon: Leaf, label: "Replantios", path: "/replantios", slug: "replantios" },
+  { icon: DollarSign, label: "Pagamentos Clientes", path: "/pagamentos-clientes", slug: "pagamentos-clientes" },
   { icon: Wallet, label: "Financeiro", path: "/financeiro", slug: "financeiro" },
   { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: null },
 ];

@@ -1089,3 +1089,71 @@
 - [ ] Exibir imagens das motosserras vindas do cadastro de Setores e Equipamentos
 - [ ] BUG: Aba Mensal mostra 0 presenças em março/2026 - investigar datas no banco da Hostinger
 - [ ] BUG: Portal do cliente Fazenda GW mostra 0 cargas, 0 replantios e 0 pagamentos
+
+## 🚀 SPRINT 04/04/2026 — SESSÃO 4 (Noite)
+
+### Portal do Cliente — Correções
+- [x] Portal do cliente Fazenda GW: cargas agora aparecem (corrigido try/catch no getPortalData)
+- [ ] Corrigir cadastro de destinos (client_id deve ser opcional)
+
+### Tracking de Cargas com Fotos (Fluxo Motorista)
+- [ ] Implementar sistema de etapas de tracking com upload de fotos
+- [ ] Etapas do fluxo principal (caminhão próprio):
+  - [ ] 1. Início do carregamento (foto)
+  - [ ] 2. Fim do carregamento (foto)
+  - [ ] 3. Pesagem na balança (foto)
+  - [ ] 4. Nota fiscal recebida (foto/PDF)
+  - [ ] 5. Nota entregue ao motorista
+  - [ ] 6. Descarga + pesagem/medição do receptor (foto dos papéis)
+  - [ ] 7. Cliente envia boleto (foto)
+  - [ ] 8. Confirmação de pagamento
+- [ ] Fluxo simplificado (carga de terceiros):
+  - [ ] 1. Enviar nota de transporte
+  - [ ] 2. Receber finalização após descarga (foto)
+  - [ ] 3. Registro financeiro
+- [ ] Interface mobile simples: motorista tira foto e clica "Próximo"
+- [ ] Portal do cliente: timeline visual com fotos de cada etapa
+
+### Replantios (Admin + Portal do Cliente)
+- [ ] Tela no admin para cadastrar replantios vinculados a clientes
+- [ ] Formulário: cliente, área, espécie, quantidade, data, fotos, notas
+- [ ] Listagem de replantios com filtros
+- [ ] Portal do cliente: aba Replantio mostra replantios do cliente
+
+### Pagamentos do Cliente (Admin + Portal do Cliente)
+- [ ] Tela no admin para registrar pagamentos de clientes
+- [ ] Formulário: cliente, mês referência, volume m³, preço/m³, deduções, valor líquido, vencimento, PIX
+- [ ] Status: pendente, pago, atrasado, cancelado
+- [ ] Portal do cliente: aba Pagamentos mostra pagamentos do cliente
+- [ ] Gerar boleto/comprovante em PDF
+
+---
+
+
+## 🚀 SPRINT 04/04/2026 — SESSÃO 5
+
+### Tracking de Cargas com Fotos por Etapa
+- [x] Criar tabela cargo_tracking_photos no schema (cargoId, etapa, fotoUrl, notas, timestamp)
+- [x] Backend: procedures para upload de foto por etapa, listar fotos por carga
+- [x] Backend: procedure pública getTrackingPhotosPublic para portal do cliente
+- [ ] Frontend: tela mobile de tracking para motoristas (botão grande "Tirar Foto" por etapa)
+- [ ] Fluxo completo: 8 etapas (início carregamento → confirmação pagamento)
+- [ ] Fluxo simplificado: 3 etapas (nota transporte → fotos descarga → financeiro)
+- [x] Portal do cliente: timeline com fotos de cada etapa
+
+### Tela Admin de Replantios
+- [x] Página ReplantingPage.tsx com listagem e formulário de cadastro
+- [x] Filtros por cliente e busca
+- [ ] Upload de fotos do replantio
+- [x] Rota /replantios no App.tsx
+- [x] Item no menu lateral
+
+### Tela Admin de Pagamentos de Clientes
+- [x] Página ClientPaymentsPage.tsx com listagem e formulário de cadastro
+- [x] Filtros por cliente, status e período
+- [x] Marcar como pago/atrasado
+- [x] Rota /pagamentos-clientes no App.tsx
+- [x] Item no menu lateral
+- [x] Testes vitest para procedures (clientPortal.test.ts)
+
+---

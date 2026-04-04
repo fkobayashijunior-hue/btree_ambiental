@@ -155,6 +155,13 @@
       "when": 1775259240569,
       "tag": "0021_orange_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1775312231780,
+      "tag": "0022_clammy_daredevil",
+      "breakpoints": true
     }
   ]
 }

@@ -373,7 +373,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       <EmptyState icon={<Truck />} text="Nenhuma carga registrada ainda." />
                     ) : (
                       data?.loads.map((load) => (
-                        <CargoCard key={load.id} load={load} formatDate={formatDate} statusColor={statusColor} />
+                        <CargoCard key={load.id} load={load} formatDate={formatDate} statusColor={statusColor} clientId={session.clientId} />
                       ))
                     )}
                   </div>
@@ -487,11 +487,24 @@ type CargoLoad = {
   photosJson: string | null;
 };
 
-function CargoCard({ load, formatDate, statusColor }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string }) {
+function CargoCard({ load, formatDate, statusColor, clientId }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string; clientId: number }) {
   const [expanded, setExpanded] = useState(false);
   const currentStep = TRACKING_STEPS.find(s => s.key === load.trackingStatus);
   const currentIdx = TRACKING_STEPS.findIndex(s => s.key === load.trackingStatus);
   const photos: string[] = load.photosJson ? (() => { try { return JSON.parse(load.photosJson); } catch { return []; } })() : [];
+
+  // Buscar fotos de tracking por etapa
+  const { data: trackingPhotos } = trpc.cargoLoads.getTrackingPhotosPublic.useQuery(
+    { cargoId: load.id, clientId },
+    { enabled: expanded }
+  );
+
+  // Agrupar fotos por etapa
+  const photosByStage = (trackingPhotos ?? []).reduce<Record<string, typeof trackingPhotos>>((acc, p) => {
+    if (!acc[p.stage]) acc[p.stage] = [];
+    acc[p.stage]!.push(p);
+    return acc;
+  }, {});
 
   return (
     <div className="border border-gray-100 rounded-xl overflow-hidden hover:border-[#2e7d32]/30 transition-colors">
@@ -564,6 +577,39 @@ function CargoCard({ load, formatDate, statusColor }: { load: CargoLoad; formatD
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Fotos de Tracking por Etapa */}
+          {Object.keys(photosByStage).length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 flex items-center gap-1">
+                <ImageIcon className="h-3.5 w-3.5" /> Fotos por Etapa
+              </p>
+              <div className="space-y-3">
+                {TRACKING_STEPS.filter(s => photosByStage[s.key]).map(step => (
+                  <div key={step.key}>
+                    <p className="text-xs font-medium text-gray-600 mb-1">{step.icon} {step.label}</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {photosByStage[step.key]!.map((tp: any) => (
+                        <div key={tp.id} className="relative group">
+                          <img
+                            src={tp.photoUrl}
+                            alt={`${step.label}`}
+                            className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => window.open(tp.photoUrl, "_blank")}
+                          />
+                          {tp.notes && (
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] px-1 py-0.5 rounded-b-lg truncate">
+                              {tp.notes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

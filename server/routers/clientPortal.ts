@@ -70,17 +70,8 @@ export const clientPortalRouter = router({
 
       if (!client) throw new Error("Acesso não autorizado.");
 
-      // Buscar destinos vinculados a este cliente
+      // Destinos (sem filtro por clientId pois a tabela não tem esse campo)
       let destIds: number[] = [];
-      try {
-        const clientDestinations = await db
-          .select({ id: cargoDestinations.id })
-          .from(cargoDestinations)
-          .where(eq(cargoDestinations.clientId, input.clientId));
-        destIds = clientDestinations.map(d => d.id);
-      } catch (e) {
-        console.error('[Portal] Erro ao buscar destinos:', e);
-      }
 
       // Cargas vinculadas ao cliente - buscar com SQL direto para evitar problemas de schema
       let loads: any[] = [];
@@ -147,6 +138,105 @@ export const clientPortalRouter = router({
       return { client, loads, replanting, payments };
     }),
 
+  // ── LISTAR TODOS OS REPLANTIOS (admin) ──
+  listAllReplantings: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const records = await db
+      .select({
+        id: replantingRecords.id,
+        clientId: replantingRecords.clientId,
+        date: replantingRecords.date,
+        area: replantingRecords.area,
+        species: replantingRecords.species,
+        quantity: replantingRecords.quantity,
+        areaHectares: replantingRecords.areaHectares,
+        notes: replantingRecords.notes,
+        photosJson: replantingRecords.photosJson,
+        registeredBy: replantingRecords.registeredBy,
+        createdAt: replantingRecords.createdAt,
+        clientName: clients.name,
+      })
+      .from(replantingRecords)
+      .leftJoin(clients, eq(replantingRecords.clientId, clients.id))
+      .orderBy(desc(replantingRecords.date));
+    return records;
+  }),
+
+  // ── LISTAR TODOS OS PAGAMENTOS (admin) ──
+  listAllPayments: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const records = await db
+      .select({
+        id: clientPayments.id,
+        clientId: clientPayments.clientId,
+        referenceDate: clientPayments.referenceDate,
+        description: clientPayments.description,
+        volumeM3: clientPayments.volumeM3,
+        pricePerM3: clientPayments.pricePerM3,
+        grossAmount: clientPayments.grossAmount,
+        deductions: clientPayments.deductions,
+        netAmount: clientPayments.netAmount,
+        status: clientPayments.status,
+        dueDate: clientPayments.dueDate,
+        paidAt: clientPayments.paidAt,
+        pixKey: clientPayments.pixKey,
+        notes: clientPayments.notes,
+        registeredBy: clientPayments.registeredBy,
+        createdAt: clientPayments.createdAt,
+        clientName: clients.name,
+      })
+      .from(clientPayments)
+      .leftJoin(clients, eq(clientPayments.clientId, clients.id))
+      .orderBy(desc(clientPayments.referenceDate));
+    return records;
+  }),
+
+  // ── ATUALIZAR PAGAMENTO (admin) ──
+  updatePayment: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["pendente", "pago", "atrasado", "cancelado"]).optional(),
+      paidAt: z.string().optional(),
+      notes: z.string().optional(),
+      description: z.string().optional(),
+      grossAmount: z.string().optional(),
+      netAmount: z.string().optional(),
+      deductions: z.string().optional(),
+      dueDate: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { id, paidAt, dueDate, ...rest } = input;
+      const updateData: Record<string, unknown> = { ...rest };
+      if (paidAt) updateData.paidAt = new Date(paidAt).toISOString().slice(0, 19).replace('T', ' ');
+      if (dueDate) updateData.dueDate = new Date(dueDate).toISOString().slice(0, 19).replace('T', ' ');
+      await db.update(clientPayments).set(updateData).where(eq(clientPayments.id, id));
+      return { success: true };
+    }),
+
+  // ── EXCLUIR REPLANTIO (admin) ──
+  deleteReplanting: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.delete(replantingRecords).where(eq(replantingRecords.id, input.id));
+      return { success: true };
+    }),
+
+  // ── EXCLUIR PAGAMENTO (admin) ──
+  deletePayment: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.delete(clientPayments).where(eq(clientPayments.id, input.id));
+      return { success: true };
+    }),
+
   // ── DEFINIR/ALTERAR SENHA DO CLIENTE (admin) ──
   setClientPassword: protectedProcedure
     .input(z.object({
@@ -180,7 +270,7 @@ export const clientPortalRouter = router({
 
       await db.insert(replantingRecords).values({
         clientId: input.clientId,
-        date: new Date(input.date),
+        date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         area: input.area,
         species: input.species || "Eucalipto",
         quantity: input.quantity,
@@ -215,7 +305,7 @@ export const clientPortalRouter = router({
 
       await db.insert(clientPayments).values({
         clientId: input.clientId,
-        referenceDate: new Date(input.referenceDate),
+        referenceDate: new Date(input.referenceDate).toISOString().slice(0, 19).replace('T', ' '),
         description: input.description,
         volumeM3: input.volumeM3,
         pricePerM3: input.pricePerM3,
@@ -223,8 +313,8 @@ export const clientPortalRouter = router({
         deductions: input.deductions || "0",
         netAmount: input.netAmount,
         status: input.status,
-        dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
-        paidAt: input.paidAt ? new Date(input.paidAt) : undefined,
+        dueDate: input.dueDate ? new Date(input.dueDate).toISOString().slice(0, 19).replace('T', ' ') : undefined,
+        paidAt: input.paidAt ? new Date(input.paidAt).toISOString().slice(0, 19).replace('T', ' ') : undefined,
         pixKey: input.pixKey,
         notes: input.notes,
         registeredBy: ctx.user.id,

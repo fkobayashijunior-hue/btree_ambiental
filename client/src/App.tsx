@@ -29,6 +29,8 @@ import ChainsawModule from "./pages/ChainsawModule";
 import ExtraExpenses from "./pages/ExtraExpenses";
 import FinancialModule from "./pages/FinancialModule";
 import GpsLocationsPage from "./pages/GpsLocationsPage";
+import ReplantingPage from "./pages/ReplantingPage";
+import ClientPaymentsPage from "./pages/ClientPaymentsPage";
 
 // Wrapper que aplica DashboardLayout a páginas protegidas
 function WithLayout({ component: Component }: { component: React.ComponentType }) {
@@ -103,6 +105,12 @@ function Router() {
       </Route>
       <Route path={"/locais-gps"}>
         {() => <WithLayout component={GpsLocationsPage} />}
+      </Route>
+      <Route path={"/replantios"}>
+        {() => <WithLayout component={ReplantingPage} />}
+      </Route>
+      <Route path={"/pagamentos-clientes"}>
+        {() => <WithLayout component={ClientPaymentsPage} />}
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

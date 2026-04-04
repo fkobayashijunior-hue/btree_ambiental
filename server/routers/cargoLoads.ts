@@ -3,7 +3,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
-  cargoLoads, cargoDestinations, clients, equipment, collaborators, users
+  cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos
 } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
@@ -226,10 +226,10 @@ export const cargoLoadsRouter = router({
       const uploaded = await cloudinaryUpload(input.photoBase64, `btree/cargo/${input.cargoId}`);
 
       if (input.photoType === "weight_out") {
-        await db.update(cargoLoads).set({ weightOutPhotoUrl: uploaded.url, updatedAt: new Date() }).where(eq(cargoLoads.id, input.cargoId));
+        await db.update(cargoLoads).set({ weightOutPhotoUrl: uploaded.url, updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') }).where(eq(cargoLoads.id, input.cargoId));
         return { url: uploaded.url };
       } else if (input.photoType === "weight_in") {
-        await db.update(cargoLoads).set({ weightInPhotoUrl: uploaded.url, updatedAt: new Date() }).where(eq(cargoLoads.id, input.cargoId));
+        await db.update(cargoLoads).set({ weightInPhotoUrl: uploaded.url, updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') }).where(eq(cargoLoads.id, input.cargoId));
         return { url: uploaded.url };
       }
 
@@ -242,7 +242,7 @@ export const cargoLoadsRouter = router({
       }
       photos.push(uploaded.url);
       await db.update(cargoLoads)
-        .set({ photosJson: JSON.stringify(photos), updatedAt: new Date() })
+        .set({ photosJson: JSON.stringify(photos), updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') })
         .where(eq(cargoLoads.id, input.cargoId));
       return { url: uploaded.url, photos };
     }),
@@ -274,7 +274,7 @@ export const cargoLoadsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       await db.insert(cargoLoads).values({
         ...input,
-        date: new Date(input.date),
+        date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         status: input.status || "pendente",
         trackingStatus: "aguardando",
         registeredBy: ctx.user.id,
@@ -311,9 +311,10 @@ export const cargoLoadsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       const { id, date, ...rest } = input;
-      const updateData: Record<string, unknown> = { ...rest, updatedAt: new Date() };
-      if (date) updateData.date = new Date(date);
-      if (rest.trackingStatus) updateData.trackingUpdatedAt = new Date();
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
+      if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
+      if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
       await db.update(cargoLoads).set(updateData).where(eq(cargoLoads.id, id));
       return { success: true };
     }),
@@ -330,8 +331,8 @@ export const cargoLoadsRouter = router({
       await db.update(cargoLoads).set({
         trackingStatus: input.trackingStatus,
         trackingNotes: input.trackingNotes,
-        trackingUpdatedAt: new Date(),
-        updatedAt: new Date(),
+        trackingUpdatedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
         // Finalizar carga quando tracking chega em "finalizado"
         status: input.trackingStatus === "finalizado" ? "entregue" : undefined,
       }).where(eq(cargoLoads.id, input.id));
@@ -350,6 +351,69 @@ export const cargoLoadsRouter = router({
       return { success: true };
     }),
 
+  // ===== TRACKING PHOTOS =====
+  listTrackingPhotos: protectedProcedure
+    .input(z.object({ cargoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      return db.select().from(cargoTrackingPhotos)
+        .where(eq(cargoTrackingPhotos.cargoId, input.cargoId))
+        .orderBy(cargoTrackingPhotos.createdAt);
+    }),
+
+  addTrackingPhoto: protectedProcedure
+    .input(z.object({
+      cargoId: z.number(),
+      stage: z.string().min(1),
+      photoBase64: z.string(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      const uploaded = await cloudinaryUpload(input.photoBase64, `btree/tracking/${input.cargoId}`);
+
+      await db.insert(cargoTrackingPhotos).values({
+        cargoId: input.cargoId,
+        stage: input.stage,
+        photoUrl: uploaded.url,
+        notes: input.notes,
+        registeredBy: ctx.user.id,
+        registeredByName: ctx.user.name,
+      });
+
+      return { url: uploaded.url, success: true };
+    }),
+
+  deleteTrackingPhoto: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      await db.delete(cargoTrackingPhotos).where(eq(cargoTrackingPhotos.id, input.id));
+      return { success: true };
+    }),
+
+  // Listar fotos de tracking para o portal do cliente (público)
+  getTrackingPhotosPublic: publicProcedure
+    .input(z.object({ cargoId: z.number(), clientId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const [load] = await db.select({ clientId: cargoLoads.clientId, clientName: cargoLoads.clientName })
+        .from(cargoLoads).where(eq(cargoLoads.id, input.cargoId)).limit(1);
+      if (!load) throw new TRPCError({ code: "NOT_FOUND" });
+      return db.select().from(cargoTrackingPhotos)
+        .where(eq(cargoTrackingPhotos.cargoId, input.cargoId))
+        .orderBy(cargoTrackingPhotos.createdAt);
+    }),
+
+  // ===== CAMINHÕES E MOTORISTAS =====
   // Listar caminhões disponíveis (tipo veículo)
   listTrucks: protectedProcedure.query(async () => {
     const db = await getDb();
