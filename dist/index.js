@@ -52,11 +52,13 @@ __export(schema_exports, {
   equipmentPhotos: () => equipmentPhotos,
   equipmentTypes: () => equipmentTypes,
   extraExpenses: () => extraExpenses,
+  financialEntries: () => financialEntries,
   fuelContainerEvents: () => fuelContainerEvents,
   fuelContainers: () => fuelContainers,
   fuelRecords: () => fuelRecords,
   gpsDeviceLinks: () => gpsDeviceLinks,
   gpsHoursLog: () => gpsHoursLog,
+  gpsLocations: () => gpsLocations,
   machineFuel: () => machineFuel,
   machineHours: () => machineHours,
   machineMaintenance: () => machineMaintenance,
@@ -79,8 +81,8 @@ __export(schema_exports, {
   users: () => users,
   vehicleRecords: () => vehicleRecords
 });
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements, userPermissions, chainsaws, fuelContainers, fuelContainerEvents, chainsawChainStock, chainsawChainEvents, chainsawParts, chainsawPartMovements, chainsawServiceOrders, chainsawServiceParts, extraExpenses;
+import { int, mysqlEnum, mysqlTable, text, tinyint, timestamp, varchar } from "drizzle-orm/mysql-core";
+var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements, userPermissions, chainsaws, fuelContainers, fuelContainerEvents, chainsawChainStock, chainsawChainEvents, chainsawParts, chainsawPartMovements, chainsawServiceOrders, chainsawServiceParts, extraExpenses, financialEntries, gpsLocations;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -614,6 +616,11 @@ var init_schema = __esm({
       paymentStatus: mysqlEnum("payment_status_ca", ["pendente", "pago"]).default("pendente").notNull(),
       paidAt: timestamp("paid_at"),
       registeredBy: int("registered_by").references(() => users.id),
+      // GPS do registro de presença
+      latitude: varchar("latitude", { length: 20 }),
+      longitude: varchar("longitude", { length: 20 }),
+      locationName: varchar("location_name", { length: 255 }),
+      // nome do local (fazenda, sede, etc.)
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
     });
@@ -941,6 +948,43 @@ var init_schema = __esm({
       registeredBy: int("registered_by").references(() => users.id),
       registeredByName: varchar("registered_by_name", { length: 255 }),
       createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    financialEntries = mysqlTable("financial_entries", {
+      id: int("id").autoincrement().primaryKey(),
+      type: mysqlEnum("type", ["receita", "despesa"]).notNull(),
+      category: varchar("category", { length: 100 }).notNull(),
+      // Categorias de receita: venda_madeira, servico_corte, servico_plantio, servico_transporte, outro_receita
+      // Categorias de despesa: folha_pagamento, combustivel, manutencao, material, alimentacao, transporte, impostos, aluguel, outro_despesa
+      description: varchar("description", { length: 500 }).notNull(),
+      amount: varchar("amount", { length: 20 }).notNull(),
+      // valor em reais
+      date: timestamp("date").notNull(),
+      referenceMonth: varchar("reference_month", { length: 7 }),
+      // ex: "2026-04" para agrupamento
+      paymentMethod: mysqlEnum("payment_method", ["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).default("pix").notNull(),
+      status: mysqlEnum("status", ["pendente", "confirmado", "cancelado"]).default("confirmado").notNull(),
+      clientId: int("client_id").references(() => clients.id, { onDelete: "set null" }),
+      clientName: varchar("client_name", { length: 255 }),
+      receiptImageUrl: text("receipt_image_url"),
+      notes: text("notes"),
+      registeredBy: int("registered_by").references(() => users.id),
+      registeredByName: varchar("registered_by_name", { length: 255 }),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    gpsLocations = mysqlTable("gps_locations", {
+      id: int("id").autoincrement().primaryKey(),
+      name: varchar("name", { length: 255 }).notNull(),
+      latitude: varchar("latitude", { length: 30 }).notNull(),
+      longitude: varchar("longitude", { length: 30 }).notNull(),
+      radiusMeters: int("radius_meters").default(2e3).notNull(),
+      // raio de detecção em metros
+      isActive: tinyint("is_active").default(1).notNull(),
+      notes: text("notes"),
+      createdBy: int("created_by").references(() => users.id),
+      createdByName: varchar("created_by_name", { length: 255 }),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
     });
   }
 });
@@ -2413,21 +2457,21 @@ var machineHoursRouter = router({
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
-    return equipmentList.map((eq19) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq19.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq19.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq19.id);
+    return equipmentList.map((eq21) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq21.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq21.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq21.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq19.id,
-        equipmentName: eq19.name,
-        brand: eq19.brand,
-        model: eq19.model,
-        status: eq19.status,
+        equipmentId: eq21.id,
+        equipmentName: eq21.name,
+        brand: eq21.brand,
+        model: eq21.model,
+        status: eq21.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -2925,7 +2969,7 @@ var clientPortalRouter = router({
     const allLoads = await db.select().from(cargoLoads).orderBy(desc8(cargoLoads.date)).limit(200);
     const clientNameLower = client.name.toLowerCase();
     const loads = allLoads.filter(
-      (l) => l.clientId === input.clientId || l.clientName && l.clientName.toLowerCase().includes(clientNameLower) || l.destinationId && destIds.includes(l.destinationId)
+      (l) => l.clientId === input.clientId || l.clientName && l.clientName.toLowerCase().includes(clientNameLower) || l.destination && l.destination.toLowerCase().includes(clientNameLower) || l.destinationId && destIds.includes(l.destinationId)
     ).slice(0, 50);
     const replanting = await db.select().from(replantingRecords).where(eq10(replantingRecords.clientId, input.clientId)).orderBy(desc8(replantingRecords.date)).limit(50);
     const payments = await db.select().from(clientPayments).where(eq10(clientPayments.clientId, input.clientId)).orderBy(desc8(clientPayments.referenceDate)).limit(50);
@@ -3466,7 +3510,10 @@ var attendanceRouter = router({
       paymentStatus: collaboratorAttendance.paymentStatus,
       paidAt: collaboratorAttendance.paidAt,
       registeredBy: collaboratorAttendance.registeredBy,
-      createdAt: collaboratorAttendance.createdAt
+      createdAt: collaboratorAttendance.createdAt,
+      latitude: collaboratorAttendance.latitude,
+      longitude: collaboratorAttendance.longitude,
+      locationName: collaboratorAttendance.locationName
     }).from(collaboratorAttendance).innerJoin(collaborators, eq14(collaboratorAttendance.collaboratorId, collaborators.id)).orderBy(desc12(collaboratorAttendance.date));
     let filtered = records;
     if (input?.collaboratorId) {
@@ -3504,7 +3551,11 @@ var attendanceRouter = router({
     dailyValue: z14.string(),
     pixKey: z14.string().optional(),
     activity: z14.string().optional(),
-    observations: z14.string().optional()
+    observations: z14.string().optional(),
+    // GPS
+    latitude: z14.string().optional(),
+    longitude: z14.string().optional(),
+    locationName: z14.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -3518,7 +3569,10 @@ var attendanceRouter = router({
       pixKey: input.pixKey || null,
       activity: input.activity || null,
       observations: input.observations || null,
-      registeredBy: ctx.user.id
+      registeredBy: ctx.user.id,
+      latitude: input.latitude || null,
+      longitude: input.longitude || null,
+      locationName: input.locationName || null
     });
     const dateFormatted = (/* @__PURE__ */ new Date(input.date + "T12:00:00")).toLocaleDateString("pt-BR");
     const activityInfo = input.activity ? ` (${input.activity})` : "";
@@ -3527,6 +3581,7 @@ var attendanceRouter = router({
       title: `\u2705 Presen\xE7a registrada \u2014 ${collaboratorName}`,
       content: `${collaboratorName}${activityInfo} teve presen\xE7a registrada em ${dateFormatted}.
 V\xEDnculo: ${employmentLabel} | Di\xE1ria: R$ ${input.dailyValue}${input.pixKey ? " | PIX: " + input.pixKey : ""}
+Local: ${input.locationName || "N\xE3o informado"}
 Registrado por: ${ctx.user.name}`
     }).catch(() => {
     });
@@ -3944,7 +3999,8 @@ var SYSTEM_MODULES = [
   { slug: "gps", label: "Rastreamento GPS", group: "Opera\xE7\xF5es" },
   { slug: "motosserras", label: "Motosserras", group: "Maquin\xE1rio" },
   { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
-  { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" }
+  { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" },
+  { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Administrativo" }
 ];
 var PROFILES = {
   admin: {
@@ -3966,6 +4022,10 @@ var PROFILES = {
   motosserrista: {
     label: "Motosserrista",
     modules: ["equipamentos", "manutencao", "motosserras"]
+  },
+  lider: {
+    label: "L\xEDder",
+    modules: ["presencas", "colaboradores"]
   },
   custom: {
     label: "Personalizado",
@@ -4792,8 +4852,339 @@ var dashboardRouter = router({
   })
 });
 
-// server/routers.ts
+// server/routers/financial.ts
 import { z as z20 } from "zod";
+init_db();
+init_schema();
+import { desc as desc16, eq as eq19, and as and11, gte as gte5, lte as lte5, sql as sql5 } from "drizzle-orm";
+var financialRouter = router({
+  // ── Listar lançamentos ──────────────────────────────────────────────────
+  list: protectedProcedure.input(z20.object({
+    type: z20.enum(["receita", "despesa", "all"]).default("all"),
+    dateFrom: z20.string().optional(),
+    dateTo: z20.string().optional(),
+    referenceMonth: z20.string().optional(),
+    // "2026-04"
+    status: z20.string().optional(),
+    category: z20.string().optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const conditions = [];
+    if (input.type !== "all") {
+      conditions.push(eq19(financialEntries.type, input.type));
+    }
+    if (input.dateFrom) {
+      conditions.push(gte5(financialEntries.date, new Date(input.dateFrom)));
+    }
+    if (input.dateTo) {
+      const to = new Date(input.dateTo);
+      to.setHours(23, 59, 59, 999);
+      conditions.push(lte5(financialEntries.date, to));
+    }
+    if (input.referenceMonth) {
+      conditions.push(eq19(financialEntries.referenceMonth, input.referenceMonth));
+    }
+    if (input.status) {
+      conditions.push(eq19(financialEntries.status, input.status));
+    }
+    if (input.category) {
+      conditions.push(eq19(financialEntries.category, input.category));
+    }
+    return db.select().from(financialEntries).where(conditions.length > 0 ? and11(...conditions) : void 0).orderBy(desc16(financialEntries.date));
+  }),
+  // ── Resumo mensal ────────────────────────────────────────────────────────
+  monthlySummary: protectedProcedure.input(z20.object({
+    referenceMonth: z20.string()
+    // "2026-04"
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { totalReceitas: 0, totalDespesas: 0, saldo: 0, entries: [] };
+    const [year, month] = input.referenceMonth.split("-").map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const entries = await db.select().from(financialEntries).where(and11(
+      gte5(financialEntries.date, startDate),
+      lte5(financialEntries.date, endDate),
+      eq19(financialEntries.status, "confirmado")
+    )).orderBy(desc16(financialEntries.date));
+    const totalReceitas = entries.filter((e) => e.type === "receita").reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
+    const totalDespesas = entries.filter((e) => e.type === "despesa").reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
+    return {
+      totalReceitas,
+      totalDespesas,
+      saldo: totalReceitas - totalDespesas,
+      entries
+    };
+  }),
+  // ── Resumo por categoria ─────────────────────────────────────────────────
+  categoryBreakdown: protectedProcedure.input(z20.object({
+    referenceMonth: z20.string(),
+    type: z20.enum(["receita", "despesa"])
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const [year, month] = input.referenceMonth.split("-").map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const rows = await db.select({
+      category: financialEntries.category,
+      total: sql5`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
+      count: sql5`count(*)`
+    }).from(financialEntries).where(and11(
+      eq19(financialEntries.type, input.type),
+      gte5(financialEntries.date, startDate),
+      lte5(financialEntries.date, endDate),
+      eq19(financialEntries.status, "confirmado")
+    )).groupBy(financialEntries.category).orderBy(sql5`total desc`);
+    return rows.map((r) => ({
+      category: r.category,
+      total: Number(r.total),
+      count: Number(r.count)
+    }));
+  }),
+  // ── Histórico mensal (últimos 12 meses) ──────────────────────────────────
+  monthlyHistory: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db.select({
+      referenceMonth: financialEntries.referenceMonth,
+      type: financialEntries.type,
+      total: sql5`coalesce(sum(cast(amount as decimal(10,2))), 0)`
+    }).from(financialEntries).where(and11(
+      eq19(financialEntries.status, "confirmado"),
+      sql5`reference_month >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 MONTH), '%Y-%m')`
+    )).groupBy(financialEntries.referenceMonth, financialEntries.type).orderBy(financialEntries.referenceMonth);
+    const byMonth = {};
+    for (const r of rows) {
+      const m = r.referenceMonth || "desconhecido";
+      if (!byMonth[m]) byMonth[m] = { month: m, receitas: 0, despesas: 0, saldo: 0 };
+      if (r.type === "receita") byMonth[m].receitas += Number(r.total);
+      else byMonth[m].despesas += Number(r.total);
+      byMonth[m].saldo = byMonth[m].receitas - byMonth[m].despesas;
+    }
+    return Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month));
+  }),
+  // ── Criar lançamento ─────────────────────────────────────────────────────
+  create: protectedProcedure.input(z20.object({
+    type: z20.enum(["receita", "despesa"]),
+    category: z20.string().min(1),
+    description: z20.string().min(1),
+    amount: z20.string().min(1),
+    date: z20.string(),
+    paymentMethod: z20.enum(["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).default("pix"),
+    status: z20.enum(["pendente", "confirmado", "cancelado"]).default("confirmado"),
+    clientId: z20.number().optional(),
+    clientName: z20.string().optional(),
+    receiptImageUrl: z20.string().optional(),
+    notes: z20.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const dateObj = new Date(input.date);
+    const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
+    const [result] = await db.insert(financialEntries).values({
+      type: input.type,
+      category: input.category,
+      description: input.description,
+      amount: input.amount,
+      date: dateObj,
+      referenceMonth: refMonth,
+      paymentMethod: input.paymentMethod,
+      status: input.status,
+      clientId: input.clientId,
+      clientName: input.clientName,
+      receiptImageUrl: input.receiptImageUrl,
+      notes: input.notes,
+      registeredBy: ctx.user.id,
+      registeredByName: ctx.user.name
+    });
+    return { id: result.insertId };
+  }),
+  // ── Atualizar lançamento ─────────────────────────────────────────────────
+  update: protectedProcedure.input(z20.object({
+    id: z20.number(),
+    type: z20.enum(["receita", "despesa"]).optional(),
+    category: z20.string().optional(),
+    description: z20.string().optional(),
+    amount: z20.string().optional(),
+    date: z20.string().optional(),
+    paymentMethod: z20.enum(["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).optional(),
+    status: z20.enum(["pendente", "confirmado", "cancelado"]).optional(),
+    clientName: z20.string().optional(),
+    notes: z20.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const { id, date: date2, ...rest } = input;
+    const updateData = { ...rest };
+    if (date2) {
+      const dateObj = new Date(date2);
+      updateData.date = dateObj;
+      updateData.referenceMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
+    }
+    await db.update(financialEntries).set(updateData).where(eq19(financialEntries.id, id));
+    return { success: true };
+  }),
+  // ──   // ── Excluir lançamento ───────────────────────────────────────────
+  delete: protectedProcedure.input(z20.object({ id: z20.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.delete(financialEntries).where(eq19(financialEntries.id, input.id));
+    return { success: true };
+  }),
+  // ── Lançar folha de pagamento automaticamente ──────────────────────
+  launchPayroll: protectedProcedure.input(z20.object({
+    referenceMonth: z20.string()
+    // "YYYY-MM"
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const existing = await db.select({ id: financialEntries.id }).from(financialEntries).where(and11(
+      eq19(financialEntries.referenceMonth, input.referenceMonth),
+      eq19(financialEntries.category, "folha_pagamento"),
+      eq19(financialEntries.type, "despesa")
+    )).limit(1);
+    if (existing.length > 0) {
+      return { success: false, alreadyExists: true, message: "Folha de pagamento j\xE1 foi lan\xE7ada para este m\xEAs." };
+    }
+    const [year, month] = input.referenceMonth.split("-").map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    const attendances = await db.select().from(collaboratorAttendance).where(and11(
+      gte5(collaboratorAttendance.date, startDate),
+      lte5(collaboratorAttendance.date, endDate)
+    ));
+    if (attendances.length === 0) {
+      return { success: false, alreadyExists: false, message: "Nenhuma presen\xE7a registrada neste m\xEAs." };
+    }
+    const totalAmount = attendances.reduce((sum, a) => {
+      return sum + parseFloat(a.dailyValue || "0");
+    }, 0);
+    const totalDays = attendances.length;
+    const monthNames = [
+      "Janeiro",
+      "Fevereiro",
+      "Mar\xE7o",
+      "Abril",
+      "Maio",
+      "Junho",
+      "Julho",
+      "Agosto",
+      "Setembro",
+      "Outubro",
+      "Novembro",
+      "Dezembro"
+    ];
+    const monthLabel = `${monthNames[month - 1]} ${year}`;
+    await db.insert(financialEntries).values({
+      type: "despesa",
+      category: "folha_pagamento",
+      description: `Folha de Pagamento \u2014 ${monthLabel} (${totalDays} di\xE1rias)`,
+      amount: totalAmount.toFixed(2),
+      date: endDate,
+      referenceMonth: input.referenceMonth,
+      paymentMethod: "pix",
+      status: "confirmado",
+      notes: `Lan\xE7amento autom\xE1tico gerado a partir de ${totalDays} registros de presen\xE7a em ${monthLabel}.`,
+      registeredBy: ctx.user.id,
+      registeredByName: ctx.user.name
+    });
+    return {
+      success: true,
+      alreadyExists: false,
+      totalAmount: totalAmount.toFixed(2),
+      totalDays,
+      message: `Folha de ${monthLabel} lan\xE7ada com sucesso: ${totalDays} di\xE1rias totalizando R$ ${totalAmount.toFixed(2)}.`
+    };
+  }),
+  // ── Verificar se folha já foi lançada ──────────────────────────────
+  checkPayrollStatus: protectedProcedure.input(z20.object({ referenceMonth: z20.string() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const existing = await db.select({ id: financialEntries.id, amount: financialEntries.amount, description: financialEntries.description }).from(financialEntries).where(and11(
+      eq19(financialEntries.referenceMonth, input.referenceMonth),
+      eq19(financialEntries.category, "folha_pagamento"),
+      eq19(financialEntries.type, "despesa")
+    )).limit(1);
+    return { launched: existing.length > 0, entry: existing[0] || null };
+  })
+});
+
+// server/routers/gpsLocations.ts
+import { z as z21 } from "zod";
+import { eq as eq20, desc as desc17 } from "drizzle-orm";
+init_db();
+init_schema();
+var gpsLocationsRouter = router({
+  // ── Listar todos os locais ativos ────────────────────────────────────────
+  list: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    return db.select().from(gpsLocations).orderBy(desc17(gpsLocations.createdAt));
+  }),
+  // ── Listar apenas ativos (para uso na detecção de presença) ──────────────
+  listActive: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    return db.select().from(gpsLocations).where(eq20(gpsLocations.isActive, 1)).orderBy(gpsLocations.name);
+  }),
+  // ── Criar local ──────────────────────────────────────────────────────────
+  create: protectedProcedure.input(z21.object({
+    name: z21.string().min(1, "Nome \xE9 obrigat\xF3rio"),
+    latitude: z21.string().min(1, "Latitude \xE9 obrigat\xF3ria"),
+    longitude: z21.string().min(1, "Longitude \xE9 obrigat\xF3ria"),
+    radiusMeters: z21.number().min(100).max(5e4).default(2e3),
+    notes: z21.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.insert(gpsLocations).values({
+      name: input.name,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      radiusMeters: input.radiusMeters,
+      notes: input.notes || null,
+      isActive: 1,
+      createdBy: ctx.user.id,
+      createdByName: ctx.user.name
+    });
+    return { success: true };
+  }),
+  // ── Atualizar local ──────────────────────────────────────────────────────
+  update: protectedProcedure.input(z21.object({
+    id: z21.number(),
+    name: z21.string().min(1).optional(),
+    latitude: z21.string().optional(),
+    longitude: z21.string().optional(),
+    radiusMeters: z21.number().min(100).max(5e4).optional(),
+    notes: z21.string().optional(),
+    isActive: z21.number().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const { id, ...rest } = input;
+    const updateData = {};
+    if (rest.name !== void 0) updateData.name = rest.name;
+    if (rest.latitude !== void 0) updateData.latitude = rest.latitude;
+    if (rest.longitude !== void 0) updateData.longitude = rest.longitude;
+    if (rest.radiusMeters !== void 0) updateData.radiusMeters = rest.radiusMeters;
+    if (rest.notes !== void 0) updateData.notes = rest.notes;
+    if (rest.isActive !== void 0) updateData.isActive = rest.isActive;
+    await db.update(gpsLocations).set(updateData).where(eq20(gpsLocations.id, id));
+    return { success: true };
+  }),
+  // ── Excluir local ────────────────────────────────────────────────────────
+  delete: protectedProcedure.input(z21.object({ id: z21.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.delete(gpsLocations).where(eq20(gpsLocations.id, input.id));
+    return { success: true };
+  })
+});
+
+// server/routers.ts
+import { z as z22 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -4902,10 +5293,10 @@ var appRouter = router({
   dashboard: dashboardRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z20.object({
-      name: z20.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z20.string().email("Email inv\xE1lido"),
-      password: z20.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z22.object({
+      name: z22.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z22.string().email("Email inv\xE1lido"),
+      password: z22.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -4920,9 +5311,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z20.object({
-      email: z20.string().email("Email inv\xE1lido"),
-      password: z20.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z22.object({
+      email: z22.string().email("Email inv\xE1lido"),
+      password: z22.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -4938,11 +5329,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z20.object({
-      seedKey: z20.string(),
-      email: z20.string().email(),
-      name: z20.string(),
-      password: z20.string().min(4)
+    seedAdmin: publicProcedure.input(z22.object({
+      seedKey: z22.string(),
+      email: z22.string().email(),
+      name: z22.string(),
+      password: z22.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -4952,9 +5343,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z20.object({
-      email: z20.string().email("Email inv\xE1lido"),
-      origin: z20.string().url().optional()
+    forgotPassword: publicProcedure.input(z22.object({
+      email: z22.string().email("Email inv\xE1lido"),
+      origin: z22.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -4968,9 +5359,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z20.object({
-      token: z20.string().min(1),
-      password: z20.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z22.object({
+      token: z22.string().min(1),
+      password: z22.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -4979,10 +5370,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq19 } = await import("drizzle-orm");
+      const { eq: eq21 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq19(users3.id, resetToken.userId));
+      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq21(users3.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -5010,8 +5401,10 @@ var appRouter = router({
   traccar: traccarRouter,
   permissions: permissionsRouter,
   chainsawModule: chainsawModuleRouter,
-  extraExpenses: extraExpensesRouter
-  // TODO: add feature routers here, e.g.
+  extraExpenses: extraExpensesRouter,
+  financial: financialRouter,
+  gpsLocations: gpsLocationsRouter
+  // TODO: add feature routers heree, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>
   //     db.getUserTodos(ctx.user.id)
