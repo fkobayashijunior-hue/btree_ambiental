@@ -1073,3 +1073,10 @@
 - [ ] Exportação PDF na aba Relatório do módulo financeiro (padrão BTREE)
 - [ ] Notificações automáticas de pagamento pendente (> 7 dias)
 - [ ] Corrigir erro 404 do Service Worker PWA (rotas novas não encontradas no cache do PWA)
+
+---
+
+## 🚀 SPRINT 04/04/2026 — PARTE 3
+
+- [ ] Gerar SQL para criação das tabelas financial_entries e gps_locations (para phpMyAdmin)
+- [ ] Reposicionar botões de acesso rápido no topo do painel (como era antes, maiores)
