@@ -1088,3 +1088,4 @@
 - [ ] BUG: Dados de presenças antigas sumiram - investigar e corrigir filtro/query
 - [ ] Exibir imagens das motosserras vindas do cadastro de Setores e Equipamentos
 - [ ] BUG: Aba Mensal mostra 0 presenças em março/2026 - investigar datas no banco da Hostinger
+- [ ] BUG: Portal do cliente Fazenda GW mostra 0 cargas, 0 replantios e 0 pagamentos

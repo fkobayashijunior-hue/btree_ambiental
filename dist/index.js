@@ -2975,15 +2975,51 @@ var clientPortalRouter = router({
       )
     ).limit(1);
     if (!client) throw new Error("Acesso n\xE3o autorizado.");
-    const clientDestinations = await db.select({ id: cargoDestinations.id }).from(cargoDestinations).where(eq10(cargoDestinations.clientId, input.clientId));
-    const destIds = clientDestinations.map((d) => d.id);
-    const allLoads = await db.select().from(cargoLoads).orderBy(desc8(cargoLoads.date)).limit(200);
-    const clientNameLower = client.name.toLowerCase();
-    const loads = allLoads.filter(
-      (l) => l.clientId === input.clientId || l.clientName && l.clientName.toLowerCase().includes(clientNameLower) || l.destination && l.destination.toLowerCase().includes(clientNameLower) || l.destinationId && destIds.includes(l.destinationId)
-    ).slice(0, 50);
-    const replanting = await db.select().from(replantingRecords).where(eq10(replantingRecords.clientId, input.clientId)).orderBy(desc8(replantingRecords.date)).limit(50);
-    const payments = await db.select().from(clientPayments).where(eq10(clientPayments.clientId, input.clientId)).orderBy(desc8(clientPayments.referenceDate)).limit(50);
+    let destIds = [];
+    try {
+      const clientDestinations = await db.select({ id: cargoDestinations.id }).from(cargoDestinations).where(eq10(cargoDestinations.clientId, input.clientId));
+      destIds = clientDestinations.map((d) => d.id);
+    } catch (e) {
+      console.error("[Portal] Erro ao buscar destinos:", e);
+    }
+    let loads = [];
+    try {
+      const allLoads = await db.select().from(cargoLoads).orderBy(desc8(cargoLoads.date)).limit(200);
+      console.log(`[Portal] Total cargas no banco: ${allLoads.length}, clientId buscado: ${input.clientId}, clientName: ${client.name}`);
+      const clientNameLower = client.name.toLowerCase();
+      loads = allLoads.filter((l) => {
+        const matchClientId = l.clientId === input.clientId;
+        const matchClientName = l.clientName && l.clientName.toLowerCase().includes(clientNameLower);
+        const matchDestination = l.destination && l.destination.toLowerCase().includes(clientNameLower);
+        const matchDestId = l.destinationId && destIds.includes(l.destinationId);
+        return matchClientId || matchClientName || matchDestination || matchDestId;
+      }).slice(0, 50);
+      console.log(`[Portal] Cargas filtradas para cliente: ${loads.length}`);
+      if (allLoads.length > 0) {
+        console.log(`[Portal] Amostra carga[0]: clientId=${allLoads[0].clientId} (tipo: ${typeof allLoads[0].clientId}), clientName=${allLoads[0].clientName}, destination=${allLoads[0].destination}`);
+      }
+    } catch (e) {
+      console.error("[Portal] Erro ao buscar cargas:", e);
+      try {
+        const [rawLoads] = await db.execute(`SELECT * FROM cargo_loads WHERE client_id = ${input.clientId} OR client_name LIKE '%${client.name}%' ORDER BY date DESC LIMIT 50`);
+        loads = Array.isArray(rawLoads) ? rawLoads : [];
+        console.log(`[Portal] Fallback SQL raw: ${loads.length} cargas encontradas`);
+      } catch (e2) {
+        console.error("[Portal] Erro no fallback SQL:", e2);
+      }
+    }
+    let replanting = [];
+    try {
+      replanting = await db.select().from(replantingRecords).where(eq10(replantingRecords.clientId, input.clientId)).orderBy(desc8(replantingRecords.date)).limit(50);
+    } catch (e) {
+      console.error("[Portal] Erro ao buscar replantios:", e);
+    }
+    let payments = [];
+    try {
+      payments = await db.select().from(clientPayments).where(eq10(clientPayments.clientId, input.clientId)).orderBy(desc8(clientPayments.referenceDate)).limit(50);
+    } catch (e) {
+      console.error("[Portal] Erro ao buscar pagamentos:", e);
+    }
     return { client, loads, replanting, payments };
   }),
   // ── DEFINIR/ALTERAR SENHA DO CLIENTE (admin) ──

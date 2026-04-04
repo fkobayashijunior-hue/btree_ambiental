@@ -71,46 +71,78 @@ export const clientPortalRouter = router({
       if (!client) throw new Error("Acesso não autorizado.");
 
       // Buscar destinos vinculados a este cliente
-      const clientDestinations = await db
-        .select({ id: cargoDestinations.id })
-        .from(cargoDestinations)
-        .where(eq(cargoDestinations.clientId, input.clientId));
-      const destIds = clientDestinations.map(d => d.id);
+      let destIds: number[] = [];
+      try {
+        const clientDestinations = await db
+          .select({ id: cargoDestinations.id })
+          .from(cargoDestinations)
+          .where(eq(cargoDestinations.clientId, input.clientId));
+        destIds = clientDestinations.map(d => d.id);
+      } catch (e) {
+        console.error('[Portal] Erro ao buscar destinos:', e);
+      }
 
-      // Cargas vinculadas ao cliente:
-      // 1. Por clientId direto
-      // 2. Por clientName (fallback para cargas antigas sem clientId)
-      // 3. Por destinationId vinculado ao cliente
-      const allLoads = await db
-        .select()
-        .from(cargoLoads)
-        .orderBy(desc(cargoLoads.date))
-        .limit(200);
+      // Cargas vinculadas ao cliente - buscar com SQL direto para evitar problemas de schema
+      let loads: any[] = [];
+      try {
+        const allLoads = await db
+          .select()
+          .from(cargoLoads)
+          .orderBy(desc(cargoLoads.date))
+          .limit(200);
 
-      const clientNameLower = client.name.toLowerCase();
-      // Buscar também nomes alternativos do cliente (ex: apelido, nome da fazenda)
-      const loads = allLoads.filter(l =>
-        l.clientId === input.clientId ||
-        (l.clientName && l.clientName.toLowerCase().includes(clientNameLower)) ||
-        (l.destination && l.destination.toLowerCase().includes(clientNameLower)) ||
-        (l.destinationId && destIds.includes(l.destinationId))
-      ).slice(0, 50);
+        console.log(`[Portal] Total cargas no banco: ${allLoads.length}, clientId buscado: ${input.clientId}, clientName: ${client.name}`);
+        
+        const clientNameLower = client.name.toLowerCase();
+        loads = allLoads.filter(l => {
+          const matchClientId = l.clientId === input.clientId;
+          const matchClientName = l.clientName && l.clientName.toLowerCase().includes(clientNameLower);
+          const matchDestination = l.destination && l.destination.toLowerCase().includes(clientNameLower);
+          const matchDestId = l.destinationId && destIds.includes(l.destinationId);
+          return matchClientId || matchClientName || matchDestination || matchDestId;
+        }).slice(0, 50);
+        
+        console.log(`[Portal] Cargas filtradas para cliente: ${loads.length}`);
+        if (allLoads.length > 0) {
+          console.log(`[Portal] Amostra carga[0]: clientId=${allLoads[0].clientId} (tipo: ${typeof allLoads[0].clientId}), clientName=${allLoads[0].clientName}, destination=${allLoads[0].destination}`);
+        }
+      } catch (e) {
+        console.error('[Portal] Erro ao buscar cargas:', e);
+        // Fallback: buscar cargas diretamente por client_id via SQL raw
+        try {
+          const [rawLoads] = await db.execute(`SELECT * FROM cargo_loads WHERE client_id = ${input.clientId} OR client_name LIKE '%${client.name}%' ORDER BY date DESC LIMIT 50`) as any;
+          loads = Array.isArray(rawLoads) ? rawLoads : [];
+          console.log(`[Portal] Fallback SQL raw: ${loads.length} cargas encontradas`);
+        } catch (e2) {
+          console.error('[Portal] Erro no fallback SQL:', e2);
+        }
+      }
 
       // Replantios vinculados ao cliente
-      const replanting = await db
-        .select()
-        .from(replantingRecords)
-        .where(eq(replantingRecords.clientId, input.clientId))
-        .orderBy(desc(replantingRecords.date))
-        .limit(50);
+      let replanting: any[] = [];
+      try {
+        replanting = await db
+          .select()
+          .from(replantingRecords)
+          .where(eq(replantingRecords.clientId, input.clientId))
+          .orderBy(desc(replantingRecords.date))
+          .limit(50);
+      } catch (e) {
+        console.error('[Portal] Erro ao buscar replantios:', e);
+      }
 
       // Pagamentos vinculados ao cliente
-      const payments = await db
-        .select()
-        .from(clientPayments)
-        .where(eq(clientPayments.clientId, input.clientId))
-        .orderBy(desc(clientPayments.referenceDate))
-        .limit(50);
+      let payments: any[] = [];
+      try {
+        payments = await db
+          .select()
+          .from(clientPayments)
+          .where(eq(clientPayments.clientId, input.clientId))
+          .orderBy(desc(clientPayments.referenceDate))
+          .limit(50);
+      } catch (e) {
+        console.error('[Portal] Erro ao buscar pagamentos:', e);
+      }
 
       return { client, loads, replanting, payments };
     }),
