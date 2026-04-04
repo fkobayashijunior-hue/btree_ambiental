@@ -78,3 +78,77 @@ async function startServer() {
 }
 
 startServer().catch(console.error);
+
+// ── Cron job: verificar pagamentos pendentes toda segunda-feira às 8h ────────
+function schedulePendingPaymentsCheck() {
+  const checkAndSchedule = async () => {
+    const now = new Date();
+    // Calcular próxima segunda-feira às 8h
+    const next = new Date(now);
+    const dayOfWeek = next.getDay(); // 0=dom, 1=seg, ..., 6=sáb
+    const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7 || 7;
+    next.setDate(next.getDate() + daysUntilMonday);
+    next.setHours(8, 0, 0, 0);
+    const msUntilNext = next.getTime() - now.getTime();
+
+    setTimeout(async () => {
+      try {
+        const { getDb } = await import('../db');
+        const { notifyOwner } = await import('./notification');
+        const { collaboratorAttendance, collaborators } = await import('../../drizzle/schema');
+        const { eq, and, lt } = await import('drizzle-orm');
+
+        const db = await getDb();
+        if (!db) return;
+
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const pendingRecords = await db
+          .select({
+            id: collaboratorAttendance.id,
+            collaboratorName: collaborators.name,
+            date: collaboratorAttendance.date,
+            dailyValue: collaboratorAttendance.dailyValue,
+          })
+          .from(collaboratorAttendance)
+          .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
+          .where(and(
+            eq(collaboratorAttendance.paymentStatus, 'pendente'),
+            lt(collaboratorAttendance.date, sevenDaysAgo)
+          ));
+
+        if (pendingRecords.length > 0) {
+          const totalGeral = pendingRecords.reduce((sum: number, r: any) => sum + parseFloat(r.dailyValue || '0'), 0);
+          const byCollab: Record<string, { count: number; total: number }> = {};
+          for (const r of pendingRecords) {
+            if (!byCollab[r.collaboratorName]) byCollab[r.collaboratorName] = { count: 0, total: 0 };
+            byCollab[r.collaboratorName].count++;
+            byCollab[r.collaboratorName].total += parseFloat(r.dailyValue || '0');
+          }
+          const lines = Object.entries(byCollab)
+            .map(([name, d]) => `• ${name}: ${d.count} dia(s) — R$ ${d.total.toFixed(2)}`)
+            .join('\n');
+          await notifyOwner({
+            title: `⚠️ Alerta semanal: ${pendingRecords.length} pagamento(s) pendente(s)`,
+            content: `Relatório semanal de pagamentos pendentes há mais de 7 dias.\n\nTotal: R$ ${totalGeral.toFixed(2)}\n\n${lines}\n\nAcesse o sistema para realizar os pagamentos.`,
+          }).catch(() => {});
+          console.log(`[CronJob] Notificou ${pendingRecords.length} pagamentos pendentes.`);
+        } else {
+          console.log('[CronJob] Nenhum pagamento pendente há mais de 7 dias.');
+        }
+      } catch (err) {
+        console.error('[CronJob] Erro ao verificar pagamentos pendentes:', err);
+      }
+      // Agendar próxima execução
+      checkAndSchedule();
+    }, msUntilNext);
+
+    const nextDate = new Date(now.getTime() + msUntilNext);
+    console.log(`[CronJob] Próxima verificação de pagamentos pendentes: ${nextDate.toLocaleString('pt-BR')}`);
+  };
+
+  checkAndSchedule();
+}
+
+schedulePendingPaymentsCheck();

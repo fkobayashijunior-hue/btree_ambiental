@@ -192,6 +192,57 @@ export const appRouter = router({
   extraExpenses: extraExpensesRouter,
   financial: financialRouter,
   gpsLocations: gpsLocationsRouter,
+  // Procedure de migração para criar tabelas faltantes na produção
+  migrations: router({
+    run: publicProcedure
+      .input(z.object({ key: z.string() }))
+      .mutation(async ({ input }) => {
+        if (input.key !== 'BTREE_SEED_2026') throw new Error('Chave inválida');
+        const { getDb } = await import('./db');
+        const db = await getDb();
+        if (!db) throw new Error('Banco de dados não disponível');
+        const results: string[] = [];
+        // Criar tabela financial_entries se não existir
+        try {
+          await db.execute(`
+            CREATE TABLE IF NOT EXISTS financial_entries (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              type ENUM('receita','despesa') NOT NULL,
+              category VARCHAR(100) NOT NULL,
+              description VARCHAR(500) NOT NULL,
+              amount DECIMAL(10,2) NOT NULL,
+              date DATE NOT NULL,
+              reference_month VARCHAR(7) NOT NULL,
+              payment_method VARCHAR(50),
+              notes TEXT,
+              created_by INT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+          `);
+          results.push('financial_entries: OK');
+        } catch (e: any) { results.push('financial_entries: ' + e.message); }
+        // Criar tabela gps_locations se não existir
+        try {
+          await db.execute(`
+            CREATE TABLE IF NOT EXISTS gps_locations (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              name VARCHAR(200) NOT NULL,
+              latitude DECIMAL(10,8) NOT NULL,
+              longitude DECIMAL(11,8) NOT NULL,
+              radius_meters INT NOT NULL DEFAULT 500,
+              is_active TINYINT(1) NOT NULL DEFAULT 1,
+              notes TEXT,
+              created_by INT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+          `);
+          results.push('gps_locations: OK');
+        } catch (e: any) { results.push('gps_locations: ' + e.message); }
+        return { success: true, results };
+      }),
+  }),
   // TODO: add feature routers heree, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>

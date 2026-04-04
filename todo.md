@@ -1064,3 +1064,12 @@
 
 ### Avatar do Usuário Logado
 - [x] Exibir foto do colaborador logado no menu lateral (já estava implementado via getMyPhoto)
+
+---
+
+## 🚀 SPRINT 04/04/2026 — PARTE 2
+
+- [ ] Criar tabela financial_entries no banco da Hostinger via SQL
+- [ ] Exportação PDF na aba Relatório do módulo financeiro (padrão BTREE)
+- [ ] Notificações automáticas de pagamento pendente (> 7 dias)
+- [ ] Corrigir erro 404 do Service Worker PWA (rotas novas não encontradas no cache do PWA)

@@ -13,7 +13,7 @@ import {
   Users, Plus, Calendar, ChevronDown, ChevronUp, Loader2,
   FileDown, ChevronLeft, ChevronRight, CheckCircle2, Clock,
   DollarSign, User, CalendarDays, LayoutList, Trash2,
-  MapPin, Navigation, AlertCircle, Banknote
+  MapPin, Navigation, AlertCircle, Banknote, Bell
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -180,6 +180,17 @@ export default function AttendanceList() {
     { referenceMonth: currentRefMonth },
     { enabled: isAdmin }
   );
+  const checkPendingMutation = trpc.attendance.checkPendingPayments.useMutation({
+    onSuccess: (result) => {
+      if (result.count === 0) {
+        toast.success("Nenhum pagamento pendente há mais de 7 dias.");
+      } else {
+        toast.warning(`⚠️ ${result.count} pagamento(s) pendente(s) há mais de 7 dias. Notificação enviada ao administrador.`);
+      }
+    },
+    onError: (e) => toast.error(e.message || "Erro ao verificar pagamentos"),
+  });
+
   const launchPayrollMutation = trpc.financial.launchPayroll.useMutation({
     onSuccess: (result) => {
       if (result.alreadyExists) {
@@ -478,6 +489,22 @@ export default function AttendanceList() {
           <p className="text-gray-500 text-sm mt-0.5">Registro e pagamento de colaboradores</p>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={() => checkPendingMutation.mutate()}
+              disabled={checkPendingMutation.isPending}
+              className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
+              title="Verificar pagamentos pendentes há mais de 7 dias"
+            >
+              {checkPendingMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Bell className="h-4 w-4" />
+              )}
+              Verificar Pendentes
+            </Button>
+          )}
           {isAdmin && (
             <Button
               variant="outline"

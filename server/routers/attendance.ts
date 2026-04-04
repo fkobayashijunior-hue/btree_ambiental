@@ -3,7 +3,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { collaboratorAttendance, collaborators, users } from "../../drizzle/schema";
-import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray, lt } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { notifyTeam } from "../notifyTeam";
 export const attendanceRouter = router({
@@ -163,5 +163,64 @@ export const attendanceRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       await db.delete(collaboratorAttendance).where(eq(collaboratorAttendance.id, input.id));
       return { success: true };
+    }),
+
+  // Verificar e notificar pagamentos pendentes há mais de 7 dias
+  checkPendingPayments: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      // Data limite: 7 dias atrás
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const pendingRecords = await db
+        .select({
+          id: collaboratorAttendance.id,
+          collaboratorName: collaborators.name,
+          date: collaboratorAttendance.date,
+          dailyValue: collaboratorAttendance.dailyValue,
+          pixKey: collaboratorAttendance.pixKey,
+          activity: collaboratorAttendance.activity,
+        })
+        .from(collaboratorAttendance)
+        .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
+        .where(
+          and(
+            eq(collaboratorAttendance.paymentStatus, "pendente"),
+            lt(collaboratorAttendance.date, sevenDaysAgo)
+          )
+        )
+        .orderBy(collaboratorAttendance.date);
+
+      if (pendingRecords.length === 0) {
+        return { success: true, count: 0, message: "Nenhum pagamento pendente há mais de 7 dias." };
+      }
+
+      // Agrupar por colaborador
+      const byCollaborator: Record<string, { count: number; total: number; oldest: string }> = {};
+      for (const r of pendingRecords) {
+        const name = r.collaboratorName;
+        if (!byCollaborator[name]) {
+          byCollaborator[name] = { count: 0, total: 0, oldest: new Date(r.date).toLocaleDateString("pt-BR") };
+        }
+        byCollaborator[name].count++;
+        byCollaborator[name].total += parseFloat(r.dailyValue || "0");
+      }
+
+      const lines = Object.entries(byCollaborator)
+        .map(([name, data]) => `• ${name}: ${data.count} dia(s) — R$ ${data.total.toFixed(2)} (desde ${data.oldest})`)
+        .join("\n");
+
+      const totalGeral = pendingRecords.reduce((sum, r) => sum + parseFloat(r.dailyValue || "0"), 0);
+
+      await notifyOwner({
+        title: `⚠️ ${pendingRecords.length} pagamento(s) pendente(s) há mais de 7 dias`,
+        content: `Existem ${pendingRecords.length} presença(s) com pagamento pendente há mais de 7 dias.\n\nTotal a pagar: R$ ${totalGeral.toFixed(2)}\n\nDetalhamento:\n${lines}\n\nAcesse o sistema para realizar os pagamentos.`,
+      }).catch(() => {});
+
+      return { success: true, count: pendingRecords.length, total: totalGeral, details: byCollaborator };
     }),
 });
