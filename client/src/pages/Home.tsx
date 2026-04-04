@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Package, Fuel, Users, Calendar, Leaf, DollarSign, Wrench, AlertTriangle, ShoppingCart, CheckCircle2, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { Truck, Package, Fuel, Users, Calendar, Leaf, DollarSign, Wrench, AlertTriangle, ShoppingCart, CheckCircle2, Clock, ChevronLeft, ChevronRight, ClipboardList, UserCheck, Layers, Car, Globe, Scissors, Receipt, Wallet, Map, Navigation } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -76,6 +78,25 @@ export default function Home() {
     setSelectedYear(now.getFullYear());
   };
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
+  // Módulos de acesso rápido
+  const quickModules = [
+    { icon: ClipboardList, label: "Presenças", path: "/presencas", color: "bg-blue-500", slug: "presencas" },
+    { icon: Truck, label: "Cargas", path: "/cargas", color: "bg-teal-500", slug: "cargas" },
+    { icon: UserCheck, label: "Colaboradores", path: "/colaboradores", color: "bg-emerald-500", slug: "colaboradores" },
+    { icon: Users, label: "Clientes", path: "/clientes", color: "bg-green-500", slug: "clientes" },
+    { icon: Layers, label: "Equipamentos", path: "/setores", color: "bg-orange-500", slug: "equipamentos" },
+    { icon: Car, label: "Abastecimento", path: "/veiculos", color: "bg-yellow-500", slug: "equipamentos" },
+    { icon: Package, label: "Peças", path: "/pecas", color: "bg-purple-500", slug: "pecas" },
+    { icon: Scissors, label: "Motosserras", path: "/motosserras", color: "bg-red-500", slug: "motosserras" },
+    { icon: Wrench, label: "Máquinas", path: "/maquinas", color: "bg-gray-500", slug: "manutencao" },
+    { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", color: "bg-pink-500", slug: null },
+    { icon: Wallet, label: "Financeiro", path: "/financeiro", color: "bg-indigo-500", slug: "financeiro" },
+    { icon: Globe, label: "Portal Cliente", path: "/client-portal", color: "bg-cyan-500", slug: "portal-cliente" },
+  ];
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       {/* Header */}
@@ -87,6 +108,23 @@ export default function Home() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
           <span className="capitalize">{today}</span>
+        </div>
+      </div>
+
+      {/* Acesso Rápido */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido</p>
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+          {quickModules.map((mod) => (
+            <Link key={mod.path} href={mod.path}>
+              <div className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
+                <div className={`w-12 h-12 rounded-xl ${mod.color} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
+                  <mod.icon className="h-6 w-6 text-white" />
+                </div>
+                <span className="text-xs font-medium text-center text-foreground leading-tight">{mod.label}</span>
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
 
