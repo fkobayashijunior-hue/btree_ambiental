@@ -1080,3 +1080,10 @@
 
 - [ ] Gerar SQL para criação das tabelas financial_entries e gps_locations (para phpMyAdmin)
 - [ ] Reposicionar botões de acesso rápido no topo do painel (como era antes, maiores)
+
+---
+
+## 🐛 BUGS SPRINT 04/04/2026 (Tarde)
+
+- [ ] BUG: Dados de presenças antigas sumiram - investigar e corrigir filtro/query
+- [ ] Exibir imagens das motosserras vindas do cadastro de Setores e Equipamentos
