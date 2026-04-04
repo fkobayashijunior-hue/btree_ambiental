@@ -470,7 +470,86 @@ export default function CargoControl() {
           <p className="text-lg font-medium">Nenhuma carga encontrada</p>
           <p className="text-sm mt-1">Registre a primeira saída de carga</p>
         </div>
+      ) : viewMode === "tracking" ? (
+        /* ===== VIEW: TRACKING TIMELINE ===== */
+        <div className="space-y-4">
+          {filtered.map(cargo => {
+            const currentIdx = TRACKING_STEPS.findIndex(s => s.key === cargo.trackingStatus);
+            const photos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson); } catch { return []; } })() : [];
+            return (
+              <Card key={cargo.id} className="hover:shadow-md transition-shadow overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-50 to-white px-4 py-3 border-b border-emerald-100">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {photos[0] ? (
+                        <img src={photos[0]} alt="Carga" className="w-10 h-10 rounded-lg object-cover border border-gray-200" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                          <Package className="h-5 w-5 text-emerald-500" />
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-800">{cargo.vehiclePlate || cargo.vehicleName || "Veículo"}</span>
+                          <Badge className={`text-xs ${STATUS_COLORS[cargo.status]}`}>{cargo.status}</Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 text-xs text-gray-500 mt-0.5">
+                          <span>{cargo.date ? new Date(cargo.date).toLocaleDateString("pt-BR") : "-"}</span>
+                          {cargo.clientName && <span>{cargo.clientName}</span>}
+                          {cargo.destination && <span>→ {cargo.destination}</span>}
+                          <span>{cargo.volumeM3} m³</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-blue-600" title="Atualizar tracking" onClick={() => { setTrackingCargoId(cargo.id); setTrackingStatus((cargo.trackingStatus as TrackingStatus) || "aguardando"); setTrackingNotes(""); }}>
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-emerald-600" title="Ver detalhes" onClick={() => setDetailId(cargo.id)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <CardContent className="p-4">
+                  {/* Timeline horizontal */}
+                  <div className="flex items-center gap-0 overflow-x-auto pb-2">
+                    {TRACKING_STEPS.map((step, idx) => {
+                      const isDone = idx < currentIdx;
+                      const isCurrent = idx === currentIdx;
+                      return (
+                        <div key={step.key} className="flex items-center">
+                          <div className="flex flex-col items-center min-w-[70px]">
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm transition-all ${
+                              isDone ? "bg-emerald-500 text-white shadow-sm" : isCurrent ? "bg-emerald-600 text-white ring-4 ring-emerald-100 shadow-md" : "bg-gray-100 text-gray-400"
+                            }`}>
+                              {isDone ? <CheckCircle2 className="h-4 w-4" /> : <span>{step.icon}</span>}
+                            </div>
+                            <span className={`text-[10px] mt-1 text-center leading-tight font-medium ${
+                              isDone ? "text-emerald-600" : isCurrent ? "text-emerald-700 font-bold" : "text-gray-400"
+                            }`}>{step.label}</span>
+                          </div>
+                          {idx < TRACKING_STEPS.length - 1 && (
+                            <div className={`h-0.5 w-6 mx-0.5 rounded-full ${
+                              idx < currentIdx ? "bg-emerald-400" : "bg-gray-200"
+                            }`} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {cargo.trackingNotes && (
+                    <p className="text-xs text-gray-500 italic mt-2 bg-gray-50 rounded-lg px-3 py-2">
+                      "{cargo.trackingNotes}"
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       ) : (
+        /* ===== VIEW: LISTA PADRÃO ===== */
         <div className="space-y-3">
           {filtered.map(cargo => {
             const trackStep = TRACKING_STEPS.find(s => s.key === cargo.trackingStatus);

@@ -22,6 +22,8 @@ export const SYSTEM_MODULES = [
   { slug: "relatorios",      label: "Relatórios",            group: "Administrativo" },
   { slug: "acesso",          label: "Controle de Acesso",    group: "Administrativo" },
   { slug: "financeiro",      label: "Módulo Financeiro",     group: "Administrativo" },
+  { slug: "replantios",      label: "Replantios",            group: "Operações" },
+  { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" },
 ] as const;
 
 export type ModuleSlug = typeof SYSTEM_MODULES[number]["slug"];

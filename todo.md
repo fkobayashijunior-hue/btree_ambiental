@@ -1162,3 +1162,9 @@
 - [x] Sempre fazer push no GitHub após salvar checkpoint
 - [x] Sempre enviar script SQL ao usuário quando houver alteração no banco de dados
 
+
+## 🐛 BUGS 04/04/2026 — SESSÃO 5b
+- [x] Botão "Ver Tracking" na página Controle de Cargas não mostra tracking, só alterna texto
+- [x] Replantios não aparece no menu lateral do dashboard (faltava slug no SYSTEM_MODULES)
+- [x] Pagamentos de Clientes não aparece no menu lateral do dashboard (faltava slug no SYSTEM_MODULES)
+
