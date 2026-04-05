@@ -1196,15 +1196,15 @@
 ## 🔧 MELHORIAS 05/04/2026 — Peso/Metragem Final + Medidas por Caminhão
 
 ### Peso e Metragem Final
-- [ ] Adicionar campos peso_saida_kg, peso_chegada_kg, metragem_final ao schema cargo_loads
-- [ ] Motorista registra peso e metragem final ao concluir a carga
-- [ ] Admin e cliente visualizam peso e metragem final
+- [x] Adicionar campos peso_saida_kg, peso_chegada_kg, metragem_final ao schema cargo_loads
+- [x] Motorista registra peso e metragem final ao concluir a carga
+- [x] Admin e cliente visualizam peso e metragem final
 
 ### Medidas Padrão por Caminhão
-- [ ] Adicionar campos default_height, default_width, default_length ao schema equipment
-- [ ] Ao selecionar caminhão, preencher medidas padrão do caminhão automaticamente
-- [ ] Admin pode configurar medidas padrão de cada caminhão no cadastro de equipamentos
+- [x] Adicionar campos default_height, default_width, default_length ao schema equipment
+- [x] Ao selecionar caminhão, preencher medidas padrão do caminhão automaticamente
+- [x] Admin pode configurar medidas padrão de cada caminhão no cadastro de equipamentos
 
 ### Git e SQL
-- [ ] Push no GitHub (btree_ambiental)
-- [ ] Gerar script SQL com nova tabela cargo_tracking_photos e novos campos
+- [x] Push no GitHub (btree_ambiental)
+- [x] Gerar script SQL com nova tabela cargo_tracking_photos e novos campos
