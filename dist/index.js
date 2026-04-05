@@ -127,6 +127,7 @@ __export(schema_exports, {
   cargoDestinations: () => cargoDestinations,
   cargoLoads: () => cargoLoads,
   cargoShipments: () => cargoShipments,
+  cargoTrackingPhotos: () => cargoTrackingPhotos,
   chainsawChainEvents: () => chainsawChainEvents,
   chainsawChainStock: () => chainsawChainStock,
   chainsawPartMovements: () => chainsawPartMovements,
@@ -134,6 +135,8 @@ __export(schema_exports, {
   chainsawServiceOrders: () => chainsawServiceOrders,
   chainsawServiceParts: () => chainsawServiceParts,
   chainsaws: () => chainsaws,
+  clientContracts: () => clientContracts,
+  clientPaymentReceipts: () => clientPaymentReceipts,
   clientPayments: () => clientPayments,
   clientPortalAccess: () => clientPortalAccess,
   clients: () => clients,
@@ -174,910 +177,787 @@ __export(schema_exports, {
   users: () => users,
   vehicleRecords: () => vehicleRecords
 });
-import { int, mysqlEnum, mysqlTable, text, tinyint, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users, passwordResetTokens, collaborators, biometricAttendance, userProfiles, equipmentTypes, equipment, cargoShipments, fuelRecords, attendanceRecords, sectors, rolePermissions, clients, cargoDestinations, cargoLoads, machineHours, machineMaintenance, machineFuel, vehicleRecords, parts, partsRequests, clientPortalAccess, replantingRecords, clientPayments, collaboratorDocuments, equipmentPhotos, equipmentMaintenance, purchaseOrders, purchaseOrderItems, collaboratorAttendance, gpsDeviceLinks, gpsHoursLog, preventiveMaintenancePlans, preventiveMaintenanceAlerts, maintenanceTemplates, maintenanceTemplateParts, maintenanceParts, partsStockMovements, userPermissions, chainsaws, fuelContainers, fuelContainerEvents, chainsawChainStock, chainsawChainEvents, chainsawParts, chainsawPartMovements, chainsawServiceOrders, chainsawServiceParts, extraExpenses, financialEntries, gpsLocations;
+import { mysqlTable, int, timestamp, mysqlEnum, varchar, text, index, tinyint } from "drizzle-orm/mysql-core";
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
-    users = mysqlTable("users", {
-      /**
-       * Surrogate primary key. Auto-incremented numeric value managed by the database.
-       * Use this for relations between tables.
-       */
-      id: int("id").autoincrement().primaryKey(),
-      /** Manus OAuth identifier (openId) - NULLABLE para suportar login com email/senha */
-      openId: varchar("openId", { length: 64 }).unique(),
-      name: text("name").notNull(),
-      email: varchar("email", { length: 320 }).notNull().unique(),
-      /** Hash da senha (bcrypt) - para autenticação própria */
-      passwordHash: varchar("password_hash", { length: 255 }),
-      loginMethod: varchar("loginMethod", { length: 64 }).default("email").notNull(),
-      role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-      createdAt: timestamp("createdAt").defaultNow().notNull(),
-      updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-      lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull()
-    });
-    passwordResetTokens = mysqlTable("password_reset_tokens", {
-      id: int("id").autoincrement().primaryKey(),
-      userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-      token: varchar("token", { length: 128 }).notNull().unique(),
-      expiresAt: timestamp("expires_at").notNull(),
-      usedAt: timestamp("used_at"),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    collaborators = mysqlTable("collaborators", {
-      id: int("id").autoincrement().primaryKey(),
-      userId: int("user_id").references(() => users.id, { onDelete: "set null" }),
-      // Dados pessoais
-      name: varchar("name", { length: 255 }).notNull(),
-      email: varchar("email", { length: 320 }),
-      phone: varchar("phone", { length: 20 }),
-      cpf: varchar("cpf", { length: 14 }),
-      rg: varchar("rg", { length: 20 }),
-      // Endereço
-      address: varchar("address", { length: 500 }),
-      city: varchar("city", { length: 100 }),
-      state: varchar("state", { length: 2 }),
-      zipCode: varchar("zip_code", { length: 10 }),
-      // Foto e biometria facial
-      photoUrl: text("photo_url"),
-      faceDescriptor: text("face_descriptor"),
-      // JSON com vetor facial (128 floats)
-      // Função e acesso
-      role: mysqlEnum("role", [
-        "administrativo",
-        "encarregado",
-        "mecanico",
-        "motosserrista",
-        "carregador",
-        "operador",
-        "motorista",
-        "terceirizado"
-      ]).notNull().default("operador"),
-      // Dados de pagamento
-      pixKey: varchar("pix_key", { length: 255 }),
-      dailyRate: varchar("daily_rate", { length: 20 }),
-      employmentType: mysqlEnum("employment_type", ["clt", "terceirizado", "diarista"]).default("diarista"),
-      // Tamanhos para EPI
-      shirtSize: mysqlEnum("shirt_size", ["PP", "P", "M", "G", "GG", "XGG"]),
-      pantsSize: varchar("pants_size", { length: 10 }),
-      shoeSize: varchar("shoe_size", { length: 5 }),
-      bootSize: varchar("boot_size", { length: 5 }),
-      // Status
-      active: int("active").default(1).notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-      createdBy: int("created_by").references(() => users.id)
-    });
-    biometricAttendance = mysqlTable("biometric_attendance", {
-      id: int("id").autoincrement().primaryKey(),
-      collaboratorId: int("collaborator_id").notNull(),
-      checkIn: timestamp("check_in").notNull(),
-      checkOut: timestamp("check_out"),
-      location: varchar("location", { length: 255 }),
-      latitude: varchar("latitude", { length: 20 }),
-      longitude: varchar("longitude", { length: 20 }),
-      confidence: varchar("confidence", { length: 10 }),
-      registeredBy: int("registered_by"),
-      notes: text("notes"),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    userProfiles = mysqlTable("user_profiles", {
-      id: int("id").autoincrement().primaryKey(),
-      userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-      profileType: mysqlEnum("profile_type", [
-        "administrativo",
-        "encarregado",
-        "mecanico",
-        "motosserrista",
-        "carregador",
-        "operador",
-        "motorista",
-        "terceirizado"
-      ]).notNull(),
-      cpf: varchar("cpf", { length: 14 }),
-      phone: varchar("phone", { length: 20 }),
-      pixKey: varchar("pix_key", { length: 255 }),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    equipmentTypes = mysqlTable("equipment_types", {
-      id: int("id").autoincrement().primaryKey(),
-      name: varchar("name", { length: 100 }).notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    equipment = mysqlTable("equipment", {
-      id: int("id").autoincrement().primaryKey(),
-      typeId: int("type_id").notNull().references(() => equipmentTypes.id),
-      name: varchar("name", { length: 255 }).notNull(),
-      brand: varchar("brand", { length: 100 }),
-      model: varchar("model", { length: 100 }),
-      year: int("year"),
-      serialNumber: varchar("serial_number", { length: 100 }),
-      licensePlate: varchar("license_plate", { length: 20 }),
-      imageUrl: text("image_url"),
-      sectorId: int("sector_id"),
-      status: mysqlEnum("status", ["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    cargoShipments = mysqlTable("cargo_shipments", {
-      id: int("id").autoincrement().primaryKey(),
-      truckId: int("truck_id").notNull().references(() => equipment.id),
-      driverId: int("driver_id").notNull().references(() => users.id),
-      date: timestamp("date").notNull(),
-      height: varchar("height", { length: 20 }).notNull(),
-      width: varchar("width", { length: 20 }).notNull(),
-      length: varchar("length", { length: 20 }).notNull(),
-      volume: varchar("volume", { length: 20 }).notNull(),
-      destination: varchar("destination", { length: 255 }),
-      invoiceNumber: varchar("invoice_number", { length: 100 }),
-      woodType: varchar("wood_type", { length: 100 }),
-      client: varchar("client", { length: 255 }),
-      imagesUrls: text("images_urls"),
-      registeredBy: int("registered_by").notNull().references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    fuelRecords = mysqlTable("fuel_records", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
-      operatorId: int("operator_id").notNull().references(() => users.id),
-      date: timestamp("date").notNull(),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "mistura_2t"]).notNull(),
-      liters: varchar("liters", { length: 20 }).notNull(),
-      totalValue: varchar("total_value", { length: 20 }).notNull(),
-      pricePerLiter: varchar("price_per_liter", { length: 20 }),
-      odometer: varchar("odometer", { length: 20 }),
-      station: varchar("station", { length: 255 }),
-      invoiceUrl: text("invoice_url"),
-      odometerImageUrl: text("odometer_image_url"),
-      registeredBy: int("registered_by").notNull().references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
     attendanceRecords = mysqlTable("attendance_records", {
-      id: int("id").autoincrement().primaryKey(),
+      id: int().autoincrement().notNull(),
       userId: int("user_id").notNull().references(() => users.id),
-      date: timestamp("date").notNull(),
+      date: timestamp({ mode: "string" }).notNull(),
       employmentType: mysqlEnum("employment_type", ["clt", "terceirizado", "diarista"]).notNull(),
       dailyValue: varchar("daily_value", { length: 20 }).notNull(),
       pixKey: varchar("pix_key", { length: 255 }).notNull(),
-      function: varchar("function", { length: 100 }).notNull(),
-      observations: text("observations"),
+      function: varchar({ length: 100 }).notNull(),
+      observations: text(),
       paymentStatus: mysqlEnum("payment_status", ["pendente", "pago", "atrasado", "cancelado"]).default("pendente").notNull(),
-      paidAt: timestamp("paid_at"),
+      paidAt: timestamp("paid_at", { mode: "string" }),
       paidBy: int("paid_by").references(() => users.id),
       registeredBy: int("registered_by").notNull().references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
-    sectors = mysqlTable("sectors", {
-      id: int("id").autoincrement().primaryKey(),
-      name: varchar("name", { length: 100 }).notNull(),
-      description: text("description"),
-      color: varchar("color", { length: 20 }).default("#16a34a"),
-      active: int("active").default(1).notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-      createdBy: int("created_by").references(() => users.id)
-    });
-    rolePermissions = mysqlTable("role_permissions", {
-      id: int("id").autoincrement().primaryKey(),
-      roleName: varchar("role_name", { length: 50 }).notNull(),
-      // ex: mecanico, motorista
-      module: varchar("module", { length: 50 }).notNull(),
-      // ex: colaboradores, equipamentos, presenca
-      canView: int("can_view").default(0).notNull(),
-      canCreate: int("can_create").default(0).notNull(),
-      canEdit: int("can_edit").default(0).notNull(),
-      canDelete: int("can_delete").default(0).notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-      updatedBy: int("updated_by").references(() => users.id)
-    });
-    clients = mysqlTable("clients", {
-      id: int("id").autoincrement().primaryKey(),
-      name: varchar("name", { length: 255 }).notNull(),
-      document: varchar("document", { length: 20 }),
-      // CPF ou CNPJ
-      email: varchar("email", { length: 320 }),
-      phone: varchar("phone", { length: 20 }),
-      address: varchar("address", { length: 500 }),
-      city: varchar("city", { length: 100 }),
-      state: varchar("state", { length: 2 }),
-      notes: text("notes"),
-      password: varchar("password", { length: 255 }),
-      // senha para acesso ao portal
-      active: int("active").default(1).notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-      createdBy: int("created_by").references(() => users.id)
+    biometricAttendance = mysqlTable("biometric_attendance", {
+      id: int().autoincrement().notNull(),
+      collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
+      date: timestamp({ mode: "string" }).notNull(),
+      checkInTime: timestamp("check_in_time", { mode: "string" }).notNull(),
+      checkOutTime: timestamp("check_out_time", { mode: "string" }),
+      location: varchar({ length: 255 }),
+      latitude: varchar({ length: 20 }),
+      longitude: varchar({ length: 20 }),
+      photoUrl: text("photo_url"),
+      confidence: varchar({ length: 10 }),
+      registeredBy: int("registered_by").notNull().references(() => users.id),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
     cargoDestinations = mysqlTable("cargo_destinations", {
-      id: int("id").autoincrement().primaryKey(),
-      name: varchar("name", { length: 255 }).notNull(),
-      address: varchar("address", { length: 500 }),
-      city: varchar("city", { length: 100 }),
-      state: varchar("state", { length: 2 }),
-      notes: text("notes"),
-      active: int("active").default(1).notNull(),
-      clientId: int("client_id").references(() => clients.id),
-      // cliente vinculado ao destino
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      createdBy: int("created_by").references(() => users.id)
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 255 }).notNull(),
+      address: varchar({ length: 500 }),
+      city: varchar({ length: 100 }),
+      state: varchar({ length: 2 }),
+      notes: text(),
+      active: int().default(1).notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      createdBy: int("created_by")
     });
     cargoLoads = mysqlTable("cargo_loads", {
-      id: int("id").autoincrement().primaryKey(),
-      date: timestamp("date").notNull(),
-      // Veículo e motorista
+      id: int().autoincrement().notNull(),
+      date: timestamp({ mode: "string" }).notNull(),
       vehicleId: int("vehicle_id").references(() => equipment.id),
       vehiclePlate: varchar("vehicle_plate", { length: 20 }),
       driverCollaboratorId: int("driver_collaborator_id").references(() => collaborators.id),
       driverName: varchar("driver_name", { length: 255 }),
-      // Medidas da carga (em metros)
       heightM: varchar("height_m", { length: 20 }).notNull(),
       widthM: varchar("width_m", { length: 20 }).notNull(),
       lengthM: varchar("length_m", { length: 20 }).notNull(),
       volumeM3: varchar("volume_m3", { length: 20 }).notNull(),
-      // calculado
-      // Informações da carga
       woodType: varchar("wood_type", { length: 100 }),
-      destination: varchar("destination", { length: 255 }),
-      destinationId: int("destination_id").references(() => cargoDestinations.id),
-      weightKg: varchar("weight_kg", { length: 20 }),
-      // peso em kg
+      destination: varchar({ length: 255 }),
       invoiceNumber: varchar("invoice_number", { length: 100 }),
-      // Acompanhamento em tempo real
-      trackingStatus: mysqlEnum("tracking_status", ["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).default("aguardando"),
-      trackingUpdatedAt: timestamp("tracking_updated_at"),
-      trackingNotes: text("tracking_notes"),
-      weightOutPhotoUrl: text("weight_out_photo_url"),
-      // foto da pesagem na saída
-      weightInPhotoUrl: text("weight_in_photo_url"),
-      // foto da pesagem na chegada/destino
-      // Cliente
       clientId: int("client_id").references(() => clients.id),
       clientName: varchar("client_name", { length: 255 }),
-      // Fotos (JSON array de URLs)
       photosJson: text("photos_json"),
-      notes: text("notes"),
-      status: mysqlEnum("status", ["pendente", "entregue", "cancelado"]).default("pendente").notNull(),
+      notes: text(),
+      status: mysqlEnum(["pendente", "entregue", "cancelado"]).default("pendente").notNull(),
       registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      weightKg: varchar("weight_kg", { length: 20 }),
+      destinationId: int("destination_id"),
+      trackingStatus: mysqlEnum("tracking_status", ["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).default("aguardando"),
+      trackingUpdatedAt: timestamp("tracking_updated_at", { mode: "string" }),
+      trackingNotes: text("tracking_notes"),
+      weightOutPhotoUrl: text("weight_out_photo_url"),
+      weightInPhotoUrl: text("weight_in_photo_url")
+    });
+    cargoShipments = mysqlTable("cargo_shipments", {
+      id: int().autoincrement().notNull(),
+      truckId: int("truck_id").notNull().references(() => equipment.id),
+      driverId: int("driver_id").notNull().references(() => users.id),
+      date: timestamp({ mode: "string" }).notNull(),
+      height: varchar({ length: 20 }).notNull(),
+      width: varchar({ length: 20 }).notNull(),
+      length: varchar({ length: 20 }).notNull(),
+      volume: varchar({ length: 20 }).notNull(),
+      destination: varchar({ length: 255 }),
+      invoiceNumber: varchar("invoice_number", { length: 100 }),
+      woodType: varchar("wood_type", { length: 100 }),
+      client: varchar({ length: 255 }),
+      imagesUrls: text("images_urls"),
+      registeredBy: int("registered_by").notNull().references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    chainsawChainEvents = mysqlTable("chainsaw_chain_events", {
+      id: int().autoincrement().notNull(),
+      chainType: varchar("chain_type", { length: 20 }).notNull(),
+      eventType: mysqlEnum("event_type", ["envio_campo", "retorno_oficina", "afiacao_concluida", "baixa_estoque", "entrada_estoque"]).notNull(),
+      quantity: int().notNull(),
+      chainsawId: int("chainsaw_id"),
+      registeredBy: int("registered_by"),
+      notes: text(),
+      eventDate: timestamp("event_date", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    chainsawChainStock = mysqlTable("chainsaw_chain_stock", {
+      id: int().autoincrement().notNull(),
+      chainType: varchar("chain_type", { length: 20 }).notNull(),
+      sharpenedInBox: int("sharpened_in_box").default(0).notNull(),
+      inField: int("in_field").default(0).notNull(),
+      inWorkshop: int("in_workshop").default(0).notNull(),
+      totalStock: int("total_stock").default(0).notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    chainsawPartMovements = mysqlTable("chainsaw_part_movements", {
+      id: int().autoincrement().notNull(),
+      partId: int("part_id").notNull(),
+      type: mysqlEnum(["entrada", "saida"]).notNull(),
+      quantity: varchar({ length: 20 }).notNull(),
+      reason: varchar({ length: 255 }),
+      serviceOrderId: int("service_order_id"),
+      unitCost: varchar("unit_cost", { length: 20 }),
+      registeredBy: int("registered_by"),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    chainsawParts = mysqlTable("chainsaw_parts", {
+      id: int().autoincrement().notNull(),
+      code: varchar({ length: 50 }),
+      name: varchar({ length: 255 }).notNull(),
+      category: varchar({ length: 100 }),
+      unit: varchar({ length: 20 }).default("un"),
+      currentStock: varchar("current_stock", { length: 20 }).default("0"),
+      minStock: varchar("min_stock", { length: 20 }).default("0"),
+      unitCost: varchar("unit_cost", { length: 20 }),
+      notes: text(),
+      isActive: int("is_active").default(1),
+      createdBy: int("created_by"),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      imageUrl: text("image_url")
+    });
+    chainsawServiceOrders = mysqlTable("chainsaw_service_orders", {
+      id: int().autoincrement().notNull(),
+      chainsawId: int("chainsaw_id").notNull(),
+      problemType: mysqlEnum("problem_type", ["motor_falhando", "nao_liga", "superaquecimento", "vazamento", "corrente_problema", "sabre_problema", "manutencao_preventiva", "outro"]).notNull(),
+      problemDescription: text("problem_description"),
+      priority: mysqlEnum(["baixa", "media", "alta", "urgente"]).default("media").notNull(),
+      status: mysqlEnum(["aberta", "em_andamento", "concluida", "cancelada"]).default("aberta").notNull(),
+      mechanicId: int("mechanic_id"),
+      serviceDescription: text("service_description"),
+      completedAt: timestamp("completed_at", { mode: "string" }),
+      openedBy: int("opened_by"),
+      openedAt: timestamp("opened_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      imageUrl: text("image_url")
+    });
+    chainsawServiceParts = mysqlTable("chainsaw_service_parts", {
+      id: int().autoincrement().notNull(),
+      serviceOrderId: int("service_order_id").notNull(),
+      partId: int("part_id"),
+      partName: varchar("part_name", { length: 255 }).notNull(),
+      quantity: varchar({ length: 20 }).notNull(),
+      unit: varchar({ length: 20 }).default("un"),
+      unitCost: varchar("unit_cost", { length: 20 }),
+      fromStock: int("from_stock").default(1),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    chainsaws = mysqlTable("chainsaws", {
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 100 }).notNull(),
+      brand: varchar({ length: 100 }),
+      model: varchar({ length: 100 }),
+      serialNumber: varchar("serial_number", { length: 100 }),
+      chainType: varchar("chain_type", { length: 20 }).default("30"),
+      status: mysqlEnum(["ativa", "oficina", "inativa"]).default("ativa").notNull(),
+      notes: text(),
+      createdBy: int("created_by"),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      imageUrl: text("image_url")
+    });
+    clientContracts = mysqlTable("client_contracts", {
+      id: int().autoincrement().notNull(),
+      clientId: int("client_id").notNull().references(() => clients.id),
+      description: varchar({ length: 500 }).notNull(),
+      billingType: mysqlEnum("billing_type", ["peso_kg", "metro_m3", "fixo"]).default("metro_m3").notNull(),
+      unitPrice: varchar("unit_price", { length: 20 }),
+      estimatedVolume: varchar("estimated_volume", { length: 20 }),
+      totalAmount: varchar("total_amount", { length: 20 }),
+      dueDate: timestamp("due_date", { mode: "string" }),
+      status: mysqlEnum(["ativo", "pago", "atrasado", "cancelado"]).default("ativo").notNull(),
+      notes: text(),
+      registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    clientPaymentReceipts = mysqlTable("client_payment_receipts", {
+      id: int().autoincrement().notNull(),
+      clientId: int("client_id").notNull().references(() => clients.id),
+      contractId: int("contract_id").references(() => clientContracts.id),
+      paymentDate: timestamp("payment_date", { mode: "string" }).notNull(),
+      amount: varchar({ length: 20 }).notNull(),
+      paymentMethod: mysqlEnum("payment_method", ["pix", "transferencia", "dinheiro", "cheque", "outros"]).default("pix").notNull(),
+      receiptUrl: varchar("receipt_url", { length: 1e3 }),
+      referenceMonth: varchar("reference_month", { length: 7 }),
+      notes: text(),
+      registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    clientPayments = mysqlTable("client_payments", {
+      id: int().autoincrement().notNull(),
+      clientId: int("client_id").notNull().references(() => clients.id),
+      referenceDate: timestamp("reference_date", { mode: "string" }).notNull(),
+      description: varchar({ length: 500 }),
+      volumeM3: varchar("volume_m3", { length: 20 }),
+      pricePerM3: varchar("price_per_m3", { length: 20 }),
+      grossAmount: varchar("gross_amount", { length: 20 }).notNull(),
+      deductions: varchar({ length: 20 }).default("0"),
+      netAmount: varchar("net_amount", { length: 20 }).notNull(),
+      status: mysqlEnum(["pendente", "pago", "atrasado", "cancelado"]).default("pendente").notNull(),
+      dueDate: timestamp("due_date", { mode: "string" }),
+      paidAt: timestamp("paid_at", { mode: "string" }),
+      pixKey: varchar("pix_key", { length: 255 }),
+      notes: text(),
+      registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    clientPortalAccess = mysqlTable(
+      "client_portal_access",
+      {
+        id: int().autoincrement().notNull(),
+        clientId: int("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+        accessCode: varchar("access_code", { length: 64 }).notNull(),
+        active: int().default(1).notNull(),
+        lastAccessAt: timestamp("last_access_at", { mode: "string" }),
+        createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+        updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+        createdBy: int("created_by").references(() => users.id)
+      },
+      (table) => [
+        index("client_portal_access_access_code_unique").on(table.accessCode)
+      ]
+    );
+    clients = mysqlTable("clients", {
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 255 }).notNull(),
+      document: varchar({ length: 20 }),
+      email: varchar({ length: 320 }),
+      phone: varchar({ length: 20 }),
+      address: varchar({ length: 500 }),
+      city: varchar({ length: 100 }),
+      state: varchar({ length: 2 }),
+      notes: text(),
+      password: varchar({ length: 255 }),
+      active: int().default(1).notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      createdBy: int("created_by").references(() => users.id)
+    });
+    collaboratorAttendance = mysqlTable("collaborator_attendance", {
+      id: int().autoincrement().notNull(),
+      collaboratorId: int("collaborator_id").notNull(),
+      date: timestamp({ mode: "string" }).notNull(),
+      employmentTypeCa: mysqlEnum("employment_type_ca", ["clt", "terceirizado", "diarista"]).default("diarista").notNull(),
+      dailyValue: varchar("daily_value", { length: 20 }).default("0").notNull(),
+      pixKey: varchar("pix_key", { length: 255 }),
+      activity: varchar({ length: 255 }),
+      observations: text(),
+      paymentStatusCa: mysqlEnum("payment_status_ca", ["pendente", "pago"]).default("pendente").notNull(),
+      paidAt: timestamp("paid_at", { mode: "string" }),
+      registeredBy: int("registered_by"),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      latitude: varchar({ length: 20 }),
+      longitude: varchar({ length: 20 }),
+      locationName: varchar("location_name", { length: 255 })
+    });
+    collaboratorDocuments = mysqlTable("collaborator_documents", {
+      id: int().autoincrement().notNull(),
+      collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
+      type: mysqlEnum(["cnh", "certificado", "aso", "contrato", "rg", "cpf", "outros"]).default("outros").notNull(),
+      title: varchar({ length: 255 }).notNull(),
+      fileUrl: varchar("file_url", { length: 1e3 }).notNull(),
+      fileType: varchar("file_type", { length: 50 }),
+      issueDate: timestamp("issue_date", { mode: "string" }),
+      expiryDate: timestamp("expiry_date", { mode: "string" }),
+      notes: text(),
+      uploadedBy: int("uploaded_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    collaborators = mysqlTable("collaborators", {
+      id: int().autoincrement().notNull(),
+      userId: int("user_id").references(() => users.id, { onDelete: "set null" }),
+      name: varchar({ length: 255 }).notNull(),
+      email: varchar({ length: 320 }),
+      phone: varchar({ length: 20 }),
+      cpf: varchar({ length: 14 }),
+      rg: varchar({ length: 20 }),
+      address: varchar({ length: 500 }),
+      city: varchar({ length: 100 }),
+      state: varchar({ length: 2 }),
+      zipCode: varchar("zip_code", { length: 10 }),
+      photoUrl: text("photo_url"),
+      faceDescriptor: text("face_descriptor"),
+      role: mysqlEnum(["administrativo", "encarregado", "mecanico", "motosserrista", "carregador", "operador", "motorista", "terceirizado"]).default("operador").notNull(),
+      pixKey: varchar("pix_key", { length: 255 }),
+      dailyRate: varchar("daily_rate", { length: 20 }),
+      employmentType: mysqlEnum("employment_type", ["clt", "terceirizado", "diarista"]).default("diarista"),
+      shirtSize: mysqlEnum("shirt_size", ["PP", "P", "M", "G", "GG", "XGG"]),
+      pantsSize: varchar("pants_size", { length: 10 }),
+      shoeSize: varchar("shoe_size", { length: 5 }),
+      bootSize: varchar("boot_size", { length: 5 }),
+      active: int().default(1).notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      createdBy: int("created_by").references(() => users.id)
+    });
+    equipment = mysqlTable("equipment", {
+      id: int().autoincrement().notNull(),
+      typeId: int("type_id").notNull().references(() => equipmentTypes.id),
+      name: varchar({ length: 255 }).notNull(),
+      brand: varchar({ length: 100 }),
+      model: varchar({ length: 100 }),
+      year: int(),
+      serialNumber: varchar("serial_number", { length: 100 }),
+      licensePlate: varchar("license_plate", { length: 20 }),
+      imageUrl: text("image_url"),
+      status: mysqlEnum(["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      sectorId: int("sector_id")
+    });
+    equipmentMaintenance = mysqlTable("equipment_maintenance", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull(),
+      type: mysqlEnum(["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]).default("manutencao").notNull(),
+      description: text().notNull(),
+      performedBy: varchar("performed_by", { length: 255 }),
+      cost: varchar({ length: 20 }),
+      nextMaintenanceDate: timestamp("next_maintenance_date", { mode: "string" }),
+      photosJson: text("photos_json"),
+      registeredBy: int("registered_by").references(() => users.id),
+      performedAt: timestamp("performed_at", { mode: "string" }).notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    equipmentPhotos = mysqlTable("equipment_photos", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull(),
+      photoUrl: varchar("photo_url", { length: 1e3 }).notNull(),
+      caption: varchar({ length: 255 }),
+      uploadedBy: int("uploaded_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    equipmentTypes = mysqlTable("equipment_types", {
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 100 }).notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    extraExpenses = mysqlTable("extra_expenses", {
+      id: int().autoincrement().notNull(),
+      date: timestamp({ mode: "string" }).notNull(),
+      category: mysqlEnum(["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]).notNull(),
+      description: varchar({ length: 500 }).notNull(),
+      amount: varchar({ length: 20 }).notNull(),
+      paymentMethod: mysqlEnum("payment_method", ["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro").notNull(),
+      receiptImageUrl: text("receipt_image_url"),
+      notes: text(),
+      registeredBy: int("registered_by").references(() => users.id),
+      registeredByName: varchar("registered_by_name", { length: 255 }),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    financialEntries = mysqlTable("financial_entries", {
+      id: int().autoincrement().notNull(),
+      type: mysqlEnum(["receita", "despesa"]).notNull(),
+      category: varchar({ length: 100 }).notNull(),
+      description: varchar({ length: 500 }).notNull(),
+      amount: varchar({ length: 20 }).notNull(),
+      date: timestamp({ mode: "string" }).notNull(),
+      referenceMonth: varchar("reference_month", { length: 7 }),
+      paymentMethod: mysqlEnum("payment_method", ["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).default("pix").notNull(),
+      status: mysqlEnum(["pendente", "confirmado", "cancelado"]).default("confirmado").notNull(),
+      clientId: int("client_id"),
+      clientName: varchar("client_name", { length: 255 }),
+      receiptImageUrl: text("receipt_image_url"),
+      notes: text(),
+      registeredBy: int("registered_by"),
+      registeredByName: varchar("registered_by_name", { length: 255 }),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    fuelContainerEvents = mysqlTable("fuel_container_events", {
+      id: int().autoincrement().notNull(),
+      containerId: int("container_id").notNull(),
+      eventType: mysqlEnum("event_type", ["abastecimento", "uso", "transferencia"]).notNull(),
+      volumeLiters: varchar("volume_liters", { length: 10 }).notNull(),
+      costPerLiter: varchar("cost_per_liter", { length: 20 }),
+      totalCost: varchar("total_cost", { length: 20 }),
+      oil2TMl: varchar("oil2t_ml", { length: 10 }),
+      sourceContainerId: int("source_container_id"),
+      chainsawId: int("chainsaw_id"),
+      registeredBy: int("registered_by"),
+      notes: text(),
+      eventDate: timestamp("event_date", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    fuelContainers = mysqlTable("fuel_containers", {
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 100 }).notNull(),
+      color: varchar({ length: 30 }).default("vermelho"),
+      type: mysqlEnum(["puro", "mistura"]).notNull(),
+      capacityLiters: varchar("capacity_liters", { length: 10 }).default("20"),
+      currentVolumeLiters: varchar("current_volume_liters", { length: 10 }).default("0"),
+      isActive: int("is_active").default(1),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    fuelRecords = mysqlTable("fuel_records", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+      operatorId: int("operator_id").notNull().references(() => users.id),
+      date: timestamp({ mode: "string" }).notNull(),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "mistura_2t"]).notNull(),
+      liters: varchar({ length: 20 }).notNull(),
+      totalValue: varchar("total_value", { length: 20 }).notNull(),
+      pricePerLiter: varchar("price_per_liter", { length: 20 }),
+      odometer: varchar({ length: 20 }),
+      station: varchar({ length: 255 }),
+      invoiceUrl: text("invoice_url"),
+      odometerImageUrl: text("odometer_image_url"),
+      registeredBy: int("registered_by").notNull().references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    gpsDeviceLinks = mysqlTable("gps_device_links", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull(),
+      traccarDeviceId: int("traccar_device_id").notNull(),
+      traccarDeviceName: varchar("traccar_device_name", { length: 255 }),
+      traccarUniqueId: varchar("traccar_unique_id", { length: 100 }),
+      active: int().default(1).notNull(),
+      createdBy: int("created_by"),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    gpsHoursLog = mysqlTable("gps_hours_log", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull(),
+      gpsDeviceLinkId: int("gps_device_link_id"),
+      date: timestamp({ mode: "string" }).notNull(),
+      hoursWorked: varchar("hours_worked", { length: 20 }).notNull(),
+      hourMeterStart: varchar("hour_meter_start", { length: 20 }),
+      hourMeterEnd: varchar("hour_meter_end", { length: 20 }),
+      distanceKm: varchar("distance_km", { length: 20 }),
+      source: mysqlEnum(["gps_auto", "manual"]).default("gps_auto").notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    gpsLocations = mysqlTable("gps_locations", {
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 255 }).notNull(),
+      latitude: varchar({ length: 30 }).notNull(),
+      longitude: varchar({ length: 30 }).notNull(),
+      radiusMeters: int("radius_meters").default(2e3).notNull(),
+      isActive: tinyint("is_active").default(1).notNull(),
+      notes: text(),
+      createdBy: int("created_by"),
+      createdByName: varchar("created_by_name", { length: 255 }),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    machineFuel = mysqlTable("machine_fuel", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+      date: timestamp({ mode: "string" }).notNull(),
+      hourMeter: varchar("hour_meter", { length: 20 }),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "mistura_2t", "arla"]).notNull(),
+      liters: varchar({ length: 20 }).notNull(),
+      pricePerLiter: varchar("price_per_liter", { length: 20 }),
+      totalValue: varchar("total_value", { length: 20 }),
+      supplier: varchar({ length: 255 }),
+      notes: text(),
+      registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
     machineHours = mysqlTable("machine_hours", {
-      id: int("id").autoincrement().primaryKey(),
+      id: int().autoincrement().notNull(),
       equipmentId: int("equipment_id").notNull().references(() => equipment.id),
       operatorCollaboratorId: int("operator_collaborator_id").references(() => collaborators.id),
-      date: timestamp("date").notNull(),
+      date: timestamp({ mode: "string" }).notNull(),
       startHourMeter: varchar("start_hour_meter", { length: 20 }).notNull(),
       endHourMeter: varchar("end_hour_meter", { length: 20 }).notNull(),
       hoursWorked: varchar("hours_worked", { length: 20 }).notNull(),
-      // calculado
-      activity: varchar("activity", { length: 255 }),
-      location: varchar("location", { length: 255 }),
-      notes: text("notes"),
+      activity: varchar({ length: 255 }),
+      location: varchar({ length: 255 }),
+      notes: text(),
       registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
     machineMaintenance = mysqlTable("machine_maintenance", {
-      id: int("id").autoincrement().primaryKey(),
+      id: int().autoincrement().notNull(),
       equipmentId: int("equipment_id").notNull().references(() => equipment.id),
-      date: timestamp("date").notNull(),
+      date: timestamp({ mode: "string" }).notNull(),
       hourMeter: varchar("hour_meter", { length: 20 }),
-      type: mysqlEnum("type", ["preventiva", "corretiva", "revisao"]).notNull().default("corretiva"),
-      serviceType: mysqlEnum("service_type", ["proprio", "terceirizado"]).notNull().default("proprio"),
+      type: mysqlEnum(["preventiva", "corretiva", "revisao"]).default("corretiva").notNull(),
+      serviceType: mysqlEnum("service_type", ["proprio", "terceirizado"]).default("proprio").notNull(),
       mechanicCollaboratorId: int("mechanic_collaborator_id").references(() => collaborators.id),
       mechanicName: varchar("mechanic_name", { length: 255 }),
       thirdPartyCompany: varchar("third_party_company", { length: 255 }),
       partsReplaced: text("parts_replaced"),
-      // JSON: [{name, quantity, cost}]
       laborCost: varchar("labor_cost", { length: 20 }),
       totalCost: varchar("total_cost", { length: 20 }),
-      description: text("description"),
+      description: text(),
       nextMaintenanceHours: varchar("next_maintenance_hours", { length: 20 }),
       registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    machineFuel = mysqlTable("machine_fuel", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
-      date: timestamp("date").notNull(),
-      hourMeter: varchar("hour_meter", { length: 20 }),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "mistura_2t", "arla"]).notNull(),
-      liters: varchar("liters", { length: 20 }).notNull(),
-      pricePerLiter: varchar("price_per_liter", { length: 20 }),
-      totalValue: varchar("total_value", { length: 20 }),
-      supplier: varchar("supplier", { length: 255 }),
-      notes: text("notes"),
-      registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    vehicleRecords = mysqlTable("vehicle_records", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
-      date: timestamp("date").notNull(),
-      recordType: mysqlEnum("record_type", ["abastecimento", "manutencao", "km"]).notNull(),
-      // Para abastecimento
-      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "etanol", "gnv"]),
-      liters: varchar("liters", { length: 20 }),
-      fuelCost: varchar("fuel_cost", { length: 20 }),
-      pricePerLiter: varchar("price_per_liter", { length: 20 }),
-      supplier: varchar("supplier", { length: 255 }),
-      // Para km
-      odometer: varchar("odometer", { length: 20 }),
-      kmDriven: varchar("km_driven", { length: 20 }),
-      // Para manutenção
-      maintenanceType: varchar("maintenance_type", { length: 255 }),
-      maintenanceCost: varchar("maintenance_cost", { length: 20 }),
-      serviceType: mysqlEnum("service_type", ["proprio", "terceirizado"]),
-      mechanicName: varchar("mechanic_name", { length: 255 }),
-      // Geral
-      driverCollaboratorId: int("driver_collaborator_id").references(() => collaborators.id),
-      photoUrl: text("photo_url"),
-      notes: text("notes"),
-      registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    parts = mysqlTable("parts", {
-      id: int("id").autoincrement().primaryKey(),
-      code: varchar("code", { length: 50 }),
-      name: varchar("name", { length: 255 }).notNull(),
-      category: varchar("category", { length: 100 }),
-      unit: varchar("unit", { length: 20 }).default("un"),
-      stockQuantity: int("stock_quantity").default(0).notNull(),
-      minStock: int("min_stock").default(0),
-      unitCost: varchar("unit_cost", { length: 20 }),
-      supplier: varchar("supplier", { length: 255 }),
-      photoUrl: text("photo_url"),
-      notes: text("notes"),
-      active: int("active").default(1).notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-      createdBy: int("created_by").references(() => users.id)
-    });
-    partsRequests = mysqlTable("parts_requests", {
-      id: int("id").autoincrement().primaryKey(),
-      partId: int("part_id").references(() => parts.id),
-      partName: varchar("part_name", { length: 255 }).notNull(),
-      // fallback se não cadastrada
-      quantity: int("quantity").notNull(),
-      urgency: mysqlEnum("urgency", ["baixa", "media", "alta"]).notNull().default("media"),
-      equipmentId: int("equipment_id").references(() => equipment.id),
-      equipmentName: varchar("equipment_name", { length: 255 }),
-      reason: text("reason"),
-      status: mysqlEnum("status", ["pendente", "aprovado", "rejeitado", "comprado", "entregue"]).default("pendente").notNull(),
-      approvedBy: int("approved_by").references(() => users.id),
-      approvedAt: timestamp("approved_at"),
-      rejectionReason: text("rejection_reason"),
-      estimatedCost: varchar("estimated_cost", { length: 20 }),
-      requestedBy: int("requested_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    clientPortalAccess = mysqlTable("client_portal_access", {
-      id: int("id").autoincrement().primaryKey(),
-      clientId: int("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
-      accessCode: varchar("access_code", { length: 64 }).notNull().unique(),
-      // PIN ou token
-      active: int("active").default(1).notNull(),
-      lastAccessAt: timestamp("last_access_at"),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-      createdBy: int("created_by")
-    });
-    replantingRecords = mysqlTable("replanting_records", {
-      id: int("id").autoincrement().primaryKey(),
-      clientId: int("client_id").notNull().references(() => clients.id),
-      date: timestamp("date").notNull(),
-      area: varchar("area", { length: 100 }),
-      // ex: "Fazenda Boa Vista - Talhão 3"
-      species: varchar("species", { length: 100 }).default("Eucalipto"),
-      // espécie plantada
-      quantity: int("quantity"),
-      // número de mudas
-      areaHectares: varchar("area_hectares", { length: 20 }),
-      // área em hectares
-      notes: text("notes"),
-      photosJson: text("photos_json"),
-      // JSON array de URLs
-      registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    clientPayments = mysqlTable("client_payments", {
-      id: int("id").autoincrement().primaryKey(),
-      clientId: int("client_id").notNull().references(() => clients.id),
-      referenceDate: timestamp("reference_date").notNull(),
-      // mês/período de referência
-      description: varchar("description", { length: 500 }),
-      // ex: "Compra de eucalipto - Talhão 3"
-      volumeM3: varchar("volume_m3", { length: 20 }),
-      // volume comprado
-      pricePerM3: varchar("price_per_m3", { length: 20 }),
-      // preço por m³
-      grossAmount: varchar("gross_amount", { length: 20 }).notNull(),
-      // valor bruto
-      deductions: varchar("deductions", { length: 20 }).default("0"),
-      // descontos
-      netAmount: varchar("net_amount", { length: 20 }).notNull(),
-      // valor líquido
-      status: mysqlEnum("status", ["pendente", "pago", "atrasado", "cancelado"]).default("pendente").notNull(),
-      dueDate: timestamp("due_date"),
-      // data de vencimento
-      paidAt: timestamp("paid_at"),
-      // data do pagamento
-      pixKey: varchar("pix_key", { length: 255 }),
-      // chave pix do cliente
-      notes: text("notes"),
-      registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    collaboratorDocuments = mysqlTable("collaborator_documents", {
-      id: int("id").autoincrement().primaryKey(),
-      collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
-      type: mysqlEnum("type", [
-        "cnh",
-        "certificado",
-        "aso",
-        "contrato",
-        "rg",
-        "cpf",
-        "outros"
-      ]).notNull().default("outros"),
-      title: varchar("title", { length: 255 }).notNull(),
-      // ex: "CNH Categoria B", "Certificado NR10"
-      fileUrl: varchar("file_url", { length: 1e3 }).notNull(),
-      // URL Cloudinary
-      fileType: varchar("file_type", { length: 50 }),
-      // "image/jpeg", "application/pdf"
-      issueDate: timestamp("issue_date"),
-      // data de emissão
-      expiryDate: timestamp("expiry_date"),
-      // data de validade (opcional)
-      notes: text("notes"),
-      uploadedBy: int("uploaded_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    equipmentPhotos = mysqlTable("equipment_photos", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull(),
-      // referência ao equipamento (setores/equipamentos)
-      photoUrl: varchar("photo_url", { length: 1e3 }).notNull(),
-      caption: varchar("caption", { length: 255 }),
-      // ex: "Foto da placa", "Vista lateral"
-      uploadedBy: int("uploaded_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    equipmentMaintenance = mysqlTable("equipment_maintenance", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull(),
-      type: mysqlEnum("type", ["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]).notNull().default("manutencao"),
-      description: text("description").notNull(),
-      performedBy: varchar("performed_by", { length: 255 }),
-      // nome do responsável
-      cost: varchar("cost", { length: 20 }),
-      // custo em R$
-      nextMaintenanceDate: timestamp("next_maintenance_date"),
-      // próxima manutenção prevista
-      photosJson: text("photos_json"),
-      // JSON array de URLs
-      registeredBy: int("registered_by").references(() => users.id),
-      performedAt: timestamp("performed_at").notNull(),
-      // data da manutenção
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    purchaseOrders = mysqlTable("purchase_orders", {
-      id: int("id").autoincrement().primaryKey(),
-      title: varchar("title", { length: 255 }).notNull(),
-      // ex: "Pedido 001 - Filtros"
-      status: mysqlEnum("status", ["rascunho", "enviado", "aprovado", "rejeitado", "comprado"]).default("rascunho").notNull(),
-      notes: text("notes"),
-      createdBy: int("created_by").references(() => users.id),
-      approvedBy: int("approved_by").references(() => users.id),
-      approvedAt: timestamp("approved_at"),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    purchaseOrderItems = mysqlTable("purchase_order_items", {
-      id: int("id").autoincrement().primaryKey(),
-      orderId: int("order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
-      partId: int("part_id").references(() => parts.id),
-      partName: varchar("part_name", { length: 255 }).notNull(),
-      partCode: varchar("part_code", { length: 50 }),
-      partCategory: varchar("part_category", { length: 100 }),
-      supplier: varchar("supplier", { length: 255 }),
-      unit: varchar("unit", { length: 20 }).default("un"),
-      quantity: int("quantity").notNull(),
-      unitCost: varchar("unit_cost", { length: 20 }),
-      notes: text("notes"),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    collaboratorAttendance = mysqlTable("collaborator_attendance", {
-      id: int("id").autoincrement().primaryKey(),
-      collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
-      date: timestamp("date").notNull(),
-      employmentType: mysqlEnum("employment_type_ca", ["clt", "terceirizado", "diarista"]).notNull().default("diarista"),
-      dailyValue: varchar("daily_value", { length: 20 }).notNull().default("0"),
-      pixKey: varchar("pix_key", { length: 255 }),
-      activity: varchar("activity", { length: 255 }),
-      // função/atividade do dia
-      observations: text("observations"),
-      paymentStatus: mysqlEnum("payment_status_ca", ["pendente", "pago"]).default("pendente").notNull(),
-      paidAt: timestamp("paid_at"),
-      registeredBy: int("registered_by").references(() => users.id),
-      // GPS do registro de presença
-      latitude: varchar("latitude", { length: 20 }),
-      longitude: varchar("longitude", { length: 20 }),
-      locationName: varchar("location_name", { length: 255 }),
-      // nome do local (fazenda, sede, etc.)
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    gpsDeviceLinks = mysqlTable("gps_device_links", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull().references(() => equipment.id, { onDelete: "cascade" }),
-      traccarDeviceId: int("traccar_device_id").notNull(),
-      // ID do dispositivo no Traccar
-      traccarDeviceName: varchar("traccar_device_name", { length: 255 }),
-      // nome no Traccar (cache)
-      traccarUniqueId: varchar("traccar_unique_id", { length: 100 }),
-      // IMEI/ID único do rastreador
-      active: int("active").default(1).notNull(),
-      createdBy: int("created_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    gpsHoursLog = mysqlTable("gps_hours_log", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
-      gpsDeviceLinkId: int("gps_device_link_id").references(() => gpsDeviceLinks.id),
-      date: timestamp("date").notNull(),
-      // dia do registro
-      hoursWorked: varchar("hours_worked", { length: 20 }).notNull(),
-      // horas com ignição ligada
-      hourMeterStart: varchar("hour_meter_start", { length: 20 }),
-      // horímetro início do dia
-      hourMeterEnd: varchar("hour_meter_end", { length: 20 }),
-      // horímetro fim do dia
-      distanceKm: varchar("distance_km", { length: 20 }),
-      // km rodados no dia
-      source: mysqlEnum("source", ["gps_auto", "manual"]).default("gps_auto").notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    preventiveMaintenancePlans = mysqlTable("preventive_maintenance_plans", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull().references(() => equipment.id, { onDelete: "cascade" }),
-      name: varchar("name", { length: 255 }).notNull(),
-      // ex: "Troca de óleo", "Engraxamento"
-      type: mysqlEnum("type", [
-        "troca_oleo",
-        "engraxamento",
-        "filtro_ar",
-        "filtro_combustivel",
-        "correia",
-        "revisao_geral",
-        "abastecimento",
-        "outros"
-      ]).notNull().default("outros"),
-      intervalHours: int("interval_hours").notNull(),
-      // a cada X horas de uso
-      lastDoneHours: varchar("last_done_hours", { length: 20 }).default("0"),
-      // horímetro da última execução
-      lastDoneAt: timestamp("last_done_at"),
-      // data da última execução
-      alertThresholdHours: int("alert_threshold_hours").default(10),
-      // alertar X horas antes
-      active: int("active").default(1).notNull(),
-      notes: text("notes"),
-      createdBy: int("created_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    preventiveMaintenanceAlerts = mysqlTable("preventive_maintenance_alerts", {
-      id: int("id").autoincrement().primaryKey(),
-      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
-      planId: int("plan_id").notNull().references(() => preventiveMaintenancePlans.id),
-      status: mysqlEnum("status", ["pendente", "em_andamento", "concluido", "ignorado"]).default("pendente").notNull(),
-      currentHours: varchar("current_hours", { length: 20 }).notNull(),
-      // horímetro quando gerado
-      dueHours: varchar("due_hours", { length: 20 }).notNull(),
-      // horímetro alvo
-      generatedAt: timestamp("generated_at").defaultNow().notNull(),
-      resolvedAt: timestamp("resolved_at"),
-      resolvedBy: int("resolved_by").references(() => users.id),
-      notes: text("notes"),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    maintenanceTemplates = mysqlTable("maintenance_templates", {
-      id: int("id").autoincrement().primaryKey(),
-      name: varchar("name", { length: 255 }).notNull(),
-      // ex: "Troca de Óleo Motor"
-      type: mysqlEnum("type", ["preventiva", "corretiva", "revisao"]).notNull().default("preventiva"),
-      description: text("description"),
-      estimatedCost: varchar("estimated_cost", { length: 20 }),
-      active: int("active").default(1).notNull(),
-      createdBy: int("created_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    maintenanceTemplateParts = mysqlTable("maintenance_template_parts", {
-      id: int("id").autoincrement().primaryKey(),
-      templateId: int("template_id").notNull().references(() => maintenanceTemplates.id, { onDelete: "cascade" }),
-      partId: int("part_id").references(() => parts.id, { onDelete: "set null" }),
-      partCode: varchar("part_code", { length: 50 }),
-      // cache do código
-      partName: varchar("part_name", { length: 255 }).notNull(),
-      // cache do nome
-      quantity: int("quantity").notNull().default(1),
-      unit: varchar("unit", { length: 20 }).default("un"),
-      notes: text("notes"),
-      createdAt: timestamp("created_at").defaultNow().notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
     maintenanceParts = mysqlTable("maintenance_parts", {
-      id: int("id").autoincrement().primaryKey(),
+      id: int().autoincrement().notNull(),
       maintenanceId: int("maintenance_id").notNull().references(() => equipmentMaintenance.id, { onDelete: "cascade" }),
       partId: int("part_id").references(() => parts.id, { onDelete: "set null" }),
       partCode: varchar("part_code", { length: 50 }),
       partName: varchar("part_name", { length: 255 }).notNull(),
       partPhotoUrl: text("part_photo_url"),
-      quantity: int("quantity").notNull().default(1),
-      unit: varchar("unit", { length: 20 }).default("un"),
+      quantity: int().default(1).notNull(),
+      unit: varchar({ length: 20 }).default("un"),
       unitCost: varchar("unit_cost", { length: 20 }),
       totalCost: varchar("total_cost", { length: 20 }),
       fromStock: int("from_stock").default(1),
-      // 1 = baixou do estoque, 0 = compra avulsa
-      createdAt: timestamp("created_at").defaultNow().notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    maintenanceTemplateParts = mysqlTable("maintenance_template_parts", {
+      id: int().autoincrement().notNull(),
+      templateId: int("template_id").notNull().references(() => maintenanceTemplates.id, { onDelete: "cascade" }),
+      partId: int("part_id").references(() => parts.id, { onDelete: "set null" }),
+      partCode: varchar("part_code", { length: 50 }),
+      partName: varchar("part_name", { length: 255 }).notNull(),
+      quantity: int().default(1).notNull(),
+      unit: varchar({ length: 20 }).default("un"),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    maintenanceTemplates = mysqlTable("maintenance_templates", {
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 255 }).notNull(),
+      type: mysqlEnum(["preventiva", "corretiva", "revisao"]).default("preventiva").notNull(),
+      description: text(),
+      estimatedCost: varchar("estimated_cost", { length: 20 }),
+      active: int().default(1).notNull(),
+      createdBy: int("created_by"),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    parts = mysqlTable("parts", {
+      id: int().autoincrement().notNull(),
+      code: varchar({ length: 50 }),
+      name: varchar({ length: 255 }).notNull(),
+      category: varchar({ length: 100 }),
+      unit: varchar({ length: 20 }).default("un"),
+      stockQuantity: int("stock_quantity").default(0).notNull(),
+      minStock: int("min_stock").default(0),
+      unitCost: varchar("unit_cost", { length: 20 }),
+      supplier: varchar({ length: 255 }),
+      photoUrl: text("photo_url"),
+      notes: text(),
+      active: int().default(1).notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      createdBy: int("created_by").references(() => users.id),
+      photosJson: text("photos_json")
+    });
+    partsRequests = mysqlTable("parts_requests", {
+      id: int().autoincrement().notNull(),
+      partId: int("part_id").references(() => parts.id),
+      partName: varchar("part_name", { length: 255 }).notNull(),
+      quantity: int().notNull(),
+      urgency: mysqlEnum(["baixa", "media", "alta"]).default("media").notNull(),
+      equipmentId: int("equipment_id").references(() => equipment.id),
+      equipmentName: varchar("equipment_name", { length: 255 }),
+      reason: text(),
+      status: mysqlEnum(["pendente", "aprovado", "rejeitado", "comprado", "entregue"]).default("pendente").notNull(),
+      approvedBy: int("approved_by").references(() => users.id),
+      approvedAt: timestamp("approved_at", { mode: "string" }),
+      rejectionReason: text("rejection_reason"),
+      estimatedCost: varchar("estimated_cost", { length: 20 }),
+      requestedBy: int("requested_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
     partsStockMovements = mysqlTable("parts_stock_movements", {
-      id: int("id").autoincrement().primaryKey(),
+      id: int().autoincrement().notNull(),
       partId: int("part_id").notNull().references(() => parts.id, { onDelete: "cascade" }),
-      type: mysqlEnum("type", ["entrada", "saida"]).notNull(),
-      quantity: int("quantity").notNull(),
-      reason: varchar("reason", { length: 255 }),
-      // ex: "Compra", "Uso em manutenção #42"
+      type: mysqlEnum(["entrada", "saida"]).notNull(),
+      quantity: int().notNull(),
+      reason: varchar({ length: 255 }),
       referenceId: int("reference_id"),
-      // ID da manutenção ou pedido de compra
       referenceType: varchar("reference_type", { length: 50 }),
-      // "maintenance" | "purchase_order"
       unitCost: varchar("unit_cost", { length: 20 }),
-      notes: text("notes"),
-      registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull()
+      notes: text(),
+      registeredBy: int("registered_by"),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
-    userPermissions = mysqlTable("user_permissions", {
-      id: int("id").autoincrement().primaryKey(),
-      userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
-      // JSON array de módulos permitidos. null = admin (acesso total)
-      modules: text("modules"),
-      // JSON: string[]
-      // Perfil pré-definido para referência (não restringe, apenas label)
-      profile: varchar("profile", { length: 64 }).default("custom"),
-      updatedBy: int("updated_by").references(() => users.id),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull()
+    passwordResetTokens = mysqlTable(
+      "password_reset_tokens",
+      {
+        id: int().autoincrement().notNull(),
+        userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+        token: varchar({ length: 128 }).notNull(),
+        expiresAt: timestamp("expires_at", { mode: "string" }).notNull(),
+        usedAt: timestamp("used_at", { mode: "string" }),
+        createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+      },
+      (table) => [
+        index("password_reset_tokens_token_unique").on(table.token)
+      ]
+    );
+    preventiveMaintenanceAlerts = mysqlTable("preventive_maintenance_alerts", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull(),
+      planId: int("plan_id").notNull(),
+      status: mysqlEnum(["pendente", "em_andamento", "concluido", "ignorado"]).default("pendente").notNull(),
+      currentHours: varchar("current_hours", { length: 20 }).notNull(),
+      dueHours: varchar("due_hours", { length: 20 }).notNull(),
+      generatedAt: timestamp("generated_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      resolvedAt: timestamp("resolved_at", { mode: "string" }),
+      resolvedBy: int("resolved_by"),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
-    chainsaws = mysqlTable("chainsaws", {
-      id: int("id").autoincrement().primaryKey(),
-      name: varchar("name", { length: 100 }).notNull(),
-      // ex: "Motosserra 1 - Stihl MS 250"
-      brand: varchar("brand", { length: 100 }),
-      model: varchar("model", { length: 100 }),
-      serialNumber: varchar("serial_number", { length: 100 }),
-      chainType: varchar("chain_type", { length: 20 }).default("30"),
-      // "30" | "34" | outro
-      status: mysqlEnum("status", ["ativa", "oficina", "inativa"]).default("ativa").notNull(),
-      imageUrl: text("image_url"),
-      // foto da motosserra
-      notes: text("notes"),
-      createdBy: int("created_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull()
+    preventiveMaintenancePlans = mysqlTable("preventive_maintenance_plans", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull(),
+      name: varchar({ length: 255 }).notNull(),
+      type: mysqlEnum(["troca_oleo", "engraxamento", "filtro_ar", "filtro_combustivel", "correia", "revisao_geral", "abastecimento", "outros"]).default("outros").notNull(),
+      intervalHours: int("interval_hours").notNull(),
+      lastDoneHours: varchar("last_done_hours", { length: 20 }).default("0"),
+      lastDoneAt: timestamp("last_done_at", { mode: "string" }),
+      alertThresholdHours: int("alert_threshold_hours").default(10),
+      active: int().default(1).notNull(),
+      notes: text(),
+      createdBy: int("created_by"),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
-    fuelContainers = mysqlTable("fuel_containers", {
-      id: int("id").autoincrement().primaryKey(),
-      name: varchar("name", { length: 100 }).notNull(),
-      // ex: "Galão Vermelho", "Galão Verde"
-      color: varchar("color", { length: 30 }).default("vermelho"),
-      // "vermelho" | "verde"
-      type: mysqlEnum("type", ["puro", "mistura"]).notNull(),
-      // puro=gasolina, mistura=gasolina+2T
-      capacityLiters: varchar("capacity_liters", { length: 10 }).default("20"),
-      // capacidade total
-      currentVolumeLiters: varchar("current_volume_liters", { length: 10 }).default("0"),
-      // volume atual
-      isActive: int("is_active").default(1),
-      notes: text("notes"),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    fuelContainerEvents = mysqlTable("fuel_container_events", {
-      id: int("id").autoincrement().primaryKey(),
-      containerId: int("container_id").notNull().references(() => fuelContainers.id, { onDelete: "cascade" }),
-      eventType: mysqlEnum("event_type", ["abastecimento", "uso", "transferencia"]).notNull(),
-      // abastecimento = galão foi reabastecido (compra)
-      // uso = galão foi usado para abastecer motosserra no campo
-      // transferencia = galão vermelho → galão verde
-      volumeLiters: varchar("volume_liters", { length: 10 }).notNull(),
-      // litros movimentados
-      costPerLiter: varchar("cost_per_liter", { length: 20 }),
-      // custo por litro (para financeiro)
-      totalCost: varchar("total_cost", { length: 20 }),
-      // custo total
-      oil2tMl: varchar("oil2t_ml", { length: 10 }),
-      // ml de óleo 2T usados (só para mistura)
-      sourceContainerId: int("source_container_id").references(() => fuelContainers.id),
-      // para transferência
-      chainsawId: int("chainsaw_id").references(() => chainsaws.id),
-      // motosserra abastecida (para uso)
-      registeredBy: int("registered_by").references(() => users.id),
-      notes: text("notes"),
-      eventDate: timestamp("event_date").defaultNow().notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    chainsawChainStock = mysqlTable("chainsaw_chain_stock", {
-      id: int("id").autoincrement().primaryKey(),
-      chainType: varchar("chain_type", { length: 20 }).notNull(),
-      // "30", "34", ou outro
-      sharpenedInBox: int("sharpened_in_box").default(0).notNull(),
-      // afiadas na caixa (prontas)
-      inField: int("in_field").default(0).notNull(),
-      // em campo
-      inWorkshop: int("in_workshop").default(0).notNull(),
-      // na oficina (para afiar)
-      totalStock: int("total_stock").default(0).notNull(),
-      // total em estoque (compradas)
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    chainsawChainEvents = mysqlTable("chainsaw_chain_events", {
-      id: int("id").autoincrement().primaryKey(),
-      chainType: varchar("chain_type", { length: 20 }).notNull(),
-      eventType: mysqlEnum("event_type", [
-        "envio_campo",
-        // caixa → campo
-        "retorno_oficina",
-        // campo → oficina (para afiar)
-        "afiacao_concluida",
-        // oficina → caixa (afiadas)
-        "baixa_estoque",
-        // descarte ou substituição definitiva
-        "entrada_estoque"
-        // compra de novas correntes
-      ]).notNull(),
-      quantity: int("quantity").notNull(),
-      chainsawId: int("chainsaw_id").references(() => chainsaws.id),
-      registeredBy: int("registered_by").references(() => users.id),
-      notes: text("notes"),
-      // observações para o mecânico
-      eventDate: timestamp("event_date").defaultNow().notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    chainsawParts = mysqlTable("chainsaw_parts", {
-      id: int("id").autoincrement().primaryKey(),
-      code: varchar("code", { length: 50 }),
-      name: varchar("name", { length: 255 }).notNull(),
-      category: varchar("category", { length: 100 }),
-      // ex: "Filtro", "Corrente", "Sabre", "Óleo"
-      unit: varchar("unit", { length: 20 }).default("un"),
-      // un, L, ml, m
-      currentStock: varchar("current_stock", { length: 20 }).default("0"),
-      minStock: varchar("min_stock", { length: 20 }).default("0"),
-      // estoque mínimo para alerta
-      unitCost: varchar("unit_cost", { length: 20 }),
-      imageUrl: text("image_url"),
-      // foto da peça
-      notes: text("notes"),
-      isActive: int("is_active").default(1),
-      createdBy: int("created_by").references(() => users.id),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    chainsawPartMovements = mysqlTable("chainsaw_part_movements", {
-      id: int("id").autoincrement().primaryKey(),
-      partId: int("part_id").notNull().references(() => chainsawParts.id, { onDelete: "cascade" }),
-      type: mysqlEnum("type", ["entrada", "saida"]).notNull(),
-      quantity: varchar("quantity", { length: 20 }).notNull(),
-      reason: varchar("reason", { length: 255 }),
-      // ex: "Compra", "Uso em OS #12"
-      serviceOrderId: int("service_order_id"),
-      // referência à OS
-      unitCost: varchar("unit_cost", { length: 20 }),
-      registeredBy: int("registered_by").references(() => users.id),
-      notes: text("notes"),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    chainsawServiceOrders = mysqlTable("chainsaw_service_orders", {
-      id: int("id").autoincrement().primaryKey(),
-      chainsawId: int("chainsaw_id").notNull().references(() => chainsaws.id, { onDelete: "cascade" }),
-      // Problema reportado (pelo operador no campo ou pelo encarregado)
-      problemType: mysqlEnum("problem_type", [
-        "motor_falhando",
-        "nao_liga",
-        "superaquecimento",
-        "vazamento",
-        "corrente_problema",
-        "sabre_problema",
-        "manutencao_preventiva",
-        "outro"
-      ]).notNull(),
-      problemDescription: text("problem_description"),
-      priority: mysqlEnum("priority", ["baixa", "media", "alta", "urgente"]).default("media").notNull(),
-      status: mysqlEnum("status", ["aberta", "em_andamento", "concluida", "cancelada"]).default("aberta").notNull(),
-      // Execução pelo mecânico
-      mechanicId: int("mechanic_id").references(() => users.id),
-      serviceDescription: text("service_description"),
-      // o que foi feito
-      completedAt: timestamp("completed_at"),
-      // Imagem do problema (foto tirada no campo)
-      imageUrl: text("image_url"),
-      // Metadados
-      openedBy: int("opened_by").references(() => users.id),
-      openedAt: timestamp("opened_at").defaultNow().notNull(),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    chainsawServiceParts = mysqlTable("chainsaw_service_parts", {
-      id: int("id").autoincrement().primaryKey(),
-      serviceOrderId: int("service_order_id").notNull().references(() => chainsawServiceOrders.id, { onDelete: "cascade" }),
-      partId: int("part_id").references(() => chainsawParts.id, { onDelete: "set null" }),
+    purchaseOrderItems = mysqlTable("purchase_order_items", {
+      id: int().autoincrement().notNull(),
+      orderId: int("order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+      partId: int("part_id"),
       partName: varchar("part_name", { length: 255 }).notNull(),
-      quantity: varchar("quantity", { length: 20 }).notNull(),
-      unit: varchar("unit", { length: 20 }).default("un"),
+      partCode: varchar("part_code", { length: 50 }),
+      partCategory: varchar("part_category", { length: 100 }),
+      supplier: varchar({ length: 255 }),
+      unit: varchar({ length: 20 }).default("un"),
+      quantity: int().notNull(),
       unitCost: varchar("unit_cost", { length: 20 }),
-      fromStock: int("from_stock").default(1),
-      // 1 = baixou do estoque, 0 = compra avulsa
-      createdAt: timestamp("created_at").defaultNow().notNull()
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
-    extraExpenses = mysqlTable("extra_expenses", {
+    purchaseOrders = mysqlTable("purchase_orders", {
+      id: int().autoincrement().notNull(),
+      title: varchar({ length: 255 }).notNull(),
+      status: mysqlEnum(["rascunho", "enviado", "aprovado", "rejeitado", "comprado"]).default("rascunho").notNull(),
+      notes: text(),
+      createdBy: int("created_by"),
+      approvedBy: int("approved_by"),
+      approvedAt: timestamp("approved_at", { mode: "string" }),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    replantingRecords = mysqlTable("replanting_records", {
+      id: int().autoincrement().notNull(),
+      clientId: int("client_id").notNull().references(() => clients.id),
+      date: timestamp({ mode: "string" }).notNull(),
+      area: varchar({ length: 100 }),
+      species: varchar({ length: 100 }).default("Eucalipto"),
+      quantity: int(),
+      areaHectares: varchar("area_hectares", { length: 20 }),
+      notes: text(),
+      photosJson: text("photos_json"),
+      registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    rolePermissions = mysqlTable("role_permissions", {
+      id: int().autoincrement().notNull(),
+      roleName: varchar("role_name", { length: 50 }).notNull(),
+      module: varchar({ length: 50 }).notNull(),
+      canView: int("can_view").default(0).notNull(),
+      canCreate: int("can_create").default(0).notNull(),
+      canEdit: int("can_edit").default(0).notNull(),
+      canDelete: int("can_delete").default(0).notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      updatedBy: int("updated_by").references(() => users.id)
+    });
+    sectors = mysqlTable("sectors", {
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 100 }).notNull(),
+      description: text(),
+      color: varchar({ length: 20 }).default("#16a34a"),
+      active: int().default(1).notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      createdBy: int("created_by").references(() => users.id)
+    });
+    userPermissions = mysqlTable(
+      "user_permissions",
+      {
+        id: int().autoincrement().notNull(),
+        userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+        modules: text(),
+        profile: varchar({ length: 64 }).default("custom"),
+        updatedBy: int("updated_by"),
+        updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+        createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+      },
+      (table) => [
+        index("user_id").on(table.userId)
+      ]
+    );
+    userProfiles = mysqlTable("user_profiles", {
+      id: int().autoincrement().notNull(),
+      userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      profileType: mysqlEnum("profile_type", ["administrativo", "encarregado", "mecanico", "motosserrista", "carregador", "operador", "motorista", "terceirizado"]).notNull(),
+      cpf: varchar({ length: 14 }),
+      phone: varchar({ length: 20 }),
+      pixKey: varchar("pix_key", { length: 255 }),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    users = mysqlTable(
+      "users",
+      {
+        id: int().autoincrement().notNull(),
+        openId: varchar({ length: 64 }),
+        name: text().notNull(),
+        email: varchar({ length: 320 }).notNull(),
+        loginMethod: varchar({ length: 64 }).default("email").notNull(),
+        role: mysqlEnum(["user", "admin"]).default("user").notNull(),
+        createdAt: timestamp({ mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+        updatedAt: timestamp({ mode: "string" }).defaultNow().onUpdateNow().notNull(),
+        lastSignedIn: timestamp({ mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+        passwordHash: varchar("password_hash", { length: 255 })
+      },
+      (table) => [
+        index("users_openId_unique").on(table.openId),
+        index("users_email_unique").on(table.email)
+      ]
+    );
+    vehicleRecords = mysqlTable("vehicle_records", {
+      id: int().autoincrement().notNull(),
+      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+      date: timestamp({ mode: "string" }).notNull(),
+      recordType: mysqlEnum("record_type", ["abastecimento", "manutencao", "km"]).notNull(),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "etanol", "gnv"]),
+      liters: varchar({ length: 20 }),
+      fuelCost: varchar("fuel_cost", { length: 20 }),
+      pricePerLiter: varchar("price_per_liter", { length: 20 }),
+      supplier: varchar({ length: 255 }),
+      odometer: varchar({ length: 20 }),
+      kmDriven: varchar("km_driven", { length: 20 }),
+      maintenanceType: varchar("maintenance_type", { length: 255 }),
+      maintenanceCost: varchar("maintenance_cost", { length: 20 }),
+      serviceType: mysqlEnum("service_type", ["proprio", "terceirizado"]),
+      mechanicName: varchar("mechanic_name", { length: 255 }),
+      driverCollaboratorId: int("driver_collaborator_id").references(() => collaborators.id),
+      notes: text(),
+      registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      maintenanceLocation: varchar("maintenance_location", { length: 255 }),
+      photosJson: text("photos_json"),
+      photoUrl: text("photo_url")
+    });
+    cargoTrackingPhotos = mysqlTable("cargo_tracking_photos", {
       id: int("id").autoincrement().primaryKey(),
-      date: timestamp("date").notNull(),
-      category: mysqlEnum("category", ["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]).notNull(),
-      description: varchar("description", { length: 500 }).notNull(),
-      amount: varchar("amount", { length: 20 }).notNull(),
-      // valor em reais
-      paymentMethod: mysqlEnum("payment_method", ["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro").notNull(),
-      receiptImageUrl: text("receipt_image_url"),
-      // foto da nota fiscal
+      cargoId: int("cargo_id").notNull().references(() => cargoLoads.id, { onDelete: "cascade" }),
+      stage: varchar("stage", { length: 50 }).notNull(),
+      photoUrl: text("photo_url").notNull(),
       notes: text("notes"),
       registeredBy: int("registered_by").references(() => users.id),
       registeredByName: varchar("registered_by_name", { length: 255 }),
-      createdAt: timestamp("created_at").defaultNow().notNull()
-    });
-    financialEntries = mysqlTable("financial_entries", {
-      id: int("id").autoincrement().primaryKey(),
-      type: mysqlEnum("type", ["receita", "despesa"]).notNull(),
-      category: varchar("category", { length: 100 }).notNull(),
-      // Categorias de receita: venda_madeira, servico_corte, servico_plantio, servico_transporte, outro_receita
-      // Categorias de despesa: folha_pagamento, combustivel, manutencao, material, alimentacao, transporte, impostos, aluguel, outro_despesa
-      description: varchar("description", { length: 500 }).notNull(),
-      amount: varchar("amount", { length: 20 }).notNull(),
-      // valor em reais
-      date: timestamp("date").notNull(),
-      referenceMonth: varchar("reference_month", { length: 7 }),
-      // ex: "2026-04" para agrupamento
-      paymentMethod: mysqlEnum("payment_method", ["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).default("pix").notNull(),
-      status: mysqlEnum("status", ["pendente", "confirmado", "cancelado"]).default("confirmado").notNull(),
-      clientId: int("client_id").references(() => clients.id, { onDelete: "set null" }),
-      clientName: varchar("client_name", { length: 255 }),
-      receiptImageUrl: text("receipt_image_url"),
-      notes: text("notes"),
-      registeredBy: int("registered_by").references(() => users.id),
-      registeredByName: varchar("registered_by_name", { length: 255 }),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    });
-    gpsLocations = mysqlTable("gps_locations", {
-      id: int("id").autoincrement().primaryKey(),
-      name: varchar("name", { length: 255 }).notNull(),
-      latitude: varchar("latitude", { length: 30 }).notNull(),
-      longitude: varchar("longitude", { length: 30 }).notNull(),
-      radiusMeters: int("radius_meters").default(2e3).notNull(),
-      // raio de detecção em metros
-      isActive: tinyint("is_active").default(1).notNull(),
-      notes: text("notes"),
-      createdBy: int("created_by").references(() => users.id),
-      createdByName: varchar("created_by_name", { length: 255 }),
-      createdAt: timestamp("created_at").defaultNow().notNull(),
-      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
   }
 });
@@ -2123,10 +2003,10 @@ var cargoLoadsRouter = router({
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const uploaded = await cloudinaryUpload(input.photoBase64, `btree/cargo/${input.cargoId}`);
     if (input.photoType === "weight_out") {
-      await db.update(cargoLoads).set({ weightOutPhotoUrl: uploaded.url, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(cargoLoads.id, input.cargoId));
+      await db.update(cargoLoads).set({ weightOutPhotoUrl: uploaded.url, updatedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") }).where(eq5(cargoLoads.id, input.cargoId));
       return { url: uploaded.url };
     } else if (input.photoType === "weight_in") {
-      await db.update(cargoLoads).set({ weightInPhotoUrl: uploaded.url, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(cargoLoads.id, input.cargoId));
+      await db.update(cargoLoads).set({ weightInPhotoUrl: uploaded.url, updatedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") }).where(eq5(cargoLoads.id, input.cargoId));
       return { url: uploaded.url };
     }
     const existing = await db.select({ photosJson: cargoLoads.photosJson }).from(cargoLoads).where(eq5(cargoLoads.id, input.cargoId)).limit(1);
@@ -2139,7 +2019,7 @@ var cargoLoadsRouter = router({
       }
     }
     photos.push(uploaded.url);
-    await db.update(cargoLoads).set({ photosJson: JSON.stringify(photos), updatedAt: /* @__PURE__ */ new Date() }).where(eq5(cargoLoads.id, input.cargoId));
+    await db.update(cargoLoads).set({ photosJson: JSON.stringify(photos), updatedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") }).where(eq5(cargoLoads.id, input.cargoId));
     return { url: uploaded.url, photos };
   }),
   create: protectedProcedure.input(z5.object({
@@ -2167,7 +2047,7 @@ var cargoLoadsRouter = router({
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(cargoLoads).values({
       ...input,
-      date: new Date(input.date),
+      date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       status: input.status || "pendente",
       trackingStatus: "aguardando",
       registeredBy: ctx.user.id
@@ -2200,10 +2080,11 @@ var cargoLoadsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, date: date2, ...rest } = input;
-    const updateData = { ...rest, updatedAt: /* @__PURE__ */ new Date() };
-    if (date2) updateData.date = new Date(date2);
-    if (rest.trackingStatus) updateData.trackingUpdatedAt = /* @__PURE__ */ new Date();
+    const { id, date, ...rest } = input;
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    const updateData = { ...rest, updatedAt: now };
+    if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
+    if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
     await db.update(cargoLoads).set(updateData).where(eq5(cargoLoads.id, id));
     return { success: true };
   }),
@@ -2217,8 +2098,8 @@ var cargoLoadsRouter = router({
     await db.update(cargoLoads).set({
       trackingStatus: input.trackingStatus,
       trackingNotes: input.trackingNotes,
-      trackingUpdatedAt: /* @__PURE__ */ new Date(),
-      updatedAt: /* @__PURE__ */ new Date(),
+      trackingUpdatedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "),
       // Finalizar carga quando tracking chega em "finalizado"
       status: input.trackingStatus === "finalizado" ? "entregue" : void 0
     }).where(eq5(cargoLoads.id, input.id));
@@ -2233,6 +2114,49 @@ var cargoLoadsRouter = router({
     await db.delete(cargoLoads).where(eq5(cargoLoads.id, input.id));
     return { success: true };
   }),
+  // ===== TRACKING PHOTOS =====
+  listTrackingPhotos: protectedProcedure.input(z5.object({ cargoId: z5.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    return db.select().from(cargoTrackingPhotos).where(eq5(cargoTrackingPhotos.cargoId, input.cargoId)).orderBy(cargoTrackingPhotos.createdAt);
+  }),
+  addTrackingPhoto: protectedProcedure.input(z5.object({
+    cargoId: z5.number(),
+    stage: z5.string().min(1),
+    photoBase64: z5.string(),
+    notes: z5.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const uploaded = await cloudinaryUpload(input.photoBase64, `btree/tracking/${input.cargoId}`);
+    await db.insert(cargoTrackingPhotos).values({
+      cargoId: input.cargoId,
+      stage: input.stage,
+      photoUrl: uploaded.url,
+      notes: input.notes,
+      registeredBy: ctx.user.id,
+      registeredByName: ctx.user.name
+    });
+    return { url: uploaded.url, success: true };
+  }),
+  deleteTrackingPhoto: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError4({ code: "FORBIDDEN" });
+    }
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.delete(cargoTrackingPhotos).where(eq5(cargoTrackingPhotos.id, input.id));
+    return { success: true };
+  }),
+  // Listar fotos de tracking para o portal do cliente (público)
+  getTrackingPhotosPublic: publicProcedure.input(z5.object({ cargoId: z5.number(), clientId: z5.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [load] = await db.select({ clientId: cargoLoads.clientId, clientName: cargoLoads.clientName }).from(cargoLoads).where(eq5(cargoLoads.id, input.cargoId)).limit(1);
+    if (!load) throw new TRPCError4({ code: "NOT_FOUND" });
+    return db.select().from(cargoTrackingPhotos).where(eq5(cargoTrackingPhotos.cargoId, input.cargoId)).orderBy(cargoTrackingPhotos.createdAt);
+  }),
+  // ===== CAMINHÕES E MOTORISTAS =====
   // Listar caminhões disponíveis (tipo veículo)
   listTrucks: protectedProcedure.query(async () => {
     const db = await getDb();
@@ -2306,10 +2230,10 @@ var machineHoursRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, date: date2, ...rest } = input;
+    const { id, date, ...rest } = input;
     await db.update(machineHours).set({
       ...rest,
-      ...date2 ? { date: new Date(date2) } : {}
+      ...date ? { date: new Date(date) } : {}
     }).where(eq6(machineHours.id, id));
     return { success: true };
   }),
@@ -2368,10 +2292,10 @@ var machineHoursRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, date: date2, ...rest } = input;
+    const { id, date, ...rest } = input;
     await db.update(machineMaintenance).set({
       ...rest,
-      ...date2 ? { date: new Date(date2) } : {}
+      ...date ? { date: new Date(date) } : {}
     }).where(eq6(machineMaintenance.id, id));
     return { success: true };
   }),
@@ -2696,7 +2620,7 @@ var vehicleRecordsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, photoBase64, date: date2, ...rest } = input;
+    const { id, photoBase64, date, ...rest } = input;
     let photoUrl;
     if (photoBase64 && photoBase64.startsWith("data:")) {
       const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
@@ -2705,7 +2629,7 @@ var vehicleRecordsRouter = router({
     }
     await db.update(vehicleRecords).set({
       ...rest,
-      ...date2 ? { date: new Date(date2) } : {},
+      ...date ? { date: new Date(date) } : {},
       ...photoUrl ? { photoUrl } : {}
     }).where(eq7(vehicleRecords.id, id));
     return { success: true };
@@ -2976,12 +2900,6 @@ var clientPortalRouter = router({
     ).limit(1);
     if (!client) throw new Error("Acesso n\xE3o autorizado.");
     let destIds = [];
-    try {
-      const clientDestinations = await db.select({ id: cargoDestinations.id }).from(cargoDestinations).where(eq10(cargoDestinations.clientId, input.clientId));
-      destIds = clientDestinations.map((d) => d.id);
-    } catch (e) {
-      console.error("[Portal] Erro ao buscar destinos:", e);
-    }
     let loads = [];
     try {
       const allLoads = await db.select().from(cargoLoads).orderBy(desc8(cargoLoads.date)).limit(200);
@@ -3022,6 +2940,86 @@ var clientPortalRouter = router({
     }
     return { client, loads, replanting, payments };
   }),
+  // ── LISTAR TODOS OS REPLANTIOS (admin) ──
+  listAllReplantings: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const records = await db.select({
+      id: replantingRecords.id,
+      clientId: replantingRecords.clientId,
+      date: replantingRecords.date,
+      area: replantingRecords.area,
+      species: replantingRecords.species,
+      quantity: replantingRecords.quantity,
+      areaHectares: replantingRecords.areaHectares,
+      notes: replantingRecords.notes,
+      photosJson: replantingRecords.photosJson,
+      registeredBy: replantingRecords.registeredBy,
+      createdAt: replantingRecords.createdAt,
+      clientName: clients.name
+    }).from(replantingRecords).leftJoin(clients, eq10(replantingRecords.clientId, clients.id)).orderBy(desc8(replantingRecords.date));
+    return records;
+  }),
+  // ── LISTAR TODOS OS PAGAMENTOS (admin) ──
+  listAllPayments: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const records = await db.select({
+      id: clientPayments.id,
+      clientId: clientPayments.clientId,
+      referenceDate: clientPayments.referenceDate,
+      description: clientPayments.description,
+      volumeM3: clientPayments.volumeM3,
+      pricePerM3: clientPayments.pricePerM3,
+      grossAmount: clientPayments.grossAmount,
+      deductions: clientPayments.deductions,
+      netAmount: clientPayments.netAmount,
+      status: clientPayments.status,
+      dueDate: clientPayments.dueDate,
+      paidAt: clientPayments.paidAt,
+      pixKey: clientPayments.pixKey,
+      notes: clientPayments.notes,
+      registeredBy: clientPayments.registeredBy,
+      createdAt: clientPayments.createdAt,
+      clientName: clients.name
+    }).from(clientPayments).leftJoin(clients, eq10(clientPayments.clientId, clients.id)).orderBy(desc8(clientPayments.referenceDate));
+    return records;
+  }),
+  // ── ATUALIZAR PAGAMENTO (admin) ──
+  updatePayment: protectedProcedure.input(z10.object({
+    id: z10.number(),
+    status: z10.enum(["pendente", "pago", "atrasado", "cancelado"]).optional(),
+    paidAt: z10.string().optional(),
+    notes: z10.string().optional(),
+    description: z10.string().optional(),
+    grossAmount: z10.string().optional(),
+    netAmount: z10.string().optional(),
+    deductions: z10.string().optional(),
+    dueDate: z10.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const { id, paidAt, dueDate, ...rest } = input;
+    const updateData = { ...rest };
+    if (paidAt) updateData.paidAt = new Date(paidAt).toISOString().slice(0, 19).replace("T", " ");
+    if (dueDate) updateData.dueDate = new Date(dueDate).toISOString().slice(0, 19).replace("T", " ");
+    await db.update(clientPayments).set(updateData).where(eq10(clientPayments.id, id));
+    return { success: true };
+  }),
+  // ── EXCLUIR REPLANTIO (admin) ──
+  deleteReplanting: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(replantingRecords).where(eq10(replantingRecords.id, input.id));
+    return { success: true };
+  }),
+  // ── EXCLUIR PAGAMENTO (admin) ──
+  deletePayment: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(clientPayments).where(eq10(clientPayments.id, input.id));
+    return { success: true };
+  }),
   // ── DEFINIR/ALTERAR SENHA DO CLIENTE (admin) ──
   setClientPassword: protectedProcedure.input(z10.object({
     clientId: z10.number(),
@@ -3047,7 +3045,7 @@ var clientPortalRouter = router({
     if (!db) throw new Error("Database not available");
     await db.insert(replantingRecords).values({
       clientId: input.clientId,
-      date: new Date(input.date),
+      date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       area: input.area,
       species: input.species || "Eucalipto",
       quantity: input.quantity,
@@ -3077,7 +3075,7 @@ var clientPortalRouter = router({
     if (!db) throw new Error("Database not available");
     await db.insert(clientPayments).values({
       clientId: input.clientId,
-      referenceDate: new Date(input.referenceDate),
+      referenceDate: new Date(input.referenceDate).toISOString().slice(0, 19).replace("T", " "),
       description: input.description,
       volumeM3: input.volumeM3,
       pricePerM3: input.pricePerM3,
@@ -3085,8 +3083,8 @@ var clientPortalRouter = router({
       deductions: input.deductions || "0",
       netAmount: input.netAmount,
       status: input.status,
-      dueDate: input.dueDate ? new Date(input.dueDate) : void 0,
-      paidAt: input.paidAt ? new Date(input.paidAt) : void 0,
+      dueDate: input.dueDate ? new Date(input.dueDate).toISOString().slice(0, 19).replace("T", " ") : void 0,
+      paidAt: input.paidAt ? new Date(input.paidAt).toISOString().slice(0, 19).replace("T", " ") : void 0,
       pixKey: input.pixKey,
       notes: input.notes,
       registeredBy: ctx.user.id
@@ -4096,7 +4094,9 @@ var SYSTEM_MODULES = [
   { slug: "motosserras", label: "Motosserras", group: "Maquin\xE1rio" },
   { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
   { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" },
-  { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Administrativo" }
+  { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Administrativo" },
+  { slug: "replantios", label: "Replantios", group: "Opera\xE7\xF5es" },
+  { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" }
 ];
 var PROFILES = {
   admin: {
@@ -5112,10 +5112,10 @@ var financialRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const { id, date: date2, ...rest } = input;
+    const { id, date, ...rest } = input;
     const updateData = { ...rest };
-    if (date2) {
-      const dateObj = new Date(date2);
+    if (date) {
+      const dateObj = new Date(date);
       updateData.date = dateObj;
       updateData.referenceMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
     }
