@@ -677,6 +677,27 @@ function CargoCard({ load, formatDate, statusColor, clientId }: { load: CargoLoa
                 <p className="font-medium text-gray-700">{load.invoiceNumber}</p>
               </div>
             )}
+            {(load as any).weightOutKg && (
+              <div className="bg-white rounded-lg p-2">
+                <p className="text-gray-400">Peso Saída</p>
+                <p className="font-medium text-gray-700">{(load as any).weightOutKg} kg</p>
+              </div>
+            )}
+            {(load as any).weightInKg && (
+              <div className="bg-white rounded-lg p-2">
+                <p className="text-gray-400">Peso Chegada</p>
+                <p className="font-medium text-gray-700">{(load as any).weightInKg} kg</p>
+              </div>
+            )}
+            {(load as any).finalHeightM && (
+              <div className="bg-white rounded-lg p-2 col-span-2">
+                <p className="text-gray-400">Metragem Final</p>
+                <p className="font-medium text-gray-700">
+                  {(load as any).finalHeightM} x {(load as any).finalWidthM} x {(load as any).finalLengthM} m
+                  {' = '}{(parseFloat(((load as any).finalHeightM || '0').replace(',','.')) * parseFloat(((load as any).finalWidthM || '0').replace(',','.')) * parseFloat(((load as any).finalLengthM || '0').replace(',','.'))).toFixed(2)} m³
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

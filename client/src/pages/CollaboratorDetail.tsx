@@ -13,6 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Link2, Unlink } from "lucide-react";
 
 const DOC_TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   cnh: { label: "CNH", icon: <Car className="h-4 w-4" />, color: "bg-blue-100 text-blue-800" },
@@ -329,6 +330,8 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
                 ))}
               </CardContent>
             </Card>
+            {/* Card: Vincular Usuário do Sistema */}
+            <LinkUserCard collaboratorId={collaboratorId} currentUserId={(collab as any).userId} />
           </div>
         )}
 
@@ -579,5 +582,107 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
         </Dialog>
       )}
     </div>
+  );
+}
+
+// ===== Componente para vincular usuário do sistema ao colaborador =====
+function LinkUserCard({ collaboratorId, currentUserId }: { collaboratorId: number; currentUserId: number | null }) {
+  const [showDialog, setShowDialog] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(currentUserId);
+  const utils = trpc.useUtils();
+
+  const { data: availableUsers = [] } = trpc.collaborators.listAvailableUsers.useQuery(undefined, {
+    enabled: showDialog,
+  });
+
+  const linkMutation = trpc.collaborators.linkUser.useMutation({
+    onSuccess: () => {
+      toast.success(selectedUserId ? "Usuário vinculado com sucesso!" : "Vínculo removido!");
+      utils.collaborators.getById.invalidate({ id: collaboratorId });
+      setShowDialog(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const currentUser = availableUsers.find((u: any) => u.id === currentUserId);
+
+  return (
+    <Card className="col-span-full">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+          <Link2 className="h-4 w-4" /> Vínculo com Usuário do Sistema
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {currentUserId ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                <User className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">{currentUser?.name || `Usuário #${currentUserId}`}</p>
+                <p className="text-xs text-muted-foreground">{currentUser?.email || ""}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setSelectedUserId(currentUserId); setShowDialog(true); }}>
+                <Link2 className="h-3 w-3 mr-1" /> Alterar
+              </Button>
+              <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => {
+                if (confirm("Remover vínculo com usuário do sistema?")) {
+                  setSelectedUserId(null);
+                  linkMutation.mutate({ collaboratorId, userId: null });
+                }
+              }}>
+                <Unlink className="h-3 w-3 mr-1" /> Desvincular
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">Nenhum usuário vinculado. Vincule para que o colaborador acesse o sistema como motorista.</p>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setSelectedUserId(null); setShowDialog(true); }}>
+              <Link2 className="h-3 w-3 mr-1" /> Vincular
+            </Button>
+          </div>
+        )}
+      </CardContent>
+
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vincular Usuário do Sistema</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Selecione o usuário que corresponde a este colaborador. Usuários já vinculados a outros colaboradores aparecem desabilitados.</p>
+            <select
+              value={selectedUserId ?? ""}
+              onChange={e => setSelectedUserId(e.target.value ? Number(e.target.value) : null)}
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">-- Selecione um usuário --</option>
+              {availableUsers.map((u: any) => (
+                <option key={u.id} value={u.id} disabled={u.isLinked && u.id !== currentUserId}>
+                  {u.name || u.email} {u.email ? `(${u.email})` : ""} {u.isLinked && u.id !== currentUserId ? " [já vinculado]" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={!selectedUserId || linkMutation.isPending}
+              onClick={() => {
+                if (selectedUserId) linkMutation.mutate({ collaboratorId, userId: selectedUserId });
+              }}
+            >
+              {linkMutation.isPending ? "Vinculando..." : "Vincular"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }

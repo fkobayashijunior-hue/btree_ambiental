@@ -128,6 +128,9 @@ export const sectorsRouter = router({
       licensePlate: z.string().optional(),
       imageUrl: z.string().optional(),
       status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
+      defaultHeightM: z.string().optional(),
+      defaultWidthM: z.string().optional(),
+      defaultLengthM: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -159,6 +162,9 @@ export const sectorsRouter = router({
       licensePlate: z.string().optional(),
       imageUrl: z.string().optional(),
       status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
+      defaultHeightM: z.string().optional().nullable(),
+      defaultWidthM: z.string().optional().nullable(),
+      defaultLengthM: z.string().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

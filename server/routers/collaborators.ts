@@ -139,6 +139,29 @@ export const collaboratorsRouter = router({
       return created[0];
     }),
 
+  // Vincular colaborador a usuário do sistema
+  linkUser: protectedProcedure
+    .input(z.object({
+      collaboratorId: z.number(),
+      userId: z.number().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.update(collaborators).set({ userId: input.userId } as any).where(eq(collaborators.id, input.collaboratorId));
+      return { success: true };
+    }),
+
+  // Listar usuários disponíveis para vincular (que ainda não estão vinculados a outro colaborador)
+  listAvailableUsers: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const allUsers = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(users.name);
+    const allCollabs = await db.select({ userId: collaborators.userId }).from(collaborators);
+    const linkedUserIds = new Set(allCollabs.map(c => c.userId).filter(Boolean));
+    return allUsers.map(u => ({ ...u, isLinked: linkedUserIds.has(u.id) }));
+  }),
+
   // Atualizar colaborador
   update: protectedProcedure
     .input(z.object({

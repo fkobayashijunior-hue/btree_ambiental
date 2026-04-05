@@ -870,10 +870,13 @@ export default function CargoControl() {
                   ["Cliente", detailCargo.clientName || "-"],
                   ["Destino", detailCargo.destination || "-"],
                   ["Tipo de Madeira", detailCargo.woodType || "-"],
-                  ["Volume", `${detailCargo.volumeM3} m³`],
-                  ["Peso", detailCargo.weightKg ? `${detailCargo.weightKg} kg` : "-"],
+                  ["Volume Previsto", `${detailCargo.volumeM3} m³`],
+                  ["Peso Previsto", detailCargo.weightKg ? `${detailCargo.weightKg} kg` : "-"],
                   ["Nota Fiscal", detailCargo.invoiceNumber || "-"],
                   ["Status", detailCargo.status],
+                  ["Peso Saída (kg)", (detailCargo as any).weightOutKg ? `${(detailCargo as any).weightOutKg} kg` : "-"],
+                  ["Peso Chegada (kg)", (detailCargo as any).weightInKg ? `${(detailCargo as any).weightInKg} kg` : "-"],
+                  ["Metragem Final", (detailCargo as any).finalHeightM ? `${(detailCargo as any).finalHeightM} x ${(detailCargo as any).finalWidthM} x ${(detailCargo as any).finalLengthM} m = ${calcVolume((detailCargo as any).finalHeightM || "0", (detailCargo as any).finalWidthM || "0", (detailCargo as any).finalLengthM || "0")} m³` : "-"],
                 ].map(([label, value]) => (
                   <div key={label} className="bg-gray-50 rounded-lg p-2">
                     <p className="text-xs text-gray-500">{label}</p>

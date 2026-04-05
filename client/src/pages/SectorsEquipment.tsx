@@ -41,6 +41,7 @@ export default function SectorsEquipment() {
   const [equipForm, setEquipForm] = useState({
     name: "", typeId: 0, sectorId: 0, brand: "", model: "",
     year: "", serialNumber: "", licensePlate: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
+    defaultHeightM: "", defaultWidthM: "", defaultLengthM: "",
   });
   const [filterSectorId, setFilterSectorId] = useState(0);
   // Upload de foto do equipamento
@@ -95,7 +96,7 @@ export default function SectorsEquipment() {
   });
 
   const resetEquipForm = () => {
-    setEquipForm({ name: "", typeId: 0, sectorId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", status: "ativo" });
+    setEquipForm({ name: "", typeId: 0, sectorId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", status: "ativo", defaultHeightM: "", defaultWidthM: "", defaultLengthM: "" });
     setEquipPhotoPreview(null);
     setEquipPhotoBase64(null);
     setExistingImageUrl(null);
@@ -122,6 +123,7 @@ export default function SectorsEquipment() {
       name: e.name, typeId: e.typeId, sectorId: (e as any).sectorId || 0, brand: e.brand || "",
       model: e.model || "", year: e.year?.toString() || "",
       serialNumber: e.serialNumber || "", licensePlate: (e as any).licensePlate || "", status: e.status as any,
+      defaultHeightM: (e as any).defaultHeightM || "", defaultWidthM: (e as any).defaultWidthM || "", defaultLengthM: (e as any).defaultLengthM || "",
     });
     // Carregar imagem existente
     const imgUrl = (e as any).imageUrl;
@@ -176,6 +178,9 @@ export default function SectorsEquipment() {
       licensePlate: isVehicleType ? (equipForm.licensePlate || undefined) : undefined,
       status: equipForm.status,
       imageUrl: equipPhotoBase64 || existingImageUrl || undefined,
+      defaultHeightM: isVehicleType ? (equipForm.defaultHeightM || undefined) : undefined,
+      defaultWidthM: isVehicleType ? (equipForm.defaultWidthM || undefined) : undefined,
+      defaultLengthM: isVehicleType ? (equipForm.defaultLengthM || undefined) : undefined,
     };
     if (editEquipId) {
       updateEquip.mutate({ id: editEquipId, ...data });
@@ -441,6 +446,42 @@ export default function SectorsEquipment() {
                           </>
                         )}
                       </div>
+                      {/* Medidas padrão do caminhão */}
+                      {isVehicleType && (
+                        <div className="col-span-2">
+                          <Label className="flex items-center gap-1 text-emerald-700 font-semibold">📏 Medidas Padrão da Carga (metros)</Label>
+                          <p className="text-xs text-gray-500 mb-2">Preenchidas automaticamente ao criar nova carga com este caminhão</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <Label className="text-xs">Altura (m)</Label>
+                              <Input
+                                value={equipForm.defaultHeightM}
+                                onChange={e => setEquipForm(f => ({ ...f, defaultHeightM: e.target.value }))}
+                                placeholder="2.4"
+                                inputMode="decimal"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Largura (m)</Label>
+                              <Input
+                                value={equipForm.defaultWidthM}
+                                onChange={e => setEquipForm(f => ({ ...f, defaultWidthM: e.target.value }))}
+                                placeholder="2.4"
+                                inputMode="decimal"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Comprimento (m)</Label>
+                              <Input
+                                value={equipForm.defaultLengthM}
+                                onChange={e => setEquipForm(f => ({ ...f, defaultLengthM: e.target.value }))}
+                                placeholder="13.80"
+                                inputMode="decimal"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div className="col-span-2">
                         <Label>Status</Label>
                         <select

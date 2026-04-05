@@ -1208,3 +1208,23 @@
 ### Git e SQL
 - [x] Push no GitHub (btree_ambiental)
 - [x] Gerar script SQL com nova tabela cargo_tracking_photos e novos campos
+
+## 🔧 PRÓXIMOS PASSOS 05/04/2026 — Funcionar Tudo de Ponta a Ponta
+
+### 1. Medidas Padrão por Caminhão (Admin)
+- [x] Adicionar campos de medidas padrão no formulário de cadastro/edição de equipamento
+- [x] Exibir medidas padrão na listagem de equipamentos (caminhões)
+
+### 2. Vincular Colaborador a Usuário
+- [x] Adicionar campo userId no formulário de cadastro/edição de colaborador
+- [x] Dropdown de usuários disponíveis para vincular ao colaborador
+- [x] Procedure backend para listar usuários disponíveis para vinculação
+
+### 3. Peso e Metragem Final no Portal do Cliente e Admin
+- [x] Exibir peso saída/chegada nos detalhes da carga (admin CargoControl)
+- [x] Exibir metragem final nos detalhes da carga (admin CargoControl)
+- [x] Exibir peso e metragem final no portal do cliente (ClientPortal)
+
+### 4. Git e SQL
+- [ ] Push no GitHub
+- [ ] Script SQL se houver alterações de tabela
