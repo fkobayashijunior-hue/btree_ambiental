@@ -440,4 +440,156 @@ export const cargoLoadsRouter = router({
       role: collaborators.role,
     }).from(collaborators).orderBy(collaborators.name);
   }),
+
+  // ===== EXPERIÊNCIA DO MOTORISTA =====
+  // Buscar informações do motorista logado (colaborador vinculado + caminhão)
+  getMyDriverInfo: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+    
+    // Buscar colaborador vinculado ao user logado
+    const [myCollaborator] = await db.select({
+      id: collaborators.id,
+      name: collaborators.name,
+      role: collaborators.role,
+    }).from(collaborators).where(eq(collaborators.userId, ctx.user.id)).limit(1);
+    
+    // Buscar caminhões disponíveis
+    const allEquip = await db.select({
+      id: equipment.id,
+      name: equipment.name,
+      licensePlate: equipment.licensePlate,
+      brand: equipment.brand,
+      model: equipment.model,
+      status: equipment.status,
+    }).from(equipment).orderBy(equipment.name);
+    const trucksList = allEquip.filter(e => 
+      e.licensePlate || e.name.toLowerCase().includes("caminh") || 
+      e.name.toLowerCase().includes("veículo") || e.name.toLowerCase().includes("veiculo") || 
+      e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van") ||
+      e.name.toLowerCase().includes("bitrem") || e.name.toLowerCase().includes("carreta")
+    );
+    
+    // Buscar a última carga do motorista para sugerir caminhão padrão
+    let defaultTruckId: number | null = null;
+    if (myCollaborator) {
+      const [lastCargo] = await db.select({ vehicleId: cargoLoads.vehicleId })
+        .from(cargoLoads)
+        .where(eq(cargoLoads.driverCollaboratorId, myCollaborator.id))
+        .orderBy(desc(cargoLoads.createdAt))
+        .limit(1);
+      if (lastCargo?.vehicleId) defaultTruckId = lastCargo.vehicleId;
+    }
+    
+    return {
+      collaborator: myCollaborator || null,
+      defaultTruckId,
+      trucks: trucksList,
+      isDriver: myCollaborator?.role === 'motorista',
+      // Medidas padrão para eucalipto (6 pilhas)
+      defaultMeasures: {
+        heightM: '2.4',
+        widthM: '2.4',
+        lengthM: '13.80',
+      },
+    };
+  }),
+
+  // Buscar cargas pendentes do motorista logado
+  getMyPendingLoads: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+    
+    // Buscar colaborador vinculado
+    const [myCollaborator] = await db.select({ id: collaborators.id })
+      .from(collaborators).where(eq(collaborators.userId, ctx.user.id)).limit(1);
+    
+    if (!myCollaborator) return [];
+    
+    const loads = await db.select({
+      id: cargoLoads.id,
+      date: cargoLoads.date,
+      vehicleId: cargoLoads.vehicleId,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      driverName: cargoLoads.driverName,
+      heightM: cargoLoads.heightM,
+      widthM: cargoLoads.widthM,
+      lengthM: cargoLoads.lengthM,
+      volumeM3: cargoLoads.volumeM3,
+      clientName: cargoLoads.clientName,
+      clientId: cargoLoads.clientId,
+      destination: cargoLoads.destination,
+      destinationId: cargoLoads.destinationId,
+      status: cargoLoads.status,
+      trackingStatus: cargoLoads.trackingStatus,
+      trackingNotes: cargoLoads.trackingNotes,
+      notes: cargoLoads.notes,
+      createdAt: cargoLoads.createdAt,
+      // Joins
+      clientNameJoined: clients.name,
+      destinationNameJoined: cargoDestinations.name,
+      vehicleNameJoined: equipment.name,
+      vehiclePlateJoined: equipment.licensePlate,
+    })
+    .from(cargoLoads)
+    .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
+    .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
+    .leftJoin(equipment, eq(cargoLoads.vehicleId, equipment.id))
+    .where(and(
+      eq(cargoLoads.driverCollaboratorId, myCollaborator.id),
+      eq(cargoLoads.status, 'pendente')
+    ))
+    .orderBy(desc(cargoLoads.createdAt));
+    
+    return loads.map(r => ({
+      ...r,
+      clientName: r.clientNameJoined || r.clientName,
+      destination: r.destinationNameJoined || r.destination,
+      vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
+      vehicleName: r.vehicleNameJoined,
+    }));
+  }),
+
+  // Avançar tracking + enviar foto em um único passo
+  advanceTrackingWithPhoto: protectedProcedure
+    .input(z.object({
+      cargoId: z.number(),
+      stage: z.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
+      photoBase64: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      
+      // Atualizar tracking status
+      const updateData: Record<string, unknown> = {
+        trackingStatus: input.stage,
+        trackingNotes: input.notes || null,
+        trackingUpdatedAt: now,
+        updatedAt: now,
+      };
+      if (input.stage === 'finalizado') updateData.status = 'entregue';
+      await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
+      
+      // Se tem foto, fazer upload e salvar na tabela de tracking photos
+      let photoUrl: string | null = null;
+      if (input.photoBase64) {
+        const uploaded = await cloudinaryUpload(input.photoBase64, `btree/tracking/${input.cargoId}`);
+        photoUrl = uploaded.url;
+        
+        await db.insert(cargoTrackingPhotos).values({
+          cargoId: input.cargoId,
+          stage: input.stage,
+          photoUrl: uploaded.url,
+          notes: input.notes,
+          registeredBy: ctx.user.id,
+          registeredByName: ctx.user.name,
+        });
+      }
+      
+      return { success: true, photoUrl };
+    }),
 });

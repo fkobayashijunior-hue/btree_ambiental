@@ -48,6 +48,7 @@ const menuItems = [
   { icon: DollarSign, label: "Pagamentos Clientes", path: "/pagamentos-clientes", slug: "pagamentos-clientes" },
   { icon: Wallet, label: "Financeiro", path: "/financeiro", slug: "financeiro" },
   { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: null },
+  { icon: Truck, label: "Minha Carga", path: "/motorista", slug: "cargas" },
 ];
 
 // Rotas que são subpáginas (não estão no menu principal)
@@ -117,7 +118,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
-  const { hasAccess, isAdmin } = usePermissions();
+  const { hasAccess, isAdmin, profile } = usePermissions();
   const { data: myPhotoUrl } = trpc.collaborators.getMyPhoto.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
@@ -126,6 +127,15 @@ function DashboardLayoutContent({
   const [showDevContact, setShowDevContact] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
+  const [didRedirect, setDidRedirect] = useState(false);
+
+  // Redirecionar motorista para /motorista automaticamente ao logar
+  useEffect(() => {
+    if (!didRedirect && profile === 'motorista' && location === '/app') {
+      setDidRedirect(true);
+      setLocation('/motorista');
+    }
+  }, [profile, location, didRedirect, setLocation]);
 
   // Determinar se é subpágina e qual o parent
   const activeMenuItem = menuItems.find(item => item.path === location);

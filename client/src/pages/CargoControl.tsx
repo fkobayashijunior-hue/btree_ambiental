@@ -269,6 +269,9 @@ export default function CargoControl() {
   const { data: detailCargo } = trpc.cargoLoads.getById.useQuery(
     { id: detailId! }, { enabled: !!detailId }
   );
+  const { data: detailTrackingPhotos = [] } = trpc.cargoLoads.listTrackingPhotos.useQuery(
+    { cargoId: detailId! }, { enabled: !!detailId }
+  );
 
   // Mutations
   const createMutation = trpc.cargoLoads.create.useMutation({
@@ -878,6 +881,47 @@ export default function CargoControl() {
                   </div>
                 ))}
               </div>
+
+              {/* Fotos de Tracking por Etapa */}
+              {detailTrackingPhotos.length > 0 && (() => {
+                const grouped = detailTrackingPhotos.reduce<Record<string, typeof detailTrackingPhotos>>((acc, p) => {
+                  if (!acc[p.stage]) acc[p.stage] = [];
+                  acc[p.stage]!.push(p);
+                  return acc;
+                }, {});
+                return (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Fotos por Etapa</p>
+                    <div className="space-y-3">
+                      {TRACKING_STEPS.filter(s => grouped[s.key]).map(step => (
+                        <div key={step.key}>
+                          <p className="text-xs font-medium text-gray-600 mb-1">{step.icon} {step.label}</p>
+                          <div className="flex gap-2 flex-wrap">
+                            {grouped[step.key]!.map((tp) => (
+                              <div key={tp.id} className="relative group">
+                                <img
+                                  src={tp.photoUrl}
+                                  alt={step.label}
+                                  className="w-24 h-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90"
+                                  onClick={() => window.open(tp.photoUrl, "_blank")}
+                                />
+                                {tp.notes && (
+                                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] px-1 py-0.5 rounded-b-lg truncate">
+                                    {tp.notes}
+                                  </div>
+                                )}
+                                <p className="text-[10px] text-gray-400 mt-0.5">
+                                  {tp.registeredByName} · {new Date(tp.createdAt).toLocaleString("pt-BR")}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Fotos de pesagem */}
               <div>

@@ -1175,3 +1175,20 @@
 - [x] 403 Forbidden em aba anônima - public_html estava vazio
 - [x] Causa raiz: arquivos estáticos (index.html, CSS, JS) não copiados para public_html
 - [x] Correção: copiados manualmente + build.sh atualizado para copiar automaticamente
+
+
+## 🚀 SPRINT 05/04/2026 — Simplificação do Controle de Cargas para Motoristas
+
+### Experiência do Motorista
+- [x] Ao logar, motorista vê Controle de Cargas com seu caminhão pré-selecionado
+- [x] Auto-preenchimento: motorista, caminhão, metragem prevista (2,4 x 2,4 x 13,80 padrão 6 pilhas)
+- [x] Metragem configurável (comprimento pode mudar conforme pedido do cliente)
+- [x] Seleção simples de Cliente (local de extração) via dropdown
+- [x] Seleção simples de Destino via dropdown
+- [x] Tracking com fotos por etapa: clicar na etapa → abre câmera → envia foto
+- [x] Etapas: Carregando → Pesagem Saída → Em Trânsito → Descarregando → Pesagem Chegada → Finalizado
+
+### Visibilidade e Controle
+- [x] Portal do cliente: timeline com fotos de cada etapa visível
+- [x] Admin: visão completa de todas as cargas com tracking, fotos e documentos
+- [x] Transparência: todas as informações disponíveis para cliente e admin

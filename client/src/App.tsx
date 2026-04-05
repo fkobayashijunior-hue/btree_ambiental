@@ -31,6 +31,7 @@ import FinancialModule from "./pages/FinancialModule";
 import GpsLocationsPage from "./pages/GpsLocationsPage";
 import ReplantingPage from "./pages/ReplantingPage";
 import ClientPaymentsPage from "./pages/ClientPaymentsPage";
+import DriverCargoView from "./pages/DriverCargoView";
 
 // Wrapper que aplica DashboardLayout a páginas protegidas
 function WithLayout({ component: Component }: { component: React.ComponentType }) {
@@ -111,6 +112,9 @@ function Router() {
       </Route>
       <Route path={"/pagamentos-clientes"}>
         {() => <WithLayout component={ClientPaymentsPage} />}
+      </Route>
+      <Route path={"/motorista"}>
+        {() => <WithLayout component={DriverCargoView} />}
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
