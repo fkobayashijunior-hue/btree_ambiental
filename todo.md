@@ -1228,3 +1228,7 @@
 ### 4. Git e SQL
 - [x] Push no GitHub
 - [x] Script SQL se houver alterações de tabela
+
+## 🐛 CORREÇÕES 05/04/2026 — Auto-preenchimento medidas no admin
+- [ ] Formulário Nova Carga (admin): ao selecionar caminhão, preencher medidas padrão automaticamente
+- [ ] Verificar se a página /motorista está acessível e funcionando

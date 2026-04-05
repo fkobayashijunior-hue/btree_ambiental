@@ -425,6 +425,9 @@ export const cargoLoadsRouter = router({
       brand: equipment.brand,
       model: equipment.model,
       status: equipment.status,
+      defaultHeightM: equipment.defaultHeightM,
+      defaultWidthM: equipment.defaultWidthM,
+      defaultLengthM: equipment.defaultLengthM,
     }).from(equipment).orderBy(equipment.name);
     // Filtrar apenas veículos com placa ou que sejam do tipo veículo
     return all.filter(e => e.licensePlate || e.name.toLowerCase().includes("caminh") || e.name.toLowerCase().includes("veículo") || e.name.toLowerCase().includes("veiculo") || e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van"));
