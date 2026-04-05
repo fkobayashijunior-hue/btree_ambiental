@@ -454,7 +454,7 @@ export const cargoLoadsRouter = router({
       role: collaborators.role,
     }).from(collaborators).where(eq(collaborators.userId, ctx.user.id)).limit(1);
     
-    // Buscar caminhões disponíveis
+    // Buscar caminhões disponíveis (com medidas padrão)
     const allEquip = await db.select({
       id: equipment.id,
       name: equipment.name,
@@ -462,6 +462,9 @@ export const cargoLoadsRouter = router({
       brand: equipment.brand,
       model: equipment.model,
       status: equipment.status,
+      defaultHeightM: equipment.defaultHeightM,
+      defaultWidthM: equipment.defaultWidthM,
+      defaultLengthM: equipment.defaultLengthM,
     }).from(equipment).orderBy(equipment.name);
     const trucksList = allEquip.filter(e => 
       e.licensePlate || e.name.toLowerCase().includes("caminh") || 
@@ -481,17 +484,20 @@ export const cargoLoadsRouter = router({
       if (lastCargo?.vehicleId) defaultTruckId = lastCargo.vehicleId;
     }
     
+    // Determinar medidas padrão: do caminhão selecionado ou fallback eucalipto
+    const defaultTruck = trucksList.find(t => t.id === defaultTruckId);
+    const defaultMeasures = {
+      heightM: defaultTruck?.defaultHeightM || '2.4',
+      widthM: defaultTruck?.defaultWidthM || '2.4',
+      lengthM: defaultTruck?.defaultLengthM || '13.80',
+    };
+    
     return {
       collaborator: myCollaborator || null,
       defaultTruckId,
       trucks: trucksList,
       isDriver: myCollaborator?.role === 'motorista',
-      // Medidas padrão para eucalipto (6 pilhas)
-      defaultMeasures: {
-        heightM: '2.4',
-        widthM: '2.4',
-        lengthM: '13.80',
-      },
+      defaultMeasures,
     };
   }),
 
@@ -551,12 +557,39 @@ export const cargoLoadsRouter = router({
   }),
 
   // Avançar tracking + enviar foto em um único passo
+  // Atualizar medidas padrão de um caminhão (admin)
+  updateTruckDefaults: protectedProcedure
+    .input(z.object({
+      equipmentId: z.number(),
+      defaultHeightM: z.string().optional(),
+      defaultWidthM: z.string().optional(),
+      defaultLengthM: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN' });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      await db.update(equipment).set({
+        defaultHeightM: input.defaultHeightM || null,
+        defaultWidthM: input.defaultWidthM || null,
+        defaultLengthM: input.defaultLengthM || null,
+      } as any).where(eq(equipment.id, input.equipmentId));
+      return { success: true };
+    }),
+
   advanceTrackingWithPhoto: protectedProcedure
     .input(z.object({
       cargoId: z.number(),
       stage: z.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
       photoBase64: z.string().optional(),
       notes: z.string().optional(),
+      // Campos de peso (pesagem saída e chegada)
+      weightKg: z.string().optional(),
+      // Campos de metragem final (ao finalizar)
+      finalHeightM: z.string().optional(),
+      finalWidthM: z.string().optional(),
+      finalLengthM: z.string().optional(),
+      finalVolumeM3: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -571,7 +604,22 @@ export const cargoLoadsRouter = router({
         trackingUpdatedAt: now,
         updatedAt: now,
       };
-      if (input.stage === 'finalizado') updateData.status = 'entregue';
+      // Peso na pesagem de saída
+      if (input.stage === 'pesagem_saida' && input.weightKg) {
+        updateData.weightOutKg = input.weightKg;
+      }
+      // Peso na pesagem de chegada
+      if (input.stage === 'pesagem_chegada' && input.weightKg) {
+        updateData.weightInKg = input.weightKg;
+      }
+      // Metragem final ao finalizar
+      if (input.stage === 'finalizado') {
+        updateData.status = 'entregue';
+        if (input.finalHeightM) updateData.finalHeightM = input.finalHeightM;
+        if (input.finalWidthM) updateData.finalWidthM = input.finalWidthM;
+        if (input.finalLengthM) updateData.finalLengthM = input.finalLengthM;
+        if (input.finalVolumeM3) updateData.finalVolumeM3 = input.finalVolumeM3;
+      }
       await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
       
       // Se tem foto, fazer upload e salvar na tabela de tracking photos

@@ -70,6 +70,10 @@ export default function DriverCargoView() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [trackingPhotoStage, setTrackingPhotoStage] = useState<TrackingStatus | null>(null);
   const [trackingNotes, setTrackingNotes] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [finalHeight, setFinalHeight] = useState("");
+  const [finalWidth, setFinalWidth] = useState("");
+  const [finalLength, setFinalLength] = useState("");
 
   // Form para nova carga
   const [form, setForm] = useState({
@@ -126,6 +130,10 @@ export default function DriverCargoView() {
       setTrackingPhotoStage(null);
       setPhotoPreview(null);
       setTrackingNotes("");
+      setWeightKg("");
+      setFinalHeight("");
+      setFinalWidth("");
+      setFinalLength("");
       setUploading(false);
     },
     onError: (e) => { toast.error(e.message); setUploading(false); },
@@ -187,12 +195,25 @@ export default function DriverCargoView() {
   const handleConfirmAdvance = () => {
     if (!selectedCargoId || !trackingPhotoStage) return;
     setUploading(true);
-    advanceTracking.mutate({
+    const mutateData: Record<string, unknown> = {
       cargoId: selectedCargoId,
       stage: trackingPhotoStage,
       photoBase64: photoPreview || undefined,
       notes: trackingNotes || undefined,
-    });
+    };
+    // Peso nas etapas de pesagem
+    if ((trackingPhotoStage === 'pesagem_saida' || trackingPhotoStage === 'pesagem_chegada') && weightKg) {
+      mutateData.weightKg = weightKg;
+    }
+    // Metragem final ao finalizar
+    if (trackingPhotoStage === 'finalizado') {
+      if (finalHeight) mutateData.finalHeightM = finalHeight;
+      if (finalWidth) mutateData.finalWidthM = finalWidth;
+      if (finalLength) mutateData.finalLengthM = finalLength;
+      const fv = calcVolume(finalHeight || selectedCargo?.heightM || '0', finalWidth || selectedCargo?.widthM || '0', finalLength || selectedCargo?.lengthM || '0');
+      if (fv) mutateData.finalVolumeM3 = fv;
+    }
+    advanceTracking.mutate(mutateData as any);
   };
 
   const handleAdvanceWithoutPhoto = (stage: TrackingStatus) => {
@@ -255,7 +276,21 @@ export default function DriverCargoView() {
           </Label>
           <select
             value={form.vehicleId}
-            onChange={e => setForm(f => ({ ...f, vehicleId: parseInt(e.target.value) }))}
+            onChange={e => {
+              const newId = parseInt(e.target.value);
+              setForm(f => ({ ...f, vehicleId: newId }));
+              // Atualizar medidas padrão do caminhão selecionado
+              const truck = driverInfo?.trucks.find(t => t.id === newId);
+              if (truck) {
+                setForm(f => ({
+                  ...f,
+                  vehicleId: newId,
+                  heightM: truck.defaultHeightM || '2.4',
+                  widthM: truck.defaultWidthM || '2.4',
+                  lengthM: truck.defaultLengthM || '13.80',
+                }));
+              }
+            }}
             className="w-full h-12 px-4 rounded-xl border border-gray-200 bg-white text-sm font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
           >
             <option value={0}>Selecionar caminhão...</option>
@@ -512,6 +547,72 @@ export default function DriverCargoView() {
               {photoPreview && (
                 <img src={photoPreview} alt="Preview" className="w-full rounded-xl border border-gray-200" />
               )}
+
+              {/* Campo de peso para etapas de pesagem */}
+              {(trackingPhotoStage === 'pesagem_saida' || trackingPhotoStage === 'pesagem_chegada') && (
+                <div>
+                  <Label className="text-sm font-medium">Peso (kg)</Label>
+                  <Input
+                    value={weightKg}
+                    onChange={e => setWeightKg(e.target.value)}
+                    className="h-12 text-center text-lg font-bold rounded-xl mt-1"
+                    inputMode="decimal"
+                    placeholder="Ex: 32000"
+                  />
+                </div>
+              )}
+
+              {/* Campos de metragem final ao finalizar */}
+              {trackingPhotoStage === 'finalizado' && (
+                <div>
+                  <Label className="text-sm font-medium">Metragem Final (medida real)</Label>
+                  <div className="grid grid-cols-3 gap-2 mt-1">
+                    <div>
+                      <span className="text-xs text-gray-500 block mb-1">Altura (m)</span>
+                      <Input
+                        value={finalHeight}
+                        onChange={e => setFinalHeight(e.target.value)}
+                        className="h-10 text-center font-bold rounded-xl"
+                        inputMode="decimal"
+                        placeholder={selectedCargo?.heightM || '2.4'}
+                      />
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500 block mb-1">Largura (m)</span>
+                      <Input
+                        value={finalWidth}
+                        onChange={e => setFinalWidth(e.target.value)}
+                        className="h-10 text-center font-bold rounded-xl"
+                        inputMode="decimal"
+                        placeholder={selectedCargo?.widthM || '2.4'}
+                      />
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500 block mb-1">Comp. (m)</span>
+                      <Input
+                        value={finalLength}
+                        onChange={e => setFinalLength(e.target.value)}
+                        className="h-10 text-center font-bold rounded-xl"
+                        inputMode="decimal"
+                        placeholder={selectedCargo?.lengthM || '13.80'}
+                      />
+                    </div>
+                  </div>
+                  {(finalHeight || finalWidth || finalLength) && (
+                    <div className="mt-2 bg-blue-50 rounded-xl p-2 text-center">
+                      <span className="text-sm text-blue-700">Volume Final: </span>
+                      <span className="text-lg font-bold text-blue-800">
+                        {calcVolume(
+                          finalHeight || selectedCargo?.heightM || '0',
+                          finalWidth || selectedCargo?.widthM || '0',
+                          finalLength || selectedCargo?.lengthM || '0'
+                        )} m³
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <Label className="text-sm">Observação (opcional)</Label>
                 <textarea

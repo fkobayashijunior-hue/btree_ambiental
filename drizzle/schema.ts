@@ -75,6 +75,12 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 	trackingNotes: text("tracking_notes"),
 	weightOutPhotoUrl: text("weight_out_photo_url"),
 	weightInPhotoUrl: text("weight_in_photo_url"),
+	weightOutKg: varchar("weight_out_kg", { length: 20 }),
+	weightInKg: varchar("weight_in_kg", { length: 20 }),
+	finalHeightM: varchar("final_height_m", { length: 20 }),
+	finalWidthM: varchar("final_width_m", { length: 20 }),
+	finalLengthM: varchar("final_length_m", { length: 20 }),
+	finalVolumeM3: varchar("final_volume_m3", { length: 20 }),
 });
 
 export const cargoShipments = mysqlTable("cargo_shipments", {
@@ -345,6 +351,9 @@ export const equipment = mysqlTable("equipment", {
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	sectorId: int("sector_id"),
+	defaultHeightM: varchar("default_height_m", { length: 20 }),
+	defaultWidthM: varchar("default_width_m", { length: 20 }),
+	defaultLengthM: varchar("default_length_m", { length: 20 }),
 });
 
 export const equipmentMaintenance = mysqlTable("equipment_maintenance", {

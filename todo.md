@@ -1192,3 +1192,19 @@
 - [x] Portal do cliente: timeline com fotos de cada etapa visível
 - [x] Admin: visão completa de todas as cargas com tracking, fotos e documentos
 - [x] Transparência: todas as informações disponíveis para cliente e admin
+
+## 🔧 MELHORIAS 05/04/2026 — Peso/Metragem Final + Medidas por Caminhão
+
+### Peso e Metragem Final
+- [ ] Adicionar campos peso_saida_kg, peso_chegada_kg, metragem_final ao schema cargo_loads
+- [ ] Motorista registra peso e metragem final ao concluir a carga
+- [ ] Admin e cliente visualizam peso e metragem final
+
+### Medidas Padrão por Caminhão
+- [ ] Adicionar campos default_height, default_width, default_length ao schema equipment
+- [ ] Ao selecionar caminhão, preencher medidas padrão do caminhão automaticamente
+- [ ] Admin pode configurar medidas padrão de cada caminhão no cadastro de equipamentos
+
+### Git e SQL
+- [ ] Push no GitHub (btree_ambiental)
+- [ ] Gerar script SQL com nova tabela cargo_tracking_photos e novos campos
