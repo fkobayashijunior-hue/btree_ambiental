@@ -1226,5 +1226,5 @@
 - [x] Exibir peso e metragem final no portal do cliente (ClientPortal)
 
 ### 4. Git e SQL
-- [ ] Push no GitHub
-- [ ] Script SQL se houver alterações de tabela
+- [x] Push no GitHub
+- [x] Script SQL se houver alterações de tabela
