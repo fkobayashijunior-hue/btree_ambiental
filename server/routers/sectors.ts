@@ -96,6 +96,9 @@ export const sectorsRouter = router({
           sectorId: equipment.sectorId,
           typeName: equipmentTypes.name,
           createdAt: equipment.createdAt,
+          defaultHeightM: equipment.defaultHeightM,
+          defaultWidthM: equipment.defaultWidthM,
+          defaultLengthM: equipment.defaultLengthM,
         })
         .from(equipment)
         .leftJoin(equipmentTypes, eq(equipment.typeId, equipmentTypes.id))

@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { UserPlus, Search, Camera, Users, Eye, EyeOff, Lock, ChevronDown, ChevronUp, ImagePlus, X, FileText } from "lucide-react";
+import { UserPlus, Search, Camera, Users, Eye, EyeOff, Lock, ChevronDown, ChevronUp, ImagePlus, X, FileText, Link2, Unlink } from "lucide-react";
 
 // Comprime imagem para máx 800px e qualidade 0.8 (reduz tamanho do base64)
 function compressImage(file: File): Promise<string> {
@@ -62,7 +62,7 @@ type FormData = {
   role: string; pixKey: string; dailyRate: string;
   employmentType: string; shirtSize: string; pantsSize: string;
   shoeSize: string; bootSize: string; photoBase64: string;
-  password: string;
+  password: string; linkedUserId: number | null;
 };
 
 const emptyForm: FormData = {
@@ -71,6 +71,7 @@ const emptyForm: FormData = {
   role: "operador", pixKey: "", dailyRate: "",
   employmentType: "diarista", shirtSize: "", pantsSize: "",
   shoeSize: "", bootSize: "", photoBase64: "", password: "",
+  linkedUserId: null,
 };
 
 function SectionTitle({ icon, title, open, onToggle }: { icon: React.ReactNode; title: string; open: boolean; onToggle: () => void }) {
@@ -164,6 +165,21 @@ export default function Collaborators() {
     }
   };
 
+  // Query de usuários disponíveis para vincular
+  const { data: availableUsers = [] } = trpc.collaborators.listAvailableUsers.useQuery(undefined, {
+    enabled: isOpen && editId !== null,
+  });
+
+  // Mutation para vincular/desvincular usuário
+  const linkUserMutation = trpc.collaborators.linkUser.useMutation({
+    onSuccess: () => {
+      toast.success("Vínculo atualizado!");
+      utils.collaborators.list.invalidate();
+      utils.collaborators.listAvailableUsers.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const openEdit = (c: any) => {
     setEditId(c.id);
     setForm({
@@ -174,6 +190,7 @@ export default function Collaborators() {
       employmentType: c.employmentType || "diarista", shirtSize: c.shirtSize || "",
       pantsSize: c.pantsSize || "", shoeSize: c.shoeSize || "", bootSize: c.bootSize || "",
       photoBase64: "", password: "",
+      linkedUserId: c.userId || null,
     });
     setOpenSections({ pessoal: true, endereco: false, epi: false });
     setIsOpen(true);
@@ -462,6 +479,49 @@ export default function Collaborators() {
                       <Input value={form.bootSize} onChange={e => setForm(f => ({ ...f, bootSize: e.target.value }))} placeholder="ex: 43" />
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ===== VINCULAR USUÁRIO (apenas na edição) ===== */}
+            {editId && (
+              <div className="space-y-3 px-1">
+                <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-blue-50 text-blue-800 font-semibold text-sm">
+                  <Link2 className="h-4 w-4" />
+                  Vincular Usuário do Sistema
+                </div>
+                <div className="px-1">
+                  <p className="text-xs text-gray-500 mb-2">Vincule este colaborador a um usuário para que ele acesse o sistema com as permissões corretas.</p>
+                  <select
+                    value={form.linkedUserId ?? 0}
+                    onChange={e => {
+                      const uid = parseInt(e.target.value) || null;
+                      setForm(f => ({ ...f, linkedUserId: uid }));
+                      if (editId) {
+                        linkUserMutation.mutate({ collaboratorId: editId, userId: uid });
+                      }
+                    }}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value={0}>Nenhum usuário vinculado</option>
+                    {availableUsers.map((u: any) => (
+                      <option key={u.id} value={u.id} disabled={u.isLinked && u.id !== form.linkedUserId}>
+                        {u.name} ({u.email}){u.isLinked && u.id !== form.linkedUserId ? " — já vinculado" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {form.linkedUserId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm(f => ({ ...f, linkedUserId: null }));
+                        if (editId) linkUserMutation.mutate({ collaboratorId: editId, userId: null });
+                      }}
+                      className="mt-2 text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
+                    >
+                      <Unlink className="h-3 w-3" /> Desvincular usuário
+                    </button>
+                  )}
                 </div>
               </div>
             )}
