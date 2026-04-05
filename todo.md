@@ -1234,5 +1234,5 @@
 - [x] Verificar se a página /motorista está acessível e funcionando
 
 ## 🐛 BUG 05/04/2026 — Campos não aparecem
-- [ ] Campos de medidas padrão (altura, largura, comprimento) não aparecem no formulário de editar equipamento
-- [ ] Card de vincular usuário não aparece no detalhe do colaborador
+- [x] Campos de medidas padrão (altura, largura, comprimento) não aparecem no formulário de editar equipamento
+- [x] Card de vincular usuário não aparece no detalhe do colaborador (adicionado também no painel lateral de edição)
