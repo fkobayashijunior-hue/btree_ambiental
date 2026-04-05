@@ -1168,3 +1168,10 @@
 - [x] Replantios não aparece no menu lateral do dashboard (faltava slug no SYSTEM_MODULES)
 - [x] Pagamentos de Clientes não aparece no menu lateral do dashboard (faltava slug no SYSTEM_MODULES)
 
+
+## 🐛 BUG 05/04/2026 — Login não funciona na Hostinger
+- [x] Erro "Unexpected token '<', '<!DOCTYPE '... is not valid JSON" ao tentar login
+- [x] Backend retornando HTML em vez de JSON nas chamadas de API
+- [x] 403 Forbidden em aba anônima - public_html estava vazio
+- [x] Causa raiz: arquivos estáticos (index.html, CSS, JS) não copiados para public_html
+- [x] Correção: copiados manualmente + build.sh atualizado para copiar automaticamente

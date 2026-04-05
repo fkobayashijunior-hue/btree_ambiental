@@ -43,6 +43,16 @@ else
   fi
 
   echo "Using pre-built dist/ from repository."
+
+  # ── Copiar arquivos estáticos para public_html ──
+  # O LiteSpeed/Passenger da Hostinger serve arquivos estáticos de public_html
+  # Sem isso, rotas SPA como /login retornam 403 Forbidden
+  PUBLIC_HTML="$HOME/domains/btreeambiental.com/public_html"
+  if [ -d "$PUBLIC_HTML" ] && [ -d "dist/public" ]; then
+    echo "Copying static assets to public_html..."
+    cp -r dist/public/* "$PUBLIC_HTML/" 2>/dev/null || true
+    echo "Static assets copied to public_html."
+  fi
 fi
 
 echo "Build complete!"
