@@ -82,10 +82,11 @@ export default function Register() {
               </Label>
               <Input
                 id="email"
-                type="email"
+                type="text"
+                inputMode="email"
                 placeholder="seu@email.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value.trim())}
                 required
                 className="border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
               />

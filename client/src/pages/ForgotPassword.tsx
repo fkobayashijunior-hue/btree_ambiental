@@ -72,10 +72,11 @@ export default function ForgotPassword() {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="email"
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     placeholder="seu@email.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => setEmail(e.target.value.trim())}
                     required
                     className="pl-10 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                   />

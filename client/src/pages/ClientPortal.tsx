@@ -152,10 +152,11 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   placeholder="seu@email.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value.trim())}
                   autoComplete="email"
                   className="w-full h-12 pl-10 pr-4 rounded-xl border-2 border-gray-200 focus:border-[#2e7d32] focus:outline-none transition-colors text-gray-900 placeholder-gray-300"
                 />
