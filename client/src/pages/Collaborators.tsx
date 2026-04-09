@@ -390,6 +390,49 @@ export default function Collaborators() {
               </div>
             )}
 
+            {/* ===== VINCULAR USUÁRIO (apenas na edição) ===== */}
+            {editId && (
+              <div className="space-y-3 px-1 py-3 border rounded-lg border-blue-200 bg-blue-50/50">
+                <div className="flex items-center gap-2 py-1 px-3 text-blue-800 font-semibold text-sm">
+                  <Link2 className="h-4 w-4" />
+                  Vincular Usuário do Sistema
+                </div>
+                <div className="px-3">
+                  <p className="text-xs text-gray-500 mb-2">Vincule este colaborador a um usuário para que ele acesse o sistema (motorista, etc).</p>
+                  <select
+                    value={form.linkedUserId ?? 0}
+                    onChange={e => {
+                      const uid = parseInt(e.target.value) || null;
+                      setForm(f => ({ ...f, linkedUserId: uid }));
+                      if (editId) {
+                        linkUserMutation.mutate({ collaboratorId: editId, userId: uid });
+                      }
+                    }}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value={0}>Nenhum usuário vinculado</option>
+                    {availableUsers.map((u: any) => (
+                      <option key={u.id} value={u.id} disabled={u.isLinked && u.id !== form.linkedUserId}>
+                        {u.name} ({u.email}){u.isLinked && u.id !== form.linkedUserId ? " — já vinculado" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {form.linkedUserId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm(f => ({ ...f, linkedUserId: null }));
+                        if (editId) linkUserMutation.mutate({ collaboratorId: editId, userId: null });
+                      }}
+                      className="mt-2 text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
+                    >
+                      <Unlink className="h-3 w-3" /> Desvincular usuário
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ===== ENDEREÇO ===== */}
             <SectionTitle
               icon={<span>📍</span>}
@@ -479,49 +522,6 @@ export default function Collaborators() {
                       <Input value={form.bootSize} onChange={e => setForm(f => ({ ...f, bootSize: e.target.value }))} placeholder="ex: 43" />
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* ===== VINCULAR USUÁRIO (apenas na edição) ===== */}
-            {editId && (
-              <div className="space-y-3 px-1">
-                <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-blue-50 text-blue-800 font-semibold text-sm">
-                  <Link2 className="h-4 w-4" />
-                  Vincular Usuário do Sistema
-                </div>
-                <div className="px-1">
-                  <p className="text-xs text-gray-500 mb-2">Vincule este colaborador a um usuário para que ele acesse o sistema com as permissões corretas.</p>
-                  <select
-                    value={form.linkedUserId ?? 0}
-                    onChange={e => {
-                      const uid = parseInt(e.target.value) || null;
-                      setForm(f => ({ ...f, linkedUserId: uid }));
-                      if (editId) {
-                        linkUserMutation.mutate({ collaboratorId: editId, userId: uid });
-                      }
-                    }}
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value={0}>Nenhum usuário vinculado</option>
-                    {availableUsers.map((u: any) => (
-                      <option key={u.id} value={u.id} disabled={u.isLinked && u.id !== form.linkedUserId}>
-                        {u.name} ({u.email}){u.isLinked && u.id !== form.linkedUserId ? " — já vinculado" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {form.linkedUserId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForm(f => ({ ...f, linkedUserId: null }));
-                        if (editId) linkUserMutation.mutate({ collaboratorId: editId, userId: null });
-                      }}
-                      className="mt-2 text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
-                    >
-                      <Unlink className="h-3 w-3" /> Desvincular usuário
-                    </button>
-                  )}
                 </div>
               </div>
             )}

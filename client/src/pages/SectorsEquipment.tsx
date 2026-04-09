@@ -103,13 +103,15 @@ export default function SectorsEquipment() {
   };
 
   // Detectar se o tipo selecionado é veículo/caminhão (campo dinâmico)
-  const selectedTypeName = equipTypes.find(t => t.id === equipForm.typeId)?.name?.toLowerCase() || "";
-  const isVehicleType = selectedTypeName.includes("caminhão") || selectedTypeName.includes("caminhao") ||
-    selectedTypeName.includes("veículo") || selectedTypeName.includes("veiculo") ||
-    selectedTypeName.includes("carro") || selectedTypeName.includes("moto") ||
-    selectedTypeName.includes("van") || selectedTypeName.includes("ônibus") ||
-    selectedTypeName.includes("onibus") || selectedTypeName.includes("pickup") ||
-    selectedTypeName.includes("utilitário") || selectedTypeName.includes("utilitario");
+  const selectedTypeName = equipTypes.find(t => Number(t.id) === Number(equipForm.typeId))?.name?.toLowerCase() || "";
+  // Normalizar removendo acentos para garantir match
+  const normalizedTypeName = selectedTypeName.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const isVehicleType = normalizedTypeName.includes("caminhao") || normalizedTypeName.includes("veiculo") ||
+    normalizedTypeName.includes("carro") || normalizedTypeName.includes("moto") ||
+    normalizedTypeName.includes("van") || normalizedTypeName.includes("onibus") ||
+    normalizedTypeName.includes("pickup") || normalizedTypeName.includes("utilitario") ||
+    normalizedTypeName.includes("truck") || normalizedTypeName.includes("carreta") ||
+    normalizedTypeName.includes("bitrem") || normalizedTypeName.includes("rodotrem");
 
   const openEditSector = (s: typeof sectorsList[number]) => {
     setEditSectorId(s.id);
