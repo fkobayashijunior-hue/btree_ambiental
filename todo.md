@@ -1238,7 +1238,7 @@
 - [x] Card de vincular usuário não aparece no detalhe do colaborador (adicionado também no painel lateral de edição)
 
 ## 🐛 BUG 09/04/2026
-- [ ] Erro "The string did not match the expected pattern" no login do colaborador
+- [x] Erro "The string did not match the expected pattern" no login do colaborador
 
 ## 🐛 BUG 09/04/2026
-- [ ] Erro "The string did not match the expected pattern" no login do colaborador
+- [x] Erro "The string did not match the expected pattern" no login do colaborador
