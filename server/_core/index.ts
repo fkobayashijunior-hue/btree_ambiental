@@ -55,6 +55,39 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Debug endpoint temporário
+  app.get('/api/debug-attendance', async (req, res) => {
+    try {
+      const { getDb } = await import('../db');
+      const db = await getDb();
+      if (!db) return res.json({ error: 'DB null' });
+      const { sql } = await import('drizzle-orm');
+      // 1. Estrutura da tabela
+      const cols = await db.execute(sql`SHOW COLUMNS FROM collaborator_attendance`);
+      // 2. Contagem
+      const cnt = await db.execute(sql`SELECT COUNT(*) as cnt FROM collaborator_attendance`);
+      // 3. Amostra de dados raw
+      const sample = await db.execute(sql`SELECT * FROM collaborator_attendance ORDER BY id DESC LIMIT 3`);
+      // 4. Tentar a query do Drizzle
+      try {
+        const { collaboratorAttendance, collaborators } = await import('../../drizzle/schema');
+        const { eq, desc } = await import('drizzle-orm');
+        const records = await db.select({
+          id: collaboratorAttendance.id,
+          collaboratorId: collaboratorAttendance.collaboratorId,
+          date: collaboratorAttendance.date,
+          employmentType: collaboratorAttendance.employmentTypeCa,
+          paymentStatus: collaboratorAttendance.paymentStatusCa,
+        }).from(collaboratorAttendance).limit(3);
+        return res.json({ cols: cols[0], count: cnt[0], sample: sample[0], drizzleRecords: records, success: true });
+      } catch (qErr: any) {
+        return res.json({ cols: cols[0], count: cnt[0], sample: sample[0], queryError: qErr.message, stack: qErr.stack?.slice(0, 800) });
+      }
+    } catch (err: any) {
+      return res.json({ error: err.message, stack: err.stack?.slice(0, 800) });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
