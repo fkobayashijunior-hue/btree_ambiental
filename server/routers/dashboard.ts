@@ -142,7 +142,7 @@ export const dashboardRouter = router({
           collaboratorId: collaboratorAttendance.collaboratorId,
           date: collaboratorAttendance.date,
           dailyValue: collaboratorAttendance.dailyValue,
-          paymentStatus: collaboratorAttendance.paymentStatus,
+          paymentStatus: collaboratorAttendance.paymentStatusCa,
           activity: collaboratorAttendance.activity,
         })
         .from(collaboratorAttendance)

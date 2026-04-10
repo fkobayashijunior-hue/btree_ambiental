@@ -27,12 +27,12 @@ export const attendanceRouter = router({
           collaboratorRole: collaborators.role,
           collaboratorPhoto: collaborators.photoUrl,
           date: collaboratorAttendance.date,
-          employmentType: collaboratorAttendance.employmentType,
+          employmentType: collaboratorAttendance.employmentTypeCa,
           dailyValue: collaboratorAttendance.dailyValue,
           pixKey: collaboratorAttendance.pixKey,
           activity: collaboratorAttendance.activity,
           observations: collaboratorAttendance.observations,
-          paymentStatus: collaboratorAttendance.paymentStatus,
+          paymentStatus: collaboratorAttendance.paymentStatusCa,
           paidAt: collaboratorAttendance.paidAt,
           registeredBy: collaboratorAttendance.registeredBy,
           createdAt: collaboratorAttendance.createdAt,
@@ -99,8 +99,8 @@ export const attendanceRouter = router({
 
       await db.insert(collaboratorAttendance).values({
         collaboratorId: input.collaboratorId,
-        date: new Date(input.date + "T12:00:00"),
-        employmentType: input.employmentType,
+        date: new Date(input.date + "T12:00:00").toISOString().slice(0, 19).replace("T", " "),
+        employmentTypeCa: input.employmentType,
         dailyValue: input.dailyValue,
         pixKey: input.pixKey || null,
         activity: input.activity || null,
@@ -148,8 +148,8 @@ export const attendanceRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       await db.update(collaboratorAttendance).set({
-        paymentStatus: input.paid ? "pago" : "pendente",
-        paidAt: input.paid ? new Date() : null,
+        paymentStatusCa: input.paid ? "pago" : "pendente",
+        paidAt: input.paid ? new Date().toISOString().slice(0, 19).replace("T", " ") : null,
       }).where(eq(collaboratorAttendance.id, input.id));
       return { success: true };
     }),
@@ -189,7 +189,7 @@ export const attendanceRouter = router({
         .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
         .where(
           and(
-            eq(collaboratorAttendance.paymentStatus, "pendente"),
+            eq(collaboratorAttendance.paymentStatusCa, "pendente"),
             lt(collaboratorAttendance.date, sevenDaysAgo)
           )
         )

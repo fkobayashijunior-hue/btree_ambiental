@@ -114,7 +114,7 @@ function schedulePendingPaymentsCheck() {
           .from(collaboratorAttendance)
           .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
           .where(and(
-            eq(collaboratorAttendance.paymentStatus, 'pendente'),
+            eq(collaboratorAttendance.paymentStatusCa, 'pendente'),
             lt(collaboratorAttendance.date, sevenDaysAgo)
           ));
 

@@ -1242,3 +1242,9 @@
 
 ## 🐛 BUG 09/04/2026
 - [x] Erro "The string did not match the expected pattern" no login do colaborador
+
+## 🐛 CORREÇÕES 10/04/2026
+
+- [ ] Corrigir lista de presenças que não atualiza após registrar (presença salva no banco mas não aparece na listagem)
+- [ ] Gerar script SQL CONSOLIDADO com TODAS as alterações pendentes para banco Hostinger
+- [ ] Garantir Git atualizado com push para GitHub
