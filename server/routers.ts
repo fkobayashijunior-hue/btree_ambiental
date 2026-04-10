@@ -42,6 +42,36 @@ export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   dashboard: dashboardRouter,
+  debug: router({
+    attendanceTest: protectedProcedure.query(async () => {
+      try {
+        const { getDb } = await import('./db');
+        const db = await getDb();
+        if (!db) return { error: 'DB null' };
+        // Test 1: raw query to check table structure
+        const [cols] = await db.execute(require('drizzle-orm/sql').sql`SHOW COLUMNS FROM collaborator_attendance`);
+        // Test 2: simple count
+        const [countResult] = await db.execute(require('drizzle-orm/sql').sql`SELECT COUNT(*) as cnt FROM collaborator_attendance`);
+        // Test 3: try the actual query
+        const { collaboratorAttendance, collaborators } = await import('../drizzle/schema');
+        const { eq, desc } = await import('drizzle-orm');
+        try {
+          const records = await db.select({
+            id: collaboratorAttendance.id,
+            collaboratorId: collaboratorAttendance.collaboratorId,
+            date: collaboratorAttendance.date,
+            employmentType: collaboratorAttendance.employmentTypeCa,
+            paymentStatus: collaboratorAttendance.paymentStatusCa,
+          }).from(collaboratorAttendance).limit(5);
+          return { cols, count: countResult, records, success: true };
+        } catch (queryErr: any) {
+          return { cols, count: countResult, queryError: queryErr.message, stack: queryErr.stack?.slice(0, 500) };
+        }
+      } catch (err: any) {
+        return { error: err.message, stack: err.stack?.slice(0, 500) };
+      }
+    }),
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     
