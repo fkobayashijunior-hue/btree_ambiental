@@ -1,5 +1,11 @@
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -252,7 +258,13 @@ var init_schema = __esm({
       trackingUpdatedAt: timestamp("tracking_updated_at", { mode: "string" }),
       trackingNotes: text("tracking_notes"),
       weightOutPhotoUrl: text("weight_out_photo_url"),
-      weightInPhotoUrl: text("weight_in_photo_url")
+      weightInPhotoUrl: text("weight_in_photo_url"),
+      weightOutKg: varchar("weight_out_kg", { length: 20 }),
+      weightInKg: varchar("weight_in_kg", { length: 20 }),
+      finalHeightM: varchar("final_height_m", { length: 20 }),
+      finalWidthM: varchar("final_width_m", { length: 20 }),
+      finalLengthM: varchar("final_length_m", { length: 20 }),
+      finalVolumeM3: varchar("final_volume_m3", { length: 20 })
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -508,7 +520,10 @@ var init_schema = __esm({
       status: mysqlEnum(["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
-      sectorId: int("sector_id")
+      sectorId: int("sector_id"),
+      defaultHeightM: varchar("default_height_m", { length: 20 }),
+      defaultWidthM: varchar("default_width_m", { length: 20 }),
+      defaultLengthM: varchar("default_length_m", { length: 20 })
     });
     equipmentMaintenance = mysqlTable("equipment_maintenance", {
       id: int().autoincrement().notNull(),
@@ -1386,6 +1401,25 @@ var collaboratorsRouter = router({
     const created = await db.select().from(collaborators).where(eq2(collaborators.id, newId)).limit(1);
     return created[0];
   }),
+  // Vincular colaborador a usuário do sistema
+  linkUser: protectedProcedure.input(z2.object({
+    collaboratorId: z2.number(),
+    userId: z2.number().nullable()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.update(collaborators).set({ userId: input.userId }).where(eq2(collaborators.id, input.collaboratorId));
+    return { success: true };
+  }),
+  // Listar usuários disponíveis para vincular (que ainda não estão vinculados a outro colaborador)
+  listAvailableUsers: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const allUsers = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(users.name);
+    const allCollabs = await db.select({ userId: collaborators.userId }).from(collaborators);
+    const linkedUserIds = new Set(allCollabs.map((c) => c.userId).filter(Boolean));
+    return allUsers.map((u) => ({ ...u, isLinked: linkedUserIds.has(u.id) }));
+  }),
   // Atualizar colaborador
   update: protectedProcedure.input(z2.object({
     id: z2.number(),
@@ -1610,7 +1644,10 @@ var sectorsRouter = router({
       typeId: equipment.typeId,
       sectorId: equipment.sectorId,
       typeName: equipmentTypes.name,
-      createdAt: equipment.createdAt
+      createdAt: equipment.createdAt,
+      defaultHeightM: equipment.defaultHeightM,
+      defaultWidthM: equipment.defaultWidthM,
+      defaultLengthM: equipment.defaultLengthM
     }).from(equipment).leftJoin(equipmentTypes, eq3(equipment.typeId, equipmentTypes.id)).orderBy(equipment.name);
     return rows.filter((r) => {
       if (input.typeId && r.typeId !== input.typeId) return false;
@@ -1632,7 +1669,10 @@ var sectorsRouter = router({
     serialNumber: z3.string().optional(),
     licensePlate: z3.string().optional(),
     imageUrl: z3.string().optional(),
-    status: z3.enum(["ativo", "manutencao", "inativo"]).optional()
+    status: z3.enum(["ativo", "manutencao", "inativo"]).optional(),
+    defaultHeightM: z3.string().optional(),
+    defaultWidthM: z3.string().optional(),
+    defaultLengthM: z3.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -1659,7 +1699,10 @@ var sectorsRouter = router({
     serialNumber: z3.string().optional(),
     licensePlate: z3.string().optional(),
     imageUrl: z3.string().optional(),
-    status: z3.enum(["ativo", "manutencao", "inativo"]).optional()
+    status: z3.enum(["ativo", "manutencao", "inativo"]).optional(),
+    defaultHeightM: z3.string().optional().nullable(),
+    defaultWidthM: z3.string().optional().nullable(),
+    defaultLengthM: z3.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -1833,7 +1876,7 @@ init_db();
 init_schema();
 init_cloudinary();
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq5, desc as desc3 } from "drizzle-orm";
+import { eq as eq5, desc as desc3, and as and3 } from "drizzle-orm";
 var cargoLoadsRouter = router({
   // ===== DESTINOS =====
   listDestinations: protectedProcedure.query(async () => {
@@ -2167,7 +2210,10 @@ var cargoLoadsRouter = router({
       licensePlate: equipment.licensePlate,
       brand: equipment.brand,
       model: equipment.model,
-      status: equipment.status
+      status: equipment.status,
+      defaultHeightM: equipment.defaultHeightM,
+      defaultWidthM: equipment.defaultWidthM,
+      defaultLengthM: equipment.defaultLengthM
     }).from(equipment).orderBy(equipment.name);
     return all.filter((e) => e.licensePlate || e.name.toLowerCase().includes("caminh") || e.name.toLowerCase().includes("ve\xEDculo") || e.name.toLowerCase().includes("veiculo") || e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van"));
   }),
@@ -2180,6 +2226,160 @@ var cargoLoadsRouter = router({
       name: collaborators.name,
       role: collaborators.role
     }).from(collaborators).orderBy(collaborators.name);
+  }),
+  // ===== EXPERIÊNCIA DO MOTORISTA =====
+  // Buscar informações do motorista logado (colaborador vinculado + caminhão)
+  getMyDriverInfo: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [myCollaborator] = await db.select({
+      id: collaborators.id,
+      name: collaborators.name,
+      role: collaborators.role
+    }).from(collaborators).where(eq5(collaborators.userId, ctx.user.id)).limit(1);
+    const allEquip = await db.select({
+      id: equipment.id,
+      name: equipment.name,
+      licensePlate: equipment.licensePlate,
+      brand: equipment.brand,
+      model: equipment.model,
+      status: equipment.status,
+      defaultHeightM: equipment.defaultHeightM,
+      defaultWidthM: equipment.defaultWidthM,
+      defaultLengthM: equipment.defaultLengthM
+    }).from(equipment).orderBy(equipment.name);
+    const trucksList = allEquip.filter(
+      (e) => e.licensePlate || e.name.toLowerCase().includes("caminh") || e.name.toLowerCase().includes("ve\xEDculo") || e.name.toLowerCase().includes("veiculo") || e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van") || e.name.toLowerCase().includes("bitrem") || e.name.toLowerCase().includes("carreta")
+    );
+    let defaultTruckId = null;
+    if (myCollaborator) {
+      const [lastCargo] = await db.select({ vehicleId: cargoLoads.vehicleId }).from(cargoLoads).where(eq5(cargoLoads.driverCollaboratorId, myCollaborator.id)).orderBy(desc3(cargoLoads.createdAt)).limit(1);
+      if (lastCargo?.vehicleId) defaultTruckId = lastCargo.vehicleId;
+    }
+    const defaultTruck = trucksList.find((t2) => t2.id === defaultTruckId);
+    const defaultMeasures = {
+      heightM: defaultTruck?.defaultHeightM || "2.4",
+      widthM: defaultTruck?.defaultWidthM || "2.4",
+      lengthM: defaultTruck?.defaultLengthM || "13.80"
+    };
+    return {
+      collaborator: myCollaborator || null,
+      defaultTruckId,
+      trucks: trucksList,
+      isDriver: myCollaborator?.role === "motorista",
+      defaultMeasures
+    };
+  }),
+  // Buscar cargas pendentes do motorista logado
+  getMyPendingLoads: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [myCollaborator] = await db.select({ id: collaborators.id }).from(collaborators).where(eq5(collaborators.userId, ctx.user.id)).limit(1);
+    if (!myCollaborator) return [];
+    const loads = await db.select({
+      id: cargoLoads.id,
+      date: cargoLoads.date,
+      vehicleId: cargoLoads.vehicleId,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      driverName: cargoLoads.driverName,
+      heightM: cargoLoads.heightM,
+      widthM: cargoLoads.widthM,
+      lengthM: cargoLoads.lengthM,
+      volumeM3: cargoLoads.volumeM3,
+      clientName: cargoLoads.clientName,
+      clientId: cargoLoads.clientId,
+      destination: cargoLoads.destination,
+      destinationId: cargoLoads.destinationId,
+      status: cargoLoads.status,
+      trackingStatus: cargoLoads.trackingStatus,
+      trackingNotes: cargoLoads.trackingNotes,
+      notes: cargoLoads.notes,
+      createdAt: cargoLoads.createdAt,
+      // Joins
+      clientNameJoined: clients.name,
+      destinationNameJoined: cargoDestinations.name,
+      vehicleNameJoined: equipment.name,
+      vehiclePlateJoined: equipment.licensePlate
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).where(and3(
+      eq5(cargoLoads.driverCollaboratorId, myCollaborator.id),
+      eq5(cargoLoads.status, "pendente")
+    )).orderBy(desc3(cargoLoads.createdAt));
+    return loads.map((r) => ({
+      ...r,
+      clientName: r.clientNameJoined || r.clientName,
+      destination: r.destinationNameJoined || r.destination,
+      vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
+      vehicleName: r.vehicleNameJoined
+    }));
+  }),
+  // Avançar tracking + enviar foto em um único passo
+  // Atualizar medidas padrão de um caminhão (admin)
+  updateTruckDefaults: protectedProcedure.input(z5.object({
+    equipmentId: z5.number(),
+    defaultHeightM: z5.string().optional(),
+    defaultWidthM: z5.string().optional(),
+    defaultLengthM: z5.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError4({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(equipment).set({
+      defaultHeightM: input.defaultHeightM || null,
+      defaultWidthM: input.defaultWidthM || null,
+      defaultLengthM: input.defaultLengthM || null
+    }).where(eq5(equipment.id, input.equipmentId));
+    return { success: true };
+  }),
+  advanceTrackingWithPhoto: protectedProcedure.input(z5.object({
+    cargoId: z5.number(),
+    stage: z5.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
+    photoBase64: z5.string().optional(),
+    notes: z5.string().optional(),
+    // Campos de peso (pesagem saída e chegada)
+    weightKg: z5.string().optional(),
+    // Campos de metragem final (ao finalizar)
+    finalHeightM: z5.string().optional(),
+    finalWidthM: z5.string().optional(),
+    finalLengthM: z5.string().optional(),
+    finalVolumeM3: z5.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    const updateData = {
+      trackingStatus: input.stage,
+      trackingNotes: input.notes || null,
+      trackingUpdatedAt: now,
+      updatedAt: now
+    };
+    if (input.stage === "pesagem_saida" && input.weightKg) {
+      updateData.weightOutKg = input.weightKg;
+    }
+    if (input.stage === "pesagem_chegada" && input.weightKg) {
+      updateData.weightInKg = input.weightKg;
+    }
+    if (input.stage === "finalizado") {
+      updateData.status = "entregue";
+      if (input.finalHeightM) updateData.finalHeightM = input.finalHeightM;
+      if (input.finalWidthM) updateData.finalWidthM = input.finalWidthM;
+      if (input.finalLengthM) updateData.finalLengthM = input.finalLengthM;
+      if (input.finalVolumeM3) updateData.finalVolumeM3 = input.finalVolumeM3;
+    }
+    await db.update(cargoLoads).set(updateData).where(eq5(cargoLoads.id, input.cargoId));
+    let photoUrl = null;
+    if (input.photoBase64) {
+      const uploaded = await cloudinaryUpload(input.photoBase64, `btree/tracking/${input.cargoId}`);
+      photoUrl = uploaded.url;
+      await db.insert(cargoTrackingPhotos).values({
+        cargoId: input.cargoId,
+        stage: input.stage,
+        photoUrl: uploaded.url,
+        notes: input.notes,
+        registeredBy: ctx.user.id,
+        registeredByName: ctx.user.name
+      });
+    }
+    return { success: true, photoUrl };
   })
 });
 
@@ -3541,52 +3741,76 @@ var attendanceRouter = router({
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const records = await db.select({
-      id: collaboratorAttendance.id,
-      collaboratorId: collaboratorAttendance.collaboratorId,
-      collaboratorName: collaborators.name,
-      collaboratorRole: collaborators.role,
-      collaboratorPhoto: collaborators.photoUrl,
-      date: collaboratorAttendance.date,
-      employmentType: collaboratorAttendance.employmentType,
-      dailyValue: collaboratorAttendance.dailyValue,
-      pixKey: collaboratorAttendance.pixKey,
-      activity: collaboratorAttendance.activity,
-      observations: collaboratorAttendance.observations,
-      paymentStatus: collaboratorAttendance.paymentStatus,
-      paidAt: collaboratorAttendance.paidAt,
-      registeredBy: collaboratorAttendance.registeredBy,
-      createdAt: collaboratorAttendance.createdAt,
-      latitude: collaboratorAttendance.latitude,
-      longitude: collaboratorAttendance.longitude,
-      locationName: collaboratorAttendance.locationName
-    }).from(collaboratorAttendance).innerJoin(collaborators, eq14(collaboratorAttendance.collaboratorId, collaborators.id)).orderBy(desc12(collaboratorAttendance.date));
-    let filtered = records;
-    if (input?.collaboratorId) {
-      filtered = filtered.filter((r) => r.collaboratorId === input.collaboratorId);
+    try {
+      const records = await db.select({
+        id: collaboratorAttendance.id,
+        collaboratorId: collaboratorAttendance.collaboratorId,
+        collaboratorName: collaborators.name,
+        collaboratorRole: collaborators.role,
+        collaboratorPhoto: collaborators.photoUrl,
+        date: collaboratorAttendance.date,
+        employmentType: collaboratorAttendance.employmentTypeCa,
+        dailyValue: collaboratorAttendance.dailyValue,
+        pixKey: collaboratorAttendance.pixKey,
+        activity: collaboratorAttendance.activity,
+        observations: collaboratorAttendance.observations,
+        paymentStatus: collaboratorAttendance.paymentStatusCa,
+        paidAt: collaboratorAttendance.paidAt,
+        registeredBy: collaboratorAttendance.registeredBy,
+        createdAt: collaboratorAttendance.createdAt,
+        latitude: collaboratorAttendance.latitude,
+        longitude: collaboratorAttendance.longitude,
+        locationName: collaboratorAttendance.locationName
+      }).from(collaboratorAttendance).innerJoin(collaborators, eq14(collaboratorAttendance.collaboratorId, collaborators.id)).orderBy(desc12(collaboratorAttendance.date));
+      let filtered = records;
+      if (input?.collaboratorId) {
+        filtered = filtered.filter((r) => r.collaboratorId === input.collaboratorId);
+      }
+      if (input?.paymentStatus) {
+        filtered = filtered.filter((r) => r.paymentStatus === input.paymentStatus);
+      }
+      if (input?.dateFrom) {
+        const from = /* @__PURE__ */ new Date(input.dateFrom + "T00:00:00");
+        filtered = filtered.filter((r) => {
+          try {
+            return new Date(r.date) >= from;
+          } catch {
+            return true;
+          }
+        });
+      }
+      if (input?.dateTo) {
+        const to = /* @__PURE__ */ new Date(input.dateTo + "T23:59:59");
+        filtered = filtered.filter((r) => {
+          try {
+            return new Date(r.date) <= to;
+          } catch {
+            return true;
+          }
+        });
+      }
+      const userIdsRaw = filtered.map((r) => r.registeredBy).filter((id) => id !== null && id !== void 0);
+      const userIds = Array.from(new Set(userIdsRaw));
+      let userMap = {};
+      if (userIds.length > 0) {
+        try {
+          const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray2(users.id, userIds));
+          userMap = Object.fromEntries(usersData.map((u) => [u.id, u.name]));
+        } catch (userErr) {
+          console.error("[attendance.list] Erro ao buscar nomes de usu\xE1rios:", userErr);
+        }
+      }
+      return filtered.map((r) => ({
+        ...r,
+        registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null
+      }));
+    } catch (err) {
+      console.error("[attendance.list] ERRO DETALHADO:", err.message, err.stack);
+      throw new TRPCError10({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed query: ${err.message}`
+      });
     }
-    if (input?.paymentStatus) {
-      filtered = filtered.filter((r) => r.paymentStatus === input.paymentStatus);
-    }
-    if (input?.dateFrom) {
-      const from = /* @__PURE__ */ new Date(input.dateFrom + "T00:00:00");
-      filtered = filtered.filter((r) => new Date(r.date) >= from);
-    }
-    if (input?.dateTo) {
-      const to = /* @__PURE__ */ new Date(input.dateTo + "T23:59:59");
-      filtered = filtered.filter((r) => new Date(r.date) <= to);
-    }
-    const userIdsRaw = filtered.map((r) => r.registeredBy).filter((id) => id !== null && id !== void 0);
-    const userIds = Array.from(new Set(userIdsRaw));
-    let userMap = {};
-    if (userIds.length > 0) {
-      const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray2(users.id, userIds));
-      userMap = Object.fromEntries(usersData.map((u) => [u.id, u.name]));
-    }
-    return filtered.map((r) => ({
-      ...r,
-      registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null
-    }));
   }),
   // Criar presença
   create: protectedProcedure.input(z14.object({
@@ -3609,8 +3833,8 @@ var attendanceRouter = router({
     const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
     await db.insert(collaboratorAttendance).values({
       collaboratorId: input.collaboratorId,
-      date: /* @__PURE__ */ new Date(input.date + "T12:00:00"),
-      employmentType: input.employmentType,
+      date: (/* @__PURE__ */ new Date(input.date + "T12:00:00")).toISOString().slice(0, 19).replace("T", " "),
+      employmentTypeCa: input.employmentType,
       dailyValue: input.dailyValue,
       pixKey: input.pixKey || null,
       activity: input.activity || null,
@@ -3655,8 +3879,8 @@ Registrado por: ${ctx.user.name}`
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(collaboratorAttendance).set({
-      paymentStatus: input.paid ? "pago" : "pendente",
-      paidAt: input.paid ? /* @__PURE__ */ new Date() : null
+      paymentStatusCa: input.paid ? "pago" : "pendente",
+      paidAt: input.paid ? (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") : null
     }).where(eq14(collaboratorAttendance.id, input.id));
     return { success: true };
   }),
@@ -3684,7 +3908,7 @@ Registrado por: ${ctx.user.name}`
       activity: collaboratorAttendance.activity
     }).from(collaboratorAttendance).innerJoin(collaborators, eq14(collaboratorAttendance.collaboratorId, collaborators.id)).where(
       and6(
-        eq14(collaboratorAttendance.paymentStatus, "pendente"),
+        eq14(collaboratorAttendance.paymentStatusCa, "pendente"),
         lt(collaboratorAttendance.date, sevenDaysAgo)
       )
     ).orderBy(collaboratorAttendance.date);
@@ -4908,7 +5132,7 @@ var dashboardRouter = router({
       collaboratorId: collaboratorAttendance.collaboratorId,
       date: collaboratorAttendance.date,
       dailyValue: collaboratorAttendance.dailyValue,
-      paymentStatus: collaboratorAttendance.paymentStatus,
+      paymentStatus: collaboratorAttendance.paymentStatusCa,
       activity: collaboratorAttendance.activity
     }).from(collaboratorAttendance).orderBy(sql4`created_at desc`).limit(5);
     const [{ count: pendingOrders }] = await db.select({ count: sql4`count(*)` }).from(purchaseOrders).where(sql4`status = 'pending'`);
@@ -5387,6 +5611,33 @@ var appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   dashboard: dashboardRouter,
+  debug: router({
+    attendanceTest: protectedProcedure.query(async () => {
+      try {
+        const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+        const db = await getDb2();
+        if (!db) return { error: "DB null" };
+        const [cols] = await db.execute(__require("drizzle-orm/sql").sql`SHOW COLUMNS FROM collaborator_attendance`);
+        const [countResult] = await db.execute(__require("drizzle-orm/sql").sql`SELECT COUNT(*) as cnt FROM collaborator_attendance`);
+        const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+        const { eq: eq21, desc: desc18 } = await import("drizzle-orm");
+        try {
+          const records = await db.select({
+            id: collaboratorAttendance2.id,
+            collaboratorId: collaboratorAttendance2.collaboratorId,
+            date: collaboratorAttendance2.date,
+            employmentType: collaboratorAttendance2.employmentTypeCa,
+            paymentStatus: collaboratorAttendance2.paymentStatusCa
+          }).from(collaboratorAttendance2).limit(5);
+          return { cols, count: countResult, records, success: true };
+        } catch (queryErr) {
+          return { cols, count: countResult, queryError: queryErr.message, stack: queryErr.stack?.slice(0, 500) };
+        }
+      } catch (err) {
+        return { error: err.message, stack: err.stack?.slice(0, 500) };
+      }
+    })
+  }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     register: publicProcedure.input(z22.object({
@@ -5717,7 +5968,7 @@ function schedulePendingPaymentsCheck() {
           date: collaboratorAttendance2.date,
           dailyValue: collaboratorAttendance2.dailyValue
         }).from(collaboratorAttendance2).innerJoin(collaborators2, eq21(collaboratorAttendance2.collaboratorId, collaborators2.id)).where(and13(
-          eq21(collaboratorAttendance2.paymentStatus, "pendente"),
+          eq21(collaboratorAttendance2.paymentStatusCa, "pendente"),
           lt2(collaboratorAttendance2.date, sevenDaysAgo)
         ));
         if (pendingRecords.length > 0) {

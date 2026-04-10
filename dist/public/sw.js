@@ -94,7 +94,7 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "index.html",
-    "revision": "ef7f1c35d7947932ab65b1d4806c0e72"
+    "revision": "47ea1a43f156e718ff17eb4e236b8e47"
   }, {
     "url": "icon-btree-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
@@ -105,10 +105,10 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "url": "assets/xlsx-DGuHH-KN.js",
     "revision": null
   }, {
-    "url": "assets/index-bZrfSqwa.js",
+    "url": "assets/index-Cgei_Kqm.js",
     "revision": null
   }, {
-    "url": "assets/index-BI8XYVgP.css",
+    "url": "assets/index-BeQYXvGa.css",
     "revision": null
   }, {
     "url": "__manus__/debug-collector.js",
