@@ -108,7 +108,7 @@ CALL add_fk_if_col_exists('gps_device_links', 'gps_device_links_created_by_users
 CALL add_fk_if_col_exists('gps_hours_log', 'gps_hours_log_equipment_id_equipment_id_fk', 'equipment_id', 'equipment', 'id', 'ON DELETE no action ON UPDATE no action');
 CALL add_fk_if_col_exists('gps_hours_log', 'gps_hours_log_gps_device_link_id_gps_device_links_id_fk', 'gps_device_link_id', 'gps_device_links', 'id', 'ON DELETE no action ON UPDATE no action');
 CALL add_fk_if_col_exists('preventive_maintenance_alerts', 'preventive_maintenance_alerts_equipment_id_equipment_id_fk', 'equipment_id', 'equipment', 'id', 'ON DELETE no action ON UPDATE no action');
-CALL add_fk_if_col_exists('preventive_maintenance_alerts', 'preventive_maintenance_alerts_plan_id_preventive_maintenance_plans_id_fk', 'plan_id', 'preventive_maintenance_plans', 'id', 'ON DELETE no action ON UPDATE no action');
+CALL add_fk_if_col_exists('preventive_maintenance_alerts', 'pm_alerts_plan_id_pm_plans_id_fk', 'plan_id', 'preventive_maintenance_plans', 'id', 'ON DELETE no action ON UPDATE no action');
 CALL add_fk_if_col_exists('preventive_maintenance_alerts', 'preventive_maintenance_alerts_resolved_by_users_id_fk', 'resolved_by', 'users', 'id', 'ON DELETE no action ON UPDATE no action');
 CALL add_fk_if_col_exists('preventive_maintenance_plans', 'preventive_maintenance_plans_equipment_id_equipment_id_fk', 'equipment_id', 'equipment', 'id', 'ON DELETE cascade ON UPDATE no action');
 CALL add_fk_if_col_exists('preventive_maintenance_plans', 'preventive_maintenance_plans_created_by_users_id_fk', 'created_by', 'users', 'id', 'ON DELETE no action ON UPDATE no action');
@@ -116,7 +116,7 @@ CALL add_fk_if_col_exists('cargo_destinations', 'cargo_destinations_created_by_u
 CALL add_fk_if_col_exists('cargo_loads', 'cargo_loads_destination_id_cargo_destinations_id_fk', 'destination_id', 'cargo_destinations', 'id', 'ON DELETE no action ON UPDATE no action');
 CALL add_fk_if_col_exists('maintenance_parts', 'maintenance_parts_maintenance_id_equipment_maintenance_id_fk', 'maintenance_id', 'equipment_maintenance', 'id', 'ON DELETE cascade ON UPDATE no action');
 CALL add_fk_if_col_exists('maintenance_parts', 'maintenance_parts_part_id_parts_id_fk', 'part_id', 'parts', 'id', 'ON DELETE set null ON UPDATE no action');
-CALL add_fk_if_col_exists('maintenance_template_parts', 'maintenance_template_parts_template_id_maintenance_templates_id_fk', 'template_id', 'maintenance_templates', 'id', 'ON DELETE cascade ON UPDATE no action');
+CALL add_fk_if_col_exists('maintenance_template_parts', 'mt_parts_template_id_mt_templates_id_fk', 'template_id', 'maintenance_templates', 'id', 'ON DELETE cascade ON UPDATE no action');
 CALL add_fk_if_col_exists('maintenance_template_parts', 'maintenance_template_parts_part_id_parts_id_fk', 'part_id', 'parts', 'id', 'ON DELETE set null ON UPDATE no action');
 CALL add_fk_if_col_exists('maintenance_templates', 'maintenance_templates_created_by_users_id_fk', 'created_by', 'users', 'id', 'ON DELETE no action ON UPDATE no action');
 CALL add_fk_if_col_exists('parts_stock_movements', 'parts_stock_movements_part_id_parts_id_fk', 'part_id', 'parts', 'id', 'ON DELETE cascade ON UPDATE no action');
@@ -131,7 +131,7 @@ CALL add_fk_if_col_exists('chainsaw_parts', 'chainsaw_parts_created_by_users_id_
 CALL add_fk_if_col_exists('chainsaw_service_orders', 'chainsaw_service_orders_chainsaw_id_chainsaws_id_fk', 'chainsaw_id', 'chainsaws', 'id', 'ON DELETE cascade ON UPDATE no action');
 CALL add_fk_if_col_exists('chainsaw_service_orders', 'chainsaw_service_orders_mechanic_id_users_id_fk', 'mechanic_id', 'users', 'id', 'ON DELETE no action ON UPDATE no action');
 CALL add_fk_if_col_exists('chainsaw_service_orders', 'chainsaw_service_orders_opened_by_users_id_fk', 'opened_by', 'users', 'id', 'ON DELETE no action ON UPDATE no action');
-CALL add_fk_if_col_exists('chainsaw_service_parts', 'chainsaw_service_parts_service_order_id_chainsaw_service_orders_id_fk', 'service_order_id', 'chainsaw_service_orders', 'id', 'ON DELETE cascade ON UPDATE no action');
+CALL add_fk_if_col_exists('chainsaw_service_parts', 'cs_parts_service_order_id_cs_orders_id_fk', 'service_order_id', 'chainsaw_service_orders', 'id', 'ON DELETE cascade ON UPDATE no action');
 CALL add_fk_if_col_exists('chainsaw_service_parts', 'chainsaw_service_parts_part_id_chainsaw_parts_id_fk', 'part_id', 'chainsaw_parts', 'id', 'ON DELETE set null ON UPDATE no action');
 CALL add_fk_if_col_exists('chainsaws', 'chainsaws_created_by_users_id_fk', 'created_by', 'users', 'id', 'ON DELETE no action ON UPDATE no action');
 CALL add_fk_if_col_exists('fuel_container_events', 'fuel_container_events_container_id_fuel_containers_id_fk', 'container_id', 'fuel_containers', 'id', 'ON DELETE cascade ON UPDATE no action');
