@@ -1245,6 +1245,6 @@
 
 ## 🐛 CORREÇÕES 10/04/2026
 
-- [ ] Corrigir lista de presenças que não atualiza após registrar (presença salva no banco mas não aparece na listagem)
-- [ ] Gerar script SQL CONSOLIDADO com TODAS as alterações pendentes para banco Hostinger
-- [ ] Garantir Git atualizado com push para GitHub
+- [x] Corrigir lista de presenças que não atualiza após registrar (presença salva no banco mas não aparece na listagem)
+- [x] Gerar script SQL CONSOLIDADO com TODAS as alterações pendentes para banco Hostinger
+- [x] Garantir Git atualizado com push para GitHub
