@@ -19,60 +19,79 @@ export const attendanceRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
-      const records = await db
-        .select({
-          id: collaboratorAttendance.id,
-          collaboratorId: collaboratorAttendance.collaboratorId,
-          collaboratorName: collaborators.name,
-          collaboratorRole: collaborators.role,
-          collaboratorPhoto: collaborators.photoUrl,
-          date: collaboratorAttendance.date,
-          employmentType: collaboratorAttendance.employmentTypeCa,
-          dailyValue: collaboratorAttendance.dailyValue,
-          pixKey: collaboratorAttendance.pixKey,
-          activity: collaboratorAttendance.activity,
-          observations: collaboratorAttendance.observations,
-          paymentStatus: collaboratorAttendance.paymentStatusCa,
-          paidAt: collaboratorAttendance.paidAt,
-          registeredBy: collaboratorAttendance.registeredBy,
-          createdAt: collaboratorAttendance.createdAt,
-          latitude: collaboratorAttendance.latitude,
-          longitude: collaboratorAttendance.longitude,
-          locationName: collaboratorAttendance.locationName,
-        })
-        .from(collaboratorAttendance)
-        .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
-        .orderBy(desc(collaboratorAttendance.date));
+      try {
+        // STEP 1: Query principal
+        const records = await db
+          .select({
+            id: collaboratorAttendance.id,
+            collaboratorId: collaboratorAttendance.collaboratorId,
+            collaboratorName: collaborators.name,
+            collaboratorRole: collaborators.role,
+            collaboratorPhoto: collaborators.photoUrl,
+            date: collaboratorAttendance.date,
+            employmentType: collaboratorAttendance.employmentTypeCa,
+            dailyValue: collaboratorAttendance.dailyValue,
+            pixKey: collaboratorAttendance.pixKey,
+            activity: collaboratorAttendance.activity,
+            observations: collaboratorAttendance.observations,
+            paymentStatus: collaboratorAttendance.paymentStatusCa,
+            paidAt: collaboratorAttendance.paidAt,
+            registeredBy: collaboratorAttendance.registeredBy,
+            createdAt: collaboratorAttendance.createdAt,
+            latitude: collaboratorAttendance.latitude,
+            longitude: collaboratorAttendance.longitude,
+            locationName: collaboratorAttendance.locationName,
+          })
+          .from(collaboratorAttendance)
+          .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
+          .orderBy(desc(collaboratorAttendance.date));
 
-      let filtered = records;
-      if (input?.collaboratorId) {
-        filtered = filtered.filter(r => r.collaboratorId === input.collaboratorId);
-      }
-      if (input?.paymentStatus) {
-        filtered = filtered.filter(r => r.paymentStatus === input.paymentStatus);
-      }
-      if (input?.dateFrom) {
-        const from = new Date(input.dateFrom + "T00:00:00");
-        filtered = filtered.filter(r => new Date(r.date) >= from);
-      }
-      if (input?.dateTo) {
-        const to = new Date(input.dateTo + "T23:59:59");
-        filtered = filtered.filter(r => new Date(r.date) <= to);
-      }
+        // STEP 2: Filtros
+        let filtered = records;
+        if (input?.collaboratorId) {
+          filtered = filtered.filter(r => r.collaboratorId === input.collaboratorId);
+        }
+        if (input?.paymentStatus) {
+          filtered = filtered.filter(r => r.paymentStatus === input.paymentStatus);
+        }
+        if (input?.dateFrom) {
+          const from = new Date(input.dateFrom + "T00:00:00");
+          filtered = filtered.filter(r => {
+            try { return new Date(r.date) >= from; } catch { return true; }
+          });
+        }
+        if (input?.dateTo) {
+          const to = new Date(input.dateTo + "T23:59:59");
+          filtered = filtered.filter(r => {
+            try { return new Date(r.date) <= to; } catch { return true; }
+          });
+        }
 
-      // Buscar nomes dos usuários que cadastraram
-      const userIdsRaw = filtered.map(r => r.registeredBy).filter((id): id is number => id !== null && id !== undefined);
-      const userIds = Array.from(new Set(userIdsRaw));
-      let userMap: Record<number, string> = {};
-      if (userIds.length > 0) {
-        const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds));
-        userMap = Object.fromEntries(usersData.map(u => [u.id, u.name]));
-      }
+        // STEP 3: Buscar nomes dos usuários que cadastraram
+        const userIdsRaw = filtered.map(r => r.registeredBy).filter((id): id is number => id !== null && id !== undefined);
+        const userIds = Array.from(new Set(userIdsRaw));
+        let userMap: Record<number, string> = {};
+        if (userIds.length > 0) {
+          try {
+            const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds));
+            userMap = Object.fromEntries(usersData.map(u => [u.id, u.name]));
+          } catch (userErr) {
+            console.error('[attendance.list] Erro ao buscar nomes de usuários:', userErr);
+            // Continua sem os nomes
+          }
+        }
 
-      return filtered.map(r => ({
-        ...r,
-        registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null,
-      }));
+        return filtered.map(r => ({
+          ...r,
+          registeredByName: r.registeredBy ? (userMap[r.registeredBy] || null) : null,
+        }));
+      } catch (err: any) {
+        console.error('[attendance.list] ERRO DETALHADO:', err.message, err.stack);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed query: ${err.message}`,
+        });
+      }
     }),
 
   // Criar presença

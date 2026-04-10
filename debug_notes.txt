@@ -1,0 +1,19 @@
+BANCO HOSTINGER - Tabela collaborator_attendance
+=================================================
+Colunas existentes:
+id, collaborator_id, date, employment_type_ca, daily_value, pix_key, activity, 
+observations, payment_status_ca, paid_at, latitude, longitude, location_name, 
+registered_by, created_at, updated_at, work_location, registered_by_name
+
+COLUNAS EXTRAS NO BANCO QUE NÃO ESTÃO NO SCHEMA DRIZZLE:
+- work_location
+- registered_by_name
+
+55 registros no total.
+As colunas employment_type_ca e payment_status_ca EXISTEM e têm dados.
+
+PROBLEMA: O erro "Cannot convert undefined or null to object" NÃO é das colunas faltantes.
+O schema Drizzle NÃO define work_location e registered_by_name, mas isso não deveria causar erro.
+
+PRÓXIMO PASSO: Verificar o router attendance.ts - o problema pode ser no Object.fromEntries ou
+no processamento dos resultados da query.
