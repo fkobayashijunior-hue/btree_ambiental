@@ -49,6 +49,7 @@ export const vehicleRecordsRouter = router({
       driverCollaboratorId: z.number().optional(),
       photoBase64: z.string().optional(),
       notes: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -59,12 +60,13 @@ export const vehicleRecordsRouter = router({
         const result = await cloudinaryUpload(input.photoBase64, "btree/vehicle-records");
         photoUrl = result.url;
       }
-      const { photoBase64, ...rest } = input;
+      const { photoBase64, workLocationId, ...rest } = input;
       await db.insert(vehicleRecords).values({
         ...rest,
-        date: new Date(input.date),
+        date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         photoUrl,
         registeredBy: ctx.user.id,
+        workLocationId: workLocationId || null,
       });
 
       // Notificação por e-mail apenas para abastecimentos
@@ -121,11 +123,10 @@ export const vehicleRecordsRouter = router({
         const result = await cloudinaryUpload(photoBase64, "btree/vehicle-records");
         photoUrl = result.url;
       }
-      await db.update(vehicleRecords).set({
-        ...rest,
-        ...(date ? { date: new Date(date) } : {}),
-        ...(photoUrl ? { photoUrl } : {}),
-      }).where(eq(vehicleRecords.id, id));
+      const updateData: Record<string, unknown> = { ...rest };
+      if (date) updateData.date = new Date(date);
+      if (photoUrl) updateData.photoUrl = photoUrl;
+      await db.update(vehicleRecords).set(updateData).where(eq(vehicleRecords.id, id));
       return { success: true };
     }),
 

@@ -15,6 +15,7 @@ import {
   BarChart3, Download, Eye, RefreshCw, Building2
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
+import WorkLocationSelect from "@/components/WorkLocationSelect";
 
 // ===== TIPOS =====
 type TrackingStatus = "aguardando" | "carregando" | "em_transito" | "pesagem_saida" | "descarregando" | "pesagem_chegada" | "finalizado";
@@ -251,6 +252,7 @@ export default function CargoControl() {
     clientName: "",
     notes: "",
     status: "pendente" as "pendente" | "entregue" | "cancelado",
+    workLocationId: "",
   });
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -313,7 +315,7 @@ export default function CargoControl() {
   const volume = useMemo(() => calcVolume(form.heightM, form.widthM, form.lengthM), [form.heightM, form.widthM, form.lengthM]);
 
   const resetForm = () => {
-    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: 0, clientName: "", notes: "", status: "pendente" });
+    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: 0, clientName: "", notes: "", status: "pendente", workLocationId: "" });
     setPendingPhotos([]);
   };
 
@@ -337,6 +339,7 @@ export default function CargoControl() {
       clientName: cargo.clientName || "",
       notes: cargo.notes || "",
       status: cargo.status as "pendente" | "entregue" | "cancelado",
+      workLocationId: (cargo as any).workLocationId ? String((cargo as any).workLocationId) : "",
     });
     setIsFormOpen(true);
   };
@@ -351,6 +354,7 @@ export default function CargoControl() {
       clientId: form.clientId || undefined,
       volumeM3: volume || "0",
       photosJson: pendingPhotos.length ? JSON.stringify(pendingPhotos) : undefined,
+      workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
     };
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
@@ -786,6 +790,12 @@ export default function CargoControl() {
                 </div>
               )}
             </div>
+
+            {/* Local de Trabalho */}
+            <WorkLocationSelect
+              value={form.workLocationId}
+              onChange={(id) => setForm(f => ({ ...f, workLocationId: id }))}
+            />
 
             {/* Status e Observações */}
             <div className="space-y-3">

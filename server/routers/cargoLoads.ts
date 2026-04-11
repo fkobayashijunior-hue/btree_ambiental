@@ -268,6 +268,7 @@ export const cargoLoadsRouter = router({
       photosJson: z.string().optional(),
       notes: z.string().optional(),
       status: z.enum(["pendente", "entregue", "cancelado"]).optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -278,6 +279,7 @@ export const cargoLoadsRouter = router({
         status: input.status || "pendente",
         trackingStatus: "aguardando",
         registeredBy: ctx.user.id,
+        workLocationId: input.workLocationId || null,
       });
       return { success: true };
     }),
@@ -306,6 +308,7 @@ export const cargoLoadsRouter = router({
       status: z.enum(["pendente", "entregue", "cancelado"]).optional(),
       trackingStatus: z.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).optional(),
       trackingNotes: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

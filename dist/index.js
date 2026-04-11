@@ -2091,7 +2091,8 @@ var cargoLoadsRouter = router({
     clientName: z5.string().optional(),
     photosJson: z5.string().optional(),
     notes: z5.string().optional(),
-    status: z5.enum(["pendente", "entregue", "cancelado"]).optional()
+    status: z5.enum(["pendente", "entregue", "cancelado"]).optional(),
+    workLocationId: z5.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2100,7 +2101,8 @@ var cargoLoadsRouter = router({
       date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       status: input.status || "pendente",
       trackingStatus: "aguardando",
-      registeredBy: ctx.user.id
+      registeredBy: ctx.user.id,
+      workLocationId: input.workLocationId || null
     });
     return { success: true };
   }),
@@ -2126,7 +2128,8 @@ var cargoLoadsRouter = router({
     notes: z5.string().optional(),
     status: z5.enum(["pendente", "entregue", "cancelado"]).optional(),
     trackingStatus: z5.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).optional(),
-    trackingNotes: z5.string().optional()
+    trackingNotes: z5.string().optional(),
+    workLocationId: z5.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2414,14 +2417,17 @@ var machineHoursRouter = router({
     hoursWorked: z6.string(),
     activity: z6.string().optional(),
     location: z6.string().optional(),
-    notes: z6.string().optional()
+    notes: z6.string().optional(),
+    workLocationId: z6.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const { workLocationId, ...rest } = input;
     await db.insert(machineHours).values({
-      ...input,
+      ...rest,
       date: new Date(input.date),
-      registeredBy: ctx.user.id
+      registeredBy: ctx.user.id,
+      workLocationId: workLocationId || null
     });
     return { success: true };
   }),
@@ -2530,14 +2536,17 @@ var machineHoursRouter = router({
     pricePerLiter: z6.string().optional(),
     totalValue: z6.string().optional(),
     supplier: z6.string().optional(),
-    notes: z6.string().optional()
+    notes: z6.string().optional(),
+    workLocationId: z6.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const { workLocationId, ...rest } = input;
     await db.insert(machineFuel).values({
-      ...input,
+      ...rest,
       date: new Date(input.date),
-      registeredBy: ctx.user.id
+      registeredBy: ctx.user.id,
+      workLocationId: workLocationId || null
     });
     return { success: true };
   }),
@@ -2767,7 +2776,8 @@ var vehicleRecordsRouter = router({
     mechanicName: z7.string().optional(),
     driverCollaboratorId: z7.number().optional(),
     photoBase64: z7.string().optional(),
-    notes: z7.string().optional()
+    notes: z7.string().optional(),
+    workLocationId: z7.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2777,12 +2787,13 @@ var vehicleRecordsRouter = router({
       const result = await cloudinaryUpload2(input.photoBase64, "btree/vehicle-records");
       photoUrl = result.url;
     }
-    const { photoBase64, ...rest } = input;
+    const { photoBase64, workLocationId, ...rest } = input;
     await db.insert(vehicleRecords).values({
       ...rest,
-      date: new Date(input.date),
+      date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       photoUrl,
-      registeredBy: ctx.user.id
+      registeredBy: ctx.user.id,
+      workLocationId: workLocationId || null
     });
     if (input.recordType === "abastecimento") {
       const dateFormatted = new Date(input.date).toLocaleDateString("pt-BR");
@@ -2834,11 +2845,10 @@ var vehicleRecordsRouter = router({
       const result = await cloudinaryUpload2(photoBase64, "btree/vehicle-records");
       photoUrl = result.url;
     }
-    await db.update(vehicleRecords).set({
-      ...rest,
-      ...date ? { date: new Date(date) } : {},
-      ...photoUrl ? { photoUrl } : {}
-    }).where(eq7(vehicleRecords.id, id));
+    const updateData = { ...rest };
+    if (date) updateData.date = new Date(date);
+    if (photoUrl) updateData.photoUrl = photoUrl;
+    await db.update(vehicleRecords).set(updateData).where(eq7(vehicleRecords.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
@@ -5047,7 +5057,8 @@ var extraExpensesRouter = router({
     amount: z18.string().min(1),
     paymentMethod: z18.enum(["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro"),
     receiptImageUrl: z18.string().optional(),
-    notes: z18.string().optional()
+    notes: z18.string().optional(),
+    workLocationId: z18.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -5060,7 +5071,8 @@ var extraExpensesRouter = router({
       receiptImageUrl: input.receiptImageUrl,
       notes: input.notes,
       registeredBy: ctx.user.id,
-      registeredByName: ctx.user.name
+      registeredByName: ctx.user.name,
+      workLocationId: input.workLocationId || null
     });
     return { id: result.insertId };
   }),

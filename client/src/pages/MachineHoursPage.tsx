@@ -12,6 +12,7 @@ import {
   CheckCircle2, FileDown, Pencil, ChevronDown, ChevronUp,
   Package, Search, Trash2
 } from "lucide-react";
+import WorkLocationSelect from "@/components/WorkLocationSelect";
 
 type ActiveTab = "resumo" | "horas" | "manutencao" | "abastecimento";
 type SheetMode = "horas" | "manutencao" | "abastecimento";
@@ -49,6 +50,7 @@ const emptyHoursForm = {
   activity: "",
   location: "",
   notes: "",
+  workLocationId: "",
 };
 
 const emptyMaintForm = {
@@ -88,6 +90,7 @@ const emptyFuelForm = {
   totalValue: "",
   supplier: "",
   notes: "",
+  workLocationId: "",
 };
 
 export default function MachineHoursPage() {
@@ -240,6 +243,7 @@ export default function MachineHoursPage() {
       activity: h.activity || "",
       location: h.location || "",
       notes: h.notes || "",
+      workLocationId: h.workLocationId ? String(h.workLocationId) : "",
     });
     setSheetMode("horas");
     setIsOpen(true);
@@ -285,6 +289,7 @@ export default function MachineHoursPage() {
         activity: hoursForm.activity || undefined,
         location: hoursForm.location || undefined,
         notes: hoursForm.notes || undefined,
+        workLocationId: hoursForm.workLocationId ? parseInt(hoursForm.workLocationId) : undefined,
       };
       if (editingId) {
         updateHoursMutation.mutate({ id: editingId, ...payload });
@@ -335,6 +340,7 @@ export default function MachineHoursPage() {
         totalValue: fuelForm.totalValue || undefined,
         supplier: fuelForm.supplier || undefined,
         notes: fuelForm.notes || undefined,
+        workLocationId: fuelForm.workLocationId ? parseInt(fuelForm.workLocationId) : undefined,
       });
     }
   };
@@ -828,8 +834,12 @@ export default function MachineHoursPage() {
                   <Label>Atividade</Label>
                   <Input value={hoursForm.activity} onChange={e => setHoursForm(f => ({ ...f, activity: e.target.value }))} placeholder="ex: Colheita, Plantio..." />
                 </div>
+                <WorkLocationSelect
+                  value={hoursForm.workLocationId}
+                  onChange={(id, name) => setHoursForm(f => ({ ...f, workLocationId: id, location: name || f.location }))}
+                />
                 <div>
-                  <Label>Local</Label>
+                  <Label>Local (texto livre)</Label>
                   <Input value={hoursForm.location} onChange={e => setHoursForm(f => ({ ...f, location: e.target.value }))} placeholder="ex: Talhão 3, Fazenda..." />
                 </div>
                 <div>
@@ -1041,6 +1051,10 @@ export default function MachineHoursPage() {
                     <Input value={fuelForm.totalValue} onChange={e => setFuelForm(f => ({ ...f, totalValue: e.target.value }))} placeholder="0,00" />
                   </div>
                 </div>
+                <WorkLocationSelect
+                  value={fuelForm.workLocationId}
+                  onChange={(id) => setFuelForm(f => ({ ...f, workLocationId: id }))}
+                />
                 <div>
                   <Label>Fornecedor / Posto</Label>
                   <Input value={fuelForm.supplier} onChange={e => setFuelForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do posto" />

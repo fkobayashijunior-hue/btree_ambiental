@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, Camera, X, Receipt, Filter, TrendingDown } from "lucide-react";
+import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { useFilePicker } from "@/hooks/useFilePicker";
 
 const CATEGORIES = [
@@ -60,6 +61,7 @@ export default function ExtraExpenses() {
     paymentMethod: "dinheiro" as any,
     receiptImageUrl: "",
     notes: "",
+    workLocationId: "",
   });
 
   const { openFilePicker } = useFilePicker();
@@ -94,6 +96,7 @@ export default function ExtraExpenses() {
       paymentMethod: "dinheiro" as any,
       receiptImageUrl: "",
       notes: "",
+      workLocationId: "",
     });
   }
 
@@ -136,7 +139,10 @@ export default function ExtraExpenses() {
     if (!form.category) return toast.error("Selecione uma categoria.");
     if (!form.description.trim()) return toast.error("Informe uma descrição.");
     if (!form.amount || parseFloat(form.amount) <= 0) return toast.error("Informe o valor.");
-    createMutation.mutate(form);
+    createMutation.mutate({
+      ...form,
+      workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
+    });
   }
 
   // Totais
@@ -334,6 +340,11 @@ export default function ExtraExpenses() {
                 </Button>
               )}
             </div>
+
+            <WorkLocationSelect
+              value={form.workLocationId}
+              onChange={(id) => setForm(f => ({ ...f, workLocationId: id }))}
+            />
 
             <div>
               <Label>Observações</Label>

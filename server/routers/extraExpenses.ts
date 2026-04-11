@@ -42,6 +42,7 @@ export const extraExpensesRouter = router({
       paymentMethod: z.enum(["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro"),
       receiptImageUrl: z.string().optional(),
       notes: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -56,6 +57,7 @@ export const extraExpensesRouter = router({
         notes: input.notes,
         registeredBy: ctx.user.id,
         registeredByName: ctx.user.name,
+        workLocationId: input.workLocationId || null,
       });
       return { id: (result as any).insertId };
     }),

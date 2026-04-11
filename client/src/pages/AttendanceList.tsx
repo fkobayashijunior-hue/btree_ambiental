@@ -71,6 +71,7 @@ const emptyForm = {
   latitude: "",
   longitude: "",
   locationName: "",
+  workLocationId: "",
 };
 
 // ─── Componente principal ────────────────────────────────────────────────────
@@ -237,6 +238,7 @@ export default function AttendanceList() {
       latitude: form.latitude || undefined,
       longitude: form.longitude || undefined,
       locationName: form.locationName || undefined,
+      workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
     });
   };
 
@@ -935,18 +937,20 @@ export default function AttendanceList() {
 
             {/* ─── Local (override manual) ────────────────────────────────── */}
             <div>
-              <Label>Local de Trabalho</Label>
+              <Label className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-emerald-600" /> Local de Trabalho</Label>
               <select
                 value={form.locationName}
-                onChange={e => setForm(f => ({ ...f, locationName: e.target.value }))}
+                onChange={e => {
+                  const name = e.target.value;
+                  const loc = (gpsLocationsList as any[]).find((l: any) => l.name === name);
+                  setForm(f => ({ ...f, locationName: name, workLocationId: loc ? String(loc.id) : "" }));
+                }}
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">Detectado automaticamente pelo GPS</option>
-                <option value="Fazenda GW">Fazenda GW</option>
-                <option value="Sede BTREE">Sede BTREE</option>
-                <option value="Escritório">Escritório</option>
-                <option value="Campo">Campo</option>
-                <option value="Outro">Outro</option>
+                {(gpsLocationsList as any[]).map((loc: any) => (
+                  <option key={loc.id} value={loc.name}>{loc.name}</option>
+                ))}
               </select>
             </div>
 

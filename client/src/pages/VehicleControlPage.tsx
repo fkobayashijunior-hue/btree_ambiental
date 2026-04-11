@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Car, Plus, Calendar, Camera, X, User, Pencil, ImageIcon, FileDown, FileSpreadsheet } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
+import WorkLocationSelect from "@/components/WorkLocationSelect";
 
 type RecordType = "abastecimento" | "manutencao" | "km";
 
@@ -41,6 +42,7 @@ const emptyForm = {
   serviceType: "proprio" as "proprio" | "terceirizado",
   mechanicName: "",
   notes: "",
+  workLocationId: "",
 };
 
 // Meses em português
@@ -134,6 +136,7 @@ export default function VehicleControlPage() {
       serviceType: r.serviceType || "proprio",
       mechanicName: r.mechanicName || "",
       notes: r.notes || "",
+      workLocationId: r.workLocationId ? String(r.workLocationId) : "",
     });
     setPhotoPreview(r.photoUrl || null);
     setPhotoBase64(null);
@@ -177,6 +180,7 @@ export default function VehicleControlPage() {
       mechanicName: form.mechanicName || undefined,
       notes: form.notes || undefined,
       photoBase64: photoBase64 || undefined,
+      workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
     };
 
     if (editingId) {
@@ -651,6 +655,11 @@ export default function VehicleControlPage() {
                 </div>
               )}
             </div>
+
+            <WorkLocationSelect
+              value={form.workLocationId}
+              onChange={(id) => setForm(f => ({ ...f, workLocationId: id }))}
+            />
 
             <div>
               <Label>Observações</Label>

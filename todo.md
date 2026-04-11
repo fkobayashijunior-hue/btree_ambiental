@@ -1251,12 +1251,35 @@
 
 ## 📊 RELATÓRIOS POR LOCAL/FAZENDA - 11/04/2026
 
-- [ ] Criar cadastro de locais/fazendas padronizados
-- [ ] Permitir editar/padronizar nomes de locais já cadastrados
-- [ ] Adicionar campo de local nos registros de consumo (combustível, óleo, etc.)
-- [ ] Vincular presenças e cargas aos locais
-- [ ] Criar router de relatórios com queries por dia/semana/mês agrupadas por local
-- [ ] Criar Dashboard executiva bonita para diretores com dados visuais
-- [ ] Implementar geração de relatórios em PDF (mão de obra, consumo, cargas)
-- [ ] Relatório com seções opcionais (incluir/excluir cargas)
+- [x] Criar cadastro de locais/fazendas padronizados
+- [x] Permitir editar/padronizar nomes de locais já cadastrados
+- [x] Adicionar campo de local nos registros de consumo (combustível, óleo, etc.)
+- [x] Vincular presenças e cargas aos locais
+- [x] Criar router de relatórios com queries por dia/semana/mês agrupadas por local
+- [x] Criar Dashboard executiva bonita para diretores com dados visuais
+- [x] Implementar geração de relatórios em PDF (mão de obra, consumo, cargas)
+- [x] Relatório com seções opcionais (incluir/excluir cargas)
+- [x] Compilar dist/ e fazer push no Git
+
+## 🔧 PRÓXIMOS PASSOS 11/04/2026 — Seletor de Local nos Formulários + Padronização
+
+### Verificação Git/Deploy
+- [ ] Verificar se último push foi feito corretamente no GitHub
+- [ ] Recompilar dist/ se necessário e fazer push
+
+### Seletor de Local nos Formulários de Consumo
+- [ ] Adicionar dropdown de local no formulário de abastecimento de combustível (FuelRecords)
+- [ ] Adicionar dropdown de local no formulário de abastecimento de máquinas (MachineFuelRecords)
+- [ ] Adicionar dropdown de local no formulário de despesas extras (ExtraExpenses)
+- [ ] Adicionar dropdown de local no formulário de motosserra (ChainsawFuelRecords)
+- [ ] Adicionar dropdown de local no formulário de presenças (Attendance)
+- [ ] Adicionar dropdown de local no formulário de cargas (CargoLoads)
+
+### Padronização de Nomes de Locais
+- [ ] Criar interface para listar todos os locais únicos usados nos registros
+- [ ] Permitir mesclar/renomear locais duplicados
+- [ ] Atualizar registros vinculados ao nome antigo para o novo
+
+### Build e Deploy
 - [ ] Compilar dist/ e fazer push no Git
+- [ ] Gerar SQL se houver alterações de schema

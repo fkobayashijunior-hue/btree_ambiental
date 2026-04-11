@@ -28,14 +28,17 @@ export const machineHoursRouter = router({
       activity: z.string().optional(),
       location: z.string().optional(),
       notes: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const { workLocationId, ...rest } = input;
       await db.insert(machineHours).values({
-        ...input,
+        ...rest,
         date: new Date(input.date),
         registeredBy: ctx.user.id,
+        workLocationId: workLocationId || null,
       });
       return { success: true };
     }),
@@ -167,14 +170,17 @@ export const machineHoursRouter = router({
       totalValue: z.string().optional(),
       supplier: z.string().optional(),
       notes: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const { workLocationId, ...rest } = input;
       await db.insert(machineFuel).values({
-        ...input,
+        ...rest,
         date: new Date(input.date),
         registeredBy: ctx.user.id,
+        workLocationId: workLocationId || null,
       });
       return { success: true };
     }),
