@@ -1248,3 +1248,15 @@
 - [x] Corrigir lista de presenças que não atualiza após registrar (presença salva no banco mas não aparece na listagem)
 - [x] Gerar script SQL CONSOLIDADO com TODAS as alterações pendentes para banco Hostinger
 - [x] Garantir Git atualizado com push para GitHub
+
+## 📊 RELATÓRIOS POR LOCAL/FAZENDA - 11/04/2026
+
+- [ ] Criar cadastro de locais/fazendas padronizados
+- [ ] Permitir editar/padronizar nomes de locais já cadastrados
+- [ ] Adicionar campo de local nos registros de consumo (combustível, óleo, etc.)
+- [ ] Vincular presenças e cargas aos locais
+- [ ] Criar router de relatórios com queries por dia/semana/mês agrupadas por local
+- [ ] Criar Dashboard executiva bonita para diretores com dados visuais
+- [ ] Implementar geração de relatórios em PDF (mão de obra, consumo, cargas)
+- [ ] Relatório com seções opcionais (incluir/excluir cargas)
+- [ ] Compilar dist/ e fazer push no Git

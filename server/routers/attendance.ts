@@ -41,6 +41,7 @@ export const attendanceRouter = router({
             latitude: collaboratorAttendance.latitude,
             longitude: collaboratorAttendance.longitude,
             locationName: collaboratorAttendance.locationName,
+            workLocationId: collaboratorAttendance.workLocationId,
           })
           .from(collaboratorAttendance)
           .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
@@ -108,6 +109,7 @@ export const attendanceRouter = router({
       latitude: z.string().optional(),
       longitude: z.string().optional(),
       locationName: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -128,6 +130,7 @@ export const attendanceRouter = router({
         latitude: input.latitude || null,
         longitude: input.longitude || null,
         locationName: input.locationName || null,
+        workLocationId: input.workLocationId || null,
       });
 
       // Notificar o administrador

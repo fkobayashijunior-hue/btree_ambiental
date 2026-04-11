@@ -1,0 +1,40 @@
+ANÁLISE DO SCHEMA PARA RELATÓRIOS POR LOCAL
+=============================================
+
+TABELAS RELEVANTES:
+1. collaboratorAttendance - Presenças (tem location_name, latitude, longitude)
+2. fuelRecords - Abastecimento de veículos (NÃO tem campo de local)
+3. machineFuel - Combustível de máquinas (NÃO tem campo de local)
+4. machineHours - Horas de máquina (TEM campo location varchar)
+5. cargoLoads - Cargas (TEM campo origin varchar)
+6. vehicleRecords - Registros de veículos (NÃO tem campo de local)
+7. extraExpenses - Despesas extras (NÃO tem campo de local)
+8. gpsLocations - Locais GPS cadastrados (nome, lat, lng, raio)
+
+PLANO DE IMPLEMENTAÇÃO:
+1. Criar tabela "work_locations" (locais de trabalho/fazendas) - cadastro padronizado
+   - id, name, code, address, latitude, longitude, active, notes
+   - Permitir editar nomes para padronizar
+
+2. Adicionar coluna "work_location_id" nas tabelas:
+   - collaborator_attendance (já tem location_name, mas precisa FK)
+   - fuel_records (adicionar)
+   - machine_fuel (adicionar)
+   - machine_hours (já tem location varchar, mas precisa FK)
+   - vehicle_records (adicionar)
+   - extra_expenses (adicionar)
+
+3. Criar router "reports" com queries agrupadas por local e período
+
+4. Criar página Dashboard Executiva
+
+5. Gerar PDF com jsPDF ou similar
+
+TABELAS DE CONSUMO:
+- fuelRecords: abastecimento de veículos (diesel, gasolina, mistura_2t)
+- machineFuel: combustível de máquinas (diesel, gasolina, mistura_2t, arla)
+- vehicleRecords: registros gerais de veículos (abastecimento, manutenção, km)
+- extraExpenses: despesas extras
+
+CARGAS:
+- cargoLoads: tem origin, destination, client, volume, etc.

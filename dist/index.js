@@ -264,7 +264,8 @@ var init_schema = __esm({
       finalHeightM: varchar("final_height_m", { length: 20 }),
       finalWidthM: varchar("final_width_m", { length: 20 }),
       finalLengthM: varchar("final_length_m", { length: 20 }),
-      finalVolumeM3: varchar("final_volume_m3", { length: 20 })
+      finalVolumeM3: varchar("final_volume_m3", { length: 20 }),
+      workLocationId: int("work_location_id")
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -465,7 +466,8 @@ var init_schema = __esm({
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
       latitude: varchar({ length: 20 }),
       longitude: varchar({ length: 20 }),
-      locationName: varchar("location_name", { length: 255 })
+      locationName: varchar("location_name", { length: 255 }),
+      workLocationId: int("work_location_id")
     });
     collaboratorDocuments = mysqlTable("collaborator_documents", {
       id: int().autoincrement().notNull(),
@@ -562,7 +564,8 @@ var init_schema = __esm({
       notes: text(),
       registeredBy: int("registered_by").references(() => users.id),
       registeredByName: varchar("registered_by_name", { length: 255 }),
-      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      workLocationId: int("work_location_id")
     });
     financialEntries = mysqlTable("financial_entries", {
       id: int().autoincrement().notNull(),
@@ -624,7 +627,8 @@ var init_schema = __esm({
       odometerImageUrl: text("odometer_image_url"),
       registeredBy: int("registered_by").notNull().references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
-      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      workLocationId: int("work_location_id")
     });
     gpsDeviceLinks = mysqlTable("gps_device_links", {
       id: int().autoincrement().notNull(),
@@ -674,7 +678,8 @@ var init_schema = __esm({
       supplier: varchar({ length: 255 }),
       notes: text(),
       registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      workLocationId: int("work_location_id")
     });
     machineHours = mysqlTable("machine_hours", {
       id: int().autoincrement().notNull(),
@@ -688,7 +693,8 @@ var init_schema = __esm({
       location: varchar({ length: 255 }),
       notes: text(),
       registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      workLocationId: int("work_location_id")
     });
     machineMaintenance = mysqlTable("machine_maintenance", {
       id: int().autoincrement().notNull(),
@@ -962,7 +968,8 @@ var init_schema = __esm({
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
       maintenanceLocation: varchar("maintenance_location", { length: 255 }),
       photosJson: text("photos_json"),
-      photoUrl: text("photo_url")
+      photoUrl: text("photo_url"),
+      workLocationId: int("work_location_id")
     });
     cargoTrackingPhotos = mysqlTable("cargo_tracking_photos", {
       id: int("id").autoincrement().primaryKey(),
@@ -2592,21 +2599,21 @@ var machineHoursRouter = router({
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
-    return equipmentList.map((eq21) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq21.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq21.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq21.id);
+    return equipmentList.map((eq23) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq23.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq23.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq23.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq21.id,
-        equipmentName: eq21.name,
-        brand: eq21.brand,
-        model: eq21.model,
-        status: eq21.status,
+        equipmentId: eq23.id,
+        equipmentName: eq23.name,
+        brand: eq23.brand,
+        model: eq23.model,
+        status: eq23.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -3760,7 +3767,8 @@ var attendanceRouter = router({
         createdAt: collaboratorAttendance.createdAt,
         latitude: collaboratorAttendance.latitude,
         longitude: collaboratorAttendance.longitude,
-        locationName: collaboratorAttendance.locationName
+        locationName: collaboratorAttendance.locationName,
+        workLocationId: collaboratorAttendance.workLocationId
       }).from(collaboratorAttendance).innerJoin(collaborators, eq14(collaboratorAttendance.collaboratorId, collaborators.id)).orderBy(desc12(collaboratorAttendance.date));
       let filtered = records;
       if (input?.collaboratorId) {
@@ -3825,7 +3833,8 @@ var attendanceRouter = router({
     // GPS
     latitude: z14.string().optional(),
     longitude: z14.string().optional(),
-    locationName: z14.string().optional()
+    locationName: z14.string().optional(),
+    workLocationId: z14.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -3842,7 +3851,8 @@ var attendanceRouter = router({
       registeredBy: ctx.user.id,
       latitude: input.latitude || null,
       longitude: input.longitude || null,
-      locationName: input.locationName || null
+      locationName: input.locationName || null,
+      workLocationId: input.workLocationId || null
     });
     const dateFormatted = (/* @__PURE__ */ new Date(input.date + "T12:00:00")).toLocaleDateString("pt-BR");
     const activityInfo = input.activity ? ` (${input.activity})` : "";
@@ -5503,8 +5513,675 @@ var gpsLocationsRouter = router({
   })
 });
 
-// server/routers.ts
+// server/routers/reports.ts
 import { z as z22 } from "zod";
+init_db();
+init_schema();
+import { TRPCError as TRPCError13 } from "@trpc/server";
+import { eq as eq21, desc as desc18, and as and13, gte as gte6, lte as lte6, sql as sql6, isNull as isNull2 } from "drizzle-orm";
+var reportsRouter = router({
+  // ── Listar todos os locais de trabalho (para filtro) ──────────────────────
+  locations: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    return db.select({ id: gpsLocations.id, name: gpsLocations.name, isActive: gpsLocations.isActive }).from(gpsLocations).orderBy(gpsLocations.name);
+  }),
+  // ── Padronizar nomes de locais (atualizar locationName em registros antigos) ──
+  standardizeLocationNames: protectedProcedure.input(z22.object({
+    oldName: z22.string(),
+    newLocationId: z22.number(),
+    newLocationName: z22.string()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    await db.execute(sql6`
+        UPDATE collaborator_attendance 
+        SET location_name = ${input.newLocationName}, work_location_id = ${input.newLocationId}
+        WHERE location_name = ${input.oldName}
+      `);
+    return { success: true };
+  }),
+  // ── Listar nomes de locais únicos (para padronização) ──────────────────────
+  uniqueLocationNames: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    const results = await db.execute(sql6`
+      SELECT DISTINCT location_name FROM collaborator_attendance 
+      WHERE location_name IS NOT NULL AND location_name != ''
+      ORDER BY location_name
+    `);
+    return results[0]?.map((r) => r.location_name) || [];
+  }),
+  // ── Relatório completo por local e período ─────────────────────────────────
+  fullReport: protectedProcedure.input(z22.object({
+    locationId: z22.number().optional(),
+    // null = todos os locais
+    dateFrom: z22.string(),
+    // YYYY-MM-DD
+    dateTo: z22.string(),
+    // YYYY-MM-DD
+    includeMaoDeObra: z22.boolean().default(true),
+    includeConsumo: z22.boolean().default(true),
+    includeCargas: z22.boolean().default(true)
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    const dateFrom = input.dateFrom + " 00:00:00";
+    const dateTo = input.dateTo + " 23:59:59";
+    let maoDeObra = [];
+    if (input.includeMaoDeObra) {
+      const attendanceQuery = db.select({
+        id: collaboratorAttendance.id,
+        collaboratorName: collaborators.name,
+        collaboratorRole: collaborators.role,
+        date: collaboratorAttendance.date,
+        employmentType: collaboratorAttendance.employmentTypeCa,
+        dailyValue: collaboratorAttendance.dailyValue,
+        activity: collaboratorAttendance.activity,
+        paymentStatus: collaboratorAttendance.paymentStatusCa,
+        locationName: collaboratorAttendance.locationName,
+        workLocationId: collaboratorAttendance.workLocationId
+      }).from(collaboratorAttendance).innerJoin(collaborators, eq21(collaboratorAttendance.collaboratorId, collaborators.id)).where(
+        and13(
+          gte6(collaboratorAttendance.date, dateFrom),
+          lte6(collaboratorAttendance.date, dateTo),
+          ...input.locationId ? [eq21(collaboratorAttendance.workLocationId, input.locationId)] : []
+        )
+      ).orderBy(desc18(collaboratorAttendance.date));
+      maoDeObra = await attendanceQuery;
+    }
+    let consumoVeiculos = [];
+    if (input.includeConsumo) {
+      consumoVeiculos = await db.select({
+        id: fuelRecords.id,
+        date: fuelRecords.date,
+        equipmentName: equipment.name,
+        equipmentPlate: equipment.plate,
+        fuelType: fuelRecords.fuelType,
+        liters: fuelRecords.liters,
+        totalValue: fuelRecords.totalValue,
+        pricePerLiter: fuelRecords.pricePerLiter,
+        station: fuelRecords.station,
+        workLocationId: fuelRecords.workLocationId
+      }).from(fuelRecords).innerJoin(equipment, eq21(fuelRecords.equipmentId, equipment.id)).where(
+        and13(
+          gte6(fuelRecords.date, dateFrom),
+          lte6(fuelRecords.date, dateTo),
+          ...input.locationId ? [eq21(fuelRecords.workLocationId, input.locationId)] : []
+        )
+      ).orderBy(desc18(fuelRecords.date));
+    }
+    let consumoMaquinas = [];
+    if (input.includeConsumo) {
+      consumoMaquinas = await db.select({
+        id: machineFuel.id,
+        date: machineFuel.date,
+        equipmentName: equipment.name,
+        fuelType: machineFuel.fuelType,
+        liters: machineFuel.liters,
+        totalValue: machineFuel.totalValue,
+        pricePerLiter: machineFuel.pricePerLiter,
+        supplier: machineFuel.supplier,
+        workLocationId: machineFuel.workLocationId
+      }).from(machineFuel).innerJoin(equipment, eq21(machineFuel.equipmentId, equipment.id)).where(
+        and13(
+          gte6(machineFuel.date, dateFrom),
+          lte6(machineFuel.date, dateTo),
+          ...input.locationId ? [eq21(machineFuel.workLocationId, input.locationId)] : []
+        )
+      ).orderBy(desc18(machineFuel.date));
+    }
+    let despesasExtras = [];
+    if (input.includeConsumo) {
+      despesasExtras = await db.select({
+        id: extraExpenses.id,
+        date: extraExpenses.date,
+        category: extraExpenses.category,
+        description: extraExpenses.description,
+        amount: extraExpenses.amount,
+        paymentMethod: extraExpenses.paymentMethod,
+        workLocationId: extraExpenses.workLocationId
+      }).from(extraExpenses).where(
+        and13(
+          gte6(extraExpenses.date, dateFrom),
+          lte6(extraExpenses.date, dateTo),
+          ...input.locationId ? [eq21(extraExpenses.workLocationId, input.locationId)] : []
+        )
+      ).orderBy(desc18(extraExpenses.date));
+    }
+    let cargas = [];
+    if (input.includeCargas) {
+      cargas = await db.select({
+        id: cargoLoads.id,
+        date: cargoLoads.date,
+        vehiclePlate: cargoLoads.vehiclePlate,
+        driverName: cargoLoads.driverName,
+        heightM: cargoLoads.heightM,
+        widthM: cargoLoads.widthM,
+        lengthM: cargoLoads.lengthM,
+        volumeM3: cargoLoads.volumeM3,
+        woodType: cargoLoads.woodType,
+        destination: cargoLoads.destination,
+        status: cargoLoads.status,
+        workLocationId: cargoLoads.workLocationId
+      }).from(cargoLoads).where(
+        and13(
+          gte6(cargoLoads.date, dateFrom),
+          lte6(cargoLoads.date, dateTo),
+          ...input.locationId ? [eq21(cargoLoads.workLocationId, input.locationId)] : []
+        )
+      ).orderBy(desc18(cargoLoads.date));
+    }
+    const totalMaoDeObra = maoDeObra.reduce((sum, r) => sum + parseFloat(r.dailyValue || "0"), 0);
+    const totalCombustivelVeiculos = consumoVeiculos.reduce((sum, r) => sum + parseFloat(r.totalValue || "0"), 0);
+    const totalCombustivelMaquinas = consumoMaquinas.reduce((sum, r) => sum + parseFloat(r.totalValue || "0"), 0);
+    const totalDespesasExtras = despesasExtras.reduce((sum, r) => sum + parseFloat(r.amount || "0"), 0);
+    const totalLitrosVeiculos = consumoVeiculos.reduce((sum, r) => sum + parseFloat(r.liters || "0"), 0);
+    const totalLitrosMaquinas = consumoMaquinas.reduce((sum, r) => sum + parseFloat(r.liters || "0"), 0);
+    const totalVolumeCargas = cargas.reduce((sum, r) => sum + parseFloat(r.volumeM3 || "0"), 0);
+    return {
+      periodo: { de: input.dateFrom, ate: input.dateTo },
+      maoDeObra: {
+        registros: maoDeObra,
+        totalDias: maoDeObra.length,
+        totalValor: totalMaoDeObra,
+        colaboradoresUnicos: new Set(maoDeObra.map((r) => r.collaboratorName)).size,
+        pendentes: maoDeObra.filter((r) => r.paymentStatus === "pendente").length,
+        pagos: maoDeObra.filter((r) => r.paymentStatus === "pago").length
+      },
+      consumo: {
+        veiculos: consumoVeiculos,
+        maquinas: consumoMaquinas,
+        despesasExtras,
+        totalCombustivelValor: totalCombustivelVeiculos + totalCombustivelMaquinas,
+        totalCombustivelLitros: totalLitrosVeiculos + totalLitrosMaquinas,
+        totalDespesasExtras,
+        totalConsumo: totalCombustivelVeiculos + totalCombustivelMaquinas + totalDespesasExtras
+      },
+      cargas: {
+        registros: cargas,
+        totalCargas: cargas.length,
+        totalVolumeM3: totalVolumeCargas
+      },
+      resumo: {
+        custoTotal: totalMaoDeObra + totalCombustivelVeiculos + totalCombustivelMaquinas + totalDespesasExtras,
+        totalMaoDeObra,
+        totalConsumo: totalCombustivelVeiculos + totalCombustivelMaquinas + totalDespesasExtras,
+        totalCargas: cargas.length,
+        totalVolumeM3: totalVolumeCargas
+      }
+    };
+  }),
+  // ── Dashboard resumo por local (para a tela executiva) ─────────────────────
+  dashboardByLocation: protectedProcedure.input(z22.object({
+    dateFrom: z22.string(),
+    dateTo: z22.string()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    const dateFrom = input.dateFrom + " 00:00:00";
+    const dateTo = input.dateTo + " 23:59:59";
+    const locations = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(eq21(gpsLocations.isActive, 1)).orderBy(gpsLocations.name);
+    const locationData = await Promise.all(locations.map(async (loc) => {
+      const attendance = await db.select({ dailyValue: collaboratorAttendance.dailyValue }).from(collaboratorAttendance).where(and13(
+        eq21(collaboratorAttendance.workLocationId, loc.id),
+        gte6(collaboratorAttendance.date, dateFrom),
+        lte6(collaboratorAttendance.date, dateTo)
+      ));
+      const totalMaoDeObra = attendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
+      const fuel = await db.select({ totalValue: fuelRecords.totalValue, liters: fuelRecords.liters }).from(fuelRecords).where(and13(
+        eq21(fuelRecords.workLocationId, loc.id),
+        gte6(fuelRecords.date, dateFrom),
+        lte6(fuelRecords.date, dateTo)
+      ));
+      const totalFuel = fuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
+      const totalFuelLiters = fuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0);
+      const mfuel = await db.select({ totalValue: machineFuel.totalValue, liters: machineFuel.liters }).from(machineFuel).where(and13(
+        eq21(machineFuel.workLocationId, loc.id),
+        gte6(machineFuel.date, dateFrom),
+        lte6(machineFuel.date, dateTo)
+      ));
+      const totalMFuel = mfuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
+      const totalMFuelLiters = mfuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0);
+      const extras = await db.select({ amount: extraExpenses.amount }).from(extraExpenses).where(and13(
+        eq21(extraExpenses.workLocationId, loc.id),
+        gte6(extraExpenses.date, dateFrom),
+        lte6(extraExpenses.date, dateTo)
+      ));
+      const totalExtras = extras.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+      const cargos = await db.select({ volumeM3: cargoLoads.volumeM3 }).from(cargoLoads).where(and13(
+        eq21(cargoLoads.workLocationId, loc.id),
+        gte6(cargoLoads.date, dateFrom),
+        lte6(cargoLoads.date, dateTo)
+      ));
+      const totalVolume = cargos.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0);
+      return {
+        locationId: loc.id,
+        locationName: loc.name,
+        maoDeObra: { total: totalMaoDeObra, dias: attendance.length },
+        combustivel: { total: totalFuel + totalMFuel, litros: totalFuelLiters + totalMFuelLiters },
+        despesasExtras: { total: totalExtras, qtd: extras.length },
+        cargas: { total: cargos.length, volumeM3: totalVolume },
+        custoTotal: totalMaoDeObra + totalFuel + totalMFuel + totalExtras
+      };
+    }));
+    const unassignedAttendance = await db.select({ dailyValue: collaboratorAttendance.dailyValue }).from(collaboratorAttendance).where(and13(
+      isNull2(collaboratorAttendance.workLocationId),
+      gte6(collaboratorAttendance.date, dateFrom),
+      lte6(collaboratorAttendance.date, dateTo)
+    ));
+    const unassignedTotal = unassignedAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
+    return {
+      locations: locationData,
+      unassigned: {
+        maoDeObra: { total: unassignedTotal, dias: unassignedAttendance.length }
+      },
+      totals: {
+        custoTotal: locationData.reduce((s, l) => s + l.custoTotal, 0) + unassignedTotal,
+        totalMaoDeObra: locationData.reduce((s, l) => s + l.maoDeObra.total, 0) + unassignedTotal,
+        totalCombustivel: locationData.reduce((s, l) => s + l.combustivel.total, 0),
+        totalDespesas: locationData.reduce((s, l) => s + l.despesasExtras.total, 0),
+        totalCargas: locationData.reduce((s, l) => s + l.cargas.total, 0),
+        totalVolumeM3: locationData.reduce((s, l) => s + l.cargas.volumeM3, 0)
+      }
+    };
+  })
+});
+
+// server/routers/reportPdf.ts
+import { z as z23 } from "zod";
+init_db();
+init_schema();
+import { TRPCError as TRPCError14 } from "@trpc/server";
+import { eq as eq22, desc as desc19, and as and14, gte as gte7, lte as lte7 } from "drizzle-orm";
+function formatCurrency(value) {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function formatDate(d) {
+  return new Date(d).toLocaleDateString("pt-BR");
+}
+function generatePdfHtml(data, locationName, periodo, sections) {
+  const styles = `
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; font-size: 11px; }
+      .page { padding: 20px 30px; }
+      .header { background: linear-gradient(135deg, #0d4f2e, #1a7a47); color: white; padding: 20px 25px; border-radius: 8px; margin-bottom: 20px; }
+      .header h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+      .header p { font-size: 12px; opacity: 0.9; }
+      .header .meta { display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; opacity: 0.85; }
+      .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+      .summary-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 12px; text-align: center; }
+      .summary-card .label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+      .summary-card .value { font-size: 16px; font-weight: 700; margin-top: 4px; }
+      .summary-card .value.red { color: #dc3545; }
+      .summary-card .value.blue { color: #0d6efd; }
+      .summary-card .value.amber { color: #d97706; }
+      .summary-card .value.green { color: #198754; }
+      .section { margin-bottom: 20px; }
+      .section-title { font-size: 13px; font-weight: 700; color: #0d4f2e; border-bottom: 2px solid #0d4f2e; padding-bottom: 4px; margin-bottom: 10px; }
+      table { width: 100%; border-collapse: collapse; font-size: 10px; }
+      th { background: #f1f3f5; color: #495057; font-weight: 600; text-align: left; padding: 6px 8px; border-bottom: 2px solid #dee2e6; }
+      td { padding: 5px 8px; border-bottom: 1px solid #e9ecef; }
+      tr:nth-child(even) { background: #f8f9fa; }
+      .text-right { text-align: right; }
+      .text-center { text-align: center; }
+      .font-bold { font-weight: 700; }
+      .total-row { background: #e8f5e9 !important; font-weight: 700; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 9px; font-weight: 600; }
+      .badge-clt { background: #dbeafe; color: #1d4ed8; }
+      .badge-terceirizado { background: #ede9fe; color: #7c3aed; }
+      .badge-diarista { background: #fef3c7; color: #d97706; }
+      .badge-pago { background: #d1fae5; color: #059669; }
+      .badge-pendente { background: #fee2e2; color: #dc2626; }
+      .footer { text-align: center; font-size: 9px; color: #999; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e9ecef; }
+      @media print { .page { padding: 10px; } }
+    </style>
+  `;
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8">${styles}</head><body><div class="page">`;
+  html += `
+    <div class="header">
+      <h1>BTREE Ambiental \u2014 Relat\xF3rio</h1>
+      <p>${locationName}</p>
+      <div class="meta">
+        <span>Per\xEDodo: ${periodo}</span>
+        <span>Gerado em: ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")} ${(/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR")}</span>
+      </div>
+    </div>
+  `;
+  html += `
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">Custo Total</div>
+        <div class="value red">${formatCurrency(data.resumo.custoTotal)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">M\xE3o de Obra</div>
+        <div class="value blue">${formatCurrency(data.resumo.totalMaoDeObra)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Consumo</div>
+        <div class="value amber">${formatCurrency(data.resumo.totalConsumo)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Cargas</div>
+        <div class="value green">${data.resumo.totalCargas} (${data.resumo.totalVolumeM3.toFixed(1)}m\xB3)</div>
+      </div>
+    </div>
+  `;
+  if (sections.maoDeObra && data.maoDeObra.registros.length > 0) {
+    html += `
+      <div class="section">
+        <div class="section-title">M\xE3o de Obra \u2014 ${data.maoDeObra.totalDias} registros</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Colaborador</th>
+              <th>Atividade</th>
+              <th>V\xEDnculo</th>
+              <th class="text-right">Valor</th>
+              <th class="text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    for (const r of data.maoDeObra.registros) {
+      const empBadge = r.employmentType === "clt" ? "badge-clt" : r.employmentType === "terceirizado" ? "badge-terceirizado" : "badge-diarista";
+      const empLabel = r.employmentType === "clt" ? "CLT" : r.employmentType === "terceirizado" ? "Terceirizado" : "Diarista";
+      const payBadge = r.paymentStatus === "pago" ? "badge-pago" : "badge-pendente";
+      const payLabel = r.paymentStatus === "pago" ? "Pago" : "Pendente";
+      html += `
+        <tr>
+          <td>${formatDate(r.date)}</td>
+          <td class="font-bold">${r.collaboratorName}</td>
+          <td>${r.activity || "\u2014"}</td>
+          <td><span class="badge ${empBadge}">${empLabel}</span></td>
+          <td class="text-right">${formatCurrency(parseFloat(r.dailyValue || "0"))}</td>
+          <td class="text-center"><span class="badge ${payBadge}">${payLabel}</span></td>
+        </tr>
+      `;
+    }
+    html += `
+        <tr class="total-row">
+          <td colspan="4">Total M\xE3o de Obra</td>
+          <td class="text-right">${formatCurrency(data.maoDeObra.totalValor)}</td>
+          <td class="text-center">${data.maoDeObra.pendentes} pend. / ${data.maoDeObra.pagos} pagos</td>
+        </tr>
+      </tbody></table></div>
+    `;
+  }
+  if (sections.consumo && data.consumo.veiculos.length > 0) {
+    html += `
+      <div class="section">
+        <div class="section-title">Combust\xEDvel \u2014 Ve\xEDculos (${data.consumo.veiculos.length} registros)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Ve\xEDculo</th>
+              <th>Tipo</th>
+              <th class="text-right">Litros</th>
+              <th class="text-right">R$/L</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    for (const r of data.consumo.veiculos) {
+      html += `
+        <tr>
+          <td>${formatDate(r.date)}</td>
+          <td class="font-bold">${r.equipmentName} ${r.equipmentPlate ? `(${r.equipmentPlate})` : ""}</td>
+          <td style="text-transform:capitalize">${r.fuelType}</td>
+          <td class="text-right">${parseFloat(r.liters || "0").toFixed(1)}L</td>
+          <td class="text-right">${formatCurrency(parseFloat(r.pricePerLiter || "0"))}</td>
+          <td class="text-right font-bold">${formatCurrency(parseFloat(r.totalValue || "0"))}</td>
+        </tr>
+      `;
+    }
+    html += `</tbody></table></div>`;
+  }
+  if (sections.consumo && data.consumo.maquinas.length > 0) {
+    html += `
+      <div class="section">
+        <div class="section-title">Combust\xEDvel \u2014 M\xE1quinas (${data.consumo.maquinas.length} registros)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>M\xE1quina</th>
+              <th>Tipo</th>
+              <th class="text-right">Litros</th>
+              <th class="text-right">R$/L</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    for (const r of data.consumo.maquinas) {
+      html += `
+        <tr>
+          <td>${formatDate(r.date)}</td>
+          <td class="font-bold">${r.equipmentName}</td>
+          <td style="text-transform:capitalize">${r.fuelType}</td>
+          <td class="text-right">${parseFloat(r.liters || "0").toFixed(1)}L</td>
+          <td class="text-right">${formatCurrency(parseFloat(r.pricePerLiter || "0"))}</td>
+          <td class="text-right font-bold">${formatCurrency(parseFloat(r.totalValue || "0"))}</td>
+        </tr>
+      `;
+    }
+    html += `</tbody></table></div>`;
+  }
+  if (sections.consumo && data.consumo.despesasExtras.length > 0) {
+    html += `
+      <div class="section">
+        <div class="section-title">Despesas Extras (${data.consumo.despesasExtras.length} registros)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Categoria</th>
+              <th>Descri\xE7\xE3o</th>
+              <th>Pagamento</th>
+              <th class="text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    for (const r of data.consumo.despesasExtras) {
+      html += `
+        <tr>
+          <td>${formatDate(r.date)}</td>
+          <td style="text-transform:capitalize">${r.category || "\u2014"}</td>
+          <td>${r.description || "\u2014"}</td>
+          <td style="text-transform:capitalize">${r.paymentMethod || "\u2014"}</td>
+          <td class="text-right font-bold">${formatCurrency(parseFloat(r.amount || "0"))}</td>
+        </tr>
+      `;
+    }
+    html += `</tbody></table></div>`;
+  }
+  if (sections.cargas && data.cargas.registros.length > 0) {
+    html += `
+      <div class="section">
+        <div class="section-title">Cargas (${data.cargas.totalCargas} registros \u2014 ${data.cargas.totalVolumeM3.toFixed(1)}m\xB3)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Motorista</th>
+              <th>Placa</th>
+              <th>Madeira</th>
+              <th class="text-right">Volume (m\xB3)</th>
+              <th>Destino</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    for (const r of data.cargas.registros) {
+      html += `
+        <tr>
+          <td>${formatDate(r.date)}</td>
+          <td class="font-bold">${r.driverName || "\u2014"}</td>
+          <td>${r.vehiclePlate || "\u2014"}</td>
+          <td style="text-transform:capitalize">${r.woodType || "\u2014"}</td>
+          <td class="text-right">${parseFloat(r.volumeM3 || "0").toFixed(2)}</td>
+          <td>${r.destination || "\u2014"}</td>
+        </tr>
+      `;
+    }
+    html += `</tbody></table></div>`;
+  }
+  html += `
+    <div class="footer">
+      BTREE Ambiental \u2014 Sistema de Gest\xE3o | Relat\xF3rio gerado automaticamente
+    </div>
+  </div></body></html>`;
+  return html;
+}
+var reportPdfRouter = router({
+  generatePdfHtml: protectedProcedure.input(z23.object({
+    locationId: z23.number().optional(),
+    dateFrom: z23.string(),
+    dateTo: z23.string(),
+    includeMaoDeObra: z23.boolean().default(true),
+    includeConsumo: z23.boolean().default(true),
+    includeCargas: z23.boolean().default(true)
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    const dateFrom = input.dateFrom + " 00:00:00";
+    const dateTo = input.dateTo + " 23:59:59";
+    let locationName = "Todos os Locais";
+    if (input.locationId) {
+      const loc = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq22(gpsLocations.id, input.locationId));
+      if (loc.length > 0) locationName = loc[0].name;
+    }
+    let maoDeObra = [];
+    if (input.includeMaoDeObra) {
+      maoDeObra = await db.select({
+        id: collaboratorAttendance.id,
+        collaboratorName: collaborators.name,
+        date: collaboratorAttendance.date,
+        employmentType: collaboratorAttendance.employmentTypeCa,
+        dailyValue: collaboratorAttendance.dailyValue,
+        activity: collaboratorAttendance.activity,
+        paymentStatus: collaboratorAttendance.paymentStatusCa
+      }).from(collaboratorAttendance).innerJoin(collaborators, eq22(collaboratorAttendance.collaboratorId, collaborators.id)).where(and14(
+        gte7(collaboratorAttendance.date, dateFrom),
+        lte7(collaboratorAttendance.date, dateTo),
+        ...input.locationId ? [eq22(collaboratorAttendance.workLocationId, input.locationId)] : []
+      )).orderBy(desc19(collaboratorAttendance.date));
+    }
+    let consumoVeiculos = [];
+    if (input.includeConsumo) {
+      consumoVeiculos = await db.select({
+        id: fuelRecords.id,
+        date: fuelRecords.date,
+        equipmentName: equipment.name,
+        equipmentPlate: equipment.plate,
+        fuelType: fuelRecords.fuelType,
+        liters: fuelRecords.liters,
+        totalValue: fuelRecords.totalValue,
+        pricePerLiter: fuelRecords.pricePerLiter
+      }).from(fuelRecords).innerJoin(equipment, eq22(fuelRecords.equipmentId, equipment.id)).where(and14(
+        gte7(fuelRecords.date, dateFrom),
+        lte7(fuelRecords.date, dateTo),
+        ...input.locationId ? [eq22(fuelRecords.workLocationId, input.locationId)] : []
+      )).orderBy(desc19(fuelRecords.date));
+    }
+    let consumoMaquinas = [];
+    if (input.includeConsumo) {
+      consumoMaquinas = await db.select({
+        id: machineFuel.id,
+        date: machineFuel.date,
+        equipmentName: equipment.name,
+        fuelType: machineFuel.fuelType,
+        liters: machineFuel.liters,
+        totalValue: machineFuel.totalValue,
+        pricePerLiter: machineFuel.pricePerLiter
+      }).from(machineFuel).innerJoin(equipment, eq22(machineFuel.equipmentId, equipment.id)).where(and14(
+        gte7(machineFuel.date, dateFrom),
+        lte7(machineFuel.date, dateTo),
+        ...input.locationId ? [eq22(machineFuel.workLocationId, input.locationId)] : []
+      )).orderBy(desc19(machineFuel.date));
+    }
+    let despesasExtras = [];
+    if (input.includeConsumo) {
+      despesasExtras = await db.select({
+        id: extraExpenses.id,
+        date: extraExpenses.date,
+        category: extraExpenses.category,
+        description: extraExpenses.description,
+        amount: extraExpenses.amount,
+        paymentMethod: extraExpenses.paymentMethod
+      }).from(extraExpenses).where(and14(
+        gte7(extraExpenses.date, dateFrom),
+        lte7(extraExpenses.date, dateTo),
+        ...input.locationId ? [eq22(extraExpenses.workLocationId, input.locationId)] : []
+      )).orderBy(desc19(extraExpenses.date));
+    }
+    let cargas = [];
+    if (input.includeCargas) {
+      cargas = await db.select({
+        id: cargoLoads.id,
+        date: cargoLoads.date,
+        vehiclePlate: cargoLoads.vehiclePlate,
+        driverName: cargoLoads.driverName,
+        volumeM3: cargoLoads.volumeM3,
+        woodType: cargoLoads.woodType,
+        destination: cargoLoads.destination
+      }).from(cargoLoads).where(and14(
+        gte7(cargoLoads.date, dateFrom),
+        lte7(cargoLoads.date, dateTo),
+        ...input.locationId ? [eq22(cargoLoads.workLocationId, input.locationId)] : []
+      )).orderBy(desc19(cargoLoads.date));
+    }
+    const totalMaoDeObra = maoDeObra.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
+    const totalCombV = consumoVeiculos.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
+    const totalCombM = consumoMaquinas.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
+    const totalDespesas = despesasExtras.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+    const totalVolume = cargas.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0);
+    const reportData = {
+      maoDeObra: {
+        registros: maoDeObra,
+        totalDias: maoDeObra.length,
+        totalValor: totalMaoDeObra,
+        pendentes: maoDeObra.filter((r) => r.paymentStatus === "pendente").length,
+        pagos: maoDeObra.filter((r) => r.paymentStatus === "pago").length
+      },
+      consumo: {
+        veiculos: consumoVeiculos,
+        maquinas: consumoMaquinas,
+        despesasExtras,
+        totalConsumo: totalCombV + totalCombM + totalDespesas
+      },
+      cargas: {
+        registros: cargas,
+        totalCargas: cargas.length,
+        totalVolumeM3: totalVolume
+      },
+      resumo: {
+        custoTotal: totalMaoDeObra + totalCombV + totalCombM + totalDespesas,
+        totalMaoDeObra,
+        totalConsumo: totalCombV + totalCombM + totalDespesas,
+        totalCargas: cargas.length,
+        totalVolumeM3: totalVolume
+      }
+    };
+    const periodo = `${new Date(input.dateFrom).toLocaleDateString("pt-BR")} a ${new Date(input.dateTo).toLocaleDateString("pt-BR")}`;
+    const htmlContent = generatePdfHtml(reportData, locationName, periodo, {
+      maoDeObra: input.includeMaoDeObra,
+      consumo: input.includeConsumo,
+      cargas: input.includeCargas
+    });
+    return { html: htmlContent };
+  })
+});
+
+// server/routers.ts
+import { z as z24 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -5620,7 +6297,7 @@ var appRouter = router({
         const [cols] = await db.execute(__require("drizzle-orm/sql").sql`SHOW COLUMNS FROM collaborator_attendance`);
         const [countResult] = await db.execute(__require("drizzle-orm/sql").sql`SELECT COUNT(*) as cnt FROM collaborator_attendance`);
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq21, desc: desc18 } = await import("drizzle-orm");
+        const { eq: eq23, desc: desc20 } = await import("drizzle-orm");
         try {
           const records = await db.select({
             id: collaboratorAttendance2.id,
@@ -5640,10 +6317,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z22.object({
-      name: z22.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z22.string().email("Email inv\xE1lido"),
-      password: z22.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z24.object({
+      name: z24.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z24.string().email("Email inv\xE1lido"),
+      password: z24.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -5658,9 +6335,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z22.object({
-      email: z22.string().email("Email inv\xE1lido"),
-      password: z22.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z24.object({
+      email: z24.string().email("Email inv\xE1lido"),
+      password: z24.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -5676,11 +6353,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z22.object({
-      seedKey: z22.string(),
-      email: z22.string().email(),
-      name: z22.string(),
-      password: z22.string().min(4)
+    seedAdmin: publicProcedure.input(z24.object({
+      seedKey: z24.string(),
+      email: z24.string().email(),
+      name: z24.string(),
+      password: z24.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -5690,9 +6367,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z22.object({
-      email: z22.string().email("Email inv\xE1lido"),
-      origin: z22.string().url().optional()
+    forgotPassword: publicProcedure.input(z24.object({
+      email: z24.string().email("Email inv\xE1lido"),
+      origin: z24.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -5706,9 +6383,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z22.object({
-      token: z22.string().min(1),
-      password: z22.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z24.object({
+      token: z24.string().min(1),
+      password: z24.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -5717,10 +6394,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq21 } = await import("drizzle-orm");
+      const { eq: eq23 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq21(users3.id, resetToken.userId));
+      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq23(users3.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -5751,9 +6428,11 @@ var appRouter = router({
   extraExpenses: extraExpensesRouter,
   financial: financialRouter,
   gpsLocations: gpsLocationsRouter,
+  reports: reportsRouter,
+  reportPdf: reportPdfRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z22.object({ key: z22.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z24.object({ key: z24.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -5957,7 +6636,7 @@ function schedulePendingPaymentsCheck() {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq21, and: and13, lt: lt2 } = await import("drizzle-orm");
+        const { eq: eq23, and: and15, lt: lt2 } = await import("drizzle-orm");
         const db = await getDb2();
         if (!db) return;
         const sevenDaysAgo = /* @__PURE__ */ new Date();
@@ -5967,8 +6646,8 @@ function schedulePendingPaymentsCheck() {
           collaboratorName: collaborators2.name,
           date: collaboratorAttendance2.date,
           dailyValue: collaboratorAttendance2.dailyValue
-        }).from(collaboratorAttendance2).innerJoin(collaborators2, eq21(collaboratorAttendance2.collaboratorId, collaborators2.id)).where(and13(
-          eq21(collaboratorAttendance2.paymentStatusCa, "pendente"),
+        }).from(collaboratorAttendance2).innerJoin(collaborators2, eq23(collaboratorAttendance2.collaboratorId, collaborators2.id)).where(and15(
+          eq23(collaboratorAttendance2.paymentStatusCa, "pendente"),
           lt2(collaboratorAttendance2.date, sevenDaysAgo)
         ));
         if (pendingRecords.length > 0) {

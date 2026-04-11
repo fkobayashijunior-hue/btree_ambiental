@@ -81,6 +81,7 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 	finalWidthM: varchar("final_width_m", { length: 20 }),
 	finalLengthM: varchar("final_length_m", { length: 20 }),
 	finalVolumeM3: varchar("final_volume_m3", { length: 20 }),
+	workLocationId: int("work_location_id"),
 });
 
 export const cargoShipments = mysqlTable("cargo_shipments", {
@@ -293,6 +294,7 @@ export const collaboratorAttendance = mysqlTable("collaborator_attendance", {
 	latitude: varchar({ length: 20 }),
 	longitude: varchar({ length: 20 }),
 	locationName: varchar("location_name", { length: 255 }),
+	workLocationId: int("work_location_id"),
 });
 
 export const collaboratorDocuments = mysqlTable("collaborator_documents", {
@@ -397,6 +399,7 @@ export const extraExpenses = mysqlTable("extra_expenses", {
 	registeredBy: int("registered_by").references(() => users.id),
 	registeredByName: varchar("registered_by_name", { length: 255 }),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	workLocationId: int("work_location_id"),
 });
 
 export const financialEntries = mysqlTable("financial_entries", {
@@ -463,6 +466,7 @@ export const fuelRecords = mysqlTable("fuel_records", {
 	registeredBy: int("registered_by").notNull().references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	workLocationId: int("work_location_id"),
 });
 
 export const gpsDeviceLinks = mysqlTable("gps_device_links", {
@@ -517,6 +521,7 @@ export const machineFuel = mysqlTable("machine_fuel", {
 	notes: text(),
 	registeredBy: int("registered_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	workLocationId: int("work_location_id"),
 });
 
 export const machineHours = mysqlTable("machine_hours", {
@@ -532,6 +537,7 @@ export const machineHours = mysqlTable("machine_hours", {
 	notes: text(),
 	registeredBy: int("registered_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	workLocationId: int("work_location_id"),
 });
 
 export const machineMaintenance = mysqlTable("machine_maintenance", {
@@ -816,6 +822,7 @@ export const vehicleRecords = mysqlTable("vehicle_records", {
 	maintenanceLocation: varchar("maintenance_location", { length: 255 }),
 	photosJson: text("photos_json"),
 	photoUrl: text("photo_url"),
+	workLocationId: int("work_location_id"),
 });
 
 
