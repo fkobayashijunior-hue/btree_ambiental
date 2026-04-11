@@ -271,6 +271,7 @@ export default function AttendanceList() {
       id: number; name: string; photo: string | null; role: string;
       pixKey: string | null; employmentType: string;
       days: any[]; total: number; pendente: number; pago: number;
+      locations: Set<string>;
     }> = {};
 
     for (const r of weekRecords as any[]) {
@@ -280,10 +281,12 @@ export default function AttendanceList() {
           photo: r.collaboratorPhoto, role: r.collaboratorRole,
           pixKey: r.pixKey, employmentType: r.employmentType,
           days: [], total: 0, pendente: 0, pago: 0,
+          locations: new Set<string>(),
         };
       }
       const v = parseFloat(r.dailyValue || "0");
       map[r.collaboratorId].days.push(r);
+      if (r.locationName) map[r.collaboratorId].locations.add(r.locationName);
       map[r.collaboratorId].total += v;
       if (r.paymentStatus === "pago") map[r.collaboratorId].pago += v;
       else map[r.collaboratorId].pendente += v;
@@ -364,6 +367,7 @@ export default function AttendanceList() {
         <td>${c.name}</td>
         <td style="text-align:center">${c.days.length}</td>
         <td style="font-size:11px">${c.days.map(d => fmtDateFull(d.date)).join(", ")}</td>
+        <td style="text-align:center">${Array.from(c.locations).join(", ") || "Sem local"}</td>
         <td style="text-align:center">${EMPLOYMENT_LABELS[c.employmentType] || c.employmentType}</td>
         <td style="font-size:11px">${c.pixKey || "—"}</td>
         <td style="text-align:right">R$ ${c.total.toFixed(2)}</td>
@@ -420,7 +424,7 @@ export default function AttendanceList() {
         </div>
         <table>
           <thead><tr>
-            <th>Colaborador</th><th>Dias</th><th>Datas</th><th>Vínculo</th>
+            <th>Colaborador</th><th>Dias</th><th>Datas</th><th>Local</th><th>Vínculo</th>
             <th>PIX</th><th>Total</th><th>A Pagar</th><th>Pago</th>
           </tr></thead>
           <tbody>${rows}</tbody>
@@ -455,11 +459,12 @@ export default function AttendanceList() {
     const rows = sortedDayRecords.map((r: any) => `
       <tr>
         <td>${r.collaboratorName}</td>
-        <td>${r.activity || "—"}</td>
+        <td>${r.activity || "\u2014"}</td>
+        <td style="text-align:center">${r.locationName || "Sem local"}</td>
         <td style="text-align:center">${EMPLOYMENT_LABELS[r.employmentType] || r.employmentType}</td>
         <td style="text-align:right">R$ ${parseFloat(r.dailyValue || "0").toFixed(2)}</td>
-        <td style="font-size:11px">${r.pixKey || "—"}</td>
-        <td style="text-align:center;color:${r.paymentStatus === "pago" ? "#15803d" : "#b91c1c"}">${r.paymentStatus === "pago" ? "✓ Pago" : "Pendente"}</td>
+        <td style="font-size:11px">${r.pixKey || "\u2014"}</td>
+        <td style="text-align:center;color:${r.paymentStatus === "pago" ? "#15803d" : "#b91c1c"}">${r.paymentStatus === "pago" ? "\u2713 Pago" : "Pendente"}</td>
       </tr>
     `).join("");
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
@@ -510,7 +515,7 @@ export default function AttendanceList() {
         </div>
         <table>
           <thead><tr>
-            <th>Colaborador</th><th>Atividade</th><th>Vínculo</th>
+            <th>Colaborador</th><th>Atividade</th><th>Local</th><th>V\u00ednculo</th>
             <th>Valor</th><th>PIX</th><th>Status</th>
           </tr></thead>
           <tbody>${rows}</tbody>

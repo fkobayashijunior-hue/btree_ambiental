@@ -37,19 +37,19 @@ const menuItems = [
   { icon: Layers, label: "Setores e Equipamentos", path: "/setores", slug: "equipamentos" },
   { icon: Truck, label: "Controle de Cargas", path: "/cargas", slug: "cargas" },
   { icon: ClipboardList, label: "Controle de Equipamentos", path: "/maquinas", slug: "manutencao" },
-  { icon: Car, label: "Controle de Abastecimento", path: "/veiculos", slug: "equipamentos" },
+  { icon: Car, label: "Controle de Abastecimento", path: "/veiculos", slug: "abastecimento" },
   { icon: Package, label: "Peças e Acessórios", path: "/pecas", slug: "pecas" },
   { icon: Globe, label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente" },
   { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },
   { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps" },
   { icon: Scissors, label: "Motosserras", path: "/motosserras", slug: "motosserras" },
-  { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", slug: null },
+  { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", slug: "gastos-extras" },
   { icon: Leaf, label: "Replantios", path: "/replantios", slug: "replantios" },
   { icon: DollarSign, label: "Pagamentos Clientes", path: "/pagamentos-clientes", slug: "pagamentos-clientes" },
   { icon: Wallet, label: "Financeiro", path: "/financeiro", slug: "financeiro" },
-  { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: null },
+  { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: "locais-gps" },
   { icon: Truck, label: "Minha Carga", path: "/motorista", slug: "cargas" },
-  { icon: BarChart3, label: "Dashboard Executivo", path: "/dashboard-executivo", slug: null },
+  { icon: BarChart3, label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec" },
 ];
 
 // Rotas que são subpáginas (não estão no menu principal)

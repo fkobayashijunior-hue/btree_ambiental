@@ -434,6 +434,7 @@ export const fuelContainerEvents = mysqlTable("fuel_container_events", {
 	chainsawId: int("chainsaw_id"),
 	registeredBy: int("registered_by"),
 	notes: text(),
+	workLocationId: int("work_location_id"),
 	eventDate: timestamp("event_date", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });

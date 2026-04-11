@@ -7,28 +7,42 @@ import { eq } from "drizzle-orm";
 
 // Módulos disponíveis no sistema
 export const SYSTEM_MODULES = [
+  // Maquinário
   { slug: "equipamentos",    label: "Equipamentos",         group: "Maquinário" },
   { slug: "pecas",           label: "Peças / Estoque",       group: "Maquinário" },
   { slug: "manutencao",      label: "Manutenção",            group: "Maquinário" },
   { slug: "horas-maquina",   label: "Horas de Máquina",      group: "Maquinário" },
+  { slug: "motosserras",     label: "Motosserras",           group: "Maquinário" },
+  // Pessoas
   { slug: "colaboradores",   label: "Colaboradores",         group: "Pessoas" },
   { slug: "presencas",       label: "Presenças",             group: "Pessoas" },
-  { slug: "reflorestamento", label: "Reflorestamento",       group: "Operações" },
+  // Operações
   { slug: "cargas",          label: "Controle de Cargas",    group: "Operações" },
+  { slug: "abastecimento",   label: "Abastecimento",         group: "Operações" },
+  { slug: "gastos-extras",   label: "Gastos Extras",         group: "Operações" },
+  { slug: "reflorestamento", label: "Reflorestamento",       group: "Operações" },
+  { slug: "replantios",      label: "Replantios",            group: "Operações" },
+  { slug: "gps",             label: "Rastreamento GPS",      group: "Operações" },
+  { slug: "locais-gps",      label: "Locais GPS",            group: "Operações" },
+  // Comercial
   { slug: "clientes",        label: "Clientes",              group: "Comercial" },
   { slug: "portal-cliente",  label: "Portal do Cliente",     group: "Comercial" },
-  { slug: "gps",             label: "Rastreamento GPS",      group: "Operações" },
-  { slug: "motosserras",    label: "Motosserras",           group: "Maquinário" },
-  { slug: "relatorios",      label: "Relatórios",            group: "Administrativo" },
-  { slug: "acesso",          label: "Controle de Acesso",    group: "Administrativo" },
-  { slug: "financeiro",      label: "Módulo Financeiro",     group: "Administrativo" },
-  { slug: "replantios",      label: "Replantios",            group: "Operações" },
   { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" },
+  // Administrativo (valores financeiros)
+  { slug: "financeiro",      label: "Módulo Financeiro",     group: "Administrativo" },
+  { slug: "relatorios",      label: "Relatórios",            group: "Administrativo" },
+  { slug: "dashboard-exec",  label: "Dashboard Executivo",   group: "Administrativo" },
+  { slug: "acesso",          label: "Controle de Acesso",    group: "Administrativo" },
 ] as const;
 
 export type ModuleSlug = typeof SYSTEM_MODULES[number]["slug"];
 
 // Perfis pré-definidos
+// Módulos que contêm informações financeiras sensíveis
+export const FINANCIAL_MODULES: ModuleSlug[] = [
+  "financeiro", "relatorios", "dashboard-exec", "pagamentos-clientes",
+];
+
 export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> = {
   admin: {
     label: "Administrador",
@@ -40,19 +54,23 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
   },
   operador: {
     label: "Operador",
-    modules: ["equipamentos", "horas-maquina"],
+    modules: ["equipamentos", "horas-maquina", "presencas"],
   },
   motorista: {
     label: "Motorista",
-    modules: ["equipamentos", "cargas"],
+    modules: ["equipamentos", "cargas", "abastecimento"],
   },
   motosserrista: {
     label: "Motosserrista",
     modules: ["equipamentos", "manutencao", "motosserras"],
   },
   lider: {
-    label: "Líder",
-    modules: ["presencas", "colaboradores"],
+    label: "Líder de Equipe",
+    modules: ["presencas", "colaboradores", "equipamentos", "cargas", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"],
+  },
+  equipe: {
+    label: "Equipe de Campo",
+    modules: ["presencas", "equipamentos", "cargas", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"],
   },
   custom: {
     label: "Personalizado",

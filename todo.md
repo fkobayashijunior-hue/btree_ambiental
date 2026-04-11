@@ -1306,3 +1306,28 @@
 
 ### Build e Deploy
 - [x] Compilar dist/ e fazer push no Git (commit 7ab198f)
+
+## 🐛 CORREÇÕES URGENTES (12/04/2026)
+
+### Presenças - Edição de Local
+- [ ] Corrigir botão de editar local nas presenças (não funciona no site publicado)
+- [ ] Garantir que registros antigos possam ter o local atualizado
+
+### PDF de Presenças
+- [ ] Adicionar coluna "Local de Trabalho" no PDF diário de presenças
+- [ ] Agrupar por local no PDF se possível
+
+### Motosserras
+- [ ] Adicionar campo de local de trabalho no formulário de motosserras
+- [ ] Adicionar workLocationId ao backend de motosserras
+
+### Controle de Acesso (Permissões por Perfil)
+- [ ] Fazer Controle de Acesso funcionar para a equipe usar o sistema
+- [ ] Equipe NÃO pode ver valores financeiros (salários, pagamentos mensais)
+- [ ] Equipe PODE registrar valores de peças, combustível etc.
+- [ ] Motorista: acesso ao seu veículo/caminhão + campo de cargas + abastecimento
+- [ ] Perfis: Administrativo (tudo), Encarregado, Mecânico, Motosserrista, Carregador, Operador, Motorista
+
+### Simplificação do Menu (Futuro)
+- [ ] Unificar "Controle de Cargas" e "Minha Carga" em um único módulo
+- [ ] Simplificar campos duplicados de manutenção e abastecimento

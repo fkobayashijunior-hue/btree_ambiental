@@ -20,6 +20,8 @@ const PROFILE_COLORS: Record<string, string> = {
   operador:      "bg-orange-100 text-orange-800 border-orange-200",
   motorista:     "bg-purple-100 text-purple-800 border-purple-200",
   motosserrista: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  lider:         "bg-emerald-100 text-emerald-800 border-emerald-200",
+  equipe:        "bg-teal-100 text-teal-800 border-teal-200",
   custom:        "bg-gray-100 text-gray-700 border-gray-200",
 };
 

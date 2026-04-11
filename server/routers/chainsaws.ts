@@ -127,6 +127,7 @@ const fuelRouter = router({
       costPerLiter: z.string().optional(),
       totalCost: z.string().optional(),
       notes: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -174,9 +175,10 @@ const fuelRouter = router({
         volumeLiters: input.volumeLiters,
         costPerLiter: input.costPerLiter,
         totalCost: input.totalCost,
-        oil2tMl,
+        oil2TMl: oil2tMl,
         registeredBy: ctx.user.id,
         notes: input.notes,
+        workLocationId: input.workLocationId,
       });
 
       return { success: true, oil2tMl };
@@ -189,6 +191,7 @@ const fuelRouter = router({
       volumeLiters: z.string(),
       chainsawId: z.number().optional(),
       notes: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -213,6 +216,7 @@ const fuelRouter = router({
         chainsawId: input.chainsawId,
         registeredBy: ctx.user.id,
         notes: input.notes,
+        workLocationId: input.workLocationId,
       });
 
       return { success: true };
@@ -225,6 +229,7 @@ const fuelRouter = router({
       targetContainerId: z.number(),
       volumeLiters: z.string(),
       notes: z.string().optional(),
+      workLocationId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -250,6 +255,7 @@ const fuelRouter = router({
         sourceContainerId: input.sourceContainerId,
         registeredBy: ctx.user.id,
         notes: input.notes,
+        workLocationId: input.workLocationId,
       });
 
       return { success: true };
@@ -683,7 +689,7 @@ const chainsawOSRouter = router({
         .set({
           status: "concluida",
           serviceDescription: input.serviceDescription,
-          completedAt: new Date(),
+          completedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
           mechanicId: ctx.user.id,
         })
         .where(eq(chainsawServiceOrders.id, input.id));

@@ -17,6 +17,8 @@ import {
   ArrowRight, ArrowLeft, RotateCcw, TrendingDown, TrendingUp,
   ChevronDown, ChevronUp, Edit, Camera, ImageOff
 } from "lucide-react";
+import WorkLocationSelect from "@/components/WorkLocationSelect";
+import { useWorkLocations } from "@/hooks/useWorkLocations";
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -300,9 +302,10 @@ function FuelTab() {
   const [useDialog, setUseDialog] = useState<any>(null);
   const [transferDialog, setTransferDialog] = useState(false);
   const [containerForm, setContainerForm] = useState({ name: "", color: "vermelho", type: "puro" as "puro" | "mistura", capacityLiters: "20" });
-  const [supplyForm, setSupplyForm] = useState({ volumeLiters: "", costPerLiter: "", totalCost: "", notes: "" });
-  const [useForm, setUseForm] = useState({ volumeLiters: "", chainsawId: "", notes: "" });
-  const [transferForm, setTransferForm] = useState({ sourceContainerId: "", targetContainerId: "", volumeLiters: "", notes: "" });
+  const [supplyForm, setSupplyForm] = useState({ volumeLiters: "", costPerLiter: "", totalCost: "", notes: "", workLocationId: "" });
+  const [useForm, setUseForm] = useState({ volumeLiters: "", chainsawId: "", notes: "", workLocationId: "" });
+  const [transferForm, setTransferForm] = useState({ sourceContainerId: "", targetContainerId: "", volumeLiters: "", notes: "", workLocationId: "" });
+  const { locations: gpsLocations } = useWorkLocations();
 
   const EVENT_LABELS: Record<string, string> = { abastecimento: "Abastecimento", uso: "Uso no campo", transferencia: "Transferência" };
   const EVENT_COLORS: Record<string, string> = { abastecimento: "text-green-600", uso: "text-orange-600", transferencia: "text-blue-600" };
@@ -350,10 +353,10 @@ function FuelTab() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => { setSupplyDialog(c); setSupplyForm({ volumeLiters: "", costPerLiter: "", totalCost: "", notes: "" }); }}>
+                  <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => { setSupplyDialog(c); setSupplyForm({ volumeLiters: "", costPerLiter: "", totalCost: "", notes: "", workLocationId: "" }); }}>
                     <TrendingUp className="w-3 h-3 mr-1" /> Abastecer
                   </Button>
-                  <Button size="sm" variant="outline" className="flex-1 text-orange-600 border-orange-200" onClick={() => { setUseDialog(c); setUseForm({ volumeLiters: "", chainsawId: "", notes: "" }); }}>
+                  <Button size="sm" variant="outline" className="flex-1 text-orange-600 border-orange-200" onClick={() => { setUseDialog(c); setUseForm({ volumeLiters: "", chainsawId: "", notes: "", workLocationId: "" }); }}>
                     <TrendingDown className="w-3 h-3 mr-1" /> Registrar Uso
                   </Button>
                 </div>
@@ -446,12 +449,13 @@ function FuelTab() {
               <div><Label>Total (R$)</Label><Input type="number" step="0.01" value={supplyForm.totalCost} onChange={e => setSupplyForm(f => ({ ...f, totalCost: e.target.value }))} placeholder="0,00" /></div>
             </div>
             <div><Label>Observações</Label><Textarea value={supplyForm.notes} onChange={e => setSupplyForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+            <WorkLocationSelect value={supplyForm.workLocationId} onChange={(v) => setSupplyForm(f => ({ ...f, workLocationId: v }))} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSupplyDialog(null)}>Cancelar</Button>
             <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => {
               if (!supplyForm.volumeLiters) return toast.error('Volume obrigatório');
-              supplyMutation.mutate({ containerId: supplyDialog.id, ...supplyForm });
+              supplyMutation.mutate({ containerId: supplyDialog.id, volumeLiters: supplyForm.volumeLiters, costPerLiter: supplyForm.costPerLiter, totalCost: supplyForm.totalCost, notes: supplyForm.notes, workLocationId: supplyForm.workLocationId ? parseInt(supplyForm.workLocationId) : undefined });
             }}>Registrar Abastecimento</Button>
           </DialogFooter>
         </DialogContent>
@@ -472,12 +476,13 @@ function FuelTab() {
               </Select>
             </div>
             <div><Label>Observações</Label><Textarea value={useForm.notes} onChange={e => setUseForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+            <WorkLocationSelect value={useForm.workLocationId} onChange={(v) => setUseForm(f => ({ ...f, workLocationId: v }))} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUseDialog(null)}>Cancelar</Button>
             <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={() => {
               if (!useForm.volumeLiters) return toast.error('Volume obrigatório');
-              useMutation.mutate({ containerId: useDialog.id, volumeLiters: useForm.volumeLiters, chainsawId: useForm.chainsawId ? parseInt(useForm.chainsawId) : undefined, notes: useForm.notes });
+              useMutation.mutate({ containerId: useDialog.id, volumeLiters: useForm.volumeLiters, chainsawId: useForm.chainsawId ? parseInt(useForm.chainsawId) : undefined, notes: useForm.notes, workLocationId: useForm.workLocationId ? parseInt(useForm.workLocationId) : undefined });
             }}>Registrar Uso</Button>
           </DialogFooter>
         </DialogContent>
@@ -503,13 +508,14 @@ function FuelTab() {
             </div>
             <div><Label>Volume (litros) *</Label><Input type="number" step="0.1" value={transferForm.volumeLiters} onChange={e => setTransferForm(f => ({ ...f, volumeLiters: e.target.value }))} /></div>
             <div><Label>Observações</Label><Textarea value={transferForm.notes} onChange={e => setTransferForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+            <WorkLocationSelect value={transferForm.workLocationId} onChange={(v) => setTransferForm(f => ({ ...f, workLocationId: v }))} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTransferDialog(false)}>Cancelar</Button>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => {
               if (!transferForm.sourceContainerId || !transferForm.targetContainerId || !transferForm.volumeLiters)
                 return toast.error('Preencha todos os campos');
-              transferMutation.mutate({ sourceContainerId: parseInt(transferForm.sourceContainerId), targetContainerId: parseInt(transferForm.targetContainerId), volumeLiters: transferForm.volumeLiters, notes: transferForm.notes });
+              transferMutation.mutate({ sourceContainerId: parseInt(transferForm.sourceContainerId), targetContainerId: parseInt(transferForm.targetContainerId), volumeLiters: transferForm.volumeLiters, notes: transferForm.notes, workLocationId: transferForm.workLocationId ? parseInt(transferForm.workLocationId) : undefined });
             }}>Transferir</Button>
           </DialogFooter>
         </DialogContent>

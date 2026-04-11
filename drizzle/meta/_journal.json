@@ -162,6 +162,13 @@
       "when": 1775312231780,
       "tag": "0022_clammy_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1775932287647,
+      "tag": "0023_complex_molten_man",
+      "breakpoints": true
     }
   ]
 }
