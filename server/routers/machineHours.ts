@@ -2,8 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { machineHours, machineMaintenance, machineFuel, equipment } from "../../drizzle/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { machineHours, machineMaintenance, machineFuel, equipment, gpsLocations } from "../../drizzle/schema";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 
 export const machineHoursRouter = router({
   // === HORAS TRABALHADAS ===
@@ -13,8 +13,16 @@ export const machineHoursRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       const results = await db.select().from(machineHours).orderBy(desc(machineHours.createdAt));
-      if (input?.equipmentId) return results.filter(r => r.equipmentId === input.equipmentId);
-      return results;
+      let filtered = input?.equipmentId ? results.filter(r => r.equipmentId === input.equipmentId) : results;
+      // Resolver nomes dos locais
+      const locIdsRaw = filtered.map(r => r.workLocationId).filter((id): id is number => id !== null && id !== undefined);
+      const locIds = Array.from(new Set(locIdsRaw));
+      let locMap: Record<number, string> = {};
+      if (locIds.length > 0) {
+        const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, locIds));
+        locMap = Object.fromEntries(locsData.map(l => [l.id, l.name]));
+      }
+      return filtered.map(r => ({ ...r, locationName: r.workLocationId ? locMap[r.workLocationId] || null : null }));
     }),
 
   createHours: protectedProcedure
@@ -36,7 +44,7 @@ export const machineHoursRouter = router({
       const { workLocationId, ...rest } = input;
       await db.insert(machineHours).values({
         ...rest,
-        date: new Date(input.date),
+        date: input.date,
         registeredBy: ctx.user.id,
         workLocationId: workLocationId || null,
       });
@@ -53,6 +61,7 @@ export const machineHoursRouter = router({
       activity: z.string().optional().nullable(),
       location: z.string().optional().nullable(),
       notes: z.string().optional().nullable(),
+      workLocationId: z.number().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -60,7 +69,7 @@ export const machineHoursRouter = router({
       const { id, date, ...rest } = input;
       await db.update(machineHours).set({
         ...rest,
-        ...(date ? { date: new Date(date) } : {}),
+        ...(date ? { date } : {}),
       }).where(eq(machineHours.id, id));
       return { success: true };
     }),
@@ -107,7 +116,7 @@ export const machineHoursRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       await db.insert(machineMaintenance).values({
         ...input,
-        date: new Date(input.date),
+        date: input.date,
         registeredBy: ctx.user.id,
       });
       return { success: true };
@@ -133,7 +142,7 @@ export const machineHoursRouter = router({
       const { id, date, ...rest } = input;
       await db.update(machineMaintenance).set({
         ...rest,
-        ...(date ? { date: new Date(date) } : {}),
+        ...(date ? { date } : {}),
       }).where(eq(machineMaintenance.id, id));
       return { success: true };
     }),
@@ -155,8 +164,15 @@ export const machineHoursRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       const results = await db.select().from(machineFuel).orderBy(desc(machineFuel.createdAt));
-      if (input?.equipmentId) return results.filter(r => r.equipmentId === input.equipmentId);
-      return results;
+      let filteredFuel = input?.equipmentId ? results.filter(r => r.equipmentId === input.equipmentId) : results;
+      const fuelLocIdsRaw = filteredFuel.map(r => r.workLocationId).filter((id): id is number => id !== null && id !== undefined);
+      const fuelLocIds = Array.from(new Set(fuelLocIdsRaw));
+      let fuelLocMap: Record<number, string> = {};
+      if (fuelLocIds.length > 0) {
+        const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, fuelLocIds));
+        fuelLocMap = Object.fromEntries(locsData.map(l => [l.id, l.name]));
+      }
+      return filteredFuel.map(r => ({ ...r, locationName: r.workLocationId ? fuelLocMap[r.workLocationId] || null : null }));
     }),
 
   createFuel: protectedProcedure
@@ -178,10 +194,23 @@ export const machineHoursRouter = router({
       const { workLocationId, ...rest } = input;
       await db.insert(machineFuel).values({
         ...rest,
-        date: new Date(input.date),
+        date: input.date,
         registeredBy: ctx.user.id,
         workLocationId: workLocationId || null,
       });
+      return { success: true };
+    }),
+
+  updateFuel: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      workLocationId: z.number().optional().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const { id, ...rest } = input;
+      await db.update(machineFuel).set(rest).where(eq(machineFuel.id, id));
       return { success: true };
     }),
 
@@ -240,7 +269,7 @@ export const machineHoursRouter = router({
       nextMaintenanceHours: number;
       hoursRemaining: number;
       isOverdue: boolean;
-      lastMaintenanceDate: Date;
+      lastMaintenanceDate: string;
       maintenanceType: string;
     }> = [];
 
@@ -262,7 +291,7 @@ export const machineHoursRouter = router({
           nextMaintenanceHours: nextMaintHour,
           hoursRemaining,
           isOverdue: hoursRemaining < 0,
-          lastMaintenanceDate: maint.date,
+          lastMaintenanceDate: maint.date as string,
           maintenanceType: maint.type,
         });
       }

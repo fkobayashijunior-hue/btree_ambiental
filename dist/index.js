@@ -1965,12 +1965,14 @@ var cargoLoadsRouter = router({
       registeredBy: cargoLoads.registeredBy,
       createdAt: cargoLoads.createdAt,
       updatedAt: cargoLoads.updatedAt,
+      workLocationId: cargoLoads.workLocationId,
       // Joins
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
       vehicleNameJoined: equipment.name,
-      vehiclePlateJoined: equipment.licensePlate
-    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).orderBy(desc3(cargoLoads.createdAt));
+      vehiclePlateJoined: equipment.licensePlate,
+      locationName: gpsLocations.name
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).orderBy(desc3(cargoLoads.createdAt));
     let filtered = results;
     if (input?.search) {
       const s = input.search.toLowerCase();
@@ -2020,11 +2022,13 @@ var cargoLoadsRouter = router({
       registeredBy: cargoLoads.registeredBy,
       createdAt: cargoLoads.createdAt,
       updatedAt: cargoLoads.updatedAt,
+      workLocationId: cargoLoads.workLocationId,
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
       vehicleNameJoined: equipment.name,
-      vehiclePlateJoined: equipment.licensePlate
-    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).where(eq5(cargoLoads.id, input.id)).limit(1);
+      vehiclePlateJoined: equipment.licensePlate,
+      locationName: gpsLocations.name
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).where(eq5(cargoLoads.id, input.id)).limit(1);
     if (!result.length) throw new TRPCError4({ code: "NOT_FOUND" });
     const r = result[0];
     return {
@@ -2398,15 +2402,22 @@ import { z as z6 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError5 } from "@trpc/server";
-import { eq as eq6, desc as desc4 } from "drizzle-orm";
+import { eq as eq6, desc as desc4, inArray } from "drizzle-orm";
 var machineHoursRouter = router({
   // === HORAS TRABALHADAS ===
   listHours: protectedProcedure.input(z6.object({ equipmentId: z6.number().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
-    if (input?.equipmentId) return results.filter((r) => r.equipmentId === input.equipmentId);
-    return results;
+    let filtered = input?.equipmentId ? results.filter((r) => r.equipmentId === input.equipmentId) : results;
+    const locIdsRaw = filtered.map((r) => r.workLocationId).filter((id) => id !== null && id !== void 0);
+    const locIds = Array.from(new Set(locIdsRaw));
+    let locMap = {};
+    if (locIds.length > 0) {
+      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, locIds));
+      locMap = Object.fromEntries(locsData.map((l) => [l.id, l.name]));
+    }
+    return filtered.map((r) => ({ ...r, locationName: r.workLocationId ? locMap[r.workLocationId] || null : null }));
   }),
   createHours: protectedProcedure.input(z6.object({
     equipmentId: z6.number(),
@@ -2425,7 +2436,7 @@ var machineHoursRouter = router({
     const { workLocationId, ...rest } = input;
     await db.insert(machineHours).values({
       ...rest,
-      date: new Date(input.date),
+      date: input.date,
       registeredBy: ctx.user.id,
       workLocationId: workLocationId || null
     });
@@ -2439,14 +2450,15 @@ var machineHoursRouter = router({
     hoursWorked: z6.string().optional(),
     activity: z6.string().optional().nullable(),
     location: z6.string().optional().nullable(),
-    notes: z6.string().optional().nullable()
+    notes: z6.string().optional().nullable(),
+    workLocationId: z6.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, date, ...rest } = input;
     await db.update(machineHours).set({
       ...rest,
-      ...date ? { date: new Date(date) } : {}
+      ...date ? { date } : {}
     }).where(eq6(machineHours.id, id));
     return { success: true };
   }),
@@ -2485,7 +2497,7 @@ var machineHoursRouter = router({
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(machineMaintenance).values({
       ...input,
-      date: new Date(input.date),
+      date: input.date,
       registeredBy: ctx.user.id
     });
     return { success: true };
@@ -2508,7 +2520,7 @@ var machineHoursRouter = router({
     const { id, date, ...rest } = input;
     await db.update(machineMaintenance).set({
       ...rest,
-      ...date ? { date: new Date(date) } : {}
+      ...date ? { date } : {}
     }).where(eq6(machineMaintenance.id, id));
     return { success: true };
   }),
@@ -2524,8 +2536,15 @@ var machineHoursRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
-    if (input?.equipmentId) return results.filter((r) => r.equipmentId === input.equipmentId);
-    return results;
+    let filteredFuel = input?.equipmentId ? results.filter((r) => r.equipmentId === input.equipmentId) : results;
+    const fuelLocIdsRaw = filteredFuel.map((r) => r.workLocationId).filter((id) => id !== null && id !== void 0);
+    const fuelLocIds = Array.from(new Set(fuelLocIdsRaw));
+    let fuelLocMap = {};
+    if (fuelLocIds.length > 0) {
+      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, fuelLocIds));
+      fuelLocMap = Object.fromEntries(locsData.map((l) => [l.id, l.name]));
+    }
+    return filteredFuel.map((r) => ({ ...r, locationName: r.workLocationId ? fuelLocMap[r.workLocationId] || null : null }));
   }),
   createFuel: protectedProcedure.input(z6.object({
     equipmentId: z6.number(),
@@ -2544,10 +2563,20 @@ var machineHoursRouter = router({
     const { workLocationId, ...rest } = input;
     await db.insert(machineFuel).values({
       ...rest,
-      date: new Date(input.date),
+      date: input.date,
       registeredBy: ctx.user.id,
       workLocationId: workLocationId || null
     });
+    return { success: true };
+  }),
+  updateFuel: protectedProcedure.input(z6.object({
+    id: z6.number(),
+    workLocationId: z6.number().optional().nullable()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const { id, ...rest } = input;
+    await db.update(machineFuel).set(rest).where(eq6(machineFuel.id, id));
     return { success: true };
   }),
   deleteFuel: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ ctx, input }) => {
@@ -2640,7 +2669,7 @@ import { z as z7 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError6 } from "@trpc/server";
-import { eq as eq7, desc as desc5, inArray } from "drizzle-orm";
+import { eq as eq7, desc as desc5, inArray as inArray2 } from "drizzle-orm";
 
 // server/notifyTeam.ts
 import nodemailer from "nodemailer";
@@ -2754,10 +2783,21 @@ var vehicleRecordsRouter = router({
     const userIds = Array.from(new Set(userIdsRaw));
     let userMap = {};
     if (userIds.length > 0) {
-      const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds));
+      const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray2(users.id, userIds));
       userMap = Object.fromEntries(usersData.map((u) => [u.id, u.name]));
     }
-    return filtered.map((r) => ({ ...r, registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null }));
+    const locIdsRaw = filtered.map((r) => r.workLocationId).filter((id) => id !== null && id !== void 0);
+    const locIds = Array.from(new Set(locIdsRaw));
+    let locMap = {};
+    if (locIds.length > 0) {
+      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray2(gpsLocations.id, locIds));
+      locMap = Object.fromEntries(locsData.map((l) => [l.id, l.name]));
+    }
+    return filtered.map((r) => ({
+      ...r,
+      registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null,
+      locationName: r.workLocationId ? locMap[r.workLocationId] || null : null
+    }));
   }),
   create: protectedProcedure.input(z7.object({
     equipmentId: z7.number(),
@@ -2834,7 +2874,8 @@ var vehicleRecordsRouter = router({
     mechanicName: z7.string().optional().nullable(),
     driverCollaboratorId: z7.number().optional().nullable(),
     photoBase64: z7.string().optional().nullable(),
-    notes: z7.string().optional().nullable()
+    notes: z7.string().optional().nullable(),
+    workLocationId: z7.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -3746,7 +3787,7 @@ init_db();
 init_schema();
 init_notification();
 import { TRPCError as TRPCError10 } from "@trpc/server";
-import { eq as eq14, desc as desc12, and as and6, inArray as inArray2, lt } from "drizzle-orm";
+import { eq as eq14, desc as desc12, and as and6, inArray as inArray3, lt } from "drizzle-orm";
 var attendanceRouter = router({
   // Listar presenças com filtros
   list: protectedProcedure.input(z14.object({
@@ -3812,7 +3853,7 @@ var attendanceRouter = router({
       let userMap = {};
       if (userIds.length > 0) {
         try {
-          const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray2(users.id, userIds));
+          const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray3(users.id, userIds));
           userMap = Object.fromEntries(usersData.map((u) => [u.id, u.name]));
         } catch (userErr) {
           console.error("[attendance.list] Erro ao buscar nomes de usu\xE1rios:", userErr);
@@ -3917,8 +3958,9 @@ Registrado por: ${ctx.user.name}`
     if (ctx.user.role !== "admin") throw new TRPCError10({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const sevenDaysAgo = /* @__PURE__ */ new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoDate = /* @__PURE__ */ new Date();
+    sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 7);
+    const sevenDaysAgo = sevenDaysAgoDate.toISOString().slice(0, 19).replace("T", " ");
     const pendingRecords = await db.select({
       id: collaboratorAttendance.id,
       collaboratorName: collaborators.name,
@@ -3959,6 +4001,34 @@ Acesse o sistema para realizar os pagamentos.`
     }).catch(() => {
     });
     return { success: true, count: pendingRecords.length, total: totalGeral, details: byCollaborator };
+  }),
+  // Atualizar local de trabalho de uma presença
+  updateLocation: protectedProcedure.input(z14.object({
+    id: z14.number(),
+    workLocationId: z14.number().nullable(),
+    locationName: z14.string().nullable()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.update(collaboratorAttendance).set({
+      workLocationId: input.workLocationId,
+      locationName: input.locationName
+    }).where(eq14(collaboratorAttendance.id, input.id));
+    return { success: true };
+  }),
+  // Atualizar local de trabalho em lote (vários registros de uma vez)
+  updateLocationBatch: protectedProcedure.input(z14.object({
+    ids: z14.array(z14.number()),
+    workLocationId: z14.number().nullable(),
+    locationName: z14.string().nullable()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.update(collaboratorAttendance).set({
+      workLocationId: input.workLocationId,
+      locationName: input.locationName
+    }).where(inArray3(collaboratorAttendance.id, input.ids));
+    return { success: true, count: input.ids.length };
   })
 });
 
@@ -5038,17 +5108,30 @@ var extraExpensesRouter = router({
     if (!db) return [];
     const conditions = [];
     if (input.dateFrom) {
-      conditions.push(gte3(extraExpenses.date, new Date(input.dateFrom)));
+      conditions.push(gte3(extraExpenses.date, input.dateFrom));
     }
     if (input.dateTo) {
-      const to = new Date(input.dateTo);
-      to.setHours(23, 59, 59, 999);
-      conditions.push(lte3(extraExpenses.date, to));
+      conditions.push(lte3(extraExpenses.date, input.dateTo + " 23:59:59"));
     }
     if (input.category) {
       conditions.push(eq18(extraExpenses.category, input.category));
     }
-    return db.select().from(extraExpenses).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc15(extraExpenses.date));
+    const rows = await db.select({
+      id: extraExpenses.id,
+      date: extraExpenses.date,
+      category: extraExpenses.category,
+      description: extraExpenses.description,
+      amount: extraExpenses.amount,
+      paymentMethod: extraExpenses.paymentMethod,
+      receiptImageUrl: extraExpenses.receiptImageUrl,
+      notes: extraExpenses.notes,
+      registeredBy: extraExpenses.registeredBy,
+      registeredByName: extraExpenses.registeredByName,
+      createdAt: extraExpenses.createdAt,
+      workLocationId: extraExpenses.workLocationId,
+      locationName: gpsLocations.name
+    }).from(extraExpenses).leftJoin(gpsLocations, eq18(extraExpenses.workLocationId, gpsLocations.id)).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc15(extraExpenses.date));
+    return rows;
   }),
   create: protectedProcedure.input(z18.object({
     date: z18.string(),
@@ -5063,7 +5146,7 @@ var extraExpensesRouter = router({
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const [result] = await db.insert(extraExpenses).values({
-      date: new Date(input.date),
+      date: input.date,
       category: input.category,
       description: input.description,
       amount: input.amount,
@@ -5075,6 +5158,17 @@ var extraExpensesRouter = router({
       workLocationId: input.workLocationId || null
     });
     return { id: result.insertId };
+  }),
+  updateLocation: protectedProcedure.input(z18.object({
+    id: z18.number(),
+    workLocationId: z18.number().nullable()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    await db.update(extraExpenses).set({
+      workLocationId: input.workLocationId
+    }).where(eq18(extraExpenses.id, input.id));
+    return { success: true };
   }),
   delete: protectedProcedure.input(z18.object({ id: z18.number() })).mutation(async ({ input }) => {
     const db = await getDb();

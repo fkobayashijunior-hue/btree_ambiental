@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, X, Receipt, Filter, TrendingDown } from "lucide-react";
+import { Plus, Trash2, Camera, X, Receipt, Filter, TrendingDown, MapPin } from "lucide-react";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { useFilePicker } from "@/hooks/useFilePicker";
 
@@ -252,6 +252,11 @@ export default function ExtraExpenses() {
                           <p className="font-medium mt-1 truncate">{expense.description}</p>
                           {expense.notes && <p className="text-sm text-muted-foreground truncate">{expense.notes}</p>}
                           <p className="text-xs text-muted-foreground mt-1">Por: {expense.registeredByName || "—"}</p>
+                          {expense.locationName && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <MapPin className="h-3 w-3" /> {expense.locationName}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {isAdmin && (

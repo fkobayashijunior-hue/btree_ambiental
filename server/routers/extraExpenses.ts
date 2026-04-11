@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { extraExpenses } from "../../drizzle/schema";
+import { extraExpenses, gpsLocations } from "../../drizzle/schema";
 import { desc, eq, and, gte, lte } from "drizzle-orm";
 
 export const extraExpensesRouter = router({
@@ -16,21 +16,35 @@ export const extraExpensesRouter = router({
       if (!db) return [];
       const conditions = [];
       if (input.dateFrom) {
-        conditions.push(gte(extraExpenses.date, new Date(input.dateFrom)));
+        conditions.push(gte(extraExpenses.date, input.dateFrom));
       }
       if (input.dateTo) {
-        const to = new Date(input.dateTo);
-        to.setHours(23, 59, 59, 999);
-        conditions.push(lte(extraExpenses.date, to));
+        conditions.push(lte(extraExpenses.date, input.dateTo + " 23:59:59"));
       }
       if (input.category) {
         conditions.push(eq(extraExpenses.category, input.category as any));
       }
-      return db
-        .select()
+      const rows = await db
+        .select({
+          id: extraExpenses.id,
+          date: extraExpenses.date,
+          category: extraExpenses.category,
+          description: extraExpenses.description,
+          amount: extraExpenses.amount,
+          paymentMethod: extraExpenses.paymentMethod,
+          receiptImageUrl: extraExpenses.receiptImageUrl,
+          notes: extraExpenses.notes,
+          registeredBy: extraExpenses.registeredBy,
+          registeredByName: extraExpenses.registeredByName,
+          createdAt: extraExpenses.createdAt,
+          workLocationId: extraExpenses.workLocationId,
+          locationName: gpsLocations.name,
+        })
         .from(extraExpenses)
+        .leftJoin(gpsLocations, eq(extraExpenses.workLocationId, gpsLocations.id))
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(extraExpenses.date));
+      return rows;
     }),
 
   create: protectedProcedure
@@ -48,7 +62,7 @@ export const extraExpensesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       const [result] = await db.insert(extraExpenses).values({
-        date: new Date(input.date),
+        date: input.date,
         category: input.category,
         description: input.description,
         amount: input.amount,
@@ -60,6 +74,20 @@ export const extraExpensesRouter = router({
         workLocationId: input.workLocationId || null,
       });
       return { id: (result as any).insertId };
+    }),
+
+  updateLocation: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      workLocationId: z.number().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.update(extraExpenses).set({
+        workLocationId: input.workLocationId,
+      }).where(eq(extraExpenses.id, input.id));
+      return { success: true };
     }),
 
   delete: protectedProcedure

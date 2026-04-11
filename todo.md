@@ -1290,3 +1290,19 @@
 ## 🔤 ORDENAÇÃO ALFABÉTICA - LISTA DE PRESENÇAS (11/04/2026)
 
 - [x] Ordenar lista de presenças por nome do colaborador em ordem alfabética (visão diária + semanal + PDF)
+
+## 📍 AGRUPAMENTO POR LOCAL + EDIÇÃO DE LOCAL (11/04/2026)
+
+### Presenças
+- [ ] Agrupar lista de presenças por local de trabalho (separar visualmente por fazenda/local)
+- [ ] Permitir editar o local de trabalho de presenças já registradas
+- [ ] Mostrar seção "Sem local atribuído" para registros antigos sem local
+
+### Consumos (Veículos, Máquinas, Despesas, Cargas)
+- [ ] Permitir editar o local de trabalho em registros de veículos antigos
+- [ ] Permitir editar o local de trabalho em registros de máquinas antigos
+- [ ] Permitir editar o local de trabalho em registros de despesas extras antigos
+- [ ] Permitir editar o local de trabalho em registros de cargas antigos
+
+### Build e Deploy
+- [ ] Compilar dist/ e fazer push no Git

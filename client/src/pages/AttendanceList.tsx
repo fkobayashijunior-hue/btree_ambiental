@@ -13,7 +13,7 @@ import {
   Users, Plus, Calendar, ChevronDown, ChevronUp, Loader2,
   FileDown, ChevronLeft, ChevronRight, CheckCircle2, Clock,
   DollarSign, User, CalendarDays, LayoutList, Trash2,
-  MapPin, Navigation, AlertCircle, Banknote, Bell
+  MapPin, Navigation, AlertCircle, Banknote, Bell, Edit3
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -186,6 +186,18 @@ export default function AttendanceList() {
     onError: (e) => toast.error(e.message || "Erro ao excluir"),
   });
 
+  const updateLocationMutation = trpc.attendance.updateLocation.useMutation({
+    onSuccess: () => {
+      toast.success("Local atualizado!");
+      utils.attendance.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "Erro ao atualizar local"),
+  });
+
+  // Estado para editar local de um registro
+  const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
+  const [editingLocationValue, setEditingLocationValue] = useState<string>("");
+
   // ── Lançamento automático da folha de pagamento ────────────────────────
   const currentRefMonth = format(weekRef, "yyyy-MM");
   const { data: payrollStatus, refetch: refetchPayrollStatus } = trpc.financial.checkPayrollStatus.useQuery(
@@ -287,11 +299,46 @@ export default function AttendanceList() {
     pago: weekByCollab.reduce((s, c) => s + c.pago, 0),
   }), [weekByCollab, weekRecords]);
 
-  // ── Agrupamento diário ───────────────────────────────────────────────────
+  // ── Agrupamento diário ─────────────────────────────────────────────────────────────────────
   const dayPendentes = (dayRecords as any[]).filter(r => r.paymentStatus === "pendente").sort((a: any, b: any) => (a.collaboratorName || "").localeCompare(b.collaboratorName || ""));
   const dayPagos = (dayRecords as any[]).filter(r => r.paymentStatus === "pago").sort((a: any, b: any) => (a.collaboratorName || "").localeCompare(b.collaboratorName || ""));
   const dayTotal = (dayRecords as any[]).reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
   const dayPendenteTotal = dayPendentes.reduce((s: number, r: any) => s + parseFloat(r.dailyValue || "0"), 0);
+
+  // ── Agrupamento por local de trabalho (visão diária) ────────────────────────
+  const dayByLocation = useMemo(() => {
+    const map: Record<string, { name: string; records: any[]; total: number; pendente: number }> = {};
+    for (const r of dayRecords as any[]) {
+      const locName = r.locationName || "Sem local atribuído";
+      if (!map[locName]) map[locName] = { name: locName, records: [], total: 0, pendente: 0 };
+      map[locName].records.push(r);
+      const v = parseFloat(r.dailyValue || "0");
+      map[locName].total += v;
+      if (r.paymentStatus !== "pago") map[locName].pendente += v;
+    }
+    // Ordenar registros dentro de cada local por nome
+    for (const loc of Object.values(map)) {
+      loc.records.sort((a: any, b: any) => (a.collaboratorName || "").localeCompare(b.collaboratorName || ""));
+    }
+    // Retornar ordenado: locais reais primeiro, "Sem local" por último
+    return Object.values(map).sort((a, b) => {
+      if (a.name === "Sem local atribuído") return 1;
+      if (b.name === "Sem local atribuído") return -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [dayRecords]);
+
+  // Função para salvar edição de local
+  const handleSaveLocation = (recordId: number) => {
+    const loc = (gpsLocationsList as any[]).find((l: any) => l.name === editingLocationValue);
+    updateLocationMutation.mutate({
+      id: recordId,
+      workLocationId: loc ? loc.id : null,
+      locationName: editingLocationValue || null,
+    });
+    setEditingLocationId(null);
+    setEditingLocationValue("");
+  };
 
   // ── Marcar todos como pago (semana de um colaborador) ───────────────────
   const markAllPaid = async (collab: typeof weekByCollab[0]) => {
@@ -777,59 +824,56 @@ export default function AttendanceList() {
             </div>
           ) : (
             <div className="space-y-4">
-              {dayPendentes.length > 0 && (
-                <div>
+              {dayByLocation.map(locGroup => (
+                <div key={locGroup.name}>
+                  {/* Cabeçalho do local */}
                   <button
-                    className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-yellow-50 hover:bg-yellow-100 transition-colors text-yellow-800 font-semibold text-sm mb-2"
-                    onClick={() => setExpandedGroups(p => ({ ...p, pendente: !p.pendente }))}
+                    className={`w-full flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors font-semibold text-sm mb-2 ${
+                      locGroup.name === "Sem local atribuído"
+                        ? "bg-gray-100 hover:bg-gray-200 text-gray-600"
+                        : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800"
+                    }`}
+                    onClick={() => setExpandedGroups(p => ({ ...p, [`loc_${locGroup.name}`]: p[`loc_${locGroup.name}`] === false ? true : p[`loc_${locGroup.name}`] === undefined ? false : !p[`loc_${locGroup.name}`] }))}
                   >
                     <span className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      Pendente de Pagamento ({dayPendentes.length}){canSeeFinancial ? ` — R$ ${dayPendenteTotal.toFixed(2)}` : ""}
+                      <MapPin className="h-4 w-4" />
+                      {locGroup.name} ({locGroup.records.length})
+                      {canSeeFinancial && (
+                        <span className="font-normal text-xs opacity-70">
+                          — R$ {locGroup.total.toFixed(2)}
+                          {locGroup.pendente > 0 && <span className="text-yellow-600 ml-1">(R$ {locGroup.pendente.toFixed(2)} pendente)</span>}
+                        </span>
+                      )}
                     </span>
-                    {expandedGroups.pendente === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                    {expandedGroups[`loc_${locGroup.name}`] === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                   </button>
-                  {expandedGroups.pendente !== false && (
-                    <div className="space-y-2">
-                      {dayPendentes.map((r: any) => (
-                        <AttendanceCard
-                          key={r.id}
-                          record={r}
-                          canSeeFinancial={canSeeFinancial}
-                          onMarkPaid={canSeeFinancial ? (paid) => markPaidMutation.mutate({ id: r.id, paid }) : undefined}
-                          onDelete={isAdmin ? () => handleDelete(r.id, r.collaboratorName) : undefined}
-                        />
+                  {expandedGroups[`loc_${locGroup.name}`] !== false && (
+                    <div className="space-y-2 ml-1 border-l-2 border-emerald-200 pl-3">
+                      {locGroup.records.map((r: any) => (
+                        <div key={r.id} className="relative">
+                          <AttendanceCard
+                            key={r.id}
+                            record={r}
+                            canSeeFinancial={canSeeFinancial}
+                            onMarkPaid={canSeeFinancial ? (paid) => markPaidMutation.mutate({ id: r.id, paid }) : undefined}
+                            onDelete={isAdmin ? () => handleDelete(r.id, r.collaboratorName) : undefined}
+                            onEditLocation={isAdmin ? () => {
+                              setEditingLocationId(r.id);
+                              setEditingLocationValue(r.locationName || "");
+                            } : undefined}
+                            editingLocationId={editingLocationId}
+                            editingLocationValue={editingLocationValue}
+                            setEditingLocationValue={setEditingLocationValue}
+                            onSaveLocation={() => handleSaveLocation(r.id)}
+                            onCancelEditLocation={() => { setEditingLocationId(null); setEditingLocationValue(""); }}
+                            gpsLocationsList={gpsLocationsList as any[]}
+                          />
+                        </div>
                       ))}
                     </div>
                   )}
                 </div>
-              )}
-              {dayPagos.length > 0 && (
-                <div>
-                  <button
-                    className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors text-green-800 font-semibold text-sm mb-2"
-                    onClick={() => setExpandedGroups(p => ({ ...p, pago: !p.pago }))}
-                  >
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" /> Pagos ({dayPagos.length})
-                    </span>
-                    {expandedGroups.pago === false ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </button>
-                  {expandedGroups.pago !== false && (
-                    <div className="space-y-2">
-                      {dayPagos.map((r: any) => (
-                        <AttendanceCard
-                          key={r.id}
-                          record={r}
-                          canSeeFinancial={canSeeFinancial}
-                          onMarkPaid={canSeeFinancial ? (paid) => markPaidMutation.mutate({ id: r.id, paid }) : undefined}
-                          onDelete={isAdmin ? () => handleDelete(r.id, r.collaboratorName) : undefined}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              ))}
             </div>
           )}
         </TabsContent>
@@ -1055,12 +1099,26 @@ function AttendanceCard({
   record,
   canSeeFinancial,
   onMarkPaid,
-  onDelete
+  onDelete,
+  onEditLocation,
+  editingLocationId,
+  editingLocationValue,
+  setEditingLocationValue,
+  onSaveLocation,
+  onCancelEditLocation,
+  gpsLocationsList,
 }: {
   record: any;
   canSeeFinancial?: boolean;
   onMarkPaid?: (paid: boolean) => void;
   onDelete?: () => void;
+  onEditLocation?: () => void;
+  editingLocationId?: number | null;
+  editingLocationValue?: string;
+  setEditingLocationValue?: (v: string) => void;
+  onSaveLocation?: () => void;
+  onCancelEditLocation?: () => void;
+  gpsLocationsList?: any[];
 }) {
   const isPago = record.paymentStatus === "pago";
   return (
@@ -1096,9 +1154,33 @@ function AttendanceCard({
                   <DollarSign className="h-3 w-3" /> {record.pixKey}
                 </span>
               )}
-              {record.locationName && (
+              {editingLocationId === record.id ? (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <select
+                    className="text-xs border rounded px-2 py-1 bg-white"
+                    value={editingLocationValue || ""}
+                    onChange={(e) => setEditingLocationValue?.(e.target.value)}
+                  >
+                    <option value="">Sem local</option>
+                    {(gpsLocationsList || []).map((loc: any) => (
+                      <option key={loc.id} value={loc.name}>{loc.name}</option>
+                    ))}
+                  </select>
+                  <Button size="sm" variant="outline" className="text-xs h-6 px-2 text-green-600 border-green-200" onClick={onSaveLocation}>
+                    <CheckCircle2 className="h-3 w-3" />
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs h-6 px-2 text-gray-400 border-gray-200" onClick={onCancelEditLocation}>
+                    ✕
+                  </Button>
+                </div>
+              ) : (
                 <span className="text-xs text-gray-400 flex items-center gap-1">
-                  <MapPin className="h-3 w-3" /> {record.locationName}
+                  <MapPin className="h-3 w-3" /> {record.locationName || "Sem local"}
+                  {onEditLocation && (
+                    <button onClick={onEditLocation} className="ml-1 text-emerald-500 hover:text-emerald-700" title="Editar local">
+                      <Edit3 className="h-3 w-3" />
+                    </button>
+                  )}
                 </span>
               )}
               {record.registeredByName && (

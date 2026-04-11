@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Car, Plus, Calendar, Camera, X, User, Pencil, ImageIcon, FileDown, FileSpreadsheet } from "lucide-react";
+import { Car, Plus, Calendar, Camera, X, User, Pencil, ImageIcon, FileDown, FileSpreadsheet, MapPin } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 
@@ -520,6 +520,11 @@ export default function VehicleControlPage() {
                       {r.registeredByName && (
                         <span className="flex items-center gap-1 text-gray-400">
                           <User className="h-3 w-3" /> {r.registeredByName}
+                        </span>
+                      )}
+                      {(r as any).locationName && (
+                        <span className="flex items-center gap-1 text-emerald-600">
+                          <MapPin className="h-3 w-3" /> {(r as any).locationName}
                         </span>
                       )}
                     </div>

@@ -591,6 +591,7 @@ export default function CargoControl() {
                         {cargo.clientName && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{cargo.clientName}</span>}
                         {cargo.destination && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{cargo.destination}</span>}
                         <span className="flex items-center gap-1"><Package className="h-3 w-3" />{cargo.volumeM3} m³{cargo.weightKg ? ` · ${cargo.weightKg} kg` : ""}</span>
+                        {(cargo as any).locationName && <span className="flex items-center gap-1 text-emerald-600"><MapPin className="h-3 w-3" />{(cargo as any).locationName}</span>}
                       </div>
                     </div>
                     {/* Ações */}

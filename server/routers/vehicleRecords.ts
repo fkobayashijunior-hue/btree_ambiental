@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { vehicleRecords, users } from "../../drizzle/schema";
+import { vehicleRecords, users, gpsLocations } from "../../drizzle/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { notifyTeam } from "../notifyTeam";
 
@@ -27,7 +27,19 @@ export const vehicleRecordsRouter = router({
         const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds));
         userMap = Object.fromEntries(usersData.map(u => [u.id, u.name]));
       }
-      return filtered.map(r => ({ ...r, registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null }));
+      // Buscar nomes dos locais
+      const locIdsRaw = filtered.map(r => r.workLocationId).filter((id): id is number => id !== null && id !== undefined);
+      const locIds = Array.from(new Set(locIdsRaw));
+      let locMap: Record<number, string> = {};
+      if (locIds.length > 0) {
+        const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, locIds));
+        locMap = Object.fromEntries(locsData.map(l => [l.id, l.name]));
+      }
+      return filtered.map(r => ({
+        ...r,
+        registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null,
+        locationName: r.workLocationId ? locMap[r.workLocationId] || null : null,
+      }));
     }),
 
   create: protectedProcedure
@@ -112,6 +124,7 @@ export const vehicleRecordsRouter = router({
       driverCollaboratorId: z.number().optional().nullable(),
       photoBase64: z.string().optional().nullable(),
       notes: z.string().optional().nullable(),
+      workLocationId: z.number().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

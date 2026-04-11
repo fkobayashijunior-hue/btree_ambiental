@@ -3,7 +3,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
-  cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos
+  cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos, gpsLocations
 } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
@@ -102,16 +102,19 @@ export const cargoLoadsRouter = router({
           registeredBy: cargoLoads.registeredBy,
           createdAt: cargoLoads.createdAt,
           updatedAt: cargoLoads.updatedAt,
+          workLocationId: cargoLoads.workLocationId,
           // Joins
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
           vehicleNameJoined: equipment.name,
           vehiclePlateJoined: equipment.licensePlate,
+          locationName: gpsLocations.name,
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
         .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
         .leftJoin(equipment, eq(cargoLoads.vehicleId, equipment.id))
+        .leftJoin(gpsLocations, eq(cargoLoads.workLocationId, gpsLocations.id))
         .orderBy(desc(cargoLoads.createdAt));
 
       let filtered = results;
@@ -175,15 +178,18 @@ export const cargoLoadsRouter = router({
           registeredBy: cargoLoads.registeredBy,
           createdAt: cargoLoads.createdAt,
           updatedAt: cargoLoads.updatedAt,
+          workLocationId: cargoLoads.workLocationId,
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
           vehicleNameJoined: equipment.name,
           vehiclePlateJoined: equipment.licensePlate,
+          locationName: gpsLocations.name,
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
         .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
         .leftJoin(equipment, eq(cargoLoads.vehicleId, equipment.id))
+        .leftJoin(gpsLocations, eq(cargoLoads.workLocationId, gpsLocations.id))
         .where(eq(cargoLoads.id, input.id))
         .limit(1);
       if (!result.length) throw new TRPCError({ code: "NOT_FOUND" });

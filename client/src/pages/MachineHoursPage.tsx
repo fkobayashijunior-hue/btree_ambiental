@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
   Settings, Plus, Clock, Wrench, Fuel, Calendar, AlertTriangle,
   CheckCircle2, FileDown, Pencil, ChevronDown, ChevronUp,
-  Package, Search, Trash2
+  Package, Search, Trash2, MapPin
 } from "lucide-react";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 
@@ -639,6 +639,11 @@ export default function MachineHoursPage() {
                       <Calendar className="h-3 w-3 inline mr-1" />
                       {new Date(h.date).toLocaleDateString("pt-BR")} · Horímetro: {h.startHourMeter} → {h.endHourMeter}
                     </p>
+                    {h.locationName && (
+                      <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
+                        <MapPin className="h-3 w-3" /> {h.locationName}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="text-right">
@@ -737,6 +742,11 @@ export default function MachineHoursPage() {
                       {new Date(f.date).toLocaleDateString("pt-BR")}
                       {f.hourMeter && ` · Horímetro: ${f.hourMeter}`}
                     </p>
+                    {f.locationName && (
+                      <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
+                        <MapPin className="h-3 w-3" /> {f.locationName}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="text-xl font-bold text-blue-700">{f.liters}L</p>

@@ -195,8 +195,9 @@ export const attendanceRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
       // Data limite: 7 dias atrás
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const sevenDaysAgoDate = new Date();
+      sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 7);
+      const sevenDaysAgo = sevenDaysAgoDate.toISOString().slice(0, 19).replace('T', ' ');
 
       const pendingRecords = await db
         .select({
@@ -244,5 +245,39 @@ export const attendanceRouter = router({
       }).catch(() => {});
 
       return { success: true, count: pendingRecords.length, total: totalGeral, details: byCollaborator };
+    }),
+
+  // Atualizar local de trabalho de uma presença
+  updateLocation: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      workLocationId: z.number().nullable(),
+      locationName: z.string().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      await db.update(collaboratorAttendance).set({
+        workLocationId: input.workLocationId,
+        locationName: input.locationName,
+      }).where(eq(collaboratorAttendance.id, input.id));
+      return { success: true };
+    }),
+
+  // Atualizar local de trabalho em lote (vários registros de uma vez)
+  updateLocationBatch: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number()),
+      workLocationId: z.number().nullable(),
+      locationName: z.string().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      await db.update(collaboratorAttendance).set({
+        workLocationId: input.workLocationId,
+        locationName: input.locationName,
+      }).where(inArray(collaboratorAttendance.id, input.ids));
+      return { success: true, count: input.ids.length };
     }),
 });
