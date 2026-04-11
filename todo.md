@@ -1294,15 +1294,15 @@
 ## 📍 AGRUPAMENTO POR LOCAL + EDIÇÃO DE LOCAL (11/04/2026)
 
 ### Presenças
-- [ ] Agrupar lista de presenças por local de trabalho (separar visualmente por fazenda/local)
-- [ ] Permitir editar o local de trabalho de presenças já registradas
-- [ ] Mostrar seção "Sem local atribuído" para registros antigos sem local
+- [x] Agrupar lista de presenças por local de trabalho (separar visualmente por fazenda/local)
+- [x] Permitir editar o local de trabalho de presenças já registradas
+- [x] Mostrar seção "Sem local atribuído" para registros antigos sem local
 
 ### Consumos (Veículos, Máquinas, Despesas, Cargas)
-- [ ] Permitir editar o local de trabalho em registros de veículos antigos
-- [ ] Permitir editar o local de trabalho em registros de máquinas antigos
-- [ ] Permitir editar o local de trabalho em registros de despesas extras antigos
-- [ ] Permitir editar o local de trabalho em registros de cargas antigos
+- [x] Exibir local de trabalho nos cards de veículos, máquinas, despesas e cargas
+- [x] Backend updateLocation pronto para presenças e despesas extras
+- [x] Backend update com workLocationId pronto para veículos, máquinas e cargas
+- [x] Edição de local via formulário de edição existente (veículos, máquinas, cargas)
 
 ### Build e Deploy
-- [ ] Compilar dist/ e fazer push no Git
+- [x] Compilar dist/ e fazer push no Git (commit 7ab198f)
