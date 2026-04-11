@@ -288,8 +288,8 @@ export default function AttendanceList() {
   }), [weekByCollab, weekRecords]);
 
   // ── Agrupamento diário ───────────────────────────────────────────────────
-  const dayPendentes = (dayRecords as any[]).filter(r => r.paymentStatus === "pendente");
-  const dayPagos = (dayRecords as any[]).filter(r => r.paymentStatus === "pago");
+  const dayPendentes = (dayRecords as any[]).filter(r => r.paymentStatus === "pendente").sort((a: any, b: any) => (a.collaboratorName || "").localeCompare(b.collaboratorName || ""));
+  const dayPagos = (dayRecords as any[]).filter(r => r.paymentStatus === "pago").sort((a: any, b: any) => (a.collaboratorName || "").localeCompare(b.collaboratorName || ""));
   const dayTotal = (dayRecords as any[]).reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
   const dayPendenteTotal = dayPendentes.reduce((s: number, r: any) => s + parseFloat(r.dailyValue || "0"), 0);
 
@@ -404,7 +404,8 @@ export default function AttendanceList() {
   const handleExportDayPDF = () => {
     if ((dayRecords as any[]).length === 0) { toast.error("Nenhuma presença neste dia"); return; }
     const dateLabel = format(parseISO(searchDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-    const rows = (dayRecords as any[]).map((r: any) => `
+    const sortedDayRecords = [...(dayRecords as any[])].sort((a: any, b: any) => (a.collaboratorName || "").localeCompare(b.collaboratorName || ""));
+    const rows = sortedDayRecords.map((r: any) => `
       <tr>
         <td>${r.collaboratorName}</td>
         <td>${r.activity || "—"}</td>

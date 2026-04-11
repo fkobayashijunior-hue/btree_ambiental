@@ -1286,3 +1286,7 @@
 ### Build e Deploy
 - [x] Compilar dist/ e fazer push no Git (commit 47b7f66)
 - [x] Sem alterações de schema necessárias (workLocationId já existia nas tabelas)
+
+## 🔤 ORDENAÇÃO ALFABÉTICA - LISTA DE PRESENÇAS (11/04/2026)
+
+- [x] Ordenar lista de presenças por nome do colaborador em ordem alfabética (visão diária + semanal + PDF)
