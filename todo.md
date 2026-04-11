@@ -1310,23 +1310,25 @@
 ## 🐛 CORREÇÕES URGENTES (12/04/2026)
 
 ### Presenças - Edição de Local
-- [ ] Corrigir botão de editar local nas presenças (não funciona no site publicado)
-- [ ] Garantir que registros antigos possam ter o local atualizado
+- [x] Corrigir botão de editar local nas presenças (dist/ recompilado com funcionalidade)
+- [x] Garantir que registros antigos possam ter o local atualizado (mutation updateLocation)
 
 ### PDF de Presenças
-- [ ] Adicionar coluna "Local de Trabalho" no PDF diário de presenças
-- [ ] Agrupar por local no PDF se possível
+- [x] Adicionar coluna "Local de Trabalho" no PDF diário de presenças
+- [x] Adicionar coluna "Local" no PDF semanal de presenças
 
 ### Motosserras
-- [ ] Adicionar campo de local de trabalho no formulário de motosserras
-- [ ] Adicionar workLocationId ao backend de motosserras
+- [x] Adicionar campo de local de trabalho nos 3 formulários de combustível (abastecer, uso, transferência)
+- [x] Adicionar workLocationId ao backend de motosserras + schema DB atualizado
 
 ### Controle de Acesso (Permissões por Perfil)
-- [ ] Fazer Controle de Acesso funcionar para a equipe usar o sistema
-- [ ] Equipe NÃO pode ver valores financeiros (salários, pagamentos mensais)
-- [ ] Equipe PODE registrar valores de peças, combustível etc.
-- [ ] Motorista: acesso ao seu veículo/caminhão + campo de cargas + abastecimento
-- [ ] Perfis: Administrativo (tudo), Encarregado, Mecânico, Motosserrista, Carregador, Operador, Motorista
+- [x] Fazer Controle de Acesso funcionar para a equipe usar o sistema
+- [x] Equipe NÃO pode ver valores financeiros (módulos financeiros protegidos)
+- [x] Equipe PODE registrar valores de peças, combustível etc.
+- [x] Motorista: acesso a equipamentos + cargas + abastecimento
+- [x] Perfis atualizados: admin, mecânico, operador, motorista, motosserrista, líder, equipe, personalizado
+- [x] Módulos novos no RBAC: gastos-extras, locais-gps, abastecimento, dashboard-exec
+- [x] Slugs do menu lateral corrigidos para corresponder aos módulos de permissão
 
 ### Simplificação do Menu (Futuro)
 - [ ] Unificar "Controle de Cargas" e "Minha Carga" em um único módulo
