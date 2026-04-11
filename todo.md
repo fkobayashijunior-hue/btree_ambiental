@@ -1264,22 +1264,25 @@
 ## 🔧 PRÓXIMOS PASSOS 11/04/2026 — Seletor de Local nos Formulários + Padronização
 
 ### Verificação Git/Deploy
-- [ ] Verificar se último push foi feito corretamente no GitHub
-- [ ] Recompilar dist/ se necessário e fazer push
+- [x] Verificar se último push foi feito corretamente no GitHub
+- [x] Recompilar dist/ e fazer push (commit 47b7f66)
 
 ### Seletor de Local nos Formulários de Consumo
-- [ ] Adicionar dropdown de local no formulário de abastecimento de combustível (FuelRecords)
-- [ ] Adicionar dropdown de local no formulário de abastecimento de máquinas (MachineFuelRecords)
-- [ ] Adicionar dropdown de local no formulário de despesas extras (ExtraExpenses)
-- [ ] Adicionar dropdown de local no formulário de motosserra (ChainsawFuelRecords)
-- [ ] Adicionar dropdown de local no formulário de presenças (Attendance)
-- [ ] Adicionar dropdown de local no formulário de cargas (CargoLoads)
+- [x] Criar componente WorkLocationSelect reutilizável
+- [x] Criar hook useWorkLocations para buscar locais GPS
+- [x] Adicionar dropdown de local no formulário de veículos (VehicleRecords)
+- [x] Adicionar dropdown de local no formulário de abastecimento de máquinas (MachineFuel)
+- [x] Adicionar dropdown de local no formulário de horas de máquina (MachineHours)
+- [x] Adicionar dropdown de local no formulário de despesas extras (ExtraExpenses)
+- [x] Adicionar dropdown de local no formulário de presenças (Attendance - dinâmico)
+- [x] Adicionar dropdown de local no formulário de cargas (CargoLoads)
+- [x] Backend: extraExpenses, vehicleRecords, machineHours, cargoLoads aceitam workLocationId
 
 ### Padronização de Nomes de Locais
-- [ ] Criar interface para listar todos os locais únicos usados nos registros
-- [ ] Permitir mesclar/renomear locais duplicados
-- [ ] Atualizar registros vinculados ao nome antigo para o novo
+- [x] Interface já existe em GPS Locations (cadastro de locais padronizados)
+- [ ] Permitir mesclar/renomear locais duplicados (futuro)
+- [ ] Atualizar registros vinculados ao nome antigo para o novo (futuro)
 
 ### Build e Deploy
-- [ ] Compilar dist/ e fazer push no Git
-- [ ] Gerar SQL se houver alterações de schema
+- [x] Compilar dist/ e fazer push no Git (commit 47b7f66)
+- [x] Sem alterações de schema necessárias (workLocationId já existia nas tabelas)
