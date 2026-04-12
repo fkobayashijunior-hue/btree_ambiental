@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapView } from "@/components/Map";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +14,8 @@ import {
   RefreshCw, Route, AlertTriangle, Car, Zap, ZapOff, History,
   Link2, Wrench, Bell, CheckCircle, XCircle, Plus, Trash2, Timer
 } from "lucide-react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 // ─── Tipos da API Traccar ────────────────────────────────────────────────────
 
@@ -98,14 +99,196 @@ function statusLabel(status: string) {
   return "Desconhecido";
 }
 
+// Criar ícone de seta para marcador Leaflet
+function createArrowIcon(color: string, rotation: number) {
+  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+    <g transform="rotate(${rotation}, 14, 14)">
+      <polygon points="14,2 22,24 14,18 6,24" fill="${color}" stroke="#fff" stroke-width="1.5"/>
+    </g>
+  </svg>`;
+  return L.divIcon({
+    html: svgStr,
+    className: "leaflet-arrow-icon",
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14],
+  });
+}
+
+// Criar ícone de círculo para dispositivo parado
+function createCircleIcon(color: string) {
+  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="8" fill="${color}" stroke="#fff" stroke-width="2"/>
+  </svg>`;
+  return L.divIcon({
+    html: svgStr,
+    className: "leaflet-circle-icon",
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -10],
+  });
+}
+
+// ─── Componente de Mapa Leaflet ──────────────────────────────────────────────
+
+function LeafletMap({
+  devices,
+  positions,
+  selectedDeviceId,
+  onSelectDevice,
+  historyPositions,
+  showHistory,
+  className,
+}: {
+  devices: TraccarDevice[];
+  positions: TraccarPosition[];
+  selectedDeviceId: number | null;
+  onSelectDevice: (id: number | null) => void;
+  historyPositions?: TraccarPosition[];
+  showHistory?: boolean;
+  className?: string;
+}) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<Map<number, L.Marker>>(new Map());
+  const polylineRef = useRef<L.Polyline | null>(null);
+
+  // Inicializar mapa
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = L.map(mapContainerRef.current, {
+      center: [-15.7801, -47.9292],
+      zoom: 5,
+      zoomControl: true,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markersRef.current.clear();
+    };
+  }, []);
+
+  // Atualizar marcadores
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || positions.length === 0) return;
+
+    const positionMap = new Map<number, TraccarPosition>();
+    positions.forEach((p) => positionMap.set(p.deviceId, p));
+
+    // Rastrear IDs de dispositivos ativos para remover marcadores antigos
+    const activeDeviceIds = new Set<number>();
+
+    devices.forEach((device) => {
+      const pos = positionMap.get(device.id);
+      if (!pos || !pos.valid) return;
+      activeDeviceIds.add(device.id);
+
+      const isOnline = device.status === "online";
+      const speed = knotsToKmh(pos.speed);
+      const color = isOnline ? "#16a34a" : "#dc2626";
+      const isMoving = pos.speed > 1;
+
+      const icon = isMoving
+        ? createArrowIcon(color, pos.course)
+        : createCircleIcon(color);
+
+      const popupContent = `
+        <div style="font-family:sans-serif;min-width:180px">
+          <strong style="font-size:14px">${device.name}</strong><br/>
+          <span style="color:${color};font-size:12px">&#9679; ${statusLabel(device.status)}</span><br/>
+          <hr style="margin:6px 0"/>
+          <span style="font-size:12px">&#128663; Velocidade: <strong>${speed} km/h</strong></span><br/>
+          <span style="font-size:12px">&#128273; Igni\u00e7\u00e3o: <strong>${pos.attributes.ignition ? "Ligada" : "Desligada"}</strong></span><br/>
+          <span style="font-size:12px">&#128267; Bateria: <strong>${pos.attributes.batteryLevel ?? "\u2014"}%</strong></span><br/>
+          <span style="font-size:12px;color:#888">Atualizado: ${new Date(pos.deviceTime).toLocaleTimeString("pt-BR")}</span>
+        </div>
+      `;
+
+      if (markersRef.current.has(device.id)) {
+        const marker = markersRef.current.get(device.id)!;
+        marker.setLatLng([pos.latitude, pos.longitude]);
+        marker.setIcon(icon);
+        marker.getPopup()?.setContent(popupContent);
+      } else {
+        const marker = L.marker([pos.latitude, pos.longitude], { icon })
+          .addTo(map)
+          .bindPopup(popupContent);
+
+        marker.on("click", () => {
+          onSelectDevice(device.id);
+        });
+
+        markersRef.current.set(device.id, marker);
+      }
+    });
+
+    // Remover marcadores de dispositivos que não existem mais
+    markersRef.current.forEach((marker, deviceId) => {
+      if (!activeDeviceIds.has(deviceId)) {
+        map.removeLayer(marker);
+        markersRef.current.delete(deviceId);
+      }
+    });
+
+    // Centralizar no dispositivo selecionado
+    if (selectedDeviceId) {
+      const pos = positionMap.get(selectedDeviceId);
+      if (pos?.valid) {
+        map.setView([pos.latitude, pos.longitude], Math.max(map.getZoom(), 12), { animate: true });
+      }
+    }
+  }, [positions, devices, selectedDeviceId, onSelectDevice]);
+
+  // Desenhar histórico de rota
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Remover polyline anterior
+    if (polylineRef.current) {
+      map.removeLayer(polylineRef.current);
+      polylineRef.current = null;
+    }
+
+    if (!showHistory || !historyPositions || historyPositions.length === 0) return;
+
+    const path = historyPositions
+      .filter((p) => p.valid)
+      .map((p) => [p.latitude, p.longitude] as [number, number]);
+
+    if (path.length === 0) return;
+
+    const polyline = L.polyline(path, {
+      color: "#2563eb",
+      weight: 3,
+      opacity: 0.8,
+    }).addTo(map);
+
+    polylineRef.current = polyline;
+
+    // Ajustar bounds para mostrar toda a rota
+    map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+  }, [historyPositions, showHistory]);
+
+  return (
+    <div ref={mapContainerRef} className={className || "w-full h-full min-h-[400px]"} />
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function GpsTrackingPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
-  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<Map<number, google.maps.Marker>>(new Map());
-  const historyPolylineRef = useRef<google.maps.Polyline | null>(null);
   const [tab, setTab] = useState("mapa");
 
   // Estados para vinculacao
@@ -168,143 +351,28 @@ export default function GpsTrackingPage() {
 
   const linkDeviceMut = trpc.traccar.linkDevice.useMutation({
     onSuccess: () => { refetchLinks(); setLinkDialogOpen(false); toast.success("Dispositivo vinculado com sucesso"); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
   const unlinkDeviceMut = trpc.traccar.unlinkDevice.useMutation({
-    onSuccess: () => { refetchLinks(); toast.success("Vinculo removido"); },
+    onSuccess: () => { refetchLinks(); toast.success("Vínculo removido"); },
   });
   const upsertPlanMut = trpc.traccar.upsertMaintenancePlan.useMutation({
     onSuccess: () => { setPlanDialogOpen(false); toast.success("Plano salvo"); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
   const resolveAlertMut = trpc.traccar.resolveAlert.useMutation({
     onSuccess: () => { refetchAlerts(); toast.success("Alerta atualizado"); },
   });
   const syncHoursMut = trpc.traccar.syncDailyHours.useMutation({
-    onSuccess: (d) => toast.success(`Sincronizado: ${d.synced} equipamentos`),
-    onError: (e) => toast.error(e.message),
+    onSuccess: (d: any) => toast.success(`Sincronizado: ${d.synced} equipamentos`),
+    onError: (e: any) => toast.error(e.message),
   });
 
-  // ── Mapa: renderizar marcadores ───────────────────────────────────────────────
-
-  const handleMapReady = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-    setMapInstance(map);
-  }, []);
-
-  useEffect(() => {
-    if (!mapInstance || positions.length === 0) return;
-
-    const positionMap = new Map<number, TraccarPosition>();
-    positions.forEach((p) => positionMap.set(p.deviceId, p));
-
-    devices.forEach((device) => {
-      const pos = positionMap.get(device.id);
-      if (!pos || !pos.valid) return;
-
-      const latLng = new google.maps.LatLng(pos.latitude, pos.longitude);
-      const isOnline = device.status === "online";
-      const speed = knotsToKmh(pos.speed);
-
-      if (markersRef.current.has(device.id)) {
-        // Atualizar marcador existente
-        const marker = markersRef.current.get(device.id)!;
-        marker.setPosition(latLng);
-        marker.setIcon({
-          path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-          scale: 5,
-          fillColor: isOnline ? "#16a34a" : "#dc2626",
-          fillOpacity: 1,
-          strokeColor: "#fff",
-          strokeWeight: 1,
-          rotation: pos.course,
-        });
-      } else {
-        // Criar novo marcador
-        const marker = new google.maps.Marker({
-          position: latLng,
-          map: mapInstance,
-          title: device.name,
-          icon: {
-            path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-            scale: 5,
-            fillColor: isOnline ? "#16a34a" : "#dc2626",
-            fillOpacity: 1,
-            strokeColor: "#fff",
-            strokeWeight: 1,
-            rotation: pos.course,
-          },
-        });
-
-        const infoWindow = new google.maps.InfoWindow({
-          content: `
-            <div style="font-family:sans-serif;min-width:180px">
-              <strong style="font-size:14px">${device.name}</strong><br/>
-              <span style="color:${isOnline ? "#16a34a" : "#dc2626"};font-size:12px">● ${statusLabel(device.status)}</span><br/>
-              <hr style="margin:6px 0"/>
-              <span style="font-size:12px">🚗 Velocidade: <strong>${speed} km/h</strong></span><br/>
-              <span style="font-size:12px">🔑 Ignição: <strong>${pos.attributes.ignition ? "Ligada" : "Desligada"}</strong></span><br/>
-              <span style="font-size:12px">🔋 Bateria: <strong>${pos.attributes.batteryLevel ?? "—"}%</strong></span><br/>
-              <span style="font-size:12px;color:#888">Atualizado: ${new Date(pos.deviceTime).toLocaleTimeString("pt-BR")}</span>
-            </div>
-          `,
-        });
-
-        marker.addListener("click", () => {
-          infoWindow.open(mapInstance, marker);
-          setSelectedDeviceId(device.id);
-        });
-
-        markersRef.current.set(device.id, marker);
-      }
-    });
-
-    // Centralizar no dispositivo selecionado
-    if (selectedDeviceId) {
-      const pos = positionMap.get(selectedDeviceId);
-      if (pos?.valid) {
-        mapInstance.panTo({ lat: pos.latitude, lng: pos.longitude });
-      }
-    }
-  }, [mapInstance, positions, devices, selectedDeviceId]);
-
-  // ── Mapa: histórico de rota ───────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!mapInstance) return;
-
-    // Remover polyline anterior
-    if (historyPolylineRef.current) {
-      historyPolylineRef.current.setMap(null);
-      historyPolylineRef.current = null;
-    }
-
-    if (tab !== "historico" || historyPositions.length === 0) return;
-
-    const path = historyPositions
-      .filter((p) => p.valid)
-      .map((p) => ({ lat: p.latitude, lng: p.longitude }));
-
-    const polyline = new google.maps.Polyline({
-      path,
-      geodesic: true,
-      strokeColor: "#2563eb",
-      strokeOpacity: 0.8,
-      strokeWeight: 3,
-      map: mapInstance,
-    });
-
-    historyPolylineRef.current = polyline;
-
-    // Ajustar bounds para mostrar toda a rota
-    if (path.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      path.forEach((p) => bounds.extend(p));
-      mapInstance.fitBounds(bounds);
-    }
-  }, [mapInstance, historyPositions, tab]);
-
   // ── Seleção de dispositivo ────────────────────────────────────────────────────
+
+  const handleSelectDevice = useCallback((id: number | null) => {
+    setSelectedDeviceId(id);
+  }, []);
 
   const selectedDevice = devices.find((d) => d.id === selectedDeviceId);
   const selectedPosition = positions.find((p) => p.deviceId === selectedDeviceId);
@@ -332,8 +400,7 @@ export default function GpsTrackingPage() {
             <p className="font-medium">Variáveis necessárias:</p>
             <div className="bg-amber-100 rounded p-3 font-mono text-sm space-y-1">
               <div><span className="text-amber-900">TRACCAR_URL</span> = http://SEU_IP:8082</div>
-              <div><span className="text-amber-900">TRACCAR_EMAIL</span> = admin@btreeambiental.com</div>
-              <div><span className="text-amber-900">TRACCAR_PASSWORD</span> = sua_senha</div>
+              <div><span className="text-amber-900">TRACCAR_TOKEN</span> = seu_token_api</div>
             </div>
             <p className="text-sm">
               Consulte o <strong>Guia de Instalação do Traccar</strong> enviado pelo sistema para o passo a passo completo.
@@ -418,7 +485,7 @@ export default function GpsTrackingPage() {
               <p className="text-xl font-bold text-orange-600">
                 {positions.length > 0
                   ? `${knotsToKmh(Math.max(...positions.map((p) => p.speed)))} km/h`
-                  : "—"}
+                  : "\u2014"}
               </p>
             </div>
           </CardContent>
@@ -486,7 +553,7 @@ export default function GpsTrackingPage() {
         {/* Painel direito: mapa + abas */}
         <div className="flex-1 flex flex-col gap-3 min-h-[400px]">
           <Tabs value={tab} onValueChange={setTab} className="flex flex-col flex-1">
-            <TabsList className="self-start">
+            <TabsList className="self-start flex-wrap">
               <TabsTrigger value="mapa" className="gap-1">
                 <MapPin className="h-4 w-4" /> Mapa ao vivo
               </TabsTrigger>
@@ -514,10 +581,12 @@ export default function GpsTrackingPage() {
             {/* Mapa ao vivo */}
             <TabsContent value="mapa" className="flex-1 mt-2">
               <div className="rounded-lg overflow-hidden border h-full min-h-[400px]">
-                <MapView
-                  onMapReady={handleMapReady}
-                  initialCenter={{ lat: -15.7801, lng: -47.9292 }}
-                  initialZoom={5}
+                <LeafletMap
+                  devices={devices}
+                  positions={positions}
+                  selectedDeviceId={selectedDeviceId}
+                  onSelectDevice={handleSelectDevice}
+                  className="w-full h-full min-h-[400px]"
                 />
               </div>
             </TabsContent>
@@ -532,10 +601,15 @@ export default function GpsTrackingPage() {
                 </div>
               )}
               <div className="rounded-lg overflow-hidden border flex-1 min-h-[400px]">
-                <MapView
-                  onMapReady={handleMapReady}
-                  initialCenter={{ lat: -15.7801, lng: -47.9292 }}
-                  initialZoom={5}
+                <LeafletMap
+                  key="history-map"
+                  devices={devices}
+                  positions={positions}
+                  selectedDeviceId={selectedDeviceId}
+                  onSelectDevice={handleSelectDevice}
+                  historyPositions={historyPositions}
+                  showHistory={true}
+                  className="w-full h-full min-h-[400px]"
                 />
               </div>
             </TabsContent>
@@ -622,6 +696,7 @@ export default function GpsTrackingPage() {
                 </div>
               )}
             </TabsContent>
+
             {/* Aba Vincular GPS */}
             <TabsContent value="vincular" className="mt-2 space-y-4">
               <div className="flex items-center justify-between">
@@ -652,7 +727,7 @@ export default function GpsTrackingPage() {
                         <tr key={link.id} className="border-t hover:bg-muted/30">
                           <td className="p-3 font-medium">{link.equipmentName}</td>
                           <td className="p-3">{link.traccarDeviceName || `#${link.traccarDeviceId}`}</td>
-                          <td className="p-3 font-mono text-xs">{link.traccarUniqueId || "—"}</td>
+                          <td className="p-3 font-mono text-xs">{link.traccarUniqueId || "\u2014"}</td>
                           <td className="p-3 text-muted-foreground">{new Date(link.createdAt).toLocaleDateString("pt-BR")}</td>
                           <td className="p-3">
                             <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => unlinkDeviceMut.mutate({ linkId: link.id })}>
@@ -892,7 +967,7 @@ export default function GpsTrackingPage() {
                 <p className="font-semibold">
                   {selectedPosition.attributes.batteryLevel !== undefined
                     ? `${selectedPosition.attributes.batteryLevel}%`
-                    : "—"}
+                    : "\u2014"}
                 </p>
               </div>
               <div>
@@ -919,7 +994,7 @@ export default function GpsTrackingPage() {
                 <p className="font-semibold">
                   {selectedPosition.attributes.totalDistance !== undefined
                     ? `${metersToKm(selectedPosition.attributes.totalDistance)} km`
-                    : "—"}
+                    : "\u2014"}
                 </p>
               </div>
               <div>

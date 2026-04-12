@@ -1384,3 +1384,15 @@
 - [x] Testar conexão com a API do Traccar (vitest passou)
 - [x] Preparar guia de configuração dos dispositivos EC33 com chips EMnify
 - [ ] Build e push para GitHub
+
+### Bug: App BTREE mostra 0 dispositivos GPS apesar do Traccar estar conectado
+- [x] Investigar por que o app mostra "Traccar conectado" mas 0 dispositivos
+- [x] Verificar se o token está configurado corretamente na Hostinger (token antigo na env)
+- [x] Corrigir para que os dispositivos apareçam no app (atualizar TRACCAR_TOKEN na Hostinger)
+
+### Substituir Google Maps por Leaflet/OpenStreetMap no Rastreamento GPS
+- [x] Instalar leaflet e @types/leaflet
+- [x] Substituir MapView do Google Maps por Leaflet no GpsTrackingPage
+- [x] Manter marcadores, histórico de rota e funcionalidades existentes
+- [x] Build funciona sem erros
+- [ ] Push para GitHub
