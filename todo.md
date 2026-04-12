@@ -1363,3 +1363,10 @@
 - [x] Corrigir backend para salvar ambos campos (locationName + workLocationId) com resolução automática
 - [x] Corrigir updateLocation e updateLocationBatch para também resolver ambos campos
 - [ ] Script SQL para corrigir registros antigos que têm location_name mas não work_location_id
+
+### Exportação Excel com ExcelJS no Abastecimento
+- [x] Instalar ExcelJS e file-saver no projeto
+- [x] Substituir xlsx por ExcelJS com formatação profissional
+- [x] Usar mesmos padrões visuais do PDF (cores verde BTREE, cabeçalho, resumo, rodapé)
+- [x] Botão de exportação Excel já existente no frontend (reutilizado)
+- [ ] Build e push para GitHub

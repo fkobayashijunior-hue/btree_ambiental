@@ -288,61 +288,185 @@ export default function VehicleControlPage() {
     win.document.close();
   };
 
-  // ===== EXPORTAR EXCEL =====
+  // ===== EXPORTAR EXCEL (ExcelJS profissional) =====
   const handleExportExcel = async () => {
     if (filteredRecords.length === 0) { toast.error("Nenhum registro para exportar no período"); return; }
     try {
-      const XLSX = await import("xlsx");
-      const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos") : "Todos";
+      const ExcelJS = await import("exceljs");
+      const { saveAs } = await import("file-saver");
+      const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos os veículos") : "Todos os veículos";
+      const now = new Date().toLocaleString("pt-BR");
 
-      const rows = filteredRecords.map((r: any) => ({
-        "Data": new Date(r.createdAt).toLocaleDateString("pt-BR"),
-        "Veículo": equipMap[r.equipmentId] || `#${r.equipmentId}`,
-        "Tipo": RECORD_LABELS[r.recordType as RecordType] || r.recordType,
-        "Combustível": r.fuelType || "",
-        "Litros": r.liters || "",
-        "KM Percorridos": r.kmDriven || "",
-        "Hodômetro": r.odometer || "",
-        "Preço/L (R$)": r.pricePerLiter || "",
-        "Custo Total (R$)": r.fuelCost || r.maintenanceCost || "",
-        "Posto/Fornecedor": r.supplier || "",
-        "Tipo Manutenção": r.maintenanceType || "",
-        "Mecânico": r.mechanicName || "",
-        "Observações": r.notes || "",
-        "Registrado por": r.registeredByName || "",
-      }));
-
-      // Linha de totais
-      rows.push({
-        "Data": `TOTAIS — ${periodLabel} — ${vehicleName}`,
-        "Veículo": "",
-        "Tipo": `${filteredRecords.length} registros`,
-        "Combustível": "",
-        "Litros": `${totalLiters.toFixed(1)} L`,
-        "KM Percorridos": "",
-        "Hodômetro": "",
-        "Preço/L (R$)": "",
-        "Custo Total (R$)": `R$ ${totalCost.toFixed(2)}`,
-        "Posto/Fornecedor": "",
-        "Tipo Manutenção": "",
-        "Mecânico": "",
-        "Observações": "",
-        "Registrado por": "",
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "BTREE Ambiental";
+      wb.created = new Date();
+      const ws = wb.addWorksheet("Abastecimentos", {
+        properties: { defaultRowHeight: 18 },
+        pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
       });
 
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Abastecimentos");
+      // Cores padrão BTREE (mesmo do PDF)
+      const GREEN_DARK = "0D4F2E";
+      const GREEN_LIGHT = "F0FDF4";
+      const GREEN_BORDER = "BBF7D0";
+      const WHITE = "FFFFFF";
+      const GRAY_BORDER = "E5E7EB";
+      const GRAY_TEXT = "6B7280";
 
-      // Ajustar largura das colunas
-      ws["!cols"] = [
-        { wch: 12 }, { wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 10 },
-        { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 20 },
-        { wch: 20 }, { wch: 18 }, { wch: 25 }, { wch: 18 },
+      // Definir colunas
+      ws.columns = [
+        { key: "data", width: 14 },
+        { key: "veiculo", width: 22 },
+        { key: "tipo", width: 16 },
+        { key: "combustivel", width: 14 },
+        { key: "litros", width: 12 },
+        { key: "kmPercorridos", width: 14 },
+        { key: "hodometro", width: 14 },
+        { key: "precoLitro", width: 14 },
+        { key: "custoTotal", width: 16 },
+        { key: "fornecedor", width: 22 },
+        { key: "tipoManutencao", width: 18 },
+        { key: "mecanico", width: 18 },
+        { key: "observacoes", width: 28 },
+        { key: "registradoPor", width: 18 },
       ];
 
-      XLSX.writeFile(wb, `abastecimentos-${filterYear}-${String(filterMonth + 1).padStart(2, "0")}.xlsx`);
-      toast.success("Excel gerado com sucesso!");
+      // ===== CABEÇALHO (linhas 1-4) =====
+      // Linha 1: Título principal
+      ws.mergeCells("A1:N1");
+      const titleCell = ws.getCell("A1");
+      titleCell.value = "BTREE AMBIENTAL — RELATÓRIO DE ABASTECIMENTOS";
+      titleCell.font = { name: "Arial", size: 16, bold: true, color: { argb: WHITE } };
+      titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_DARK } };
+      titleCell.alignment = { horizontal: "center", vertical: "middle" };
+      ws.getRow(1).height = 36;
+
+      // Linha 2: Subtítulo
+      ws.mergeCells("A2:N2");
+      const subtitleCell = ws.getCell("A2");
+      subtitleCell.value = `BTREE Empreendimentos LTDA  \u2022  btreeambiental.com  \u2022  Ve\u00edculo: ${vehicleName}  \u2022  Per\u00edodo: ${periodLabel}  \u2022  Emitido em ${now}`;
+      subtitleCell.font = { name: "Arial", size: 9, italic: true, color: { argb: WHITE } };
+      subtitleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_DARK } };
+      subtitleCell.alignment = { horizontal: "center", vertical: "middle" };
+      ws.getRow(2).height = 22;
+
+      // Linha 3: Resumo (cards)
+      ws.mergeCells("A3:C3");
+      ws.getCell("A3").value = `Total de Registros: ${filteredRecords.length}`;
+      ws.mergeCells("D3:F3");
+      ws.getCell("D3").value = `Abastecimentos: ${fuelRecords.length}`;
+      ws.mergeCells("G3:J3");
+      ws.getCell("G3").value = `Total de Litros: ${totalLiters.toFixed(1)} L`;
+      ws.mergeCells("K3:N3");
+      ws.getCell("K3").value = `Custo Total: R$ ${totalCost.toFixed(2)}`;
+      ["A3", "D3", "G3", "K3"].forEach(ref => {
+        const c = ws.getCell(ref);
+        c.font = { name: "Arial", size: 11, bold: true, color: { argb: GREEN_DARK } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_LIGHT } };
+        c.alignment = { horizontal: "center", vertical: "middle" };
+        c.border = { top: { style: "thin", color: { argb: GREEN_BORDER } }, bottom: { style: "thin", color: { argb: GREEN_BORDER } }, left: { style: "thin", color: { argb: GREEN_BORDER } }, right: { style: "thin", color: { argb: GREEN_BORDER } } };
+      });
+      ws.getRow(3).height = 28;
+
+      // Linha 4: vazia (espaçamento)
+      ws.getRow(4).height = 8;
+
+      // ===== CABEÇALHO DA TABELA (linha 5) =====
+      const headers = ["Data", "Ve\u00edculo", "Tipo", "Combust\u00edvel", "Litros", "KM Percorridos", "Hod\u00f4metro", "Pre\u00e7o/L (R$)", "Custo Total (R$)", "Posto/Fornecedor", "Tipo Manuten\u00e7\u00e3o", "Mec\u00e2nico", "Observa\u00e7\u00f5es", "Registrado por"];
+      const headerRow = ws.getRow(5);
+      headers.forEach((h, i) => {
+        const cell = headerRow.getCell(i + 1);
+        cell.value = h;
+        cell.font = { name: "Arial", size: 10, bold: true, color: { argb: WHITE } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_DARK } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = { top: { style: "thin", color: { argb: GREEN_DARK } }, bottom: { style: "thin", color: { argb: GREEN_DARK } }, left: { style: "thin", color: { argb: GREEN_DARK } }, right: { style: "thin", color: { argb: GREEN_DARK } } };
+      });
+      headerRow.height = 24;
+
+      // ===== DADOS (a partir da linha 6) =====
+      filteredRecords.forEach((r: any, idx: number) => {
+        const rowNum = 6 + idx;
+        const row = ws.getRow(rowNum);
+        const isEven = idx % 2 === 0;
+        const values = [
+          new Date(r.createdAt).toLocaleDateString("pt-BR"),
+          equipMap[r.equipmentId] || `#${r.equipmentId}`,
+          RECORD_LABELS[r.recordType as RecordType] || r.recordType,
+          r.fuelType || "-",
+          r.liters ? parseFloat(r.liters) : "-",
+          r.kmDriven || "-",
+          r.odometer || "-",
+          r.pricePerLiter ? parseFloat(r.pricePerLiter) : "-",
+          r.fuelCost ? parseFloat(r.fuelCost) : (r.maintenanceCost ? parseFloat(r.maintenanceCost) : "-"),
+          r.supplier || "-",
+          r.maintenanceType || "-",
+          r.mechanicName || "-",
+          r.notes || "-",
+          r.registeredByName || "-",
+        ];
+        values.forEach((v, i) => {
+          const cell = row.getCell(i + 1);
+          cell.value = v;
+          cell.font = { name: "Arial", size: 10 };
+          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+          if (isEven) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_LIGHT } };
+          }
+          cell.border = { bottom: { style: "thin", color: { argb: GRAY_BORDER } } };
+          // Formatar valores monetários
+          if ((i === 7 || i === 8) && typeof v === "number") {
+            cell.numFmt = '#,##0.00';
+          }
+          if (i === 4 && typeof v === "number") {
+            cell.numFmt = '#,##0.0';
+          }
+        });
+        row.height = 20;
+      });
+
+      // ===== LINHA DE TOTAIS =====
+      const totalsRowNum = 6 + filteredRecords.length;
+      const totalsRow = ws.getRow(totalsRowNum);
+      const totalMaintCost = filteredRecords.filter((r: any) => r.recordType === "manutencao").reduce((s: number, r: any) => s + (parseFloat(r.maintenanceCost) || 0), 0);
+      const totalsValues = [
+        `TOTAIS \u2014 ${periodLabel}`,
+        vehicleName,
+        `${filteredRecords.length} registros`,
+        "",
+        totalLiters,
+        "",
+        "",
+        "",
+        totalCost + totalMaintCost,
+        "", "", "", "", "",
+      ];
+      totalsValues.forEach((v, i) => {
+        const cell = totalsRow.getCell(i + 1);
+        cell.value = v;
+        cell.font = { name: "Arial", size: 11, bold: true, color: { argb: WHITE } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_DARK } };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = { top: { style: "medium", color: { argb: GREEN_DARK } }, bottom: { style: "medium", color: { argb: GREEN_DARK } } };
+        if ((i === 4 || i === 8) && typeof v === "number") {
+          cell.numFmt = '#,##0.00';
+        }
+      });
+      totalsRow.height = 26;
+
+      // ===== RODAPÉ =====
+      const footerRowNum = totalsRowNum + 2;
+      ws.mergeCells(`A${footerRowNum}:N${footerRowNum}`);
+      const footerCell = ws.getCell(`A${footerRowNum}`);
+      footerCell.value = "Desenvolvido por Kobayashi Desenvolvimento de Sistemas  \u2022  btreeambiental.com";
+      footerCell.font = { name: "Arial", size: 9, italic: true, color: { argb: GRAY_TEXT } };
+      footerCell.alignment = { horizontal: "center", vertical: "middle" };
+
+      // Gerar e salvar
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      saveAs(blob, `abastecimentos-${filterYear}-${String(filterMonth + 1).padStart(2, "0")}.xlsx`);
+      toast.success("Excel profissional gerado com sucesso!");
     } catch (err) {
       toast.error("Erro ao gerar Excel");
       console.error(err);
