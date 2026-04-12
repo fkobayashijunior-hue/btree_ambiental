@@ -1372,6 +1372,15 @@
 - [x] Build e push para GitHub
 
 ### Bug: Erro ao gerar Excel no Controle de Abastecimento
-- [ ] Build antigo na Hostinger ainda referencia xlsx-DGuHH-KN.js (pacote antigo)
-- [ ] O novo build com ExcelJS precisa ser deployado corretamente
-- [ ] Verificar se o import dinâmico do ExcelJS funciona no build de produção
+- [x] Build antigo na Hostinger ainda referencia xlsx-DGuHH-KN.js (pacote antigo) - removido xlsx
+- [x] O novo build com ExcelJS precisa ser deployado corretamente - push feito
+- [x] Verificar se o import dinâmico do ExcelJS funciona no build de produção
+- [x] Adicionado cleanupOutdatedCaches/skipWaiting/clientsClaim no workbox para forçar atualização
+
+### Integração GPS/Traccar - Nova Conta
+- [x] Verificar estado atual do módulo GPS no projeto
+- [x] Gerar novo token API do Traccar (expira 31/12/2027)
+- [x] Configurar TRACCAR_URL e TRACCAR_TOKEN no sistema BTREE
+- [x] Testar conexão com a API do Traccar (vitest passou)
+- [x] Preparar guia de configuração dos dispositivos EC33 com chips EMnify
+- [ ] Build e push para GitHub
