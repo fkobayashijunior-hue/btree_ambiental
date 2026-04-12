@@ -1369,4 +1369,9 @@
 - [x] Substituir xlsx por ExcelJS com formatação profissional
 - [x] Usar mesmos padrões visuais do PDF (cores verde BTREE, cabeçalho, resumo, rodapé)
 - [x] Botão de exportação Excel já existente no frontend (reutilizado)
-- [ ] Build e push para GitHub
+- [x] Build e push para GitHub
+
+### Bug: Erro ao gerar Excel no Controle de Abastecimento
+- [ ] Build antigo na Hostinger ainda referencia xlsx-DGuHH-KN.js (pacote antigo)
+- [ ] O novo build com ExcelJS precisa ser deployado corretamente
+- [ ] Verificar se o import dinâmico do ExcelJS funciona no build de produção
