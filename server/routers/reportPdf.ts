@@ -22,13 +22,20 @@ function formatDate(d: string | Date) {
   return new Date(d).toLocaleDateString("pt-BR");
 }
 
+const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+const BTREE_SITE = "btreeambiental.com";
+const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
+
 function generatePdfHtml(data: any, locationName: string, periodo: string, sections: { maoDeObra: boolean; consumo: boolean; cargas: boolean }) {
   const styles = `
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; font-size: 11px; }
       .page { padding: 20px 30px; }
-      .header { background: linear-gradient(135deg, #0d4f2e, #1a7a47); color: white; padding: 20px 25px; border-radius: 8px; margin-bottom: 20px; }
+      .header { background: linear-gradient(135deg, #0d4f2e, #1a7a47); color: white; padding: 20px 25px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 18px; }
+      .header img { height: 50px; }
+      .header-content { flex: 1; }
       .header h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
       .header p { font-size: 12px; opacity: 0.9; }
       .header .meta { display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; opacity: 0.85; }
@@ -56,8 +63,15 @@ function generatePdfHtml(data: any, locationName: string, periodo: string, secti
       .badge-diarista { background: #fef3c7; color: #d97706; }
       .badge-pago { background: #d1fae5; color: #059669; }
       .badge-pendente { background: #fee2e2; color: #dc2626; }
-      .footer { text-align: center; font-size: 9px; color: #999; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e9ecef; }
-      @media print { .page { padding: 10px; } }
+      .footer { margin-top: 24px; padding: 14px 24px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+      .footer-left { display: flex; align-items: center; gap: 10px; }
+      .footer-left img.kobayashi { height: 28px; }
+      .footer-text { font-size: 10px; color: #555; }
+      .footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+      .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+      .footer-right img { width: 60px; height: 60px; }
+      .footer-right span { font-size: 9px; color: #555; }
+      @media print { .page { padding: 10px; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     </style>
   `;
 
@@ -66,11 +80,14 @@ function generatePdfHtml(data: any, locationName: string, periodo: string, secti
   // Header
   html += `
     <div class="header">
-      <h1>BTREE Ambiental — Relatório</h1>
-      <p>${locationName}</p>
-      <div class="meta">
-        <span>Período: ${periodo}</span>
-        <span>Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}</span>
+      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+      <div class="header-content">
+        <h1>BTREE Ambiental — Relatório de Operação</h1>
+        <p>${locationName}</p>
+        <div class="meta">
+          <span>Período: ${periodo}</span>
+          <span>Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}</span>
+        </div>
       </div>
     </div>
   `;
@@ -274,8 +291,19 @@ function generatePdfHtml(data: any, locationName: string, periodo: string, secti
   // Footer
   html += `
     <div class="footer">
-      BTREE Ambiental — Sistema de Gestão | Relatório gerado automaticamente
+      <div class="footer-left">
+        <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+        <div class="footer-text">
+          Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+          <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
+        </div>
+      </div>
+      <div class="footer-right">
+        <img src="${BTREE_QR}" alt="QR Code" />
+        <span>Acesse nosso site</span>
+      </div>
     </div>
+    <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
   </div></body></html>`;
 
   return html;
@@ -336,7 +364,7 @@ export const reportPdfRouter = router({
             id: fuelRecords.id,
             date: fuelRecords.date,
             equipmentName: equipment.name,
-            equipmentPlate: equipment.plate,
+            equipmentPlate: equipment.licensePlate,
             fuelType: fuelRecords.fuelType,
             liters: fuelRecords.liters,
             totalValue: fuelRecords.totalValue,

@@ -42,6 +42,7 @@ export const attendanceRouter = router({
             longitude: collaboratorAttendance.longitude,
             locationName: collaboratorAttendance.locationName,
             workLocationId: collaboratorAttendance.workLocationId,
+            collaboratorPixKey: collaborators.pixKey,
           })
           .from(collaboratorAttendance)
           .innerJoin(collaborators, eq(collaboratorAttendance.collaboratorId, collaborators.id))
@@ -84,6 +85,8 @@ export const attendanceRouter = router({
 
         return filtered.map(r => ({
           ...r,
+          // Usar PIX do cadastro do colaborador como fallback quando o registro de presença não tem
+          pixKey: r.pixKey || r.collaboratorPixKey || null,
           registeredByName: r.registeredBy ? (userMap[r.registeredBy] || null) : null,
         }));
       } catch (err: any) {

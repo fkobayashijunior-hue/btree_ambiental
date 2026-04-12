@@ -82,7 +82,10 @@ export default function AttendanceList() {
   // Somente admin vê valores financeiros
   const canSeeFinancial = isAdmin;
 
-  const [tab, setTab] = useState<"semanal" | "diario" | "mensal">("semanal");
+  const [tab, setTab] = useState<"semanal" | "diario" | "mensal" | "periodo">("semanal");
+  // ── Seletor de período personalizado ─────────────────────────────────────
+  const [periodoFrom, setPeriodoFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [periodoTo, setPeriodoTo] = useState(new Date().toISOString().slice(0, 10));
   const [weekRef, setWeekRef] = useState(new Date());
   const [searchDate, setSearchDate] = useState(new Date().toISOString().slice(0, 10));
   const _now = new Date();
@@ -119,6 +122,12 @@ export default function AttendanceList() {
   const { data: monthRecords = [], isLoading: monthLoading } = trpc.attendance.list.useQuery(
     { dateFrom: monthStart.toISOString().slice(0, 10), dateTo: monthEnd.toISOString().slice(0, 10) },
     { enabled: tab === "mensal" }
+  );
+
+  // ── Dados do período personalizado ──────────────────────────────────────
+  const { data: periodoRecords = [], isLoading: periodoLoading } = trpc.attendance.list.useQuery(
+    { dateFrom: periodoFrom, dateTo: periodoTo },
+    { enabled: tab === "periodo" && !!periodoFrom && !!periodoTo }
   );
 
   // ── Capturar GPS ─────────────────────────────────────────────────────────
@@ -358,7 +367,131 @@ export default function AttendanceList() {
   const BTREE_SITE = "btreeambiental.com";
   const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 
-  // ── Exportar PDF semanal ─────────────────────────────────────────────────
+  // ──  // ── Exportar PDF por período personalizado ───────────────────────────────
+  const handleExportPeriodoPDF = () => {
+    const records = periodoRecords as any[];
+    if (records.length === 0) { toast.error("Nenhuma presença no período"); return; }
+    const fromLabel = format(parseISO(periodoFrom), "dd/MM/yyyy");
+    const toLabel = format(parseISO(periodoTo), "dd/MM/yyyy");
+    const periodoLabel = periodoFrom === periodoTo ? fromLabel : `${fromLabel} a ${toLabel}`;
+
+    // Agrupar por colaborador
+    const collabMap: Record<number, {
+      name: string; pixKey: string | null; employmentType: string;
+      days: any[]; total: number; pendente: number; pago: number;
+      locations: Set<string>;
+    }> = {};
+    for (const r of records) {
+      if (!collabMap[r.collaboratorId]) {
+        collabMap[r.collaboratorId] = {
+          name: r.collaboratorName, pixKey: r.pixKey, employmentType: r.employmentType,
+          days: [], total: 0, pendente: 0, pago: 0, locations: new Set<string>(),
+        };
+      }
+      const v = parseFloat(r.dailyValue || "0");
+      collabMap[r.collaboratorId].days.push(r);
+      if (r.locationName) collabMap[r.collaboratorId].locations.add(r.locationName);
+      collabMap[r.collaboratorId].total += v;
+      if (r.paymentStatus === "pago") collabMap[r.collaboratorId].pago += v;
+      else collabMap[r.collaboratorId].pendente += v;
+    }
+    const collabs = Object.values(collabMap).sort((a, b) => a.name.localeCompare(b.name));
+    const totalGeral = collabs.reduce((s, c) => s + c.total, 0);
+    const totalPendente = collabs.reduce((s, c) => s + c.pendente, 0);
+    const totalPago = collabs.reduce((s, c) => s + c.pago, 0);
+
+    const rows = collabs.map(c => `
+      <tr>
+        <td>${c.name}</td>
+        <td style="text-align:center">${c.days.length}</td>
+        <td style="font-size:11px">${c.days.map(d => fmtDateFull(d.date)).join(", ")}</td>
+        <td style="text-align:center">${Array.from(c.locations).join(", ") || "Sem local"}</td>
+        <td style="text-align:center">${EMPLOYMENT_LABELS[c.employmentType] || c.employmentType}</td>
+        <td style="font-size:11px">${c.pixKey || "\u2014"}</td>
+        <td style="text-align:right">R$ ${c.total.toFixed(2)}</td>
+        <td style="text-align:right;color:${c.pendente > 0 ? "#b91c1c" : "#15803d"}">${c.pendente > 0 ? `R$ ${c.pendente.toFixed(2)}` : "\u2014"}</td>
+        <td style="text-align:right;color:#15803d">${c.pago > 0 ? `R$ ${c.pago.toFixed(2)}` : "\u2014"}</td>
+      </tr>
+    `).join("");
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+      <title>Presenças - BTREE Ambiental</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
+        .header { background: #14532d; color: white; padding: 18px 24px; display: flex; align-items: center; gap: 18px; }
+        .header img { height: 50px; }
+        .header-text h1 { font-size: 20px; font-weight: bold; }
+        .header-text p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+        .content { padding: 20px 24px; }
+        .title { font-size: 15px; font-weight: bold; color: #14532d; margin-bottom: 6px; }
+        .subtitle { font-size: 12px; color: #555; margin-bottom: 14px; }
+        .summary { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .summary-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 14px; min-width: 120px; }
+        .summary-card .label { font-size: 10px; color: #555; text-transform: uppercase; }
+        .summary-card .value { font-size: 14px; font-weight: bold; color: #15803d; }
+        .summary-card.red .value { color: #b91c1c; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { background: #14532d; color: white; padding: 7px 8px; text-align: left; font-size: 11px; }
+        td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+        tr:nth-child(even) td { background: #f0fdf4; }
+        .footer { margin-top: 24px; padding: 14px 24px; border-top: 2px solid #14532d; display: flex; align-items: center; justify-content: space-between; }
+        .footer-left { display: flex; align-items: center; gap: 10px; }
+        .footer-left img.kobayashi { height: 28px; }
+        .footer-text { font-size: 10px; color: #555; }
+        .footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+        .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .footer-right img { width: 60px; height: 60px; }
+        .footer-right span { font-size: 9px; color: #555; }
+        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      </style></head><body>
+      <div class="header">
+        <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+        <div class="header-text">
+          <h1>BTREE Ambiental</h1>
+          <p>Relatório de Presenças — ${periodoLabel}</p>
+        </div>
+      </div>
+      <div class="content">
+        <div class="title">Controle de Presença por Período</div>
+        <div class="subtitle">Período: ${periodoLabel} | Gerado em: ${new Date().toLocaleString("pt-BR")}</div>
+        <div class="summary">
+          <div class="summary-card"><div class="label">Presenças</div><div class="value">${records.length}</div></div>
+          <div class="summary-card"><div class="label">Colaboradores</div><div class="value">${collabs.length}</div></div>
+          <div class="summary-card"><div class="label">Total Geral</div><div class="value">R$ ${totalGeral.toFixed(2)}</div></div>
+          <div class="summary-card red"><div class="label">A Pagar</div><div class="value">R$ ${totalPendente.toFixed(2)}</div></div>
+          <div class="summary-card"><div class="label">Pago</div><div class="value">R$ ${totalPago.toFixed(2)}</div></div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Colaborador</th><th>Dias</th><th>Datas</th><th>Local</th><th>Vínculo</th>
+            <th>PIX</th><th>Total</th><th>A Pagar</th><th>Pago</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="footer">
+        <div class="footer-left">
+          <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+          <div class="footer-text">
+            Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+            <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
+          </div>
+        </div>
+        <div class="footer-right">
+          <img src="${BTREE_QR}" alt="QR Code" />
+          <span>Acesse nosso site</span>
+        </div>
+      </div>
+      <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
+    </body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
+    win.document.write(html);
+    win.document.close();
+  };
+
+  // ── Exportar PDF semanal ─────────────────────────────────────────
   const handleExportWeekPDF = () => {
     if (weekByCollab.length === 0) { toast.error("Nenhuma presença na semana"); return; }
     const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;
@@ -603,7 +736,7 @@ export default function AttendanceList() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={v => setTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-3 max-w-sm">
+        <TabsList className="grid w-full grid-cols-4 max-w-md">
           <TabsTrigger value="semanal" className="gap-1.5">
             <CalendarDays className="h-4 w-4" /> Semanal
           </TabsTrigger>
@@ -612,6 +745,9 @@ export default function AttendanceList() {
           </TabsTrigger>
           <TabsTrigger value="mensal" className="gap-1.5">
             <Calendar className="h-4 w-4" /> Mensal
+          </TabsTrigger>
+          <TabsTrigger value="periodo" className="gap-1.5">
+            <FileDown className="h-4 w-4" /> PDF
           </TabsTrigger>
         </TabsList>
 
@@ -883,7 +1019,94 @@ export default function AttendanceList() {
           )}
         </TabsContent>
 
-        {/* ─── ABA MENSAL ───────────────────────────────────────────────────────── */}
+           {/* ─── ABA PERÍODO PERSONALIZADO (PDF) ────────────────────────────────── */}
+        <TabsContent value="periodo" className="space-y-4 mt-4">
+          <Card>
+            <CardContent className="p-4 space-y-4">
+              <h3 className="font-semibold text-emerald-800 flex items-center gap-2">
+                <FileDown className="h-5 w-5" /> Gerar PDF por Período Personalizado
+              </h3>
+              <p className="text-sm text-gray-500">Selecione o intervalo de datas para gerar o relatório de presenças em PDF.</p>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <Label className="text-xs text-gray-500">Data Inicial</Label>
+                  <Input type="date" value={periodoFrom} onChange={e => setPeriodoFrom(e.target.value)} className="w-40" />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Data Final</Label>
+                  <Input type="date" value={periodoTo} onChange={e => setPeriodoTo(e.target.value)} className="w-40" />
+                </div>
+                {canSeeFinancial && (
+                  <Button
+                    onClick={handleExportPeriodoPDF}
+                    disabled={periodoLoading || (periodoRecords as any[]).length === 0}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                  >
+                    <FileDown className="h-4 w-4" />
+                    {periodoLoading ? "Carregando..." : "Gerar PDF"}
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Resumo do período */}
+          {!periodoLoading && (periodoRecords as any[]).length > 0 && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card><CardContent className="p-3 text-center">
+                  <p className="text-xl font-bold text-emerald-700">{(periodoRecords as any[]).length}</p>
+                  <p className="text-xs text-gray-500">Presenças</p>
+                </CardContent></Card>
+                <Card><CardContent className="p-3 text-center">
+                  <p className="text-xl font-bold text-gray-700">{new Set((periodoRecords as any[]).map((r: any) => r.collaboratorId)).size}</p>
+                  <p className="text-xs text-gray-500">Colaboradores</p>
+                </CardContent></Card>
+                {canSeeFinancial && (<Card><CardContent className="p-3 text-center">
+                  <p className="text-xl font-bold text-yellow-600">R$ {(periodoRecords as any[]).filter((r: any) => r.paymentStatus !== "pago").reduce((s: number, r: any) => s + parseFloat(r.dailyValue || "0"), 0).toFixed(2)}</p>
+                  <p className="text-xs text-gray-500">A Pagar</p>
+                </CardContent></Card>)}
+                {canSeeFinancial && (<Card><CardContent className="p-3 text-center">
+                  <p className="text-xl font-bold text-blue-600">R$ {(periodoRecords as any[]).reduce((s: number, r: any) => s + parseFloat(r.dailyValue || "0"), 0).toFixed(2)}</p>
+                  <p className="text-xs text-gray-500">Total</p>
+                </CardContent></Card>)}
+              </div>
+
+              {/* Lista de presenças do período */}
+              <div className="space-y-2">
+                {(periodoRecords as any[]).sort((a: any, b: any) => {
+                  const dateComp = new Date(a.date).getTime() - new Date(b.date).getTime();
+                  if (dateComp !== 0) return dateComp;
+                  return (a.collaboratorName || "").localeCompare(b.collaboratorName || "");
+                }).map((r: any) => (
+                  <AttendanceCard
+                    key={r.id}
+                    record={r}
+                    canSeeFinancial={canSeeFinancial}
+                    onMarkPaid={canSeeFinancial ? (paid) => markPaidMutation.mutate({ id: r.id, paid }) : undefined}
+                    onDelete={isAdmin ? () => handleDelete(r.id, r.collaboratorName) : undefined}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {periodoLoading && (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          )}
+
+          {!periodoLoading && (periodoRecords as any[]).length === 0 && periodoFrom && periodoTo && (
+            <div className="text-center py-16 text-gray-400">
+              <Users className="h-16 w-16 mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-medium">Nenhuma presença no período selecionado</p>
+              <p className="text-sm">De {format(parseISO(periodoFrom), "dd/MM/yyyy")} a {format(parseISO(periodoTo), "dd/MM/yyyy")}</p>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── ABA MENSAL ───────────────────────────────────────────────────── */}
         <TabsContent value="mensal" className="space-y-4 mt-4">
           {/* Navegação de mês */}
           <div className="flex items-center justify-between gap-3">
@@ -891,7 +1114,7 @@ export default function AttendanceList() {
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div className="text-center">
-              <p className="font-semibold text-gray-800 capitalize">{monthLabel}</p>
+              <p className="font-semibold text-gray-800" translate="no" suppressHydrationWarning><span key={monthLabel}>{monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}</span></p>
               <p className="text-xs text-gray-400">{(monthRecords as any[]).length} presença(s) registrada(s)</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => setMonthRef(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>

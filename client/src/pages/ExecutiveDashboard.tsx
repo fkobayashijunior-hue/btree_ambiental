@@ -112,7 +112,7 @@ export default function ExecutiveDashboard() {
     includeMaoDeObra: true,
     includeConsumo: true,
     includeCargas: true,
-  }, { enabled: selectedLocationId !== "all" });
+  });
 
   const data = dashboardQuery.data;
   const locations = data?.locations || [];
@@ -159,8 +159,8 @@ export default function ExecutiveDashboard() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(-1)}>
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <span className="text-sm font-medium text-gray-700 min-w-[140px] text-center capitalize">
-                  {range.label}
+                <span className="text-sm font-medium text-gray-700 min-w-[140px] text-center" translate="no" suppressHydrationWarning>
+                  <span key={range.label}>{range.label.charAt(0).toUpperCase() + range.label.slice(1)}</span>
                 </span>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(1)}>
                   <ChevronRight className="w-4 h-4" />
@@ -171,7 +171,7 @@ export default function ExecutiveDashboard() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6" key={`${range.from}-${range.to}`}>
         {/* Loading */}
         {dashboardQuery.isLoading && (
           <div className="flex items-center justify-center py-20">
@@ -466,13 +466,13 @@ export default function ExecutiveDashboard() {
                   </label>
                 </div>
 
-                {/* Relatório detalhado quando um local é selecionado */}
-                {selectedLocationId !== "all" && reportQuery.data && (
+                {/* Relatório detalhado */}
+                {reportQuery.data && (
                   <div className="mt-6 space-y-6" id="report-content">
                     {/* Resumo do local */}
                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
                       <h3 className="font-bold text-green-800 text-lg mb-2">
-                        {locationsQuery.data?.find(l => String(l.id) === selectedLocationId)?.name || "Local"}
+                        {selectedLocationId === "all" ? "Todos os Locais" : (locationsQuery.data?.find(l => String(l.id) === selectedLocationId)?.name || "Local")}
                       </h3>
                       <p className="text-sm text-green-700 mb-3">
                         Período: {new Date(range.from).toLocaleDateString("pt-BR")} a {new Date(range.to).toLocaleDateString("pt-BR")}

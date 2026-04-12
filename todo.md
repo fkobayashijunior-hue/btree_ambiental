@@ -1333,3 +1333,26 @@
 ### Simplificação do Menu (Futuro)
 - [ ] Unificar "Controle de Cargas" e "Minha Carga" em um único módulo
 - [ ] Simplificar campos duplicados de manutenção e abastecimento
+
+## 🐛 CORREÇÕES + NOVOS RECURSOS (12/04/2026 - Parte 2)
+
+### Bug: Erro removeChild no Dashboard Executivo e Presenças
+- [x] Investigar erro "removeChild" ao mudar data no Dashboard Executivo
+- [x] Investigar erro "removeChild" ao clicar em Presenças
+- [x] Corrigir o bug de renderização React (translate=no, key props, remoção de capitalize CSS)
+
+### PDF de Presenças - PIX não atualiza
+- [x] Verificar se o PDF busca dados atualizados do colaborador (PIX do Gilmar)
+- [x] Corrigir para que o PDF sempre use dados mais recentes (fallback para collaboratorPixKey)
+
+### Seletor de Período para PDF de Presenças
+- [x] Criar seletor de intervalo de datas para gerar PDF de presenças (nova aba "PDF")
+- [x] Permitir selecionar dias específicos ou intervalo (de/até)
+
+### Relatório de Consumos/Gastos em PDF
+- [x] Criar relatório PDF com todos os gastos da operação (presenças + combustível + despesas + cargas)
+- [x] Layout profissional com logo da empresa para enviar à chefe
+- [x] Permitir gerar PDF para todos os locais (sem precisar selecionar um específico)
+- [x] Adicionado logo BTREE e Kobayashi no cabeçalho/rodapé do PDF
+- [x] Corrigido campo equipment.plate para equipment.licensePlate
+- [ ] Filtro por período e por local de trabalho
