@@ -1356,3 +1356,10 @@
 - [x] Adicionado logo BTREE e Kobayashi no cabeçalho/rodapé do PDF
 - [x] Corrigido campo equipment.plate para equipment.licensePlate
 - [ ] Filtro por período e por local de trabalho
+
+### Bug: Local de trabalho salvo no campo errado
+- [x] Presença salva local de trabalho no campo location_name em vez de work_location
+- [x] Dashboard Executivo filtra por work_location, então não encontra os registros
+- [x] Corrigir backend para salvar ambos campos (locationName + workLocationId) com resolução automática
+- [x] Corrigir updateLocation e updateLocationBatch para também resolver ambos campos
+- [ ] Script SQL para corrigir registros antigos que têm location_name mas não work_location_id

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { collaboratorAttendance, collaborators, users } from "../../drizzle/schema";
+import { collaboratorAttendance, collaborators, users, gpsLocations } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte, inArray, lt } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { notifyTeam } from "../notifyTeam";
@@ -121,6 +121,19 @@ export const attendanceRouter = router({
       const [collaborator] = await db.select({ name: collaborators.name }).from(collaborators).where(eq(collaborators.id, input.collaboratorId));
       const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
 
+      // Resolver workLocationId a partir do locationName se não foi fornecido
+      let resolvedWorkLocationId = input.workLocationId || null;
+      let resolvedLocationName = input.locationName || null;
+      if (resolvedLocationName && !resolvedWorkLocationId) {
+        const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq(gpsLocations.name, resolvedLocationName));
+        if (loc) resolvedWorkLocationId = loc.id;
+      }
+      // Se temos workLocationId mas não locationName, buscar o nome
+      if (resolvedWorkLocationId && !resolvedLocationName) {
+        const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq(gpsLocations.id, resolvedWorkLocationId));
+        if (loc) resolvedLocationName = loc.name;
+      }
+
       await db.insert(collaboratorAttendance).values({
         collaboratorId: input.collaboratorId,
         date: new Date(input.date + "T12:00:00").toISOString().slice(0, 19).replace("T", " "),
@@ -132,8 +145,8 @@ export const attendanceRouter = router({
         registeredBy: ctx.user.id,
         latitude: input.latitude || null,
         longitude: input.longitude || null,
-        locationName: input.locationName || null,
-        workLocationId: input.workLocationId || null,
+        locationName: resolvedLocationName,
+        workLocationId: resolvedWorkLocationId,
       });
 
       // Notificar o administrador
@@ -260,9 +273,20 @@ export const attendanceRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      // Resolver workLocationId/locationName para garantir consistência
+      let wlId = input.workLocationId;
+      let wlName = input.locationName;
+      if (wlName && !wlId) {
+        const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq(gpsLocations.name, wlName));
+        if (loc) wlId = loc.id;
+      }
+      if (wlId && !wlName) {
+        const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq(gpsLocations.id, wlId));
+        if (loc) wlName = loc.name;
+      }
       await db.update(collaboratorAttendance).set({
-        workLocationId: input.workLocationId,
-        locationName: input.locationName,
+        workLocationId: wlId,
+        locationName: wlName,
       }).where(eq(collaboratorAttendance.id, input.id));
       return { success: true };
     }),
@@ -277,9 +301,20 @@ export const attendanceRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      // Resolver workLocationId/locationName para garantir consistência
+      let wlId = input.workLocationId;
+      let wlName = input.locationName;
+      if (wlName && !wlId) {
+        const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq(gpsLocations.name, wlName));
+        if (loc) wlId = loc.id;
+      }
+      if (wlId && !wlName) {
+        const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq(gpsLocations.id, wlId));
+        if (loc) wlName = loc.name;
+      }
       await db.update(collaboratorAttendance).set({
-        workLocationId: input.workLocationId,
-        locationName: input.locationName,
+        workLocationId: wlId,
+        locationName: wlName,
       }).where(inArray(collaboratorAttendance.id, input.ids));
       return { success: true, count: input.ids.length };
     }),
