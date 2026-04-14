@@ -12,7 +12,8 @@ import {
   Truck, Plus, Search, Package, Calendar, User, MapPin, FileText,
   Camera, Loader2, X, Image as ImageIcon, Weight, Navigation,
   CheckCircle2, Clock, AlertCircle, ChevronRight, Pencil, Trash2,
-  BarChart3, Download, Eye, RefreshCw, Building2
+  BarChart3, Download, Eye, RefreshCw, Building2, ChevronDown, ChevronUp,
+  Filter, Users
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
@@ -45,6 +46,18 @@ const TRACKING_COLORS: Record<TrackingStatus, string> = {
   pesagem_chegada: "bg-indigo-100 text-indigo-700",
   finalizado: "bg-green-100 text-green-700",
 };
+
+// Cores distintas para cada grupo de cliente
+const CLIENT_COLORS = [
+  { border: "border-l-emerald-500", bg: "bg-emerald-50", text: "text-emerald-700", headerBg: "bg-emerald-600" },
+  { border: "border-l-blue-500", bg: "bg-blue-50", text: "text-blue-700", headerBg: "bg-blue-600" },
+  { border: "border-l-purple-500", bg: "bg-purple-50", text: "text-purple-700", headerBg: "bg-purple-600" },
+  { border: "border-l-orange-500", bg: "bg-orange-50", text: "text-orange-700", headerBg: "bg-orange-600" },
+  { border: "border-l-pink-500", bg: "bg-pink-50", text: "text-pink-700", headerBg: "bg-pink-600" },
+  { border: "border-l-cyan-500", bg: "bg-cyan-50", text: "text-cyan-700", headerBg: "bg-cyan-600" },
+  { border: "border-l-amber-500", bg: "bg-amber-50", text: "text-amber-700", headerBg: "bg-amber-600" },
+  { border: "border-l-indigo-500", bg: "bg-indigo-50", text: "text-indigo-700", headerBg: "bg-indigo-600" },
+];
 
 function calcVolume(h: string, w: string, l: string): string {
   const hN = parseFloat(h.replace(",", "."));
@@ -223,7 +236,8 @@ export default function CargoControl() {
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("");
-  const [viewMode, setViewMode] = useState<"lista" | "tracking">("lista");
+  const [filterClientId, setFilterClientId] = useState<number>(0);
+  const [viewMode, setViewMode] = useState<"cliente" | "lista" | "tracking">("cliente");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -233,6 +247,7 @@ export default function CargoControl() {
   const [newDestCity, setNewDestCity] = useState("");
   const [newDestState, setNewDestState] = useState("");
   const [newDestClientId, setNewDestClientId] = useState(0);
+  const [collapsedClients, setCollapsedClients] = useState<Set<string>>(new Set());
   const { openFilePicker } = useFilePicker();
 
   // Form state
@@ -393,9 +408,61 @@ export default function CargoControl() {
   const filtered = useMemo(() => {
     return loads.filter(c => {
       if (filterStatus && c.status !== filterStatus) return false;
+      if (filterClientId && c.clientId !== filterClientId) return false;
       return true;
     });
-  }, [loads, filterStatus]);
+  }, [loads, filterStatus, filterClientId]);
+
+  // Agrupar por cliente (ordenado por data dentro de cada grupo)
+  const groupedByClient = useMemo(() => {
+    const groups: Record<string, { clientName: string; clientId: number | null; cargas: typeof filtered; totalVolume: number; totalCargas: number; pendentes: number; entregues: number }> = {};
+    
+    for (const cargo of filtered) {
+      const clientKey = cargo.clientName || "Sem Cliente";
+      if (!groups[clientKey]) {
+        groups[clientKey] = {
+          clientName: clientKey,
+          clientId: cargo.clientId,
+          cargas: [],
+          totalVolume: 0,
+          totalCargas: 0,
+          pendentes: 0,
+          entregues: 0,
+        };
+      }
+      groups[clientKey].cargas.push(cargo);
+      groups[clientKey].totalCargas++;
+      groups[clientKey].totalVolume += parseFloat(cargo.volumeM3 || "0");
+      if (cargo.status === "pendente") groups[clientKey].pendentes++;
+      if (cargo.status === "entregue") groups[clientKey].entregues++;
+    }
+
+    // Ordenar cargas dentro de cada grupo por data (mais recente primeiro)
+    for (const key of Object.keys(groups)) {
+      groups[key].cargas.sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      });
+    }
+
+    // Retornar como array ordenado por nome do cliente
+    return Object.values(groups).sort((a, b) => {
+      // "Sem Cliente" vai para o final
+      if (a.clientName === "Sem Cliente") return 1;
+      if (b.clientName === "Sem Cliente") return -1;
+      return a.clientName.localeCompare(b.clientName, "pt-BR");
+    });
+  }, [filtered]);
+
+  const toggleClientCollapse = (clientName: string) => {
+    setCollapsedClients(prev => {
+      const next = new Set(prev);
+      if (next.has(clientName)) next.delete(clientName);
+      else next.add(clientName);
+      return next;
+    });
+  };
 
   // Estatísticas
   const stats = useMemo(() => ({
@@ -405,27 +472,113 @@ export default function CargoControl() {
     volumeTotal: loads.reduce((acc, c) => acc + parseFloat(c.volumeM3 || "0"), 0).toFixed(2),
   }), [loads]);
 
+  // Lista de clientes únicos para filtro
+  const uniqueClients = useMemo(() => {
+    const map = new Map<number, string>();
+    loads.forEach(c => {
+      if (c.clientId && c.clientName) map.set(c.clientId, c.clientName);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [loads]);
+
+  // Renderizar um card de carga individual
+  const renderCargoCard = (cargo: typeof loads[number], colorIdx: number) => {
+    const trackStep = TRACKING_STEPS.find(s => s.key === cargo.trackingStatus);
+    const colors = CLIENT_COLORS[colorIdx % CLIENT_COLORS.length];
+    return (
+      <div key={cargo.id} className={`bg-white rounded-lg border border-gray-200 border-l-4 ${colors.border} hover:shadow-md transition-shadow`}>
+        <div className="p-3 sm:p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 min-w-0">
+              {/* Linha 1: Placa + Status + Tracking */}
+              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                <span className="font-bold text-gray-800 text-sm sm:text-base">
+                  {cargo.vehiclePlate || cargo.vehicleName || "Veículo"}
+                </span>
+                <Badge className={`text-[10px] sm:text-xs ${STATUS_COLORS[cargo.status]}`}>{cargo.status}</Badge>
+                {trackStep && (
+                  <Badge className={`text-[10px] sm:text-xs ${TRACKING_COLORS[cargo.trackingStatus as TrackingStatus]}`}>
+                    {trackStep.icon} <span translate="no">{trackStep.label}</span>
+                  </Badge>
+                )}
+              </div>
+              {/* Linha 2: Data, motorista, destino, volume */}
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                <span className="flex items-center gap-1 font-medium text-gray-700">
+                  <Calendar className="h-3 w-3" />
+                  {cargo.date ? new Date(cargo.date).toLocaleDateString("pt-BR") : "-"}
+                </span>
+                {cargo.driverName && <span className="flex items-center gap-1"><User className="h-3 w-3" /><span translate="no">{cargo.driverName}</span></span>}
+                {cargo.destination && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /><span translate="no">{cargo.destination}</span></span>}
+                <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                  <Package className="h-3 w-3" />{cargo.volumeM3} m³{cargo.weightKg ? ` · ${cargo.weightKg} kg` : ""}
+                </span>
+                {cargo.invoiceNumber && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{cargo.invoiceNumber}</span>}
+                {(cargo as any).locationName && <span className="flex items-center gap-1 text-emerald-600"><MapPin className="h-3 w-3" /><span translate="no">{(cargo as any).locationName}</span></span>}
+              </div>
+            </div>
+            {/* Ações */}
+            <div className="flex flex-col gap-0.5 flex-shrink-0">
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Ver detalhes" onClick={() => setDetailId(cargo.id)}>
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" title="Atualizar tracking" onClick={() => { setTrackingCargoId(cargo.id); setTrackingStatus((cargo.trackingStatus as TrackingStatus) || "aguardando"); setTrackingNotes(""); }}>
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Editar" onClick={() => openEdit(cargo)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Gerar PDF" onClick={() => generateCargoPDF(cargo as unknown as Record<string, unknown>)}>
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" title="Excluir" onClick={() => { if (confirm("Remover esta carga?")) deleteMutation.mutate({ id: cargo.id }); }}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-emerald-800 flex items-center gap-2">
-            <Truck className="h-7 w-7" /> Controle de Cargas
+            <Truck className="h-7 w-7" /> <span translate="no">Controle de Cargas</span>
           </h1>
           <p className="text-gray-500 text-sm mt-1">Registre e acompanhe as saídas de carga</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
-            className={`gap-2 ${viewMode === "tracking" ? "bg-emerald-50 border-emerald-300" : ""}`}
-            onClick={() => setViewMode(v => v === "lista" ? "tracking" : "lista")}
+            size="sm"
+            className={`gap-1.5 text-xs ${viewMode === "cliente" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : ""}`}
+            onClick={() => setViewMode("cliente")}
           >
-            <Navigation className="h-4 w-4" />
-            {viewMode === "lista" ? "Ver Tracking" : "Ver Lista"}
+            <Users className="h-3.5 w-3.5" /> Por Cliente
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className={`gap-1.5 text-xs ${viewMode === "lista" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : ""}`}
+            onClick={() => setViewMode("lista")}
+          >
+            <BarChart3 className="h-3.5 w-3.5" /> Lista
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className={`gap-1.5 text-xs ${viewMode === "tracking" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : ""}`}
+            onClick={() => setViewMode("tracking")}
+          >
+            <Navigation className="h-3.5 w-3.5" /> Tracking
           </Button>
           <Button
             className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+            size="sm"
             onClick={() => { resetForm(); setEditId(null); setIsFormOpen(true); }}
           >
             <Plus className="h-4 w-4" /> Nova Carga
@@ -437,7 +590,7 @@ export default function CargoControl() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Total", value: stats.total, color: "text-gray-700", bg: "bg-gray-50" },
-          { label: "Pendentes", value: stats.pendente, color: "text-yellow-700", bg: "bg-yellow-50" },
+          { label: "Pendentes", value: stats.pendente, color: "text-red-700", bg: "bg-red-50" },
           { label: "Entregues", value: stats.entregue, color: "text-green-700", bg: "bg-green-50" },
           { label: "Volume Total", value: `${stats.volumeTotal} m³`, color: "text-emerald-700", bg: "bg-emerald-50" },
         ].map(s => (
@@ -454,6 +607,16 @@ export default function CargoControl() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="Buscar placa, cliente, destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
         </div>
+        <select
+          value={filterClientId}
+          onChange={e => setFilterClientId(parseInt(e.target.value))}
+          className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+        >
+          <option value={0}>Todos os clientes</option>
+          {uniqueClients.map(([id, name]) => (
+            <option key={id} value={id}>{name}</option>
+          ))}
+        </select>
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}
@@ -476,6 +639,100 @@ export default function CargoControl() {
           <Truck className="h-16 w-16 mx-auto mb-4 opacity-30" />
           <p className="text-lg font-medium">Nenhuma carga encontrada</p>
           <p className="text-sm mt-1">Registre a primeira saída de carga</p>
+        </div>
+      ) : viewMode === "cliente" ? (
+        /* ===== VIEW: AGRUPADO POR CLIENTE ===== */
+        <div className="space-y-6">
+          {groupedByClient.map((group, groupIdx) => {
+            const colors = CLIENT_COLORS[groupIdx % CLIENT_COLORS.length];
+            const isCollapsed = collapsedClients.has(group.clientName);
+            return (
+              <div key={group.clientName} className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                {/* Header do grupo (cliente) */}
+                <button
+                  onClick={() => toggleClientCollapse(group.clientName)}
+                  className={`w-full ${colors.headerBg} text-white px-4 py-3 flex items-center justify-between hover:opacity-95 transition-opacity`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Building2 className="h-5 w-5 flex-shrink-0" />
+                    <div className="text-left">
+                      <h3 className="font-bold text-sm sm:text-base" translate="no">{group.clientName}</h3>
+                      <p className="text-xs opacity-90">
+                        {group.totalCargas} carga{group.totalCargas !== 1 ? "s" : ""} · {group.totalVolume.toFixed(2)} m³
+                        {group.pendentes > 0 && ` · ${group.pendentes} pendente${group.pendentes !== 1 ? "s" : ""}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Mini badges de resumo */}
+                    <div className="hidden sm:flex gap-2">
+                      {group.pendentes > 0 && (
+                        <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
+                          {group.pendentes} pendente{group.pendentes !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {group.entregues > 0 && (
+                        <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
+                          {group.entregues} entregue{group.entregues !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                    {isCollapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
+                  </div>
+                </button>
+
+                {/* Cargas do cliente */}
+                {!isCollapsed && (
+                  <div className="bg-gray-50/50 divide-y divide-gray-100">
+                    {/* Subheader com datas */}
+                    {(() => {
+                      let lastDate = "";
+                      return group.cargas.map((cargo) => {
+                        const cargoDate = cargo.date ? new Date(cargo.date).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }) : "Sem data";
+                        const showDateHeader = cargoDate !== lastDate;
+                        lastDate = cargoDate;
+                        return (
+                          <div key={cargo.id}>
+                            {showDateHeader && (
+                              <div className="px-4 py-2 bg-gray-100/80 border-b border-gray-200">
+                                <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                  <Calendar className="h-3 w-3" />
+                                  {cargoDate}
+                                </span>
+                              </div>
+                            )}
+                            <div className="px-3 py-2">
+                              {renderCargoCard(cargo, groupIdx)}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                    
+                    {/* Rodapé do grupo com totais */}
+                    <div className={`px-4 py-3 ${colors.bg} flex flex-wrap gap-4 text-xs`}>
+                      <span className={`font-semibold ${colors.text}`}>
+                        Total: {group.totalCargas} carga{group.totalCargas !== 1 ? "s" : ""}
+                      </span>
+                      <span className={`font-semibold ${colors.text}`}>
+                        Volume: {group.totalVolume.toFixed(2)} m³
+                      </span>
+                      {group.pendentes > 0 && (
+                        <span className="font-semibold text-red-600">
+                          Pendentes: {group.pendentes}
+                        </span>
+                      )}
+                      {group.entregues > 0 && (
+                        <span className="font-semibold text-green-600">
+                          Entregues: {group.entregues}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : viewMode === "tracking" ? (
         /* ===== VIEW: TRACKING TIMELINE ===== */
@@ -502,8 +759,8 @@ export default function CargoControl() {
                         </div>
                         <div className="flex flex-wrap gap-x-3 text-xs text-gray-500 mt-0.5">
                           <span>{cargo.date ? new Date(cargo.date).toLocaleDateString("pt-BR") : "-"}</span>
-                          {cargo.clientName && <span>{cargo.clientName}</span>}
-                          {cargo.destination && <span>→ {cargo.destination}</span>}
+                          {cargo.clientName && <span translate="no">{cargo.clientName}</span>}
+                          {cargo.destination && <span>→ <span translate="no">{cargo.destination}</span></span>}
                           <span>{cargo.volumeM3} m³</span>
                         </div>
                       </div>
@@ -556,67 +813,9 @@ export default function CargoControl() {
           })}
         </div>
       ) : (
-        /* ===== VIEW: LISTA PADRÃO ===== */
+        /* ===== VIEW: LISTA PADRÃO (ordenada por data) ===== */
         <div className="space-y-3">
-          {filtered.map(cargo => {
-            const trackStep = TRACKING_STEPS.find(s => s.key === cargo.trackingStatus);
-            const photos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson); } catch { return []; } })() : [];
-            return (
-              <Card key={cargo.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    {/* Foto principal */}
-                    {photos[0] ? (
-                      <img src={photos[0]} alt="Carga" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 border border-gray-200" />
-                    ) : (
-                      <div className="w-16 h-16 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                        <Package className="h-7 w-7 text-emerald-400" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="font-semibold text-gray-800">
-                          {cargo.vehiclePlate || cargo.vehicleName || "Veículo não informado"}
-                        </span>
-                        <Badge className={`text-xs ${STATUS_COLORS[cargo.status]}`}>{cargo.status}</Badge>
-                        {trackStep && (
-                          <Badge className={`text-xs ${TRACKING_COLORS[cargo.trackingStatus as TrackingStatus]}`}>
-                            {trackStep.icon} {trackStep.label}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                        <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{cargo.date ? new Date(cargo.date).toLocaleDateString("pt-BR") : "-"}</span>
-                        {cargo.driverName && <span className="flex items-center gap-1"><User className="h-3 w-3" />{cargo.driverName}</span>}
-                        {cargo.clientName && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{cargo.clientName}</span>}
-                        {cargo.destination && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{cargo.destination}</span>}
-                        <span className="flex items-center gap-1"><Package className="h-3 w-3" />{cargo.volumeM3} m³{cargo.weightKg ? ` · ${cargo.weightKg} kg` : ""}</span>
-                        {(cargo as any).locationName && <span className="flex items-center gap-1 text-emerald-600"><MapPin className="h-3 w-3" />{(cargo as any).locationName}</span>}
-                      </div>
-                    </div>
-                    {/* Ações */}
-                    <div className="flex flex-col gap-1 flex-shrink-0">
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Ver detalhes" onClick={() => setDetailId(cargo.id)}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" title="Atualizar tracking" onClick={() => { setTrackingCargoId(cargo.id); setTrackingStatus((cargo.trackingStatus as TrackingStatus) || "aguardando"); setTrackingNotes(""); }}>
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Editar" onClick={() => openEdit(cargo)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Gerar PDF" onClick={() => generateCargoPDF(cargo as unknown as Record<string, unknown>)}>
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" title="Excluir" onClick={() => { if (confirm("Remover esta carga?")) deleteMutation.mutate({ id: cargo.id }); }}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+          {filtered.map(cargo => renderCargoCard(cargo, 0))}
         </div>
       )}
 
@@ -766,7 +965,6 @@ export default function CargoControl() {
                   onChange={e => {
                     const id = parseInt(e.target.value);
                     const dest = destinations.find(d => d.id === id) as (typeof destinations[number] & { clientId?: number | null }) | undefined;
-                    // Auto-preencher clientId se o destino tiver cliente vinculado
                     const linkedClientId = dest?.clientId;
                     const linkedClient = linkedClientId ? (clientsList as { id: number; name: string }[]).find(c => c.id === linkedClientId) : null;
                     setForm(f => ({

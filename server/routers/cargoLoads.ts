@@ -115,7 +115,7 @@ export const cargoLoadsRouter = router({
         .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
         .leftJoin(equipment, eq(cargoLoads.vehicleId, equipment.id))
         .leftJoin(gpsLocations, eq(cargoLoads.workLocationId, gpsLocations.id))
-        .orderBy(desc(cargoLoads.createdAt));
+        .orderBy(desc(cargoLoads.date), desc(cargoLoads.createdAt));
 
       let filtered = results;
       if (input?.search) {
@@ -133,6 +133,8 @@ export const cargoLoadsRouter = router({
       }
       if (input?.clientId) filtered = filtered.filter(r => r.clientId === input.clientId);
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);
+      if (input?.dateFrom) filtered = filtered.filter(r => r.date && r.date >= input.dateFrom!);
+      if (input?.dateTo) filtered = filtered.filter(r => r.date && r.date <= input.dateTo!);
 
       return filtered.map(r => ({
         ...r,
@@ -215,7 +217,7 @@ export const cargoLoadsRouter = router({
       // Retornar cargas do cliente
       const loads = await db.select().from(cargoLoads)
         .where(eq(cargoLoads.clientId, input.clientId))
-        .orderBy(desc(cargoLoads.createdAt));
+        .orderBy(desc(cargoLoads.date), desc(cargoLoads.createdAt));
       return loads;
     }),
 

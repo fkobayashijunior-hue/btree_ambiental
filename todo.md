@@ -1395,4 +1395,10 @@
 - [x] Substituir MapView do Google Maps por Leaflet no GpsTrackingPage
 - [x] Manter marcadores, histórico de rota e funcionalidades existentes
 - [x] Build funciona sem erros
+- [x] Push para GitHub
+
+### Melhoria Controle de Cargas - Agrupamento por Cliente (14/04/2026)
+- [x] Ordenar cargas por data (mais recente primeiro)
+- [x] Agrupar/separar cargas por cliente para facilitar visualização e conferência
+- [x] Manter funcionalidade de cadastro manual pelo admin
 - [ ] Push para GitHub
