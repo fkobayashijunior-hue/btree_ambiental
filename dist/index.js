@@ -265,7 +265,8 @@ var init_schema = __esm({
       finalWidthM: varchar("final_width_m", { length: 20 }),
       finalLengthM: varchar("final_length_m", { length: 20 }),
       finalVolumeM3: varchar("final_volume_m3", { length: 20 }),
-      workLocationId: int("work_location_id")
+      workLocationId: int("work_location_id"),
+      weightNetKg: varchar("weight_net_kg", { length: 20 })
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -598,6 +599,7 @@ var init_schema = __esm({
       chainsawId: int("chainsaw_id"),
       registeredBy: int("registered_by"),
       notes: text(),
+      workLocationId: int("work_location_id"),
       eventDate: timestamp("event_date", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
@@ -1965,14 +1967,21 @@ var cargoLoadsRouter = router({
       registeredBy: cargoLoads.registeredBy,
       createdAt: cargoLoads.createdAt,
       updatedAt: cargoLoads.updatedAt,
+      weightOutKg: cargoLoads.weightOutKg,
+      weightInKg: cargoLoads.weightInKg,
+      weightNetKg: cargoLoads.weightNetKg,
       workLocationId: cargoLoads.workLocationId,
+      finalHeightM: cargoLoads.finalHeightM,
+      finalWidthM: cargoLoads.finalWidthM,
+      finalLengthM: cargoLoads.finalLengthM,
+      finalVolumeM3: cargoLoads.finalVolumeM3,
       // Joins
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
       vehicleNameJoined: equipment.name,
       vehiclePlateJoined: equipment.licensePlate,
       locationName: gpsLocations.name
-    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).orderBy(desc3(cargoLoads.createdAt));
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     let filtered = results;
     if (input?.search) {
       const s = input.search.toLowerCase();
@@ -1982,6 +1991,8 @@ var cargoLoadsRouter = router({
     }
     if (input?.clientId) filtered = filtered.filter((r) => r.clientId === input.clientId);
     if (input?.status) filtered = filtered.filter((r) => r.status === input.status);
+    if (input?.dateFrom) filtered = filtered.filter((r) => r.date && r.date >= input.dateFrom);
+    if (input?.dateTo) filtered = filtered.filter((r) => r.date && r.date <= input.dateTo);
     return filtered.map((r) => ({
       ...r,
       clientName: r.clientNameJoined || r.clientName,
@@ -2022,6 +2033,13 @@ var cargoLoadsRouter = router({
       registeredBy: cargoLoads.registeredBy,
       createdAt: cargoLoads.createdAt,
       updatedAt: cargoLoads.updatedAt,
+      weightOutKg: cargoLoads.weightOutKg,
+      weightInKg: cargoLoads.weightInKg,
+      weightNetKg: cargoLoads.weightNetKg,
+      finalHeightM: cargoLoads.finalHeightM,
+      finalWidthM: cargoLoads.finalWidthM,
+      finalLengthM: cargoLoads.finalLengthM,
+      finalVolumeM3: cargoLoads.finalVolumeM3,
       workLocationId: cargoLoads.workLocationId,
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
@@ -2045,7 +2063,7 @@ var cargoLoadsRouter = router({
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
     const client = await db.select().from(clients).where(eq5(clients.id, input.clientId)).limit(1);
     if (!client.length) throw new TRPCError4({ code: "NOT_FOUND" });
-    const loads = await db.select().from(cargoLoads).where(eq5(cargoLoads.clientId, input.clientId)).orderBy(desc3(cargoLoads.createdAt));
+    const loads = await db.select().from(cargoLoads).where(eq5(cargoLoads.clientId, input.clientId)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     return loads;
   }),
   uploadPhoto: protectedProcedure.input(z5.object({
@@ -2087,6 +2105,7 @@ var cargoLoadsRouter = router({
     lengthM: z5.string(),
     volumeM3: z5.string(),
     weightKg: z5.string().optional(),
+    weightNetKg: z5.string().optional(),
     woodType: z5.string().optional(),
     destination: z5.string().optional(),
     destinationId: z5.number().optional(),
@@ -2122,6 +2141,7 @@ var cargoLoadsRouter = router({
     lengthM: z5.string().optional(),
     volumeM3: z5.string().optional(),
     weightKg: z5.string().optional(),
+    weightNetKg: z5.string().optional(),
     woodType: z5.string().optional(),
     destination: z5.string().optional(),
     destinationId: z5.number().optional(),
@@ -2133,6 +2153,8 @@ var cargoLoadsRouter = router({
     status: z5.enum(["pendente", "entregue", "cancelado"]).optional(),
     trackingStatus: z5.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).optional(),
     trackingNotes: z5.string().optional(),
+    weightOutKg: z5.string().optional(),
+    weightInKg: z5.string().optional(),
     workLocationId: z5.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -2351,6 +2373,7 @@ var cargoLoadsRouter = router({
     notes: z5.string().optional(),
     // Campos de peso (pesagem saída e chegada)
     weightKg: z5.string().optional(),
+    weightNetKg: z5.string().optional(),
     // Campos de metragem final (ao finalizar)
     finalHeightM: z5.string().optional(),
     finalWidthM: z5.string().optional(),
@@ -2371,6 +2394,9 @@ var cargoLoadsRouter = router({
     }
     if (input.stage === "pesagem_chegada" && input.weightKg) {
       updateData.weightInKg = input.weightKg;
+    }
+    if (input.stage === "pesagem_chegada" && input.weightNetKg) {
+      updateData.weightNetKg = input.weightNetKg;
     }
     if (input.stage === "finalizado") {
       updateData.status = "entregue";
@@ -3819,7 +3845,8 @@ var attendanceRouter = router({
         latitude: collaboratorAttendance.latitude,
         longitude: collaboratorAttendance.longitude,
         locationName: collaboratorAttendance.locationName,
-        workLocationId: collaboratorAttendance.workLocationId
+        workLocationId: collaboratorAttendance.workLocationId,
+        collaboratorPixKey: collaborators.pixKey
       }).from(collaboratorAttendance).innerJoin(collaborators, eq14(collaboratorAttendance.collaboratorId, collaborators.id)).orderBy(desc12(collaboratorAttendance.date));
       let filtered = records;
       if (input?.collaboratorId) {
@@ -3861,6 +3888,8 @@ var attendanceRouter = router({
       }
       return filtered.map((r) => ({
         ...r,
+        // Usar PIX do cadastro do colaborador como fallback quando o registro de presença não tem
+        pixKey: r.pixKey || r.collaboratorPixKey || null,
         registeredByName: r.registeredBy ? userMap[r.registeredBy] || null : null
       }));
     } catch (err) {
@@ -3891,6 +3920,16 @@ var attendanceRouter = router({
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [collaborator] = await db.select({ name: collaborators.name }).from(collaborators).where(eq14(collaborators.id, input.collaboratorId));
     const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
+    let resolvedWorkLocationId = input.workLocationId || null;
+    let resolvedLocationName = input.locationName || null;
+    if (resolvedLocationName && !resolvedWorkLocationId) {
+      const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq14(gpsLocations.name, resolvedLocationName));
+      if (loc) resolvedWorkLocationId = loc.id;
+    }
+    if (resolvedWorkLocationId && !resolvedLocationName) {
+      const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq14(gpsLocations.id, resolvedWorkLocationId));
+      if (loc) resolvedLocationName = loc.name;
+    }
     await db.insert(collaboratorAttendance).values({
       collaboratorId: input.collaboratorId,
       date: (/* @__PURE__ */ new Date(input.date + "T12:00:00")).toISOString().slice(0, 19).replace("T", " "),
@@ -3902,8 +3941,8 @@ var attendanceRouter = router({
       registeredBy: ctx.user.id,
       latitude: input.latitude || null,
       longitude: input.longitude || null,
-      locationName: input.locationName || null,
-      workLocationId: input.workLocationId || null
+      locationName: resolvedLocationName,
+      workLocationId: resolvedWorkLocationId
     });
     const dateFormatted = (/* @__PURE__ */ new Date(input.date + "T12:00:00")).toLocaleDateString("pt-BR");
     const activityInfo = input.activity ? ` (${input.activity})` : "";
@@ -4010,9 +4049,19 @@ Acesse o sistema para realizar os pagamentos.`
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    let wlId = input.workLocationId;
+    let wlName = input.locationName;
+    if (wlName && !wlId) {
+      const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq14(gpsLocations.name, wlName));
+      if (loc) wlId = loc.id;
+    }
+    if (wlId && !wlName) {
+      const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq14(gpsLocations.id, wlId));
+      if (loc) wlName = loc.name;
+    }
     await db.update(collaboratorAttendance).set({
-      workLocationId: input.workLocationId,
-      locationName: input.locationName
+      workLocationId: wlId,
+      locationName: wlName
     }).where(eq14(collaboratorAttendance.id, input.id));
     return { success: true };
   }),
@@ -4024,9 +4073,19 @@ Acesse o sistema para realizar os pagamentos.`
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    let wlId = input.workLocationId;
+    let wlName = input.locationName;
+    if (wlName && !wlId) {
+      const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq14(gpsLocations.name, wlName));
+      if (loc) wlId = loc.id;
+    }
+    if (wlId && !wlName) {
+      const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq14(gpsLocations.id, wlId));
+      if (loc) wlName = loc.name;
+    }
     await db.update(collaboratorAttendance).set({
-      workLocationId: input.workLocationId,
-      locationName: input.locationName
+      workLocationId: wlId,
+      locationName: wlName
     }).where(inArray3(collaboratorAttendance.id, input.ids));
     return { success: true, count: input.ids.length };
   })
@@ -4394,23 +4453,33 @@ init_schema();
 import { TRPCError as TRPCError12 } from "@trpc/server";
 import { eq as eq16 } from "drizzle-orm";
 var SYSTEM_MODULES = [
+  // Maquinário
   { slug: "equipamentos", label: "Equipamentos", group: "Maquin\xE1rio" },
   { slug: "pecas", label: "Pe\xE7as / Estoque", group: "Maquin\xE1rio" },
   { slug: "manutencao", label: "Manuten\xE7\xE3o", group: "Maquin\xE1rio" },
   { slug: "horas-maquina", label: "Horas de M\xE1quina", group: "Maquin\xE1rio" },
+  { slug: "motosserras", label: "Motosserras", group: "Maquin\xE1rio" },
+  // Pessoas
   { slug: "colaboradores", label: "Colaboradores", group: "Pessoas" },
   { slug: "presencas", label: "Presen\xE7as", group: "Pessoas" },
-  { slug: "reflorestamento", label: "Reflorestamento", group: "Opera\xE7\xF5es" },
+  // Operações
   { slug: "cargas", label: "Controle de Cargas", group: "Opera\xE7\xF5es" },
+  { slug: "minha-carga", label: "Minha Carga", group: "Opera\xE7\xF5es" },
+  { slug: "abastecimento", label: "Abastecimento", group: "Opera\xE7\xF5es" },
+  { slug: "gastos-extras", label: "Gastos Extras", group: "Opera\xE7\xF5es" },
+  { slug: "reflorestamento", label: "Reflorestamento", group: "Opera\xE7\xF5es" },
+  { slug: "replantios", label: "Replantios", group: "Opera\xE7\xF5es" },
+  { slug: "gps", label: "Rastreamento GPS", group: "Opera\xE7\xF5es" },
+  { slug: "locais-gps", label: "Locais GPS", group: "Opera\xE7\xF5es" },
+  // Comercial
   { slug: "clientes", label: "Clientes", group: "Comercial" },
   { slug: "portal-cliente", label: "Portal do Cliente", group: "Comercial" },
-  { slug: "gps", label: "Rastreamento GPS", group: "Opera\xE7\xF5es" },
-  { slug: "motosserras", label: "Motosserras", group: "Maquin\xE1rio" },
-  { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
-  { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" },
+  { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" },
+  // Administrativo (valores financeiros)
   { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Administrativo" },
-  { slug: "replantios", label: "Replantios", group: "Opera\xE7\xF5es" },
-  { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" }
+  { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
+  { slug: "dashboard-exec", label: "Dashboard Executivo", group: "Administrativo" },
+  { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" }
 ];
 var PROFILES = {
   admin: {
@@ -4423,19 +4492,23 @@ var PROFILES = {
   },
   operador: {
     label: "Operador",
-    modules: ["equipamentos", "horas-maquina"]
+    modules: ["equipamentos", "horas-maquina", "presencas"]
   },
   motorista: {
     label: "Motorista",
-    modules: ["equipamentos", "cargas"]
+    modules: ["equipamentos", "minha-carga", "abastecimento"]
   },
   motosserrista: {
     label: "Motosserrista",
     modules: ["equipamentos", "manutencao", "motosserras"]
   },
   lider: {
-    label: "L\xEDder",
-    modules: ["presencas", "colaboradores"]
+    label: "L\xEDder de Equipe",
+    modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"]
+  },
+  equipe: {
+    label: "Equipe de Campo",
+    modules: ["presencas", "equipamentos", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"]
   },
   custom: {
     label: "Personalizado",
@@ -4647,7 +4720,8 @@ var fuelRouter = router({
     volumeLiters: z17.string(),
     costPerLiter: z17.string().optional(),
     totalCost: z17.string().optional(),
-    notes: z17.string().optional()
+    notes: z17.string().optional(),
+    workLocationId: z17.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -4684,9 +4758,10 @@ var fuelRouter = router({
       volumeLiters: input.volumeLiters,
       costPerLiter: input.costPerLiter,
       totalCost: input.totalCost,
-      oil2tMl,
+      oil2TMl: oil2tMl,
       registeredBy: ctx.user.id,
-      notes: input.notes
+      notes: input.notes,
+      workLocationId: input.workLocationId
     });
     return { success: true, oil2tMl };
   }),
@@ -4695,7 +4770,8 @@ var fuelRouter = router({
     containerId: z17.number(),
     volumeLiters: z17.string(),
     chainsawId: z17.number().optional(),
-    notes: z17.string().optional()
+    notes: z17.string().optional(),
+    workLocationId: z17.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -4712,7 +4788,8 @@ var fuelRouter = router({
       volumeLiters: input.volumeLiters,
       chainsawId: input.chainsawId,
       registeredBy: ctx.user.id,
-      notes: input.notes
+      notes: input.notes,
+      workLocationId: input.workLocationId
     });
     return { success: true };
   }),
@@ -4721,7 +4798,8 @@ var fuelRouter = router({
     sourceContainerId: z17.number(),
     targetContainerId: z17.number(),
     volumeLiters: z17.string(),
-    notes: z17.string().optional()
+    notes: z17.string().optional(),
+    workLocationId: z17.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -4740,7 +4818,8 @@ var fuelRouter = router({
       volumeLiters: input.volumeLiters,
       sourceContainerId: input.sourceContainerId,
       registeredBy: ctx.user.id,
-      notes: input.notes
+      notes: input.notes,
+      workLocationId: input.workLocationId
     });
     return { success: true };
   }),
@@ -5068,7 +5147,7 @@ var chainsawOSRouter = router({
     await db.update(chainsawServiceOrders).set({
       status: "concluida",
       serviceDescription: input.serviceDescription,
-      completedAt: /* @__PURE__ */ new Date(),
+      completedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "),
       mechanicId: ctx.user.id
     }).where(eq17(chainsawServiceOrders.id, input.id));
     await db.update(chainsaws).set({ status: "ativa" }).where(eq17(chainsaws.id, os.chainsawId));
@@ -5906,13 +5985,19 @@ function formatCurrency(value) {
 function formatDate(d) {
   return new Date(d).toLocaleDateString("pt-BR");
 }
+var BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+var KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+var BTREE_SITE = "btreeambiental.com";
+var BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 function generatePdfHtml(data, locationName, periodo, sections) {
   const styles = `
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; font-size: 11px; }
       .page { padding: 20px 30px; }
-      .header { background: linear-gradient(135deg, #0d4f2e, #1a7a47); color: white; padding: 20px 25px; border-radius: 8px; margin-bottom: 20px; }
+      .header { background: linear-gradient(135deg, #0d4f2e, #1a7a47); color: white; padding: 20px 25px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 18px; }
+      .header img { height: 50px; }
+      .header-content { flex: 1; }
       .header h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
       .header p { font-size: 12px; opacity: 0.9; }
       .header .meta { display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; opacity: 0.85; }
@@ -5940,18 +6025,28 @@ function generatePdfHtml(data, locationName, periodo, sections) {
       .badge-diarista { background: #fef3c7; color: #d97706; }
       .badge-pago { background: #d1fae5; color: #059669; }
       .badge-pendente { background: #fee2e2; color: #dc2626; }
-      .footer { text-align: center; font-size: 9px; color: #999; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e9ecef; }
-      @media print { .page { padding: 10px; } }
+      .footer { margin-top: 24px; padding: 14px 24px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+      .footer-left { display: flex; align-items: center; gap: 10px; }
+      .footer-left img.kobayashi { height: 28px; }
+      .footer-text { font-size: 10px; color: #555; }
+      .footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+      .footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+      .footer-right img { width: 60px; height: 60px; }
+      .footer-right span { font-size: 9px; color: #555; }
+      @media print { .page { padding: 10px; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     </style>
   `;
   let html = `<!DOCTYPE html><html><head><meta charset="utf-8">${styles}</head><body><div class="page">`;
   html += `
     <div class="header">
-      <h1>BTREE Ambiental \u2014 Relat\xF3rio</h1>
-      <p>${locationName}</p>
-      <div class="meta">
-        <span>Per\xEDodo: ${periodo}</span>
-        <span>Gerado em: ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")} ${(/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR")}</span>
+      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+      <div class="header-content">
+        <h1>BTREE Ambiental \u2014 Relat\xF3rio de Opera\xE7\xE3o</h1>
+        <p>${locationName}</p>
+        <div class="meta">
+          <span>Per\xEDodo: ${periodo}</span>
+          <span>Gerado em: ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")} ${(/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR")}</span>
+        </div>
       </div>
     </div>
   `;
@@ -6141,8 +6236,19 @@ function generatePdfHtml(data, locationName, periodo, sections) {
   }
   html += `
     <div class="footer">
-      BTREE Ambiental \u2014 Sistema de Gest\xE3o | Relat\xF3rio gerado automaticamente
+      <div class="footer-left">
+        <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+        <div class="footer-text">
+          Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+          <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
+        </div>
+      </div>
+      <div class="footer-right">
+        <img src="${BTREE_QR}" alt="QR Code" />
+        <span>Acesse nosso site</span>
+      </div>
     </div>
+    <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
   </div></body></html>`;
   return html;
 }
@@ -6186,7 +6292,7 @@ var reportPdfRouter = router({
         id: fuelRecords.id,
         date: fuelRecords.date,
         equipmentName: equipment.name,
-        equipmentPlate: equipment.plate,
+        equipmentPlate: equipment.licensePlate,
         fuelType: fuelRecords.fuelType,
         liters: fuelRecords.liters,
         totalValue: fuelRecords.totalValue,

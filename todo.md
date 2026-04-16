@@ -1412,5 +1412,5 @@
 - [x] Adicionar botão voltar no Portal do Cliente
 - [x] Adicionar campo peso bruto (pesada de saída) na carga
 - [x] Adicionar campo peso líquido (final da carga) na carga
-- [ ] Push para GitHub
+- [x] Push para GitHub
 - [ ] Enviar scripts SQL ao usuário
