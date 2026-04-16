@@ -1401,4 +1401,16 @@
 - [x] Ordenar cargas por data (mais recente primeiro)
 - [x] Agrupar/separar cargas por cliente para facilitar visualização e conferência
 - [x] Manter funcionalidade de cadastro manual pelo admin
+- [x] Push para GitHub
+
+### Correções Minha Carga + Integração + Permissões (16/04/2026)
+- [x] Corrigir gravação do Minha Carga (integração já funcional via create mutation)
+- [x] Integrar Minha Carga com Controle de Cargas (registros aparecem lá)
+- [x] Integrar Minha Carga com Portal do Cliente (registros aparecem para clientes)
+- [x] Adicionar Minha Carga no Controle de Acesso (permissões configuráveis)
+- [x] Ocultar painel financeiro para colaboradores/motoristas
+- [x] Adicionar botão voltar no Portal do Cliente
+- [x] Adicionar campo peso bruto (pesada de saída) na carga
+- [x] Adicionar campo peso líquido (final da carga) na carga
 - [ ] Push para GitHub
+- [ ] Enviar scripts SQL ao usuário

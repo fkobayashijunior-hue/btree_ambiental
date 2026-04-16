@@ -283,13 +283,23 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               <p className="text-green-300 text-xs mt-0.5">Portal do Cliente</p>
             </div>
           </div>
-          <button
-            onClick={onLogout}
-            className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-sm"
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-sm"
+              title="Voltar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+              Voltar
+            </button>
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-sm"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
+          </div>
         </div>
       </header>
 
@@ -680,14 +690,20 @@ function CargoCard({ load, formatDate, statusColor, clientId }: { load: CargoLoa
             )}
             {(load as any).weightOutKg && (
               <div className="bg-white rounded-lg p-2">
-                <p className="text-gray-400">Peso Saída</p>
+                <p className="text-gray-400">Peso Bruto Saída</p>
                 <p className="font-medium text-gray-700">{(load as any).weightOutKg} kg</p>
               </div>
             )}
             {(load as any).weightInKg && (
               <div className="bg-white rounded-lg p-2">
-                <p className="text-gray-400">Peso Chegada</p>
+                <p className="text-gray-400">Peso Bruto Chegada</p>
                 <p className="font-medium text-gray-700">{(load as any).weightInKg} kg</p>
+              </div>
+            )}
+            {(load as any).weightNetKg && (
+              <div className="bg-white rounded-lg p-2">
+                <p className="text-gray-400">Peso Líquido</p>
+                <p className="font-medium text-emerald-700 font-bold">{(load as any).weightNetKg} kg</p>
               </div>
             )}
             {(load as any).finalHeightM && (

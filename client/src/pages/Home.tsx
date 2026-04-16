@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -79,7 +80,7 @@ export default function Home() {
   };
 
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const { hasAccess, isAdmin } = usePermissions();
 
   // Módulos de acesso rápido
   const quickModules = [
@@ -115,7 +116,7 @@ export default function Home() {
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido</p>
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-          {quickModules.map((mod) => (
+          {quickModules.filter(mod => mod.slug === null ? true : hasAccess(mod.slug)).map((mod) => (
             <Link key={mod.path} href={mod.path}>
               <div className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
                 <div className={`w-12 h-12 rounded-xl ${mod.color} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
@@ -128,8 +129,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Seletor de Período */}
-      <div className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 w-fit">
+      {/* Seletor de Período (somente admin) */}
+      {isAdmin && <div className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 w-fit">
         <button
           onClick={goToPrevMonth}
           className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
@@ -154,9 +155,10 @@ export default function Home() {
         >
           <ChevronRight className="h-4 w-4" />
         </button>
-      </div>
+      </div>}
 
-      {/* Stats Grid — Linha 1: Pessoas e Clientes */}
+      {/* Stats Grid — Linha 1: Pessoas e Clientes (somente admin) */}
+      {isAdmin && (
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pessoas</p>
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
@@ -194,8 +196,10 @@ export default function Home() {
           />
         </div>
       </div>
+      )}
 
-      {/* Stats Grid — Linha 2: Operações */}
+      {/* Stats Grid — Linha 2: Operações (somente admin) */}
+      {isAdmin && (
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Operações — {periodLabel}</p>
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
@@ -233,9 +237,10 @@ export default function Home() {
           />
         </div>
       </div>
+      )}
 
-      {/* Atividades Recentes + Pedidos Pendentes */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Atividades Recentes + Pedidos Pendentes (somente admin) */}
+      {isAdmin && <div className="grid gap-4 md:grid-cols-2">
         {/* Últimas Cargas */}
         <Card>
           <CardHeader>
@@ -307,10 +312,10 @@ export default function Home() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </div>}
 
-      {/* Alertas */}
-      {(stats?.lowStockParts ?? 0) > 0 || (stats?.pendingOrders ?? 0) > 0 ? (
+      {/* Alertas (somente admin) */}
+      {isAdmin && ((stats?.lowStockParts ?? 0) > 0 || (stats?.pendingOrders ?? 0) > 0) ? (
         <Card className="border-orange-200 bg-orange-50">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-orange-800 flex items-center gap-2">

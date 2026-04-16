@@ -82,6 +82,7 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 	finalLengthM: varchar("final_length_m", { length: 20 }),
 	finalVolumeM3: varchar("final_volume_m3", { length: 20 }),
 	workLocationId: int("work_location_id"),
+	weightNetKg: varchar("weight_net_kg", { length: 20 }),
 });
 
 export const cargoShipments = mysqlTable("cargo_shipments", {

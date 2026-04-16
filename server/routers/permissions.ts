@@ -18,6 +18,7 @@ export const SYSTEM_MODULES = [
   { slug: "presencas",       label: "Presenças",             group: "Pessoas" },
   // Operações
   { slug: "cargas",          label: "Controle de Cargas",    group: "Operações" },
+  { slug: "minha-carga",     label: "Minha Carga",           group: "Operações" },
   { slug: "abastecimento",   label: "Abastecimento",         group: "Operações" },
   { slug: "gastos-extras",   label: "Gastos Extras",         group: "Operações" },
   { slug: "reflorestamento", label: "Reflorestamento",       group: "Operações" },
@@ -58,7 +59,7 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
   },
   motorista: {
     label: "Motorista",
-    modules: ["equipamentos", "cargas", "abastecimento"],
+    modules: ["equipamentos", "minha-carga", "abastecimento"],
   },
   motosserrista: {
     label: "Motosserrista",
@@ -66,11 +67,11 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
   },
   lider: {
     label: "Líder de Equipe",
-    modules: ["presencas", "colaboradores", "equipamentos", "cargas", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"],
+    modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"],
   },
   equipe: {
     label: "Equipe de Campo",
-    modules: ["presencas", "equipamentos", "cargas", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"],
+    modules: ["presencas", "equipamentos", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"],
   },
   custom: {
     label: "Personalizado",

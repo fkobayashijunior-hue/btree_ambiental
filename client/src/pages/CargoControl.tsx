@@ -165,6 +165,9 @@ function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE 
   <div class="grid">
     <div class="field"><div class="field-label">Tipo de Madeira</div><div class="field-value">${cargo.woodType || "-"}</div></div>
     <div class="field"><div class="field-label">Peso (kg)</div><div class="field-value">${cargo.weightKg ? cargo.weightKg + " kg" : "-"}</div></div>
+    <div class="field"><div class="field-label">Peso Bruto Saída</div><div class="field-value">${(cargo as any).weightOutKg ? (cargo as any).weightOutKg + " kg" : "-"}</div></div>
+    <div class="field"><div class="field-label">Peso Bruto Chegada</div><div class="field-value">${(cargo as any).weightInKg ? (cargo as any).weightInKg + " kg" : "-"}</div></div>
+    <div class="field"><div class="field-label">Peso Líquido</div><div class="field-value">${(cargo as any).weightNetKg ? (cargo as any).weightNetKg + " kg" : "-"}</div></div>
     <div class="field"><div class="field-label">Altura (m)</div><div class="field-value">${cargo.heightM || "-"}</div></div>
     <div class="field"><div class="field-label">Largura (m)</div><div class="field-value">${cargo.widthM || "-"}</div></div>
     <div class="field"><div class="field-label">Comprimento (m)</div><div class="field-value">${cargo.lengthM || "-"}</div></div>
@@ -259,6 +262,9 @@ export default function CargoControl() {
     driverName: "",
     heightM: "", widthM: "", lengthM: "",
     weightKg: "",
+    weightOutKg: "",
+    weightInKg: "",
+    weightNetKg: "",
     woodType: "",
     destinationId: 0,
     destination: "",
@@ -330,7 +336,7 @@ export default function CargoControl() {
   const volume = useMemo(() => calcVolume(form.heightM, form.widthM, form.lengthM), [form.heightM, form.widthM, form.lengthM]);
 
   const resetForm = () => {
-    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: 0, clientName: "", notes: "", status: "pendente", workLocationId: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: 0, clientName: "", notes: "", status: "pendente", workLocationId: "" });
     setPendingPhotos([]);
   };
 
@@ -346,6 +352,9 @@ export default function CargoControl() {
       widthM: cargo.widthM || "",
       lengthM: cargo.lengthM || "",
       weightKg: cargo.weightKg || "",
+      weightOutKg: (cargo as any).weightOutKg || "",
+      weightInKg: (cargo as any).weightInKg || "",
+      weightNetKg: (cargo as any).weightNetKg || "",
       woodType: cargo.woodType || "",
       destinationId: cargo.destinationId || 0,
       destination: cargo.destination || "",
@@ -368,6 +377,9 @@ export default function CargoControl() {
       destinationId: form.destinationId || undefined,
       clientId: form.clientId || undefined,
       volumeM3: volume || "0",
+      weightOutKg: form.weightOutKg || undefined,
+      weightInKg: form.weightInKg || undefined,
+      weightNetKg: form.weightNetKg || undefined,
       photosJson: pendingPhotos.length ? JSON.stringify(pendingPhotos) : undefined,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
     };
@@ -921,6 +933,20 @@ export default function CargoControl() {
                 <Label className="flex items-center gap-1"><Weight className="h-3.5 w-3.5" /> Peso (kg)</Label>
                 <Input value={form.weightKg} onChange={e => setForm(f => ({ ...f, weightKg: e.target.value }))} placeholder="ex: 15000" type="number" />
               </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-xs">Peso Bruto Saída (kg)</Label>
+                  <Input value={form.weightOutKg} onChange={e => setForm(f => ({ ...f, weightOutKg: e.target.value }))} placeholder="ex: 32000" type="number" />
+                </div>
+                <div>
+                  <Label className="text-xs">Peso Bruto Chegada (kg)</Label>
+                  <Input value={form.weightInKg} onChange={e => setForm(f => ({ ...f, weightInKg: e.target.value }))} placeholder="ex: 32000" type="number" />
+                </div>
+                <div>
+                  <Label className="text-xs">Peso Líquido (kg)</Label>
+                  <Input value={form.weightNetKg} onChange={e => setForm(f => ({ ...f, weightNetKg: e.target.value }))} placeholder="ex: 28000" type="number" />
+                </div>
+              </div>
               <div>
                 <Label>Nº Nota Fiscal</Label>
                 <Input value={form.invoiceNumber} onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="ex: NF-001234" />
@@ -1090,8 +1116,9 @@ export default function CargoControl() {
                   ["Peso Previsto", detailCargo.weightKg ? `${detailCargo.weightKg} kg` : "-"],
                   ["Nota Fiscal", detailCargo.invoiceNumber || "-"],
                   ["Status", detailCargo.status],
-                  ["Peso Saída (kg)", (detailCargo as any).weightOutKg ? `${(detailCargo as any).weightOutKg} kg` : "-"],
-                  ["Peso Chegada (kg)", (detailCargo as any).weightInKg ? `${(detailCargo as any).weightInKg} kg` : "-"],
+                  ["Peso Bruto Saída (kg)", (detailCargo as any).weightOutKg ? `${(detailCargo as any).weightOutKg} kg` : "-"],
+                  ["Peso Bruto Chegada (kg)", (detailCargo as any).weightInKg ? `${(detailCargo as any).weightInKg} kg` : "-"],
+                  ["Peso Líquido (kg)", (detailCargo as any).weightNetKg ? `${(detailCargo as any).weightNetKg} kg` : "-"],
                   ["Metragem Final", (detailCargo as any).finalHeightM ? `${(detailCargo as any).finalHeightM} x ${(detailCargo as any).finalWidthM} x ${(detailCargo as any).finalLengthM} m = ${calcVolume((detailCargo as any).finalHeightM || "0", (detailCargo as any).finalWidthM || "0", (detailCargo as any).finalLengthM || "0")} m³` : "-"],
                 ].map(([label, value]) => (
                   <div key={label} className="bg-gray-50 rounded-lg p-2">

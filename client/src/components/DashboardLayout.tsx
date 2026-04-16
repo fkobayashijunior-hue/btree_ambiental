@@ -48,7 +48,7 @@ const menuItems = [
   { icon: DollarSign, label: "Pagamentos Clientes", path: "/pagamentos-clientes", slug: "pagamentos-clientes" },
   { icon: Wallet, label: "Financeiro", path: "/financeiro", slug: "financeiro" },
   { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: "locais-gps" },
-  { icon: Truck, label: "Minha Carga", path: "/motorista", slug: "cargas" },
+  { icon: Truck, label: "Minha Carga", path: "/motorista", slug: "minha-carga" },
   { icon: BarChart3, label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec" },
 ];
 
@@ -132,7 +132,7 @@ function DashboardLayoutContent({
 
   // Redirecionar motorista para /motorista automaticamente ao logar
   useEffect(() => {
-    if (!didRedirect && profile === 'motorista' && location === '/app') {
+    if (!didRedirect && (profile === 'motorista') && location === '/app' && hasAccess('minha-carga')) {
       setDidRedirect(true);
       setLocation('/motorista');
     }

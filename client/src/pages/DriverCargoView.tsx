@@ -71,6 +71,7 @@ export default function DriverCargoView() {
   const [trackingPhotoStage, setTrackingPhotoStage] = useState<TrackingStatus | null>(null);
   const [trackingNotes, setTrackingNotes] = useState("");
   const [weightKg, setWeightKg] = useState("");
+  const [weightNetKg, setWeightNetKg] = useState("");
   const [finalHeight, setFinalHeight] = useState("");
   const [finalWidth, setFinalWidth] = useState("");
   const [finalLength, setFinalLength] = useState("");
@@ -131,6 +132,7 @@ export default function DriverCargoView() {
       setPhotoPreview(null);
       setTrackingNotes("");
       setWeightKg("");
+      setWeightNetKg("");
       setFinalHeight("");
       setFinalWidth("");
       setFinalLength("");
@@ -204,6 +206,10 @@ export default function DriverCargoView() {
     // Peso nas etapas de pesagem
     if ((trackingPhotoStage === 'pesagem_saida' || trackingPhotoStage === 'pesagem_chegada') && weightKg) {
       mutateData.weightKg = weightKg;
+    }
+    // Peso líquido na pesagem de chegada
+    if (trackingPhotoStage === 'pesagem_chegada' && weightNetKg) {
+      mutateData.weightNetKg = weightNetKg;
     }
     // Metragem final ao finalizar
     if (trackingPhotoStage === 'finalizado') {
@@ -548,10 +554,10 @@ export default function DriverCargoView() {
                 <img src={photoPreview} alt="Preview" className="w-full rounded-xl border border-gray-200" />
               )}
 
-              {/* Campo de peso para etapas de pesagem */}
-              {(trackingPhotoStage === 'pesagem_saida' || trackingPhotoStage === 'pesagem_chegada') && (
+              {/* Campo de peso para pesagem de saída - apenas Peso Bruto */}
+              {trackingPhotoStage === 'pesagem_saida' && (
                 <div>
-                  <Label className="text-sm font-medium">Peso (kg)</Label>
+                  <Label className="text-sm font-medium">Peso Bruto (kg)</Label>
                   <Input
                     value={weightKg}
                     onChange={e => setWeightKg(e.target.value)}
@@ -559,6 +565,33 @@ export default function DriverCargoView() {
                     inputMode="decimal"
                     placeholder="Ex: 32000"
                   />
+                </div>
+              )}
+
+              {/* Campos de peso para pesagem de chegada - Peso Bruto + Peso Líquido */}
+              {trackingPhotoStage === 'pesagem_chegada' && (
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium">Peso Bruto (kg)</Label>
+                    <Input
+                      value={weightKg}
+                      onChange={e => setWeightKg(e.target.value)}
+                      className="h-12 text-center text-lg font-bold rounded-xl mt-1"
+                      inputMode="decimal"
+                      placeholder="Ex: 32000"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Peso Líquido (kg)</Label>
+                    <Input
+                      value={weightNetKg}
+                      onChange={e => setWeightNetKg(e.target.value)}
+                      className="h-12 text-center text-lg font-bold rounded-xl mt-1"
+                      inputMode="decimal"
+                      placeholder="Ex: 28000"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Peso líquido = Peso Bruto - Tara</p>
+                  </div>
                 </div>
               )}
 

@@ -1,0 +1,1 @@
+ALTER TABLE `cargo_loads` ADD `weight_net_kg` varchar(20);

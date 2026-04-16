@@ -169,6 +169,13 @@
       "when": 1775932287647,
       "tag": "0023_complex_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1776337718264,
+      "tag": "0024_glorious_wrecker",
+      "breakpoints": true
     }
   ]
 }

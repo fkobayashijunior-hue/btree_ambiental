@@ -102,7 +102,14 @@ export const cargoLoadsRouter = router({
           registeredBy: cargoLoads.registeredBy,
           createdAt: cargoLoads.createdAt,
           updatedAt: cargoLoads.updatedAt,
+          weightOutKg: cargoLoads.weightOutKg,
+          weightInKg: cargoLoads.weightInKg,
+          weightNetKg: cargoLoads.weightNetKg,
           workLocationId: cargoLoads.workLocationId,
+          finalHeightM: cargoLoads.finalHeightM,
+          finalWidthM: cargoLoads.finalWidthM,
+          finalLengthM: cargoLoads.finalLengthM,
+          finalVolumeM3: cargoLoads.finalVolumeM3,
           // Joins
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
@@ -180,6 +187,13 @@ export const cargoLoadsRouter = router({
           registeredBy: cargoLoads.registeredBy,
           createdAt: cargoLoads.createdAt,
           updatedAt: cargoLoads.updatedAt,
+          weightOutKg: cargoLoads.weightOutKg,
+          weightInKg: cargoLoads.weightInKg,
+          weightNetKg: cargoLoads.weightNetKg,
+          finalHeightM: cargoLoads.finalHeightM,
+          finalWidthM: cargoLoads.finalWidthM,
+          finalLengthM: cargoLoads.finalLengthM,
+          finalVolumeM3: cargoLoads.finalVolumeM3,
           workLocationId: cargoLoads.workLocationId,
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
@@ -267,6 +281,7 @@ export const cargoLoadsRouter = router({
       lengthM: z.string(),
       volumeM3: z.string(),
       weightKg: z.string().optional(),
+      weightNetKg: z.string().optional(),
       woodType: z.string().optional(),
       destination: z.string().optional(),
       destinationId: z.number().optional(),
@@ -305,6 +320,7 @@ export const cargoLoadsRouter = router({
       lengthM: z.string().optional(),
       volumeM3: z.string().optional(),
       weightKg: z.string().optional(),
+      weightNetKg: z.string().optional(),
       woodType: z.string().optional(),
       destination: z.string().optional(),
       destinationId: z.number().optional(),
@@ -316,6 +332,8 @@ export const cargoLoadsRouter = router({
       status: z.enum(["pendente", "entregue", "cancelado"]).optional(),
       trackingStatus: z.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).optional(),
       trackingNotes: z.string().optional(),
+      weightOutKg: z.string().optional(),
+      weightInKg: z.string().optional(),
       workLocationId: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -599,6 +617,7 @@ export const cargoLoadsRouter = router({
       notes: z.string().optional(),
       // Campos de peso (pesagem saída e chegada)
       weightKg: z.string().optional(),
+      weightNetKg: z.string().optional(),
       // Campos de metragem final (ao finalizar)
       finalHeightM: z.string().optional(),
       finalWidthM: z.string().optional(),
@@ -625,6 +644,10 @@ export const cargoLoadsRouter = router({
       // Peso na pesagem de chegada
       if (input.stage === 'pesagem_chegada' && input.weightKg) {
         updateData.weightInKg = input.weightKg;
+      }
+      // Peso líquido na pesagem de chegada
+      if (input.stage === 'pesagem_chegada' && input.weightNetKg) {
+        updateData.weightNetKg = input.weightNetKg;
       }
       // Metragem final ao finalizar
       if (input.stage === 'finalizado') {
