@@ -1414,3 +1414,13 @@
 - [x] Adicionar campo peso líquido (final da carga) na carga
 - [x] Push para GitHub
 - [ ] Enviar scripts SQL ao usuário
+
+### Correções Rastreamento GPS (21/04/2026)
+- [x] Corrigir horas trabalhadas não aparecendo (summary do Traccar com engineHours)
+- [x] Corrigir relatório de viagens vazio (seletor de período com datas)
+- [x] Corrigir histórico de rotas vazio (seletor de período + resumo horas/distância)
+- [x] Corrigir botões/abas encavalados no layout (scroll horizontal + textos responsivos)
+- [x] Melhorar mapa ao vivo com auto-refresh (refetchInterval 10s + indicador visual)
+- [x] Preparar integração manutenção preventiva por horímetro (abastecimento, troca de óleo, engraxamento)
+- [ ] Compilar e push para GitHub
+- [ ] Enviar scripts SQL se necessário

@@ -12,7 +12,8 @@ import { toast } from "sonner";
 import {
   MapPin, Navigation, Clock, Gauge, Wifi, WifiOff,
   RefreshCw, Route, AlertTriangle, Car, Zap, ZapOff, History,
-  Link2, Wrench, Bell, CheckCircle, XCircle, Plus, Trash2, Timer
+  Link2, Wrench, Bell, CheckCircle, XCircle, Plus, Trash2, Timer,
+  Calendar, Search
 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -53,6 +54,7 @@ interface TraccarPosition {
     power?: number;
     odometer?: number;
     totalDistance?: number;
+    hours?: number;
   };
 }
 
@@ -97,6 +99,21 @@ function statusLabel(status: string) {
   if (status === "online") return "Online";
   if (status === "offline") return "Offline";
   return "Desconhecido";
+}
+
+function toLocalDateInput(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateInputToISO(dateStr: string, endOfDay = false): string {
+  const d = new Date(dateStr + "T00:00:00");
+  if (endOfDay) {
+    d.setHours(23, 59, 59, 999);
+  }
+  return d.toISOString();
 }
 
 // Criar ícone de seta para marcador Leaflet
@@ -185,7 +202,6 @@ function LeafletMap({
     const positionMap = new Map<number, TraccarPosition>();
     positions.forEach((p) => positionMap.set(p.deviceId, p));
 
-    // Rastrear IDs de dispositivos ativos para remover marcadores antigos
     const activeDeviceIds = new Set<number>();
 
     devices.forEach((device) => {
@@ -208,7 +224,7 @@ function LeafletMap({
           <span style="color:${color};font-size:12px">&#9679; ${statusLabel(device.status)}</span><br/>
           <hr style="margin:6px 0"/>
           <span style="font-size:12px">&#128663; Velocidade: <strong>${speed} km/h</strong></span><br/>
-          <span style="font-size:12px">&#128273; Igni\u00e7\u00e3o: <strong>${pos.attributes.ignition ? "Ligada" : "Desligada"}</strong></span><br/>
+          <span style="font-size:12px">&#128273; Ignição: <strong>${pos.attributes.ignition ? "Ligada" : "Desligada"}</strong></span><br/>
           <span style="font-size:12px">&#128267; Bateria: <strong>${pos.attributes.batteryLevel ?? "\u2014"}%</strong></span><br/>
           <span style="font-size:12px;color:#888">Atualizado: ${new Date(pos.deviceTime).toLocaleTimeString("pt-BR")}</span>
         </div>
@@ -254,7 +270,6 @@ function LeafletMap({
     const map = mapRef.current;
     if (!map) return;
 
-    // Remover polyline anterior
     if (polylineRef.current) {
       map.removeLayer(polylineRef.current);
       polylineRef.current = null;
@@ -275,13 +290,49 @@ function LeafletMap({
     }).addTo(map);
 
     polylineRef.current = polyline;
-
-    // Ajustar bounds para mostrar toda a rota
     map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
   }, [historyPositions, showHistory]);
 
   return (
     <div ref={mapContainerRef} className={className || "w-full h-full min-h-[400px]"} />
+  );
+}
+
+// ─── Componente de Seletor de Período ────────────────────────────────────────
+
+function DateRangeSelector({
+  fromDate,
+  toDate,
+  onFromChange,
+  onToChange,
+}: {
+  fromDate: string;
+  toDate: string;
+  onFromChange: (v: string) => void;
+  onToChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1.5">
+        <Calendar className="h-4 w-4 text-muted-foreground" />
+        <Label className="text-xs text-muted-foreground whitespace-nowrap">De:</Label>
+        <Input
+          type="date"
+          value={fromDate}
+          onChange={(e) => onFromChange(e.target.value)}
+          className="h-8 w-36 text-xs"
+        />
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Label className="text-xs text-muted-foreground whitespace-nowrap">Até:</Label>
+        <Input
+          type="date"
+          value={toDate}
+          onChange={(e) => onToChange(e.target.value)}
+          className="h-8 w-36 text-xs"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -305,13 +356,20 @@ export default function GpsTrackingPage() {
   const [planLastDoneHours, setPlanLastDoneHours] = useState("0");
   const [planAlertThreshold, setPlanAlertThreshold] = useState("10");
 
-  // Período para relatórios (últimas 24h por padrão)
-  const [from] = useState(() => {
+  // Período para relatórios - com seletor de datas
+  const [fromDate, setFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    return d.toISOString();
+    return toLocalDateInput(d);
   });
-  const [to] = useState(() => new Date().toISOString());
+  const [toDate, setToDate] = useState(() => toLocalDateInput(new Date()));
+
+  // Converter datas para ISO
+  const from = useMemo(() => dateInputToISO(fromDate), [fromDate]);
+  const to = useMemo(() => dateInputToISO(toDate, true), [toDate]);
+
+  // Última atualização
+  const [lastRefresh, setLastRefresh] = useState(new Date());
 
   // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -321,12 +379,12 @@ export default function GpsTrackingPage() {
 
   const { data: devices = [], refetch: refetchDevices } = trpc.traccar.devices.useQuery(undefined, {
     enabled: statusData?.configured === true,
-    refetchInterval: 30000,
+    refetchInterval: 10000,
   }) as { data: TraccarDevice[]; refetch: () => void };
 
   const { data: positions = [], refetch: refetchPositions } = trpc.traccar.positions.useQuery(undefined, {
     enabled: statusData?.configured === true,
-    refetchInterval: 15000,
+    refetchInterval: 10000,
   }) as { data: TraccarPosition[]; refetch: () => void };
 
   const { data: trips = [] } = trpc.traccar.trips.useQuery(
@@ -343,11 +401,20 @@ export default function GpsTrackingPage() {
     }
   ) as { data: TraccarPosition[] };
 
+  // Horas trabalhadas (summary do Traccar)
+  const { data: summaryData = [] } = trpc.traccar.summary.useQuery(
+    { deviceId: selectedDeviceId!, from, to },
+    {
+      enabled: !!selectedDeviceId && statusData?.configured === true && (tab === "relatorio" || tab === "historico"),
+    }
+  ) as { data: any[] };
+
   // Queries de vinculacao e manutencao
   const { data: deviceLinks = [], refetch: refetchLinks } = trpc.traccar.listDeviceLinks.useQuery() as { data: any[]; refetch: () => void };
   const { data: allAlerts = [], refetch: refetchAlerts } = trpc.traccar.listAlerts.useQuery({}) as { data: any[]; refetch: () => void };
   const { data: alertCount } = trpc.traccar.alertCount.useQuery(undefined, { refetchInterval: 60000 });
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({}) as { data: any[] };
+  const { data: hoursSummary = [] } = trpc.traccar.equipmentHoursSummary.useQuery({}) as { data: any[] };
 
   const linkDeviceMut = trpc.traccar.linkDevice.useMutation({
     onSuccess: () => { refetchLinks(); setLinkDialogOpen(false); toast.success("Dispositivo vinculado com sucesso"); },
@@ -368,17 +435,37 @@ export default function GpsTrackingPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Atualizar timestamp de última atualização
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLastRefresh(new Date());
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ── Seleção de dispositivo ────────────────────────────────────────────────────
 
   const handleSelectDevice = useCallback((id: number | null) => {
     setSelectedDeviceId(id);
   }, []);
 
+  const handleRefresh = useCallback(() => {
+    refetchDevices();
+    refetchPositions();
+    setLastRefresh(new Date());
+    toast.success("Dados atualizados");
+  }, [refetchDevices, refetchPositions]);
+
   const selectedDevice = devices.find((d) => d.id === selectedDeviceId);
   const selectedPosition = positions.find((p) => p.deviceId === selectedDeviceId);
 
   const onlineCount = devices.filter((d) => d.status === "online").length;
   const offlineCount = devices.filter((d) => d.status !== "online").length;
+  const movingCount = positions.filter((p) => p.attributes.motion && p.speed > 0).length;
+
+  // Horas do summary do Traccar
+  const engineHoursMs = summaryData.length > 0 ? (summaryData[0]?.engineHours || 0) : 0;
+  const engineHoursFormatted = formatDuration(engineHoursMs);
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -402,9 +489,6 @@ export default function GpsTrackingPage() {
               <div><span className="text-amber-900">TRACCAR_URL</span> = http://SEU_IP:8082</div>
               <div><span className="text-amber-900">TRACCAR_TOKEN</span> = seu_token_api</div>
             </div>
-            <p className="text-sm">
-              Consulte o <strong>Guia de Instalação do Traccar</strong> enviado pelo sistema para o passo a passo completo.
-            </p>
           </CardContent>
         </Card>
       </div>
@@ -421,18 +505,21 @@ export default function GpsTrackingPage() {
             Rastreamento GPS
           </h1>
           <p className="text-sm text-muted-foreground">
-            {devices.length} dispositivos cadastrados · {onlineCount} online · {offlineCount} offline
+            {devices.length} dispositivos · {onlineCount} online · {offlineCount} offline
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            Atualizado: {lastRefresh.toLocaleTimeString("pt-BR")}
+          </span>
           <Badge variant="outline" className="gap-1">
             {statusData.configured ? (
-              <><Wifi className="h-3 w-3 text-green-500" /> Traccar conectado</>
+              <><Wifi className="h-3 w-3 text-green-500" /> Conectado</>
             ) : (
               <><WifiOff className="h-3 w-3 text-red-500" /> Desconectado</>
             )}
           </Badge>
-          <Button variant="outline" size="sm" onClick={() => { refetchDevices(); refetchPositions(); }}>
+          <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
           </Button>
         </div>
@@ -469,9 +556,7 @@ export default function GpsTrackingPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Em movimento</p>
-              <p className="text-xl font-bold text-blue-600">
-                {positions.filter((p) => p.attributes.motion && p.speed > 0).length}
-              </p>
+              <p className="text-xl font-bold text-blue-600">{movingCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -495,7 +580,7 @@ export default function GpsTrackingPage() {
       {/* Conteúdo principal: lista + mapa */}
       <div className="flex gap-4 flex-1 min-h-0 flex-col lg:flex-row">
         {/* Lista de dispositivos */}
-        <div className="w-full lg:w-72 flex flex-col gap-2 overflow-y-auto">
+        <div className="w-full lg:w-72 flex flex-col gap-2 overflow-y-auto max-h-[500px] lg:max-h-none">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
             Dispositivos
           </p>
@@ -553,33 +638,42 @@ export default function GpsTrackingPage() {
         {/* Painel direito: mapa + abas */}
         <div className="flex-1 flex flex-col gap-3 min-h-[400px]">
           <Tabs value={tab} onValueChange={setTab} className="flex flex-col flex-1">
-            <TabsList className="self-start flex-wrap">
-              <TabsTrigger value="mapa" className="gap-1">
-                <MapPin className="h-4 w-4" /> Mapa ao vivo
-              </TabsTrigger>
-              <TabsTrigger value="historico" className="gap-1" disabled={!selectedDeviceId}>
-                <History className="h-4 w-4" /> Histórico de rota
-              </TabsTrigger>
-              <TabsTrigger value="relatorio" className="gap-1" disabled={!selectedDeviceId}>
-                <Route className="h-4 w-4" /> Relatório de viagens
-              </TabsTrigger>
-              <TabsTrigger value="vincular" className="gap-1">
-                <Link2 className="h-4 w-4" /> Vincular GPS
-              </TabsTrigger>
-              <TabsTrigger value="manutencao" className="gap-1">
-                <Wrench className="h-4 w-4" /> Manutenção
-              </TabsTrigger>
-              <TabsTrigger value="alertas" className="gap-1">
-                <Bell className="h-4 w-4" />
-                Alertas
-                {alertCount && alertCount.count > 0 && (
-                  <Badge className="ml-1 h-5 min-w-5 px-1 text-xs bg-red-500 text-white">{alertCount.count}</Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
+            {/* Abas reorganizadas em grid para não encavalar */}
+            <div className="overflow-x-auto pb-1">
+              <TabsList className="inline-flex w-auto gap-1">
+                <TabsTrigger value="mapa" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
+                  <MapPin className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Mapa</span> ao vivo
+                </TabsTrigger>
+                <TabsTrigger value="historico" className="gap-1 text-xs sm:text-sm px-2 sm:px-3" disabled={!selectedDeviceId}>
+                  <History className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Histórico</span> Rota
+                </TabsTrigger>
+                <TabsTrigger value="relatorio" className="gap-1 text-xs sm:text-sm px-2 sm:px-3" disabled={!selectedDeviceId}>
+                  <Route className="h-3.5 w-3.5" /> Viagens
+                </TabsTrigger>
+                <TabsTrigger value="vincular" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
+                  <Link2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Vincular</span> GPS
+                </TabsTrigger>
+                <TabsTrigger value="manutencao" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
+                  <Wrench className="h-3.5 w-3.5" /> <span className="hidden md:inline">Manutenção</span>
+                </TabsTrigger>
+                <TabsTrigger value="alertas" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
+                  <Bell className="h-3.5 w-3.5" />
+                  <span className="hidden md:inline">Alertas</span>
+                  {alertCount && alertCount.count > 0 && (
+                    <Badge className="ml-0.5 h-4 min-w-4 px-1 text-[10px] bg-red-500 text-white">{alertCount.count}</Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* Mapa ao vivo */}
             <TabsContent value="mapa" className="flex-1 mt-2">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  Atualização automática a cada 10s
+                </p>
+              </div>
               <div className="rounded-lg overflow-hidden border h-full min-h-[400px]">
                 <LeafletMap
                   devices={devices}
@@ -593,16 +687,53 @@ export default function GpsTrackingPage() {
 
             {/* Histórico de rota */}
             <TabsContent value="historico" className="flex-1 mt-2 flex flex-col gap-3">
-              {selectedDevice && (
-                <div className="flex items-center gap-2 text-sm">
-                  <MapPin className="h-4 w-4 text-blue-500" />
-                  <span>Rota de <strong>{selectedDevice.name}</strong> nas últimas 24 horas</span>
-                  <Badge variant="secondary">{historyPositions.length} pontos</Badge>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                {selectedDevice && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-blue-500" />
+                    <span>Rota de <strong>{selectedDevice.name}</strong></span>
+                    <Badge variant="secondary">{historyPositions.length} pontos</Badge>
+                  </div>
+                )}
+                <DateRangeSelector
+                  fromDate={fromDate}
+                  toDate={toDate}
+                  onFromChange={setFromDate}
+                  onToChange={setToDate}
+                />
+              </div>
+              {/* Resumo de horas trabalhadas */}
+              {summaryData.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <Card>
+                    <CardContent className="p-2 text-center">
+                      <p className="text-[10px] text-muted-foreground">Horas Trabalhadas</p>
+                      <p className="text-lg font-bold text-blue-600">{engineHoursFormatted}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-2 text-center">
+                      <p className="text-[10px] text-muted-foreground">Distância</p>
+                      <p className="text-lg font-bold text-green-600">{metersToKm(summaryData[0]?.distance || 0)} km</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-2 text-center">
+                      <p className="text-[10px] text-muted-foreground">Vel. Média</p>
+                      <p className="text-lg font-bold">{knotsToKmh(summaryData[0]?.averageSpeed || 0)} km/h</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-2 text-center">
+                      <p className="text-[10px] text-muted-foreground">Vel. Máxima</p>
+                      <p className="text-lg font-bold text-orange-600">{knotsToKmh(summaryData[0]?.maxSpeed || 0)} km/h</p>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
               <div className="rounded-lg overflow-hidden border flex-1 min-h-[400px]">
                 <LeafletMap
-                  key="history-map"
+                  key={`history-${selectedDeviceId}-${from}-${to}`}
                   devices={devices}
                   positions={positions}
                   selectedDeviceId={selectedDeviceId}
@@ -616,15 +747,41 @@ export default function GpsTrackingPage() {
 
             {/* Relatório de viagens */}
             <TabsContent value="relatorio" className="mt-2">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                {selectedDevice && (
+                  <p className="text-sm font-medium">Viagens de <strong>{selectedDevice.name}</strong></p>
+                )}
+                <DateRangeSelector
+                  fromDate={fromDate}
+                  toDate={toDate}
+                  onFromChange={setFromDate}
+                  onToChange={setToDate}
+                />
+              </div>
+              {/* Resumo de horas trabalhadas no relatório */}
+              {summaryData.length > 0 && (
+                <Card className="mb-3 border-blue-200 bg-blue-50/50">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Timer className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-blue-800">Horas Trabalhadas (Ignição)</span>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600">{engineHoursFormatted}</p>
+                    <p className="text-xs text-muted-foreground">Período: {new Date(from).toLocaleDateString("pt-BR")} a {new Date(to).toLocaleDateString("pt-BR")}</p>
+                  </CardContent>
+                </Card>
+              )}
               {trips.length === 0 ? (
                 <Card>
                   <CardContent className="p-6 text-center text-muted-foreground">
-                    Nenhuma viagem registrada nas últimas 24 horas para este dispositivo.
+                    <Route className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                    <p>Nenhuma viagem registrada no período selecionado.</p>
+                    <p className="text-xs mt-1">Selecione um período diferente ou verifique se o dispositivo estava ativo.</p>
                   </CardContent>
                 </Card>
               ) : (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <Card>
                       <CardContent className="p-3 text-center">
                         <p className="text-xs text-muted-foreground">Total de viagens</p>
@@ -636,6 +793,14 @@ export default function GpsTrackingPage() {
                         <p className="text-xs text-muted-foreground">Km rodados</p>
                         <p className="text-2xl font-bold text-blue-600">
                           {metersToKm(trips.reduce((s, t) => s + (t.distance || 0), 0))} km
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-3 text-center">
+                        <p className="text-xs text-muted-foreground">Duração total</p>
+                        <p className="text-2xl font-bold text-purple-600">
+                          {formatDuration(trips.reduce((s, t) => s + (t.duration || 0), 0))}
                         </p>
                       </CardContent>
                     </Card>
@@ -653,39 +818,39 @@ export default function GpsTrackingPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
                         <tr>
-                          <th className="text-left p-3 font-medium">Início</th>
-                          <th className="text-left p-3 font-medium">Fim</th>
-                          <th className="text-right p-3 font-medium">Distância</th>
-                          <th className="text-right p-3 font-medium">Duração</th>
-                          <th className="text-right p-3 font-medium">Vel. média</th>
-                          <th className="text-right p-3 font-medium">Vel. máx.</th>
+                          <th className="text-left p-2 sm:p-3 font-medium">Início</th>
+                          <th className="text-left p-2 sm:p-3 font-medium">Fim</th>
+                          <th className="text-right p-2 sm:p-3 font-medium">Distância</th>
+                          <th className="text-right p-2 sm:p-3 font-medium">Duração</th>
+                          <th className="text-right p-2 sm:p-3 font-medium hidden sm:table-cell">Vel. média</th>
+                          <th className="text-right p-2 sm:p-3 font-medium">Vel. máx.</th>
                         </tr>
                       </thead>
                       <tbody>
                         {trips.map((trip, i) => (
                           <tr key={i} className="border-t hover:bg-muted/30">
-                            <td className="p-3">
+                            <td className="p-2 sm:p-3 text-xs sm:text-sm">
                               {new Date(trip.startTime).toLocaleString("pt-BR", {
                                 day: "2-digit", month: "2-digit",
                                 hour: "2-digit", minute: "2-digit",
                               })}
                             </td>
-                            <td className="p-3">
+                            <td className="p-2 sm:p-3 text-xs sm:text-sm">
                               {new Date(trip.endTime).toLocaleString("pt-BR", {
                                 day: "2-digit", month: "2-digit",
                                 hour: "2-digit", minute: "2-digit",
                               })}
                             </td>
-                            <td className="p-3 text-right font-medium">
+                            <td className="p-2 sm:p-3 text-right font-medium text-xs sm:text-sm">
                               {metersToKm(trip.distance)} km
                             </td>
-                            <td className="p-3 text-right text-muted-foreground">
+                            <td className="p-2 sm:p-3 text-right text-muted-foreground text-xs sm:text-sm">
                               {formatDuration(trip.duration)}
                             </td>
-                            <td className="p-3 text-right">
+                            <td className="p-2 sm:p-3 text-right hidden sm:table-cell text-xs sm:text-sm">
                               {knotsToKmh(trip.averageSpeed)} km/h
                             </td>
-                            <td className="p-3 text-right text-orange-600 font-medium">
+                            <td className="p-2 sm:p-3 text-right text-orange-600 font-medium text-xs sm:text-sm">
                               {knotsToKmh(trip.maxSpeed)} km/h
                             </td>
                           </tr>
@@ -699,12 +864,12 @@ export default function GpsTrackingPage() {
 
             {/* Aba Vincular GPS */}
             <TabsContent value="vincular" className="mt-2 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h3 className="font-semibold">Vincular Dispositivos GPS a Equipamentos</h3>
-                  <p className="text-sm text-muted-foreground">Associe cada rastreador EC33 a um equipamento para contagem automática de horas.</p>
+                  <p className="text-sm text-muted-foreground">Associe cada rastreador a um equipamento para contagem automática de horas.</p>
                 </div>
-                <Button onClick={() => setLinkDialogOpen(true)} className="gap-2">
+                <Button onClick={() => setLinkDialogOpen(true)} className="gap-2" size="sm">
                   <Plus className="h-4 w-4" /> Vincular
                 </Button>
               </div>
@@ -715,21 +880,21 @@ export default function GpsTrackingPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="text-left p-3 font-medium">Equipamento</th>
-                        <th className="text-left p-3 font-medium">Dispositivo GPS</th>
-                        <th className="text-left p-3 font-medium">IMEI</th>
-                        <th className="text-left p-3 font-medium">Vinculado em</th>
-                        <th className="p-3"></th>
+                        <th className="text-left p-2 sm:p-3 font-medium">Equipamento</th>
+                        <th className="text-left p-2 sm:p-3 font-medium">Dispositivo GPS</th>
+                        <th className="text-left p-2 sm:p-3 font-medium hidden sm:table-cell">IMEI</th>
+                        <th className="text-left p-2 sm:p-3 font-medium hidden sm:table-cell">Vinculado em</th>
+                        <th className="p-2 sm:p-3"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {deviceLinks.map((link: any) => (
                         <tr key={link.id} className="border-t hover:bg-muted/30">
-                          <td className="p-3 font-medium">{link.equipmentName}</td>
-                          <td className="p-3">{link.traccarDeviceName || `#${link.traccarDeviceId}`}</td>
-                          <td className="p-3 font-mono text-xs">{link.traccarUniqueId || "\u2014"}</td>
-                          <td className="p-3 text-muted-foreground">{new Date(link.createdAt).toLocaleDateString("pt-BR")}</td>
-                          <td className="p-3">
+                          <td className="p-2 sm:p-3 font-medium">{link.equipmentName}</td>
+                          <td className="p-2 sm:p-3">{link.traccarDeviceName || `#${link.traccarDeviceId}`}</td>
+                          <td className="p-2 sm:p-3 font-mono text-xs hidden sm:table-cell">{link.traccarUniqueId || "\u2014"}</td>
+                          <td className="p-2 sm:p-3 text-muted-foreground hidden sm:table-cell">{new Date(link.createdAt).toLocaleDateString("pt-BR")}</td>
+                          <td className="p-2 sm:p-3">
                             <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => unlinkDeviceMut.mutate({ linkId: link.id })}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -740,8 +905,43 @@ export default function GpsTrackingPage() {
                   </table>
                 </div>
               )}
-              <div className="flex items-center gap-3 pt-2">
-                <Button variant="outline" className="gap-2" onClick={() => syncHoursMut.mutate({})} disabled={syncHoursMut.isPending}>
+
+              {/* Horas trabalhadas por equipamento */}
+              {hoursSummary.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Timer className="h-4 w-4 text-blue-600" />
+                    Horas Acumuladas por Equipamento
+                  </h4>
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left p-2 sm:p-3 font-medium">Equipamento</th>
+                          <th className="text-right p-2 sm:p-3 font-medium">Total Horas</th>
+                          <th className="text-right p-2 sm:p-3 font-medium hidden sm:table-cell">Registros</th>
+                          <th className="text-right p-2 sm:p-3 font-medium">Último Registro</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hoursSummary.map((h: any) => (
+                          <tr key={h.equipmentId} className="border-t hover:bg-muted/30">
+                            <td className="p-2 sm:p-3 font-medium">{h.equipmentName}</td>
+                            <td className="p-2 sm:p-3 text-right font-bold text-blue-600">{parseFloat(h.totalHours || "0").toFixed(1)}h</td>
+                            <td className="p-2 sm:p-3 text-right text-muted-foreground hidden sm:table-cell">{h.recordCount}</td>
+                            <td className="p-2 sm:p-3 text-right text-muted-foreground text-xs">
+                              {h.lastDate ? new Date(h.lastDate).toLocaleDateString("pt-BR") : "\u2014"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-2 flex-wrap">
+                <Button variant="outline" className="gap-2" size="sm" onClick={() => syncHoursMut.mutate({})} disabled={syncHoursMut.isPending}>
                   <Timer className="h-4 w-4" />
                   {syncHoursMut.isPending ? "Sincronizando..." : "Sincronizar Horas de Hoje"}
                 </Button>
@@ -751,12 +951,12 @@ export default function GpsTrackingPage() {
 
             {/* Aba Manutenção Preventiva */}
             <TabsContent value="manutencao" className="mt-2 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h3 className="font-semibold">Planos de Manutenção Preventiva</h3>
-                  <p className="text-sm text-muted-foreground">Configure intervalos de manutenção por horas de uso (engraxamento, troca de óleo, filtros, etc.).</p>
+                  <p className="text-sm text-muted-foreground">Configure intervalos de manutenção por horas de uso.</p>
                 </div>
-                <Button onClick={() => setPlanDialogOpen(true)} className="gap-2">
+                <Button onClick={() => setPlanDialogOpen(true)} className="gap-2" size="sm">
                   <Plus className="h-4 w-4" /> Novo Plano
                 </Button>
               </div>
@@ -780,11 +980,11 @@ export default function GpsTrackingPage() {
                 <div className="space-y-3">
                   {allAlerts.map((alert: any) => (
                     <Card key={alert.id} className={`border-l-4 ${alert.status === "pendente" ? "border-l-orange-400" : "border-l-green-400"}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <AlertTriangle className={`h-4 w-4 ${alert.status === "pendente" ? "text-orange-500" : "text-green-500"}`} />
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <AlertTriangle className={`h-4 w-4 flex-shrink-0 ${alert.status === "pendente" ? "text-orange-500" : "text-green-500"}`} />
                               <span className="font-semibold text-sm">{alert.planName}</span>
                               <Badge variant="outline" className="text-xs">{alert.planType?.replace("_", " ")}</Badge>
                               <Badge className={`text-xs ${alert.status === "pendente" ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}>
@@ -792,7 +992,7 @@ export default function GpsTrackingPage() {
                               </Badge>
                             </div>
                             <p className="text-sm text-muted-foreground">
-                              <strong>{alert.equipmentName}</strong> — Horímetro atual: <strong>{alert.currentHours}h</strong> / Vencimento: <strong>{alert.dueHours}h</strong>
+                              <strong>{alert.equipmentName}</strong> — Horímetro: <strong>{alert.currentHours}h</strong> / Vencimento: <strong>{alert.dueHours}h</strong>
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
                               Gerado em {new Date(alert.generatedAt).toLocaleDateString("pt-BR")}
@@ -801,10 +1001,10 @@ export default function GpsTrackingPage() {
                           {alert.status === "pendente" && (
                             <div className="flex gap-2">
                               <Button size="sm" variant="outline" className="gap-1 text-green-600 border-green-300" onClick={() => resolveAlertMut.mutate({ alertId: alert.id, status: "concluido" })}>
-                                <CheckCircle className="h-3 w-3" /> Concluído
+                                <CheckCircle className="h-3 w-3" /> <span className="hidden sm:inline">Concluído</span>
                               </Button>
                               <Button size="sm" variant="ghost" className="gap-1 text-gray-500" onClick={() => resolveAlertMut.mutate({ alertId: alert.id, status: "ignorado" })}>
-                                <XCircle className="h-3 w-3" /> Ignorar
+                                <XCircle className="h-3 w-3" /> <span className="hidden sm:inline">Ignorar</span>
                               </Button>
                             </div>
                           )}
@@ -914,7 +1114,7 @@ export default function GpsTrackingPage() {
                 <Input type="number" placeholder="0" value={planLastDoneHours} onChange={e => setPlanLastDoneHours(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Alerta antecipado (h)</Label>
+                <Label>Alerta antes (h)</Label>
                 <Input type="number" placeholder="10" value={planAlertThreshold} onChange={e => setPlanAlertThreshold(e.target.value)} />
               </div>
             </div>
