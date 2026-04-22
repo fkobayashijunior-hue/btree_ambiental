@@ -716,6 +716,58 @@ function CargoCard({ load, formatDate, statusColor, clientId }: { load: CargoLoa
               </div>
             )}
           </div>
+
+          {/* Documentos compartilhados */}
+          {((load as any).invoiceUrl || (load as any).boletoUrl || (load as any).paymentReceiptUrl) && (
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold text-gray-500 mb-2">📄 Documentos</p>
+              <div className="flex flex-wrap gap-2">
+                {(load as any).invoiceUrl && (
+                  <a
+                    href={(load as any).invoiceUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors border border-blue-200"
+                  >
+                    📋 Nota Fiscal
+                  </a>
+                )}
+                {(load as any).boletoUrl && (
+                  <a
+                    href={(load as any).boletoUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg text-xs font-medium hover:bg-orange-100 transition-colors border border-orange-200"
+                  >
+                    🧾 Boleto
+                    {(load as any).boletoAmount && <span className="ml-1">R$ {(load as any).boletoAmount}</span>}
+                  </a>
+                )}
+                {(load as any).paymentReceiptUrl && (
+                  <a
+                    href={(load as any).paymentReceiptUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors border border-green-200"
+                  >
+                    ✅ Comprovante
+                  </a>
+                )}
+              </div>
+              {(load as any).paymentStatus && (
+                <div className={`mt-2 inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                  (load as any).paymentStatus === 'pago'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-orange-100 text-orange-700'
+                }`}>
+                  {(load as any).paymentStatus === 'pago' ? '✅ Pago' : '⏳ A Pagar'}
+                  {(load as any).boletoDueDate && (load as any).paymentStatus !== 'pago' && (
+                    <span className="ml-1">· Venc: {new Date((load as any).boletoDueDate).toLocaleDateString('pt-BR')}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

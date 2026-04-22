@@ -451,6 +451,21 @@ export default function DriverCargoView() {
           </div>
         </Card>
 
+        {/* Nota Fiscal (compartilhada pelo admin) */}
+        {(selectedCargo as any).invoiceUrl && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+            <p className="text-xs font-semibold text-blue-600 mb-2">📋 Nota Fiscal da Carga</p>
+            <a
+              href={(selectedCargo as any).invoiceUrl}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              📄 Ver Nota Fiscal
+            </a>
+          </div>
+        )}
+
         {/* Timeline vertical */}
         <div className="space-y-0">
           {TRACKING_STEPS.map((step, idx) => {

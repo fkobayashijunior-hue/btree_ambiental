@@ -110,6 +110,13 @@ export const cargoLoadsRouter = router({
           finalWidthM: cargoLoads.finalWidthM,
           finalLengthM: cargoLoads.finalLengthM,
           finalVolumeM3: cargoLoads.finalVolumeM3,
+          invoiceUrl: cargoLoads.invoiceUrl,
+          boletoUrl: cargoLoads.boletoUrl,
+          boletoAmount: cargoLoads.boletoAmount,
+          boletoDueDate: cargoLoads.boletoDueDate,
+          paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
+          paymentStatus: cargoLoads.paymentStatus,
+          paidAt: cargoLoads.paidAt,
           // Joins
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
@@ -195,6 +202,13 @@ export const cargoLoadsRouter = router({
           finalLengthM: cargoLoads.finalLengthM,
           finalVolumeM3: cargoLoads.finalVolumeM3,
           workLocationId: cargoLoads.workLocationId,
+          invoiceUrl: cargoLoads.invoiceUrl,
+          boletoUrl: cargoLoads.boletoUrl,
+          boletoAmount: cargoLoads.boletoAmount,
+          boletoDueDate: cargoLoads.boletoDueDate,
+          paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
+          paymentStatus: cargoLoads.paymentStatus,
+          paidAt: cargoLoads.paidAt,
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
           vehicleNameJoined: equipment.name,
@@ -335,6 +349,13 @@ export const cargoLoadsRouter = router({
       weightOutKg: z.string().optional(),
       weightInKg: z.string().optional(),
       workLocationId: z.number().optional(),
+      invoiceUrl: z.string().optional(),
+      boletoUrl: z.string().optional(),
+      boletoAmount: z.string().optional(),
+      boletoDueDate: z.string().optional(),
+      paymentReceiptUrl: z.string().optional(),
+      paymentStatus: z.enum(['sem_boleto','a_pagar','pago']).optional(),
+      paidAt: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -365,6 +386,91 @@ export const cargoLoadsRouter = router({
         // Finalizar carga quando tracking chega em "finalizado"
         status: input.trackingStatus === "finalizado" ? "entregue" : undefined,
       }).where(eq(cargoLoads.id, input.id));
+      return { success: true };
+    }),
+
+  // Upload de documento (nota, boleto, comprovante) para uma carga
+  uploadDocument: protectedProcedure
+    .input(z.object({
+      cargoId: z.number(),
+      docBase64: z.string(),
+      docType: z.enum(['invoice', 'boleto', 'payment_receipt']),
+      boletoAmount: z.string().optional(),
+      boletoDueDate: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indispon\u00edvel' });
+      const uploaded = await cloudinaryUpload(input.docBase64, `btree/docs/${input.cargoId}`);
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const updateData: Record<string, unknown> = { updatedAt: now };
+      if (input.docType === 'invoice') {
+        updateData.invoiceUrl = uploaded.url;
+      } else if (input.docType === 'boleto') {
+        updateData.boletoUrl = uploaded.url;
+        updateData.paymentStatus = 'a_pagar';
+        if (input.boletoAmount) updateData.boletoAmount = input.boletoAmount;
+        if (input.boletoDueDate) updateData.boletoDueDate = input.boletoDueDate;
+      } else if (input.docType === 'payment_receipt') {
+        updateData.paymentReceiptUrl = uploaded.url;
+        updateData.paymentStatus = 'pago';
+        updateData.paidAt = now;
+      }
+      await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
+      return { url: uploaded.url, success: true };
+    }),
+
+  // Listar cargas com boleto (para integração financeira)
+  listBoletos: protectedProcedure
+    .input(z.object({
+      status: z.enum(['a_pagar', 'pago']).optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indispon\u00edvel' });
+      const results = await db.select({
+        id: cargoLoads.id,
+        date: cargoLoads.date,
+        clientId: cargoLoads.clientId,
+        clientName: cargoLoads.clientName,
+        destination: cargoLoads.destination,
+        invoiceNumber: cargoLoads.invoiceNumber,
+        boletoUrl: cargoLoads.boletoUrl,
+        boletoAmount: cargoLoads.boletoAmount,
+        boletoDueDate: cargoLoads.boletoDueDate,
+        paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
+        paymentStatus: cargoLoads.paymentStatus,
+        paidAt: cargoLoads.paidAt,
+        volumeM3: cargoLoads.volumeM3,
+        weightNetKg: cargoLoads.weightNetKg,
+        clientNameJoined: clients.name,
+        destinationNameJoined: cargoDestinations.name,
+      })
+      .from(cargoLoads)
+      .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
+      .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
+      .orderBy(desc(cargoLoads.boletoDueDate), desc(cargoLoads.date));
+      let filtered = results.filter(r => r.boletoUrl);
+      if (input?.status) filtered = filtered.filter(r => r.paymentStatus === input.status);
+      return filtered.map(r => ({
+        ...r,
+        clientName: r.clientNameJoined || r.clientName,
+        destination: r.destinationNameJoined || r.destination,
+      }));
+    }),
+
+  // Marcar boleto como pago (sem comprovante)
+  markAsPaid: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      await db.update(cargoLoads).set({
+        paymentStatus: 'pago',
+        paidAt: now,
+        updatedAt: now,
+      } as any).where(eq(cargoLoads.id, input.id));
       return { success: true };
     }),
 

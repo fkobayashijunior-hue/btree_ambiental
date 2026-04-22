@@ -81,9 +81,16 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 	finalWidthM: varchar("final_width_m", { length: 20 }),
 	finalLengthM: varchar("final_length_m", { length: 20 }),
 	finalVolumeM3: varchar("final_volume_m3", { length: 20 }),
-	workLocationId: int("work_location_id"),
-	weightNetKg: varchar("weight_net_kg", { length: 20 }),
-});
+		workLocationId: int("work_location_id"),
+		weightNetKg: varchar("weight_net_kg", { length: 20 }),
+		invoiceUrl: text("invoice_url"),
+		boletoUrl: text("boleto_url"),
+		boletoAmount: varchar("boleto_amount", { length: 20 }),
+		boletoDueDate: timestamp("boleto_due_date", { mode: 'string' }),
+		paymentReceiptUrl: text("payment_receipt_url"),
+		paymentStatus: mysqlEnum("payment_status", ['sem_boleto','a_pagar','pago']).default('sem_boleto'),
+		paidAt: timestamp("paid_at", { mode: 'string' }),
+	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {
 	id: int().autoincrement().notNull(),

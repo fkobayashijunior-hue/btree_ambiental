@@ -266,7 +266,14 @@ var init_schema = __esm({
       finalLengthM: varchar("final_length_m", { length: 20 }),
       finalVolumeM3: varchar("final_volume_m3", { length: 20 }),
       workLocationId: int("work_location_id"),
-      weightNetKg: varchar("weight_net_kg", { length: 20 })
+      weightNetKg: varchar("weight_net_kg", { length: 20 }),
+      invoiceUrl: text("invoice_url"),
+      boletoUrl: text("boleto_url"),
+      boletoAmount: varchar("boleto_amount", { length: 20 }),
+      boletoDueDate: timestamp("boleto_due_date", { mode: "string" }),
+      paymentReceiptUrl: text("payment_receipt_url"),
+      paymentStatus: mysqlEnum("payment_status", ["sem_boleto", "a_pagar", "pago"]).default("sem_boleto"),
+      paidAt: timestamp("paid_at", { mode: "string" })
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -1975,6 +1982,13 @@ var cargoLoadsRouter = router({
       finalWidthM: cargoLoads.finalWidthM,
       finalLengthM: cargoLoads.finalLengthM,
       finalVolumeM3: cargoLoads.finalVolumeM3,
+      invoiceUrl: cargoLoads.invoiceUrl,
+      boletoUrl: cargoLoads.boletoUrl,
+      boletoAmount: cargoLoads.boletoAmount,
+      boletoDueDate: cargoLoads.boletoDueDate,
+      paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
+      paymentStatus: cargoLoads.paymentStatus,
+      paidAt: cargoLoads.paidAt,
       // Joins
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
@@ -2041,6 +2055,13 @@ var cargoLoadsRouter = router({
       finalLengthM: cargoLoads.finalLengthM,
       finalVolumeM3: cargoLoads.finalVolumeM3,
       workLocationId: cargoLoads.workLocationId,
+      invoiceUrl: cargoLoads.invoiceUrl,
+      boletoUrl: cargoLoads.boletoUrl,
+      boletoAmount: cargoLoads.boletoAmount,
+      boletoDueDate: cargoLoads.boletoDueDate,
+      paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
+      paymentStatus: cargoLoads.paymentStatus,
+      paidAt: cargoLoads.paidAt,
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
       vehicleNameJoined: equipment.name,
@@ -2155,7 +2176,14 @@ var cargoLoadsRouter = router({
     trackingNotes: z5.string().optional(),
     weightOutKg: z5.string().optional(),
     weightInKg: z5.string().optional(),
-    workLocationId: z5.number().optional()
+    workLocationId: z5.number().optional(),
+    invoiceUrl: z5.string().optional(),
+    boletoUrl: z5.string().optional(),
+    boletoAmount: z5.string().optional(),
+    boletoDueDate: z5.string().optional(),
+    paymentReceiptUrl: z5.string().optional(),
+    paymentStatus: z5.enum(["sem_boleto", "a_pagar", "pago"]).optional(),
+    paidAt: z5.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2181,6 +2209,78 @@ var cargoLoadsRouter = router({
       updatedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "),
       // Finalizar carga quando tracking chega em "finalizado"
       status: input.trackingStatus === "finalizado" ? "entregue" : void 0
+    }).where(eq5(cargoLoads.id, input.id));
+    return { success: true };
+  }),
+  // Upload de documento (nota, boleto, comprovante) para uma carga
+  uploadDocument: protectedProcedure.input(z5.object({
+    cargoId: z5.number(),
+    docBase64: z5.string(),
+    docType: z5.enum(["invoice", "boleto", "payment_receipt"]),
+    boletoAmount: z5.string().optional(),
+    boletoDueDate: z5.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const uploaded = await cloudinaryUpload(input.docBase64, `btree/docs/${input.cargoId}`);
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    const updateData = { updatedAt: now };
+    if (input.docType === "invoice") {
+      updateData.invoiceUrl = uploaded.url;
+    } else if (input.docType === "boleto") {
+      updateData.boletoUrl = uploaded.url;
+      updateData.paymentStatus = "a_pagar";
+      if (input.boletoAmount) updateData.boletoAmount = input.boletoAmount;
+      if (input.boletoDueDate) updateData.boletoDueDate = input.boletoDueDate;
+    } else if (input.docType === "payment_receipt") {
+      updateData.paymentReceiptUrl = uploaded.url;
+      updateData.paymentStatus = "pago";
+      updateData.paidAt = now;
+    }
+    await db.update(cargoLoads).set(updateData).where(eq5(cargoLoads.id, input.cargoId));
+    return { url: uploaded.url, success: true };
+  }),
+  // Listar cargas com boleto (para integração financeira)
+  listBoletos: protectedProcedure.input(z5.object({
+    status: z5.enum(["a_pagar", "pago"]).optional()
+  }).optional()).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const results = await db.select({
+      id: cargoLoads.id,
+      date: cargoLoads.date,
+      clientId: cargoLoads.clientId,
+      clientName: cargoLoads.clientName,
+      destination: cargoLoads.destination,
+      invoiceNumber: cargoLoads.invoiceNumber,
+      boletoUrl: cargoLoads.boletoUrl,
+      boletoAmount: cargoLoads.boletoAmount,
+      boletoDueDate: cargoLoads.boletoDueDate,
+      paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
+      paymentStatus: cargoLoads.paymentStatus,
+      paidAt: cargoLoads.paidAt,
+      volumeM3: cargoLoads.volumeM3,
+      weightNetKg: cargoLoads.weightNetKg,
+      clientNameJoined: clients.name,
+      destinationNameJoined: cargoDestinations.name
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).orderBy(desc3(cargoLoads.boletoDueDate), desc3(cargoLoads.date));
+    let filtered = results.filter((r) => r.boletoUrl);
+    if (input?.status) filtered = filtered.filter((r) => r.paymentStatus === input.status);
+    return filtered.map((r) => ({
+      ...r,
+      clientName: r.clientNameJoined || r.clientName,
+      destination: r.destinationNameJoined || r.destination
+    }));
+  }),
+  // Marcar boleto como pago (sem comprovante)
+  markAsPaid: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    await db.update(cargoLoads).set({
+      paymentStatus: "pago",
+      paidAt: now,
+      updatedAt: now
     }).where(eq5(cargoLoads.id, input.id));
     return { success: true };
   }),

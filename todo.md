@@ -1426,8 +1426,19 @@
 - [x] Sem novas tabelas/colunas nesta atualização (apenas frontend)
 
 ### Correções GPS Mobile + Lógica Stats (21/04/2026)
-- [ ] Corrigir layout mobile: números fora das caixas, cards desalinhados
-- [ ] Corrigir lógica "Em movimento": considerar ignição ligada + velocidade > 0
-- [ ] Corrigir "Vel. máx. agora": mostrar 0 se nenhum dispositivo está realmente em movimento
-- [ ] Dispositivos na lista sem informações extras (velocidade, ignição, data)
+- [x] Corrigir layout mobile: números fora das caixas, cards desalinhados
+- [x] Corrigir lógica "Em movimento": considerar ignição ligada + velocidade > 2km/h + online
+- [x] Corrigir "Vel. máx. agora": mostra 0 se nenhum dispositivo está realmente em movimento
+- [x] Dispositivos na lista com velocidade, ignição, data e badge "Movendo"
+- [x] Compilar e push para GitHub
+
+### Documentos Financeiros nas Cargas + Integração Financeiro (22/04/2026)
+- [x] Adicionar campos nota_url, boleto_url, comprovante_url, payment_status no schema cargo_loads
+- [x] Backend: rotas para upload de nota, boleto e comprovante por carga
+- [x] CargoControl: botões para anexar nota, boleto e comprovante em cada carga
+- [x] Portal do Cliente: exibir nota, boleto e comprovante compartilhados
+- [x] Minha Carga (motorista): exibir nota da viagem
+- [x] Financeiro: listar cargas com boleto como "despesas a pagar"
+- [x] Financeiro: ao anexar comprovante, mudar automaticamente para "despesas pagas"
 - [ ] Compilar e push para GitHub
+- [ ] Enviar scripts SQL ao usuário

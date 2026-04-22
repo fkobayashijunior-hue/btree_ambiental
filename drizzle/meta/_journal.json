@@ -176,6 +176,13 @@
       "when": 1776337718264,
       "tag": "0024_glorious_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1776886494701,
+      "tag": "0025_crazy_darkstar",
+      "breakpoints": true
     }
   ]
 }

@@ -97,7 +97,7 @@ const emptyForm = {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function FinancialModule() {
-  const [tab, setTab] = useState<"dashboard" | "lancamentos" | "relatorio">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "lancamentos" | "boletos" | "relatorio">("dashboard");
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const [isOpen, setIsOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<any>(null);
@@ -111,6 +111,15 @@ export default function FinancialModule() {
   const { data: incomeBreakdown = [] } = trpc.financial.categoryBreakdown.useQuery({ referenceMonth: selectedMonth, type: "receita" });
   const { data: expenseBreakdown = [] } = trpc.financial.categoryBreakdown.useQuery({ referenceMonth: selectedMonth, type: "despesa" });
   const { data: monthlyHistory = [] } = trpc.financial.monthlyHistory.useQuery();
+  const { data: cargoBoletos = [], isLoading: boletosLoading } = trpc.cargoLoads.listBoletos.useQuery();
+  const markAsPaidMutation = trpc.cargoLoads.markAsPaid.useMutation({
+    onSuccess: () => {
+      toast.success("Pagamento registrado! Status atualizado.");
+      utils.cargoLoads.listBoletos.invalidate();
+      utils.cargoLoads.list.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const { data: entries = [], isLoading: entriesLoading } = trpc.financial.list.useQuery({
     referenceMonth: selectedMonth,
     type: filterType,
@@ -395,15 +404,18 @@ export default function FinancialModule() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={v => setTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="dashboard" className="gap-1.5">
-            <BarChart3 className="h-4 w-4" /> Dashboard
+        <TabsList className="grid w-full grid-cols-4 max-w-lg">
+          <TabsTrigger value="dashboard" className="gap-1.5 text-xs sm:text-sm">
+            <BarChart3 className="h-4 w-4" /> <span className="hidden sm:inline">Dashboard</span><span className="sm:hidden">Dash</span>
           </TabsTrigger>
-          <TabsTrigger value="lancamentos" className="gap-1.5">
-            <DollarSign className="h-4 w-4" /> Lançamentos
+          <TabsTrigger value="lancamentos" className="gap-1.5 text-xs sm:text-sm">
+            <DollarSign className="h-4 w-4" /> <span className="hidden sm:inline">Lançamentos</span><span className="sm:hidden">Lanc.</span>
           </TabsTrigger>
-          <TabsTrigger value="relatorio" className="gap-1.5">
-            <FileDown className="h-4 w-4" /> Relatório
+          <TabsTrigger value="boletos" className="gap-1.5 text-xs sm:text-sm">
+            <Clock className="h-4 w-4" /> <span className="hidden sm:inline">Boletos Cargas</span><span className="sm:hidden">Boletos</span>
+          </TabsTrigger>
+          <TabsTrigger value="relatorio" className="gap-1.5 text-xs sm:text-sm">
+            <FileDown className="h-4 w-4" /> <span className="hidden sm:inline">Relatório</span><span className="sm:hidden">PDF</span>
           </TabsTrigger>
         </TabsList>
 
@@ -651,6 +663,173 @@ export default function FinancialModule() {
                 </Card>
               ))}
             </div>
+          )}
+        </TabsContent>
+
+        {/* ─── ABA BOLETOS DE CARGAS ───────────────────────────────────────────── */}
+        <TabsContent value="boletos" className="space-y-4 mt-4">
+          {boletosLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : (cargoBoletos as any[]).length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="py-12 text-center">
+                <Clock className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">Nenhum boleto de carga registrado</p>
+                <p className="text-gray-400 text-sm mt-1">Quando você adicionar boletos nas cargas (Controle de Cargas), eles aparecerão aqui automaticamente.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Resumo */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Card className="border-l-4 border-l-orange-500">
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">A Pagar</p>
+                        <p className="text-xl font-bold text-orange-600">
+                          R$ {(cargoBoletos as any[]).filter((b: any) => b.paymentStatus !== 'pago').reduce((s: number, b: any) => s + parseFloat(b.boletoAmount || '0'), 0).toFixed(2)}
+                        </p>
+                        <p className="text-xs text-gray-400">{(cargoBoletos as any[]).filter((b: any) => b.paymentStatus !== 'pago').length} boleto(s)</p>
+                      </div>
+                      <Clock className="h-8 w-8 text-orange-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-green-500">
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">Pagos</p>
+                        <p className="text-xl font-bold text-green-600">
+                          R$ {(cargoBoletos as any[]).filter((b: any) => b.paymentStatus === 'pago').reduce((s: number, b: any) => s + parseFloat(b.boletoAmount || '0'), 0).toFixed(2)}
+                        </p>
+                        <p className="text-xs text-gray-400">{(cargoBoletos as any[]).filter((b: any) => b.paymentStatus === 'pago').length} boleto(s)</p>
+                      </div>
+                      <CheckCircle2 className="h-8 w-8 text-green-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-blue-500">
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">Total Boletos</p>
+                        <p className="text-xl font-bold text-blue-600">
+                          R$ {(cargoBoletos as any[]).reduce((s: number, b: any) => s + parseFloat(b.boletoAmount || '0'), 0).toFixed(2)}
+                        </p>
+                        <p className="text-xs text-gray-400">{(cargoBoletos as any[]).length} boleto(s)</p>
+                      </div>
+                      <Wallet className="h-8 w-8 text-blue-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Lista de boletos a pagar */}
+              {(cargoBoletos as any[]).filter((b: any) => b.paymentStatus !== 'pago').length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-orange-700 flex items-center gap-2 mb-3">
+                    <Clock className="h-4 w-4" /> Despesas a Pagar
+                  </h3>
+                  <div className="space-y-2">
+                    {(cargoBoletos as any[]).filter((b: any) => b.paymentStatus !== 'pago').map((boleto: any) => (
+                      <Card key={boleto.id} className="border-l-4 border-l-orange-400 hover:shadow-md transition-shadow">
+                        <CardContent className="py-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-gray-800 text-sm">{boleto.clientName || 'Sem cliente'}</span>
+                                <Badge className="bg-orange-100 text-orange-700 text-[10px]">A Pagar</Badge>
+                                {boleto.boletoDueDate && (
+                                  <span className="text-xs text-gray-500">
+                                    Venc: {new Date(boleto.boletoDueDate).toLocaleDateString('pt-BR')}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                Carga #{boleto.id} · {boleto.date ? new Date(boleto.date).toLocaleDateString('pt-BR') : ''}
+                                {boleto.vehiclePlate && ` · ${boleto.vehiclePlate}`}
+                                {boleto.destination && ` → ${boleto.destination}`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg font-bold text-orange-600">R$ {parseFloat(boleto.boletoAmount || '0').toFixed(2)}</span>
+                              <div className="flex gap-1">
+                                {boleto.boletoUrl && (
+                                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => window.open(boleto.boletoUrl, '_blank')}>
+                                    🧾 Ver
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => {
+                                    if (confirm('Confirmar pagamento deste boleto?')) {
+                                      markAsPaidMutation.mutate({ cargoId: boleto.id });
+                                    }
+                                  }}
+                                  disabled={markAsPaidMutation.isPending}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Pagar
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de boletos pagos */}
+              {(cargoBoletos as any[]).filter((b: any) => b.paymentStatus === 'pago').length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-green-700 flex items-center gap-2 mb-3">
+                    <CheckCircle2 className="h-4 w-4" /> Despesas Pagas
+                  </h3>
+                  <div className="space-y-2">
+                    {(cargoBoletos as any[]).filter((b: any) => b.paymentStatus === 'pago').map((boleto: any) => (
+                      <Card key={boleto.id} className="border-l-4 border-l-green-400 opacity-80 hover:opacity-100 transition-opacity">
+                        <CardContent className="py-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-gray-800 text-sm">{boleto.clientName || 'Sem cliente'}</span>
+                                <Badge className="bg-green-100 text-green-700 text-[10px]">Pago</Badge>
+                                {boleto.paidAt && (
+                                  <span className="text-xs text-gray-500">
+                                    Pago em: {new Date(boleto.paidAt).toLocaleDateString('pt-BR')}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                Carga #{boleto.id} · {boleto.date ? new Date(boleto.date).toLocaleDateString('pt-BR') : ''}
+                                {boleto.vehiclePlate && ` · ${boleto.vehiclePlate}`}
+                                {boleto.destination && ` → ${boleto.destination}`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg font-bold text-green-600 line-through">R$ {parseFloat(boleto.boletoAmount || '0').toFixed(2)}</span>
+                              <div className="flex gap-1">
+                                {boleto.paymentReceiptUrl && (
+                                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => window.open(boleto.paymentReceiptUrl, '_blank')}>
+                                    📄 Comprovante
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 

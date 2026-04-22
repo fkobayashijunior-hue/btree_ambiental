@@ -13,7 +13,8 @@ import {
   Camera, Loader2, X, Image as ImageIcon, Weight, Navigation,
   CheckCircle2, Clock, AlertCircle, ChevronRight, Pencil, Trash2,
   BarChart3, Download, Eye, RefreshCw, Building2, ChevronDown, ChevronUp,
-  Filter, Users
+  Filter, Users, Receipt, CreditCard, FileCheck, Upload, ExternalLink,
+  DollarSign, CalendarClock
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
@@ -332,6 +333,23 @@ export default function CargoControl() {
     onSuccess: () => { toast.success("Destino cadastrado!"); utils.cargoLoads.listDestinations.invalidate(); setIsDestinationOpen(false); setNewDestName(""); setNewDestCity(""); setNewDestState(""); },
     onError: (e) => toast.error(e.message),
   });
+  const uploadDocMutation = trpc.cargoLoads.uploadDocument.useMutation({
+    onSuccess: (data, vars) => {
+      const labels: Record<string, string> = { invoice: 'Nota fiscal', boleto: 'Boleto', payment_receipt: 'Comprovante de pagamento' };
+      toast.success(`${labels[vars.docType]} salvo!`);
+      utils.cargoLoads.getById.invalidate();
+      utils.cargoLoads.list.invalidate();
+      setUploadingDoc(null);
+    },
+    onError: (e) => { toast.error(e.message); setUploadingDoc(null); },
+  });
+  const markAsPaidMutation = trpc.cargoLoads.markAsPaid.useMutation({
+    onSuccess: () => { toast.success('Marcado como pago!'); utils.cargoLoads.getById.invalidate(); utils.cargoLoads.list.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [boletoAmount, setBoletoAmount] = useState('');
+  const [boletoDueDate, setBoletoDueDate] = useState('');
 
   const volume = useMemo(() => calcVolume(form.heightM, form.widthM, form.lengthM), [form.heightM, form.widthM, form.lengthM]);
 
@@ -414,6 +432,35 @@ export default function CargoControl() {
     setWeightPhotoType(type);
     setEditId(cargoId);
     openFilePicker({ accept: "image/*" }, handleAddPhoto);
+  };
+
+  const handleDocUpload = (cargoId: number, docType: 'invoice' | 'boleto' | 'payment_receipt') => {
+    setUploadingDoc(docType);
+    openFilePicker({ accept: 'image/*,application/pdf' }, async (files: FileList) => {
+      const file = files[0];
+      if (!file) { setUploadingDoc(null); return; }
+      try {
+        let base64: string;
+        if (file.type.startsWith('image/')) {
+          base64 = await compressImage(file);
+        } else {
+          const buf = await file.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary = '';
+          bytes.forEach(b => binary += String.fromCharCode(b));
+          base64 = `data:${file.type};base64,${btoa(binary)}`;
+        }
+        uploadDocMutation.mutate({
+          cargoId,
+          docBase64: base64,
+          docType,
+          ...(docType === 'boleto' ? { boletoAmount: boletoAmount || undefined, boletoDueDate: boletoDueDate || undefined } : {}),
+        });
+      } catch {
+        toast.error('Erro ao processar arquivo');
+        setUploadingDoc(null);
+      }
+    });
   };
 
   // Filtrar cargas
@@ -1213,6 +1260,161 @@ export default function CargoControl() {
                   );
                 } catch { return null; }
               })()}
+
+              {/* ===== DOCUMENTOS FINANCEIROS ===== */}
+              <div className="border border-amber-200 rounded-xl overflow-hidden">
+                <div className="bg-amber-50 px-4 py-2.5 border-b border-amber-200">
+                  <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                    <Receipt className="h-4 w-4" /> Documentos Financeiros
+                  </p>
+                </div>
+                <div className="p-4 space-y-4">
+                  {/* Nota Fiscal */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-700">Nota Fiscal</p>
+                        {(detailCargo as any).invoiceUrl ? (
+                          <a href={(detailCargo as any).invoiceUrl} target="_blank" rel="noopener" className="text-xs text-blue-600 hover:underline flex items-center gap-1 truncate">
+                            <ExternalLink className="h-3 w-3 flex-shrink-0" /> Ver documento
+                          </a>
+                        ) : (
+                          <p className="text-xs text-gray-400">Nenhum arquivo anexado</p>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs flex-shrink-0"
+                      disabled={uploadingDoc === 'invoice'}
+                      onClick={() => handleDocUpload(detailCargo.id, 'invoice')}
+                    >
+                      {uploadingDoc === 'invoice' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      {(detailCargo as any).invoiceUrl ? 'Substituir' : 'Anexar'}
+                    </Button>
+                  </div>
+
+                  {/* Boleto */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CreditCard className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-700">Boleto</p>
+                          {(detailCargo as any).boletoUrl ? (
+                            <div>
+                              <a href={(detailCargo as any).boletoUrl} target="_blank" rel="noopener" className="text-xs text-blue-600 hover:underline flex items-center gap-1 truncate">
+                                <ExternalLink className="h-3 w-3 flex-shrink-0" /> Ver boleto
+                              </a>
+                              {((detailCargo as any).boletoAmount || (detailCargo as any).boletoDueDate) && (
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {(detailCargo as any).boletoAmount && <span className="font-medium">R$ {(detailCargo as any).boletoAmount}</span>}
+                                  {(detailCargo as any).boletoDueDate && <span> · Venc: {new Date((detailCargo as any).boletoDueDate).toLocaleDateString('pt-BR')}</span>}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-400">Nenhum boleto anexado</p>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs flex-shrink-0"
+                        disabled={uploadingDoc === 'boleto'}
+                        onClick={() => handleDocUpload(detailCargo.id, 'boleto')}
+                      >
+                        {uploadingDoc === 'boleto' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                        {(detailCargo as any).boletoUrl ? 'Substituir' : 'Anexar'}
+                      </Button>
+                    </div>
+                    {/* Campos valor e vencimento do boleto */}
+                    {!(detailCargo as any).boletoUrl && (
+                      <div className="grid grid-cols-2 gap-2 pl-6">
+                        <div>
+                          <Label className="text-xs flex items-center gap-1"><DollarSign className="h-3 w-3" /> Valor (R$)</Label>
+                          <Input
+                            value={boletoAmount}
+                            onChange={e => setBoletoAmount(e.target.value)}
+                            placeholder="ex: 1500.00"
+                            type="number"
+                            step="0.01"
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs flex items-center gap-1"><CalendarClock className="h-3 w-3" /> Vencimento</Label>
+                          <Input
+                            value={boletoDueDate}
+                            onChange={e => setBoletoDueDate(e.target.value)}
+                            type="date"
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Comprovante de Pagamento */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-700">Comprovante de Pagamento</p>
+                        {(detailCargo as any).paymentReceiptUrl ? (
+                          <a href={(detailCargo as any).paymentReceiptUrl} target="_blank" rel="noopener" className="text-xs text-blue-600 hover:underline flex items-center gap-1 truncate">
+                            <ExternalLink className="h-3 w-3 flex-shrink-0" /> Ver comprovante
+                          </a>
+                        ) : (
+                          <p className="text-xs text-gray-400">Nenhum comprovante anexado</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      {(detailCargo as any).boletoUrl && (detailCargo as any).paymentStatus !== 'pago' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                          disabled={markAsPaidMutation.isPending}
+                          onClick={() => { if (confirm('Marcar como pago?')) markAsPaidMutation.mutate({ id: detailCargo.id }); }}
+                        >
+                          {markAsPaidMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          Pago
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs flex-shrink-0"
+                        disabled={uploadingDoc === 'payment_receipt'}
+                        onClick={() => handleDocUpload(detailCargo.id, 'payment_receipt')}
+                      >
+                        {uploadingDoc === 'payment_receipt' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                        {(detailCargo as any).paymentReceiptUrl ? 'Substituir' : 'Anexar'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Status de pagamento */}
+                  {(detailCargo as any).paymentStatus && (
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
+                      (detailCargo as any).paymentStatus === 'pago'
+                        ? 'bg-green-50 text-green-700 border border-green-200'
+                        : 'bg-orange-50 text-orange-700 border border-orange-200'
+                    }`}>
+                      {(detailCargo as any).paymentStatus === 'pago' ? (
+                        <><CheckCircle2 className="h-3.5 w-3.5" /> Pago{(detailCargo as any).paidAt && ` em ${new Date((detailCargo as any).paidAt).toLocaleDateString('pt-BR')}`}</>
+                      ) : (
+                        <><Clock className="h-3.5 w-3.5" /> A Pagar{(detailCargo as any).boletoDueDate && ` · Venc: ${new Date((detailCargo as any).boletoDueDate).toLocaleDateString('pt-BR')}`}</>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" className="flex-1 gap-2" onClick={() => { setDetailId(null); openEdit(detailCargo as unknown as typeof loads[number]); }}>
