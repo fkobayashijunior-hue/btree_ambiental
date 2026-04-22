@@ -461,7 +461,20 @@ export default function GpsTrackingPage() {
 
   const onlineCount = devices.filter((d) => d.status === "online").length;
   const offlineCount = devices.filter((d) => d.status !== "online").length;
-  const movingCount = positions.filter((p) => p.attributes.motion && p.speed > 0).length;
+
+  // "Em movimento" = ignição ligada + velocidade > 1 knot (~2 km/h) + dispositivo online
+  const onlineDeviceIds = new Set(devices.filter(d => d.status === "online").map(d => d.id));
+  const movingPositions = positions.filter((p) =>
+    onlineDeviceIds.has(p.deviceId) &&
+    p.attributes.ignition === true &&
+    p.speed > 1
+  );
+  const movingCount = movingPositions.length;
+
+  // Vel. máx. agora = maior velocidade apenas entre os que estão realmente em movimento
+  const maxSpeedNow = movingPositions.length > 0
+    ? knotsToKmh(Math.max(...movingPositions.map((p) => p.speed)))
+    : 0;
 
   // Horas do summary do Traccar
   const engineHoursMs = summaryData.length > 0 ? (summaryData[0]?.engineHours || 0) : 0;
@@ -496,81 +509,80 @@ export default function GpsTrackingPage() {
   }
 
   return (
-    <div className="flex flex-col h-full gap-4 p-4">
+    <div className="flex flex-col h-full gap-3 sm:gap-4 p-2 sm:p-4">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Navigation className="h-6 w-6 text-green-600" />
-            Rastreamento GPS
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
+            <Navigation className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 flex-shrink-0" />
+            <span className="truncate">Rastreamento GPS</span>
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {devices.length} dispositivos · {onlineCount} online · {offlineCount} offline
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <span className="text-xs text-muted-foreground hidden sm:inline">
             Atualizado: {lastRefresh.toLocaleTimeString("pt-BR")}
           </span>
-          <Badge variant="outline" className="gap-1">
+          <Badge variant="outline" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2">
             {statusData.configured ? (
-              <><Wifi className="h-3 w-3 text-green-500" /> Conectado</>
+              <><Wifi className="h-3 w-3 text-green-500" /> <span className="hidden sm:inline">Conectado</span></>
             ) : (
-              <><WifiOff className="h-3 w-3 text-red-500" /> Desconectado</>
+              <><WifiOff className="h-3 w-3 text-red-500" /> <span className="hidden sm:inline">Desconectado</span></>
             )}
           </Badge>
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+          <Button variant="outline" size="sm" onClick={handleRefresh} className="h-8 px-2 sm:px-3">
+            <RefreshCw className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">Atualizar</span>
           </Button>
         </div>
       </div>
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
         <Card>
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-green-100 flex items-center justify-center">
-              <Car className="h-5 w-5 text-green-600" />
+          <CardContent className="p-2 sm:p-3 flex items-center gap-2 sm:gap-3">
+            <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+              <Car className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Online</p>
-              <p className="text-xl font-bold text-green-600">{onlineCount}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Online</p>
+              <p className="text-lg sm:text-xl font-bold text-green-600">{onlineCount}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-red-100 flex items-center justify-center">
-              <Car className="h-5 w-5 text-red-500" />
+          <CardContent className="p-2 sm:p-3 flex items-center gap-2 sm:gap-3">
+            <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <Car className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Offline</p>
-              <p className="text-xl font-bold text-red-500">{offlineCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center">
-              <Zap className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Em movimento</p>
-              <p className="text-xl font-bold text-blue-600">{movingCount}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Offline</p>
+              <p className="text-lg sm:text-xl font-bold text-red-500">{offlineCount}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-orange-100 flex items-center justify-center">
-              <Gauge className="h-5 w-5 text-orange-600" />
+          <CardContent className="p-2 sm:p-3 flex items-center gap-2 sm:gap-3">
+            <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Vel. máx. agora</p>
-              <p className="text-xl font-bold text-orange-600">
-                {positions.length > 0
-                  ? `${knotsToKmh(Math.max(...positions.map((p) => p.speed)))} km/h`
-                  : "\u2014"}
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Em movimento</p>
+              <p className="text-lg sm:text-xl font-bold text-blue-600">{movingCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-2 sm:p-3 flex items-center gap-2 sm:gap-3">
+            <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+              <Gauge className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Vel. máx.</p>
+              <p className="text-lg sm:text-xl font-bold text-orange-600">
+                {maxSpeedNow > 0 ? `${maxSpeedNow} km/h` : "0 km/h"}
               </p>
             </div>
           </CardContent>
@@ -578,11 +590,11 @@ export default function GpsTrackingPage() {
       </div>
 
       {/* Conteúdo principal: lista + mapa */}
-      <div className="flex gap-4 flex-1 min-h-0 flex-col lg:flex-row">
+      <div className="flex gap-3 sm:gap-4 flex-1 min-h-0 flex-col lg:flex-row">
         {/* Lista de dispositivos */}
-        <div className="w-full lg:w-72 flex flex-col gap-2 overflow-y-auto max-h-[500px] lg:max-h-none">
+        <div className="w-full lg:w-72 flex flex-col gap-1.5 sm:gap-2 overflow-y-auto max-h-[300px] sm:max-h-[500px] lg:max-h-none">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
-            Dispositivos
+            Dispositivos ({devices.length})
           </p>
           {devices.length === 0 && (
             <Card>
@@ -595,6 +607,8 @@ export default function GpsTrackingPage() {
             const pos = positions.find((p) => p.deviceId === device.id);
             const speed = pos ? knotsToKmh(pos.speed) : 0;
             const isSelected = selectedDeviceId === device.id;
+            const isIgnOn = pos?.attributes.ignition === true;
+            const isReallyMoving = isIgnOn && speed > 2;
 
             return (
               <Card
@@ -602,27 +616,30 @@ export default function GpsTrackingPage() {
                 className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? "ring-2 ring-green-500" : ""}`}
                 onClick={() => setSelectedDeviceId(isSelected ? null : device.id)}
               >
-                <CardContent className="p-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm truncate">{device.name}</span>
+                <CardContent className="p-2.5 sm:p-3 space-y-0.5 sm:space-y-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-medium text-xs sm:text-sm truncate">{device.name}</span>
                     <span className={`h-2 w-2 rounded-full flex-shrink-0 ${statusColor(device.status)}`} />
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
+                  <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
+                    <span className="flex items-center gap-0.5">
                       <Gauge className="h-3 w-3" /> {speed} km/h
                     </span>
                     {pos?.attributes.ignition !== undefined && (
-                      <span className="flex items-center gap-1">
-                        {pos.attributes.ignition
+                      <span className="flex items-center gap-0.5">
+                        {isIgnOn
                           ? <><Zap className="h-3 w-3 text-green-500" /> Ligado</>
-                          : <><ZapOff className="h-3 w-3 text-gray-400" /> Desligado</>
+                          : <><ZapOff className="h-3 w-3 text-gray-400" /> Desl.</>
                         }
                       </span>
                     )}
+                    {isReallyMoving && (
+                      <Badge className="h-4 text-[9px] bg-blue-100 text-blue-700 border-0">Movendo</Badge>
+                    )}
                   </div>
                   {pos && (
-                    <p className="text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3 inline mr-1" />
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3 inline mr-0.5" />
                       {new Date(pos.deviceTime).toLocaleString("pt-BR", {
                         day: "2-digit", month: "2-digit",
                         hour: "2-digit", minute: "2-digit",
@@ -638,29 +655,28 @@ export default function GpsTrackingPage() {
         {/* Painel direito: mapa + abas */}
         <div className="flex-1 flex flex-col gap-3 min-h-[400px]">
           <Tabs value={tab} onValueChange={setTab} className="flex flex-col flex-1">
-            {/* Abas reorganizadas em grid para não encavalar */}
-            <div className="overflow-x-auto pb-1">
-              <TabsList className="inline-flex w-auto gap-1">
-                <TabsTrigger value="mapa" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
-                  <MapPin className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Mapa</span> ao vivo
+            {/* Abas reorganizadas com scroll horizontal para mobile */}
+            <div className="overflow-x-auto pb-1 -mx-1 px-1">
+              <TabsList className="inline-flex w-auto gap-0.5 sm:gap-1 h-auto p-1">
+                <TabsTrigger value="mapa" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2">
+                  <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Mapa
                 </TabsTrigger>
-                <TabsTrigger value="historico" className="gap-1 text-xs sm:text-sm px-2 sm:px-3" disabled={!selectedDeviceId}>
-                  <History className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Histórico</span> Rota
+                <TabsTrigger value="historico" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2" disabled={!selectedDeviceId}>
+                  <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Rota
                 </TabsTrigger>
-                <TabsTrigger value="relatorio" className="gap-1 text-xs sm:text-sm px-2 sm:px-3" disabled={!selectedDeviceId}>
-                  <Route className="h-3.5 w-3.5" /> Viagens
+                <TabsTrigger value="relatorio" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2" disabled={!selectedDeviceId}>
+                  <Route className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Viagens
                 </TabsTrigger>
-                <TabsTrigger value="vincular" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
-                  <Link2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Vincular</span> GPS
+                <TabsTrigger value="vincular" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2">
+                  <Link2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> GPS
                 </TabsTrigger>
-                <TabsTrigger value="manutencao" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
-                  <Wrench className="h-3.5 w-3.5" /> <span className="hidden md:inline">Manutenção</span>
+                <TabsTrigger value="manutencao" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2">
+                  <Wrench className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> <span className="hidden sm:inline">Manut.</span>
                 </TabsTrigger>
-                <TabsTrigger value="alertas" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
-                  <Bell className="h-3.5 w-3.5" />
-                  <span className="hidden md:inline">Alertas</span>
+                <TabsTrigger value="alertas" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2">
+                  <Bell className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                   {alertCount && alertCount.count > 0 && (
-                    <Badge className="ml-0.5 h-4 min-w-4 px-1 text-[10px] bg-red-500 text-white">{alertCount.count}</Badge>
+                    <Badge className="ml-0.5 h-3.5 min-w-3.5 px-0.5 text-[8px] bg-red-500 text-white">{alertCount.count}</Badge>
                   )}
                 </TabsTrigger>
               </TabsList>

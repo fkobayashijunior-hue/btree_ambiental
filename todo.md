@@ -1422,5 +1422,12 @@
 - [x] Corrigir botões/abas encavalados no layout (scroll horizontal + textos responsivos)
 - [x] Melhorar mapa ao vivo com auto-refresh (refetchInterval 10s + indicador visual)
 - [x] Preparar integração manutenção preventiva por horímetro (abastecimento, troca de óleo, engraxamento)
+- [x] Compilar e push para GitHub
+- [x] Sem novas tabelas/colunas nesta atualização (apenas frontend)
+
+### Correções GPS Mobile + Lógica Stats (21/04/2026)
+- [ ] Corrigir layout mobile: números fora das caixas, cards desalinhados
+- [ ] Corrigir lógica "Em movimento": considerar ignição ligada + velocidade > 0
+- [ ] Corrigir "Vel. máx. agora": mostrar 0 se nenhum dispositivo está realmente em movimento
+- [ ] Dispositivos na lista sem informações extras (velocidade, ignição, data)
 - [ ] Compilar e push para GitHub
-- [ ] Enviar scripts SQL se necessário
