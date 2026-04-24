@@ -91,27 +91,28 @@ function compressImage(file: File): Promise<string> {
 }
 
 // ===== GERAÇÃO DE PDF =====
-function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE Ambiental") {
-  const date = cargo.date ? new Date(cargo.date as string).toLocaleDateString("pt-BR") : "-";
-  const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-  const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
-  const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
-  const statusBadge = cargo.status === "entregue" ? "Entregue" : cargo.status === "cancelado" ? "Cancelado" : "Pendente";
-  const html = `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>Relatório de Carga #${cargo.id} - BTREE Ambiental</title>
-<style>
+// ===== CONSTANTES DE LOGOS =====
+const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
+
+const PDF_STYLES = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
-  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 16px 28px; display: flex; align-items: center; gap: 20px; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
+  @page { size: A4; margin: 0; }
+  .page { page-break-after: always; min-height: 100vh; display: flex; flex-direction: column; }
+  .page:last-child { page-break-after: auto; }
+  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
   .pdf-header img { height: 52px; filter: brightness(0) invert(1); }
-  .pdf-header-text h1 { font-size: 18px; font-weight: bold; margin: 0; }
+  .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
   .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
-  .pdf-content { padding: 20px 28px; }
-  .pdf-footer { margin-top: 24px; padding: 12px 28px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .pdf-subheader { background: #f0fdf4; padding: 10px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .pdf-subheader .badge { display: inline-block; padding: 4px 14px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .badge-pendente { background: #fef9c3; color: #854d0e; }
+  .badge-entregue { background: #dcfce7; color: #166534; }
+  .badge-cancelado { background: #fee2e2; color: #991b1b; }
+  .pdf-content { padding: 20px 32px; flex: 1; }
+  .pdf-footer { padding: 12px 32px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
   .pdf-footer-left { display: flex; align-items: center; gap: 10px; }
   .pdf-footer-left img { height: 28px; }
   .pdf-footer-text { font-size: 10px; color: #555; }
@@ -120,97 +121,46 @@ function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE 
   .pdf-footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .pdf-footer-right img { width: 60px; height: 60px; }
   .pdf-footer-right span { font-size: 9px; color: #555; }
-  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-  .badge-pendente { background: #fef9c3; color: #854d0e; }
-  .badge-entregue { background: #dcfce7; color: #166534; }
-  .badge-cancelado { background: #fee2e2; color: #991b1b; }
-  .section { margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-  .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 14px; color: #0d4f2e; border-bottom: 1px solid #e5e7eb; }
+  .section { margin-bottom: 18px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 13px; color: #0d4f2e; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
-  .field { padding: 10px 16px; border-bottom: 1px solid #f3f4f6; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+  .field { padding: 10px 16px; border-bottom: 1px solid #f3f4f6; border-right: 1px solid #f3f4f6; }
   .field:last-child { border-bottom: none; }
-  .field-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
-  .field-value { font-size: 14px; font-weight: 500; margin-top: 2px; }
-  .tracking { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .tracking-step { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+  .field-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .field-value { font-size: 13px; font-weight: 500; margin-top: 2px; color: #111; }
+  .field-value.highlight { color: #0d4f2e; font-weight: 700; font-size: 15px; }
+  .driver-card { display: flex; gap: 16px; padding: 16px; align-items: center; }
+  .driver-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #0d4f2e; }
+  .driver-avatar-placeholder { width: 80px; height: 80px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #9ca3af; border: 3px solid #0d4f2e; }
+  .driver-info { flex: 1; }
+  .driver-name { font-size: 18px; font-weight: bold; color: #0d4f2e; }
+  .driver-role { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .vehicle-badge { display: inline-flex; align-items: center; gap: 6px; background: #0d4f2e; color: white; padding: 6px 14px; border-radius: 6px; font-size: 14px; font-weight: bold; margin-top: 6px; }
+  .tracking { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 16px; }
+  .tracking-step { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
   .step-done { background: #dcfce7; color: #166534; }
   .step-current { background: #0d4f2e; color: white; }
   .step-pending { background: #f3f4f6; color: #9ca3af; }
-  .photos { display: flex; gap: 10px; flex-wrap: wrap; padding: 12px 16px; }
-  .photos img { width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; }
+  .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px 16px; }
+  .photo-item { text-align: center; }
+  .photo-item img { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; }
+  .photo-item .photo-label { font-size: 10px; color: #6b7280; margin-top: 4px; text-transform: uppercase; font-weight: 600; }
+  .doc-link { color: #0d4f2e; text-decoration: none; font-weight: 600; font-size: 12px; }
+  /* Relatório completo */
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table th { background: #0d4f2e; color: white; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+  table td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+  table tr:nth-child(even) { background: #f9fafb; }
+  table tr:hover { background: #f0fdf4; }
+  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 18px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .summary-item { text-align: center; }
+  .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+  .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-</style>
-</head>
-<body>
-<div class="pdf-header">
-  <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
-  <div class="pdf-header-text">
-    <h1>Relatório de Carga #${cargo.id}</h1>
-    <p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${new Date().toLocaleString("pt-BR")} · Status: ${statusBadge}</p>
-  </div>
-</div>
-<div class="pdf-content">
+`;
 
-<div class="section">
-  <div class="section-title">🚛 Veículo e Motorista</div>
-  <div class="grid">
-    <div class="field"><div class="field-label">Data</div><div class="field-value">${date}</div></div>
-    <div class="field"><div class="field-label">Placa / Veículo</div><div class="field-value">${cargo.vehiclePlate || cargo.vehicleName || "-"}</div></div>
-    <div class="field"><div class="field-label">Motorista</div><div class="field-value">${cargo.driverName || "-"}</div></div>
-    <div class="field"><div class="field-label">Nº Nota Fiscal</div><div class="field-value">${cargo.invoiceNumber || "-"}</div></div>
-  </div>
-</div>
-
-<div class="section">
-  <div class="section-title">📦 Informações da Carga</div>
-  <div class="grid">
-    <div class="field"><div class="field-label">Tipo de Madeira</div><div class="field-value">${cargo.woodType || "-"}</div></div>
-    <div class="field"><div class="field-label">Peso (kg)</div><div class="field-value">${cargo.weightKg ? cargo.weightKg + " kg" : "-"}</div></div>
-    <div class="field"><div class="field-label">Peso Bruto Saída</div><div class="field-value">${(cargo as any).weightOutKg ? (cargo as any).weightOutKg + " kg" : "-"}</div></div>
-    <div class="field"><div class="field-label">Peso Bruto Chegada</div><div class="field-value">${(cargo as any).weightInKg ? (cargo as any).weightInKg + " kg" : "-"}</div></div>
-    <div class="field"><div class="field-label">Peso Líquido</div><div class="field-value">${(cargo as any).weightNetKg ? (cargo as any).weightNetKg + " kg" : "-"}</div></div>
-    <div class="field"><div class="field-label">Altura (m)</div><div class="field-value">${cargo.heightM || "-"}</div></div>
-    <div class="field"><div class="field-label">Largura (m)</div><div class="field-value">${cargo.widthM || "-"}</div></div>
-    <div class="field"><div class="field-label">Comprimento (m)</div><div class="field-value">${cargo.lengthM || "-"}</div></div>
-    <div class="field"><div class="field-label">Volume (m³)</div><div class="field-value"><strong>${cargo.volumeM3 || "-"} m³</strong></div></div>
-  </div>
-</div>
-
-<div class="section">
-  <div class="section-title">👤 Cliente e Destino</div>
-  <div class="grid">
-    <div class="field"><div class="field-label">Cliente</div><div class="field-value">${cargo.clientName || "-"}</div></div>
-    <div class="field"><div class="field-label">Destino</div><div class="field-value">${cargo.destination || "-"}</div></div>
-  </div>
-  ${cargo.notes ? `<div class="field"><div class="field-label">Observações</div><div class="field-value">${cargo.notes}</div></div>` : ""}
-</div>
-
-${cargo.trackingStatus ? `
-<div class="section">
-  <div class="section-title">📍 Acompanhamento</div>
-  <div style="padding: 12px 16px;">
-    <div class="tracking">
-      ${TRACKING_STEPS.map(step => {
-        const idx = TRACKING_STEPS.findIndex(s => s.key === cargo.trackingStatus);
-        const stepIdx = TRACKING_STEPS.findIndex(s => s.key === step.key);
-        const cls = stepIdx < idx ? "step-done" : stepIdx === idx ? "step-current" : "step-pending";
-        return `<span class="tracking-step ${cls}">${step.icon} ${step.label}</span>`;
-      }).join("")}
-    </div>
-    ${cargo.trackingNotes ? `<p style="margin-top:10px;font-size:13px;color:#374151;">${cargo.trackingNotes}</p>` : ""}
-  </div>
-</div>` : ""}
-
-${(cargo.weightOutPhotoUrl || cargo.weightInPhotoUrl) ? `
-<div class="section">
-  <div class="section-title">⚖️ Fotos de Pesagem</div>
-  <div class="photos">
-    ${cargo.weightOutPhotoUrl ? `<div><div class="field-label" style="padding:0 0 4px">Pesagem Saída</div><img src="${cargo.weightOutPhotoUrl}" alt="Pesagem saída"/></div>` : ""}
-    ${cargo.weightInPhotoUrl ? `<div><div class="field-label" style="padding:0 0 4px">Pesagem Chegada</div><img src="${cargo.weightInPhotoUrl}" alt="Pesagem chegada"/></div>` : ""}
-  </div>
-</div>` : ""}
-
-</div>
+const PDF_FOOTER_HTML = `
 <div class="pdf-footer">
   <div class="pdf-footer-left">
     <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
@@ -223,16 +173,227 @@ ${(cargo.weightOutPhotoUrl || cargo.weightInPhotoUrl) ? `
     <img src="${BTREE_QR}" alt="QR Code" />
     <span>Acesse nosso site</span>
   </div>
-</div>
-<script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
-</body>
-</html>`;
+</div>`;
 
+// ===== PDF INDIVIDUAL: FICHA DA CARGA =====
+function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE Ambiental") {
+  const date = cargo.date ? new Date(cargo.date as string).toLocaleDateString("pt-BR") : "-";
+  const statusBadge = cargo.status === "entregue" ? "Entregue" : cargo.status === "cancelado" ? "Cancelado" : "Pendente";
+  const statusClass = cargo.status === "entregue" ? "badge-entregue" : cargo.status === "cancelado" ? "badge-cancelado" : "badge-pendente";
+  const photos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson as string); } catch { return []; } })() : [];
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Ficha de Carga #${cargo.id} - BTREE Ambiental</title>
+<style>${PDF_STYLES}</style></head><body>
+<div class="page">
+  <div class="pdf-header">
+    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <div class="pdf-header-text">
+      <h1>Ficha de Carga #${cargo.id}</h1>
+      <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString("pt-BR")}</p>
+    </div>
+  </div>
+  <div class="pdf-subheader">
+    <span style="font-size:13px;font-weight:600;color:#0d4f2e;">Data: ${date}</span>
+    <span class="badge ${statusClass}">${statusBadge}</span>
+  </div>
+  <div class="pdf-content">
+
+    <!-- Motorista e Veículo -->
+    <div class="section">
+      <div class="section-title">&#128104;&#8205;&#9877;&#65039; Motorista e Veículo</div>
+      <div class="driver-card">
+        <div class="driver-avatar-placeholder">&#128100;</div>
+        <div class="driver-info">
+          <div class="driver-name">${cargo.driverName || "Não informado"}</div>
+          <div class="driver-role">Motorista</div>
+          <div class="vehicle-badge">&#128666; ${cargo.vehiclePlate || cargo.vehicleName || "Veículo não informado"}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cliente e Destino -->
+    <div class="section">
+      <div class="section-title">&#127970; Cliente e Destino</div>
+      <div class="grid">
+        <div class="field"><div class="field-label">Cliente</div><div class="field-value highlight">${cargo.clientName || "-"}</div></div>
+        <div class="field"><div class="field-label">Destino</div><div class="field-value">${cargo.destination || "-"}</div></div>
+        <div class="field"><div class="field-label">Nº Nota Fiscal</div><div class="field-value">${cargo.invoiceNumber || "-"}</div></div>
+        <div class="field"><div class="field-label">Tipo de Madeira</div><div class="field-value">${cargo.woodType || "-"}</div></div>
+      </div>
+    </div>
+
+    <!-- Medições e Peso -->
+    <div class="section">
+      <div class="section-title">&#128230; Medições e Peso</div>
+      <div class="grid-3">
+        <div class="field"><div class="field-label">Altura (m)</div><div class="field-value">${cargo.heightM || "-"}</div></div>
+        <div class="field"><div class="field-label">Largura (m)</div><div class="field-value">${cargo.widthM || "-"}</div></div>
+        <div class="field"><div class="field-label">Comprimento (m)</div><div class="field-value">${cargo.lengthM || "-"}</div></div>
+        <div class="field"><div class="field-label">Volume (m³)</div><div class="field-value highlight">${cargo.volumeM3 || "-"} m³</div></div>
+        <div class="field"><div class="field-label">Peso Bruto Saída</div><div class="field-value">${(cargo as any).weightOutKg ? (cargo as any).weightOutKg + " kg" : "-"}</div></div>
+        <div class="field"><div class="field-label">Peso Bruto Chegada</div><div class="field-value">${(cargo as any).weightInKg ? (cargo as any).weightInKg + " kg" : "-"}</div></div>
+        <div class="field"><div class="field-label">Peso Líquido</div><div class="field-value highlight">${(cargo as any).weightNetKg ? (cargo as any).weightNetKg + " kg" : "-"}</div></div>
+        <div class="field"><div class="field-label">Peso (kg)</div><div class="field-value">${cargo.weightKg ? cargo.weightKg + " kg" : "-"}</div></div>
+        <div class="field"><div class="field-label">&nbsp;</div><div class="field-value">&nbsp;</div></div>
+      </div>
+    </div>
+
+    <!-- Acompanhamento -->
+    ${cargo.trackingStatus ? `
+    <div class="section">
+      <div class="section-title">&#128205; Acompanhamento</div>
+      <div class="tracking">
+        ${TRACKING_STEPS.map(step => {
+          const idx = TRACKING_STEPS.findIndex(s => s.key === cargo.trackingStatus);
+          const stepIdx = TRACKING_STEPS.findIndex(s => s.key === step.key);
+          const cls = stepIdx < idx ? "step-done" : stepIdx === idx ? "step-current" : "step-pending";
+          return `<span class="tracking-step ${cls}">${step.icon} ${step.label}</span>`;
+        }).join("")}
+      </div>
+      ${cargo.trackingNotes ? `<p style="padding:8px 16px;font-size:12px;color:#374151;">${cargo.trackingNotes}</p>` : ""}
+    </div>` : ""}
+
+    <!-- Documentos -->
+    ${((cargo as any).invoiceUrl || (cargo as any).boletoUrl || (cargo as any).paymentReceiptUrl) ? `
+    <div class="section">
+      <div class="section-title">&#128196; Documentos Financeiros</div>
+      <div class="grid">
+        <div class="field"><div class="field-label">Nota Fiscal</div><div class="field-value">${(cargo as any).invoiceUrl ? '<a class="doc-link" href="' + (cargo as any).invoiceUrl + '" target="_blank">&#10004; Anexada</a>' : "Não anexada"}</div></div>
+        <div class="field"><div class="field-label">Boleto</div><div class="field-value">${(cargo as any).boletoUrl ? '<a class="doc-link" href="' + (cargo as any).boletoUrl + '" target="_blank">&#10004; Anexado</a>' + ((cargo as any).boletoAmount ? ' - R$ ' + (cargo as any).boletoAmount : '') : "Não anexado"}</div></div>
+        <div class="field"><div class="field-label">Comprovante Pgto</div><div class="field-value">${(cargo as any).paymentReceiptUrl ? '<a class="doc-link" href="' + (cargo as any).paymentReceiptUrl + '" target="_blank">&#10004; Pago</a>' : ((cargo as any).boletoUrl ? "A pagar" : "-")}</div></div>
+        <div class="field"><div class="field-label">Status Pagamento</div><div class="field-value">${(cargo as any).paymentStatus === 'pago' ? '<span style="color:#166534;font-weight:700;">&#9989; Pago</span>' : (cargo as any).boletoUrl ? '<span style="color:#854d0e;font-weight:700;">&#9888; A Pagar</span>' : "-"}</div></div>
+      </div>
+    </div>` : ""}
+
+    ${cargo.notes ? `
+    <div class="section">
+      <div class="section-title">&#128221; Observações</div>
+      <div style="padding:12px 16px;font-size:13px;color:#374151;">${cargo.notes}</div>
+    </div>` : ""}
+
+    <!-- Fotos -->
+    ${(photos.length > 0 || cargo.weightOutPhotoUrl || cargo.weightInPhotoUrl) ? `
+    <div class="section">
+      <div class="section-title">&#128247; Registro Fotográfico</div>
+      <div class="photos-grid">
+        ${cargo.weightOutPhotoUrl ? `<div class="photo-item"><img src="${cargo.weightOutPhotoUrl}" alt="Pesagem saída" /><div class="photo-label">Pesagem Saída</div></div>` : ""}
+        ${cargo.weightInPhotoUrl ? `<div class="photo-item"><img src="${cargo.weightInPhotoUrl}" alt="Pesagem chegada" /><div class="photo-label">Pesagem Chegada</div></div>` : ""}
+        ${photos.map((p: string, i: number) => `<div class="photo-item"><img src="${p}" alt="Foto ${i + 1}" /><div class="photo-label">Foto ${i + 1}</div></div>`).join("")}
+      </div>
+    </div>` : ""}
+
+  </div>
+  ${PDF_FOOTER_HTML}
+</div>
+<script>window.onload = () => { setTimeout(() => { window.print(); }, 500); }</script>
+</body></html>`;
   const win = window.open("", "_blank");
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-  }
+  if (win) { win.document.write(html); win.document.close(); }
+}
+
+// ===== PDF RELATÓRIO COMPLETO POR CLIENTE =====
+function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>) {
+  const totalCargas = cargas.length;
+  const totalVolume = cargas.reduce((acc, c) => acc + parseFloat((c.volumeM3 as string) || "0"), 0).toFixed(2);
+  const totalPendentes = cargas.filter(c => c.status === "pendente").length;
+  const totalEntregues = cargas.filter(c => c.status === "entregue").length;
+  const totalPesoLiquido = cargas.reduce((acc, c) => {
+    const w = parseFloat(((c as any).weightNetKg || "0").replace(",", "."));
+    return acc + (isNaN(w) ? 0 : w);
+  }, 0);
+
+  const rows = cargas.map(c => {
+    const date = c.date ? new Date(c.date as string).toLocaleDateString("pt-BR") : "-";
+    const statusLabel = c.status === "entregue" ? "Entregue" : c.status === "cancelado" ? "Cancelado" : "Pendente";
+    const statusColor = c.status === "entregue" ? "#166534" : c.status === "cancelado" ? "#991b1b" : "#854d0e";
+    return `<tr>
+      <td style="font-weight:600;">${date}</td>
+      <td>${c.vehiclePlate || c.vehicleName || "-"}</td>
+      <td>${c.driverName || "-"}</td>
+      <td>${c.destination || "-"}</td>
+      <td>${c.woodType || "-"}</td>
+      <td style="text-align:right;">${c.heightM || "-"}</td>
+      <td style="text-align:right;">${c.widthM || "-"}</td>
+      <td style="text-align:right;">${c.lengthM || "-"}</td>
+      <td style="text-align:right;font-weight:700;color:#0d4f2e;">${c.volumeM3 || "-"}</td>
+      <td style="text-align:right;">${(c as any).weightOutKg || "-"}</td>
+      <td style="text-align:right;">${(c as any).weightInKg || "-"}</td>
+      <td style="text-align:right;font-weight:700;">${(c as any).weightNetKg || "-"}</td>
+      <td>${c.invoiceNumber || "-"}</td>
+      <td style="color:${statusColor};font-weight:600;">${statusLabel}</td>
+    </tr>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relatório de Cargas - ${clientName} - BTREE Ambiental</title>
+<style>${PDF_STYLES}
+  @page { size: A4 landscape; margin: 0; }
+</style></head><body>
+<div class="page">
+  <div class="pdf-header">
+    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <div class="pdf-header-text">
+      <h1>Relatório de Cargas</h1>
+      <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString("pt-BR")}</p>
+    </div>
+  </div>
+  <div class="pdf-subheader">
+    <span style="font-size:15px;font-weight:700;color:#0d4f2e;">&#127970; Cliente: ${clientName}</span>
+    <span style="font-size:12px;color:#6b7280;">Período: ${cargas.length > 0 ? new Date(cargas[cargas.length - 1].date as string).toLocaleDateString("pt-BR") : "-"} a ${cargas.length > 0 ? new Date(cargas[0].date as string).toLocaleDateString("pt-BR") : "-"}</span>
+  </div>
+  <div class="pdf-content">
+
+    <!-- Resumo -->
+    <div class="summary-box">
+      <div class="summary-item"><div class="label">Total de Cargas</div><div class="value">${totalCargas}</div></div>
+      <div class="summary-item"><div class="label">Volume Total</div><div class="value">${totalVolume} m³</div></div>
+      <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? totalPesoLiquido.toLocaleString("pt-BR") + " kg" : "-"}</div></div>
+      <div class="summary-item"><div class="label">Entregues</div><div class="value" style="color:#166534;">${totalEntregues}</div></div>
+      <div class="summary-item"><div class="label">Pendentes</div><div class="value" style="color:#854d0e;">${totalPendentes}</div></div>
+    </div>
+
+    <!-- Tabela -->
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Veículo</th>
+          <th>Motorista</th>
+          <th>Destino</th>
+          <th>Madeira</th>
+          <th style="text-align:right;">Alt.(m)</th>
+          <th style="text-align:right;">Larg.(m)</th>
+          <th style="text-align:right;">Comp.(m)</th>
+          <th style="text-align:right;">Vol.(m³)</th>
+          <th style="text-align:right;">P.Saída</th>
+          <th style="text-align:right;">P.Cheg.</th>
+          <th style="text-align:right;">P.Líq.</th>
+          <th>Nota</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f0fdf4;font-weight:bold;">
+          <td colspan="8" style="text-align:right;color:#0d4f2e;">TOTAIS:</td>
+          <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalVolume} m³</td>
+          <td colspan="2"></td>
+          <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalPesoLiquido > 0 ? totalPesoLiquido.toLocaleString("pt-BR") + " kg" : "-"}</td>
+          <td colspan="2" style="text-align:center;color:#0d4f2e;">${totalCargas} cargas</td>
+        </tr>
+      </tfoot>
+    </table>
+
+  </div>
+  ${PDF_FOOTER_HTML}
+</div>
+<script>window.onload = () => { setTimeout(() => { window.print(); }, 500); }</script>
+</body></html>`;
+  const win = window.open("", "_blank");
+  if (win) { win.document.write(html); win.document.close(); }
 }
 
 // ===== COMPONENTE PRINCIPAL =====
@@ -769,7 +930,7 @@ export default function CargoControl() {
                     })()}
                     
                     {/* Rodapé do grupo com totais */}
-                    <div className={`px-4 py-3 ${colors.bg} flex flex-wrap gap-4 text-xs`}>
+                    <div className={`px-4 py-3 ${colors.bg} flex flex-wrap items-center gap-4 text-xs`}>
                       <span className={`font-semibold ${colors.text}`}>
                         Total: {group.totalCargas} carga{group.totalCargas !== 1 ? "s" : ""}
                       </span>
@@ -786,6 +947,17 @@ export default function CargoControl() {
                           Entregues: {group.entregues}
                         </span>
                       )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="ml-auto gap-1.5 text-xs bg-white hover:bg-emerald-50 border-emerald-300 text-emerald-700"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>);
+                        }}
+                      >
+                        <Download className="h-3.5 w-3.5" /> Relatório PDF
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -1421,7 +1593,7 @@ export default function CargoControl() {
                   <Pencil className="h-4 w-4" /> Editar
                 </Button>
                 <Button className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => generateCargoPDF(detailCargo as unknown as Record<string, unknown>)}>
-                  <Download className="h-4 w-4" /> Gerar PDF
+                  <Download className="h-4 w-4" /> Ficha PDF
                 </Button>
               </div>
             </div>

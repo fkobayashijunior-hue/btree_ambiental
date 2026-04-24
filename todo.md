@@ -1440,5 +1440,12 @@
 - [x] Minha Carga (motorista): exibir nota da viagem
 - [x] Financeiro: listar cargas com boleto como "despesas a pagar"
 - [x] Financeiro: ao anexar comprovante, mudar automaticamente para "despesas pagas"
+- [x] Compilar e push para GitHub
+- [x] Enviar scripts SQL ao usuário
+
+### Relatórios PDF de Cargas (24/04/2026)
+- [x] PDF individual: ficha da carga com motorista, caminhão, imagens e dados completos
+- [x] PDF completo: relatório tabular com todas as cargas de um cliente (peso, caminhão, motorista, metragem, nota, data)
+- [x] Seguir identidade visual BTREE (logo, cores verde)
+- [x] Botões de geração no CargoControl (individual e por cliente)
 - [ ] Compilar e push para GitHub
-- [ ] Enviar scripts SQL ao usuário
