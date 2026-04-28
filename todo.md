@@ -1455,4 +1455,4 @@
 - [x] Adicionar foto do motorista no PDF da carga (buscar foto cadastrada do colaborador)
 - [x] Remover "tempo de operação" da landing page/Landing.tsx
 - [x] Corrigir erro de parse no CargoControl.tsx (resolvido após restart do servidor)
-- [ ] Compilar e push para GitHub
+- [x] Compilar e push para GitHub (commit 180dc2b)
