@@ -1448,4 +1448,11 @@
 - [x] PDF completo: relatório tabular com todas as cargas de um cliente (peso, caminhão, motorista, metragem, nota, data)
 - [x] Seguir identidade visual BTREE (logo, cores verde)
 - [x] Botões de geração no CargoControl (individual e por cliente)
+- [x] Compilar e push para GitHub
+
+### Correções 28/04/2026
+- [x] Corrigir erro 404 ao abrir o app na Hostinger (SPA routing - .htaccess)
+- [x] Adicionar foto do motorista no PDF da carga (buscar foto cadastrada do colaborador)
+- [x] Remover "tempo de operação" da landing page/Landing.tsx
+- [x] Corrigir erro de parse no CargoControl.tsx (resolvido após restart do servidor)
 - [ ] Compilar e push para GitHub

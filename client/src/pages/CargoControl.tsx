@@ -203,7 +203,7 @@ function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE 
     <div class="section">
       <div class="section-title">&#128104;&#8205;&#9877;&#65039; Motorista e Veículo</div>
       <div class="driver-card">
-        <div class="driver-avatar-placeholder">&#128100;</div>
+        ${(cargo as any).driverPhotoUrl ? `<img class="driver-avatar" src="${(cargo as any).driverPhotoUrl}" alt="${cargo.driverName || 'Motorista'}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="driver-avatar-placeholder" style="display:none">&#128100;</div>` : `<div class="driver-avatar-placeholder">&#128100;</div>`}
         <div class="driver-info">
           <div class="driver-name">${cargo.driverName || "Não informado"}</div>
           <div class="driver-role">Motorista</div>

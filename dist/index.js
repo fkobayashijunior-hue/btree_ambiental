@@ -1994,8 +1994,9 @@ var cargoLoadsRouter = router({
       destinationNameJoined: cargoDestinations.name,
       vehicleNameJoined: equipment.name,
       vehiclePlateJoined: equipment.licensePlate,
-      locationName: gpsLocations.name
-    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
+      locationName: gpsLocations.name,
+      driverPhotoUrl: collaborators.photoUrl
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq5(cargoLoads.driverCollaboratorId, collaborators.id)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     let filtered = results;
     if (input?.search) {
       const s = input.search.toLowerCase();
@@ -2012,7 +2013,8 @@ var cargoLoadsRouter = router({
       clientName: r.clientNameJoined || r.clientName,
       destination: r.destinationNameJoined || r.destination,
       vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
-      vehicleName: r.vehicleNameJoined
+      vehicleName: r.vehicleNameJoined,
+      driverPhotoUrl: r.driverPhotoUrl || null
     }));
   }),
   getById: protectedProcedure.input(z5.object({ id: z5.number() })).query(async ({ input }) => {
@@ -2066,8 +2068,9 @@ var cargoLoadsRouter = router({
       destinationNameJoined: cargoDestinations.name,
       vehicleNameJoined: equipment.name,
       vehiclePlateJoined: equipment.licensePlate,
-      locationName: gpsLocations.name
-    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).where(eq5(cargoLoads.id, input.id)).limit(1);
+      locationName: gpsLocations.name,
+      driverPhotoUrl: collaborators.photoUrl
+    }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq5(cargoLoads.driverCollaboratorId, collaborators.id)).where(eq5(cargoLoads.id, input.id)).limit(1);
     if (!result.length) throw new TRPCError4({ code: "NOT_FOUND" });
     const r = result[0];
     return {
@@ -2075,7 +2078,8 @@ var cargoLoadsRouter = router({
       clientName: r.clientNameJoined || r.clientName,
       destination: r.destinationNameJoined || r.destination,
       vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
-      vehicleName: r.vehicleNameJoined
+      vehicleName: r.vehicleNameJoined,
+      driverPhotoUrl: r.driverPhotoUrl || null
     };
   }),
   // Listagem pública para portal do cliente (por token)

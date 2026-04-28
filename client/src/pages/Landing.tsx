@@ -181,9 +181,9 @@ export default function Landing() {
             {/* Right: stats */}
             <div className="grid grid-cols-2 gap-4">
               {[
-                { value: "7", label: "Meses de operação", suffix: "meses" },
+                { value: "PR", label: "Astorga, Paraná", suffix: "" },
                 { value: "100%", label: "Venda garantida", suffix: "" },
-                { value: "Astorga", label: "Sede no Paraná", suffix: "" },
+                { value: "100%", label: "Sustentável", suffix: "" },
                 { value: "Japão", label: "Origem do grupo", suffix: "" },
               ].map((stat) => (
                 <div
@@ -275,8 +275,8 @@ export default function Landing() {
                 style={{ maxHeight: "500px" }}
               />
               <div className="absolute -bottom-6 -right-6 bg-[#2e7d32] text-white rounded-2xl p-5 shadow-xl">
-                <div className="text-2xl font-black">7 meses</div>
-                <div className="text-green-200 text-sm">de operação real</div>
+                <div className="text-2xl font-black">Astorga-PR</div>
+                <div className="text-green-200 text-sm">Sede no Paraná</div>
               </div>
             </div>
             <div>
@@ -285,7 +285,7 @@ export default function Landing() {
                 Do Japão para o Paraná: inovação que transforma florestas
               </h2>
               <p className="text-gray-600 leading-relaxed mb-4">
-                A BTREE Ambiental nasce sob os cuidados e investimentos de um grupo japonês com anos de estudos no setor florestal. Sediada em <strong>Astorga, Paraná</strong>, iniciamos a operação real há 7 meses — colocando a mão na massa com o compromisso de profissionalizar e inovar no setor de biomassa e madeira estrutural de eucalipto.
+                A BTREE Ambiental nasce sob os cuidados e investimentos de um grupo japonês com anos de estudos no setor florestal. Sediada em <strong>Astorga, Paraná</strong>, colocamos a mão na massa com o compromisso de profissionalizar e inovar no setor de biomassa e madeira estrutural de eucalipto.
               </p>
               <p className="text-gray-600 leading-relaxed mb-6">
                 Nossa missão é construir relações duradouras e de confiança com os agricultores, impulsionando o desenvolvimento sustentável da região com ética, respeito e responsabilidade ambiental. Já temos <strong>venda garantida</strong> e estamos cada vez mais fortalecidos, conquistando a confiança de novos parceiros comerciais.

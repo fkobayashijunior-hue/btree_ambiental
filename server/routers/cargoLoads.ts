@@ -123,12 +123,14 @@ export const cargoLoadsRouter = router({
           vehicleNameJoined: equipment.name,
           vehiclePlateJoined: equipment.licensePlate,
           locationName: gpsLocations.name,
+          driverPhotoUrl: collaborators.photoUrl,
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
         .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
         .leftJoin(equipment, eq(cargoLoads.vehicleId, equipment.id))
         .leftJoin(gpsLocations, eq(cargoLoads.workLocationId, gpsLocations.id))
+        .leftJoin(collaborators, eq(cargoLoads.driverCollaboratorId, collaborators.id))
         .orderBy(desc(cargoLoads.date), desc(cargoLoads.createdAt));
 
       let filtered = results;
@@ -156,6 +158,7 @@ export const cargoLoadsRouter = router({
         destination: r.destinationNameJoined || r.destination,
         vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
         vehicleName: r.vehicleNameJoined,
+        driverPhotoUrl: r.driverPhotoUrl || null,
       }));
     }),
 
@@ -214,12 +217,14 @@ export const cargoLoadsRouter = router({
           vehicleNameJoined: equipment.name,
           vehiclePlateJoined: equipment.licensePlate,
           locationName: gpsLocations.name,
+          driverPhotoUrl: collaborators.photoUrl,
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
         .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
         .leftJoin(equipment, eq(cargoLoads.vehicleId, equipment.id))
         .leftJoin(gpsLocations, eq(cargoLoads.workLocationId, gpsLocations.id))
+        .leftJoin(collaborators, eq(cargoLoads.driverCollaboratorId, collaborators.id))
         .where(eq(cargoLoads.id, input.id))
         .limit(1);
       if (!result.length) throw new TRPCError({ code: "NOT_FOUND" });
@@ -230,6 +235,7 @@ export const cargoLoadsRouter = router({
         destination: r.destinationNameJoined || r.destination,
         vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
         vehicleName: r.vehicleNameJoined,
+        driverPhotoUrl: r.driverPhotoUrl || null,
       };
     }),
 
