@@ -1456,3 +1456,6 @@
 - [x] Remover "tempo de operação" da landing page/Landing.tsx
 - [x] Corrigir erro de parse no CargoControl.tsx (resolvido após restart do servidor)
 - [x] Compilar e push para GitHub (commit 180dc2b)
+
+### Correções 01/05/2026
+- [x] Corrigir erro 404 ao abrir o app (start_url do PWA apontava para /dashboard que não existe, alterado para /)
