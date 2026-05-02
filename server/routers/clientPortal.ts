@@ -28,7 +28,7 @@ export const clientPortalRouter = router({
         .where(
           and(
             eq(clients.email, input.email.trim().toLowerCase()),
-            eq(clients.active, 1)
+            // active pode ser NULL em registros antigos
           )
         )
         .limit(1);
@@ -63,7 +63,7 @@ export const clientPortalRouter = router({
           and(
             eq(clients.id, input.clientId),
             eq(clients.email, input.email.trim().toLowerCase()),
-            eq(clients.active, 1)
+            // active pode ser NULL em registros antigos
           )
         )
         .limit(1);

@@ -1470,3 +1470,10 @@
 - [x] Juliano pode: adicionar gastos extras, manutenções, abastecimentos (só SIMFLOR)
 - [x] Juliano NÃO pode: ver financeiro geral, outras roças/clientes (via allowedClientIds)
 - [x] Compilar e push para GitHub (commit 208aa13)
+
+### Bug 02/05/2026
+- [ ] Clientes sumiram da página de Clientes (mostra 0 clientes)
+
+### Melhorias 02/05/2026
+- [x] Adicionar "Lembrar-me" no portal do cliente (salvar sessão no localStorage)
+- [x] Criar seção de documentos (proposta/contrato) na página de edição do cliente

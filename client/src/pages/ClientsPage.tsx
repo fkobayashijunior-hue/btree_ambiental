@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock } from "lucide-react";
+import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -42,8 +42,47 @@ export default function ClientsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Documentos do cliente
+  const [docClientId, setDocClientId] = useState<number | null>(null);
+  const [docTitle, setDocTitle] = useState("");
+  const [docType, setDocType] = useState<string>("proposta");
+  const [uploading, setUploading] = useState(false);
+
   const utils = trpc.useUtils();
   const { data: clientsList = [], isLoading } = trpc.clients.list.useQuery({ search: search || undefined });
+  const { data: clientDocs = [], refetch: refetchDocs } = trpc.cargoLoads.listClientDocuments.useQuery(
+    { clientId: docClientId ?? 0 },
+    { enabled: !!docClientId }
+  );
+  const uploadDocMutation = trpc.cargoLoads.uploadClientDocument.useMutation({
+    onSuccess: () => { toast.success("Documento enviado!"); refetchDocs(); setDocTitle(""); },
+    onError: (e) => toast.error(e.message || "Erro ao enviar documento"),
+  });
+  const deleteDocMutation = trpc.cargoLoads.deleteClientDocument.useMutation({
+    onSuccess: () => { toast.success("Documento removido!"); refetchDocs(); },
+    onError: (e) => toast.error(e.message || "Erro ao remover"),
+  });
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !docClientId) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      uploadDocMutation.mutate({
+        clientId: docClientId,
+        type: docType as any,
+        title: docTitle || file.name,
+        fileBase64: base64,
+        fileType: file.type || "application/pdf",
+      });
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
   const createMutation = trpc.clients.create.useMutation({
     onSuccess: () => { toast.success("Cliente cadastrado!"); utils.clients.list.invalidate(); setIsOpen(false); setForm(emptyForm); },
@@ -89,6 +128,7 @@ export default function ClientsPage() {
 
   const openEdit = (c: any) => {
     setEditId(c.id);
+    setDocClientId(c.id);
     setForm({ name: c.name, document: c.document || "", email: c.email || "", phone: c.phone || "", address: c.address || "", city: c.city || "", state: c.state || "", notes: c.notes || "", pricePerTon: c.pricePerTon || "", paymentTermDays: c.paymentTermDays ? String(c.paymentTermDays) : "20" });
     setIsOpen(true);
   };
@@ -266,6 +306,57 @@ export default function ClientsPage() {
                 <div><Label>Prazo Pagamento (dias)</Label><Input type="number" value={form.paymentTermDays} onChange={e => setForm(f => ({ ...f, paymentTermDays: e.target.value }))} placeholder="20" /></div>
               </div>
             </div>
+            {/* Seção de Documentos - só aparece ao editar */}
+            {editId && (
+              <div className="p-3 bg-amber-50 rounded-lg space-y-3">
+                <p className="text-sm font-semibold text-amber-800 flex items-center gap-2"><FileText className="h-4 w-4" /> Documentos do Cliente</p>
+                {/* Lista de documentos existentes */}
+                {clientDocs.length > 0 && (
+                  <div className="space-y-2">
+                    {clientDocs.map((doc: any) => (
+                      <div key={doc.id} className="flex items-center gap-2 bg-white p-2 rounded-md border">
+                        <FileText className="h-4 w-4 text-amber-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-800 truncate">{doc.title}</p>
+                          <p className="text-[10px] text-gray-500">{doc.type} • {new Date(doc.createdAt).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                        <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <button type="button" onClick={() => deleteDocMutation.mutate({ id: doc.id })} className="text-red-400 hover:text-red-600">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Upload de novo documento */}
+                <div className="space-y-2 pt-2 border-t border-amber-200">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Tipo</Label>
+                      <select value={docType} onChange={e => setDocType(e.target.value)} className="w-full h-9 px-2 rounded-md border border-input bg-background text-xs">
+                        <option value="proposta">Proposta</option>
+                        <option value="contrato">Contrato</option>
+                        <option value="nota_fiscal">Nota Fiscal</option>
+                        <option value="boleto">Boleto</option>
+                        <option value="recibo">Recibo</option>
+                        <option value="outros">Outros</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Título</Label>
+                      <Input className="h-9 text-xs" value={docTitle} onChange={e => setDocTitle(e.target.value)} placeholder="Nome do documento" />
+                    </div>
+                  </div>
+                  <label className="flex items-center justify-center gap-2 h-10 rounded-md border-2 border-dashed border-amber-300 bg-amber-50 hover:bg-amber-100 cursor-pointer transition-colors">
+                    <Upload className="h-4 w-4 text-amber-600" />
+                    <span className="text-xs font-medium text-amber-700">{uploading ? "Enviando..." : "Selecionar arquivo (PDF, imagem)"}</span>
+                    <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={handleDocUpload} disabled={uploading} />
+                  </label>
+                </div>
+              </div>
+            )}
             <div><Label>Observações</Label><textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="w-full min-h-[80px] px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" placeholder="Informações adicionais..." /></div>
             <div className="flex gap-3 pt-4 border-t">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setIsOpen(false)}>Cancelar</Button>

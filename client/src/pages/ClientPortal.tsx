@@ -776,16 +776,31 @@ function CargoCard({ load, formatDate, statusColor, clientId }: { load: CargoLoa
 
 // ── COMPONENTE PRINCIPAL ──
 export default function ClientPortal() {
-  const [session, setSession] = useState<ClientSession | null>(null);
+  const [session, setSession] = useState<ClientSession | null>(() => {
+    try {
+      const saved = localStorage.getItem("btree_client_session");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  const handleLogin = (data: ClientSession) => {
+    setSession(data);
+    localStorage.setItem("btree_client_session", JSON.stringify(data));
+  };
+
+  const handleLogout = () => {
+    setSession(null);
+    localStorage.removeItem("btree_client_session");
+  };
 
   if (!session) {
-    return <ClientLogin onLogin={setSession} />;
+    return <ClientLogin onLogin={handleLogin} />;
   }
 
   return (
     <ClientDashboard
       session={session}
-      onLogout={() => setSession(null)}
+      onLogout={handleLogout}
     />
   );
 }

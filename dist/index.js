@@ -3376,7 +3376,7 @@ var clientsRouter = router({
         (c) => c.name.toLowerCase().includes(s) || c.document?.toLowerCase().includes(s) || c.email?.toLowerCase().includes(s) || c.phone?.toLowerCase().includes(s)
       );
     }
-    return results.filter((c) => c.active === 1);
+    return results.filter((c) => c.active === null || c.active === void 0 || c.active === 1);
   }),
   create: protectedProcedure.input(z9.object({
     name: z9.string().min(2),
@@ -3440,8 +3440,8 @@ var clientPortalRouter = router({
     if (!db) throw new Error("Database not available");
     const [client] = await db.select().from(clients).where(
       and4(
-        eq10(clients.email, input.email.trim().toLowerCase()),
-        eq10(clients.active, 1)
+        eq10(clients.email, input.email.trim().toLowerCase())
+        // active pode ser NULL em registros antigos
       )
     ).limit(1);
     if (!client) throw new Error("E-mail ou senha incorretos.");
@@ -3463,8 +3463,8 @@ var clientPortalRouter = router({
     const [client] = await db.select().from(clients).where(
       and4(
         eq10(clients.id, input.clientId),
-        eq10(clients.email, input.email.trim().toLowerCase()),
-        eq10(clients.active, 1)
+        eq10(clients.email, input.email.trim().toLowerCase())
+        // active pode ser NULL em registros antigos
       )
     ).limit(1);
     if (!client) throw new Error("Acesso n\xE3o autorizado.");

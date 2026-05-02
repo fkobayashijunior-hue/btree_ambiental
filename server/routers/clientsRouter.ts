@@ -21,7 +21,7 @@ export const clientsRouter = router({
           c.phone?.toLowerCase().includes(s)
         );
       }
-      return results.filter(c => c.active === 1);
+      return results.filter(c => c.active === null || c.active === undefined || c.active === 1);
     }),
 
   create: protectedProcedure
