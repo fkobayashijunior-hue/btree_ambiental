@@ -41,5 +41,7 @@ export function usePermissions() {
     hasAccess,
     hasAnyAccess,
     profile: data?.profile || "custom",
+    allowedClientIds: data?.allowedClientIds as number[] | null | undefined,
+    allowedWorkLocationIds: data?.allowedWorkLocationIds as number[] | null | undefined,
   };
 }

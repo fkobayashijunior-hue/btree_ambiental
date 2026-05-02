@@ -2,8 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { userPermissions, users } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { userPermissions, users, collaborators, clients } from "../../drizzle/schema";
+import { eq, isNotNull } from "drizzle-orm";
 
 // Módulos disponíveis no sistema
 export const SYSTEM_MODULES = [
@@ -98,12 +98,22 @@ export const permissionsRouter = router({
     }));
   }),
 
+  // Listar clientes (para seletor de clientes permitidos)
+  listClients: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const allClients = await db.select({ id: clients.id, name: clients.name }).from(clients);
+    return allClients;
+  }),
+
   // Listar todos os usuários com suas permissões
   listUsers: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+    // Buscar usuários da tabela users
     const allUsers = await db.select({
       id: users.id,
       name: users.name,
@@ -112,14 +122,29 @@ export const permissionsRouter = router({
       createdAt: users.createdAt,
     }).from(users).orderBy(users.name);
 
+    // Buscar colaboradores com user_id vinculado (que já fizeram login)
+    const linkedCollabs = await db.select({
+      id: collaborators.id,
+      name: collaborators.name,
+      email: collaborators.email,
+      userId: collaborators.userId,
+      role: collaborators.role,
+    }).from(collaborators).where(isNotNull(collaborators.userId));
+
     const allPerms = await db.select().from(userPermissions);
     const permMap = Object.fromEntries(allPerms.map(p => [p.userId, p]));
 
-    return allUsers.map(u => ({
+    // Mapear usuários existentes
+    const userIds = new Set(allUsers.map(u => u.id));
+
+    // Combinar: usuários diretos + colaboradores vinculados (que não estão já na lista)
+    const result = allUsers.map(u => ({
       ...u,
+      collaboratorName: linkedCollabs.find(c => c.userId === u.id)?.name || null,
+      collaboratorRole: linkedCollabs.find(c => c.userId === u.id)?.role || null,
       permissions: permMap[u.id] || null,
       modules: u.role === "admin"
-        ? null // null = acesso total
+        ? null
         : permMap[u.id]?.modules
           ? JSON.parse(permMap[u.id].modules!) as string[]
           : [],
@@ -131,6 +156,8 @@ export const permissionsRouter = router({
         ? JSON.parse(permMap[u.id].allowedWorkLocationIds!) as number[]
         : null,
     }));
+
+    return result;
   }),
 
   // Buscar permissões do usuário atual

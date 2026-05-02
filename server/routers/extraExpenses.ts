@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { extraExpenses, gpsLocations } from "../../drizzle/schema";
+import { extraExpenses, gpsLocations, userPermissions } from "../../drizzle/schema";
 import { desc, eq, and, gte, lte } from "drizzle-orm";
 
 export const extraExpensesRouter = router({
@@ -11,7 +11,7 @@ export const extraExpensesRouter = router({
       dateTo: z.string().optional(),
       category: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
       const conditions = [];
@@ -23,6 +23,14 @@ export const extraExpensesRouter = router({
       }
       if (input.category) {
         conditions.push(eq(extraExpenses.category, input.category as any));
+      }
+      // Verificar se o usuário tem restrição de clientes
+      let allowedClientIds: number[] | null = null;
+      if (ctx.user.role !== "admin") {
+        const [perm] = await db.select().from(userPermissions).where(eq(userPermissions.userId, ctx.user.id));
+        if (perm?.allowedClientIds) {
+          allowedClientIds = JSON.parse(perm.allowedClientIds) as number[];
+        }
       }
       const rows = await db
         .select({
@@ -38,12 +46,21 @@ export const extraExpensesRouter = router({
           registeredByName: extraExpenses.registeredByName,
           createdAt: extraExpenses.createdAt,
           workLocationId: extraExpenses.workLocationId,
+          clientId: extraExpenses.clientId,
           locationName: gpsLocations.name,
+          locationClientId: gpsLocations.clientId,
         })
         .from(extraExpenses)
         .leftJoin(gpsLocations, eq(extraExpenses.workLocationId, gpsLocations.id))
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(extraExpenses.date));
+      // Filtrar por cliente se encarregado
+      if (allowedClientIds && allowedClientIds.length > 0) {
+        return rows.filter(r => {
+          const cId = r.clientId || r.locationClientId;
+          return cId && allowedClientIds!.includes(cId);
+        });
+      }
       return rows;
     }),
 
@@ -57,6 +74,7 @@ export const extraExpensesRouter = router({
       receiptImageUrl: z.string().optional(),
       notes: z.string().optional(),
       workLocationId: z.number().optional(),
+      clientId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -72,6 +90,7 @@ export const extraExpensesRouter = router({
         registeredBy: ctx.user.id,
         registeredByName: ctx.user.name,
         workLocationId: input.workLocationId || null,
+        clientId: input.clientId || null,
       });
       return { id: (result as any).insertId };
     }),

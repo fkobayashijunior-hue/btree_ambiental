@@ -414,6 +414,7 @@ export const extraExpenses = mysqlTable("extra_expenses", {
 	registeredByName: varchar("registered_by_name", { length: 255 }),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	workLocationId: int("work_location_id"),
+	clientId: int("client_id"),
 });
 
 export const financialEntries = mysqlTable("financial_entries", {
@@ -516,6 +517,7 @@ export const gpsLocations = mysqlTable("gps_locations", {
 	longitude: varchar({ length: 30 }).notNull(),
 	radiusMeters: int("radius_meters").default(2000).notNull(),
 	isActive: tinyint("is_active").default(1).notNull(),
+	clientId: int("client_id"),
 	notes: text(),
 	createdBy: int("created_by"),
 	createdByName: varchar("created_by_name", { length: 255 }),

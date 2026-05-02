@@ -1477,3 +1477,9 @@
 ### Melhorias 02/05/2026
 - [x] Adicionar "Lembrar-me" no portal do cliente (salvar sessão no localStorage)
 - [x] Criar seção de documentos (proposta/contrato) na página de edição do cliente
+
+### Bugs e Melhorias 02/05/2026 (2)
+- [x] Erro no INSERT client_documents (passando createdAt explicitamente)
+- [x] Controle de Acesso atualizado (mostra usuários logados + seletor de clientes permitidos)
+- [x] Adicionar seletor de cliente/local ao perfil Encarregado (vincular ao cliente)
+- [x] Separar gastos por local/cliente (admin vê tudo, encarregado só vê o dele via allowedClientIds + clientId no local GPS)

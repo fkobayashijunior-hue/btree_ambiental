@@ -57,6 +57,7 @@ type FormState = {
   latitude: string;
   longitude: string;
   radiusMeters: number;
+  clientId: number | null;
   notes: string;
 };
 
@@ -65,6 +66,7 @@ const emptyForm: FormState = {
   latitude: "",
   longitude: "",
   radiusMeters: 2000,
+  clientId: null,
   notes: "",
 };
 
@@ -80,6 +82,7 @@ export default function GpsLocationsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const { data: locations = [], isLoading } = trpc.gpsLocations.list.useQuery();
+  const { data: clientsList = [] } = trpc.clients.list.useQuery();
 
   const createMutation = trpc.gpsLocations.create.useMutation({
     onSuccess: () => {
@@ -172,13 +175,14 @@ export default function GpsLocationsPage() {
     setIsOpen(true);
   };
 
-  const openEdit = (loc: GpsLocation) => {
+  const openEdit = (loc: any) => {
     setEditingId(loc.id);
     setForm({
       name: loc.name,
       latitude: loc.latitude,
       longitude: loc.longitude,
       radiusMeters: loc.radiusMeters,
+      clientId: loc.clientId || null,
       notes: loc.notes || "",
     });
     setGpsStatus("idle");
@@ -190,10 +194,11 @@ export default function GpsLocationsPage() {
     if (!form.name.trim()) { toast.error("Informe o nome do local"); return; }
     if (!form.latitude || !form.longitude) { toast.error("Capture ou informe as coordenadas GPS"); return; }
     setSubmitting(true);
+    const payload = { ...form, clientId: form.clientId || undefined };
     if (editingId) {
-      updateMutation.mutate({ id: editingId, ...form });
+      updateMutation.mutate({ id: editingId, ...payload });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(payload);
     }
   };
 
@@ -282,6 +287,11 @@ export default function GpsLocationsPage() {
                       <p className="text-xs text-muted-foreground">
                         Raio de detecção: <strong>{loc.radiusMeters >= 1000 ? `${(loc.radiusMeters / 1000).toFixed(1)} km` : `${loc.radiusMeters} m`}</strong>
                       </p>
+                      {(loc as any).clientId && (
+                        <p className="text-xs text-muted-foreground">
+                          Cliente: <strong>{clientsList.find((c: any) => c.id === (loc as any).clientId)?.name || `ID ${(loc as any).clientId}`}</strong>
+                        </p>
+                      )}
                       {loc.notes && (
                         <p className="text-xs text-muted-foreground italic">{loc.notes}</p>
                       )}
@@ -455,6 +465,25 @@ export default function GpsLocationsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Colaboradores dentro deste raio serão identificados como estando neste local.
+              </p>
+            </div>
+
+            {/* Cliente vinculado */}
+            <div className="space-y-1.5">
+              <Label htmlFor="loc-client">Cliente Vinculado</Label>
+              <select
+                id="loc-client"
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                value={form.clientId || ""}
+                onChange={(e) => setForm(f => ({ ...f, clientId: e.target.value ? Number(e.target.value) : null }))}
+              >
+                <option value="">Nenhum (geral)</option>
+                {clientsList.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Vincule este local a um cliente para filtrar gastos por encarregado.
               </p>
             </div>
 

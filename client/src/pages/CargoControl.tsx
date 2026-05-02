@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // ===== TIPOS =====
 type TrackingStatus = "aguardando" | "carregando" | "em_transito" | "pesagem_saida" | "descarregando" | "pesagem_chegada" | "finalizado";
@@ -627,6 +628,7 @@ function WeeklyClosingsView({
 
 export default function CargoControl() {
   const utils = trpc.useUtils();
+  const { allowedClientIds, isAdmin } = usePermissions();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("");
   const [filterClientId, setFilterClientId] = useState<number>(0);
@@ -856,14 +858,18 @@ export default function CargoControl() {
     });
   };
 
-  // Filtrar cargas
+  // Filtrar cargas (respeitar allowedClientIds para encarregados)
   const filtered = useMemo(() => {
     return loads.filter(c => {
+      // Filtro de permissão: encarregado só vê cargas dos clientes permitidos
+      if (allowedClientIds && allowedClientIds.length > 0) {
+        if (!c.clientId || !allowedClientIds.includes(c.clientId)) return false;
+      }
       if (filterStatus && c.status !== filterStatus) return false;
       if (filterClientId && c.clientId !== filterClientId) return false;
       return true;
     });
-  }, [loads, filterStatus, filterClientId]);
+  }, [loads, filterStatus, filterClientId, allowedClientIds]);
 
   // Agrupar por cliente (ordenado por data dentro de cada grupo)
   const groupedByClient = useMemo(() => {

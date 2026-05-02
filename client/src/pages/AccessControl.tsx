@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Shield, User, ChevronDown, ChevronUp, Check, Loader2 } from "lucide-react";
+import { Shield, User, ChevronDown, ChevronUp, Check, Loader2, MapPin } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -20,6 +20,7 @@ const PROFILE_COLORS: Record<string, string> = {
   operador:      "bg-orange-100 text-orange-800 border-orange-200",
   motorista:     "bg-purple-100 text-purple-800 border-purple-200",
   motosserrista: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  encarregado:   "bg-gray-100 text-gray-700 border-gray-200",
   lider:         "bg-emerald-100 text-emerald-800 border-emerald-200",
   equipe:        "bg-teal-100 text-teal-800 border-teal-200",
   custom:        "bg-gray-100 text-gray-700 border-gray-200",
@@ -29,11 +30,13 @@ export default function AccessControl() {
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
   const [pendingModules, setPendingModules] = useState<Record<number, string[]>>({});
   const [pendingProfiles, setPendingProfiles] = useState<Record<number, string>>({});
+  const [pendingClientIds, setPendingClientIds] = useState<Record<number, number[]>>({});
 
   const utils = trpc.useUtils();
   const { data: usersList = [], isLoading: loadingUsers } = trpc.permissions.listUsers.useQuery();
   const { data: modulesList = [] } = trpc.permissions.listModules.useQuery();
   const { data: profilesList = [] } = trpc.permissions.listProfiles.useQuery();
+  const { data: clientsList = [] } = trpc.permissions.listClients.useQuery();
 
   const setPermsMutation = trpc.permissions.setPermissions.useMutation({
     onSuccess: () => {
@@ -59,6 +62,11 @@ export default function AccessControl() {
     return pendingProfiles[userId] ?? userProfile;
   };
 
+  const getUserClientIds = (userId: number, userClientIds: number[] | null): number[] => {
+    if (pendingClientIds[userId] !== undefined) return pendingClientIds[userId];
+    return userClientIds || [];
+  };
+
   const toggleModule = (userId: number, slug: string, currentModules: string[] | null) => {
     const current = getUserModules(userId, currentModules);
     const updated = current.includes(slug)
@@ -66,6 +74,14 @@ export default function AccessControl() {
       : [...current, slug];
     setPendingModules(p => ({ ...p, [userId]: updated }));
     setPendingProfiles(p => ({ ...p, [userId]: "custom" }));
+  };
+
+  const toggleClient = (userId: number, clientId: number, userClientIds: number[] | null) => {
+    const current = getUserClientIds(userId, userClientIds);
+    const updated = current.includes(clientId)
+      ? current.filter(id => id !== clientId)
+      : [...current, clientId];
+    setPendingClientIds(p => ({ ...p, [userId]: updated }));
   };
 
   const handleApplyProfile = (userId: number, profileKey: string) => {
@@ -79,21 +95,27 @@ export default function AccessControl() {
     }
   };
 
-  const handleSave = (userId: number, currentModules: string[] | null, currentProfile: string) => {
+  const handleSave = (userId: number, currentModules: string[] | null, currentProfile: string, currentClientIds: number[] | null) => {
     const modules = pendingModules[userId] !== undefined ? pendingModules[userId] : currentModules;
     const profile = pendingProfiles[userId] ?? currentProfile;
     const isAdminProfile = profile === "admin";
+    const allowedClientIds = pendingClientIds[userId] !== undefined
+      ? (pendingClientIds[userId].length > 0 ? pendingClientIds[userId] : null)
+      : currentClientIds;
+
     setPermsMutation.mutate({
       userId,
       modules: isAdminProfile ? null : (modules || []),
       profile,
+      allowedClientIds: allowedClientIds,
     });
     setPendingModules(p => { const n = { ...p }; delete n[userId]; return n; });
     setPendingProfiles(p => { const n = { ...p }; delete n[userId]; return n; });
+    setPendingClientIds(p => { const n = { ...p }; delete n[userId]; return n; });
   };
 
   const hasPendingChanges = (userId: number) =>
-    pendingModules[userId] !== undefined || pendingProfiles[userId] !== undefined;
+    pendingModules[userId] !== undefined || pendingProfiles[userId] !== undefined || pendingClientIds[userId] !== undefined;
 
   if (loadingUsers) {
     return (
@@ -133,14 +155,21 @@ export default function AccessControl() {
         </CardContent>
       </Card>
 
+      {/* Info box */}
+      <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+        <strong>Nota:</strong> Apenas usuários que já fizeram login no sistema aparecem aqui. Para dar acesso ao Juliano ou outro colaborador, ele precisa fazer login pelo menos uma vez com o e-mail vinculado.
+      </div>
+
       {/* Lista de usuários */}
       <div className="space-y-3">
         {(usersList as any[]).map((user: any) => {
           const isExpanded = expandedUser === user.id;
           const currentProfile = getUserProfile(user.id, user.profile);
           const currentModules = getUserModules(user.id, user.modules);
+          const currentClientIds = getUserClientIds(user.id, user.allowedClientIds);
           const isAdminProfile = currentProfile === "admin" || user.role === "admin";
           const changed = hasPendingChanges(user.id);
+          const isEncarregado = currentProfile === "encarregado" || currentProfile === "lider";
 
           return (
             <Card key={user.id} className={`transition-all ${changed ? "border-emerald-400 shadow-sm" : "border-gray-200"}`}>
@@ -154,8 +183,15 @@ export default function AccessControl() {
                       <User className="h-4 w-4 text-emerald-700" />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900 text-sm">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.email}</p>
+                      <p className="font-semibold text-gray-900 text-sm">
+                        {user.collaboratorName || user.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {user.email}
+                        {user.collaboratorRole && (
+                          <span className="ml-2 text-emerald-600">• {user.collaboratorRole}</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -197,6 +233,41 @@ export default function AccessControl() {
                       <span className="text-xs text-gray-400">ou selecione módulos individualmente</span>
                     </div>
 
+                    {/* Restrição por cliente (para encarregados/líderes) */}
+                    {!isAdminProfile && (
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-amber-700" />
+                          <span className="text-sm font-medium text-amber-800">Clientes Permitidos</span>
+                        </div>
+                        <p className="text-xs text-amber-700">
+                          Selecione quais clientes/roças este usuário pode acessar. Se nenhum for selecionado, terá acesso a todos.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                          {(clientsList as any[]).map((client: any) => (
+                            <label
+                              key={client.id}
+                              className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                                currentClientIds.includes(client.id)
+                                  ? "bg-amber-100 border-amber-300 text-amber-800"
+                                  : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                              }`}
+                            >
+                              <Checkbox
+                                checked={currentClientIds.includes(client.id)}
+                                onCheckedChange={() => toggleClient(user.id, client.id, user.allowedClientIds)}
+                                className="h-4 w-4 flex-shrink-0"
+                              />
+                              <span className="font-medium leading-tight">{client.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {(clientsList as any[]).length === 0 && (
+                          <p className="text-xs text-gray-500 italic">Nenhum cliente cadastrado</p>
+                        )}
+                      </div>
+                    )}
+
                     {/* Módulos por grupo */}
                     {isAdminProfile ? (
                       <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 flex items-center gap-2">
@@ -237,7 +308,7 @@ export default function AccessControl() {
                       <Button
                         size="sm"
                         className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
-                        onClick={() => handleSave(user.id, user.modules, user.profile)}
+                        onClick={() => handleSave(user.id, user.modules, user.profile, user.allowedClientIds)}
                         disabled={setPermsMutation.isPending}
                       >
                         {setPermsMutation.isPending ? (
@@ -260,6 +331,7 @@ export default function AccessControl() {
         <div className="text-center py-16 text-gray-400">
           <Shield className="h-16 w-16 mx-auto mb-4 opacity-30" />
           <p className="text-lg font-medium">Nenhum usuário encontrado</p>
+          <p className="text-sm mt-2">Os usuários aparecerão aqui após fazerem login no sistema</p>
         </div>
       )}
     </div>

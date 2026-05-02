@@ -581,7 +581,8 @@ var init_schema = __esm({
       registeredBy: int("registered_by").references(() => users.id),
       registeredByName: varchar("registered_by_name", { length: 255 }),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
-      workLocationId: int("work_location_id")
+      workLocationId: int("work_location_id"),
+      clientId: int("client_id")
     });
     financialEntries = mysqlTable("financial_entries", {
       id: int().autoincrement().notNull(),
@@ -677,6 +678,7 @@ var init_schema = __esm({
       longitude: varchar({ length: 30 }).notNull(),
       radiusMeters: int("radius_meters").default(2e3).notNull(),
       isActive: tinyint("is_active").default(1).notNull(),
+      clientId: int("client_id"),
       notes: text(),
       createdBy: int("created_by"),
       createdByName: varchar("created_by_name", { length: 255 }),
@@ -2670,14 +2672,16 @@ var cargoLoadsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
     const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const result = await db.insert(clientDocuments).values({
       clientId: input.clientId,
       type: input.type,
       title: input.title,
       fileUrl: uploaded.url,
-      fileType: input.fileType,
-      notes: input.notes,
-      uploadedBy: ctx.user.id
+      fileType: input.fileType || null,
+      notes: input.notes || null,
+      uploadedBy: ctx.user.id,
+      createdAt: now
     });
     return { success: true, id: result.insertId, url: uploaded.url };
   }),
@@ -4736,7 +4740,7 @@ import { z as z16 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError12 } from "@trpc/server";
-import { eq as eq16 } from "drizzle-orm";
+import { eq as eq16, isNotNull } from "drizzle-orm";
 var SYSTEM_MODULES = [
   // Maquinário
   { slug: "equipamentos", label: "Equipamentos", group: "Maquin\xE1rio" },
@@ -4817,6 +4821,14 @@ var permissionsRouter = router({
       modules: val.modules
     }));
   }),
+  // Listar clientes (para seletor de clientes permitidos)
+  listClients: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+    const allClients = await db.select({ id: clients.id, name: clients.name }).from(clients);
+    return allClients;
+  }),
   // Listar todos os usuários com suas permissões
   listUsers: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
@@ -4829,16 +4841,27 @@ var permissionsRouter = router({
       role: users.role,
       createdAt: users.createdAt
     }).from(users).orderBy(users.name);
+    const linkedCollabs = await db.select({
+      id: collaborators.id,
+      name: collaborators.name,
+      email: collaborators.email,
+      userId: collaborators.userId,
+      role: collaborators.role
+    }).from(collaborators).where(isNotNull(collaborators.userId));
     const allPerms = await db.select().from(userPermissions);
     const permMap = Object.fromEntries(allPerms.map((p) => [p.userId, p]));
-    return allUsers.map((u) => ({
+    const userIds = new Set(allUsers.map((u) => u.id));
+    const result = allUsers.map((u) => ({
       ...u,
+      collaboratorName: linkedCollabs.find((c) => c.userId === u.id)?.name || null,
+      collaboratorRole: linkedCollabs.find((c) => c.userId === u.id)?.role || null,
       permissions: permMap[u.id] || null,
       modules: u.role === "admin" ? null : permMap[u.id]?.modules ? JSON.parse(permMap[u.id].modules) : [],
       profile: permMap[u.id]?.profile || "custom",
       allowedClientIds: permMap[u.id]?.allowedClientIds ? JSON.parse(permMap[u.id].allowedClientIds) : null,
       allowedWorkLocationIds: permMap[u.id]?.allowedWorkLocationIds ? JSON.parse(permMap[u.id].allowedWorkLocationIds) : null
     }));
+    return result;
   }),
   // Buscar permissões do usuário atual
   myPermissions: protectedProcedure.query(async ({ ctx }) => {
@@ -5483,7 +5506,7 @@ var extraExpensesRouter = router({
     dateFrom: z18.string().optional(),
     dateTo: z18.string().optional(),
     category: z18.string().optional()
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     const conditions = [];
@@ -5495,6 +5518,13 @@ var extraExpensesRouter = router({
     }
     if (input.category) {
       conditions.push(eq18(extraExpenses.category, input.category));
+    }
+    let allowedClientIds = null;
+    if (ctx.user.role !== "admin") {
+      const [perm] = await db.select().from(userPermissions).where(eq18(userPermissions.userId, ctx.user.id));
+      if (perm?.allowedClientIds) {
+        allowedClientIds = JSON.parse(perm.allowedClientIds);
+      }
     }
     const rows = await db.select({
       id: extraExpenses.id,
@@ -5509,8 +5539,16 @@ var extraExpensesRouter = router({
       registeredByName: extraExpenses.registeredByName,
       createdAt: extraExpenses.createdAt,
       workLocationId: extraExpenses.workLocationId,
-      locationName: gpsLocations.name
+      clientId: extraExpenses.clientId,
+      locationName: gpsLocations.name,
+      locationClientId: gpsLocations.clientId
     }).from(extraExpenses).leftJoin(gpsLocations, eq18(extraExpenses.workLocationId, gpsLocations.id)).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc15(extraExpenses.date));
+    if (allowedClientIds && allowedClientIds.length > 0) {
+      return rows.filter((r) => {
+        const cId = r.clientId || r.locationClientId;
+        return cId && allowedClientIds.includes(cId);
+      });
+    }
     return rows;
   }),
   create: protectedProcedure.input(z18.object({
@@ -5521,7 +5559,8 @@ var extraExpensesRouter = router({
     paymentMethod: z18.enum(["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro"),
     receiptImageUrl: z18.string().optional(),
     notes: z18.string().optional(),
-    workLocationId: z18.number().optional()
+    workLocationId: z18.number().optional(),
+    clientId: z18.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -5535,7 +5574,8 @@ var extraExpensesRouter = router({
       notes: input.notes,
       registeredBy: ctx.user.id,
       registeredByName: ctx.user.name,
-      workLocationId: input.workLocationId || null
+      workLocationId: input.workLocationId || null,
+      clientId: input.clientId || null
     });
     return { id: result.insertId };
   }),
@@ -5934,16 +5974,36 @@ init_db();
 init_schema();
 var gpsLocationsRouter = router({
   // ── Listar todos os locais ativos ────────────────────────────────────────
-  list: protectedProcedure.query(async () => {
+  list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    return db.select().from(gpsLocations).orderBy(desc17(gpsLocations.createdAt));
+    const rows = await db.select().from(gpsLocations).orderBy(desc17(gpsLocations.createdAt));
+    if (ctx.user.role !== "admin") {
+      const [perm] = await db.select().from(userPermissions).where(eq20(userPermissions.userId, ctx.user.id));
+      if (perm?.allowedClientIds) {
+        const allowedIds = JSON.parse(perm.allowedClientIds);
+        if (allowedIds.length > 0) {
+          return rows.filter((r) => r.clientId && allowedIds.includes(r.clientId));
+        }
+      }
+    }
+    return rows;
   }),
   // ── Listar apenas ativos (para uso na detecção de presença) ──────────────
-  listActive: protectedProcedure.query(async () => {
+  listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    return db.select().from(gpsLocations).where(eq20(gpsLocations.isActive, 1)).orderBy(gpsLocations.name);
+    const rows = await db.select().from(gpsLocations).where(eq20(gpsLocations.isActive, 1)).orderBy(gpsLocations.name);
+    if (ctx.user.role !== "admin") {
+      const [perm] = await db.select().from(userPermissions).where(eq20(userPermissions.userId, ctx.user.id));
+      if (perm?.allowedClientIds) {
+        const allowedIds = JSON.parse(perm.allowedClientIds);
+        if (allowedIds.length > 0) {
+          return rows.filter((r) => r.clientId && allowedIds.includes(r.clientId));
+        }
+      }
+    }
+    return rows;
   }),
   // ── Criar local ──────────────────────────────────────────────────────────
   create: protectedProcedure.input(z21.object({
@@ -5951,6 +6011,7 @@ var gpsLocationsRouter = router({
     latitude: z21.string().min(1, "Latitude \xE9 obrigat\xF3ria"),
     longitude: z21.string().min(1, "Longitude \xE9 obrigat\xF3ria"),
     radiusMeters: z21.number().min(100).max(5e4).default(2e3),
+    clientId: z21.number().optional(),
     notes: z21.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -5960,6 +6021,7 @@ var gpsLocationsRouter = router({
       latitude: input.latitude,
       longitude: input.longitude,
       radiusMeters: input.radiusMeters,
+      clientId: input.clientId || null,
       notes: input.notes || null,
       isActive: 1,
       createdBy: ctx.user.id,
@@ -5974,6 +6036,7 @@ var gpsLocationsRouter = router({
     latitude: z21.string().optional(),
     longitude: z21.string().optional(),
     radiusMeters: z21.number().min(100).max(5e4).optional(),
+    clientId: z21.number().nullable().optional(),
     notes: z21.string().optional(),
     isActive: z21.number().optional()
   })).mutation(async ({ input }) => {
@@ -5985,6 +6048,7 @@ var gpsLocationsRouter = router({
     if (rest.latitude !== void 0) updateData.latitude = rest.latitude;
     if (rest.longitude !== void 0) updateData.longitude = rest.longitude;
     if (rest.radiusMeters !== void 0) updateData.radiusMeters = rest.radiusMeters;
+    if (rest.clientId !== void 0) updateData.clientId = rest.clientId;
     if (rest.notes !== void 0) updateData.notes = rest.notes;
     if (rest.isActive !== void 0) updateData.isActive = rest.isActive;
     await db.update(gpsLocations).set(updateData).where(eq20(gpsLocations.id, id));
