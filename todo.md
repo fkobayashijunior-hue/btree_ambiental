@@ -1472,7 +1472,7 @@
 - [x] Compilar e push para GitHub (commit 208aa13)
 
 ### Bug 02/05/2026
-- [ ] Clientes sumiram da página de Clientes (mostra 0 clientes)
+- [x] Clientes sumiram da página de Clientes (filtro active corrigido para aceitar NULL)
 
 ### Melhorias 02/05/2026
 - [x] Adicionar "Lembrar-me" no portal do cliente (salvar sessão no localStorage)
