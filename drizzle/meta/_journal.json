@@ -190,6 +190,13 @@
       "when": 1777740435427,
       "tag": "0026_optimal_vapor",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1777758974969,
+      "tag": "0027_high_amphibian",
+      "breakpoints": true
     }
   ]
 }
