@@ -1469,4 +1469,4 @@
 - [x] Implementar acesso restrito do Juliano (só vê/gerencia SIMFLOR)
 - [x] Juliano pode: adicionar gastos extras, manutenções, abastecimentos (só SIMFLOR)
 - [x] Juliano NÃO pode: ver financeiro geral, outras roças/clientes (via allowedClientIds)
-- [ ] Compilar e push para GitHub
+- [x] Compilar e push para GitHub (commit 208aa13)
