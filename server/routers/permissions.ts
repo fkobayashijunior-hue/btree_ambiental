@@ -65,6 +65,10 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
     label: "Motosserrista",
     modules: ["equipamentos", "manutencao", "motosserras"],
   },
+  encarregado: {
+    label: "Encarregado de Roça",
+    modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas"],
+  },
   lider: {
     label: "Líder de Equipe",
     modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"],
@@ -120,12 +124,18 @@ export const permissionsRouter = router({
           ? JSON.parse(permMap[u.id].modules!) as string[]
           : [],
       profile: permMap[u.id]?.profile || "custom",
+      allowedClientIds: permMap[u.id]?.allowedClientIds
+        ? JSON.parse(permMap[u.id].allowedClientIds!) as number[]
+        : null,
+      allowedWorkLocationIds: permMap[u.id]?.allowedWorkLocationIds
+        ? JSON.parse(permMap[u.id].allowedWorkLocationIds!) as number[]
+        : null,
     }));
   }),
 
   // Buscar permissões do usuário atual
   myPermissions: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role === "admin") return { modules: null, profile: "admin" }; // null = tudo
+    if (ctx.user.role === "admin") return { modules: null, profile: "admin", allowedClientIds: null, allowedWorkLocationIds: null }; // null = tudo
 
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -133,10 +143,12 @@ export const permissionsRouter = router({
     const [perm] = await db.select().from(userPermissions)
       .where(eq(userPermissions.userId, ctx.user.id));
 
-    if (!perm) return { modules: [], profile: "custom" };
+    if (!perm) return { modules: [], profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
     return {
       modules: perm.modules ? JSON.parse(perm.modules) as string[] : [],
       profile: perm.profile || "custom",
+      allowedClientIds: perm.allowedClientIds ? JSON.parse(perm.allowedClientIds) as number[] : null,
+      allowedWorkLocationIds: perm.allowedWorkLocationIds ? JSON.parse(perm.allowedWorkLocationIds) as number[] : null,
     };
   }),
 
@@ -146,6 +158,8 @@ export const permissionsRouter = router({
       userId: z.number(),
       modules: z.array(z.string()).nullable(), // null = acesso total
       profile: z.string().default("custom"),
+      allowedClientIds: z.array(z.number()).nullable().optional(),
+      allowedWorkLocationIds: z.array(z.number()).nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -153,6 +167,10 @@ export const permissionsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const modulesJson = input.modules === null ? null : JSON.stringify(input.modules);
+      const allowedClientIdsJson = input.allowedClientIds === null || input.allowedClientIds === undefined
+        ? null : JSON.stringify(input.allowedClientIds);
+      const allowedWorkLocationIdsJson = input.allowedWorkLocationIds === null || input.allowedWorkLocationIds === undefined
+        ? null : JSON.stringify(input.allowedWorkLocationIds);
 
       // Upsert
       const [existing] = await db.select().from(userPermissions)
@@ -162,6 +180,8 @@ export const permissionsRouter = router({
         await db.update(userPermissions).set({
           modules: modulesJson,
           profile: input.profile,
+          allowedClientIds: allowedClientIdsJson,
+          allowedWorkLocationIds: allowedWorkLocationIdsJson,
           updatedBy: ctx.user.id,
         }).where(eq(userPermissions.userId, input.userId));
       } else {
@@ -169,6 +189,8 @@ export const permissionsRouter = router({
           userId: input.userId,
           modules: modulesJson,
           profile: input.profile,
+          allowedClientIds: allowedClientIdsJson,
+          allowedWorkLocationIds: allowedWorkLocationIdsJson,
           updatedBy: ctx.user.id,
         });
       }

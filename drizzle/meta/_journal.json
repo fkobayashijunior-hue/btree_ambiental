@@ -183,6 +183,13 @@
       "when": 1776886494701,
       "tag": "0025_crazy_darkstar",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1777740435427,
+      "tag": "0026_optimal_vapor",
+      "breakpoints": true
     }
   ]
 }

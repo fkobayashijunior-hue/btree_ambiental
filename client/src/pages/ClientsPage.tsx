@@ -18,11 +18,13 @@ import {
 type FormData = {
   name: string; document: string; email: string; phone: string;
   address: string; city: string; state: string; notes: string;
+  pricePerTon: string; paymentTermDays: string;
 };
 
 const emptyForm: FormData = {
   name: "", document: "", email: "", phone: "",
   address: "", city: "", state: "", notes: "",
+  pricePerTon: "", paymentTermDays: "20",
 };
 
 const BRAZIL_STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
@@ -78,6 +80,8 @@ export default function ClientsPage() {
       city: form.city || undefined,
       state: form.state || undefined,
       notes: form.notes || undefined,
+      pricePerTon: form.pricePerTon || undefined,
+      paymentTermDays: form.paymentTermDays ? parseInt(form.paymentTermDays) : undefined,
     };
     if (editId) updateMutation.mutate({ id: editId, ...data });
     else createMutation.mutate(data);
@@ -85,7 +89,7 @@ export default function ClientsPage() {
 
   const openEdit = (c: any) => {
     setEditId(c.id);
-    setForm({ name: c.name, document: c.document || "", email: c.email || "", phone: c.phone || "", address: c.address || "", city: c.city || "", state: c.state || "", notes: c.notes || "" });
+    setForm({ name: c.name, document: c.document || "", email: c.email || "", phone: c.phone || "", address: c.address || "", city: c.city || "", state: c.state || "", notes: c.notes || "", pricePerTon: c.pricePerTon || "", paymentTermDays: c.paymentTermDays ? String(c.paymentTermDays) : "20" });
     setIsOpen(true);
   };
 
@@ -253,6 +257,13 @@ export default function ClientsPage() {
                   <option value="">UF</option>
                   {BRAZIL_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
+              </div>
+            </div>
+            <div className="p-3 bg-blue-50 rounded-lg space-y-3">
+              <p className="text-sm font-semibold text-blue-800">Configurações de Pagamento</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Preço por Tonelada (R$)</Label><Input type="number" step="0.01" value={form.pricePerTon} onChange={e => setForm(f => ({ ...f, pricePerTon: e.target.value }))} placeholder="130.00" /></div>
+                <div><Label>Prazo Pagamento (dias)</Label><Input type="number" value={form.paymentTermDays} onChange={e => setForm(f => ({ ...f, paymentTermDays: e.target.value }))} placeholder="20" /></div>
               </div>
             </div>
             <div><Label>Observações</Label><textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="w-full min-h-[80px] px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" placeholder="Informações adicionais..." /></div>

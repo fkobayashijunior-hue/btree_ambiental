@@ -1459,3 +1459,14 @@
 
 ### Correções 01/05/2026
 - [x] Corrigir erro 404 ao abrir o app (start_url do PWA apontava para /dashboard que não existe, alterado para /)
+
+### Upgrade SIMFLOR 01/05/2026
+- [x] Upload documentos SIMFLOR (proposta + contrato) e criar campo de documentos no cliente
+- [x] Criar tabela de fechamentos semanais (sáb-sex) com cálculo de valores (R$130/ton)
+- [x] Implementar lógica de fechamento semanal com vencimento em 20 dias
+- [x] Exibir valor calculado por carga (toneladas x R$130) no controle de cargas
+- [x] Exibir total semanal e data de vencimento nos fechamentos
+- [x] Implementar acesso restrito do Juliano (só vê/gerencia SIMFLOR)
+- [x] Juliano pode: adicionar gastos extras, manutenções, abastecimentos (só SIMFLOR)
+- [x] Juliano NÃO pode: ver financeiro geral, outras roças/clientes (via allowedClientIds)
+- [ ] Compilar e push para GitHub

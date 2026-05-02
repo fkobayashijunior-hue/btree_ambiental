@@ -34,6 +34,8 @@ export const clientsRouter = router({
       city: z.string().optional(),
       state: z.string().optional(),
       notes: z.string().optional(),
+      pricePerTon: z.string().optional(),
+      paymentTermDays: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -54,6 +56,8 @@ export const clientsRouter = router({
       state: z.string().optional(),
       notes: z.string().optional(),
       active: z.number().optional(),
+      pricePerTon: z.string().optional(),
+      paymentTermDays: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

@@ -3,7 +3,8 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
-  cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos, gpsLocations
+  cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos, gpsLocations,
+  cargoWeeklyClosings, clientDocuments
 } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
@@ -788,5 +789,184 @@ export const cargoLoadsRouter = router({
       }
       
       return { success: true, photoUrl };
+    }),
+
+  // ===== FECHAMENTOS SEMANAIS =====
+  listWeeklyClosings: protectedProcedure
+    .input(z.object({ clientId: z.number() }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      let query = db.select({
+        id: cargoWeeklyClosings.id,
+        clientId: cargoWeeklyClosings.clientId,
+        clientName: clients.name,
+        weekStart: cargoWeeklyClosings.weekStart,
+        weekEnd: cargoWeeklyClosings.weekEnd,
+        totalLoads: cargoWeeklyClosings.totalLoads,
+        totalWeightKg: cargoWeeklyClosings.totalWeightKg,
+        totalAmount: cargoWeeklyClosings.totalAmount,
+        pricePerTon: cargoWeeklyClosings.pricePerTon,
+        dueDate: cargoWeeklyClosings.dueDate,
+        status: cargoWeeklyClosings.status,
+        paidAt: cargoWeeklyClosings.paidAt,
+        notes: cargoWeeklyClosings.notes,
+        createdAt: cargoWeeklyClosings.createdAt,
+      }).from(cargoWeeklyClosings)
+        .leftJoin(clients, eq(cargoWeeklyClosings.clientId, clients.id))
+        .orderBy(desc(cargoWeeklyClosings.weekEnd));
+      const results = await query;
+      if (input?.clientId) return results.filter(r => r.clientId === input.clientId);
+      return results;
+    }),
+
+  createWeeklyClosing: protectedProcedure
+    .input(z.object({
+      clientId: z.number(),
+      weekStart: z.string(),
+      weekEnd: z.string(),
+      pricePerTon: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      
+      // Get client price if not provided
+      let pricePerTon = input.pricePerTon;
+      if (!pricePerTon) {
+        const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId));
+        pricePerTon = client?.pricePerTon || '130';
+      }
+      
+      // Calculate totals from cargo loads in this period
+      const allLoads = await db.select().from(cargoLoads)
+        .where(eq(cargoLoads.clientId, input.clientId));
+      
+      const weekStartDate = new Date(input.weekStart);
+      const weekEndDate = new Date(input.weekEnd);
+      weekEndDate.setHours(23, 59, 59, 999);
+      
+      const loadsInPeriod = allLoads.filter(l => {
+        const loadDate = new Date(l.date);
+        return loadDate >= weekStartDate && loadDate <= weekEndDate;
+      });
+      
+      const totalLoads = loadsInPeriod.length;
+      const totalWeightKg = loadsInPeriod.reduce((sum, l) => {
+        const weight = parseFloat(l.weightNetKg || l.weightOutKg || '0');
+        return sum + weight;
+      }, 0);
+      
+      const totalWeightTon = totalWeightKg / 1000;
+      const totalAmount = (totalWeightTon * parseFloat(pricePerTon)).toFixed(2);
+      
+      // Due date = weekEnd + paymentTermDays
+      const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId));
+      const paymentTermDays = client?.paymentTermDays || 20;
+      const dueDate = new Date(input.weekEnd);
+      dueDate.setDate(dueDate.getDate() + paymentTermDays);
+      
+      const result = await db.insert(cargoWeeklyClosings).values({
+        clientId: input.clientId,
+        weekStart: input.weekStart,
+        weekEnd: input.weekEnd,
+        totalLoads,
+        totalWeightKg: totalWeightKg.toFixed(2),
+        totalAmount,
+        pricePerTon,
+        dueDate: dueDate.toISOString().slice(0, 19).replace('T', ' '),
+        status: 'fechado',
+        closedBy: ctx.user.id,
+        notes: input.notes,
+      });
+      return { success: true, id: (result as any).insertId, totalLoads, totalWeightKg: totalWeightKg.toFixed(2), totalAmount };
+    }),
+
+  updateWeeklyClosingStatus: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(['aberto', 'fechado', 'pago', 'atrasado']),
+      paidAt: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const updateData: any = { status: input.status };
+      if (input.status === 'pago') updateData.paidAt = input.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ');
+      await db.update(cargoWeeklyClosings).set(updateData).where(eq(cargoWeeklyClosings.id, input.id));
+      return { success: true };
+    }),
+
+  deleteWeeklyClosing: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(cargoWeeklyClosings).where(eq(cargoWeeklyClosings.id, input.id));
+      return { success: true };
+    }),
+
+  // ===== DOCUMENTOS DO CLIENTE =====
+  listClientDocuments: protectedProcedure
+    .input(z.object({ clientId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(clientDocuments)
+        .where(eq(clientDocuments.clientId, input.clientId))
+        .orderBy(desc(clientDocuments.createdAt));
+    }),
+
+  uploadClientDocument: protectedProcedure
+    .input(z.object({
+      clientId: z.number(),
+      type: z.enum(['proposta', 'contrato', 'nota_fiscal', 'boleto', 'recibo', 'outros']),
+      title: z.string().min(1),
+      fileBase64: z.string(),
+      fileType: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
+      const result = await db.insert(clientDocuments).values({
+        clientId: input.clientId,
+        type: input.type,
+        title: input.title,
+        fileUrl: uploaded.url,
+        fileType: input.fileType,
+        notes: input.notes,
+        uploadedBy: ctx.user.id,
+      });
+      return { success: true, id: (result as any).insertId, url: uploaded.url };
+    }),
+
+  deleteClientDocument: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(clientDocuments).where(eq(clientDocuments.id, input.id));
+      return { success: true };
+    }),
+
+  // ===== ATUALIZAR PREÇO DO CLIENTE =====
+  updateClientPricing: protectedProcedure
+    .input(z.object({
+      clientId: z.number(),
+      pricePerTon: z.string().optional(),
+      residuePerTon: z.string().optional(),
+      billingCycle: z.enum(['semanal', 'quinzenal', 'mensal']).optional(),
+      billingDayOfWeek: z.number().optional(),
+      paymentTermDays: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { clientId, ...rest } = input;
+      await db.update(clients).set(rest as any).where(eq(clients.id, clientId));
+      return { success: true };
     }),
 });

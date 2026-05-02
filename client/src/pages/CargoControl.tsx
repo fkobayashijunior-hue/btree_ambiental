@@ -397,12 +397,244 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
 }
 
 // ===== COMPONENTE PRINCIPAL =====
+// ===== COMPONENTE: FECHAMENTOS SEMANAIS =====
+function WeeklyClosingsView({
+  clientsList, loads, closingClientId, setClosingClientId,
+  closingWeekStart, setClosingWeekStart, closingWeekEnd, setClosingWeekEnd,
+  isClosingFormOpen, setIsClosingFormOpen,
+}: {
+  clientsList: Array<{ id: number; name: string; pricePerTon?: string | null; paymentTermDays?: number | null }>;
+  loads: Array<any>;
+  closingClientId: number;
+  setClosingClientId: (v: number) => void;
+  closingWeekStart: string;
+  setClosingWeekStart: (v: string) => void;
+  closingWeekEnd: string;
+  setClosingWeekEnd: (v: string) => void;
+  isClosingFormOpen: boolean;
+  setIsClosingFormOpen: (v: boolean) => void;
+}) {
+  const utils = trpc.useUtils();
+  const { data: closings = [], isLoading } = trpc.cargoLoads.listWeeklyClosings.useQuery(
+    closingClientId ? { clientId: closingClientId } : undefined
+  );
+  const createClosing = trpc.cargoLoads.createWeeklyClosing.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Fechamento criado! ${data.totalLoads} cargas, R$ ${data.totalAmount}`);
+      utils.cargoLoads.listWeeklyClosings.invalidate();
+      setIsClosingFormOpen(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateStatus = trpc.cargoLoads.updateWeeklyClosingStatus.useMutation({
+    onSuccess: () => { toast.success('Status atualizado!'); utils.cargoLoads.listWeeklyClosings.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteClosing = trpc.cargoLoads.deleteWeeklyClosing.useMutation({
+    onSuccess: () => { toast.success('Fechamento removido!'); utils.cargoLoads.listWeeklyClosings.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Auto-calculate next friday from current date for week end
+  const getNextFriday = () => {
+    const d = new Date();
+    const day = d.getDay(); // 0=Sun, 5=Fri
+    const diff = day <= 5 ? 5 - day : 7 - day + 5;
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+  };
+  const getLastSaturday = () => {
+    const d = new Date();
+    const day = d.getDay(); // 0=Sun, 6=Sat
+    const diff = day >= 6 ? 0 : day + 1;
+    d.setDate(d.getDate() - diff);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const STATUS_BADGE: Record<string, string> = {
+    aberto: 'bg-blue-100 text-blue-800',
+    fechado: 'bg-yellow-100 text-yellow-800',
+    pago: 'bg-green-100 text-green-800',
+    atrasado: 'bg-red-100 text-red-800',
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <select
+            value={closingClientId}
+            onChange={e => setClosingClientId(parseInt(e.target.value))}
+            className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+          >
+            <option value={0}>Todos os clientes</option>
+            {clientsList.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <Button
+          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+          size="sm"
+          onClick={() => {
+            setClosingWeekStart(getLastSaturday());
+            setClosingWeekEnd(getNextFriday());
+            setIsClosingFormOpen(true);
+          }}
+        >
+          <Plus className="h-4 w-4" /> Novo Fechamento
+        </Button>
+      </div>
+
+      {/* Form para novo fechamento */}
+      {isClosingFormOpen && (
+        <Card className="border-emerald-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm text-emerald-800">Novo Fechamento Semanal</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <Label>Cliente *</Label>
+                <select
+                  value={closingClientId}
+                  onChange={e => setClosingClientId(parseInt(e.target.value))}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value={0}>Selecionar cliente...</option>
+                  {clientsList.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Início (Sábado)</Label>
+                <Input type="date" value={closingWeekStart} onChange={e => setClosingWeekStart(e.target.value)} />
+              </div>
+              <div>
+                <Label>Fim (Sexta)</Label>
+                <Input type="date" value={closingWeekEnd} onChange={e => setClosingWeekEnd(e.target.value)} />
+              </div>
+            </div>
+            {closingClientId > 0 && closingWeekStart && closingWeekEnd && (() => {
+              const client = clientsList.find(c => c.id === closingClientId);
+              const pricePerTon = parseFloat((client as any)?.pricePerTon || '130');
+              const weekStartDate = new Date(closingWeekStart);
+              const weekEndDate = new Date(closingWeekEnd);
+              weekEndDate.setHours(23, 59, 59, 999);
+              const loadsInPeriod = loads.filter((l: any) => {
+                if (l.clientId !== closingClientId) return false;
+                const loadDate = new Date(l.date);
+                return loadDate >= weekStartDate && loadDate <= weekEndDate;
+              });
+              const totalWeight = loadsInPeriod.reduce((sum: number, l: any) => sum + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+              const totalValue = (totalWeight / 1000) * pricePerTon;
+              const paymentTermDays = (client as any)?.paymentTermDays || 20;
+              const dueDate = new Date(closingWeekEnd);
+              dueDate.setDate(dueDate.getDate() + paymentTermDays);
+              return (
+                <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
+                  <p><strong>Preview:</strong> {loadsInPeriod.length} cargas no período</p>
+                  <p>Peso total: {(totalWeight / 1000).toFixed(2)} toneladas ({totalWeight.toFixed(0)} kg)</p>
+                  <p>Valor: <strong className="text-blue-700">R$ {totalValue.toFixed(2)}</strong> ({(totalWeight / 1000).toFixed(2)} ton x R$ {pricePerTon.toFixed(0)}/ton)</p>
+                  <p>Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong> ({paymentTermDays} dias após fechamento)</p>
+                </div>
+              );
+            })()}
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setIsClosingFormOpen(false)}>Cancelar</Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!closingClientId || !closingWeekStart || !closingWeekEnd || createClosing.isPending}
+                onClick={() => createClosing.mutate({
+                  clientId: closingClientId,
+                  weekStart: closingWeekStart,
+                  weekEnd: closingWeekEnd,
+                })}
+              >
+                {createClosing.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Fechar Semana'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lista de fechamentos */}
+      {isLoading ? (
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
+        </div>
+      ) : closings.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">
+          <CalendarClock className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="text-lg font-medium">Nenhum fechamento encontrado</p>
+          <p className="text-sm mt-1">Crie o primeiro fechamento semanal</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {closings.map(closing => (
+            <Card key={closing.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-800" translate="no">{closing.clientName || 'Cliente'}</span>
+                      <Badge className={STATUS_BADGE[closing.status || 'aberto']}>{closing.status}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR') : '-'} → {closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR') : '-'}
+                      </span>
+                      <span className="flex items-center gap-1 font-semibold">
+                        <Package className="h-3 w-3" /> {closing.totalLoads} cargas
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Weight className="h-3 w-3" /> {closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton
+                      </span>
+                      <span className="flex items-center gap-1 font-bold text-blue-700">
+                        <DollarSign className="h-3 w-3" /> R$ {closing.totalAmount || '0.00'}
+                      </span>
+                      {closing.dueDate && (
+                        <span className="flex items-center gap-1 text-orange-600">
+                          <CalendarClock className="h-3 w-3" /> Venc: {new Date(closing.dueDate).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    {closing.status === 'fechado' && (
+                      <Button size="sm" variant="outline" className="text-xs gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                        onClick={() => updateStatus.mutate({ id: closing.id, status: 'pago' })}>
+                        <CheckCircle2 className="h-3 w-3" /> Pago
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-red-500"
+                      onClick={() => { if (confirm('Remover este fechamento?')) deleteClosing.mutate({ id: closing.id }); }}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CargoControl() {
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("");
   const [filterClientId, setFilterClientId] = useState<number>(0);
-  const [viewMode, setViewMode] = useState<"cliente" | "lista" | "tracking">("cliente");
+  const [viewMode, setViewMode] = useState<"cliente" | "lista" | "tracking" | "fechamentos">("cliente");
+  const [closingClientId, setClosingClientId] = useState<number>(0);
+  const [closingWeekStart, setClosingWeekStart] = useState("");
+  const [closingWeekEnd, setClosingWeekEnd] = useState("");
+  const [isClosingFormOpen, setIsClosingFormOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -733,6 +965,16 @@ export default function CargoControl() {
                 <span className="flex items-center gap-1 font-semibold text-emerald-700">
                   <Package className="h-3 w-3" />{cargo.volumeM3} m³{cargo.weightKg ? ` · ${cargo.weightKg} kg` : ""}
                 </span>
+                {(() => {
+                  const weightNet = parseFloat((cargo as any).weightNetKg || (cargo as any).weightOutKg || '0');
+                  const client = clientsList.find(c => c.id === cargo.clientId);
+                  const pricePerTon = parseFloat((client as any)?.pricePerTon || '0');
+                  if (weightNet > 0 && pricePerTon > 0) {
+                    const valor = (weightNet / 1000) * pricePerTon;
+                    return <span className="flex items-center gap-1 font-semibold text-blue-700"><DollarSign className="h-3 w-3" />R$ {valor.toFixed(2)}</span>;
+                  }
+                  return null;
+                })()}
                 {cargo.invoiceNumber && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{cargo.invoiceNumber}</span>}
                 {(cargo as any).locationName && <span className="flex items-center gap-1 text-emerald-600"><MapPin className="h-3 w-3" /><span translate="no">{(cargo as any).locationName}</span></span>}
               </div>
@@ -795,6 +1037,14 @@ export default function CargoControl() {
             onClick={() => setViewMode("tracking")}
           >
             <Navigation className="h-3.5 w-3.5" /> Tracking
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className={`gap-1.5 text-xs ${viewMode === "fechamentos" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : ""}`}
+            onClick={() => setViewMode("fechamentos")}
+          >
+            <CalendarClock className="h-3.5 w-3.5" /> Fechamentos
           </Button>
           <Button
             className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
@@ -937,6 +1187,22 @@ export default function CargoControl() {
                       <span className={`font-semibold ${colors.text}`}>
                         Volume: {group.totalVolume.toFixed(2)} m³
                       </span>
+                      {(() => {
+                        const client = clientsList.find(c => c.id === group.clientId);
+                        const pricePerTon = parseFloat((client as any)?.pricePerTon || '0');
+                        if (pricePerTon > 0) {
+                          const totalWeight = group.cargas.reduce((sum, c) => {
+                            return sum + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || '0');
+                          }, 0);
+                          const totalValue = (totalWeight / 1000) * pricePerTon;
+                          return (
+                            <span className="font-semibold text-blue-700">
+                              Valor: R$ {totalValue.toFixed(2)} ({(totalWeight / 1000).toFixed(2)} ton x R$ {pricePerTon.toFixed(0)}/ton)
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                       {group.pendentes > 0 && (
                         <span className="font-semibold text-red-600">
                           Pendentes: {group.pendentes}
@@ -965,6 +1231,20 @@ export default function CargoControl() {
             );
           })}
         </div>
+      ) : viewMode === "fechamentos" ? (
+        /* ===== VIEW: FECHAMENTOS SEMANAIS ===== */
+        <WeeklyClosingsView
+          clientsList={clientsList}
+          loads={loads}
+          closingClientId={closingClientId}
+          setClosingClientId={setClosingClientId}
+          closingWeekStart={closingWeekStart}
+          setClosingWeekStart={setClosingWeekStart}
+          closingWeekEnd={closingWeekEnd}
+          setClosingWeekEnd={setClosingWeekEnd}
+          isClosingFormOpen={isClosingFormOpen}
+          setIsClosingFormOpen={setIsClosingFormOpen}
+        />
       ) : viewMode === "tracking" ? (
         /* ===== VIEW: TRACKING TIMELINE ===== */
         <div className="space-y-4">

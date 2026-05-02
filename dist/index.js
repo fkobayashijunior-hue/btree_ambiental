@@ -134,6 +134,7 @@ __export(schema_exports, {
   cargoLoads: () => cargoLoads,
   cargoShipments: () => cargoShipments,
   cargoTrackingPhotos: () => cargoTrackingPhotos,
+  cargoWeeklyClosings: () => cargoWeeklyClosings,
   chainsawChainEvents: () => chainsawChainEvents,
   chainsawChainStock: () => chainsawChainStock,
   chainsawPartMovements: () => chainsawPartMovements,
@@ -142,6 +143,7 @@ __export(schema_exports, {
   chainsawServiceParts: () => chainsawServiceParts,
   chainsaws: () => chainsaws,
   clientContracts: () => clientContracts,
+  clientDocuments: () => clientDocuments,
   clientPaymentReceipts: () => clientPaymentReceipts,
   clientPayments: () => clientPayments,
   clientPortalAccess: () => clientPortalAccess,
@@ -184,7 +186,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, timestamp, mysqlEnum, varchar, text, index, tinyint } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -454,6 +456,12 @@ var init_schema = __esm({
       notes: text(),
       password: varchar({ length: 255 }),
       active: int().default(1).notNull(),
+      pricePerTon: varchar("price_per_ton", { length: 20 }),
+      residuePerTon: varchar("residue_per_ton", { length: 20 }),
+      billingCycle: mysqlEnum("billing_cycle", ["semanal", "quinzenal", "mensal"]).default("mensal"),
+      billingDayOfWeek: int("billing_day_of_week").default(5),
+      paymentTermDays: int("payment_term_days").default(30),
+      documentsJson: text("documents_json"),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
       createdBy: int("created_by").references(() => users.id)
@@ -918,6 +926,8 @@ var init_schema = __esm({
         userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
         modules: text(),
         profile: varchar({ length: 64 }).default("custom"),
+        allowedClientIds: text("allowed_client_ids"),
+        allowedWorkLocationIds: text("allowed_work_location_ids"),
         updatedBy: int("updated_by"),
         updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
         createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
@@ -988,6 +998,34 @@ var init_schema = __esm({
       notes: text("notes"),
       registeredBy: int("registered_by").references(() => users.id),
       registeredByName: varchar("registered_by_name", { length: 255 }),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+    });
+    cargoWeeklyClosings = mysqlTable("cargo_weekly_closings", {
+      id: int().autoincrement().notNull(),
+      clientId: int("client_id").notNull().references(() => clients.id),
+      weekStart: timestamp("week_start", { mode: "string" }).notNull(),
+      weekEnd: timestamp("week_end", { mode: "string" }).notNull(),
+      totalLoads: int("total_loads").default(0).notNull(),
+      totalWeightKg: varchar("total_weight_kg", { length: 20 }),
+      totalAmount: varchar("total_amount", { length: 20 }),
+      pricePerTon: varchar("price_per_ton", { length: 20 }),
+      dueDate: timestamp("due_date", { mode: "string" }),
+      status: mysqlEnum(["aberto", "fechado", "pago", "atrasado"]).default("aberto").notNull(),
+      paidAt: timestamp("paid_at", { mode: "string" }),
+      notes: text(),
+      closedBy: int("closed_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    clientDocuments = mysqlTable("client_documents", {
+      id: int().autoincrement().notNull(),
+      clientId: int("client_id").notNull().references(() => clients.id),
+      type: mysqlEnum(["proposta", "contrato", "nota_fiscal", "boleto", "recibo", "outros"]).default("outros").notNull(),
+      title: varchar({ length: 255 }).notNull(),
+      fileUrl: varchar("file_url", { length: 1e3 }).notNull(),
+      fileType: varchar("file_type", { length: 50 }),
+      notes: text(),
+      uploadedBy: int("uploaded_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
     });
   }
@@ -2524,6 +2562,145 @@ var cargoLoadsRouter = router({
       });
     }
     return { success: true, photoUrl };
+  }),
+  // ===== FECHAMENTOS SEMANAIS =====
+  listWeeklyClosings: protectedProcedure.input(z5.object({ clientId: z5.number() }).optional()).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    let query = db.select({
+      id: cargoWeeklyClosings.id,
+      clientId: cargoWeeklyClosings.clientId,
+      clientName: clients.name,
+      weekStart: cargoWeeklyClosings.weekStart,
+      weekEnd: cargoWeeklyClosings.weekEnd,
+      totalLoads: cargoWeeklyClosings.totalLoads,
+      totalWeightKg: cargoWeeklyClosings.totalWeightKg,
+      totalAmount: cargoWeeklyClosings.totalAmount,
+      pricePerTon: cargoWeeklyClosings.pricePerTon,
+      dueDate: cargoWeeklyClosings.dueDate,
+      status: cargoWeeklyClosings.status,
+      paidAt: cargoWeeklyClosings.paidAt,
+      notes: cargoWeeklyClosings.notes,
+      createdAt: cargoWeeklyClosings.createdAt
+    }).from(cargoWeeklyClosings).leftJoin(clients, eq5(cargoWeeklyClosings.clientId, clients.id)).orderBy(desc3(cargoWeeklyClosings.weekEnd));
+    const results = await query;
+    if (input?.clientId) return results.filter((r) => r.clientId === input.clientId);
+    return results;
+  }),
+  createWeeklyClosing: protectedProcedure.input(z5.object({
+    clientId: z5.number(),
+    weekStart: z5.string(),
+    weekEnd: z5.string(),
+    pricePerTon: z5.string().optional(),
+    notes: z5.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    let pricePerTon = input.pricePerTon;
+    if (!pricePerTon) {
+      const [client2] = await db.select().from(clients).where(eq5(clients.id, input.clientId));
+      pricePerTon = client2?.pricePerTon || "130";
+    }
+    const allLoads = await db.select().from(cargoLoads).where(eq5(cargoLoads.clientId, input.clientId));
+    const weekStartDate = new Date(input.weekStart);
+    const weekEndDate = new Date(input.weekEnd);
+    weekEndDate.setHours(23, 59, 59, 999);
+    const loadsInPeriod = allLoads.filter((l) => {
+      const loadDate = new Date(l.date);
+      return loadDate >= weekStartDate && loadDate <= weekEndDate;
+    });
+    const totalLoads = loadsInPeriod.length;
+    const totalWeightKg = loadsInPeriod.reduce((sum, l) => {
+      const weight = parseFloat(l.weightNetKg || l.weightOutKg || "0");
+      return sum + weight;
+    }, 0);
+    const totalWeightTon = totalWeightKg / 1e3;
+    const totalAmount = (totalWeightTon * parseFloat(pricePerTon)).toFixed(2);
+    const [client] = await db.select().from(clients).where(eq5(clients.id, input.clientId));
+    const paymentTermDays = client?.paymentTermDays || 20;
+    const dueDate = new Date(input.weekEnd);
+    dueDate.setDate(dueDate.getDate() + paymentTermDays);
+    const result = await db.insert(cargoWeeklyClosings).values({
+      clientId: input.clientId,
+      weekStart: input.weekStart,
+      weekEnd: input.weekEnd,
+      totalLoads,
+      totalWeightKg: totalWeightKg.toFixed(2),
+      totalAmount,
+      pricePerTon,
+      dueDate: dueDate.toISOString().slice(0, 19).replace("T", " "),
+      status: "fechado",
+      closedBy: ctx.user.id,
+      notes: input.notes
+    });
+    return { success: true, id: result.insertId, totalLoads, totalWeightKg: totalWeightKg.toFixed(2), totalAmount };
+  }),
+  updateWeeklyClosingStatus: protectedProcedure.input(z5.object({
+    id: z5.number(),
+    status: z5.enum(["aberto", "fechado", "pago", "atrasado"]),
+    paidAt: z5.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    const updateData = { status: input.status };
+    if (input.status === "pago") updateData.paidAt = input.paidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    await db.update(cargoWeeklyClosings).set(updateData).where(eq5(cargoWeeklyClosings.id, input.id));
+    return { success: true };
+  }),
+  deleteWeeklyClosing: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(cargoWeeklyClosings).where(eq5(cargoWeeklyClosings.id, input.id));
+    return { success: true };
+  }),
+  // ===== DOCUMENTOS DO CLIENTE =====
+  listClientDocuments: protectedProcedure.input(z5.object({ clientId: z5.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(clientDocuments).where(eq5(clientDocuments.clientId, input.clientId)).orderBy(desc3(clientDocuments.createdAt));
+  }),
+  uploadClientDocument: protectedProcedure.input(z5.object({
+    clientId: z5.number(),
+    type: z5.enum(["proposta", "contrato", "nota_fiscal", "boleto", "recibo", "outros"]),
+    title: z5.string().min(1),
+    fileBase64: z5.string(),
+    fileType: z5.string().optional(),
+    notes: z5.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
+    const result = await db.insert(clientDocuments).values({
+      clientId: input.clientId,
+      type: input.type,
+      title: input.title,
+      fileUrl: uploaded.url,
+      fileType: input.fileType,
+      notes: input.notes,
+      uploadedBy: ctx.user.id
+    });
+    return { success: true, id: result.insertId, url: uploaded.url };
+  }),
+  deleteClientDocument: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(clientDocuments).where(eq5(clientDocuments.id, input.id));
+    return { success: true };
+  }),
+  // ===== ATUALIZAR PREÇO DO CLIENTE =====
+  updateClientPricing: protectedProcedure.input(z5.object({
+    clientId: z5.number(),
+    pricePerTon: z5.string().optional(),
+    residuePerTon: z5.string().optional(),
+    billingCycle: z5.enum(["semanal", "quinzenal", "mensal"]).optional(),
+    billingDayOfWeek: z5.number().optional(),
+    paymentTermDays: z5.number().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    const { clientId, ...rest } = input;
+    await db.update(clients).set(rest).where(eq5(clients.id, clientId));
+    return { success: true };
   })
 });
 
@@ -3209,7 +3386,9 @@ var clientsRouter = router({
     address: z9.string().optional(),
     city: z9.string().optional(),
     state: z9.string().optional(),
-    notes: z9.string().optional()
+    notes: z9.string().optional(),
+    pricePerTon: z9.string().optional(),
+    paymentTermDays: z9.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -3226,7 +3405,9 @@ var clientsRouter = router({
     city: z9.string().optional(),
     state: z9.string().optional(),
     notes: z9.string().optional(),
-    active: z9.number().optional()
+    active: z9.number().optional(),
+    pricePerTon: z9.string().optional(),
+    paymentTermDays: z9.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -4606,6 +4787,10 @@ var PROFILES = {
     label: "Motosserrista",
     modules: ["equipamentos", "manutencao", "motosserras"]
   },
+  encarregado: {
+    label: "Encarregado de Ro\xE7a",
+    modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas"]
+  },
   lider: {
     label: "L\xEDder de Equipe",
     modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"]
@@ -4650,19 +4835,23 @@ var permissionsRouter = router({
       ...u,
       permissions: permMap[u.id] || null,
       modules: u.role === "admin" ? null : permMap[u.id]?.modules ? JSON.parse(permMap[u.id].modules) : [],
-      profile: permMap[u.id]?.profile || "custom"
+      profile: permMap[u.id]?.profile || "custom",
+      allowedClientIds: permMap[u.id]?.allowedClientIds ? JSON.parse(permMap[u.id].allowedClientIds) : null,
+      allowedWorkLocationIds: permMap[u.id]?.allowedWorkLocationIds ? JSON.parse(permMap[u.id].allowedWorkLocationIds) : null
     }));
   }),
   // Buscar permissões do usuário atual
   myPermissions: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role === "admin") return { modules: null, profile: "admin" };
+    if (ctx.user.role === "admin") return { modules: null, profile: "admin", allowedClientIds: null, allowedWorkLocationIds: null };
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
     const [perm] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, ctx.user.id));
-    if (!perm) return { modules: [], profile: "custom" };
+    if (!perm) return { modules: [], profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
     return {
       modules: perm.modules ? JSON.parse(perm.modules) : [],
-      profile: perm.profile || "custom"
+      profile: perm.profile || "custom",
+      allowedClientIds: perm.allowedClientIds ? JSON.parse(perm.allowedClientIds) : null,
+      allowedWorkLocationIds: perm.allowedWorkLocationIds ? JSON.parse(perm.allowedWorkLocationIds) : null
     };
   }),
   // Definir permissões de um usuário (apenas admin)
@@ -4670,17 +4859,23 @@ var permissionsRouter = router({
     userId: z16.number(),
     modules: z16.array(z16.string()).nullable(),
     // null = acesso total
-    profile: z16.string().default("custom")
+    profile: z16.string().default("custom"),
+    allowedClientIds: z16.array(z16.number()).nullable().optional(),
+    allowedWorkLocationIds: z16.array(z16.number()).nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
     const modulesJson = input.modules === null ? null : JSON.stringify(input.modules);
+    const allowedClientIdsJson = input.allowedClientIds === null || input.allowedClientIds === void 0 ? null : JSON.stringify(input.allowedClientIds);
+    const allowedWorkLocationIdsJson = input.allowedWorkLocationIds === null || input.allowedWorkLocationIds === void 0 ? null : JSON.stringify(input.allowedWorkLocationIds);
     const [existing] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, input.userId));
     if (existing) {
       await db.update(userPermissions).set({
         modules: modulesJson,
         profile: input.profile,
+        allowedClientIds: allowedClientIdsJson,
+        allowedWorkLocationIds: allowedWorkLocationIdsJson,
         updatedBy: ctx.user.id
       }).where(eq16(userPermissions.userId, input.userId));
     } else {
@@ -4688,6 +4883,8 @@ var permissionsRouter = router({
         userId: input.userId,
         modules: modulesJson,
         profile: input.profile,
+        allowedClientIds: allowedClientIdsJson,
+        allowedWorkLocationIds: allowedWorkLocationIdsJson,
         updatedBy: ctx.user.id
       });
     }

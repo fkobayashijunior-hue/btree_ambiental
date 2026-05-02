@@ -280,6 +280,12 @@ export const clients = mysqlTable("clients", {
 	notes: text(),
 	password: varchar({ length: 255 }),
 	active: int().default(1).notNull(),
+	pricePerTon: varchar("price_per_ton", { length: 20 }),
+	residuePerTon: varchar("residue_per_ton", { length: 20 }),
+	billingCycle: mysqlEnum("billing_cycle", ['semanal','quinzenal','mensal']).default('mensal'),
+	billingDayOfWeek: int("billing_day_of_week").default(5),
+	paymentTermDays: int("payment_term_days").default(30),
+	documentsJson: text("documents_json"),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	createdBy: int("created_by").references(() => users.id),
@@ -772,6 +778,8 @@ export const userPermissions = mysqlTable("user_permissions", {
 	userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" } ),
 	modules: text(),
 	profile: varchar({ length: 64 }).default('custom'),
+	allowedClientIds: text("allowed_client_ids"),
+	allowedWorkLocationIds: text("allowed_work_location_ids"),
 	updatedBy: int("updated_by"),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
@@ -898,3 +906,39 @@ export type CollaboratorAttendance = typeof collaboratorAttendance.$inferSelect;
 export type InsertCollaboratorAttendance = typeof collaboratorAttendance.$inferInsert;
 export type GpsDeviceLink = typeof gpsDeviceLinks.$inferSelect;
 export type InsertGpsDeviceLink = typeof gpsDeviceLinks.$inferInsert;
+
+export const cargoWeeklyClosings = mysqlTable("cargo_weekly_closings", {
+	id: int().autoincrement().notNull(),
+	clientId: int("client_id").notNull().references(() => clients.id),
+	weekStart: timestamp("week_start", { mode: 'string' }).notNull(),
+	weekEnd: timestamp("week_end", { mode: 'string' }).notNull(),
+	totalLoads: int("total_loads").default(0).notNull(),
+	totalWeightKg: varchar("total_weight_kg", { length: 20 }),
+	totalAmount: varchar("total_amount", { length: 20 }),
+	pricePerTon: varchar("price_per_ton", { length: 20 }),
+	dueDate: timestamp("due_date", { mode: 'string' }),
+	status: mysqlEnum(['aberto','fechado','pago','atrasado']).default('aberto').notNull(),
+	paidAt: timestamp("paid_at", { mode: 'string' }),
+	notes: text(),
+	closedBy: int("closed_by").references(() => users.id),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export type CargoWeeklyClosing = typeof cargoWeeklyClosings.$inferSelect;
+export type InsertCargoWeeklyClosing = typeof cargoWeeklyClosings.$inferInsert;
+
+export const clientDocuments = mysqlTable("client_documents", {
+	id: int().autoincrement().notNull(),
+	clientId: int("client_id").notNull().references(() => clients.id),
+	type: mysqlEnum(['proposta','contrato','nota_fiscal','boleto','recibo','outros']).default('outros').notNull(),
+	title: varchar({ length: 255 }).notNull(),
+	fileUrl: varchar("file_url", { length: 1000 }).notNull(),
+	fileType: varchar("file_type", { length: 50 }),
+	notes: text(),
+	uploadedBy: int("uploaded_by").references(() => users.id),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export type ClientDocument = typeof clientDocuments.$inferSelect;
+export type InsertClientDocument = typeof clientDocuments.$inferInsert;
