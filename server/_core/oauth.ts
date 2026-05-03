@@ -36,6 +36,13 @@ export function registerOAuthRoutes(app: Express) {
         lastSignedIn: new Date(),
       });
 
+      // Auto-vincular collaborator ao user pelo email
+      try {
+        await db.linkCollaboratorToUser(userInfo.email || '', userInfo.openId);
+      } catch (linkErr) {
+        console.warn('[OAuth] Failed to link collaborator:', linkErr);
+      }
+
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
         name: userInfo.name || "",
         expiresInMs: ONE_YEAR_MS,

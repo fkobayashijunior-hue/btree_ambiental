@@ -242,7 +242,9 @@ export const permissionsRouter = router({
         };
       }
 
-      return { modules: [], profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
+      // Usuário sem permissões configuradas e sem vínculo de collaborator:
+      // Dar acesso a todos os módulos até que o admin configure
+      return { modules: null, profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
     }
 
     return {

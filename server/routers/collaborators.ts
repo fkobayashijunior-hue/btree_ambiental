@@ -87,6 +87,7 @@ export const collaboratorsRouter = router({
       photoBase64: z.string().optional(),
       faceDescriptor: z.string().optional(),
       password: z.string().min(4).optional(), // senha de acesso ao sistema
+      clientId: z.number().nullable().optional(), // local de trabalho (cliente vinculado)
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -131,6 +132,7 @@ export const collaboratorsRouter = router({
         photoUrl,
         faceDescriptor: input.faceDescriptor,
         userId: userId || null,
+        clientId: input.clientId ?? null,
         createdBy: ctx.user.id,
       });
 
@@ -186,6 +188,7 @@ export const collaboratorsRouter = router({
       faceDescriptor: z.string().optional(),
       active: z.boolean().optional(),
       password: z.string().min(4).optional(), // nova senha (opcional na edição)
+      clientId: z.number().nullable().optional(), // local de trabalho (cliente vinculado)
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

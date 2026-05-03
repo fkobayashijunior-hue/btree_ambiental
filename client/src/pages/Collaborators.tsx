@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { UserPlus, Search, Camera, Users, Eye, EyeOff, Lock, ChevronDown, ChevronUp, ImagePlus, X, FileText, Link2, Unlink } from "lucide-react";
+import { UserPlus, Search, Camera, Users, Eye, EyeOff, Lock, ChevronDown, ChevronUp, ImagePlus, X, FileText, Link2, Unlink, MapPin } from "lucide-react";
 
 // Comprime imagem para máx 800px e qualidade 0.8 (reduz tamanho do base64)
 function compressImage(file: File): Promise<string> {
@@ -63,6 +63,7 @@ type FormData = {
   employmentType: string; shirtSize: string; pantsSize: string;
   shoeSize: string; bootSize: string; photoBase64: string;
   password: string; linkedUserId: number | null;
+  clientId: number | null;
 };
 
 const emptyForm: FormData = {
@@ -71,7 +72,7 @@ const emptyForm: FormData = {
   role: "operador", pixKey: "", dailyRate: "",
   employmentType: "diarista", shirtSize: "", pantsSize: "",
   shoeSize: "", bootSize: "", photoBase64: "", password: "",
-  linkedUserId: null,
+  linkedUserId: null, clientId: null,
 };
 
 function SectionTitle({ icon, title, open, onToggle }: { icon: React.ReactNode; title: string; open: boolean; onToggle: () => void }) {
@@ -157,6 +158,7 @@ export default function Collaborators() {
       bootSize: form.bootSize || undefined,
       photoBase64: form.photoBase64 || undefined,
       password: form.password || undefined,
+      clientId: form.clientId,
     };
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
@@ -180,6 +182,9 @@ export default function Collaborators() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Query de clientes para seletor de local de trabalho
+  const { data: clientsList = [] } = trpc.clients.list.useQuery();
+
   const openEdit = (c: any) => {
     setEditId(c.id);
     setForm({
@@ -190,7 +195,7 @@ export default function Collaborators() {
       employmentType: c.employmentType || "diarista", shirtSize: c.shirtSize || "",
       pantsSize: c.pantsSize || "", shoeSize: c.shoeSize || "", bootSize: c.bootSize || "",
       photoBase64: "", password: "",
-      linkedUserId: c.userId || null,
+      linkedUserId: c.userId || null, clientId: c.clientId || null,
     });
     setOpenSections({ pessoal: true, endereco: false, epi: false });
     setIsOpen(true);
@@ -264,9 +269,17 @@ export default function Collaborators() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-800 truncate">{c.name}</p>
                     {c.phone && <p className="text-xs text-gray-500 truncate">{c.phone}</p>}
-                    <Badge className={`text-xs mt-1 ${ROLE_COLORS[c.role] || "bg-gray-100 text-gray-800"}`}>
-                      {ROLE_LABELS[c.role] || c.role}
-                    </Badge>
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      <Badge className={`text-xs ${ROLE_COLORS[c.role] || "bg-gray-100 text-gray-800"}`}>
+                        {ROLE_LABELS[c.role] || c.role}
+                      </Badge>
+                      {c.clientId && (
+                        <Badge variant="outline" className="text-xs gap-1">
+                          <MapPin className="h-2.5 w-2.5" />
+                          {clientsList.find((cl: any) => cl.id === c.clientId)?.name || "Cliente"}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 pt-3 border-t">
@@ -386,6 +399,20 @@ export default function Collaborators() {
                   >
                     {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1"><MapPin className="h-3 w-3" /> Local de Trabalho</Label>
+                  <select
+                    value={form.clientId ?? 0}
+                    onChange={e => setForm(f => ({ ...f, clientId: parseInt(e.target.value) || null }))}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value={0}>Sem local definido</option>
+                    {clientsList.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">Define a operação/cliente onde o colaborador trabalha</p>
                 </div>
               </div>
             )}

@@ -1045,6 +1045,7 @@ __export(db_exports, {
   getUserById: () => getUserById,
   getUserByOpenId: () => getUserByOpenId,
   getValidResetToken: () => getValidResetToken,
+  linkCollaboratorToUser: () => linkCollaboratorToUser,
   markTokenAsUsed: () => markTokenAsUsed,
   updateUserPasswordByEmail: () => updateUserPasswordByEmail,
   upsertUser: () => upsertUser
@@ -1186,6 +1187,19 @@ async function markTokenAsUsed(tokenId) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(passwordResetTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(eq(passwordResetTokens.id, tokenId));
+}
+async function linkCollaboratorToUser(email, openId) {
+  if (!email) return;
+  const db = await getDb();
+  if (!db) return;
+  const { collaborators: collaborators2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+  const user = await getUserByOpenId(openId);
+  if (!user) return;
+  const [collab] = await db.select({ id: collaborators2.id, userId: collaborators2.userId }).from(collaborators2).where(eq(collaborators2.email, email)).limit(1);
+  if (collab && !collab.userId) {
+    await db.update(collaborators2).set({ userId: user.id }).where(eq(collaborators2.id, collab.id));
+    console.log(`[OAuth] Linked collaborator ${collab.id} to user ${user.id} (email: ${email})`);
+  }
 }
 var _db;
 var init_db = __esm({
@@ -1416,8 +1430,10 @@ var collaboratorsRouter = router({
     bootSize: z2.string().optional(),
     photoBase64: z2.string().optional(),
     faceDescriptor: z2.string().optional(),
-    password: z2.string().min(4).optional()
+    password: z2.string().min(4).optional(),
     // senha de acesso ao sistema
+    clientId: z2.number().nullable().optional()
+    // local de trabalho (cliente vinculado)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -1453,6 +1469,7 @@ var collaboratorsRouter = router({
       photoUrl,
       faceDescriptor: input.faceDescriptor,
       userId: userId || null,
+      clientId: input.clientId ?? null,
       createdBy: ctx.user.id
     });
     const newId = inserted.insertId;
@@ -1500,8 +1517,10 @@ var collaboratorsRouter = router({
     photoBase64: z2.string().optional(),
     faceDescriptor: z2.string().optional(),
     active: z2.boolean().optional(),
-    password: z2.string().min(4).optional()
+    password: z2.string().min(4).optional(),
     // nova senha (opcional na edição)
+    clientId: z2.number().nullable().optional()
+    // local de trabalho (cliente vinculado)
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -1696,7 +1715,11 @@ var sectorsRouter = router({
         userAllowedClientIds = JSON.parse(perm.allowedClientIds);
       } else {
         const [collab] = await db.select({ clientId: collaborators.clientId }).from(collaborators).where(eq3(collaborators.userId, ctx.user.id));
-        if (collab?.clientId) userAllowedClientIds = [collab.clientId];
+        if (collab?.clientId) {
+          userAllowedClientIds = [collab.clientId];
+        } else {
+          userAllowedClientIds = null;
+        }
       }
     }
     const rows = await db.select({
@@ -2012,7 +2035,11 @@ var cargoLoadsRouter = router({
         userAllowedClientIds = JSON.parse(perm.allowedClientIds);
       } else {
         const [collab] = await db.select({ clientId: collaborators.clientId }).from(collaborators).where(eq5(collaborators.userId, ctx.user.id));
-        if (collab?.clientId) userAllowedClientIds = [collab.clientId];
+        if (collab?.clientId) {
+          userAllowedClientIds = [collab.clientId];
+        } else {
+          userAllowedClientIds = null;
+        }
       }
     }
     const results = await db.select({
@@ -4943,7 +4970,7 @@ var permissionsRouter = router({
           allowedWorkLocationIds: null
         };
       }
-      return { modules: [], profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
+      return { modules: null, profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
     }
     return {
       modules: perm.modules ? JSON.parse(perm.modules) : [],

@@ -1489,10 +1489,18 @@
 - [ ] Controle de Acesso continua vazio (nenhum usuário aparece)
 
 ### Correções 03/05/2026 (2)
-- [ ] Controle de Acesso: listar TODOS os colaboradores (não só usuários OAuth)
-- [ ] Colaboradores: adicionar campo client_id para vincular a cliente/operação
-- [ ] Controle de Acesso: permitir definir permissões e cliente vinculado por colaborador
-- [ ] Perfil encarregado: ocultar valores financeiros mas mostrar equipamentos
-- [ ] Equipamentos: adicionar campo client_id para vincular a cliente/operação
-- [ ] Equipamentos: filtrar por allowedClientIds para encarregados
-- [ ] Equipamentos: seletor de cliente na tela de cadastro (admin pode alterar/remanejar)
+- [x] Controle de Acesso: listar TODOS os colaboradores (não só usuários OAuth)
+- [x] Colaboradores: adicionar campo client_id para vincular a cliente/operação
+- [x] Controle de Acesso: permitir definir permissões e cliente vinculado por colaborador
+- [x] Perfil encarregado: ocultar valores financeiros mas mostrar equipamentos (filtro server-side)
+- [x] Equipamentos: adicionar campo client_id para vincular a cliente/operação
+- [x] Equipamentos: filtrar por allowedClientIds para encarregados
+- [x] Equipamentos: seletor de cliente na tela de cadastro (admin pode alterar/remanejar)
+- [x] Cargas: filtro server-side por allowedClientIds (encarregado só vê cargas do cliente dele)
+
+### Correções 03/05/2026 (3) - Descobertas via phpMyAdmin
+- [ ] collaborators.user_id está NULL para TODOS - vincular automaticamente no login OAuth (match por email)
+- [ ] listUsers: funcionar mesmo quando user_id é NULL (mostrar todos os collaborators)
+- [ ] Filtro cargas: quando allowedClientIds não configurado, não bloquear tudo (fallback)
+- [ ] Adicionar campo "Local de Trabalho" (client_id) na tela de Colaboradores
+- [ ] SQL para Hostinger: vincular Juliano (collaborator id=12) ao user OAuth dele

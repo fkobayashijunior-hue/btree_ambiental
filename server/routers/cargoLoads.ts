@@ -84,7 +84,13 @@ export const cargoLoadsRouter = router({
           // Fallback: verificar collaborator.client_id
           const [collab] = await db.select({ clientId: collaborators.clientId })
             .from(collaborators).where(eq(collaborators.userId, ctx.user.id));
-          if (collab?.clientId) userAllowedClientIds = [collab.clientId];
+          if (collab?.clientId) {
+            userAllowedClientIds = [collab.clientId];
+          } else {
+            // Usuário não-admin sem permissões configuradas: mostrar tudo
+            // (até que o admin configure as permissões dele)
+            userAllowedClientIds = null;
+          }
         }
       }
 

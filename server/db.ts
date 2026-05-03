@@ -184,4 +184,33 @@ export async function markTokenAsUsed(tokenId: number): Promise<void> {
     .where(eq(passwordResetTokens.id, tokenId));
 }
 
+/**
+ * Auto-vincular collaborator ao user pelo email quando faz login OAuth.
+ * Se o collaborator já tem user_id, não faz nada.
+ */
+export async function linkCollaboratorToUser(email: string, openId: string): Promise<void> {
+  if (!email) return;
+  const db = await getDb();
+  if (!db) return;
+
+  const { collaborators } = await import("../drizzle/schema");
+
+  // Buscar o user pelo openId para pegar o id
+  const user = await getUserByOpenId(openId);
+  if (!user) return;
+
+  // Buscar collaborator pelo email que ainda não tem user_id
+  const [collab] = await db.select({ id: collaborators.id, userId: collaborators.userId })
+    .from(collaborators)
+    .where(eq(collaborators.email, email))
+    .limit(1);
+
+  if (collab && !collab.userId) {
+    await db.update(collaborators)
+      .set({ userId: user.id })
+      .where(eq(collaborators.id, collab.id));
+    console.log(`[OAuth] Linked collaborator ${collab.id} to user ${user.id} (email: ${email})`);
+  }
+}
+
 // TODO: add feature queries here as your schema grows.

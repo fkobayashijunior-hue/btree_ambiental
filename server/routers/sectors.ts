@@ -91,7 +91,12 @@ export const sectorsRouter = router({
         } else {
           const [collab] = await db.select({ clientId: collaborators.clientId })
             .from(collaborators).where(eq(collaborators.userId, ctx.user.id));
-          if (collab?.clientId) userAllowedClientIds = [collab.clientId];
+          if (collab?.clientId) {
+            userAllowedClientIds = [collab.clientId];
+          } else {
+            // Usuário não-admin sem permissões: mostrar tudo até admin configurar
+            userAllowedClientIds = null;
+          }
         }
       }
 
