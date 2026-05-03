@@ -211,6 +211,13 @@
       "when": 1777839847010,
       "tag": "0029_marvelous_thing",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1777840412598,
+      "tag": "0030_fearless_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

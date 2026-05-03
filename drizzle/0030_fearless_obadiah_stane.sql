@@ -1,0 +1,1 @@
+ALTER TABLE `collaborators` ADD `client_id` int;
