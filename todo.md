@@ -1487,3 +1487,12 @@
 ### Bugs Persistentes 03/05/2026
 - [ ] Erro INSERT client_documents persiste na Hostinger (mesmo passando createdAt explicitamente)
 - [ ] Controle de Acesso continua vazio (nenhum usuário aparece)
+
+### Correções 03/05/2026 (2)
+- [ ] Controle de Acesso: listar TODOS os colaboradores (não só usuários OAuth)
+- [ ] Colaboradores: adicionar campo client_id para vincular a cliente/operação
+- [ ] Controle de Acesso: permitir definir permissões e cliente vinculado por colaborador
+- [ ] Perfil encarregado: ocultar valores financeiros mas mostrar equipamentos
+- [ ] Equipamentos: adicionar campo client_id para vincular a cliente/operação
+- [ ] Equipamentos: filtrar por allowedClientIds para encarregados
+- [ ] Equipamentos: seletor de cliente na tela de cadastro (admin pode alterar/remanejar)

@@ -1,6 +1,6 @@
 import { z } from "zod";import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { sectors, equipment, equipmentTypes } from "../../drizzle/schema";
+import { sectors, equipment, equipmentTypes, clients, userPermissions, collaborators } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 
@@ -78,9 +78,23 @@ export const sectorsRouter = router({
       typeId: z.number().optional(),
       status: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+
+      // Buscar allowedClientIds para filtro server-side
+      let userAllowedClientIds: number[] | null = null;
+      if (ctx.user.role !== "admin") {
+        const [perm] = await db.select().from(userPermissions).where(eq(userPermissions.userId, ctx.user.id));
+        if (perm?.allowedClientIds) {
+          userAllowedClientIds = JSON.parse(perm.allowedClientIds) as number[];
+        } else {
+          const [collab] = await db.select({ clientId: collaborators.clientId })
+            .from(collaborators).where(eq(collaborators.userId, ctx.user.id));
+          if (collab?.clientId) userAllowedClientIds = [collab.clientId];
+        }
+      }
+
       const rows = await db
         .select({
           id: equipment.id,
@@ -94,7 +108,9 @@ export const sectorsRouter = router({
           status: equipment.status,
           typeId: equipment.typeId,
           sectorId: equipment.sectorId,
+          clientId: equipment.clientId,
           typeName: equipmentTypes.name,
+          clientName: clients.name,
           createdAt: equipment.createdAt,
           defaultHeightM: equipment.defaultHeightM,
           defaultWidthM: equipment.defaultWidthM,
@@ -102,9 +118,14 @@ export const sectorsRouter = router({
         })
         .from(equipment)
         .leftJoin(equipmentTypes, eq(equipment.typeId, equipmentTypes.id))
+        .leftJoin(clients, eq(equipment.clientId, clients.id))
         .orderBy(equipment.name);
 
       return rows.filter((r: typeof rows[number]) => {
+        // Filtro server-side: encarregado só vê equipamentos dos clientes permitidos
+        if (userAllowedClientIds && userAllowedClientIds.length > 0) {
+          if (!r.clientId || !userAllowedClientIds.includes(r.clientId)) return false;
+        }
         if (input.typeId && r.typeId !== input.typeId) return false;
         if (input.status && r.status !== input.status) return false;
         if (input.search) {
@@ -124,6 +145,7 @@ export const sectorsRouter = router({
       name: z.string().min(1),
       typeId: z.number(),
       sectorId: z.number().optional(),
+      clientId: z.number().optional().nullable(),
       brand: z.string().optional(),
       model: z.string().optional(),
       year: z.number().optional(),
@@ -158,6 +180,7 @@ export const sectorsRouter = router({
       name: z.string().optional(),
       typeId: z.number().optional(),
       sectorId: z.number().optional().nullable(),
+      clientId: z.number().optional().nullable(),
       brand: z.string().optional(),
       model: z.string().optional(),
       year: z.number().optional(),

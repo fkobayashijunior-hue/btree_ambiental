@@ -1,0 +1,1 @@
+ALTER TABLE `equipment` ADD `client_id` int;

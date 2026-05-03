@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Shield, User, ChevronDown, ChevronUp, Check, Loader2, MapPin } from "lucide-react";
+import { Shield, User, ChevronDown, ChevronUp, Check, Loader2, MapPin, Users, UserCheck, AlertCircle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -26,11 +26,23 @@ const PROFILE_COLORS: Record<string, string> = {
   custom:        "bg-gray-100 text-gray-700 border-gray-200",
 };
 
+const COLLAB_ROLE_LABELS: Record<string, string> = {
+  administrativo: "Administrativo",
+  encarregado: "Encarregado",
+  mecanico: "Mecânico",
+  motosserrista: "Motosserrista",
+  carregador: "Carregador",
+  operador: "Operador",
+  motorista: "Motorista",
+  terceirizado: "Terceirizado",
+};
+
 export default function AccessControl() {
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
   const [pendingModules, setPendingModules] = useState<Record<number, string[]>>({});
   const [pendingProfiles, setPendingProfiles] = useState<Record<number, string>>({});
   const [pendingClientIds, setPendingClientIds] = useState<Record<number, number[]>>({});
+  const [filterTab, setFilterTab] = useState<"all" | "logged" | "pending">("all");
 
   const utils = trpc.useUtils();
   const { data: usersList = [], isLoading: loadingUsers } = trpc.permissions.listUsers.useQuery();
@@ -43,7 +55,7 @@ export default function AccessControl() {
       toast.success("Permissões salvas!");
       utils.permissions.listUsers.invalidate();
     },
-    onError: (e) => toast.error(e.message || "Erro ao salvar"),
+    onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
   });
 
   // Agrupar módulos por grupo
@@ -52,6 +64,17 @@ export default function AccessControl() {
     acc[m.group].push(m);
     return acc;
   }, {} as Record<string, Array<{ slug: string; label: string; group: string }>>);
+
+  // Filtrar lista
+  const filteredUsers = useMemo(() => {
+    const list = usersList as any[];
+    if (filterTab === "logged") return list.filter((u: any) => u.hasLoggedIn);
+    if (filterTab === "pending") return list.filter((u: any) => !u.hasLoggedIn);
+    return list;
+  }, [usersList, filterTab]);
+
+  const loggedCount = (usersList as any[]).filter((u: any) => u.hasLoggedIn).length;
+  const pendingCount = (usersList as any[]).filter((u: any) => !u.hasLoggedIn).length;
 
   const getUserModules = (userId: number, userModules: string[] | null): string[] => {
     if (pendingModules[userId] !== undefined) return pendingModules[userId];
@@ -134,7 +157,7 @@ export default function AccessControl() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-900">Controle de Acesso</h1>
-          <p className="text-sm text-gray-500">Defina quais módulos cada usuário pode acessar</p>
+          <p className="text-sm text-gray-500">Defina quais módulos cada usuário e colaborador pode acessar</p>
         </div>
       </div>
 
@@ -155,41 +178,84 @@ export default function AccessControl() {
         </CardContent>
       </Card>
 
-      {/* Info box */}
-      <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
-        <strong>Nota:</strong> Apenas usuários que já fizeram login no sistema aparecem aqui. Para dar acesso ao Juliano ou outro colaborador, ele precisa fazer login pelo menos uma vez com o e-mail vinculado.
+      {/* Tabs de filtro */}
+      <div className="flex gap-2 flex-wrap">
+        <Button
+          variant={filterTab === "all" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilterTab("all")}
+          className={filterTab === "all" ? "bg-emerald-700 hover:bg-emerald-800" : ""}
+        >
+          <Users className="h-3.5 w-3.5 mr-1.5" />
+          Todos ({(usersList as any[]).length})
+        </Button>
+        <Button
+          variant={filterTab === "logged" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilterTab("logged")}
+          className={filterTab === "logged" ? "bg-emerald-700 hover:bg-emerald-800" : ""}
+        >
+          <UserCheck className="h-3.5 w-3.5 mr-1.5" />
+          Com Login ({loggedCount})
+        </Button>
+        <Button
+          variant={filterTab === "pending" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilterTab("pending")}
+          className={filterTab === "pending" ? "bg-amber-600 hover:bg-amber-700" : ""}
+        >
+          <AlertCircle className="h-3.5 w-3.5 mr-1.5" />
+          Sem Login ({pendingCount})
+        </Button>
       </div>
 
-      {/* Lista de usuários */}
+      {/* Info box */}
+      <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+        <strong>Como funciona:</strong> Todos os colaboradores ativos aparecem aqui. Para colaboradores que ainda não fizeram login, você pode definir o cliente vinculado. Quando fizerem login, as permissões completas (módulos) poderão ser configuradas.
+      </div>
+
+      {/* Lista de usuários e colaboradores */}
       <div className="space-y-3">
-        {(usersList as any[]).map((user: any) => {
+        {filteredUsers.map((user: any) => {
           const isExpanded = expandedUser === user.id;
           const currentProfile = getUserProfile(user.id, user.profile);
           const currentModules = getUserModules(user.id, user.modules);
           const currentClientIds = getUserClientIds(user.id, user.allowedClientIds);
           const isAdminProfile = currentProfile === "admin" || user.role === "admin";
           const changed = hasPendingChanges(user.id);
-          const isEncarregado = currentProfile === "encarregado" || currentProfile === "lider";
+          const hasLogin = user.hasLoggedIn;
 
           return (
-            <Card key={user.id} className={`transition-all ${changed ? "border-emerald-400 shadow-sm" : "border-gray-200"}`}>
+            <Card key={user.id} className={`transition-all ${changed ? "border-emerald-400 shadow-sm" : !hasLogin ? "border-amber-200" : "border-gray-200"}`}>
               <CardContent className="p-0">
                 <button
                   className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors rounded-xl"
                   onClick={() => setExpandedUser(isExpanded ? null : user.id)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <User className="h-4 w-4 text-emerald-700" />
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      hasLogin ? "bg-emerald-100" : "bg-amber-100"
+                    }`}>
+                      <User className={`h-4 w-4 ${hasLogin ? "text-emerald-700" : "text-amber-700"}`} />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900 text-sm">
-                        {user.collaboratorName || user.name}
+                      <p className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                        {user.name || "Sem nome"}
+                        {!hasLogin && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-normal">
+                            Sem login
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {user.email}
+                        {user.email || user.phone || "Sem contato"}
                         {user.collaboratorRole && (
-                          <span className="ml-2 text-emerald-600">• {user.collaboratorRole}</span>
+                          <span className="ml-2 text-emerald-600">• {COLLAB_ROLE_LABELS[user.collaboratorRole] || user.collaboratorRole}</span>
+                        )}
+                        {user.collaboratorClientId && (
+                          <span className="ml-2 text-blue-600">
+                            • {(clientsList as any[]).find((c: any) => c.id === user.collaboratorClientId)?.name || `Cliente #${user.collaboratorClientId}`}
+                          </span>
                         )}
                       </p>
                     </div>
@@ -200,125 +266,185 @@ export default function AccessControl() {
                         Alterado
                       </Badge>
                     )}
-                    <Badge className={`text-xs border ${PROFILE_COLORS[currentProfile] || PROFILE_COLORS.custom}`}>
-                      {profilesList.find(p => p.key === currentProfile)?.label || "Personalizado"}
-                    </Badge>
-                    {isAdminProfile ? (
+                    {hasLogin && (
+                      <Badge className={`text-xs border ${PROFILE_COLORS[currentProfile] || PROFILE_COLORS.custom}`}>
+                        {profilesList.find(p => p.key === currentProfile)?.label || "Personalizado"}
+                      </Badge>
+                    )}
+                    {hasLogin && (isAdminProfile ? (
                       <Badge className="bg-gray-100 text-gray-600 text-xs">Acesso total</Badge>
                     ) : (
                       <Badge className="bg-gray-100 text-gray-600 text-xs">{currentModules.length} módulos</Badge>
-                    )}
+                    ))}
                     {isExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                   </div>
                 </button>
 
                 {isExpanded && (
                   <div className="border-t border-gray-100 p-4 space-y-4">
-                    {/* Seletor de perfil */}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Aplicar perfil:</span>
-                      <Select
-                        value={currentProfile}
-                        onValueChange={(val) => handleApplyProfile(user.id, val)}
-                      >
-                        <SelectTrigger className="h-8 text-sm w-48">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {profilesList.map(p => (
-                            <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <span className="text-xs text-gray-400">ou selecione módulos individualmente</span>
-                    </div>
-
-                    {/* Restrição por cliente (para encarregados/líderes) */}
-                    {!isAdminProfile && (
-                      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-amber-700" />
-                          <span className="text-sm font-medium text-amber-800">Clientes Permitidos</span>
+                    {/* Para colaboradores sem login: apenas seletor de cliente */}
+                    {!hasLogin ? (
+                      <div className="space-y-4">
+                        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                          <strong>Colaborador sem login.</strong> Quando fizer login no sistema, as permissões completas (módulos) poderão ser configuradas. Por enquanto, defina o cliente vinculado.
                         </div>
-                        <p className="text-xs text-amber-700">
-                          Selecione quais clientes/roças este usuário pode acessar. Se nenhum for selecionado, terá acesso a todos.
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                          {(clientsList as any[]).map((client: any) => (
-                            <label
-                              key={client.id}
-                              className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
-                                currentClientIds.includes(client.id)
-                                  ? "bg-amber-100 border-amber-300 text-amber-800"
-                                  : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
-                              }`}
-                            >
-                              <Checkbox
-                                checked={currentClientIds.includes(client.id)}
-                                onCheckedChange={() => toggleClient(user.id, client.id, user.allowedClientIds)}
-                                className="h-4 w-4 flex-shrink-0"
-                              />
-                              <span className="font-medium leading-tight">{client.name}</span>
-                            </label>
-                          ))}
-                        </div>
-                        {(clientsList as any[]).length === 0 && (
-                          <p className="text-xs text-gray-500 italic">Nenhum cliente cadastrado</p>
-                        )}
-                      </div>
-                    )}
 
-                    {/* Módulos por grupo */}
-                    {isAdminProfile ? (
-                      <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 flex items-center gap-2">
-                        <Check className="h-4 w-4" />
-                        Administrador — acesso completo a todos os módulos
+                        {/* Seletor de cliente para colaborador sem login */}
+                        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-blue-700" />
+                            <span className="text-sm font-medium text-blue-800">Cliente / Operação Vinculada</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                            {(clientsList as any[]).map((client: any) => (
+                              <label
+                                key={client.id}
+                                className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                                  currentClientIds.includes(client.id)
+                                    ? "bg-blue-100 border-blue-300 text-blue-800"
+                                    : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                                }`}
+                              >
+                                <Checkbox
+                                  checked={currentClientIds.includes(client.id)}
+                                  onCheckedChange={() => toggleClient(user.id, client.id, user.allowedClientIds)}
+                                  className="h-4 w-4 flex-shrink-0"
+                                />
+                                <span className="font-medium leading-tight">{client.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                          {(clientsList as any[]).length === 0 && (
+                            <p className="text-xs text-gray-500 italic">Nenhum cliente cadastrado</p>
+                          )}
+                        </div>
+
+                        {/* Botão salvar */}
+                        <div className="flex justify-end pt-2">
+                          <Button
+                            size="sm"
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
+                            onClick={() => handleSave(user.id, user.modules, user.profile, user.allowedClientIds)}
+                            disabled={setPermsMutation.isPending}
+                          >
+                            {setPermsMutation.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Check className="h-3 w-3" />
+                            )}
+                            Salvar
+                          </Button>
+                        </div>
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        {Object.entries(groups).map(([group, mods]) => (
-                          <div key={group}>
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{group}</p>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                              {mods.map((mod: any) => (
+                      <>
+                        {/* Seletor de perfil */}
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Aplicar perfil:</span>
+                          <Select
+                            value={currentProfile}
+                            onValueChange={(val) => handleApplyProfile(user.id, val)}
+                          >
+                            <SelectTrigger className="h-8 text-sm w-48">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {profilesList.map(p => (
+                                <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <span className="text-xs text-gray-400">ou selecione módulos individualmente</span>
+                        </div>
+
+                        {/* Restrição por cliente */}
+                        {!isAdminProfile && (
+                          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-amber-700" />
+                              <span className="text-sm font-medium text-amber-800">Clientes Permitidos</span>
+                            </div>
+                            <p className="text-xs text-amber-700">
+                              Selecione quais clientes/operações este usuário pode acessar. Se nenhum for selecionado, verá todos.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                              {(clientsList as any[]).map((client: any) => (
                                 <label
-                                  key={mod.slug}
+                                  key={client.id}
                                   className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
-                                    currentModules.includes(mod.slug)
-                                      ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                    currentClientIds.includes(client.id)
+                                      ? "bg-amber-100 border-amber-300 text-amber-800"
                                       : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
                                   }`}
                                 >
                                   <Checkbox
-                                    checked={currentModules.includes(mod.slug)}
-                                    onCheckedChange={() => toggleModule(user.id, mod.slug, user.modules)}
+                                    checked={currentClientIds.includes(client.id)}
+                                    onCheckedChange={() => toggleClient(user.id, client.id, user.allowedClientIds)}
                                     className="h-4 w-4 flex-shrink-0"
                                   />
-                                  <span className="font-medium leading-tight">{mod.label}</span>
+                                  <span className="font-medium leading-tight">{client.name}</span>
                                 </label>
                               ))}
                             </div>
+                            {(clientsList as any[]).length === 0 && (
+                              <p className="text-xs text-gray-500 italic">Nenhum cliente cadastrado</p>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Botão salvar */}
-                    <div className="flex justify-end pt-2">
-                      <Button
-                        size="sm"
-                        className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
-                        onClick={() => handleSave(user.id, user.modules, user.profile, user.allowedClientIds)}
-                        disabled={setPermsMutation.isPending}
-                      >
-                        {setPermsMutation.isPending ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Check className="h-3 w-3" />
                         )}
-                        Salvar Permissões
-                      </Button>
-                    </div>
+
+                        {/* Módulos por grupo */}
+                        {isAdminProfile ? (
+                          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 flex items-center gap-2">
+                            <Check className="h-4 w-4" />
+                            Administrador — acesso completo a todos os módulos
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {Object.entries(groups).map(([group, mods]) => (
+                              <div key={group}>
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{group}</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                  {mods.map((mod: any) => (
+                                    <label
+                                      key={mod.slug}
+                                      className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                                        currentModules.includes(mod.slug)
+                                          ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                          : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                                      }`}
+                                    >
+                                      <Checkbox
+                                        checked={currentModules.includes(mod.slug)}
+                                        onCheckedChange={() => toggleModule(user.id, mod.slug, user.modules)}
+                                        className="h-4 w-4 flex-shrink-0"
+                                      />
+                                      <span className="font-medium leading-tight">{mod.label}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Botão salvar */}
+                        <div className="flex justify-end pt-2">
+                          <Button
+                            size="sm"
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
+                            onClick={() => handleSave(user.id, user.modules, user.profile, user.allowedClientIds)}
+                            disabled={setPermsMutation.isPending}
+                          >
+                            {setPermsMutation.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Check className="h-3 w-3" />
+                            )}
+                            Salvar Permissões
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -327,11 +453,11 @@ export default function AccessControl() {
         })}
       </div>
 
-      {(usersList as any[]).length === 0 && (
+      {filteredUsers.length === 0 && (
         <div className="text-center py-16 text-gray-400">
           <Shield className="h-16 w-16 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">Nenhum usuário encontrado</p>
-          <p className="text-sm mt-2">Os usuários aparecerão aqui após fazerem login no sistema</p>
+          <p className="text-lg font-medium">Nenhum usuário ou colaborador encontrado</p>
+          <p className="text-sm mt-2">Cadastre colaboradores no módulo de Colaboradores para gerenciar permissões</p>
         </div>
       )}
     </div>

@@ -69,9 +69,24 @@ export const cargoLoadsRouter = router({
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
     }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      // Buscar allowedClientIds do usuário para filtro server-side
+      let userAllowedClientIds: number[] | null = null;
+      if (ctx.user.role !== "admin") {
+        const { userPermissions: upTable } = await import("../../drizzle/schema");
+        const [perm] = await db.select().from(upTable).where(eq(upTable.userId, ctx.user.id));
+        if (perm?.allowedClientIds) {
+          userAllowedClientIds = JSON.parse(perm.allowedClientIds) as number[];
+        } else {
+          // Fallback: verificar collaborator.client_id
+          const [collab] = await db.select({ clientId: collaborators.clientId })
+            .from(collaborators).where(eq(collaborators.userId, ctx.user.id));
+          if (collab?.clientId) userAllowedClientIds = [collab.clientId];
+        }
+      }
 
       const results = await db
         .select({
@@ -135,6 +150,10 @@ export const cargoLoadsRouter = router({
         .orderBy(desc(cargoLoads.date), desc(cargoLoads.createdAt));
 
       let filtered = results;
+      // Filtro server-side por allowedClientIds (encarregado só vê cargas dos clientes permitidos)
+      if (userAllowedClientIds && userAllowedClientIds.length > 0) {
+        filtered = filtered.filter(r => r.clientId && userAllowedClientIds!.includes(r.clientId));
+      }
       if (input?.search) {
         const s = input.search.toLowerCase();
         filtered = filtered.filter(r =>

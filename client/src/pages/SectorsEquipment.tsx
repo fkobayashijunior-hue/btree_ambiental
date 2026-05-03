@@ -39,7 +39,7 @@ export default function SectorsEquipment() {
   const [editEquipId, setEditEquipId] = useState<number | null>(null);
   const [equipSearch, setEquipSearch] = useState("");
   const [equipForm, setEquipForm] = useState({
-    name: "", typeId: 0, sectorId: 0, brand: "", model: "",
+    name: "", typeId: 0, sectorId: 0, clientId: 0, brand: "", model: "",
     year: "", serialNumber: "", licensePlate: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
     defaultHeightM: "", defaultWidthM: "", defaultLengthM: "",
   });
@@ -60,6 +60,7 @@ export default function SectorsEquipment() {
   const { data: equipList = [], isLoading: equipLoading } = trpc.sectors.listEquipment.useQuery({
     search: equipSearch || undefined,
   });
+  const { data: clientsList = [] } = trpc.permissions.listClients.useQuery();
 
   // Sector mutations
   const createSector = trpc.sectors.createSector.useMutation({
@@ -96,7 +97,7 @@ export default function SectorsEquipment() {
   });
 
   const resetEquipForm = () => {
-    setEquipForm({ name: "", typeId: 0, sectorId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", status: "ativo", defaultHeightM: "", defaultWidthM: "", defaultLengthM: "" });
+    setEquipForm({ name: "", typeId: 0, sectorId: 0, clientId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", status: "ativo", defaultHeightM: "", defaultWidthM: "", defaultLengthM: "" });
     setEquipPhotoPreview(null);
     setEquipPhotoBase64(null);
     setExistingImageUrl(null);
@@ -122,7 +123,7 @@ export default function SectorsEquipment() {
   const openEditEquip = (e: typeof equipList[number]) => {
     setEditEquipId(e.id);
     setEquipForm({
-      name: e.name, typeId: e.typeId, sectorId: (e as any).sectorId || 0, brand: e.brand || "",
+      name: e.name, typeId: e.typeId, sectorId: (e as any).sectorId || 0, clientId: (e as any).clientId || 0, brand: e.brand || "",
       model: e.model || "", year: e.year?.toString() || "",
       serialNumber: e.serialNumber || "", licensePlate: (e as any).licensePlate || "", status: e.status as any,
       defaultHeightM: (e as any).defaultHeightM || "", defaultWidthM: (e as any).defaultWidthM || "", defaultLengthM: (e as any).defaultLengthM || "",
@@ -173,6 +174,7 @@ export default function SectorsEquipment() {
       name: equipForm.name,
       typeId: equipForm.typeId,
       sectorId: equipForm.sectorId || undefined,
+      clientId: equipForm.clientId || undefined,
       brand: equipForm.brand || undefined,
       model: equipForm.model || undefined,
       year: equipForm.year ? parseInt(equipForm.year) : undefined,
@@ -387,16 +389,29 @@ export default function SectorsEquipment() {
                         <Label>Nome / Identificação *</Label>
                         <Input value={equipForm.name} onChange={e => setEquipForm(f => ({ ...f, name: e.target.value }))} required placeholder="ex: Motosserra #01, Trator Valtra" />
                       </div>
-                      <div className="col-span-2">
+                      <div>
                         <Label>Setor</Label>
                         <select
                           value={equipForm.sectorId}
                           onChange={e => setEquipForm(f => ({ ...f, sectorId: parseInt(e.target.value) }))}
                           className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         >
-                          <option value={0}>Sem setor definido</option>
+                          <option value={0}>Sem setor</option>
                           {sectorsList.map(s => (
                             <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Cliente / Operação</Label>
+                        <select
+                          value={equipForm.clientId}
+                          onChange={e => setEquipForm(f => ({ ...f, clientId: parseInt(e.target.value) }))}
+                          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value={0}>Sem cliente definido</option>
+                          {(clientsList as any[]).map((c: any) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
                           ))}
                         </select>
                       </div>
@@ -542,6 +557,7 @@ export default function SectorsEquipment() {
                           )}
                           {(e as any).licensePlate && <p className="text-xs text-blue-600 font-medium">🚗 Placa: {(e as any).licensePlate}</p>}
                           {e.serialNumber && <p className="text-xs text-gray-400">Série: {e.serialNumber}</p>}
+                          {(e as any).clientName && <p className="text-xs text-blue-600 font-medium">📍 {(e as any).clientName}</p>}
                         </div>
                         <div className="flex flex-col items-end gap-2 flex-shrink-0">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${sc.color}`}>

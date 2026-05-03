@@ -521,6 +521,7 @@ var init_schema = __esm({
       shoeSize: varchar("shoe_size", { length: 5 }),
       bootSize: varchar("boot_size", { length: 5 }),
       active: int().default(1).notNull(),
+      clientId: int("client_id"),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
       createdBy: int("created_by").references(() => users.id)
@@ -539,6 +540,7 @@ var init_schema = __esm({
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
       sectorId: int("sector_id"),
+      clientId: int("client_id"),
       defaultHeightM: varchar("default_height_m", { length: 20 }),
       defaultWidthM: varchar("default_width_m", { length: 20 }),
       defaultLengthM: varchar("default_length_m", { length: 20 })
@@ -1684,9 +1686,19 @@ var sectorsRouter = router({
     search: z3.string().optional(),
     typeId: z3.number().optional(),
     status: z3.string().optional()
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    let userAllowedClientIds = null;
+    if (ctx.user.role !== "admin") {
+      const [perm] = await db.select().from(userPermissions).where(eq3(userPermissions.userId, ctx.user.id));
+      if (perm?.allowedClientIds) {
+        userAllowedClientIds = JSON.parse(perm.allowedClientIds);
+      } else {
+        const [collab] = await db.select({ clientId: collaborators.clientId }).from(collaborators).where(eq3(collaborators.userId, ctx.user.id));
+        if (collab?.clientId) userAllowedClientIds = [collab.clientId];
+      }
+    }
     const rows = await db.select({
       id: equipment.id,
       name: equipment.name,
@@ -1699,13 +1711,18 @@ var sectorsRouter = router({
       status: equipment.status,
       typeId: equipment.typeId,
       sectorId: equipment.sectorId,
+      clientId: equipment.clientId,
       typeName: equipmentTypes.name,
+      clientName: clients.name,
       createdAt: equipment.createdAt,
       defaultHeightM: equipment.defaultHeightM,
       defaultWidthM: equipment.defaultWidthM,
       defaultLengthM: equipment.defaultLengthM
-    }).from(equipment).leftJoin(equipmentTypes, eq3(equipment.typeId, equipmentTypes.id)).orderBy(equipment.name);
+    }).from(equipment).leftJoin(equipmentTypes, eq3(equipment.typeId, equipmentTypes.id)).leftJoin(clients, eq3(equipment.clientId, clients.id)).orderBy(equipment.name);
     return rows.filter((r) => {
+      if (userAllowedClientIds && userAllowedClientIds.length > 0) {
+        if (!r.clientId || !userAllowedClientIds.includes(r.clientId)) return false;
+      }
       if (input.typeId && r.typeId !== input.typeId) return false;
       if (input.status && r.status !== input.status) return false;
       if (input.search) {
@@ -1719,6 +1736,7 @@ var sectorsRouter = router({
     name: z3.string().min(1),
     typeId: z3.number(),
     sectorId: z3.number().optional(),
+    clientId: z3.number().optional().nullable(),
     brand: z3.string().optional(),
     model: z3.string().optional(),
     year: z3.number().optional(),
@@ -1749,6 +1767,7 @@ var sectorsRouter = router({
     name: z3.string().optional(),
     typeId: z3.number().optional(),
     sectorId: z3.number().optional().nullable(),
+    clientId: z3.number().optional().nullable(),
     brand: z3.string().optional(),
     model: z3.string().optional(),
     year: z3.number().optional(),
@@ -1982,9 +2001,20 @@ var cargoLoadsRouter = router({
     status: z5.enum(["pendente", "entregue", "cancelado"]).optional(),
     dateFrom: z5.string().optional(),
     dateTo: z5.string().optional()
-  }).optional()).query(async ({ input }) => {
+  }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    let userAllowedClientIds = null;
+    if (ctx.user.role !== "admin") {
+      const { userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+      const [perm] = await db.select().from(upTable).where(eq5(upTable.userId, ctx.user.id));
+      if (perm?.allowedClientIds) {
+        userAllowedClientIds = JSON.parse(perm.allowedClientIds);
+      } else {
+        const [collab] = await db.select({ clientId: collaborators.clientId }).from(collaborators).where(eq5(collaborators.userId, ctx.user.id));
+        if (collab?.clientId) userAllowedClientIds = [collab.clientId];
+      }
+    }
     const results = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
@@ -2038,6 +2068,9 @@ var cargoLoadsRouter = router({
       driverPhotoUrl: collaborators.photoUrl
     }).from(cargoLoads).leftJoin(clients, eq5(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq5(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq5(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq5(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq5(cargoLoads.driverCollaboratorId, collaborators.id)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     let filtered = results;
+    if (userAllowedClientIds && userAllowedClientIds.length > 0) {
+      filtered = filtered.filter((r) => r.clientId && userAllowedClientIds.includes(r.clientId));
+    }
     if (input?.search) {
       const s = input.search.toLowerCase();
       filtered = filtered.filter(
@@ -4731,7 +4764,7 @@ import { z as z16 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError12 } from "@trpc/server";
-import { eq as eq16, isNotNull } from "drizzle-orm";
+import { eq as eq16 } from "drizzle-orm";
 var SYSTEM_MODULES = [
   // Maquinário
   { slug: "equipamentos", label: "Equipamentos", group: "Maquin\xE1rio" },
@@ -4784,7 +4817,7 @@ var PROFILES = {
   },
   encarregado: {
     label: "Encarregado de Ro\xE7a",
-    modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas"]
+    modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas", "manutencao"]
   },
   lider: {
     label: "L\xEDder de Equipe",
@@ -4820,7 +4853,7 @@ var permissionsRouter = router({
     const allClients = await db.select({ id: clients.id, name: clients.name }).from(clients);
     return allClients;
   }),
-  // Listar todos os usuários com suas permissões
+  // Listar todos os usuários E colaboradores com suas permissões
   listUsers: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
     const db = await getDb();
@@ -4832,26 +4865,61 @@ var permissionsRouter = router({
       role: users.role,
       createdAt: users.createdAt
     }).from(users).orderBy(users.name);
-    const linkedCollabs = await db.select({
+    const allCollabs = await db.select({
       id: collaborators.id,
       name: collaborators.name,
       email: collaborators.email,
+      phone: collaborators.phone,
       userId: collaborators.userId,
-      role: collaborators.role
-    }).from(collaborators).where(isNotNull(collaborators.userId));
+      role: collaborators.role,
+      clientId: collaborators.clientId,
+      active: collaborators.active
+    }).from(collaborators).where(eq16(collaborators.active, 1)).orderBy(collaborators.name);
     const allPerms = await db.select().from(userPermissions);
     const permMap = Object.fromEntries(allPerms.map((p) => [p.userId, p]));
-    const userIds = new Set(allUsers.map((u) => u.id));
-    const result = allUsers.map((u) => ({
-      ...u,
-      collaboratorName: linkedCollabs.find((c) => c.userId === u.id)?.name || null,
-      collaboratorRole: linkedCollabs.find((c) => c.userId === u.id)?.role || null,
-      permissions: permMap[u.id] || null,
-      modules: u.role === "admin" ? null : permMap[u.id]?.modules ? JSON.parse(permMap[u.id].modules) : [],
-      profile: permMap[u.id]?.profile || "custom",
-      allowedClientIds: permMap[u.id]?.allowedClientIds ? JSON.parse(permMap[u.id].allowedClientIds) : null,
-      allowedWorkLocationIds: permMap[u.id]?.allowedWorkLocationIds ? JSON.parse(permMap[u.id].allowedWorkLocationIds) : null
-    }));
+    const result = [];
+    const userIdsFromUsers = new Set(allUsers.map((u) => u.id));
+    for (const u of allUsers) {
+      const collab = allCollabs.find((c) => c.userId === u.id);
+      result.push({
+        id: u.id,
+        name: collab?.name || u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt,
+        isCollaborator: !!collab,
+        collaboratorId: collab?.id || null,
+        collaboratorRole: collab?.role || null,
+        collaboratorClientId: collab?.clientId || null,
+        hasLoggedIn: true,
+        phone: collab?.phone || null,
+        modules: u.role === "admin" ? null : permMap[u.id]?.modules ? JSON.parse(permMap[u.id].modules) : [],
+        profile: permMap[u.id]?.profile || "custom",
+        allowedClientIds: permMap[u.id]?.allowedClientIds ? JSON.parse(permMap[u.id].allowedClientIds) : null,
+        allowedWorkLocationIds: permMap[u.id]?.allowedWorkLocationIds ? JSON.parse(permMap[u.id].allowedWorkLocationIds) : null
+      });
+    }
+    for (const c of allCollabs) {
+      if (c.userId && userIdsFromUsers.has(c.userId)) continue;
+      result.push({
+        id: -c.id,
+        // ID negativo para diferenciar de users (colaborador sem login)
+        name: c.name,
+        email: c.email,
+        role: null,
+        createdAt: null,
+        isCollaborator: true,
+        collaboratorId: c.id,
+        collaboratorRole: c.role,
+        collaboratorClientId: c.clientId,
+        hasLoggedIn: false,
+        phone: c.phone,
+        modules: [],
+        profile: "custom",
+        allowedClientIds: c.clientId ? [c.clientId] : null,
+        allowedWorkLocationIds: null
+      });
+    }
     return result;
   }),
   // Buscar permissões do usuário atual
@@ -4860,7 +4928,23 @@ var permissionsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
     const [perm] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, ctx.user.id));
-    if (!perm) return { modules: [], profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
+    if (!perm) {
+      const [collab] = await db.select({
+        clientId: collaborators.clientId,
+        role: collaborators.role
+      }).from(collaborators).where(eq16(collaborators.userId, ctx.user.id));
+      if (collab?.clientId) {
+        const collabRole = collab.role || "custom";
+        const profileModules = PROFILES[collabRole]?.modules || [];
+        return {
+          modules: profileModules.length > 0 ? profileModules : [],
+          profile: collabRole,
+          allowedClientIds: [collab.clientId],
+          allowedWorkLocationIds: null
+        };
+      }
+      return { modules: [], profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
+    }
     return {
       modules: perm.modules ? JSON.parse(perm.modules) : [],
       profile: perm.profile || "custom",
@@ -4872,7 +4956,6 @@ var permissionsRouter = router({
   setPermissions: protectedProcedure.input(z16.object({
     userId: z16.number(),
     modules: z16.array(z16.string()).nullable(),
-    // null = acesso total
     profile: z16.string().default("custom"),
     allowedClientIds: z16.array(z16.number()).nullable().optional(),
     allowedWorkLocationIds: z16.array(z16.number()).nullable().optional()
@@ -4883,6 +4966,12 @@ var permissionsRouter = router({
     const modulesJson = input.modules === null ? null : JSON.stringify(input.modules);
     const allowedClientIdsJson = input.allowedClientIds === null || input.allowedClientIds === void 0 ? null : JSON.stringify(input.allowedClientIds);
     const allowedWorkLocationIdsJson = input.allowedWorkLocationIds === null || input.allowedWorkLocationIds === void 0 ? null : JSON.stringify(input.allowedWorkLocationIds);
+    if (input.userId < 0) {
+      const collabId = Math.abs(input.userId);
+      const clientId = input.allowedClientIds && input.allowedClientIds.length > 0 ? input.allowedClientIds[0] : null;
+      await db.update(collaborators).set({ clientId }).where(eq16(collaborators.id, collabId));
+      return { success: true };
+    }
     const [existing] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, input.userId));
     if (existing) {
       await db.update(userPermissions).set({
@@ -4902,6 +4991,10 @@ var permissionsRouter = router({
         updatedBy: ctx.user.id
       });
     }
+    const [collab] = await db.select({ id: collaborators.id }).from(collaborators).where(eq16(collaborators.userId, input.userId));
+    if (collab && input.allowedClientIds && input.allowedClientIds.length > 0) {
+      await db.update(collaborators).set({ clientId: input.allowedClientIds[0] }).where(eq16(collaborators.id, collab.id));
+    }
     return { success: true };
   }),
   // Aplicar perfil pré-definido a um usuário
@@ -4914,6 +5007,9 @@ var permissionsRouter = router({
     if (!profile) throw new TRPCError12({ code: "BAD_REQUEST", message: "Perfil inv\xE1lido" });
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.userId < 0) {
+      throw new TRPCError12({ code: "BAD_REQUEST", message: "Colaborador precisa fazer login para receber perfil completo" });
+    }
     const modulesJson = input.profileKey === "admin" ? null : JSON.stringify(profile.modules);
     const [existing] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, input.userId));
     if (existing) {
@@ -4931,6 +5027,17 @@ var permissionsRouter = router({
       });
     }
     return { success: true };
+  }),
+  // Atualizar client_id de um colaborador
+  setCollaboratorClient: protectedProcedure.input(z16.object({
+    collaboratorId: z16.number(),
+    clientId: z16.number().nullable()
+  })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(collaborators).set({ clientId: input.clientId }).where(eq16(collaborators.id, input.collaboratorId));
+    return { success: true };
   })
 });
 
@@ -4938,7 +5045,7 @@ var permissionsRouter = router({
 import { z as z17 } from "zod";
 init_db();
 init_schema();
-import { eq as eq17, desc as desc14, and as and8, sql as sql4 } from "drizzle-orm";
+import { eq as eq17, desc as desc14, and as and8, sql as sql5 } from "drizzle-orm";
 var chainsawsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
@@ -5050,7 +5157,7 @@ var fuelRouter = router({
       oil2tMl = oil2t;
       const oil2tParts = await db.select().from(chainsawParts).where(and8(
         eq17(chainsawParts.isActive, 1),
-        sql4`(LOWER(${chainsawParts.name}) LIKE '%2t%' OR LOWER(${chainsawParts.name}) LIKE '%dois tempos%')`
+        sql5`(LOWER(${chainsawParts.name}) LIKE '%2t%' OR LOWER(${chainsawParts.name}) LIKE '%dois tempos%')`
       )).limit(1);
       const oil2tPart = oil2tParts[0];
       if (oil2tPart) {
@@ -5592,7 +5699,7 @@ var extraExpensesRouter = router({
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql as sql5, gte as gte4, lte as lte4, and as and10 } from "drizzle-orm";
+import { sql as sql6, gte as gte4, lte as lte4, and as and10 } from "drizzle-orm";
 import { z as z19 } from "zod";
 var dashboardRouter = router({
   stats: protectedProcedure.input(z19.object({
@@ -5608,44 +5715,44 @@ var dashboardRouter = router({
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
-    const [{ count: totalCollaborators }] = await db.select({ count: sql5`count(*)` }).from(collaborators);
-    const [{ count: totalClients }] = await db.select({ count: sql5`count(*)` }).from(clients);
-    const [{ count: cargoThisMonth }] = await db.select({ count: sql5`count(*)` }).from(cargoLoads).where(and10(
+    const [{ count: totalCollaborators }] = await db.select({ count: sql6`count(*)` }).from(collaborators);
+    const [{ count: totalClients }] = await db.select({ count: sql6`count(*)` }).from(clients);
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql6`count(*)` }).from(cargoLoads).where(and10(
       gte4(cargoLoads.createdAt, startOfMonth),
       lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql5`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and10(
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql6`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and10(
       gte4(cargoLoads.createdAt, startOfMonth),
       lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ count: fuelThisMonth }] = await db.select({ count: sql5`count(*)` }).from(vehicleRecords).where(
+    const [{ count: fuelThisMonth }] = await db.select({ count: sql6`count(*)` }).from(vehicleRecords).where(
       and10(
         gte4(vehicleRecords.createdAt, startOfMonth),
         lte4(vehicleRecords.createdAt, endOfMonth),
-        sql5`record_type = 'abastecimento'`
+        sql6`record_type = 'abastecimento'`
       )
     );
-    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql5`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
+    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql6`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
       and10(
         gte4(vehicleRecords.createdAt, startOfMonth),
         lte4(vehicleRecords.createdAt, endOfMonth),
-        sql5`record_type = 'abastecimento'`
+        sql6`record_type = 'abastecimento'`
       )
     );
-    const [{ count: attendanceToday }] = await db.select({ count: sql5`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
-    const [{ count: attendanceThisMonth }] = await db.select({ count: sql5`count(*)` }).from(collaboratorAttendance).where(and10(
+    const [{ count: attendanceToday }] = await db.select({ count: sql6`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql6`count(*)` }).from(collaboratorAttendance).where(and10(
       gte4(collaboratorAttendance.date, startOfMonth),
       lte4(collaboratorAttendance.date, endOfMonth)
     ));
-    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql5`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
+    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql6`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
       and10(
         gte4(collaboratorAttendance.date, startOfMonth),
         lte4(collaboratorAttendance.date, endOfMonth),
-        sql5`payment_status_ca = 'pendente'`
+        sql6`payment_status_ca = 'pendente'`
       )
     );
-    const [{ count: totalEquipment }] = await db.select({ count: sql5`count(*)` }).from(equipment);
-    const [{ count: lowStockParts }] = await db.select({ count: sql5`count(*)` }).from(parts).where(sql5`stock_quantity < 5`);
+    const [{ count: totalEquipment }] = await db.select({ count: sql6`count(*)` }).from(equipment);
+    const [{ count: lowStockParts }] = await db.select({ count: sql6`count(*)` }).from(parts).where(sql6`stock_quantity < 5`);
     const recentCargos = await db.select({
       id: cargoLoads.id,
       vehiclePlate: cargoLoads.vehiclePlate,
@@ -5653,7 +5760,7 @@ var dashboardRouter = router({
       volumeM3: cargoLoads.volumeM3,
       createdAt: cargoLoads.createdAt,
       status: cargoLoads.status
-    }).from(cargoLoads).orderBy(sql5`created_at desc`).limit(5);
+    }).from(cargoLoads).orderBy(sql6`created_at desc`).limit(5);
     const recentAttendance = await db.select({
       id: collaboratorAttendance.id,
       collaboratorId: collaboratorAttendance.collaboratorId,
@@ -5661,8 +5768,8 @@ var dashboardRouter = router({
       dailyValue: collaboratorAttendance.dailyValue,
       paymentStatus: collaboratorAttendance.paymentStatusCa,
       activity: collaboratorAttendance.activity
-    }).from(collaboratorAttendance).orderBy(sql5`created_at desc`).limit(5);
-    const [{ count: pendingOrders }] = await db.select({ count: sql5`count(*)` }).from(purchaseOrders).where(sql5`status = 'pending'`);
+    }).from(collaboratorAttendance).orderBy(sql6`created_at desc`).limit(5);
+    const [{ count: pendingOrders }] = await db.select({ count: sql6`count(*)` }).from(purchaseOrders).where(sql6`status = 'pending'`);
     const MONTHS_PT = [
       "janeiro",
       "fevereiro",
@@ -5703,7 +5810,7 @@ var dashboardRouter = router({
 import { z as z20 } from "zod";
 init_db();
 init_schema();
-import { desc as desc16, eq as eq19, and as and11, gte as gte5, lte as lte5, sql as sql6 } from "drizzle-orm";
+import { desc as desc16, eq as eq19, and as and11, gte as gte5, lte as lte5, sql as sql7 } from "drizzle-orm";
 var financialRouter = router({
   // ── Listar lançamentos ──────────────────────────────────────────────────
   list: protectedProcedure.input(z20.object({
@@ -5776,14 +5883,14 @@ var financialRouter = router({
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
     const rows = await db.select({
       category: financialEntries.category,
-      total: sql6`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
-      count: sql6`count(*)`
+      total: sql7`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
+      count: sql7`count(*)`
     }).from(financialEntries).where(and11(
       eq19(financialEntries.type, input.type),
       gte5(financialEntries.date, startDate),
       lte5(financialEntries.date, endDate),
       eq19(financialEntries.status, "confirmado")
-    )).groupBy(financialEntries.category).orderBy(sql6`total desc`);
+    )).groupBy(financialEntries.category).orderBy(sql7`total desc`);
     return rows.map((r) => ({
       category: r.category,
       total: Number(r.total),
@@ -5797,10 +5904,10 @@ var financialRouter = router({
     const rows = await db.select({
       referenceMonth: financialEntries.referenceMonth,
       type: financialEntries.type,
-      total: sql6`coalesce(sum(cast(amount as decimal(10,2))), 0)`
+      total: sql7`coalesce(sum(cast(amount as decimal(10,2))), 0)`
     }).from(financialEntries).where(and11(
       eq19(financialEntries.status, "confirmado"),
-      sql6`reference_month >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 MONTH), '%Y-%m')`
+      sql7`reference_month >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 MONTH), '%Y-%m')`
     )).groupBy(financialEntries.referenceMonth, financialEntries.type).orderBy(financialEntries.referenceMonth);
     const byMonth = {};
     for (const r of rows) {
@@ -6059,7 +6166,7 @@ import { z as z22 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError13 } from "@trpc/server";
-import { eq as eq21, desc as desc18, and as and13, gte as gte6, lte as lte6, sql as sql7, isNull as isNull2 } from "drizzle-orm";
+import { eq as eq21, desc as desc18, and as and13, gte as gte6, lte as lte6, sql as sql8, isNull as isNull2 } from "drizzle-orm";
 var reportsRouter = router({
   // ── Listar todos os locais de trabalho (para filtro) ──────────────────────
   locations: protectedProcedure.query(async () => {
@@ -6075,7 +6182,7 @@ var reportsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
-    await db.execute(sql7`
+    await db.execute(sql8`
         UPDATE collaborator_attendance 
         SET location_name = ${input.newLocationName}, work_location_id = ${input.newLocationId}
         WHERE location_name = ${input.oldName}
@@ -6086,7 +6193,7 @@ var reportsRouter = router({
   uniqueLocationNames: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
-    const results = await db.execute(sql7`
+    const results = await db.execute(sql8`
       SELECT DISTINCT location_name FROM collaborator_attendance 
       WHERE location_name IS NOT NULL AND location_name != ''
       ORDER BY location_name
