@@ -1483,3 +1483,7 @@
 - [x] Controle de Acesso atualizado (mostra usuários logados + seletor de clientes permitidos)
 - [x] Adicionar seletor de cliente/local ao perfil Encarregado (vincular ao cliente)
 - [x] Separar gastos por local/cliente (admin vê tudo, encarregado só vê o dele via allowedClientIds + clientId no local GPS)
+
+### Bugs Persistentes 03/05/2026
+- [ ] Erro INSERT client_documents persiste na Hostinger (mesmo passando createdAt explicitamente)
+- [ ] Controle de Acesso continua vazio (nenhum usuário aparece)

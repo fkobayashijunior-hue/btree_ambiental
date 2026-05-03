@@ -1021,14 +1021,14 @@ var init_schema = __esm({
     });
     clientDocuments = mysqlTable("client_documents", {
       id: int().autoincrement().notNull(),
-      clientId: int("client_id").notNull().references(() => clients.id),
+      clientId: int("client_id").notNull(),
       type: mysqlEnum(["proposta", "contrato", "nota_fiscal", "boleto", "recibo", "outros"]).default("outros").notNull(),
       title: varchar({ length: 255 }).notNull(),
       fileUrl: varchar("file_url", { length: 1e3 }).notNull(),
       fileType: varchar("file_type", { length: 50 }),
       notes: text(),
-      uploadedBy: int("uploaded_by").references(() => users.id),
-      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
+      uploadedBy: int("uploaded_by"),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
     });
   }
 });
@@ -1932,7 +1932,7 @@ init_db();
 init_schema();
 init_cloudinary();
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq5, desc as desc3, and as and3 } from "drizzle-orm";
+import { eq as eq5, desc as desc3, and as and3, sql } from "drizzle-orm";
 var cargoLoadsRouter = router({
   // ===== DESTINOS =====
   listDestinations: protectedProcedure.query(async () => {
@@ -2673,16 +2673,7 @@ var cargoLoadsRouter = router({
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
     const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    const result = await db.insert(clientDocuments).values({
-      clientId: input.clientId,
-      type: input.type,
-      title: input.title,
-      fileUrl: uploaded.url,
-      fileType: input.fileType || null,
-      notes: input.notes || null,
-      uploadedBy: ctx.user.id,
-      createdAt: now
-    });
+    const result = await db.execute(sql`INSERT INTO client_documents (client_id, type, title, file_url, file_type, notes, uploaded_by, created_at) VALUES (${input.clientId}, ${input.type}, ${input.title}, ${uploaded.url}, ${input.fileType || null}, ${input.notes || null}, ${ctx.user.id}, ${now})`);
     return { success: true, id: result.insertId, url: uploaded.url };
   }),
   deleteClientDocument: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ input }) => {
@@ -4385,7 +4376,7 @@ import { z as z15 } from "zod";
 import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq15, and as and7, desc as desc13, gte as gte2, lte as lte2, sql as sql2 } from "drizzle-orm";
+import { eq as eq15, and as and7, desc as desc13, gte as gte2, lte as lte2, sql as sql3 } from "drizzle-orm";
 var TRACCAR_URL = process.env.TRACCAR_URL || "";
 var TRACCAR_TOKEN = process.env.TRACCAR_TOKEN || "";
 function traccarAuth() {
@@ -4590,7 +4581,7 @@ var traccarRouter = router({
               source: "gps_auto"
             });
           }
-          const totalResult = await db.select({ total: sql2`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq15(gpsHoursLog.equipmentId, link.equipmentId));
+          const totalResult = await db.select({ total: sql3`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq15(gpsHoursLog.equipmentId, link.equipmentId));
           const totalHours = parseFloat(totalResult[0]?.total || "0");
           await checkAndGenerateAlerts(link.equipmentId, totalHours);
           results.push({ equipmentId: link.equipmentId, hours });
@@ -4607,9 +4598,9 @@ var traccarRouter = router({
     const baseQuery = db.select({
       equipmentId: gpsHoursLog.equipmentId,
       equipmentName: equipment.name,
-      totalHours: sql2`SUM(CAST(hours_worked AS DECIMAL(10,2)))`,
-      lastDate: sql2`MAX(date)`,
-      recordCount: sql2`COUNT(*)`
+      totalHours: sql3`SUM(CAST(hours_worked AS DECIMAL(10,2)))`,
+      lastDate: sql3`MAX(date)`,
+      recordCount: sql3`COUNT(*)`
     }).from(gpsHoursLog).innerJoin(equipment, eq15(gpsHoursLog.equipmentId, equipment.id)).groupBy(gpsHoursLog.equipmentId, equipment.name).orderBy(equipment.name);
     if (input?.equipmentId) {
       return baseQuery.where(eq15(gpsHoursLog.equipmentId, input.equipmentId));
@@ -4730,7 +4721,7 @@ var traccarRouter = router({
   alertCount: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return { count: 0 };
-    const result = await db.select({ count: sql2`COUNT(*)` }).from(preventiveMaintenanceAlerts).where(eq15(preventiveMaintenanceAlerts.status, "pendente"));
+    const result = await db.select({ count: sql3`COUNT(*)` }).from(preventiveMaintenanceAlerts).where(eq15(preventiveMaintenanceAlerts.status, "pendente"));
     return { count: Number(result[0]?.count || 0) };
   })
 });
@@ -4947,7 +4938,7 @@ var permissionsRouter = router({
 import { z as z17 } from "zod";
 init_db();
 init_schema();
-import { eq as eq17, desc as desc14, and as and8, sql as sql3 } from "drizzle-orm";
+import { eq as eq17, desc as desc14, and as and8, sql as sql4 } from "drizzle-orm";
 var chainsawsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
@@ -5059,7 +5050,7 @@ var fuelRouter = router({
       oil2tMl = oil2t;
       const oil2tParts = await db.select().from(chainsawParts).where(and8(
         eq17(chainsawParts.isActive, 1),
-        sql3`(LOWER(${chainsawParts.name}) LIKE '%2t%' OR LOWER(${chainsawParts.name}) LIKE '%dois tempos%')`
+        sql4`(LOWER(${chainsawParts.name}) LIKE '%2t%' OR LOWER(${chainsawParts.name}) LIKE '%dois tempos%')`
       )).limit(1);
       const oil2tPart = oil2tParts[0];
       if (oil2tPart) {
@@ -5601,7 +5592,7 @@ var extraExpensesRouter = router({
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql as sql4, gte as gte4, lte as lte4, and as and10 } from "drizzle-orm";
+import { sql as sql5, gte as gte4, lte as lte4, and as and10 } from "drizzle-orm";
 import { z as z19 } from "zod";
 var dashboardRouter = router({
   stats: protectedProcedure.input(z19.object({
@@ -5617,44 +5608,44 @@ var dashboardRouter = router({
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
-    const [{ count: totalCollaborators }] = await db.select({ count: sql4`count(*)` }).from(collaborators);
-    const [{ count: totalClients }] = await db.select({ count: sql4`count(*)` }).from(clients);
-    const [{ count: cargoThisMonth }] = await db.select({ count: sql4`count(*)` }).from(cargoLoads).where(and10(
+    const [{ count: totalCollaborators }] = await db.select({ count: sql5`count(*)` }).from(collaborators);
+    const [{ count: totalClients }] = await db.select({ count: sql5`count(*)` }).from(clients);
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql5`count(*)` }).from(cargoLoads).where(and10(
       gte4(cargoLoads.createdAt, startOfMonth),
       lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql4`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and10(
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql5`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and10(
       gte4(cargoLoads.createdAt, startOfMonth),
       lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ count: fuelThisMonth }] = await db.select({ count: sql4`count(*)` }).from(vehicleRecords).where(
+    const [{ count: fuelThisMonth }] = await db.select({ count: sql5`count(*)` }).from(vehicleRecords).where(
       and10(
         gte4(vehicleRecords.createdAt, startOfMonth),
         lte4(vehicleRecords.createdAt, endOfMonth),
-        sql4`record_type = 'abastecimento'`
+        sql5`record_type = 'abastecimento'`
       )
     );
-    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql4`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
+    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql5`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
       and10(
         gte4(vehicleRecords.createdAt, startOfMonth),
         lte4(vehicleRecords.createdAt, endOfMonth),
-        sql4`record_type = 'abastecimento'`
+        sql5`record_type = 'abastecimento'`
       )
     );
-    const [{ count: attendanceToday }] = await db.select({ count: sql4`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
-    const [{ count: attendanceThisMonth }] = await db.select({ count: sql4`count(*)` }).from(collaboratorAttendance).where(and10(
+    const [{ count: attendanceToday }] = await db.select({ count: sql5`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql5`count(*)` }).from(collaboratorAttendance).where(and10(
       gte4(collaboratorAttendance.date, startOfMonth),
       lte4(collaboratorAttendance.date, endOfMonth)
     ));
-    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql4`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
+    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql5`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
       and10(
         gte4(collaboratorAttendance.date, startOfMonth),
         lte4(collaboratorAttendance.date, endOfMonth),
-        sql4`payment_status_ca = 'pendente'`
+        sql5`payment_status_ca = 'pendente'`
       )
     );
-    const [{ count: totalEquipment }] = await db.select({ count: sql4`count(*)` }).from(equipment);
-    const [{ count: lowStockParts }] = await db.select({ count: sql4`count(*)` }).from(parts).where(sql4`stock_quantity < 5`);
+    const [{ count: totalEquipment }] = await db.select({ count: sql5`count(*)` }).from(equipment);
+    const [{ count: lowStockParts }] = await db.select({ count: sql5`count(*)` }).from(parts).where(sql5`stock_quantity < 5`);
     const recentCargos = await db.select({
       id: cargoLoads.id,
       vehiclePlate: cargoLoads.vehiclePlate,
@@ -5662,7 +5653,7 @@ var dashboardRouter = router({
       volumeM3: cargoLoads.volumeM3,
       createdAt: cargoLoads.createdAt,
       status: cargoLoads.status
-    }).from(cargoLoads).orderBy(sql4`created_at desc`).limit(5);
+    }).from(cargoLoads).orderBy(sql5`created_at desc`).limit(5);
     const recentAttendance = await db.select({
       id: collaboratorAttendance.id,
       collaboratorId: collaboratorAttendance.collaboratorId,
@@ -5670,8 +5661,8 @@ var dashboardRouter = router({
       dailyValue: collaboratorAttendance.dailyValue,
       paymentStatus: collaboratorAttendance.paymentStatusCa,
       activity: collaboratorAttendance.activity
-    }).from(collaboratorAttendance).orderBy(sql4`created_at desc`).limit(5);
-    const [{ count: pendingOrders }] = await db.select({ count: sql4`count(*)` }).from(purchaseOrders).where(sql4`status = 'pending'`);
+    }).from(collaboratorAttendance).orderBy(sql5`created_at desc`).limit(5);
+    const [{ count: pendingOrders }] = await db.select({ count: sql5`count(*)` }).from(purchaseOrders).where(sql5`status = 'pending'`);
     const MONTHS_PT = [
       "janeiro",
       "fevereiro",
@@ -5712,7 +5703,7 @@ var dashboardRouter = router({
 import { z as z20 } from "zod";
 init_db();
 init_schema();
-import { desc as desc16, eq as eq19, and as and11, gte as gte5, lte as lte5, sql as sql5 } from "drizzle-orm";
+import { desc as desc16, eq as eq19, and as and11, gte as gte5, lte as lte5, sql as sql6 } from "drizzle-orm";
 var financialRouter = router({
   // ── Listar lançamentos ──────────────────────────────────────────────────
   list: protectedProcedure.input(z20.object({
@@ -5785,14 +5776,14 @@ var financialRouter = router({
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
     const rows = await db.select({
       category: financialEntries.category,
-      total: sql5`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
-      count: sql5`count(*)`
+      total: sql6`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
+      count: sql6`count(*)`
     }).from(financialEntries).where(and11(
       eq19(financialEntries.type, input.type),
       gte5(financialEntries.date, startDate),
       lte5(financialEntries.date, endDate),
       eq19(financialEntries.status, "confirmado")
-    )).groupBy(financialEntries.category).orderBy(sql5`total desc`);
+    )).groupBy(financialEntries.category).orderBy(sql6`total desc`);
     return rows.map((r) => ({
       category: r.category,
       total: Number(r.total),
@@ -5806,10 +5797,10 @@ var financialRouter = router({
     const rows = await db.select({
       referenceMonth: financialEntries.referenceMonth,
       type: financialEntries.type,
-      total: sql5`coalesce(sum(cast(amount as decimal(10,2))), 0)`
+      total: sql6`coalesce(sum(cast(amount as decimal(10,2))), 0)`
     }).from(financialEntries).where(and11(
       eq19(financialEntries.status, "confirmado"),
-      sql5`reference_month >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 MONTH), '%Y-%m')`
+      sql6`reference_month >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 MONTH), '%Y-%m')`
     )).groupBy(financialEntries.referenceMonth, financialEntries.type).orderBy(financialEntries.referenceMonth);
     const byMonth = {};
     for (const r of rows) {
@@ -6068,7 +6059,7 @@ import { z as z22 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError13 } from "@trpc/server";
-import { eq as eq21, desc as desc18, and as and13, gte as gte6, lte as lte6, sql as sql6, isNull as isNull2 } from "drizzle-orm";
+import { eq as eq21, desc as desc18, and as and13, gte as gte6, lte as lte6, sql as sql7, isNull as isNull2 } from "drizzle-orm";
 var reportsRouter = router({
   // ── Listar todos os locais de trabalho (para filtro) ──────────────────────
   locations: protectedProcedure.query(async () => {
@@ -6084,7 +6075,7 @@ var reportsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
-    await db.execute(sql6`
+    await db.execute(sql7`
         UPDATE collaborator_attendance 
         SET location_name = ${input.newLocationName}, work_location_id = ${input.newLocationId}
         WHERE location_name = ${input.oldName}
@@ -6095,7 +6086,7 @@ var reportsRouter = router({
   uniqueLocationNames: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
-    const results = await db.execute(sql6`
+    const results = await db.execute(sql7`
       SELECT DISTINCT location_name FROM collaborator_attendance 
       WHERE location_name IS NOT NULL AND location_name != ''
       ORDER BY location_name

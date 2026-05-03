@@ -932,14 +932,14 @@ export type InsertCargoWeeklyClosing = typeof cargoWeeklyClosings.$inferInsert;
 
 export const clientDocuments = mysqlTable("client_documents", {
 	id: int().autoincrement().notNull(),
-	clientId: int("client_id").notNull().references(() => clients.id),
+	clientId: int("client_id").notNull(),
 	type: mysqlEnum(['proposta','contrato','nota_fiscal','boleto','recibo','outros']).default('outros').notNull(),
 	title: varchar({ length: 255 }).notNull(),
 	fileUrl: varchar("file_url", { length: 1000 }).notNull(),
 	fileType: varchar("file_type", { length: 50 }),
 	notes: text(),
-	uploadedBy: int("uploaded_by").references(() => users.id),
-	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	uploadedBy: int("uploaded_by"),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
 export type ClientDocument = typeof clientDocuments.$inferSelect;
