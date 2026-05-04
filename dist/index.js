@@ -7002,6 +7002,26 @@ var appRouter = router({
         const [countRows] = await db.execute(sql10`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
         const [colsRows] = await db.execute(sql10`SHOW COLUMNS FROM collaborators`);
         const [sampleRows] = await db.execute(sql10`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        let myPermsResult = null;
+        try {
+          const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+          const { eq: eq23 } = await import("drizzle-orm");
+          const permResult = await db.select().from(upTable).where(eq23(upTable.userId, ctx.user.id));
+          const collabResult = await db.select({
+            clientId: collabTable.clientId,
+            role: collabTable.role
+          }).from(collabTable).where(eq23(collabTable.userId, ctx.user.id));
+          myPermsResult = {
+            permResultLength: permResult.length,
+            permResult: permResult[0] || null,
+            collabResultLength: collabResult.length,
+            collabResult: collabResult[0] || null,
+            userIdType: typeof ctx.user.id,
+            userIdValue: ctx.user.id
+          };
+        } catch (simErr) {
+          myPermsResult = { simError: simErr.message };
+        }
         return {
           currentUserId: ctx.user.id,
           currentUserRole: ctx.user.role,
@@ -7010,7 +7030,8 @@ var appRouter = router({
           collaboratorLinked: collabRows,
           totalActiveCollaborators: countRows,
           collaboratorColumns: colsRows,
-          sampleCollaborators: sampleRows
+          sampleCollaborators: sampleRows,
+          myPermsSimulation: myPermsResult
         };
       } catch (err) {
         return { error: err.message, stack: err.stack?.slice(0, 500) };
