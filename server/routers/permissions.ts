@@ -135,8 +135,19 @@ export const permissionsRouter = router({
       .where(eq(collaborators.active, 1))
       .orderBy(collaborators.name);
 
-    const allPerms = await db.select().from(userPermissions);
-    const permMap = Object.fromEntries(allPerms.map(p => [p.userId, p]));
+    let allPerms: any[] = [];
+    try {
+      allPerms = await db.select().from(userPermissions);
+    } catch {
+      // Tabela pode não ter todas as colunas - usar SQL raw
+      try {
+        const [rows] = await db.execute(sql`SELECT * FROM user_permissions`);
+        allPerms = rows as any[];
+      } catch {
+        allPerms = [];
+      }
+    }
+    const permMap = Object.fromEntries(allPerms.map((p: any) => [p.userId || p.user_id, p]));
 
     // Mapear usuários existentes (que fizeram login OAuth)
     const result: Array<{
@@ -175,15 +186,15 @@ export const permissionsRouter = router({
         phone: collab?.phone || null,
         modules: u.role === "admin"
           ? null
-          : permMap[u.id]?.modules
-            ? JSON.parse(permMap[u.id].modules!) as string[]
+          : (permMap[u.id]?.modules)
+            ? (typeof permMap[u.id].modules === 'string' ? JSON.parse(permMap[u.id].modules) : permMap[u.id].modules) as string[]
             : [],
         profile: permMap[u.id]?.profile || "custom",
-        allowedClientIds: permMap[u.id]?.allowedClientIds
-          ? JSON.parse(permMap[u.id].allowedClientIds!) as number[]
+        allowedClientIds: (permMap[u.id]?.allowedClientIds || permMap[u.id]?.allowed_client_ids)
+          ? JSON.parse(permMap[u.id].allowedClientIds || permMap[u.id].allowed_client_ids) as number[]
           : null,
-        allowedWorkLocationIds: permMap[u.id]?.allowedWorkLocationIds
-          ? JSON.parse(permMap[u.id].allowedWorkLocationIds!) as number[]
+        allowedWorkLocationIds: (permMap[u.id]?.allowedWorkLocationIds || permMap[u.id]?.allowed_work_location_ids)
+          ? JSON.parse(permMap[u.id].allowedWorkLocationIds || permMap[u.id].allowed_work_location_ids) as number[]
           : null,
       });
     }
@@ -220,15 +231,40 @@ export const permissionsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    const [perm] = await db.select().from(userPermissions)
-      .where(eq(userPermissions.userId, ctx.user.id));
+    // Tentar buscar permissões na tabela user_permissions (pode falhar se colunas não existem)
+    let perm: any = null;
+    try {
+      const [permRow] = await db.select().from(userPermissions)
+        .where(eq(userPermissions.userId, ctx.user.id));
+      perm = permRow || null;
+    } catch (e) {
+      // Tabela user_permissions pode não ter todas as colunas - usar SQL raw como fallback
+      try {
+        const [rows] = await db.execute(sql`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+        perm = (rows as any[])?.[0] || null;
+      } catch {
+        perm = null;
+      }
+    }
 
     if (!perm) {
       // Fallback: verificar se o usuário é um colaborador vinculado a um cliente
-      const [collab] = await db.select({
-        clientId: collaborators.clientId,
-        role: collaborators.role,
-      }).from(collaborators).where(eq(collaborators.userId, ctx.user.id));
+      let collab: any = null;
+      try {
+        const [collabRow] = await db.select({
+          clientId: collaborators.clientId,
+          role: collaborators.role,
+        }).from(collaborators).where(eq(collaborators.userId, ctx.user.id));
+        collab = collabRow || null;
+      } catch {
+        // Fallback com SQL raw
+        try {
+          const [rows] = await db.execute(sql`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${ctx.user.id} LIMIT 1`);
+          collab = (rows as any[])?.[0] || null;
+        } catch {
+          collab = null;
+        }
+      }
 
       if (collab?.clientId) {
         // Colaborador vinculado a um cliente: dar acesso baseado no role do colaborador
@@ -248,10 +284,14 @@ export const permissionsRouter = router({
     }
 
     return {
-      modules: perm.modules ? JSON.parse(perm.modules) as string[] : [],
+      modules: perm.modules ? (typeof perm.modules === 'string' ? JSON.parse(perm.modules) : perm.modules) as string[] : [],
       profile: perm.profile || "custom",
-      allowedClientIds: perm.allowedClientIds ? JSON.parse(perm.allowedClientIds) as number[] : null,
-      allowedWorkLocationIds: perm.allowedWorkLocationIds ? JSON.parse(perm.allowedWorkLocationIds) as number[] : null,
+      allowedClientIds: perm.allowedClientIds || perm.allowed_client_ids
+        ? JSON.parse(perm.allowedClientIds || perm.allowed_client_ids) as number[]
+        : null,
+      allowedWorkLocationIds: perm.allowedWorkLocationIds || perm.allowed_work_location_ids
+        ? JSON.parse(perm.allowedWorkLocationIds || perm.allowed_work_location_ids) as number[]
+        : null,
     };
   }),
 
@@ -286,27 +326,34 @@ export const permissionsRouter = router({
         return { success: true };
       }
 
-      // Upsert para usuários com login
-      const [existing] = await db.select().from(userPermissions)
-        .where(eq(userPermissions.userId, input.userId));
+      // Upsert para usuários com login - usar SQL raw para evitar problemas com colunas faltantes
+      try {
+        const [existing] = await db.select().from(userPermissions)
+          .where(eq(userPermissions.userId, input.userId));
 
-      if (existing) {
-        await db.update(userPermissions).set({
-          modules: modulesJson,
-          profile: input.profile,
-          allowedClientIds: allowedClientIdsJson,
-          allowedWorkLocationIds: allowedWorkLocationIdsJson,
-          updatedBy: ctx.user.id,
-        }).where(eq(userPermissions.userId, input.userId));
-      } else {
-        await db.insert(userPermissions).values({
-          userId: input.userId,
-          modules: modulesJson,
-          profile: input.profile,
-          allowedClientIds: allowedClientIdsJson,
-          allowedWorkLocationIds: allowedWorkLocationIdsJson,
-          updatedBy: ctx.user.id,
-        });
+        if (existing) {
+          await db.update(userPermissions).set({
+            modules: modulesJson,
+            profile: input.profile,
+            allowedClientIds: allowedClientIdsJson,
+            allowedWorkLocationIds: allowedWorkLocationIdsJson,
+            updatedBy: ctx.user.id,
+          }).where(eq(userPermissions.userId, input.userId));
+        } else {
+          await db.insert(userPermissions).values({
+            userId: input.userId,
+            modules: modulesJson,
+            profile: input.profile,
+            allowedClientIds: allowedClientIdsJson,
+            allowedWorkLocationIds: allowedWorkLocationIdsJson,
+            updatedBy: ctx.user.id,
+          });
+        }
+      } catch {
+        // Fallback com SQL raw se colunas não existem
+        await db.execute(sql`INSERT INTO user_permissions (user_id, modules, profile, allowed_client_ids, allowed_work_location_ids, updated_by)
+          VALUES (${input.userId}, ${modulesJson}, ${input.profile}, ${allowedClientIdsJson}, ${allowedWorkLocationIdsJson}, ${ctx.user.id})
+          ON DUPLICATE KEY UPDATE modules = ${modulesJson}, profile = ${input.profile}, allowed_client_ids = ${allowedClientIdsJson}, allowed_work_location_ids = ${allowedWorkLocationIdsJson}, updated_by = ${ctx.user.id}`);
       }
 
       // Se tem allowedClientIds, atualizar o client_id do colaborador vinculado
@@ -341,22 +388,28 @@ export const permissionsRouter = router({
 
       const modulesJson = input.profileKey === "admin" ? null : JSON.stringify(profile.modules);
 
-      const [existing] = await db.select().from(userPermissions)
-        .where(eq(userPermissions.userId, input.userId));
+      try {
+        const [existing] = await db.select().from(userPermissions)
+          .where(eq(userPermissions.userId, input.userId));
 
-      if (existing) {
-        await db.update(userPermissions).set({
-          modules: modulesJson,
-          profile: input.profileKey,
-          updatedBy: ctx.user.id,
-        }).where(eq(userPermissions.userId, input.userId));
-      } else {
-        await db.insert(userPermissions).values({
-          userId: input.userId,
-          modules: modulesJson,
-          profile: input.profileKey,
-          updatedBy: ctx.user.id,
-        });
+        if (existing) {
+          await db.update(userPermissions).set({
+            modules: modulesJson,
+            profile: input.profileKey,
+            updatedBy: ctx.user.id,
+          }).where(eq(userPermissions.userId, input.userId));
+        } else {
+          await db.insert(userPermissions).values({
+            userId: input.userId,
+            modules: modulesJson,
+            profile: input.profileKey,
+            updatedBy: ctx.user.id,
+          });
+        }
+      } catch {
+        await db.execute(sql`INSERT INTO user_permissions (user_id, modules, profile, updated_by)
+          VALUES (${input.userId}, ${modulesJson}, ${input.profileKey}, ${ctx.user.id})
+          ON DUPLICATE KEY UPDATE modules = ${modulesJson}, profile = ${input.profileKey}, updated_by = ${ctx.user.id}`);
       }
 
       return { success: true };
