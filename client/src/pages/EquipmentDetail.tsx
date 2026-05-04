@@ -369,7 +369,7 @@ export default function EquipmentDetail() {
         type: maintType,
         description: maintDesc,
         performedBy: maintBy || undefined,
-        cost: undefined,
+        cost: totalGeral > 0 ? totalGeral.toFixed(2) : undefined,
         nextMaintenanceDate: maintNextDate || undefined,
         performedAt: maintDate,
         photoBase64: maintPhoto || undefined,
@@ -913,24 +913,28 @@ export default function EquipmentDetail() {
                 </div>
               )}
 
-              {/* Resumo de custos */}
-              {(partsList.length > 0 || laborCost) && (
-                <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
+              {/* Resumo de custos - sempre visível */}
+              <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                  <span className="font-semibold text-sm text-green-800">Custos</span>
+                </div>
+                {partsList.length > 0 && (
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600">Total em Peças:</span>
                     <span className="font-medium">R$ {totalParts.toFixed(2)}</span>
                   </div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm text-gray-600 whitespace-nowrap">Mão de Obra (R$):</span>
-                    <Input value={laborCost} onChange={e => setLaborCost(e.target.value)}
-                      placeholder="0,00" className="h-7 text-sm flex-1" />
-                  </div>
-                  <div className="flex justify-between text-sm font-bold border-t border-green-200 pt-1 mt-1">
-                    <span>Custo Total:</span>
-                    <span className="text-green-700">R$ {totalGeral.toFixed(2)}</span>
-                  </div>
+                )}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm text-gray-600 whitespace-nowrap">Mão de Obra (R$):</span>
+                  <Input value={laborCost} onChange={e => setLaborCost(e.target.value)}
+                    placeholder="0,00" className="h-7 text-sm flex-1" />
                 </div>
-              )}
+                <div className="flex justify-between text-sm font-bold border-t border-green-200 pt-1 mt-1">
+                  <span>Custo Total:</span>
+                  <span className="text-green-700">R$ {totalGeral.toFixed(2)}</span>
+                </div>
+              </div>
             </div>
 
             {/* Próxima manutenção */}

@@ -231,44 +231,51 @@ export default function ExtraExpenses() {
             return (
               <Card key={expense.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
-                    {/* Foto da nota */}
-                    {expense.receiptImageUrl && (
-                      <a href={expense.receiptImageUrl} target="_blank" rel="noopener noreferrer"
-                        className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-border hover:opacity-80 transition-opacity">
-                        <img src={expense.receiptImageUrl} alt="Nota" className="w-full h-full object-cover" />
-                      </a>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge className={`text-xs ${catInfo.color} border-0`}>{catInfo.label}</Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(expense.date).toLocaleDateString("pt-BR")}
-                            </span>
-                            <span className="text-xs text-muted-foreground">• {expense.paymentMethod}</span>
-                          </div>
-                          <p className="font-medium mt-1 truncate">{expense.description}</p>
-                          {expense.notes && <p className="text-sm text-muted-foreground truncate">{expense.notes}</p>}
-                          <p className="text-xs text-muted-foreground mt-1">Por: {expense.registeredByName || "—"}</p>
-                          {expense.locationName && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                              <MapPin className="h-3 w-3" /> {expense.locationName}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {isAdmin && (
-                            <p className="text-lg font-bold text-orange-600">{formatCurrency(expense.amount)}</p>
-                          )}
-                          {isAdmin && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => { if (confirm("Remover este gasto?")) deleteMutation.mutate({ id: expense.id }); }}>
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
+                  {/* Mobile-first: stack vertically */}
+                  <div className="flex flex-col gap-2">
+                    {/* Top row: badge + date + payment */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className={`text-xs ${catInfo.color} border-0`}>{catInfo.label}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(expense.date).toLocaleDateString("pt-BR")}
+                      </span>
+                      <span className="text-xs text-muted-foreground">• {expense.paymentMethod}</span>
+                    </div>
+
+                    {/* Description + amount row */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm leading-snug">{expense.description}</p>
+                        {expense.notes && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{expense.notes}</p>}
+                      </div>
+                      {isAdmin && (
+                        <p className="text-base font-bold text-orange-600 shrink-0 whitespace-nowrap">{formatCurrency(expense.amount)}</p>
+                      )}
+                    </div>
+
+                    {/* Footer: author + location + photo + delete */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground">Por: {expense.registeredByName || "—"}</p>
+                        {expense.locationName && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <MapPin className="h-3 w-3 shrink-0" /> <span className="truncate">{expense.locationName}</span>
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {expense.receiptImageUrl && (
+                          <a href={expense.receiptImageUrl} target="_blank" rel="noopener noreferrer"
+                            className="w-10 h-10 rounded-md overflow-hidden border border-border hover:opacity-80 transition-opacity">
+                            <img src={expense.receiptImageUrl} alt="Nota" className="w-full h-full object-cover" />
+                          </a>
+                        )}
+                        {isAdmin && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => { if (confirm("Remover este gasto?")) deleteMutation.mutate({ id: expense.id }); }}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>

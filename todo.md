@@ -1513,3 +1513,7 @@
 - [x] Colaboradores: filtrar lista por allowedClientIds server-side (encarregado vê só do cliente dele)
 - [x] Colaboradores: ao cadastrar, encarregado só pode vincular ao cliente dele (forçar clientId)
 - [x] Presença: lista de colaboradores para marcar presença filtrada por allowedClientIds
+
+### Bugs e Melhorias 04/05/2026 (2)
+- [x] Gastos Extras: layout mobile bagunçado (valor cortado, informações desalinhadas nos cards)
+- [x] Equipamentos - Registrar Manutenção: campo de valor (custo) sempre visível e enviado ao backend
