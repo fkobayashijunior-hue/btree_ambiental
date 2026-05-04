@@ -2023,7 +2023,7 @@ init_db();
 init_schema();
 init_cloudinary();
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq5, desc as desc3, and as and3, sql as sql2 } from "drizzle-orm";
+import { eq as eq5, desc as desc3, and as and3 } from "drizzle-orm";
 var cargoLoadsRouter = router({
   // ===== DESTINOS =====
   listDestinations: protectedProcedure.query(async () => {
@@ -2781,9 +2781,16 @@ var cargoLoadsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
     const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
-    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    const result = await db.execute(sql2`INSERT INTO client_documents (client_id, type, title, file_url, file_type, notes, uploaded_by, created_at) VALUES (${input.clientId}, ${input.type}, ${input.title}, ${uploaded.url}, ${input.fileType || null}, ${input.notes || null}, ${ctx.user.id}, ${now})`);
-    return { success: true, id: result.insertId, url: uploaded.url };
+    const result = await db.insert(clientDocuments).values({
+      clientId: input.clientId,
+      type: input.type,
+      title: input.title,
+      fileUrl: uploaded.url,
+      fileType: input.fileType || null,
+      notes: input.notes || null,
+      uploadedBy: ctx.user.id
+    });
+    return { success: true, id: result[0]?.insertId, url: uploaded.url };
   }),
   deleteClientDocument: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -3703,7 +3710,19 @@ var clientPortalRouter = router({
     } catch (e) {
       console.error("[Portal] Erro ao buscar pagamentos:", e);
     }
-    return { client, loads, replanting, payments };
+    let weeklyClosings = [];
+    try {
+      weeklyClosings = await db.select().from(cargoWeeklyClosings).where(eq10(cargoWeeklyClosings.clientId, input.clientId)).orderBy(desc8(cargoWeeklyClosings.weekEnd)).limit(20);
+    } catch (e) {
+      console.error("[Portal] Erro ao buscar fechamentos:", e);
+    }
+    let documents = [];
+    try {
+      documents = await db.select().from(clientDocuments).where(eq10(clientDocuments.clientId, input.clientId)).orderBy(desc8(clientDocuments.createdAt)).limit(50);
+    } catch (e) {
+      console.error("[Portal] Erro ao buscar documentos:", e);
+    }
+    return { client, loads, replanting, payments, weeklyClosings, documents };
   }),
   // ── LISTAR TODOS OS REPLANTIOS (admin) ──
   listAllReplantings: protectedProcedure.query(async () => {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { clients, cargoLoads, cargoDestinations, replantingRecords, clientPayments } from "../../drizzle/schema";
+import { clients, cargoLoads, cargoDestinations, replantingRecords, clientPayments, cargoWeeklyClosings, clientDocuments } from "../../drizzle/schema";
 import { eq, and, or, isNull, like, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -135,7 +135,33 @@ export const clientPortalRouter = router({
         console.error('[Portal] Erro ao buscar pagamentos:', e);
       }
 
-      return { client, loads, replanting, payments };
+      // Fechamentos semanais do cliente
+      let weeklyClosings: any[] = [];
+      try {
+        weeklyClosings = await db
+          .select()
+          .from(cargoWeeklyClosings)
+          .where(eq(cargoWeeklyClosings.clientId, input.clientId))
+          .orderBy(desc(cargoWeeklyClosings.weekEnd))
+          .limit(20);
+      } catch (e) {
+        console.error('[Portal] Erro ao buscar fechamentos:', e);
+      }
+
+      // Documentos do cliente
+      let documents: any[] = [];
+      try {
+        documents = await db
+          .select()
+          .from(clientDocuments)
+          .where(eq(clientDocuments.clientId, input.clientId))
+          .orderBy(desc(clientDocuments.createdAt))
+          .limit(50);
+      } catch (e) {
+        console.error('[Portal] Erro ao buscar documentos:', e);
+      }
+
+      return { client, loads, replanting, payments, weeklyClosings, documents };
     }),
 
   // ── LISTAR TODOS OS REPLANTIOS (admin) ──

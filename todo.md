@@ -1517,3 +1517,9 @@
 ### Bugs e Melhorias 04/05/2026 (2)
 - [x] Gastos Extras: layout mobile bagunçado (valor cortado, informações desalinhadas nos cards)
 - [x] Equipamentos - Registrar Manutenção: campo de valor (custo) sempre visível e enviado ao backend
+
+### Bugs 04/05/2026 (3)
+- [x] client_documents INSERT falha (created_at como string não aceito pelo banco Hostinger)
+- [x] Valores da carga aparecem no Portal do Cliente (peso líquido × preço/ton)
+- [x] Fechamento semanal com valor total e previsão de pagamento no Portal do Cliente
+- [x] Documentos cadastrados visíveis no Portal do Cliente (aba Docs)

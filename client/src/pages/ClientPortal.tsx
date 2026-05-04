@@ -232,7 +232,7 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
 
 // ── DASHBOARD DO CLIENTE ──
 function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "pagamentos">("cargas");
+  const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "pagamentos" | "fechamentos" | "documentos">("cargas");
 
   const { data, isLoading } = trpc.clientPortal.getPortalData.useQuery(
     { clientId: session.clientId, email: session.clientEmail ?? "" },
@@ -244,11 +244,21 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
     return new Date(d).toLocaleDateString("pt-BR");
   };
 
-  const formatCurrency = (v: string | null) => {
-    if (!v) return "—";
-    const num = parseFloat(v);
-    if (isNaN(num)) return v;
+  const formatCurrency = (v: string | number | null) => {
+    if (!v && v !== 0) return "—";
+    const num = typeof v === 'number' ? v : parseFloat(v);
+    if (isNaN(num)) return String(v);
     return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  };
+
+  // Calcular valor de uma carga
+  const getLoadValue = (load: any) => {
+    const weightNet = parseFloat(load.weightNetKg || load.weightOutKg || '0');
+    const pricePerTon = parseFloat(data?.client?.pricePerTon || '0');
+    if (weightNet > 0 && pricePerTon > 0) {
+      return (weightNet / 1000) * pricePerTon;
+    }
+    return 0;
   };
 
   const statusColor = (s: string) => {
@@ -347,22 +357,24 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
 
         {/* Tabs */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="flex border-b border-gray-100">
+          <div className="flex border-b border-gray-100 overflow-x-auto">
             {[
               { id: "cargas" as const, label: "Cargas", icon: Truck },
+              { id: "fechamentos" as const, label: "Fechamentos", icon: DollarSign },
+              { id: "documentos" as const, label: "Docs", icon: Leaf },
               { id: "replantio" as const, label: "Replantio", icon: Leaf },
               { id: "pagamentos" as const, label: "Pagamentos", icon: DollarSign },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap px-2 ${
                   activeTab === id
                     ? "text-[#0d4f2e] border-b-2 border-[#0d4f2e] bg-green-50/50"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4 shrink-0" />
                 {label}
               </button>
             ))}
@@ -383,8 +395,104 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                     {(data?.loads.length ?? 0) === 0 ? (
                       <EmptyState icon={<Truck />} text="Nenhuma carga registrada ainda." />
                     ) : (
-                      data?.loads.map((load) => (
-                        <CargoCard key={load.id} load={load} formatDate={formatDate} statusColor={statusColor} clientId={session.clientId} />
+                      <>
+                        {/* Resumo de valor total das cargas */}
+                        {(() => {
+                          const totalValue = (data?.loads || []).reduce((sum, l) => sum + getLoadValue(l), 0);
+                          const totalWeight = (data?.loads || []).reduce((sum, l) => sum + parseFloat((l as any).weightNetKg || (l as any).weightOutKg || '0'), 0);
+                          if (totalValue > 0) {
+                            return (
+                              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2">
+                                <p className="text-blue-700 text-xs font-semibold uppercase tracking-wide">Valor Total das Cargas</p>
+                                <p className="text-blue-900 text-lg font-black">{formatCurrency(totalValue)}</p>
+                                <p className="text-blue-600 text-xs">{(totalWeight / 1000).toFixed(2)} ton x R$ {data?.client?.pricePerTon || '0'}/ton</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                        {data?.loads.map((load) => (
+                          <CargoCard key={load.id} load={load} formatDate={formatDate} statusColor={statusColor} clientId={session.clientId} loadValue={getLoadValue(load)} />
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ── FECHAMENTOS SEMANAIS ── */}
+                {activeTab === "fechamentos" && (
+                  <div className="space-y-3">
+                    {(data?.weeklyClosings?.length ?? 0) === 0 ? (
+                      <EmptyState icon={<DollarSign />} text="Nenhum fechamento semanal registrado ainda." />
+                    ) : (
+                      data?.weeklyClosings?.map((closing: any) => (
+                        <div key={closing.id} className="border border-gray-100 rounded-xl p-4 hover:border-blue-200 transition-colors">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-gray-900 text-sm">
+                                  Semana {closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} → {closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                  closing.status === 'pago' ? 'bg-green-100 text-green-700' :
+                                  closing.status === 'fechado' ? 'bg-yellow-100 text-yellow-700' :
+                                  closing.status === 'atrasado' ? 'bg-red-100 text-red-700' :
+                                  'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {closing.status}
+                                </span>
+                              </div>
+                              <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                                <span>{closing.totalLoads} carga{closing.totalLoads !== 1 ? 's' : ''}</span>
+                                <span>{closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton</span>
+                                {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
+                              </div>
+                              {closing.dueDate && (
+                                <p className="text-xs mt-1.5 text-orange-600 font-medium">
+                                  📅 Previsão de pagamento: {new Date(closing.dueDate).toLocaleDateString('pt-BR')}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-black text-blue-700 text-base">{formatCurrency(closing.totalAmount)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* ── DOCUMENTOS ── */}
+                {activeTab === "documentos" && (
+                  <div className="space-y-3">
+                    {(data?.documents?.length ?? 0) === 0 ? (
+                      <EmptyState icon={<Leaf />} text="Nenhum documento cadastrado ainda." />
+                    ) : (
+                      data?.documents?.map((doc: any) => (
+                        <a
+                          key={doc.id}
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:bg-blue-50/30 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 shrink-0">
+                              📄
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-900 text-sm truncate">{doc.title}</p>
+                              <div className="text-gray-500 text-xs mt-0.5 flex items-center gap-2">
+                                <span className="capitalize">{(doc.type || '').replace('_', ' ')}</span>
+                                <span>•</span>
+                                <span>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('pt-BR') : ''}</span>
+                              </div>
+                              {doc.notes && <p className="text-gray-400 text-xs mt-0.5 italic truncate">{doc.notes}</p>}
+                            </div>
+                            <span className="text-blue-600 text-xs font-medium">Abrir ↗</span>
+                          </div>
+                        </a>
                       ))
                     )}
                   </div>
@@ -498,7 +606,7 @@ type CargoLoad = {
   photosJson: string | null;
 };
 
-function CargoCard({ load, formatDate, statusColor, clientId }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string; clientId: number }) {
+function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string; clientId: number; loadValue?: number }) {
   const [expanded, setExpanded] = useState(false);
   const currentStep = TRACKING_STEPS.find(s => s.key === load.trackingStatus);
   const currentIdx = TRACKING_STEPS.findIndex(s => s.key === load.trackingStatus);
@@ -542,6 +650,12 @@ function CargoCard({ load, formatDate, statusColor, clientId }: { load: CargoLoa
               {load.weightKg && <span className="flex items-center gap-0.5"><Weight className="h-3 w-3" />{load.weightKg} kg</span>}
               {load.woodType && <span>{load.woodType}</span>}
               {load.vehiclePlate && <span className="flex items-center gap-0.5"><Truck className="h-3 w-3" />{load.vehiclePlate}</span>}
+              {(loadValue ?? 0) > 0 && (
+                <span className="flex items-center gap-0.5 font-bold text-blue-700">
+                  <DollarSign className="h-3 w-3" />
+                  {loadValue!.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              )}
             </div>
           </div>
           <button
