@@ -1,10 +1,41 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, updateUserPasswordByEmail } from "../db";
-import { collaborators, biometricAttendance, users } from "../../drizzle/schema";
-import { eq, desc, and, like, or } from "drizzle-orm";
+import { collaborators, biometricAttendance, users, userPermissions } from "../../drizzle/schema";
+import { eq, desc, and, like, or, inArray, sql } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 import bcrypt from "bcryptjs";
+
+// Helper: resolve allowedClientIds for the current user
+async function resolveAllowedClientIds(db: any, ctx: any): Promise<number[] | null> {
+  if (ctx.user.role === "admin") return null;
+  let allowedClientIds: number[] | null = null;
+  try {
+    const [perm] = await db.select().from(userPermissions).where(eq(userPermissions.userId, ctx.user.id));
+    if (perm?.allowedClientIds) {
+      allowedClientIds = JSON.parse(perm.allowedClientIds) as number[];
+    }
+  } catch {
+    try {
+      const [rows] = await db.execute(sql`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`) as any;
+      const row = (rows as any[])?.[0];
+      if (row?.allowed_client_ids) {
+        allowedClientIds = JSON.parse(row.allowed_client_ids) as number[];
+      }
+    } catch { /* ignore */ }
+  }
+  // Fallback: collaborator.clientId
+  if (!allowedClientIds) {
+    try {
+      const [collab] = await db.select({ clientId: collaborators.clientId })
+        .from(collaborators).where(eq(collaborators.userId, ctx.user.id));
+      if (collab?.clientId) {
+        allowedClientIds = [collab.clientId];
+      }
+    } catch { /* ignore */ }
+  }
+  return allowedClientIds;
+}
 
 const collaboratorRoles = [
   "administrativo", "encarregado", "mecanico", "motosserrista",
@@ -12,18 +43,21 @@ const collaboratorRoles = [
 ] as const;
 
 export const collaboratorsRouter = router({
-  // Listar todos os colaboradores
+  // Listar todos os colaboradores (filtrado por allowedClientIds para encarregados)
   list: protectedProcedure
     .input(z.object({
       search: z.string().optional(),
       role: z.string().optional(),
       active: z.boolean().optional(),
     }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const conditions = [];
+      // Resolve allowed client IDs
+      const allowedClientIds = await resolveAllowedClientIds(db, ctx);
+
+      const conditions: any[] = [];
 
       if (input?.active !== undefined) {
         conditions.push(eq(collaborators.active, input.active ? 1 : 0));
@@ -39,6 +73,11 @@ export const collaboratorsRouter = router({
             like(collaborators.phone, `%${input.search}%`)
           )
         );
+      }
+
+      // Filtro por clientId se não é admin
+      if (allowedClientIds && allowedClientIds.length > 0) {
+        conditions.push(inArray(collaborators.clientId, allowedClientIds));
       }
 
       if (conditions.length > 0) {
@@ -65,7 +104,7 @@ export const collaboratorsRouter = router({
       return result[0] || null;
     }),
 
-  // Criar colaborador
+  // Criar colaborador (encarregado só pode cadastrar para o cliente dele)
   create: protectedProcedure
     .input(z.object({
       name: z.string().min(2),
@@ -92,6 +131,16 @@ export const collaboratorsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+
+      // Se não é admin, forçar clientId do encarregado
+      const allowedClientIds = await resolveAllowedClientIds(db, ctx);
+      let finalClientId = input.clientId ?? null;
+      if (allowedClientIds && allowedClientIds.length > 0) {
+        // Forçar o clientId para o primeiro cliente permitido (se não informado ou se informou um não permitido)
+        if (!finalClientId || !allowedClientIds.includes(finalClientId)) {
+          finalClientId = allowedClientIds[0];
+        }
+      }
 
       let photoUrl: string | undefined;
 
@@ -132,7 +181,7 @@ export const collaboratorsRouter = router({
         photoUrl,
         faceDescriptor: input.faceDescriptor,
         userId: userId || null,
-        clientId: input.clientId ?? null,
+        clientId: finalClientId,
         createdBy: ctx.user.id,
       });
 
@@ -279,15 +328,18 @@ export const collaboratorsRouter = router({
       return { success: true, id: newId };
     }),
 
-  // Listar registros de ponto
+  // Listar registros de ponto (filtrado por allowedClientIds)
   listAttendance: protectedProcedure
     .input(z.object({
       date: z.string().optional(), // YYYY-MM-DD
       collaboratorId: z.number().optional(),
     }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+
+      // Resolve allowed client IDs
+      const allowedClientIds = await resolveAllowedClientIds(db, ctx);
 
       const baseQuery = db
         .select({
@@ -296,6 +348,7 @@ export const collaboratorsRouter = router({
           collaboratorName: collaborators.name,
           collaboratorRole: collaborators.role,
           collaboratorPhoto: collaborators.photoUrl,
+          collaboratorClientId: collaborators.clientId,
           checkInTime: biometricAttendance.checkIn,
           checkOutTime: biometricAttendance.checkOut,
           location: biometricAttendance.location,
@@ -307,9 +360,18 @@ export const collaboratorsRouter = router({
         .from(biometricAttendance)
         .innerJoin(collaborators, eq(biometricAttendance.collaboratorId, collaborators.id));
 
+      let conditions: any[] = [];
       if (input?.collaboratorId) {
+        conditions.push(eq(biometricAttendance.collaboratorId, input.collaboratorId));
+      }
+      // Filtrar por clientId do colaborador
+      if (allowedClientIds && allowedClientIds.length > 0) {
+        conditions.push(inArray(collaborators.clientId, allowedClientIds));
+      }
+
+      if (conditions.length > 0) {
         const records = await (baseQuery as any)
-          .where(eq(biometricAttendance.collaboratorId, input.collaboratorId))
+          .where(conditions.length === 1 ? conditions[0] : and(...conditions))
           .orderBy(desc(biometricAttendance.checkIn));
         return records;
       }

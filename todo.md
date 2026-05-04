@@ -1510,3 +1510,6 @@
 - [x] Abastecimentos (veículos + máquinas): filtrar por allowedClientIds server-side via workLocationId → gpsLocations.clientId
 - [x] Presenças: filtrar por allowedClientIds server-side via workLocationId → gpsLocations.clientId + collaborator.clientId
 - [x] Horas de Máquina: filtrar por allowedClientIds server-side via workLocationId → gpsLocations.clientId
+- [x] Colaboradores: filtrar lista por allowedClientIds server-side (encarregado vê só do cliente dele)
+- [x] Colaboradores: ao cadastrar, encarregado só pode vincular ao cliente dele (forçar clientId)
+- [x] Presença: lista de colaboradores para marcar presença filtrada por allowedClientIds

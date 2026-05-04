@@ -1361,8 +1361,37 @@ init_db();
 init_schema();
 init_cloudinary();
 import { z as z2 } from "zod";
-import { eq as eq2, desc, and as and2, like, or } from "drizzle-orm";
+import { eq as eq2, desc, and as and2, like, or, inArray, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+async function resolveAllowedClientIds(db, ctx) {
+  if (ctx.user.role === "admin") return null;
+  let allowedClientIds = null;
+  try {
+    const [perm] = await db.select().from(userPermissions).where(eq2(userPermissions.userId, ctx.user.id));
+    if (perm?.allowedClientIds) {
+      allowedClientIds = JSON.parse(perm.allowedClientIds);
+    }
+  } catch {
+    try {
+      const [rows] = await db.execute(sql`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+      const row = rows?.[0];
+      if (row?.allowed_client_ids) {
+        allowedClientIds = JSON.parse(row.allowed_client_ids);
+      }
+    } catch {
+    }
+  }
+  if (!allowedClientIds) {
+    try {
+      const [collab] = await db.select({ clientId: collaborators.clientId }).from(collaborators).where(eq2(collaborators.userId, ctx.user.id));
+      if (collab?.clientId) {
+        allowedClientIds = [collab.clientId];
+      }
+    } catch {
+    }
+  }
+  return allowedClientIds;
+}
 var collaboratorRoles = [
   "administrativo",
   "encarregado",
@@ -1374,14 +1403,15 @@ var collaboratorRoles = [
   "terceirizado"
 ];
 var collaboratorsRouter = router({
-  // Listar todos os colaboradores
+  // Listar todos os colaboradores (filtrado por allowedClientIds para encarregados)
   list: protectedProcedure.input(z2.object({
     search: z2.string().optional(),
     role: z2.string().optional(),
     active: z2.boolean().optional()
-  }).optional()).query(async ({ input }) => {
+  }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    const allowedClientIds = await resolveAllowedClientIds(db, ctx);
     const conditions = [];
     if (input?.active !== void 0) {
       conditions.push(eq2(collaborators.active, input.active ? 1 : 0));
@@ -1398,6 +1428,9 @@ var collaboratorsRouter = router({
         )
       );
     }
+    if (allowedClientIds && allowedClientIds.length > 0) {
+      conditions.push(inArray(collaborators.clientId, allowedClientIds));
+    }
     if (conditions.length > 0) {
       return await db.select().from(collaborators).where(conditions.length === 1 ? conditions[0] : and2(...conditions)).orderBy(desc(collaborators.createdAt));
     }
@@ -1410,7 +1443,7 @@ var collaboratorsRouter = router({
     const result = await db.select().from(collaborators).where(eq2(collaborators.id, input.id)).limit(1);
     return result[0] || null;
   }),
-  // Criar colaborador
+  // Criar colaborador (encarregado só pode cadastrar para o cliente dele)
   create: protectedProcedure.input(z2.object({
     name: z2.string().min(2),
     email: z2.string().email().optional().or(z2.literal("")),
@@ -1437,6 +1470,13 @@ var collaboratorsRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    const allowedClientIds = await resolveAllowedClientIds(db, ctx);
+    let finalClientId = input.clientId ?? null;
+    if (allowedClientIds && allowedClientIds.length > 0) {
+      if (!finalClientId || !allowedClientIds.includes(finalClientId)) {
+        finalClientId = allowedClientIds[0];
+      }
+    }
     let photoUrl;
     if (input.photoBase64) {
       const result = await cloudinaryUpload(input.photoBase64, "btree/collaborators");
@@ -1469,7 +1509,7 @@ var collaboratorsRouter = router({
       photoUrl,
       faceDescriptor: input.faceDescriptor,
       userId: userId || null,
-      clientId: input.clientId ?? null,
+      clientId: finalClientId,
       createdBy: ctx.user.id
     });
     const newId = inserted.insertId;
@@ -1591,20 +1631,22 @@ var collaboratorsRouter = router({
     const newId = inserted.insertId;
     return { success: true, id: newId };
   }),
-  // Listar registros de ponto
+  // Listar registros de ponto (filtrado por allowedClientIds)
   listAttendance: protectedProcedure.input(z2.object({
     date: z2.string().optional(),
     // YYYY-MM-DD
     collaboratorId: z2.number().optional()
-  }).optional()).query(async ({ input }) => {
+  }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    const allowedClientIds = await resolveAllowedClientIds(db, ctx);
     const baseQuery = db.select({
       id: biometricAttendance.id,
       collaboratorId: biometricAttendance.collaboratorId,
       collaboratorName: collaborators.name,
       collaboratorRole: collaborators.role,
       collaboratorPhoto: collaborators.photoUrl,
+      collaboratorClientId: collaborators.clientId,
       checkInTime: biometricAttendance.checkIn,
       checkOutTime: biometricAttendance.checkOut,
       location: biometricAttendance.location,
@@ -1613,8 +1655,15 @@ var collaboratorsRouter = router({
       notes: biometricAttendance.notes,
       createdAt: biometricAttendance.createdAt
     }).from(biometricAttendance).innerJoin(collaborators, eq2(biometricAttendance.collaboratorId, collaborators.id));
+    let conditions = [];
     if (input?.collaboratorId) {
-      const records2 = await baseQuery.where(eq2(biometricAttendance.collaboratorId, input.collaboratorId)).orderBy(desc(biometricAttendance.checkIn));
+      conditions.push(eq2(biometricAttendance.collaboratorId, input.collaboratorId));
+    }
+    if (allowedClientIds && allowedClientIds.length > 0) {
+      conditions.push(inArray(collaborators.clientId, allowedClientIds));
+    }
+    if (conditions.length > 0) {
+      const records2 = await baseQuery.where(conditions.length === 1 ? conditions[0] : and2(...conditions)).orderBy(desc(biometricAttendance.checkIn));
       return records2;
     }
     const records = await baseQuery.orderBy(desc(biometricAttendance.checkIn));
@@ -1974,7 +2023,7 @@ init_db();
 init_schema();
 init_cloudinary();
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq5, desc as desc3, and as and3, sql } from "drizzle-orm";
+import { eq as eq5, desc as desc3, and as and3, sql as sql2 } from "drizzle-orm";
 var cargoLoadsRouter = router({
   // ===== DESTINOS =====
   listDestinations: protectedProcedure.query(async () => {
@@ -2733,7 +2782,7 @@ var cargoLoadsRouter = router({
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
     const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    const result = await db.execute(sql`INSERT INTO client_documents (client_id, type, title, file_url, file_type, notes, uploaded_by, created_at) VALUES (${input.clientId}, ${input.type}, ${input.title}, ${uploaded.url}, ${input.fileType || null}, ${input.notes || null}, ${ctx.user.id}, ${now})`);
+    const result = await db.execute(sql2`INSERT INTO client_documents (client_id, type, title, file_url, file_type, notes, uploaded_by, created_at) VALUES (${input.clientId}, ${input.type}, ${input.title}, ${uploaded.url}, ${input.fileType || null}, ${input.notes || null}, ${ctx.user.id}, ${now})`);
     return { success: true, id: result.insertId, url: uploaded.url };
   }),
   deleteClientDocument: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ input }) => {
@@ -2764,8 +2813,8 @@ import { z as z6 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError5 } from "@trpc/server";
-import { eq as eq6, desc as desc4, sql as sql2, inArray } from "drizzle-orm";
-async function resolveAllowedClientIds(db, ctx) {
+import { eq as eq6, desc as desc4, sql as sql3, inArray as inArray2 } from "drizzle-orm";
+async function resolveAllowedClientIds2(db, ctx) {
   if (ctx.user.role === "admin") return null;
   let allowedClientIds = null;
   try {
@@ -2775,7 +2824,7 @@ async function resolveAllowedClientIds(db, ctx) {
     }
   } catch {
     try {
-      const [rows] = await db.execute(sql2`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+      const [rows] = await db.execute(sql3`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
       const row = rows?.[0];
       if (row?.allowed_client_ids) {
         allowedClientIds = JSON.parse(row.allowed_client_ids);
@@ -2795,7 +2844,7 @@ async function resolveAllowedClientIds(db, ctx) {
   return allowedClientIds;
 }
 async function getAllowedLocationIds(db, allowedClientIds) {
-  const locs = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(inArray(gpsLocations.clientId, allowedClientIds));
+  const locs = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(inArray2(gpsLocations.clientId, allowedClientIds));
   return locs.map((l) => l.id);
 }
 var machineHoursRouter = router({
@@ -2803,7 +2852,7 @@ var machineHoursRouter = router({
   listHours: protectedProcedure.input(z6.object({ equipmentId: z6.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const allowedClientIds = await resolveAllowedClientIds(db, ctx);
+    const allowedClientIds = await resolveAllowedClientIds2(db, ctx);
     let allowedLocationIds = null;
     if (allowedClientIds && allowedClientIds.length > 0) {
       allowedLocationIds = await getAllowedLocationIds(db, allowedClientIds);
@@ -2820,7 +2869,7 @@ var machineHoursRouter = router({
     const locIds = Array.from(new Set(locIdsRaw));
     let locMap = {};
     if (locIds.length > 0) {
-      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, locIds));
+      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray2(gpsLocations.id, locIds));
       locMap = Object.fromEntries(locsData.map((l) => [l.id, l.name]));
     }
     return filtered.map((r) => ({ ...r, locationName: r.workLocationId ? locMap[r.workLocationId] || null : null }));
@@ -2941,7 +2990,7 @@ var machineHoursRouter = router({
   listFuel: protectedProcedure.input(z6.object({ equipmentId: z6.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const allowedClientIds = await resolveAllowedClientIds(db, ctx);
+    const allowedClientIds = await resolveAllowedClientIds2(db, ctx);
     let allowedLocationIds = null;
     if (allowedClientIds && allowedClientIds.length > 0) {
       allowedLocationIds = await getAllowedLocationIds(db, allowedClientIds);
@@ -2958,7 +3007,7 @@ var machineHoursRouter = router({
     const fuelLocIds = Array.from(new Set(fuelLocIdsRaw));
     let fuelLocMap = {};
     if (fuelLocIds.length > 0) {
-      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, fuelLocIds));
+      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray2(gpsLocations.id, fuelLocIds));
       fuelLocMap = Object.fromEntries(locsData.map((l) => [l.id, l.name]));
     }
     return filteredFuel.map((r) => ({ ...r, locationName: r.workLocationId ? fuelLocMap[r.workLocationId] || null : null }));
@@ -3085,7 +3134,7 @@ import { z as z7 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError6 } from "@trpc/server";
-import { eq as eq7, desc as desc5, inArray as inArray2, sql as sql3 } from "drizzle-orm";
+import { eq as eq7, desc as desc5, inArray as inArray3, sql as sql4 } from "drizzle-orm";
 
 // server/notifyTeam.ts
 import nodemailer from "nodemailer";
@@ -3200,7 +3249,7 @@ var vehicleRecordsRouter = router({
         }
       } catch {
         try {
-          const [rows] = await db.execute(sql3`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+          const [rows] = await db.execute(sql4`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
           const row = rows?.[0];
           if (row?.allowed_client_ids) {
             allowedClientIds = JSON.parse(row.allowed_client_ids);
@@ -3220,7 +3269,7 @@ var vehicleRecordsRouter = router({
     }
     let allowedLocationIds = null;
     if (allowedClientIds && allowedClientIds.length > 0) {
-      const locs = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(inArray2(gpsLocations.clientId, allowedClientIds));
+      const locs = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(inArray3(gpsLocations.clientId, allowedClientIds));
       allowedLocationIds = locs.map((l) => l.id);
     }
     const results = await db.select().from(vehicleRecords).orderBy(desc5(vehicleRecords.createdAt));
@@ -3237,14 +3286,14 @@ var vehicleRecordsRouter = router({
     const userIds = Array.from(new Set(userIdsRaw));
     let userMap = {};
     if (userIds.length > 0) {
-      const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray2(users.id, userIds));
+      const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray3(users.id, userIds));
       userMap = Object.fromEntries(usersData.map((u) => [u.id, u.name]));
     }
     const locIdsRaw = filtered.map((r) => r.workLocationId).filter((id) => id !== null && id !== void 0);
     const locIds = Array.from(new Set(locIdsRaw));
     let locMap = {};
     if (locIds.length > 0) {
-      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray2(gpsLocations.id, locIds));
+      const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray3(gpsLocations.id, locIds));
       locMap = Object.fromEntries(locsData.map((l) => [l.id, l.name]));
     }
     return filtered.map((r) => ({
@@ -4245,7 +4294,7 @@ init_db();
 init_schema();
 init_notification();
 import { TRPCError as TRPCError10 } from "@trpc/server";
-import { eq as eq14, desc as desc12, and as and6, inArray as inArray3, lt, sql as sql4 } from "drizzle-orm";
+import { eq as eq14, desc as desc12, and as and6, inArray as inArray4, lt, sql as sql5 } from "drizzle-orm";
 var attendanceRouter = router({
   // Listar presenças com filtros
   list: protectedProcedure.input(z14.object({
@@ -4267,7 +4316,7 @@ var attendanceRouter = router({
           }
         } catch {
           try {
-            const [rows] = await db.execute(sql4`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+            const [rows] = await db.execute(sql5`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
             const row = rows?.[0];
             if (row?.allowed_client_ids) {
               allowedClientIds = JSON.parse(row.allowed_client_ids);
@@ -4287,7 +4336,7 @@ var attendanceRouter = router({
       }
       let allowedLocationIds = null;
       if (allowedClientIds && allowedClientIds.length > 0) {
-        const locs = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(inArray3(gpsLocations.clientId, allowedClientIds));
+        const locs = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(inArray4(gpsLocations.clientId, allowedClientIds));
         allowedLocationIds = locs.map((l) => l.id);
       }
       const records = await db.select({
@@ -4356,7 +4405,7 @@ var attendanceRouter = router({
       let userMap = {};
       if (userIds.length > 0) {
         try {
-          const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray3(users.id, userIds));
+          const usersData = await db.select({ id: users.id, name: users.name }).from(users).where(inArray4(users.id, userIds));
           userMap = Object.fromEntries(usersData.map((u) => [u.id, u.name]));
         } catch (userErr) {
           console.error("[attendance.list] Erro ao buscar nomes de usu\xE1rios:", userErr);
@@ -4521,7 +4570,7 @@ import { z as z15 } from "zod";
 import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq15, and as and7, desc as desc13, gte as gte2, lte as lte2, sql as sql5 } from "drizzle-orm";
+import { eq as eq15, and as and7, desc as desc13, gte as gte2, lte as lte2, sql as sql6 } from "drizzle-orm";
 var TRACCAR_URL = process.env.TRACCAR_URL || "";
 var TRACCAR_TOKEN = process.env.TRACCAR_TOKEN || "";
 function traccarAuth() {
@@ -4726,7 +4775,7 @@ var traccarRouter = router({
               source: "gps_auto"
             });
           }
-          const totalResult = await db.select({ total: sql5`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq15(gpsHoursLog.equipmentId, link.equipmentId));
+          const totalResult = await db.select({ total: sql6`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq15(gpsHoursLog.equipmentId, link.equipmentId));
           const totalHours = parseFloat(totalResult[0]?.total || "0");
           await checkAndGenerateAlerts(link.equipmentId, totalHours);
           results.push({ equipmentId: link.equipmentId, hours });
@@ -4743,9 +4792,9 @@ var traccarRouter = router({
     const baseQuery = db.select({
       equipmentId: gpsHoursLog.equipmentId,
       equipmentName: equipment.name,
-      totalHours: sql5`SUM(CAST(hours_worked AS DECIMAL(10,2)))`,
-      lastDate: sql5`MAX(date)`,
-      recordCount: sql5`COUNT(*)`
+      totalHours: sql6`SUM(CAST(hours_worked AS DECIMAL(10,2)))`,
+      lastDate: sql6`MAX(date)`,
+      recordCount: sql6`COUNT(*)`
     }).from(gpsHoursLog).innerJoin(equipment, eq15(gpsHoursLog.equipmentId, equipment.id)).groupBy(gpsHoursLog.equipmentId, equipment.name).orderBy(equipment.name);
     if (input?.equipmentId) {
       return baseQuery.where(eq15(gpsHoursLog.equipmentId, input.equipmentId));
@@ -4866,7 +4915,7 @@ var traccarRouter = router({
   alertCount: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return { count: 0 };
-    const result = await db.select({ count: sql5`COUNT(*)` }).from(preventiveMaintenanceAlerts).where(eq15(preventiveMaintenanceAlerts.status, "pendente"));
+    const result = await db.select({ count: sql6`COUNT(*)` }).from(preventiveMaintenanceAlerts).where(eq15(preventiveMaintenanceAlerts.status, "pendente"));
     return { count: Number(result[0]?.count || 0) };
   })
 });
@@ -4876,7 +4925,7 @@ import { z as z16 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError12 } from "@trpc/server";
-import { eq as eq16, sql as sql6 } from "drizzle-orm";
+import { eq as eq16, sql as sql7 } from "drizzle-orm";
 var SYSTEM_MODULES = [
   // Maquinário
   { slug: "equipamentos", label: "Equipamentos", group: "Maquin\xE1rio" },
@@ -4992,7 +5041,7 @@ var permissionsRouter = router({
       allPerms = await db.select().from(userPermissions);
     } catch {
       try {
-        const [rows] = await db.execute(sql6`SELECT * FROM user_permissions`);
+        const [rows] = await db.execute(sql7`SELECT * FROM user_permissions`);
         allPerms = rows;
       } catch {
         allPerms = [];
@@ -5055,7 +5104,7 @@ var permissionsRouter = router({
       perm = permRow || null;
     } catch (e) {
       try {
-        const [rows] = await db.execute(sql6`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+        const [rows] = await db.execute(sql7`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
         perm = rows?.[0] || null;
       } catch {
         perm = null;
@@ -5071,7 +5120,7 @@ var permissionsRouter = router({
         collab = collabRow || null;
       } catch {
         try {
-          const [rows] = await db.execute(sql6`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${ctx.user.id} LIMIT 1`);
+          const [rows] = await db.execute(sql7`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${ctx.user.id} LIMIT 1`);
           collab = rows?.[0] || null;
         } catch {
           collab = null;
@@ -5137,7 +5186,7 @@ var permissionsRouter = router({
         });
       }
     } catch {
-      await db.execute(sql6`INSERT INTO user_permissions (user_id, modules, profile, allowed_client_ids, allowed_work_location_ids, updated_by)
+      await db.execute(sql7`INSERT INTO user_permissions (user_id, modules, profile, allowed_client_ids, allowed_work_location_ids, updated_by)
           VALUES (${input.userId}, ${modulesJson}, ${input.profile}, ${allowedClientIdsJson}, ${allowedWorkLocationIdsJson}, ${ctx.user.id})
           ON DUPLICATE KEY UPDATE modules = ${modulesJson}, profile = ${input.profile}, allowed_client_ids = ${allowedClientIdsJson}, allowed_work_location_ids = ${allowedWorkLocationIdsJson}, updated_by = ${ctx.user.id}`);
     }
@@ -5178,7 +5227,7 @@ var permissionsRouter = router({
         });
       }
     } catch {
-      await db.execute(sql6`INSERT INTO user_permissions (user_id, modules, profile, updated_by)
+      await db.execute(sql7`INSERT INTO user_permissions (user_id, modules, profile, updated_by)
           VALUES (${input.userId}, ${modulesJson}, ${input.profileKey}, ${ctx.user.id})
           ON DUPLICATE KEY UPDATE modules = ${modulesJson}, profile = ${input.profileKey}, updated_by = ${ctx.user.id}`);
     }
@@ -5201,7 +5250,7 @@ var permissionsRouter = router({
 import { z as z17 } from "zod";
 init_db();
 init_schema();
-import { eq as eq17, desc as desc14, and as and8, sql as sql7 } from "drizzle-orm";
+import { eq as eq17, desc as desc14, and as and8, sql as sql8 } from "drizzle-orm";
 var chainsawsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
@@ -5313,7 +5362,7 @@ var fuelRouter = router({
       oil2tMl = oil2t;
       const oil2tParts = await db.select().from(chainsawParts).where(and8(
         eq17(chainsawParts.isActive, 1),
-        sql7`(LOWER(${chainsawParts.name}) LIKE '%2t%' OR LOWER(${chainsawParts.name}) LIKE '%dois tempos%')`
+        sql8`(LOWER(${chainsawParts.name}) LIKE '%2t%' OR LOWER(${chainsawParts.name}) LIKE '%dois tempos%')`
       )).limit(1);
       const oil2tPart = oil2tParts[0];
       if (oil2tPart) {
@@ -5754,7 +5803,7 @@ var chainsawModuleRouter = router({
 import { z as z18 } from "zod";
 init_db();
 init_schema();
-import { desc as desc15, eq as eq18, and as and9, gte as gte3, lte as lte3, sql as sql8 } from "drizzle-orm";
+import { desc as desc15, eq as eq18, and as and9, gte as gte3, lte as lte3, sql as sql9 } from "drizzle-orm";
 var extraExpensesRouter = router({
   list: protectedProcedure.input(z18.object({
     dateFrom: z18.string().optional(),
@@ -5782,7 +5831,7 @@ var extraExpensesRouter = router({
         }
       } catch {
         try {
-          const [rows2] = await db.execute(sql8`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+          const [rows2] = await db.execute(sql9`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
           const row = rows2?.[0];
           if (row?.allowed_client_ids) {
             allowedClientIds = JSON.parse(row.allowed_client_ids);
@@ -5875,7 +5924,7 @@ var extraExpensesRouter = router({
 // server/routers/dashboard.ts
 init_db();
 init_schema();
-import { sql as sql9, gte as gte4, lte as lte4, and as and10 } from "drizzle-orm";
+import { sql as sql10, gte as gte4, lte as lte4, and as and10 } from "drizzle-orm";
 import { z as z19 } from "zod";
 var dashboardRouter = router({
   stats: protectedProcedure.input(z19.object({
@@ -5891,44 +5940,44 @@ var dashboardRouter = router({
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
-    const [{ count: totalCollaborators }] = await db.select({ count: sql9`count(*)` }).from(collaborators);
-    const [{ count: totalClients }] = await db.select({ count: sql9`count(*)` }).from(clients);
-    const [{ count: cargoThisMonth }] = await db.select({ count: sql9`count(*)` }).from(cargoLoads).where(and10(
+    const [{ count: totalCollaborators }] = await db.select({ count: sql10`count(*)` }).from(collaborators);
+    const [{ count: totalClients }] = await db.select({ count: sql10`count(*)` }).from(clients);
+    const [{ count: cargoThisMonth }] = await db.select({ count: sql10`count(*)` }).from(cargoLoads).where(and10(
       gte4(cargoLoads.createdAt, startOfMonth),
       lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql9`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and10(
+    const [{ total: cargoVolumeThisMonth }] = await db.select({ total: sql10`coalesce(sum(volume_m3), 0)` }).from(cargoLoads).where(and10(
       gte4(cargoLoads.createdAt, startOfMonth),
       lte4(cargoLoads.createdAt, endOfMonth)
     ));
-    const [{ count: fuelThisMonth }] = await db.select({ count: sql9`count(*)` }).from(vehicleRecords).where(
+    const [{ count: fuelThisMonth }] = await db.select({ count: sql10`count(*)` }).from(vehicleRecords).where(
       and10(
         gte4(vehicleRecords.createdAt, startOfMonth),
         lte4(vehicleRecords.createdAt, endOfMonth),
-        sql9`record_type = 'abastecimento'`
+        sql10`record_type = 'abastecimento'`
       )
     );
-    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql9`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
+    const [{ total: fuelCostThisMonth }] = await db.select({ total: sql10`coalesce(sum(fuel_cost), 0)` }).from(vehicleRecords).where(
       and10(
         gte4(vehicleRecords.createdAt, startOfMonth),
         lte4(vehicleRecords.createdAt, endOfMonth),
-        sql9`record_type = 'abastecimento'`
+        sql10`record_type = 'abastecimento'`
       )
     );
-    const [{ count: attendanceToday }] = await db.select({ count: sql9`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
-    const [{ count: attendanceThisMonth }] = await db.select({ count: sql9`count(*)` }).from(collaboratorAttendance).where(and10(
+    const [{ count: attendanceToday }] = await db.select({ count: sql10`count(*)` }).from(collaboratorAttendance).where(gte4(collaboratorAttendance.date, startOfDay));
+    const [{ count: attendanceThisMonth }] = await db.select({ count: sql10`count(*)` }).from(collaboratorAttendance).where(and10(
       gte4(collaboratorAttendance.date, startOfMonth),
       lte4(collaboratorAttendance.date, endOfMonth)
     ));
-    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql9`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
+    const [{ total: pendingPaymentThisMonth }] = await db.select({ total: sql10`coalesce(sum(cast(daily_value as decimal(10,2))), 0)` }).from(collaboratorAttendance).where(
       and10(
         gte4(collaboratorAttendance.date, startOfMonth),
         lte4(collaboratorAttendance.date, endOfMonth),
-        sql9`payment_status_ca = 'pendente'`
+        sql10`payment_status_ca = 'pendente'`
       )
     );
-    const [{ count: totalEquipment }] = await db.select({ count: sql9`count(*)` }).from(equipment);
-    const [{ count: lowStockParts }] = await db.select({ count: sql9`count(*)` }).from(parts).where(sql9`stock_quantity < 5`);
+    const [{ count: totalEquipment }] = await db.select({ count: sql10`count(*)` }).from(equipment);
+    const [{ count: lowStockParts }] = await db.select({ count: sql10`count(*)` }).from(parts).where(sql10`stock_quantity < 5`);
     const recentCargos = await db.select({
       id: cargoLoads.id,
       vehiclePlate: cargoLoads.vehiclePlate,
@@ -5936,7 +5985,7 @@ var dashboardRouter = router({
       volumeM3: cargoLoads.volumeM3,
       createdAt: cargoLoads.createdAt,
       status: cargoLoads.status
-    }).from(cargoLoads).orderBy(sql9`created_at desc`).limit(5);
+    }).from(cargoLoads).orderBy(sql10`created_at desc`).limit(5);
     const recentAttendance = await db.select({
       id: collaboratorAttendance.id,
       collaboratorId: collaboratorAttendance.collaboratorId,
@@ -5944,8 +5993,8 @@ var dashboardRouter = router({
       dailyValue: collaboratorAttendance.dailyValue,
       paymentStatus: collaboratorAttendance.paymentStatusCa,
       activity: collaboratorAttendance.activity
-    }).from(collaboratorAttendance).orderBy(sql9`created_at desc`).limit(5);
-    const [{ count: pendingOrders }] = await db.select({ count: sql9`count(*)` }).from(purchaseOrders).where(sql9`status = 'pending'`);
+    }).from(collaboratorAttendance).orderBy(sql10`created_at desc`).limit(5);
+    const [{ count: pendingOrders }] = await db.select({ count: sql10`count(*)` }).from(purchaseOrders).where(sql10`status = 'pending'`);
     const MONTHS_PT = [
       "janeiro",
       "fevereiro",
@@ -5986,7 +6035,7 @@ var dashboardRouter = router({
 import { z as z20 } from "zod";
 init_db();
 init_schema();
-import { desc as desc16, eq as eq19, and as and11, gte as gte5, lte as lte5, sql as sql10 } from "drizzle-orm";
+import { desc as desc16, eq as eq19, and as and11, gte as gte5, lte as lte5, sql as sql11 } from "drizzle-orm";
 var financialRouter = router({
   // ── Listar lançamentos ──────────────────────────────────────────────────
   list: protectedProcedure.input(z20.object({
@@ -6059,14 +6108,14 @@ var financialRouter = router({
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
     const rows = await db.select({
       category: financialEntries.category,
-      total: sql10`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
-      count: sql10`count(*)`
+      total: sql11`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
+      count: sql11`count(*)`
     }).from(financialEntries).where(and11(
       eq19(financialEntries.type, input.type),
       gte5(financialEntries.date, startDate),
       lte5(financialEntries.date, endDate),
       eq19(financialEntries.status, "confirmado")
-    )).groupBy(financialEntries.category).orderBy(sql10`total desc`);
+    )).groupBy(financialEntries.category).orderBy(sql11`total desc`);
     return rows.map((r) => ({
       category: r.category,
       total: Number(r.total),
@@ -6080,10 +6129,10 @@ var financialRouter = router({
     const rows = await db.select({
       referenceMonth: financialEntries.referenceMonth,
       type: financialEntries.type,
-      total: sql10`coalesce(sum(cast(amount as decimal(10,2))), 0)`
+      total: sql11`coalesce(sum(cast(amount as decimal(10,2))), 0)`
     }).from(financialEntries).where(and11(
       eq19(financialEntries.status, "confirmado"),
-      sql10`reference_month >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 MONTH), '%Y-%m')`
+      sql11`reference_month >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 MONTH), '%Y-%m')`
     )).groupBy(financialEntries.referenceMonth, financialEntries.type).orderBy(financialEntries.referenceMonth);
     const byMonth = {};
     for (const r of rows) {
@@ -6342,7 +6391,7 @@ import { z as z22 } from "zod";
 init_db();
 init_schema();
 import { TRPCError as TRPCError13 } from "@trpc/server";
-import { eq as eq21, desc as desc18, and as and13, gte as gte6, lte as lte6, sql as sql11, isNull as isNull2 } from "drizzle-orm";
+import { eq as eq21, desc as desc18, and as and13, gte as gte6, lte as lte6, sql as sql12, isNull as isNull2 } from "drizzle-orm";
 var reportsRouter = router({
   // ── Listar todos os locais de trabalho (para filtro) ──────────────────────
   locations: protectedProcedure.query(async () => {
@@ -6358,7 +6407,7 @@ var reportsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
-    await db.execute(sql11`
+    await db.execute(sql12`
         UPDATE collaborator_attendance 
         SET location_name = ${input.newLocationName}, work_location_id = ${input.newLocationId}
         WHERE location_name = ${input.oldName}
@@ -6369,7 +6418,7 @@ var reportsRouter = router({
   uniqueLocationNames: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
-    const results = await db.execute(sql11`
+    const results = await db.execute(sql12`
       SELECT DISTINCT location_name FROM collaborator_attendance 
       WHERE location_name IS NOT NULL AND location_name != ''
       ORDER BY location_name
@@ -7145,12 +7194,12 @@ var appRouter = router({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { error: "DB null" };
-        const { sql: sql13 } = await import("drizzle-orm");
-        const [permsRows] = await db.execute(sql13`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
-        const [collabRows] = await db.execute(sql13`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
-        const [countRows] = await db.execute(sql13`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
-        const [colsRows] = await db.execute(sql13`SHOW COLUMNS FROM collaborators`);
-        const [sampleRows] = await db.execute(sql13`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        const { sql: sql14 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql14`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql14`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql14`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql14`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql14`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
