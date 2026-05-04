@@ -2781,6 +2781,7 @@ var cargoLoadsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
     const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const result = await db.insert(clientDocuments).values({
       clientId: input.clientId,
       type: input.type,
@@ -2788,7 +2789,8 @@ var cargoLoadsRouter = router({
       fileUrl: uploaded.url,
       fileType: input.fileType || null,
       notes: input.notes || null,
-      uploadedBy: ctx.user.id
+      uploadedBy: ctx.user.id,
+      createdAt: now
     });
     return { success: true, id: result[0]?.insertId, url: uploaded.url };
   }),
