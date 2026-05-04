@@ -357,24 +357,23 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
 
         {/* Tabs */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="flex border-b border-gray-100 overflow-x-auto">
+          <div className="flex border-b border-gray-100 overflow-x-auto scrollbar-hide">
             {[
-              { id: "cargas" as const, label: "Cargas", icon: Truck },
-              { id: "fechamentos" as const, label: "Fechamentos", icon: DollarSign },
-              { id: "documentos" as const, label: "Docs", icon: Leaf },
-              { id: "replantio" as const, label: "Replantio", icon: Leaf },
-              { id: "pagamentos" as const, label: "Pagamentos", icon: DollarSign },
-            ].map(({ id, label, icon: Icon }) => (
+              { id: "cargas" as const, label: "Cargas" },
+              { id: "fechamentos" as const, label: "Fechamentos" },
+              { id: "documentos" as const, label: "Docs" },
+              { id: "replantio" as const, label: "Replantio" },
+              { id: "pagamentos" as const, label: "Pagamentos" },
+            ].map(({ id, label }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap px-2 ${
+                className={`py-3 px-3 text-xs font-semibold transition-colors whitespace-nowrap ${
                   activeTab === id
                     ? "text-[#0d4f2e] border-b-2 border-[#0d4f2e] bg-green-50/50"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                <Icon className="h-4 w-4 shrink-0" />
                 {label}
               </button>
             ))}
@@ -399,13 +398,13 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                         {/* Resumo de valor total das cargas */}
                         {(() => {
                           const totalValue = (data?.loads || []).reduce((sum, l) => sum + getLoadValue(l), 0);
-                          const totalWeight = (data?.loads || []).reduce((sum, l) => sum + parseFloat((l as any).weightNetKg || (l as any).weightOutKg || '0'), 0);
+                          const totalWeightNet = (data?.loads || []).reduce((sum, l) => sum + parseFloat((l as any).weightNetKg || '0'), 0);
                           if (totalValue > 0) {
                             return (
                               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2">
                                 <p className="text-blue-700 text-xs font-semibold uppercase tracking-wide">Valor Total das Cargas</p>
                                 <p className="text-blue-900 text-lg font-black">{formatCurrency(totalValue)}</p>
-                                <p className="text-blue-600 text-xs">{(totalWeight / 1000).toFixed(2)} ton x R$ {data?.client?.pricePerTon || '0'}/ton</p>
+                                <p className="text-blue-600 text-xs">Peso líquido: {(totalWeightNet / 1000).toFixed(2)} ton x R$ {data?.client?.pricePerTon || '0'}/ton</p>
                               </div>
                             );
                           }
@@ -646,17 +645,15 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
             </div>
             <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
               <span>{formatDate(load.date)}</span>
-              {load.volumeM3 && <span>{load.volumeM3} m³</span>}
-              {load.weightKg && <span className="flex items-center gap-0.5"><Weight className="h-3 w-3" />{load.weightKg} kg</span>}
+              {(load as any).weightNetKg && <span className="flex items-center gap-0.5 font-medium text-emerald-700"><Weight className="h-3 w-3" />{(load as any).weightNetKg} kg (líq.)</span>}
               {load.woodType && <span>{load.woodType}</span>}
               {load.vehiclePlate && <span className="flex items-center gap-0.5"><Truck className="h-3 w-3" />{load.vehiclePlate}</span>}
-              {(loadValue ?? 0) > 0 && (
-                <span className="flex items-center gap-0.5 font-bold text-blue-700">
-                  <DollarSign className="h-3 w-3" />
-                  {loadValue!.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
-              )}
             </div>
+            {(loadValue ?? 0) > 0 && (
+              <p className="text-blue-700 text-xs font-bold mt-1">
+                R$ {loadValue!.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            )}
           </div>
           <button
             onClick={() => setExpanded(v => !v)}
