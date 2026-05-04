@@ -1504,3 +1504,9 @@
 - [x] Filtro cargas: quando allowedClientIds não configurado, não bloquear tudo (fallback)
 - [x] Adicionar campo "Local de Trabalho" (client_id) na tela de Colaboradores
 - [x] SQL para Hostinger: vincular Juliano (collaborator id=12) ao user OAuth dele
+
+### Correções 04/05/2026
+- [x] Gastos Extras: filtrar por allowedClientIds server-side (encarregado vê só do cliente dele)
+- [x] Abastecimentos (veículos + máquinas): filtrar por allowedClientIds server-side via workLocationId → gpsLocations.clientId
+- [x] Presenças: filtrar por allowedClientIds server-side via workLocationId → gpsLocations.clientId + collaborator.clientId
+- [x] Horas de Máquina: filtrar por allowedClientIds server-side via workLocationId → gpsLocations.clientId

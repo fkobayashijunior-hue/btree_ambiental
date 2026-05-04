@@ -2,8 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { vehicleRecords, users, gpsLocations } from "../../drizzle/schema";
-import { eq, desc, inArray } from "drizzle-orm";
+import { vehicleRecords, users, gpsLocations, userPermissions, collaborators } from "../../drizzle/schema";
+import { eq, desc, inArray, sql } from "drizzle-orm";
 import { notifyTeam } from "../notifyTeam";
 
 export const vehicleRecordsRouter = router({
@@ -12,13 +12,66 @@ export const vehicleRecordsRouter = router({
       equipmentId: z.number().optional(),
       recordType: z.enum(["abastecimento", "manutencao", "km"]).optional(),
     }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      // === SERVER-SIDE FILTERING: buscar allowedClientIds ===
+      let allowedClientIds: number[] | null = null;
+      if (ctx.user.role !== "admin") {
+        try {
+          const [perm] = await db.select().from(userPermissions).where(eq(userPermissions.userId, ctx.user.id));
+          if (perm?.allowedClientIds) {
+            allowedClientIds = JSON.parse(perm.allowedClientIds) as number[];
+          }
+        } catch {
+          try {
+            const [rows] = await db.execute(sql`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`) as any;
+            const row = (rows as any[])?.[0];
+            if (row?.allowed_client_ids) {
+              allowedClientIds = JSON.parse(row.allowed_client_ids) as number[];
+            }
+          } catch {
+            // Ignorar
+          }
+        }
+
+        // Fallback: verificar collaborator.client_id
+        if (!allowedClientIds) {
+          try {
+            const [collab] = await db.select({ clientId: collaborators.clientId })
+              .from(collaborators).where(eq(collaborators.userId, ctx.user.id));
+            if (collab?.clientId) {
+              allowedClientIds = [collab.clientId];
+            }
+          } catch {
+            // Ignorar
+          }
+        }
+      }
+
+      // Se temos allowedClientIds, buscar os workLocationIds vinculados a esses clientes
+      let allowedLocationIds: number[] | null = null;
+      if (allowedClientIds && allowedClientIds.length > 0) {
+        const locs = await db.select({ id: gpsLocations.id })
+          .from(gpsLocations)
+          .where(inArray(gpsLocations.clientId, allowedClientIds));
+        allowedLocationIds = locs.map((l: any) => l.id);
+      }
+
       const results = await db.select().from(vehicleRecords).orderBy(desc(vehicleRecords.createdAt));
       let filtered = results;
       if (input?.equipmentId) filtered = filtered.filter(r => r.equipmentId === input.equipmentId);
       if (input?.recordType) filtered = filtered.filter(r => r.recordType === input.recordType);
+
+      // Filtro server-side por allowedClientIds (via workLocationId)
+      if (allowedClientIds && allowedClientIds.length > 0 && allowedLocationIds) {
+        filtered = filtered.filter(r => {
+          if (r.workLocationId && allowedLocationIds!.includes(r.workLocationId)) return true;
+          return false;
+        });
+      }
+
       // Buscar nomes dos usuários que cadastraram
       const userIdsRaw = filtered.map(r => r.registeredBy).filter((id): id is number => id !== null && id !== undefined);
       const userIds = Array.from(new Set(userIdsRaw));
@@ -32,7 +85,7 @@ export const vehicleRecordsRouter = router({
       const locIds = Array.from(new Set(locIdsRaw));
       let locMap: Record<number, string> = {};
       if (locIds.length > 0) {
-        const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, locIds));
+        const locsData = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(inArray(gpsLocations.id, locIds as number[]));
         locMap = Object.fromEntries(locsData.map(l => [l.id, l.name]));
       }
       return filtered.map(r => ({

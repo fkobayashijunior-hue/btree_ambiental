@@ -2,10 +2,11 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { collaboratorAttendance, collaborators, users, gpsLocations } from "../../drizzle/schema";
-import { eq, desc, and, gte, lte, inArray, lt } from "drizzle-orm";
+import { collaboratorAttendance, collaborators, users, gpsLocations, userPermissions } from "../../drizzle/schema";
+import { eq, desc, and, gte, lte, inArray, lt, sql } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { notifyTeam } from "../notifyTeam";
+
 export const attendanceRouter = router({
   // Listar presenças com filtros
   list: protectedProcedure
@@ -15,11 +16,55 @@ export const attendanceRouter = router({
       collaboratorId: z.number().optional(),
       paymentStatus: z.enum(["pendente", "pago"]).optional(),
     }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
       try {
+        // === SERVER-SIDE FILTERING: buscar allowedClientIds ===
+        let allowedClientIds: number[] | null = null;
+        if (ctx.user.role !== "admin") {
+          // Tentar buscar da tabela user_permissions
+          try {
+            const [perm] = await db.select().from(userPermissions).where(eq(userPermissions.userId, ctx.user.id));
+            if (perm?.allowedClientIds) {
+              allowedClientIds = JSON.parse(perm.allowedClientIds) as number[];
+            }
+          } catch {
+            try {
+              const [rows] = await db.execute(sql`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`) as any;
+              const row = (rows as any[])?.[0];
+              if (row?.allowed_client_ids) {
+                allowedClientIds = JSON.parse(row.allowed_client_ids) as number[];
+              }
+            } catch {
+              // Ignorar
+            }
+          }
+
+          // Fallback: verificar collaborator.client_id
+          if (!allowedClientIds) {
+            try {
+              const [collab] = await db.select({ clientId: collaborators.clientId })
+                .from(collaborators).where(eq(collaborators.userId, ctx.user.id));
+              if (collab?.clientId) {
+                allowedClientIds = [collab.clientId];
+              }
+            } catch {
+              // Ignorar
+            }
+          }
+        }
+
+        // Se temos allowedClientIds, buscar os workLocationIds vinculados a esses clientes
+        let allowedLocationIds: number[] | null = null;
+        if (allowedClientIds && allowedClientIds.length > 0) {
+          const locs = await db.select({ id: gpsLocations.id })
+            .from(gpsLocations)
+            .where(inArray(gpsLocations.clientId, allowedClientIds));
+          allowedLocationIds = locs.map(l => l.id);
+        }
+
         // STEP 1: Query principal
         const records = await db
           .select({
@@ -28,6 +73,7 @@ export const attendanceRouter = router({
             collaboratorName: collaborators.name,
             collaboratorRole: collaborators.role,
             collaboratorPhoto: collaborators.photoUrl,
+            collaboratorClientId: collaborators.clientId,
             date: collaboratorAttendance.date,
             employmentType: collaboratorAttendance.employmentTypeCa,
             dailyValue: collaboratorAttendance.dailyValue,
@@ -69,6 +115,20 @@ export const attendanceRouter = router({
           });
         }
 
+        // STEP 2.5: Filtro server-side por allowedClientIds
+        if (allowedClientIds && allowedClientIds.length > 0) {
+          filtered = filtered.filter(r => {
+            // Filtrar por: workLocationId vinculado ao cliente OU collaborator.clientId
+            if (r.workLocationId && allowedLocationIds && allowedLocationIds.includes(r.workLocationId)) {
+              return true;
+            }
+            if (r.collaboratorClientId && allowedClientIds!.includes(r.collaboratorClientId)) {
+              return true;
+            }
+            return false;
+          });
+        }
+
         // STEP 3: Buscar nomes dos usuários que cadastraram
         const userIdsRaw = filtered.map(r => r.registeredBy).filter((id): id is number => id !== null && id !== undefined);
         const userIds = Array.from(new Set(userIdsRaw));
@@ -79,7 +139,6 @@ export const attendanceRouter = router({
             userMap = Object.fromEntries(usersData.map(u => [u.id, u.name]));
           } catch (userErr) {
             console.error('[attendance.list] Erro ao buscar nomes de usuários:', userErr);
-            // Continua sem os nomes
           }
         }
 
@@ -257,65 +316,9 @@ export const attendanceRouter = router({
 
       await notifyOwner({
         title: `⚠️ ${pendingRecords.length} pagamento(s) pendente(s) há mais de 7 dias`,
-        content: `Existem ${pendingRecords.length} presença(s) com pagamento pendente há mais de 7 dias.\n\nTotal a pagar: R$ ${totalGeral.toFixed(2)}\n\nDetalhamento:\n${lines}\n\nAcesse o sistema para realizar os pagamentos.`,
+        content: `Existem ${pendingRecords.length} presença(s) com pagamento pendente há mais de 7 dias.\n\nTotal a pagar: R$ ${totalGeral.toFixed(2)}\n\n${lines}`,
       }).catch(() => {});
 
-      return { success: true, count: pendingRecords.length, total: totalGeral, details: byCollaborator };
-    }),
-
-  // Atualizar local de trabalho de uma presença
-  updateLocation: protectedProcedure
-    .input(z.object({
-      id: z.number(),
-      workLocationId: z.number().nullable(),
-      locationName: z.string().nullable(),
-    }))
-    .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      // Resolver workLocationId/locationName para garantir consistência
-      let wlId = input.workLocationId;
-      let wlName = input.locationName;
-      if (wlName && !wlId) {
-        const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq(gpsLocations.name, wlName));
-        if (loc) wlId = loc.id;
-      }
-      if (wlId && !wlName) {
-        const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq(gpsLocations.id, wlId));
-        if (loc) wlName = loc.name;
-      }
-      await db.update(collaboratorAttendance).set({
-        workLocationId: wlId,
-        locationName: wlName,
-      }).where(eq(collaboratorAttendance.id, input.id));
-      return { success: true };
-    }),
-
-  // Atualizar local de trabalho em lote (vários registros de uma vez)
-  updateLocationBatch: protectedProcedure
-    .input(z.object({
-      ids: z.array(z.number()),
-      workLocationId: z.number().nullable(),
-      locationName: z.string().nullable(),
-    }))
-    .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      // Resolver workLocationId/locationName para garantir consistência
-      let wlId = input.workLocationId;
-      let wlName = input.locationName;
-      if (wlName && !wlId) {
-        const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq(gpsLocations.name, wlName));
-        if (loc) wlId = loc.id;
-      }
-      if (wlId && !wlName) {
-        const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq(gpsLocations.id, wlId));
-        if (loc) wlName = loc.name;
-      }
-      await db.update(collaboratorAttendance).set({
-        workLocationId: wlId,
-        locationName: wlName,
-      }).where(inArray(collaboratorAttendance.id, input.ids));
-      return { success: true, count: input.ids.length };
+      return { success: true, count: pendingRecords.length, message: `${pendingRecords.length} pagamento(s) pendente(s) notificados.` };
     }),
 });

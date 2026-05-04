@@ -141,7 +141,7 @@ export const permissionsRouter = router({
     } catch {
       // Tabela pode não ter todas as colunas - usar SQL raw
       try {
-        const [rows] = await db.execute(sql`SELECT * FROM user_permissions`);
+        const [rows] = await db.execute(sql`SELECT * FROM user_permissions`) as any;
         allPerms = rows as any[];
       } catch {
         allPerms = [];
@@ -240,7 +240,7 @@ export const permissionsRouter = router({
     } catch (e) {
       // Tabela user_permissions pode não ter todas as colunas - usar SQL raw como fallback
       try {
-        const [rows] = await db.execute(sql`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+        const [rows] = await db.execute(sql`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`) as any;
         perm = (rows as any[])?.[0] || null;
       } catch {
         perm = null;
@@ -259,7 +259,7 @@ export const permissionsRouter = router({
       } catch {
         // Fallback com SQL raw
         try {
-          const [rows] = await db.execute(sql`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${ctx.user.id} LIMIT 1`);
+          const [rows] = await db.execute(sql`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${ctx.user.id} LIMIT 1`) as any;
           collab = (rows as any[])?.[0] || null;
         } catch {
           collab = null;

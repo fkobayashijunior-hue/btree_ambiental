@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { extraExpenses, gpsLocations, userPermissions } from "../../drizzle/schema";
-import { desc, eq, and, gte, lte } from "drizzle-orm";
+import { extraExpenses, gpsLocations, userPermissions, collaborators } from "../../drizzle/schema";
+import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
 
 export const extraExpensesRouter = router({
   list: protectedProcedure
@@ -24,14 +24,43 @@ export const extraExpensesRouter = router({
       if (input.category) {
         conditions.push(eq(extraExpenses.category, input.category as any));
       }
-      // Verificar se o usuário tem restrição de clientes
+
+      // Verificar se o usuário tem restrição de clientes (server-side filtering)
       let allowedClientIds: number[] | null = null;
       if (ctx.user.role !== "admin") {
-        const [perm] = await db.select().from(userPermissions).where(eq(userPermissions.userId, ctx.user.id));
-        if (perm?.allowedClientIds) {
-          allowedClientIds = JSON.parse(perm.allowedClientIds) as number[];
+        // Tentar buscar da tabela user_permissions
+        try {
+          const [perm] = await db.select().from(userPermissions).where(eq(userPermissions.userId, ctx.user.id));
+          if (perm?.allowedClientIds) {
+            allowedClientIds = JSON.parse(perm.allowedClientIds) as number[];
+          }
+        } catch {
+          // Fallback com SQL raw se colunas não existem
+          try {
+            const [rows] = await db.execute(sql`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`) as any;
+            const row = (rows as any[])?.[0];
+            if (row?.allowed_client_ids) {
+              allowedClientIds = JSON.parse(row.allowed_client_ids) as number[];
+            }
+          } catch {
+            // Ignorar
+          }
+        }
+
+        // Fallback: verificar collaborator.client_id
+        if (!allowedClientIds) {
+          try {
+            const [collab] = await db.select({ clientId: collaborators.clientId })
+              .from(collaborators).where(eq(collaborators.userId, ctx.user.id));
+            if (collab?.clientId) {
+              allowedClientIds = [collab.clientId];
+            }
+          } catch {
+            // Ignorar
+          }
         }
       }
+
       const rows = await db
         .select({
           id: extraExpenses.id,
@@ -54,6 +83,7 @@ export const extraExpensesRouter = router({
         .leftJoin(gpsLocations, eq(extraExpenses.workLocationId, gpsLocations.id))
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(extraExpenses.date));
+
       // Filtrar por cliente se encarregado
       if (allowedClientIds && allowedClientIds.length > 0) {
         return rows.filter(r => {
