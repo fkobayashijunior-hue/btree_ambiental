@@ -6991,6 +6991,31 @@ var appRouter = router({
   system: systemRouter,
   dashboard: dashboardRouter,
   debug: router({
+    permissionsDebug: protectedProcedure.query(async ({ ctx }) => {
+      try {
+        const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+        const db = await getDb2();
+        if (!db) return { error: "DB null" };
+        const { sql: sql10 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql10`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql10`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql10`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql10`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql10`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        return {
+          currentUserId: ctx.user.id,
+          currentUserRole: ctx.user.role,
+          currentUserEmail: ctx.user.email,
+          userPermissions: permsRows,
+          collaboratorLinked: collabRows,
+          totalActiveCollaborators: countRows,
+          collaboratorColumns: colsRows,
+          sampleCollaborators: sampleRows
+        };
+      } catch (err) {
+        return { error: err.message, stack: err.stack?.slice(0, 500) };
+      }
+    }),
     attendanceTest: protectedProcedure.query(async () => {
       try {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));

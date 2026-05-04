@@ -45,6 +45,42 @@ export const appRouter = router({
   system: systemRouter,
   dashboard: dashboardRouter,
   debug: router({
+    permissionsDebug: protectedProcedure.query(async ({ ctx }) => {
+      try {
+        const { getDb } = await import('./db');
+        const db = await getDb();
+        if (!db) return { error: 'DB null' };
+        const { sql } = await import('drizzle-orm');
+        
+        // 1. Check user_permissions for current user
+        const [permsRows] = await db.execute(sql`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        
+        // 2. Check collaborators linked to this user
+        const [collabRows] = await db.execute(sql`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        
+        // 3. Count all active collaborators
+        const [countRows] = await db.execute(sql`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        
+        // 4. Check collaborators table columns
+        const [colsRows] = await db.execute(sql`SHOW COLUMNS FROM collaborators`);
+        
+        // 5. Sample first 3 active collaborators
+        const [sampleRows] = await db.execute(sql`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        
+        return {
+          currentUserId: ctx.user.id,
+          currentUserRole: ctx.user.role,
+          currentUserEmail: ctx.user.email,
+          userPermissions: permsRows,
+          collaboratorLinked: collabRows,
+          totalActiveCollaborators: countRows,
+          collaboratorColumns: colsRows,
+          sampleCollaborators: sampleRows,
+        };
+      } catch (err: any) {
+        return { error: err.message, stack: err.stack?.slice(0, 500) };
+      }
+    }),
     attendanceTest: protectedProcedure.query(async () => {
       try {
         const { getDb } = await import('./db');

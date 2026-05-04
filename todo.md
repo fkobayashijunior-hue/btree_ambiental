@@ -1499,8 +1499,8 @@
 - [x] Cargas: filtro server-side por allowedClientIds (encarregado só vê cargas do cliente dele)
 
 ### Correções 03/05/2026 (3) - Descobertas via phpMyAdmin
-- [ ] collaborators.user_id está NULL para TODOS - vincular automaticamente no login OAuth (match por email)
-- [ ] listUsers: funcionar mesmo quando user_id é NULL (mostrar todos os collaborators)
-- [ ] Filtro cargas: quando allowedClientIds não configurado, não bloquear tudo (fallback)
-- [ ] Adicionar campo "Local de Trabalho" (client_id) na tela de Colaboradores
-- [ ] SQL para Hostinger: vincular Juliano (collaborator id=12) ao user OAuth dele
+- [x] collaborators.user_id está NULL para TODOS - vincular automaticamente no login OAuth (match por email)
+- [x] listUsers: funcionar mesmo quando user_id é NULL (mostrar todos os collaborators)
+- [x] Filtro cargas: quando allowedClientIds não configurado, não bloquear tudo (fallback)
+- [x] Adicionar campo "Local de Trabalho" (client_id) na tela de Colaboradores
+- [x] SQL para Hostinger: vincular Juliano (collaborator id=12) ao user OAuth dele
