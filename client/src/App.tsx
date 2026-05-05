@@ -33,6 +33,8 @@ import ReplantingPage from "./pages/ReplantingPage";
 import ClientPaymentsPage from "./pages/ClientPaymentsPage";
 import DriverCargoView from "./pages/DriverCargoView";
 import ExecutiveDashboard from "./pages/ExecutiveDashboard";
+import BuyerClientsPage from "./pages/BuyerClientsPage";
+import FreightPage from "./pages/FreightPage";
 
 // Wrapper que aplica DashboardLayout a páginas protegidas
 function WithLayout({ component: Component }: { component: React.ComponentType }) {
@@ -119,6 +121,12 @@ function Router() {
       </Route>
       <Route path={"/dashboard-executivo"}>
         {() => <WithLayout component={ExecutiveDashboard} />}
+      </Route>
+      <Route path={"/compradores"}>
+        {() => <WithLayout component={BuyerClientsPage} />}
+      </Route>
+      <Route path={"/fretes"}>
+        {() => <WithLayout component={FreightPage} />}
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

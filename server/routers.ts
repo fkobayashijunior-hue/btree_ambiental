@@ -24,6 +24,8 @@ import { financialRouter } from "./routers/financial";
 import { gpsLocationsRouter } from "./routers/gpsLocations";
 import { reportsRouter } from "./routers/reports";
 import { reportPdfRouter } from "./routers/reportPdf";
+import { buyerClientsRouter } from "./routers/buyerClients";
+import { freightRouter } from "./routers/freight";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { SignJWT } from "jose";
@@ -290,6 +292,8 @@ export const appRouter = router({
   gpsLocations: gpsLocationsRouter,
   reports: reportsRouter,
   reportPdf: reportPdfRouter,
+  buyerClients: buyerClientsRouter,
+  freight: freightRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
     run: publicProcedure

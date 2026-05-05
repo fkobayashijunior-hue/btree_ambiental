@@ -969,7 +969,7 @@ export default function CargoControl() {
                 {cargo.driverName && <span className="flex items-center gap-1"><User className="h-3 w-3" /><span translate="no">{cargo.driverName}</span></span>}
                 {cargo.destination && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /><span translate="no">{cargo.destination}</span></span>}
                 <span className="flex items-center gap-1 font-semibold text-emerald-700">
-                  <Package className="h-3 w-3" />{cargo.volumeM3} m³{cargo.weightKg ? ` · ${cargo.weightKg} kg` : ""}
+                  <Package className="h-3 w-3" />{cargo.volumeM3} m³{(cargo as any).weightNetKg ? ` · ${(cargo as any).weightNetKg} kg (líq.)` : cargo.weightKg ? ` · ${cargo.weightKg} kg` : ""}
                 </span>
                 {(() => {
                   const weightNet = parseFloat((cargo as any).weightNetKg || (cargo as any).weightOutKg || '0');
@@ -1196,18 +1196,23 @@ export default function CargoControl() {
                       {(() => {
                         const client = clientsList.find(c => c.id === group.clientId);
                         const pricePerTon = parseFloat((client as any)?.pricePerTon || '0');
-                        if (pricePerTon > 0) {
-                          const totalWeight = group.cargas.reduce((sum, c) => {
-                            return sum + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || '0');
-                          }, 0);
-                          const totalValue = (totalWeight / 1000) * pricePerTon;
-                          return (
-                            <span className="font-semibold text-blue-700">
-                              Valor: R$ {totalValue.toFixed(2)} ({(totalWeight / 1000).toFixed(2)} ton x R$ {pricePerTon.toFixed(0)}/ton)
-                            </span>
-                          );
-                        }
-                        return null;
+                        const totalWeight = group.cargas.reduce((sum, c) => {
+                          return sum + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || '0');
+                        }, 0);
+                        return (
+                          <>
+                            {totalWeight > 0 && (
+                              <span className="font-semibold text-emerald-700">
+                                Peso líq.: {(totalWeight / 1000).toFixed(2)} ton ({totalWeight.toLocaleString('pt-BR')} kg)
+                              </span>
+                            )}
+                            {pricePerTon > 0 && totalWeight > 0 && (
+                              <span className="font-semibold text-blue-700">
+                                Valor: R$ {((totalWeight / 1000) * pricePerTon).toFixed(2)} ({(totalWeight / 1000).toFixed(2)} ton x R$ {pricePerTon.toFixed(0)}/ton)
+                              </span>
+                            )}
+                          </>
+                        );
                       })()}
                       {group.pendentes > 0 && (
                         <span className="font-semibold text-red-600">

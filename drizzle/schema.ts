@@ -946,3 +946,90 @@ export const clientDocuments = mysqlTable("client_documents", {
 
 export type ClientDocument = typeof clientDocuments.$inferSelect;
 export type InsertClientDocument = typeof clientDocuments.$inferInsert;
+
+// ===== CLIENTES DESTINO (COMPRADORES DE LENHA/MADEIRA) =====
+export const buyerClients = mysqlTable("buyer_clients", {
+  id: int().primaryKey().autoincrement(),
+  name: varchar({ length: 255 }).notNull(),
+  cnpjCpf: varchar("cnpj_cpf", { length: 30 }),
+  inscricaoEstadual: varchar("inscricao_estadual", { length: 30 }),
+  phone: varchar({ length: 30 }),
+  email: varchar({ length: 255 }),
+  address: text(),
+  city: varchar({ length: 100 }),
+  state: varchar({ length: 2 }),
+  cep: varchar({ length: 10 }),
+  contactPerson: varchar("contact_person", { length: 255 }),
+  product: varchar({ length: 255 }),
+  paymentMethod: varchar("payment_method", { length: 100 }),
+  notes: text(),
+  active: tinyint().default(1).notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export type BuyerClient = typeof buyerClients.$inferSelect;
+export type InsertBuyerClient = typeof buyerClients.$inferInsert;
+
+// ===== HISTÓRICO DE PREÇOS DOS COMPRADORES =====
+export const buyerPriceHistory = mysqlTable("buyer_price_history", {
+  id: int().primaryKey().autoincrement(),
+  buyerId: int("buyer_id").notNull(),
+  product: varchar({ length: 255 }).notNull(),
+  pricePerUnit: varchar("price_per_unit", { length: 20 }).notNull(),
+  unit: varchar({ length: 20 }).default("ton").notNull(),
+  validFrom: varchar("valid_from", { length: 10 }),
+  validUntil: varchar("valid_until", { length: 10 }),
+  notes: text(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export type BuyerPriceHistory = typeof buyerPriceHistory.$inferSelect;
+
+// ===== PAGAMENTOS DOS COMPRADORES =====
+export const buyerPayments = mysqlTable("buyer_payments", {
+  id: int().primaryKey().autoincrement(),
+  buyerId: int("buyer_id").notNull(),
+  amount: varchar({ length: 20 }).notNull(),
+  paymentDate: varchar("payment_date", { length: 10 }).notNull(),
+  paymentMethod: varchar("payment_method", { length: 50 }),
+  invoiceNumber: varchar("invoice_number", { length: 50 }),
+  notes: text(),
+  status: mysqlEnum(['pendente', 'pago', 'atrasado']).default('pendente').notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export type BuyerPayment = typeof buyerPayments.$inferSelect;
+
+// ===== CÁLCULO DE FRETES =====
+export const freightCalculations = mysqlTable("freight_calculations", {
+  id: int().primaryKey().autoincrement(),
+  cargoLoadId: int("cargo_load_id"),
+  date: varchar({ length: 10 }).notNull(),
+  vehiclePlate: varchar("vehicle_plate", { length: 20 }),
+  driverName: varchar("driver_name", { length: 255 }),
+  driverType: mysqlEnum("driver_type", ['proprio', 'terceirizado']).default('proprio').notNull(),
+  origin: varchar({ length: 255 }),
+  destination: varchar({ length: 255 }),
+  distanceKm: varchar("distance_km", { length: 20 }),
+  fuelLiters: varchar("fuel_liters", { length: 20 }),
+  fuelCostPerLiter: varchar("fuel_cost_per_liter", { length: 20 }),
+  fuelTotalCost: varchar("fuel_total_cost", { length: 20 }),
+  driverCost: varchar("driver_cost", { length: 20 }),
+  tollCost: varchar("toll_cost", { length: 20 }),
+  maintenanceCost: varchar("maintenance_cost", { length: 20 }),
+  otherCosts: varchar("other_costs", { length: 20 }),
+  otherCostsDescription: text("other_costs_description"),
+  totalCost: varchar("total_cost", { length: 20 }),
+  costPerKm: varchar("cost_per_km", { length: 20 }),
+  costPerTon: varchar("cost_per_ton", { length: 20 }),
+  weightTon: varchar("weight_ton", { length: 20 }),
+  revenuePerTon: varchar("revenue_per_ton", { length: 20 }),
+  totalRevenue: varchar("total_revenue", { length: 20 }),
+  profit: varchar({ length: 20 }),
+  notes: text(),
+  createdBy: int("created_by"),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export type FreightCalculation = typeof freightCalculations.$inferSelect;
+export type InsertFreightCalculation = typeof freightCalculations.$inferInsert;

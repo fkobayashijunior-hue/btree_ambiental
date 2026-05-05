@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3 } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -49,6 +49,8 @@ const menuItems = [
   { icon: Wallet, label: "Financeiro", path: "/financeiro", slug: "financeiro" },
   { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: "locais-gps" },
   { icon: Truck, label: "Minha Carga", path: "/motorista", slug: "minha-carga" },
+  { icon: Building2, label: "Compradores", path: "/compradores", slug: "compradores" },
+  { icon: Route, label: "Cálculo de Fretes", path: "/fretes", slug: "fretes" },
   { icon: BarChart3, label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec" },
 ];
 

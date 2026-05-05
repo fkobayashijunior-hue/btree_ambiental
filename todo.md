@@ -1523,3 +1523,9 @@
 - [x] Valores da carga aparecem no Portal do Cliente (peso líquido × preço/ton)
 - [x] Fechamento semanal com valor total e previsão de pagamento no Portal do Cliente
 - [x] Documentos cadastrados visíveis no Portal do Cliente (aba Docs)
+
+### Bugs e Features 05/05/2026
+- [x] client_documents INSERT corrigido (removido uploaded_by FK + try-catch com erro detalhado)
+- [x] Controle de Cargas: mostrar peso líquido no resumo (em vez de peso bruto 63.250 kg)
+- [x] Novo módulo: Clientes Destino (compradores de lenha) com histórico de valores e pagamentos
+- [x] Novo módulo: Cálculo de Fretes (combustível, funcionário/terceirizado, km rodado, custo total)
