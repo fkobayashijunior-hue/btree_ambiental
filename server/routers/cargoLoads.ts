@@ -8,6 +8,13 @@ import {
 } from "../../drizzle/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
+import mysql from "mysql2/promise";
+
+// Direct mysql2 connection for client_documents (bypasses Drizzle pool issues)
+async function getDirectConnection() {
+  const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+  return conn;
+}
 
 export const cargoLoadsRouter = router({
   // ===== DESTINOS =====
@@ -936,41 +943,34 @@ export const cargoLoadsRouter = router({
   listClientDocuments: protectedProcedure
     .input(z.object({ clientId: z.number() }))
     .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      let conn: any = null;
       try {
-        const result = await db.execute(sql`
-          SELECT id, client_id as clientId, type, title, file_url as fileUrl, file_type as fileType, notes, uploaded_by as uploadedBy, created_at as createdAt
-          FROM client_documents
-          WHERE client_id = ${input.clientId}
-          ORDER BY created_at DESC
-        `) as any;
-        return result[0] || [];
+        conn = await getDirectConnection();
+        // Ensure table exists
+        await conn.execute(`
+          CREATE TABLE IF NOT EXISTS client_documents (
+            id int AUTO_INCREMENT NOT NULL,
+            client_id int NOT NULL,
+            \`type\` enum('proposta','contrato','nota_fiscal','boleto','recibo','outros') NOT NULL DEFAULT 'outros',
+            title varchar(255) NOT NULL,
+            file_url varchar(1000) NOT NULL,
+            file_type varchar(50),
+            notes text,
+            uploaded_by int,
+            created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(id)
+          )
+        `);
+        const [rows] = await conn.execute(
+          'SELECT id, client_id as clientId, `type`, title, file_url as fileUrl, file_type as fileType, notes, uploaded_by as uploadedBy, created_at as createdAt FROM client_documents WHERE client_id = ? ORDER BY created_at DESC',
+          [input.clientId]
+        );
+        return rows || [];
       } catch (err: any) {
-        console.error('[listClientDocuments] DB error:', err?.message || err);
-        // If table doesn't exist, try to create it
-        if (err?.message?.includes('doesn\'t exist') || err?.cause?.message?.includes('doesn\'t exist')) {
-          try {
-            await db.execute(sql`
-              CREATE TABLE IF NOT EXISTS client_documents (
-                id int AUTO_INCREMENT NOT NULL,
-                client_id int NOT NULL,
-                type enum('proposta','contrato','nota_fiscal','boleto','recibo','outros') NOT NULL DEFAULT 'outros',
-                title varchar(255) NOT NULL,
-                file_url varchar(1000) NOT NULL,
-                file_type varchar(50),
-                notes text,
-                uploaded_by int,
-                created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY(id)
-              )
-            `);
-            return [];
-          } catch (createErr) {
-            console.error('[listClientDocuments] Failed to create table:', createErr);
-          }
-        }
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `DB Error: ${err?.message || 'Unknown'}` });
+        console.error('[listClientDocuments] Error:', err?.message, err?.code, err?.errno);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao listar documentos: ${err?.message || 'Desconhecido'}` });
+      } finally {
+        if (conn) await conn.end().catch(() => {});
       }
     }),
 
@@ -984,18 +984,19 @@ export const cargoLoadsRouter = router({
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Upload file to Cloudinary first
       const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       
-      // Ensure table exists before inserting
+      let conn: any = null;
       try {
-        await db.execute(sql`
+        conn = await getDirectConnection();
+        // Ensure table exists
+        await conn.execute(`
           CREATE TABLE IF NOT EXISTS client_documents (
             id int AUTO_INCREMENT NOT NULL,
             client_id int NOT NULL,
-            type enum('proposta','contrato','nota_fiscal','boleto','recibo','outros') NOT NULL DEFAULT 'outros',
+            \`type\` enum('proposta','contrato','nota_fiscal','boleto','recibo','outros') NOT NULL DEFAULT 'outros',
             title varchar(255) NOT NULL,
             file_url varchar(1000) NOT NULL,
             file_type varchar(50),
@@ -1005,28 +1006,33 @@ export const cargoLoadsRouter = router({
             PRIMARY KEY(id)
           )
         `);
-      } catch (e) { /* table already exists */ }
-      
-      try {
-        const result = await db.execute(sql`
-          INSERT INTO client_documents (client_id, type, title, file_url, file_type, notes, created_at)
-          VALUES (${input.clientId}, ${input.type}, ${input.title}, ${uploaded.url}, ${input.fileType || null}, ${input.notes || null}, ${now})
-        `) as any;
-        return { success: true, id: result?.[0]?.insertId, url: uploaded.url };
+        const [result] = await conn.execute(
+          'INSERT INTO client_documents (client_id, `type`, title, file_url, file_type, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [input.clientId, input.type, input.title, uploaded.url, input.fileType || null, input.notes || null, now]
+        );
+        return { success: true, id: (result as any)?.insertId, url: uploaded.url };
       } catch (err: any) {
-        console.error('[uploadClientDocument] DB error:', err?.message || err);
-        console.error('[uploadClientDocument] Full error:', JSON.stringify(err, null, 2));
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `DB Error: ${err?.cause?.message || err?.message || 'Unknown'}` });
+        console.error('[uploadClientDocument] Error:', err?.message, err?.code, err?.errno, err?.sqlState);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao salvar documento: ${err?.message || 'Desconhecido'}` });
+      } finally {
+        if (conn) await conn.end().catch(() => {});
       }
     }),
 
   deleteClientDocument: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(clientDocuments).where(eq(clientDocuments.id, input.id));
-      return { success: true };
+      let conn: any = null;
+      try {
+        conn = await getDirectConnection();
+        await conn.execute('DELETE FROM client_documents WHERE id = ?', [input.id]);
+        return { success: true };
+      } catch (err: any) {
+        console.error('[deleteClientDocument] Error:', err?.message);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao excluir documento: ${err?.message || 'Desconhecido'}` });
+      } finally {
+        if (conn) await conn.end().catch(() => {});
+      }
     }),
 
   // ===== ATUALIZAR PREÇO DO CLIENTE =====
