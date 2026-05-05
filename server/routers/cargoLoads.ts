@@ -938,9 +938,40 @@ export const cargoLoadsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(clientDocuments)
-        .where(eq(clientDocuments.clientId, input.clientId))
-        .orderBy(desc(clientDocuments.createdAt));
+      try {
+        const result = await db.execute(sql`
+          SELECT id, client_id as clientId, type, title, file_url as fileUrl, file_type as fileType, notes, uploaded_by as uploadedBy, created_at as createdAt
+          FROM client_documents
+          WHERE client_id = ${input.clientId}
+          ORDER BY created_at DESC
+        `) as any;
+        return result[0] || [];
+      } catch (err: any) {
+        console.error('[listClientDocuments] DB error:', err?.message || err);
+        // If table doesn't exist, try to create it
+        if (err?.message?.includes('doesn\'t exist') || err?.cause?.message?.includes('doesn\'t exist')) {
+          try {
+            await db.execute(sql`
+              CREATE TABLE IF NOT EXISTS client_documents (
+                id int AUTO_INCREMENT NOT NULL,
+                client_id int NOT NULL,
+                type enum('proposta','contrato','nota_fiscal','boleto','recibo','outros') NOT NULL DEFAULT 'outros',
+                title varchar(255) NOT NULL,
+                file_url varchar(1000) NOT NULL,
+                file_type varchar(50),
+                notes text,
+                uploaded_by int,
+                created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(id)
+              )
+            `);
+            return [];
+          } catch (createErr) {
+            console.error('[listClientDocuments] Failed to create table:', createErr);
+          }
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `DB Error: ${err?.message || 'Unknown'}` });
+      }
     }),
 
   uploadClientDocument: protectedProcedure
@@ -957,6 +988,25 @@ export const cargoLoadsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      
+      // Ensure table exists before inserting
+      try {
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS client_documents (
+            id int AUTO_INCREMENT NOT NULL,
+            client_id int NOT NULL,
+            type enum('proposta','contrato','nota_fiscal','boleto','recibo','outros') NOT NULL DEFAULT 'outros',
+            title varchar(255) NOT NULL,
+            file_url varchar(1000) NOT NULL,
+            file_type varchar(50),
+            notes text,
+            uploaded_by int,
+            created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(id)
+          )
+        `);
+      } catch (e) { /* table already exists */ }
+      
       try {
         const result = await db.execute(sql`
           INSERT INTO client_documents (client_id, type, title, file_url, file_type, notes, created_at)
@@ -965,7 +1015,8 @@ export const cargoLoadsRouter = router({
         return { success: true, id: result?.[0]?.insertId, url: uploaded.url };
       } catch (err: any) {
         console.error('[uploadClientDocument] DB error:', err?.message || err);
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `DB Error: ${err?.message || 'Unknown'}` });
+        console.error('[uploadClientDocument] Full error:', JSON.stringify(err, null, 2));
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `DB Error: ${err?.cause?.message || err?.message || 'Unknown'}` });
       }
     }),
 

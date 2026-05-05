@@ -1538,3 +1538,5 @@
 - [x] Controle de Cargas: reorganizar campos de peso (Saída Roça, Entrada Cliente, Saída Cliente, Líquido automático)
 - [x] Colaboradores: formatação automática de CPF (000.000.000-00) ao digitar apenas números
 - [x] Colaboradores: formatação automática de telefone ((00) 00000-0000) ao digitar apenas números
+
+- [x] Fix: tabela client_documents não existe no banco de produção - erro ao cadastrar documentos para clientes

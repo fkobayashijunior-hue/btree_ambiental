@@ -132,12 +132,31 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE buyer_clients ADD COLUMN unit varchar(20) DEFAULT 'ton'`);
     } catch(e) { /* column already exists */ }
     
+    // Create client_documents table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS client_documents (
+        id int AUTO_INCREMENT NOT NULL,
+        client_id int NOT NULL,
+        type enum('proposta','contrato','nota_fiscal','boleto','recibo','outros') NOT NULL DEFAULT 'outros',
+        title varchar(255) NOT NULL,
+        file_url varchar(1000) NOT NULL,
+        file_type varchar(50),
+        notes text,
+        uploaded_by int,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT client_documents_id PRIMARY KEY(id)
+      )
+    `);
+    
     // Also fix client_documents: drop FK on uploaded_by if exists
     try {
       await db.execute(/*sql*/`ALTER TABLE client_documents DROP FOREIGN KEY client_documents_ibfk_1`);
     } catch(e) { /* FK doesn't exist */ }
     try {
       await db.execute(/*sql*/`ALTER TABLE client_documents DROP FOREIGN KEY client_documents_uploaded_by_users_id_fk`);
+    } catch(e) { /* FK doesn't exist */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE client_documents DROP FOREIGN KEY client_documents_client_id_clients_id_fk`);
     } catch(e) { /* FK doesn't exist */ }
     
     console.log('[AutoMigration] Tables verified/created successfully');
