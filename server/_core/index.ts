@@ -27,7 +27,129 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+async function runAutoMigrations() {
+  try {
+    const { getDb } = await import('../db');
+    const db = await getDb();
+    if (!db) return;
+    
+    // Create buyer_clients table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS buyer_clients (
+        id int AUTO_INCREMENT NOT NULL,
+        name varchar(255) NOT NULL,
+        cnpj_cpf varchar(30),
+        inscricao_estadual varchar(30),
+        phone varchar(30),
+        email varchar(255),
+        address text,
+        city varchar(100),
+        state varchar(2),
+        cep varchar(10),
+        contact_person varchar(255),
+        product varchar(255),
+        payment_method varchar(100),
+        price_per_unit varchar(20),
+        unit varchar(20) DEFAULT 'ton',
+        notes text,
+        active tinyint NOT NULL DEFAULT 1,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT buyer_clients_id PRIMARY KEY(id)
+      )
+    `);
+    
+    // Create buyer_price_history table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS buyer_price_history (
+        id int AUTO_INCREMENT NOT NULL,
+        buyer_id int NOT NULL,
+        product varchar(255) NOT NULL,
+        price_per_unit varchar(20) NOT NULL,
+        unit varchar(20) NOT NULL DEFAULT 'ton',
+        valid_from varchar(10),
+        valid_until varchar(10),
+        notes text,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT buyer_price_history_id PRIMARY KEY(id)
+      )
+    `);
+    
+    // Create buyer_payments table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS buyer_payments (
+        id int AUTO_INCREMENT NOT NULL,
+        buyer_id int NOT NULL,
+        amount varchar(20) NOT NULL,
+        payment_date varchar(10) NOT NULL,
+        payment_method varchar(50),
+        invoice_number varchar(50),
+        notes text,
+        status enum('pendente','pago','atrasado') NOT NULL DEFAULT 'pendente',
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT buyer_payments_id PRIMARY KEY(id)
+      )
+    `);
+    
+    // Create freight_calculations table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS freight_calculations (
+        id int AUTO_INCREMENT NOT NULL,
+        cargo_load_id int,
+        date varchar(10) NOT NULL,
+        vehicle_plate varchar(20),
+        driver_name varchar(255),
+        driver_type enum('proprio','terceirizado') NOT NULL DEFAULT 'proprio',
+        origin varchar(255),
+        destination varchar(255),
+        distance_km varchar(20),
+        fuel_liters varchar(20),
+        fuel_cost_per_liter varchar(20),
+        fuel_total_cost varchar(20),
+        driver_cost varchar(20),
+        toll_cost varchar(20),
+        maintenance_cost varchar(20),
+        other_costs varchar(20),
+        other_costs_description text,
+        total_cost varchar(20),
+        cost_per_km varchar(20),
+        cost_per_ton varchar(20),
+        weight_ton varchar(20),
+        revenue_per_ton varchar(20),
+        total_revenue varchar(20),
+        profit varchar(20),
+        notes text,
+        created_by int,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT freight_calculations_id PRIMARY KEY(id)
+      )
+    `);
+    
+    // Add price_per_unit and unit columns to buyer_clients if they don't exist
+    try {
+      await db.execute(/*sql*/`ALTER TABLE buyer_clients ADD COLUMN price_per_unit varchar(20)`);
+    } catch(e) { /* column already exists */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE buyer_clients ADD COLUMN unit varchar(20) DEFAULT 'ton'`);
+    } catch(e) { /* column already exists */ }
+    
+    // Also fix client_documents: drop FK on uploaded_by if exists
+    try {
+      await db.execute(/*sql*/`ALTER TABLE client_documents DROP FOREIGN KEY client_documents_ibfk_1`);
+    } catch(e) { /* FK doesn't exist */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE client_documents DROP FOREIGN KEY client_documents_uploaded_by_users_id_fk`);
+    } catch(e) { /* FK doesn't exist */ }
+    
+    console.log('[AutoMigration] Tables verified/created successfully');
+  } catch (err) {
+    console.error('[AutoMigration] Error:', err);
+  }
+}
+
 async function startServer() {
+  // Run auto-migrations before starting
+  await runAutoMigrations();
+  
   const app = express();
   const server = createServer(app);
   

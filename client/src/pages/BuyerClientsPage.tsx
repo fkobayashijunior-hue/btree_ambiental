@@ -20,7 +20,7 @@ export default function BuyerClientsPage() {
   const [form, setForm] = useState({
     name: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "",
     address: "", city: "", state: "", cep: "", contactPerson: "",
-    product: "", paymentMethod: "", notes: ""
+    product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: ""
   });
   const [editId, setEditId] = useState<number | null>(null);
 
@@ -30,7 +30,7 @@ export default function BuyerClientsPage() {
   const deleteMut = trpc.buyerClients.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Comprador removido!"); } });
 
   function resetForm() {
-    setForm({ name: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "", address: "", city: "", state: "", cep: "", contactPerson: "", product: "", paymentMethod: "", notes: "" });
+    setForm({ name: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "", address: "", city: "", state: "", cep: "", contactPerson: "", product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "" });
     setEditId(null);
   }
 
@@ -40,7 +40,7 @@ export default function BuyerClientsPage() {
       phone: b.phone || "", email: b.email || "", address: b.address || "",
       city: b.city || "", state: b.state || "", cep: b.cep || "",
       contactPerson: b.contactPerson || "", product: b.product || "",
-      paymentMethod: b.paymentMethod || "", notes: b.notes || ""
+      paymentMethod: b.paymentMethod || "", pricePerUnit: b.pricePerUnit || "", unit: b.unit || "ton", notes: b.notes || ""
     });
     setEditId(b.id);
     setFormOpen(true);
@@ -101,6 +101,7 @@ export default function BuyerClientsPage() {
                     {b.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{b.city}-{b.state}</span>}
                   </div>
                   {b.product && <p className="text-xs text-emerald-600 font-medium mt-1">{b.product}</p>}
+                  {b.pricePerUnit && <p className="text-xs text-blue-600 font-semibold">R$ {parseFloat(b.pricePerUnit).toFixed(2)}/{b.unit === 'm3' ? 'm³' : 'ton'}</p>}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={e => { e.stopPropagation(); openEdit(b); }}>
@@ -186,6 +187,25 @@ export default function BuyerClientsPage() {
               <div>
                 <label className="text-sm font-medium">Forma de Pagamento</label>
                 <Input placeholder="Ex: Boleto 30 dias" value={form.paymentMethod} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} />
+              </div>
+            </div>
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-3">
+              <h4 className="text-sm font-semibold text-emerald-700 flex items-center gap-1"><DollarSign className="h-4 w-4" /> Valor de Compra</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Unidade de Medida</label>
+                  <Select value={form.unit} onValueChange={v => setForm(f => ({ ...f, unit: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ton">Tonelada (ton)</SelectItem>
+                      <SelectItem value="m3">Metro Cúbico (m³)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Preço por {form.unit === 'ton' ? 'Tonelada' : 'Metro Cúbico'} (R$)</label>
+                  <Input type="number" step="0.01" placeholder="0.00" value={form.pricePerUnit} onChange={e => setForm(f => ({ ...f, pricePerUnit: e.target.value }))} />
+                </div>
               </div>
             </div>
             <div>

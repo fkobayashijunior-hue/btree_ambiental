@@ -39,6 +39,8 @@ export const buyerClientsRouter = router({
       contactPerson: z.string().optional(),
       product: z.string().optional(),
       paymentMethod: z.string().optional(),
+      pricePerUnit: z.string().optional(),
+      unit: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -46,8 +48,8 @@ export const buyerClientsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       await db.execute(sql`
-        INSERT INTO buyer_clients (name, cnpj_cpf, inscricao_estadual, phone, email, address, city, state, cep, contact_person, product, payment_method, notes, created_at)
-        VALUES (${input.name}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null}, ${input.notes || null}, ${now})
+        INSERT INTO buyer_clients (name, cnpj_cpf, inscricao_estadual, phone, email, address, city, state, cep, contact_person, product, payment_method, price_per_unit, unit, notes, created_at)
+        VALUES (${input.name}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null}, ${input.pricePerUnit || null}, ${input.unit || 'ton'}, ${input.notes || null}, ${now})
       `);
       return { success: true };
     }),
@@ -67,6 +69,8 @@ export const buyerClientsRouter = router({
       contactPerson: z.string().optional(),
       product: z.string().optional(),
       paymentMethod: z.string().optional(),
+      pricePerUnit: z.string().optional(),
+      unit: z.string().optional(),
       notes: z.string().optional(),
       active: z.number().optional(),
     }))
@@ -87,6 +91,8 @@ export const buyerClientsRouter = router({
         contactPerson: data.contactPerson || null,
         product: data.product || null,
         paymentMethod: data.paymentMethod || null,
+        pricePerUnit: data.pricePerUnit || null,
+        unit: data.unit || 'ton',
         notes: data.notes || null,
         active: data.active ?? 1,
       }).where(eq(buyerClients.id, id));

@@ -1050,6 +1050,8 @@ var init_schema = __esm({
       contactPerson: varchar("contact_person", { length: 255 }),
       product: varchar({ length: 255 }),
       paymentMethod: varchar("payment_method", { length: 100 }),
+      pricePerUnit: varchar("price_per_unit", { length: 20 }),
+      unit: varchar({ length: 20 }).default("ton"),
       notes: text(),
       active: tinyint().default(1).notNull(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
@@ -7208,14 +7210,16 @@ var buyerClientsRouter = router({
     contactPerson: z24.string().optional(),
     product: z24.string().optional(),
     paymentMethod: z24.string().optional(),
+    pricePerUnit: z24.string().optional(),
+    unit: z24.string().optional(),
     notes: z24.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.execute(sql14`
-        INSERT INTO buyer_clients (name, cnpj_cpf, inscricao_estadual, phone, email, address, city, state, cep, contact_person, product, payment_method, notes, created_at)
-        VALUES (${input.name}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null}, ${input.notes || null}, ${now})
+        INSERT INTO buyer_clients (name, cnpj_cpf, inscricao_estadual, phone, email, address, city, state, cep, contact_person, product, payment_method, price_per_unit, unit, notes, created_at)
+        VALUES (${input.name}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null}, ${input.pricePerUnit || null}, ${input.unit || "ton"}, ${input.notes || null}, ${now})
       `);
     return { success: true };
   }),
@@ -7233,6 +7237,8 @@ var buyerClientsRouter = router({
     contactPerson: z24.string().optional(),
     product: z24.string().optional(),
     paymentMethod: z24.string().optional(),
+    pricePerUnit: z24.string().optional(),
+    unit: z24.string().optional(),
     notes: z24.string().optional(),
     active: z24.number().optional()
   })).mutation(async ({ input }) => {
@@ -7252,6 +7258,8 @@ var buyerClientsRouter = router({
       contactPerson: data.contactPerson || null,
       product: data.product || null,
       paymentMethod: data.paymentMethod || null,
+      pricePerUnit: data.pricePerUnit || null,
+      unit: data.unit || "ton",
       notes: data.notes || null,
       active: data.active ?? 1
     }).where(eq23(buyerClients.id, id));
@@ -7924,7 +7932,141 @@ function serveStatic(app) {
 }
 
 // server/_core/index.ts
+async function runAutoMigrations() {
+  try {
+    const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+    const db = await getDb2();
+    if (!db) return;
+    await db.execute(
+      /*sql*/
+      `
+      CREATE TABLE IF NOT EXISTS buyer_clients (
+        id int AUTO_INCREMENT NOT NULL,
+        name varchar(255) NOT NULL,
+        cnpj_cpf varchar(30),
+        inscricao_estadual varchar(30),
+        phone varchar(30),
+        email varchar(255),
+        address text,
+        city varchar(100),
+        state varchar(2),
+        cep varchar(10),
+        contact_person varchar(255),
+        product varchar(255),
+        payment_method varchar(100),
+        price_per_unit varchar(20),
+        unit varchar(20) DEFAULT 'ton',
+        notes text,
+        active tinyint NOT NULL DEFAULT 1,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT buyer_clients_id PRIMARY KEY(id)
+      )
+    `
+    );
+    await db.execute(
+      /*sql*/
+      `
+      CREATE TABLE IF NOT EXISTS buyer_price_history (
+        id int AUTO_INCREMENT NOT NULL,
+        buyer_id int NOT NULL,
+        product varchar(255) NOT NULL,
+        price_per_unit varchar(20) NOT NULL,
+        unit varchar(20) NOT NULL DEFAULT 'ton',
+        valid_from varchar(10),
+        valid_until varchar(10),
+        notes text,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT buyer_price_history_id PRIMARY KEY(id)
+      )
+    `
+    );
+    await db.execute(
+      /*sql*/
+      `
+      CREATE TABLE IF NOT EXISTS buyer_payments (
+        id int AUTO_INCREMENT NOT NULL,
+        buyer_id int NOT NULL,
+        amount varchar(20) NOT NULL,
+        payment_date varchar(10) NOT NULL,
+        payment_method varchar(50),
+        invoice_number varchar(50),
+        notes text,
+        status enum('pendente','pago','atrasado') NOT NULL DEFAULT 'pendente',
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT buyer_payments_id PRIMARY KEY(id)
+      )
+    `
+    );
+    await db.execute(
+      /*sql*/
+      `
+      CREATE TABLE IF NOT EXISTS freight_calculations (
+        id int AUTO_INCREMENT NOT NULL,
+        cargo_load_id int,
+        date varchar(10) NOT NULL,
+        vehicle_plate varchar(20),
+        driver_name varchar(255),
+        driver_type enum('proprio','terceirizado') NOT NULL DEFAULT 'proprio',
+        origin varchar(255),
+        destination varchar(255),
+        distance_km varchar(20),
+        fuel_liters varchar(20),
+        fuel_cost_per_liter varchar(20),
+        fuel_total_cost varchar(20),
+        driver_cost varchar(20),
+        toll_cost varchar(20),
+        maintenance_cost varchar(20),
+        other_costs varchar(20),
+        other_costs_description text,
+        total_cost varchar(20),
+        cost_per_km varchar(20),
+        cost_per_ton varchar(20),
+        weight_ton varchar(20),
+        revenue_per_ton varchar(20),
+        total_revenue varchar(20),
+        profit varchar(20),
+        notes text,
+        created_by int,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT freight_calculations_id PRIMARY KEY(id)
+      )
+    `
+    );
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE buyer_clients ADD COLUMN price_per_unit varchar(20)`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE buyer_clients ADD COLUMN unit varchar(20) DEFAULT 'ton'`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE client_documents DROP FOREIGN KEY client_documents_ibfk_1`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE client_documents DROP FOREIGN KEY client_documents_uploaded_by_users_id_fk`
+      );
+    } catch (e) {
+    }
+    console.log("[AutoMigration] Tables verified/created successfully");
+  } catch (err) {
+    console.error("[AutoMigration] Error:", err);
+  }
+}
 async function startServer() {
+  await runAutoMigrations();
   const app = express2();
   const server = createServer(app);
   app.use(cors({

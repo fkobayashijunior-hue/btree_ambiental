@@ -685,6 +685,7 @@ export default function CargoControl() {
   const { data: drivers = [] } = trpc.cargoLoads.listDrivers.useQuery();
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
+  const { data: buyersList = [] } = trpc.buyerClients.list.useQuery();
   const { data: detailCargo } = trpc.cargoLoads.getById.useQuery(
     { id: detailId! }, { enabled: !!detailId }
   );
@@ -1500,22 +1501,40 @@ export default function CargoControl() {
                   value={form.destinationId}
                   onChange={e => {
                     const id = parseInt(e.target.value);
-                    const dest = destinations.find(d => d.id === id) as (typeof destinations[number] & { clientId?: number | null }) | undefined;
-                    const linkedClientId = dest?.clientId;
-                    const linkedClient = linkedClientId ? (clientsList as { id: number; name: string }[]).find(c => c.id === linkedClientId) : null;
-                    setForm(f => ({
-                      ...f,
-                      destinationId: id,
-                      destination: dest?.name || f.destination,
-                      ...(linkedClientId ? { clientId: linkedClientId, clientName: linkedClient?.name || f.clientName } : {}),
-                    }));
+                    // Check if it's a buyer (id >= 10000)
+                    if (id >= 10000) {
+                      const buyerId = id - 10000;
+                      const buyer = (buyersList as any[]).find(b => b.id === buyerId);
+                      setForm(f => ({
+                        ...f,
+                        destinationId: id,
+                        destination: buyer?.name || f.destination,
+                      }));
+                    } else {
+                      const dest = destinations.find(d => d.id === id) as (typeof destinations[number] & { clientId?: number | null }) | undefined;
+                      const linkedClientId = dest?.clientId;
+                      const linkedClient = linkedClientId ? (clientsList as { id: number; name: string }[]).find(c => c.id === linkedClientId) : null;
+                      setForm(f => ({
+                        ...f,
+                        destinationId: id,
+                        destination: dest?.name || f.destination,
+                        ...(linkedClientId ? { clientId: linkedClientId, clientName: linkedClient?.name || f.clientName } : {}),
+                      }));
+                    }
                   }}
                   className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
                 >
                   <option value={0}>Selecionar destino cadastrado...</option>
-                  {destinations.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}</option>
-                  ))}
+                  {destinations.length > 0 && <optgroup label="Destinos">
+                    {destinations.map(d => (
+                      <option key={`dest-${d.id}`} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}</option>
+                    ))}
+                  </optgroup>}
+                  {buyersList.length > 0 && <optgroup label="💰 Compradores">
+                    {buyersList.map((b: any) => (
+                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.name}{b.pricePerUnit ? ` (R$${b.pricePerUnit}/${b.unit === 'm3' ? 'm³' : 'ton'})` : ''}{b.city ? ` — ${b.city}/${b.state}` : ''}</option>
+                    ))}
+                  </optgroup>}
                 </select>
               </div>
               {!form.destinationId && (

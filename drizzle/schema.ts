@@ -962,6 +962,8 @@ export const buyerClients = mysqlTable("buyer_clients", {
   contactPerson: varchar("contact_person", { length: 255 }),
   product: varchar({ length: 255 }),
   paymentMethod: varchar("payment_method", { length: 100 }),
+  pricePerUnit: varchar("price_per_unit", { length: 20 }),
+  unit: varchar({ length: 20 }).default("ton"),
   notes: text(),
   active: tinyint().default(1).notNull(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),

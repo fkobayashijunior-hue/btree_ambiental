@@ -225,6 +225,13 @@
       "when": 1777988590307,
       "tag": "0031_dashing_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1777990936024,
+      "tag": "0032_amazing_vivisector",
+      "breakpoints": true
     }
   ]
 }

@@ -1529,3 +1529,7 @@
 - [x] Controle de Cargas: mostrar peso líquido no resumo (em vez de peso bruto 63.250 kg)
 - [x] Novo módulo: Clientes Destino (compradores de lenha) com histórico de valores e pagamentos
 - [x] Novo módulo: Cálculo de Fretes (combustível, funcionário/terceirizado, km rodado, custo total)
+
+### Features 05/05/2026 (2)
+- [x] Compradores: adicionar campo unidade de medida (m³ ou tonelada) e valor por unidade
+- [x] Controle de Cargas: ao selecionar comprador como destino, mostrar preço no dropdown
