@@ -1533,3 +1533,8 @@
 ### Features 05/05/2026 (2)
 - [x] Compradores: adicionar campo unidade de medida (m³ ou tonelada) e valor por unidade
 - [x] Controle de Cargas: ao selecionar comprador como destino, mostrar preço no dropdown
+
+### Melhorias 05/05/2026 (3)
+- [x] Controle de Cargas: reorganizar campos de peso (Saída Roça, Entrada Cliente, Saída Cliente, Líquido automático)
+- [x] Colaboradores: formatação automática de CPF (000.000.000-00) ao digitar apenas números
+- [x] Colaboradores: formatação automática de telefone ((00) 00000-0000) ao digitar apenas números

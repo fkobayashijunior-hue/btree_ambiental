@@ -747,6 +747,16 @@ export default function CargoControl() {
   const [boletoAmount, setBoletoAmount] = useState('');
   const [boletoDueDate, setBoletoDueDate] = useState('');
 
+  const autoCalcNet = (saidaRoca: string, entradaCliente: string, saidaCliente: string) => {
+    const entrada = parseFloat(entradaCliente) || 0;
+    const saida = parseFloat(saidaCliente) || 0;
+    if (entrada > 0 && saida > 0) {
+      setForm(f => ({ ...f, weightNetKg: String(entrada - saida) }));
+    } else if (parseFloat(saidaRoca) > 0 && saida > 0) {
+      setForm(f => ({ ...f, weightNetKg: String(parseFloat(saidaRoca) - saida) }));
+    }
+  };
+
   const volume = useMemo(() => calcVolume(form.heightM, form.widthM, form.lengthM), [form.heightM, form.widthM, form.lengthM]);
 
   const resetForm = () => {
@@ -1441,22 +1451,23 @@ export default function CargoControl() {
                 </div>
               )}
               <div>
-                <Label className="flex items-center gap-1"><Weight className="h-3.5 w-3.5" /> Peso (kg)</Label>
-                <Input value={form.weightKg} onChange={e => setForm(f => ({ ...f, weightKg: e.target.value }))} placeholder="ex: 15000" type="number" />
+                <Label className="flex items-center gap-1 text-xs text-muted-foreground"><Weight className="h-3.5 w-3.5" /> Saída de Roça (kg) <span className="text-[10px] italic">(se houver pesagem)</span></Label>
+                <Input value={form.weightKg} onChange={e => { setForm(f => ({ ...f, weightKg: e.target.value })); autoCalcNet(e.target.value, form.weightInKg, form.weightOutKg); }} placeholder="ex: 63000" type="number" />
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs">Peso Bruto Saída (kg)</Label>
-                  <Input value={form.weightOutKg} onChange={e => setForm(f => ({ ...f, weightOutKg: e.target.value }))} placeholder="ex: 32000" type="number" />
+                  <Label className="text-xs">Entrada Cliente (kg)</Label>
+                  <Input value={form.weightInKg} onChange={e => { setForm(f => ({ ...f, weightInKg: e.target.value })); autoCalcNet(form.weightKg, e.target.value, form.weightOutKg); }} placeholder="ex: 63000" type="number" />
                 </div>
                 <div>
-                  <Label className="text-xs">Peso Bruto Chegada (kg)</Label>
-                  <Input value={form.weightInKg} onChange={e => setForm(f => ({ ...f, weightInKg: e.target.value }))} placeholder="ex: 32000" type="number" />
+                  <Label className="text-xs">Saída Cliente (kg)</Label>
+                  <Input value={form.weightOutKg} onChange={e => { setForm(f => ({ ...f, weightOutKg: e.target.value })); autoCalcNet(form.weightKg, form.weightInKg, e.target.value); }} placeholder="ex: 21000" type="number" />
                 </div>
-                <div>
-                  <Label className="text-xs">Peso Líquido (kg)</Label>
-                  <Input value={form.weightNetKg} onChange={e => setForm(f => ({ ...f, weightNetKg: e.target.value }))} placeholder="ex: 28000" type="number" />
-                </div>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+                <Label className="text-xs font-semibold text-green-800">Peso Líquido (kg) — calculado automaticamente</Label>
+                <div className="text-lg font-bold text-green-700">{form.weightNetKg ? `${Number(form.weightNetKg).toLocaleString('pt-BR')} kg` : '—'}</div>
+                <p className="text-[10px] text-green-600">Entrada - Saída = Líquido (usado para cálculo de pagamento)</p>
               </div>
               <div>
                 <Label>Nº Nota Fiscal</Label>

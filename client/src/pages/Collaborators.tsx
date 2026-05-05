@@ -10,6 +10,23 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { toast } from "sonner";
 import { UserPlus, Search, Camera, Users, Eye, EyeOff, Lock, ChevronDown, ChevronUp, ImagePlus, X, FileText, Link2, Unlink, MapPin } from "lucide-react";
 
+// Formata CPF: 000.000.000-00
+function formatCPF(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+// Formata telefone: (00) 00000-0000
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 // Comprime imagem para máx 800px e qualidade 0.8 (reduz tamanho do base64)
 function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -360,11 +377,11 @@ export default function Collaborators() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>CPF</Label>
-                    <Input value={form.cpf} onChange={e => setForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" />
+                    <Input value={form.cpf} onChange={e => setForm(f => ({ ...f, cpf: formatCPF(e.target.value) }))} placeholder="000.000.000-00" />
                   </div>
                   <div>
                     <Label>Celular</Label>
-                    <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="(00) 00000-0000" />
+                    <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: formatPhone(e.target.value) }))} placeholder="(00) 00000-0000" />
                   </div>
                 </div>
                 <div>
