@@ -2,7 +2,7 @@
   "name": "BTREE Ambiental",
   "short_name": "BTREE",
   "description": "Sistema de Gestão BTREE Ambiental",
-  "start_url": "/dashboard",
+  "start_url": "/client-portal",
   "id": "btree-ambiental-v4",
   "display": "standalone",
   "background_color": "#0d4f2e",

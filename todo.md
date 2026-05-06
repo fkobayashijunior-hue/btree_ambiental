@@ -1540,3 +1540,4 @@
 - [x] Colaboradores: formatação automática de telefone ((00) 00000-0000) ao digitar apenas números
 
 - [x] Fix: tabela client_documents não existe no banco de produção - erro ao cadastrar documentos para clientes
+- [x] Feature: Banner de instalação PWA no Portal do Cliente (salvar na tela do celular)

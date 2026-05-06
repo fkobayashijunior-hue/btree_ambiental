@@ -1,7 +1,122 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon } from "lucide-react";
+import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone } from "lucide-react";
+
+// ── PWA INSTALL HOOK ──
+function useInstallPrompt() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem('btree_pwa_dismissed') === 'true'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+      return;
+    }
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', () => setIsInstalled(true));
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const install = async () => {
+    if (!deferredPrompt) return false;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+    return outcome === 'accepted';
+  };
+
+  const dismiss = () => {
+    setDismissed(true);
+    try { localStorage.setItem('btree_pwa_dismissed', 'true'); } catch {}
+  };
+
+  return { canInstall: !!deferredPrompt && !isInstalled && !dismissed, isInstalled, install, dismiss };
+}
+
+// ── PWA INSTALL BANNER ──
+function InstallBanner() {
+  const { canInstall, isInstalled, install, dismiss } = useInstallPrompt();
+  const [isIOS, setIsIOS] = useState(false);
+  const [iosDismissed, setIOSDismissed] = useState(() => {
+    try { return localStorage.getItem('btree_ios_dismissed') === 'true'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    setIsIOS(ios);
+  }, []);
+
+  if (isInstalled) return null;
+
+  // iOS: show manual instructions
+  if (isIOS && !iosDismissed) {
+    return (
+      <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-green-200 rounded-2xl p-4 relative">
+        <button
+          onClick={() => { setIOSDismissed(true); try { localStorage.setItem('btree_ios_dismissed', 'true'); } catch {} }}
+          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-[#0d4f2e] flex items-center justify-center flex-shrink-0">
+            <Smartphone className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="font-bold text-gray-900 text-sm">Salvar na Tela Inicial</p>
+            <p className="text-gray-600 text-xs mt-1">
+              Para acesso r\u00e1pido como um app:
+            </p>
+            <ol className="text-gray-600 text-xs mt-2 space-y-1 list-decimal list-inside">
+              <li>Toque no bot\u00e3o <strong>Compartilhar</strong> (\u2191) no Safari</li>
+              <li>Role e toque em <strong>"Adicionar \u00e0 Tela de In\u00edcio"</strong></li>
+              <li>Toque em <strong>"Adicionar"</strong></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Android/Desktop: show install button
+  if (!canInstall) return null;
+
+  return (
+    <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-green-200 rounded-2xl p-4 relative">
+      <button
+        onClick={dismiss}
+        className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+      >
+        <X className="h-4 w-4" />
+      </button>
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-[#0d4f2e] flex items-center justify-center flex-shrink-0">
+          <Download className="h-5 w-5 text-white" />
+        </div>
+        <div className="flex-1">
+          <p className="font-bold text-gray-900 text-sm">Instalar no celular</p>
+          <p className="text-gray-500 text-xs">Acesse mais r\u00e1pido direto da tela inicial</p>
+        </div>
+        <button
+          onClick={install}
+          className="px-4 py-2 bg-[#0d4f2e] text-white text-xs font-bold rounded-xl hover:bg-[#1a5c3a] transition-colors"
+        >
+          Instalar
+        </button>
+      </div>
+    </div>
+  );
+}
 
 type TrackingStatus = "aguardando" | "carregando" | "em_transito" | "pesagem_saida" | "descarregando" | "pesagem_chegada" | "finalizado";
 
@@ -314,6 +429,9 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Banner de instalação PWA */}
+        <InstallBanner />
+
         {/* Cards de resumo */}
         {isLoading ? (
           <div className="grid grid-cols-3 gap-3">
