@@ -42,10 +42,11 @@ function useInstallPrompt() {
   return { canInstall: !!deferredPrompt && !isInstalled && !dismissed, isInstalled, install, dismiss };
 }
 
-// ── PWA INSTALL BANNER ──
+// ── PWA INSTALL BANNER (melhorado) ──
 function InstallBanner() {
   const { canInstall, isInstalled, install, dismiss } = useInstallPrompt();
   const [isIOS, setIsIOS] = useState(false);
+  const [showIOSModal, setShowIOSModal] = useState(false);
   const [iosDismissed, setIOSDismissed] = useState(() => {
     try { return localStorage.getItem('btree_ios_dismissed') === 'true'; } catch { return false; }
   });
@@ -58,62 +59,124 @@ function InstallBanner() {
 
   if (isInstalled) return null;
 
-  // iOS: show manual instructions
+  // iOS: show button that opens modal with visual guide
   if (isIOS && !iosDismissed) {
     return (
-      <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-green-200 rounded-2xl p-4 relative">
+      <>
         <button
-          onClick={() => { setIOSDismissed(true); try { localStorage.setItem('btree_ios_dismissed', 'true'); } catch {} }}
-          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+          onClick={() => setShowIOSModal(true)}
+          className="w-full bg-gradient-to-r from-[#0d4f2e] to-[#1a5c3a] text-white rounded-2xl p-4 shadow-lg active:scale-[0.98] transition-transform"
         >
-          <X className="h-4 w-4" />
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+              <Download className="h-6 w-6 text-white" />
+            </div>
+            <div className="text-left">
+              <p className="font-bold text-base">Salvar na Tela Inicial</p>
+              <p className="text-green-200 text-xs mt-0.5">Acesse rápido como um aplicativo</p>
+            </div>
+          </div>
         </button>
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#0d4f2e] flex items-center justify-center flex-shrink-0">
-            <Smartphone className="h-5 w-5 text-white" />
+
+        {/* Modal com guia visual para iOS */}
+        {showIOSModal && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center" onClick={() => setShowIOSModal(false)}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div
+              className="relative bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-sm mx-4 mb-0 sm:mb-auto shadow-2xl animate-in slide-in-from-bottom duration-300"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => setShowIOSModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0d4f2e] to-[#1a5c3a] flex items-center justify-center mx-auto mb-3 shadow-lg">
+                  <Smartphone className="h-8 w-8 text-white" />
+                </div>
+                <h3 className="font-black text-gray-900 text-lg">Salvar na Tela Inicial</h3>
+                <p className="text-gray-500 text-sm mt-1">Siga os 3 passos abaixo:</p>
+              </div>
+
+              <div className="space-y-4">
+                {/* Passo 1 */}
+                <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">1</div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Toque no botão Compartilhar</p>
+                    <p className="text-gray-500 text-xs mt-0.5">O ícone <span className="inline-block text-blue-500 font-bold text-lg leading-none align-middle">↑</span> na barra do Safari (parte de baixo da tela)</p>
+                  </div>
+                </div>
+
+                {/* Passo 2 */}
+                <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">2</div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Adicionar à Tela de Início</p>
+                    <p className="text-gray-500 text-xs mt-0.5">Role para baixo no menu e toque em <strong>"Adicionar à Tela de Início"</strong> (tem um ícone de <span className="font-bold">+</span>)</p>
+                  </div>
+                </div>
+
+                {/* Passo 3 */}
+                <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
+                  <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">3</div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Confirme tocando "Adicionar"</p>
+                    <p className="text-gray-500 text-xs mt-0.5">Pronto! O app BTREE vai aparecer na sua tela inicial</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 flex gap-2">
+                <button
+                  onClick={() => setShowIOSModal(false)}
+                  className="flex-1 py-3 bg-[#0d4f2e] text-white font-bold rounded-xl text-sm hover:bg-[#1a5c3a] transition-colors"
+                >
+                  Entendi!
+                </button>
+                <button
+                  onClick={() => {
+                    setIOSDismissed(true);
+                    setShowIOSModal(false);
+                    try { localStorage.setItem('btree_ios_dismissed', 'true'); } catch {}
+                  }}
+                  className="px-4 py-3 text-gray-500 text-xs rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  Não mostrar
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="flex-1">
-            <p className="font-bold text-gray-900 text-sm">Salvar na Tela Inicial</p>
-            <p className="text-gray-600 text-xs mt-1">
-              Para acesso r\u00e1pido como um app:
-            </p>
-            <ol className="text-gray-600 text-xs mt-2 space-y-1 list-decimal list-inside">
-              <li>Toque no bot\u00e3o <strong>Compartilhar</strong> (\u2191) no Safari</li>
-              <li>Role e toque em <strong>"Adicionar \u00e0 Tela de In\u00edcio"</strong></li>
-              <li>Toque em <strong>"Adicionar"</strong></li>
-            </ol>
-          </div>
-        </div>
-      </div>
+        )}
+      </>
     );
   }
 
-  // Android/Desktop: show install button
+  // Android/Desktop: show big install button
   if (!canInstall) return null;
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-green-200 rounded-2xl p-4 relative">
+    <div className="relative">
+      <button
+        onClick={install}
+        className="w-full bg-gradient-to-r from-[#0d4f2e] to-[#1a5c3a] text-white rounded-2xl p-4 shadow-lg active:scale-[0.98] transition-transform"
+      >
+        <div className="flex items-center justify-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 animate-pulse">
+            <Download className="h-6 w-6 text-white" />
+          </div>
+          <div className="text-left">
+            <p className="font-bold text-base">Instalar Aplicativo</p>
+            <p className="text-green-200 text-xs mt-0.5">Toque aqui para salvar na tela inicial</p>
+          </div>
+        </div>
+      </button>
       <button
         onClick={dismiss}
-        className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+        className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 shadow"
       >
-        <X className="h-4 w-4" />
+        <X className="h-3 w-3" />
       </button>
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-[#0d4f2e] flex items-center justify-center flex-shrink-0">
-          <Download className="h-5 w-5 text-white" />
-        </div>
-        <div className="flex-1">
-          <p className="font-bold text-gray-900 text-sm">Instalar no celular</p>
-          <p className="text-gray-500 text-xs">Acesse mais r\u00e1pido direto da tela inicial</p>
-        </div>
-        <button
-          onClick={install}
-          className="px-4 py-2 bg-[#0d4f2e] text-white text-xs font-bold rounded-xl hover:bg-[#1a5c3a] transition-colors"
-        >
-          Instalar
-        </button>
-      </div>
     </div>
   );
 }

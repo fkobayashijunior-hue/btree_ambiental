@@ -22,11 +22,48 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+// ── PWA INSTALL HOOK ──
+function useDashboardInstallPrompt() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem('btree_pwa_dismissed_dash') === 'true'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+      return;
+    }
+    const handler = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', () => setIsInstalled(true));
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const install = async () => {
+    if (!deferredPrompt) return false;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+    return outcome === 'accepted';
+  };
+
+  const dismiss = () => {
+    setDismissed(true);
+    try { localStorage.setItem('btree_pwa_dismissed_dash', 'true'); } catch {}
+  };
+
+  const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+  return { canInstall: !!deferredPrompt && !isInstalled && !dismissed, isInstalled, isIOS, install, dismiss };
+}
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Painel", path: "/app", slug: null }, // sempre visível
@@ -131,6 +168,8 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const [didRedirect, setDidRedirect] = useState(false);
+  const { canInstall, isIOS, isInstalled, install, dismiss } = useDashboardInstallPrompt();
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
 
   // Redirecionar motorista para /motorista automaticamente ao logar
   useEffect(() => {
@@ -259,6 +298,26 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3 space-y-3">
+            {/* Botão Instalar App - Android */}
+            {!isCollapsed && canInstall && !isInstalled && (
+              <button
+                onClick={install}
+                className="w-full flex items-center gap-2 px-3 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white text-sm font-medium transition-colors border border-white/20"
+              >
+                <Download className="h-4 w-4 flex-shrink-0" />
+                <span>Instalar App</span>
+              </button>
+            )}
+            {/* Botão Instalar App - iOS */}
+            {!isCollapsed && isIOS && !isInstalled && !canInstall && (
+              <button
+                onClick={() => setShowIOSGuide(true)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white text-sm font-medium transition-colors border border-white/20"
+              >
+                <Smartphone className="h-4 w-4 flex-shrink-0" />
+                <span>Salvar na Tela</span>
+              </button>
+            )}
             {!isCollapsed && (
               <div className="flex items-center justify-center pb-2 border-t border-white/20 pt-3">
                 <button
@@ -418,6 +477,57 @@ function DashboardLayoutContent({
 
         <main className="flex-1 p-4">{children}</main>
       </SidebarInset>
+
+      {/* Modal guia iOS para instalação */}
+      {showIOSGuide && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center" onClick={() => setShowIOSGuide(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-sm mx-4 mb-0 sm:mb-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button onClick={() => setShowIOSGuide(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <X className="h-5 w-5" />
+            </button>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0d4f2e] to-[#1a5c3a] flex items-center justify-center mx-auto mb-3 shadow-lg">
+                <Smartphone className="h-8 w-8 text-white" />
+              </div>
+              <h3 className="font-black text-gray-900 text-lg">Salvar na Tela Inicial</h3>
+              <p className="text-gray-500 text-sm mt-1">Siga os 3 passos abaixo:</p>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">1</div>
+                <div>
+                  <p className="font-semibold text-gray-900 text-sm">Toque no botão Compartilhar</p>
+                  <p className="text-gray-500 text-xs mt-0.5">O ícone <span className="inline-block text-blue-500 font-bold text-lg leading-none align-middle">↑</span> na barra do Safari</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">2</div>
+                <div>
+                  <p className="font-semibold text-gray-900 text-sm">Adicionar à Tela de Início</p>
+                  <p className="text-gray-500 text-xs mt-0.5">Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong></p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
+                <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">3</div>
+                <div>
+                  <p className="font-semibold text-gray-900 text-sm">Confirme tocando "Adicionar"</p>
+                  <p className="text-gray-500 text-xs mt-0.5">Pronto! O app BTREE aparecerá na sua tela</p>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowIOSGuide(false)}
+              className="w-full mt-5 py-3 bg-[#0d4f2e] text-white font-bold rounded-xl text-sm hover:bg-[#1a5c3a] transition-colors"
+            >
+              Entendi!
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
