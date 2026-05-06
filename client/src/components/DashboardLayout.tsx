@@ -171,6 +171,18 @@ function DashboardLayoutContent({
   const { canInstall, isIOS, isInstalled, install, dismiss } = useDashboardInstallPrompt();
   const [showIOSGuide, setShowIOSGuide] = useState(false);
 
+  // Switch manifest to collaborator-specific version
+  useEffect(() => {
+    const link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+    if (link) link.href = '/manifest-equipe.json';
+    const appleIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement;
+    if (appleIcon) appleIcon.href = '/manus-storage/pwa-collaborator-192_835bec4b.png';
+    return () => {
+      if (link) link.href = '/manifest.json';
+      if (appleIcon) appleIcon.href = '/icon-btree-192.png';
+    };
+  }, []);
+
   // Redirecionar motorista para /motorista automaticamente ao logar
   useEffect(() => {
     if (!didRedirect && (profile === 'motorista') && location === '/app' && hasAccess('minha-carga')) {

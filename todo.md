@@ -1541,3 +1541,10 @@
 
 - [x] Fix: tabela client_documents não existe no banco de produção - erro ao cadastrar documentos para clientes
 - [x] Feature: Banner de instalação PWA no Portal do Cliente (salvar na tela do celular)
+
+## 📱 PWA MELHORIAS (06/05/2026)
+
+- [x] Feature: 3 ícones PWA diferentes (site público, colaborador, cliente)
+- [x] Feature: Tela splash com logo BTREE ao abrir pelo ícone
+- [x] Feature: Notificações internas no portal (novos itens desde última visita)
+- [x] Fix: SPA routing já configurado corretamente no servidor Node.js

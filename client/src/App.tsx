@@ -1,4 +1,6 @@
+import { useState, useCallback } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import SplashScreen from "@/components/SplashScreen";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import NotFound from "@/pages/NotFound";
@@ -135,12 +137,18 @@ function Router() {
 }
 
 function App() {
+  // Show splash screen only when opened from PWA (standalone mode)
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  const [showSplash, setShowSplash] = useState(isStandalone);
+  const hideSplash = useCallback(() => setShowSplash(false), []);
+
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <OfflineIndicator />
+          {showSplash && <SplashScreen onFinish={hideSplash} />}
           <Router />
         </TooltipProvider>
       </ThemeProvider>

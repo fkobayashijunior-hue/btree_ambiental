@@ -411,11 +411,42 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
 // ── DASHBOARD DO CLIENTE ──
 function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "pagamentos" | "fechamentos" | "documentos">("cargas");
+  const [showNotification, setShowNotification] = useState(false);
+  const [newItems, setNewItems] = useState({ cargas: 0, docs: 0, fechamentos: 0, pagamentos: 0, replantios: 0 });
 
   const { data, isLoading } = trpc.clientPortal.getPortalData.useQuery(
     { clientId: session.clientId, email: session.clientEmail ?? "" },
     { retry: false }
   );
+
+  // Track last visit and count new items since then
+  useEffect(() => {
+    if (!data || isLoading) return;
+    const storageKey = `btree_last_visit_${session.clientId}`;
+    const lastVisitStr = localStorage.getItem(storageKey);
+    const lastVisit = lastVisitStr ? new Date(lastVisitStr) : null;
+
+    if (lastVisit) {
+      // Count items created after last visit
+      const newCargas = data.loads.filter((l: any) => {
+        const d = l.createdAt || l.date;
+        return d && new Date(d) > lastVisit;
+      }).length;
+      const newDocs = data.documents.filter((d: any) => d.createdAt && new Date(d.createdAt) > lastVisit).length;
+      const newFechamentos = data.weeklyClosings.filter((f: any) => f.createdAt && new Date(f.createdAt) > lastVisit).length;
+      const newPagamentos = data.payments.filter((p: any) => p.createdAt && new Date(p.createdAt) > lastVisit).length;
+      const newReplantios = data.replanting.filter((r: any) => r.createdAt && new Date(r.createdAt) > lastVisit).length;
+
+      const total = newCargas + newDocs + newFechamentos + newPagamentos + newReplantios;
+      if (total > 0) {
+        setNewItems({ cargas: newCargas, docs: newDocs, fechamentos: newFechamentos, pagamentos: newPagamentos, replantios: newReplantios });
+        setShowNotification(true);
+      }
+    }
+
+    // Update last visit to now
+    localStorage.setItem(storageKey, new Date().toISOString());
+  }, [data, isLoading, session.clientId]);
 
   const formatDate = (d: Date | string | null) => {
     if (!d) return "—";
@@ -495,6 +526,53 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
         {/* Banner de instalação PWA */}
         <InstallBanner />
 
+        {/* Notificação de novos itens */}
+        {showNotification && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 relative animate-[slideDown_0.3s_ease-out]">
+            <button
+              onClick={() => setShowNotification(false)}
+              className="absolute top-2 right-2 text-blue-400 hover:text-blue-600 p-1"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+            <div className="flex items-start gap-3">
+              <div className="bg-blue-100 rounded-full p-2 mt-0.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-600"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+              </div>
+              <div>
+                <p className="text-blue-800 font-bold text-sm">Novidades desde sua última visita!</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {newItems.cargas > 0 && (
+                    <button onClick={() => { setActiveTab('cargas'); setShowNotification(false); }} className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full hover:bg-blue-200 transition-colors">
+                      {newItems.cargas} nova{newItems.cargas > 1 ? 's' : ''} carga{newItems.cargas > 1 ? 's' : ''}
+                    </button>
+                  )}
+                  {newItems.docs > 0 && (
+                    <button onClick={() => { setActiveTab('documentos'); setShowNotification(false); }} className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full hover:bg-blue-200 transition-colors">
+                      {newItems.docs} novo{newItems.docs > 1 ? 's' : ''} doc{newItems.docs > 1 ? 's' : ''}
+                    </button>
+                  )}
+                  {newItems.fechamentos > 0 && (
+                    <button onClick={() => { setActiveTab('fechamentos'); setShowNotification(false); }} className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full hover:bg-blue-200 transition-colors">
+                      {newItems.fechamentos} novo{newItems.fechamentos > 1 ? 's' : ''} fechamento{newItems.fechamentos > 1 ? 's' : ''}
+                    </button>
+                  )}
+                  {newItems.pagamentos > 0 && (
+                    <button onClick={() => { setActiveTab('pagamentos'); setShowNotification(false); }} className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full hover:bg-blue-200 transition-colors">
+                      {newItems.pagamentos} novo{newItems.pagamentos > 1 ? 's' : ''} pagamento{newItems.pagamentos > 1 ? 's' : ''}
+                    </button>
+                  )}
+                  {newItems.replantios > 0 && (
+                    <button onClick={() => { setActiveTab('replantio'); setShowNotification(false); }} className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full hover:bg-blue-200 transition-colors">
+                      {newItems.replantios} novo{newItems.replantios > 1 ? 's' : ''} replantio{newItems.replantios > 1 ? 's' : ''}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Cards de resumo */}
         {isLoading ? (
           <div className="grid grid-cols-3 gap-3">
@@ -540,22 +618,27 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="flex border-b border-gray-100 overflow-x-auto scrollbar-hide">
             {[
-              { id: "cargas" as const, label: "Cargas" },
-              { id: "fechamentos" as const, label: "Fechamentos" },
-              { id: "documentos" as const, label: "Docs" },
-              { id: "replantio" as const, label: "Replantio" },
-              { id: "pagamentos" as const, label: "Pagamentos" },
-            ].map(({ id, label }) => (
+              { id: "cargas" as const, label: "Cargas", badge: newItems.cargas },
+              { id: "fechamentos" as const, label: "Fechamentos", badge: newItems.fechamentos },
+              { id: "documentos" as const, label: "Docs", badge: newItems.docs },
+              { id: "replantio" as const, label: "Replantio", badge: newItems.replantios },
+              { id: "pagamentos" as const, label: "Pagamentos", badge: newItems.pagamentos },
+            ].map(({ id, label, badge }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className={`py-3 px-3 text-xs font-semibold transition-colors whitespace-nowrap ${
+                className={`py-3 px-3 text-xs font-semibold transition-colors whitespace-nowrap relative ${
                   activeTab === id
                     ? "text-[#0d4f2e] border-b-2 border-[#0d4f2e] bg-green-50/50"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
                 {label}
+                {badge > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                    {badge}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -1067,7 +1150,30 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
 }
 
 // ── COMPONENTE PRINCIPAL ──
+// Hook to switch manifest based on current area
+function useManifestSwitch(manifestPath: string) {
+  useEffect(() => {
+    const link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+    if (link) {
+      link.href = manifestPath;
+    }
+    // Also update apple-touch-icon for iOS
+    const appleIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement;
+    if (appleIcon && manifestPath === '/manifest-cliente.json') {
+      appleIcon.href = '/manus-storage/pwa-client-192_b5470888.png';
+    }
+    return () => {
+      // Restore default manifest when leaving
+      if (link) link.href = '/manifest.json';
+      if (appleIcon) appleIcon.href = '/icon-btree-192.png';
+    };
+  }, [manifestPath]);
+}
+
 export default function ClientPortal() {
+  // Switch to client-specific manifest for PWA install
+  useManifestSwitch('/manifest-cliente.json');
+
   const [session, setSession] = useState<ClientSession | null>(() => {
     try {
       const saved = localStorage.getItem("btree_client_session");
