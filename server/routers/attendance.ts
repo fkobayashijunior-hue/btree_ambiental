@@ -232,6 +232,17 @@ export const attendanceRouter = router({
         registeredBy: ctx.user.name,
       }).catch(() => {});
 
+      // Notificação interna para Julia (financeiro) - pagamento de diária
+      try {
+        const { notifyFinanceiro } = await import('./notifications');
+        await notifyFinanceiro({
+          type: 'pagamento_diaria',
+          title: `Diária registrada: ${collaboratorName}`,
+          message: `${collaboratorName} - ${dateFormatted} - R$ ${input.dailyValue} (${employmentLabel})`,
+          relatedType: 'attendance',
+        });
+      } catch (e) { /* silent */ }
+
       return { success: true };
     }),
 

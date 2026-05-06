@@ -357,6 +357,21 @@ export const cargoLoadsRouter = router({
         registeredBy: ctx.user.id,
         workLocationId: input.workLocationId || null,
       });
+
+      // Notificação interna para Fábio (ADM/Comercial) - nova carga
+      try {
+        const { notifyAdmComercial } = await import('./notifications');
+        const dateFmt = new Date(input.date).toLocaleDateString('pt-BR');
+        const clientInfo = input.clientName || (input.destination ? `Destino: ${input.destination}` : '');
+        const weightInfo = input.weightNetKg ? `${(parseFloat(input.weightNetKg)/1000).toFixed(2)} ton` : `${input.volumeM3} m³`;
+        await notifyAdmComercial({
+          type: 'fechamento_carga',
+          title: `Nova carga registrada${clientInfo ? ': ' + clientInfo : ''}`,
+          message: `Data: ${dateFmt} | ${weightInfo} | Placa: ${input.vehiclePlate || 'N/I'} | Por: ${ctx.user.name}`,
+          relatedType: 'cargo_load',
+        });
+      } catch (e) { /* silent */ }
+
       return { success: true };
     }),
 
@@ -456,6 +471,23 @@ export const cargoLoadsRouter = router({
         updateData.paidAt = now;
       }
       await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
+
+      // Notificação interna para Julia (financeiro) quando boleto é cadastrado
+      if (input.docType === 'boleto') {
+        try {
+          const { notifyFinanceiro } = await import('./notifications');
+          const amountInfo = input.boletoAmount ? `R$ ${input.boletoAmount}` : 'Valor não informado';
+          const dueInfo = input.boletoDueDate ? new Date(input.boletoDueDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Sem vencimento';
+          await notifyFinanceiro({
+            type: 'pagamento_boleto',
+            title: `Novo boleto cadastrado - Carga #${input.cargoId}`,
+            message: `Valor: ${amountInfo} | Vencimento: ${dueInfo}`,
+            relatedId: input.cargoId,
+            relatedType: 'cargo_load',
+          });
+        } catch (e) { /* silent */ }
+      }
+
       return { url: uploaded.url, success: true };
     }),
 
@@ -912,6 +944,22 @@ export const cargoLoadsRouter = router({
         closedBy: ctx.user.id,
         notes: input.notes,
       });
+
+      // Notificação interna para Fábio (ADM/Comercial) e admins
+      try {
+        const { notifyAdmComercial } = await import('./notifications');
+        const clientName = client?.name || `Cliente #${input.clientId}`;
+        const weekStartFmt = new Date(input.weekStart + 'T12:00:00').toLocaleDateString('pt-BR');
+        const weekEndFmt = new Date(input.weekEnd + 'T12:00:00').toLocaleDateString('pt-BR');
+        await notifyAdmComercial({
+          type: 'fechamento_semanal',
+          title: `Fechamento semanal: ${clientName}`,
+          message: `Período ${weekStartFmt} a ${weekEndFmt} | ${totalLoads} cargas | ${totalWeightTon.toFixed(2)} ton | R$ ${totalAmount}`,
+          relatedId: (result as any).insertId,
+          relatedType: 'weekly_closing',
+        });
+      } catch (e) { /* silent */ }
+
       return { success: true, id: (result as any).insertId, totalLoads, totalWeightKg: totalWeightKg.toFixed(2), totalAmount };
     }),
 

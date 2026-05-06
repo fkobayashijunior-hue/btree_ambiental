@@ -1035,3 +1035,19 @@ export const freightCalculations = mysqlTable("freight_calculations", {
 
 export type FreightCalculation = typeof freightCalculations.$inferSelect;
 export type InsertFreightCalculation = typeof freightCalculations.$inferInsert;
+
+// ===== NOTIFICAÇÕES INTERNAS =====
+export const notifications = mysqlTable("notifications", {
+  id: int().primaryKey().autoincrement(),
+  recipientUserId: int("recipient_user_id").notNull(),
+  type: mysqlEnum(['solicitacao_peca', 'pagamento_boleto', 'pagamento_diaria', 'fechamento_carga', 'fechamento_semanal', 'geral']).default('geral').notNull(),
+  title: varchar({ length: 255 }).notNull(),
+  message: text(),
+  relatedId: int("related_id"),
+  relatedType: varchar("related_type", { length: 50 }),
+  isRead: tinyint("is_read").default(0).notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;

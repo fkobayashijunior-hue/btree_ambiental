@@ -232,6 +232,13 @@
       "when": 1777990936024,
       "tag": "0032_amazing_vivisector",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1778074502044,
+      "tag": "0033_colossal_next_avengers",
+      "breakpoints": true
     }
   ]
 }

@@ -26,6 +26,7 @@ import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, Cl
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { NotificationBell } from './NotificationBell';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // ── PWA INSTALL HOOK ──
@@ -476,6 +477,7 @@ function DashboardLayoutContent({
               <Fuel className="h-4 w-4 text-yellow-600" />
               <span className="text-xs font-medium hidden sm:inline">Abastec.</span>
             </button>
+            <NotificationBell />
             <button
               onClick={() => setLocation("/app")}
               className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent transition-colors flex-shrink-0"

@@ -76,6 +76,18 @@ export const purchaseOrdersRouter = router({
         registeredBy: ctx.user.name,
       }).catch(() => {});
 
+      // Notificação interna para Julia (financeiro) e admins
+      try {
+        const { notifyFinanceiro } = await import('./notifications');
+        await notifyFinanceiro({
+          type: 'solicitacao_peca',
+          title: `Nova solicitação de peças: ${input.title}`,
+          message: `${input.items.length} itens solicitados por ${ctx.user.name}. Itens: ${itemsList}`,
+          relatedId: orderId,
+          relatedType: 'purchase_order',
+        });
+      } catch (e) { /* silent */ }
+
       return { success: true, orderId };
     }),
 

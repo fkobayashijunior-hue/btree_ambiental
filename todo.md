@@ -1548,3 +1548,15 @@
 - [x] Feature: Tela splash com logo BTREE ao abrir pelo ícone
 - [x] Feature: Notificações internas no portal (novos itens desde última visita)
 - [x] Fix: SPA routing já configurado corretamente no servidor Node.js
+
+## 🔔 SISTEMA DE NOTIFICAÇÕES INTERNAS (06/05/2026)
+
+- [x] Schema: tabela notifications (id, tipo, título, mensagem, destinatário, lida, criada_em)
+- [x] Backend: rotas listar, marcar como lida, criar notificação
+- [x] Frontend: sino de notificações no dashboard com badge de não lidas
+- [x] Disparo automático: solicitação de peças → Julia Mary (financeiro)
+- [x] Disparo automático: pagamentos de boletos → Julia Mary (financeiro)
+- [x] Disparo automático: pagamentos de diárias → Julia Mary (financeiro)
+- [x] Disparo automático: fechamento de cargas → Fábio (ADM)
+- [x] Disparo automático: fechamento semanal (Simflor, Fazenda GW, etc.) → Fábio (ADM)
+- [x] Admin recebe todos os alertas
