@@ -1560,3 +1560,7 @@
 - [x] Disparo automático: fechamento de cargas → Fábio (ADM)
 - [x] Disparo automático: fechamento semanal (Simflor, Fazenda GW, etc.) → Fábio (ADM)
 - [x] Admin recebe todos os alertas
+
+- [ ] Fix: Erro ao editar/adicionar local de presença já registrada (colaborador Alessandro)
+
+- [x] Fix: Erro ao editar local de presença já registrada - procedure attendance.updateLocation criada

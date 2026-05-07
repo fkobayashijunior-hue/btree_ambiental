@@ -332,4 +332,38 @@ export const attendanceRouter = router({
 
       return { success: true, count: pendingRecords.length, message: `${pendingRecords.length} pagamento(s) pendente(s) notificados.` };
     }),
+
+  // Atualizar local de uma presença já registrada
+  updateLocation: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      workLocationId: z.number().nullable().optional(),
+      locationName: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      // Resolver workLocationId a partir do locationName se não foi fornecido
+      let resolvedWorkLocationId = input.workLocationId || null;
+      let resolvedLocationName = input.locationName || null;
+
+      if (resolvedLocationName && !resolvedWorkLocationId) {
+        const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq(gpsLocations.name, resolvedLocationName));
+        if (loc) resolvedWorkLocationId = loc.id;
+      }
+
+      // Se temos workLocationId mas não locationName, buscar o nome
+      if (resolvedWorkLocationId && !resolvedLocationName) {
+        const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq(gpsLocations.id, resolvedWorkLocationId));
+        if (loc) resolvedLocationName = loc.name;
+      }
+
+      await db.update(collaboratorAttendance).set({
+        workLocationId: resolvedWorkLocationId,
+        locationName: resolvedLocationName,
+      }).where(eq(collaboratorAttendance.id, input.id));
+
+      return { success: true };
+    }),
 });
