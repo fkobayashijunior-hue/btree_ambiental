@@ -294,7 +294,7 @@ function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE 
 }
 
 // ===== PDF RELATÓRIO COMPLETO POR CLIENTE =====
-function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>) {
+function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>, pricePerTon: number = 0) {
   const totalCargas = cargas.length;
   const totalVolume = cargas.reduce((acc, c) => acc + parseFloat((c.volumeM3 as string) || "0"), 0).toFixed(2);
   const totalPendentes = cargas.filter(c => c.status === "pendente").length;
@@ -303,11 +303,14 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
     const w = parseFloat(((c as any).weightNetKg || "0").replace(",", "."));
     return acc + (isNaN(w) ? 0 : w);
   }, 0);
+  const totalValor = pricePerTon > 0 && totalPesoLiquido > 0 ? (totalPesoLiquido / 1000) * pricePerTon : 0;
 
   const rows = cargas.map(c => {
     const date = c.date ? new Date(c.date as string).toLocaleDateString("pt-BR") : "-";
     const statusLabel = c.status === "entregue" ? "Entregue" : c.status === "cancelado" ? "Cancelado" : "Pendente";
     const statusColor = c.status === "entregue" ? "#166534" : c.status === "cancelado" ? "#991b1b" : "#854d0e";
+    const weightNet = parseFloat(((c as any).weightNetKg || "0").replace(",", "."));
+    const valorCarga = pricePerTon > 0 && weightNet > 0 ? (weightNet / 1000) * pricePerTon : 0;
     return `<tr>
       <td style="font-weight:600;">${date}</td>
       <td>${c.vehiclePlate || c.vehicleName || "-"}</td>
@@ -322,6 +325,7 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
       <td style="text-align:right;">${(c as any).weightInKg || "-"}</td>
       <td style="text-align:right;font-weight:700;">${(c as any).weightNetKg || "-"}</td>
       <td>${c.invoiceNumber || "-"}</td>
+      ${pricePerTon > 0 ? `<td style="text-align:right;font-weight:600;color:#1d4ed8;">${valorCarga > 0 ? "R$ " + valorCarga.toFixed(2) : "-"}</td>` : ""}
       <td style="color:${statusColor};font-weight:600;">${statusLabel}</td>
     </tr>`;
   }).join("");
@@ -350,6 +354,8 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
       <div class="summary-item"><div class="label">Total de Cargas</div><div class="value">${totalCargas}</div></div>
       <div class="summary-item"><div class="label">Volume Total</div><div class="value">${totalVolume} m³</div></div>
       <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? totalPesoLiquido.toLocaleString("pt-BR") + " kg" : "-"}</div></div>
+      ${pricePerTon > 0 ? `<div class="summary-item"><div class="label">Preço/Ton</div><div class="value" style="color:#1d4ed8;">R$ ${pricePerTon.toFixed(0)}</div></div>` : ""}
+      ${totalValor > 0 ? `<div class="summary-item"><div class="label">Valor Total</div><div class="value" style="color:#1d4ed8;">R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>` : ""}
       <div class="summary-item"><div class="label">Entregues</div><div class="value" style="color:#166534;">${totalEntregues}</div></div>
       <div class="summary-item"><div class="label">Pendentes</div><div class="value" style="color:#854d0e;">${totalPendentes}</div></div>
     </div>
@@ -371,6 +377,7 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
           <th style="text-align:right;">P.Cheg.</th>
           <th style="text-align:right;">P.Líq.</th>
           <th>Nota</th>
+          ${pricePerTon > 0 ? `<th style="text-align:right;">Valor</th>` : ""}
           <th>Status</th>
         </tr>
       </thead>
@@ -383,7 +390,9 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
           <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalVolume} m³</td>
           <td colspan="2"></td>
           <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalPesoLiquido > 0 ? totalPesoLiquido.toLocaleString("pt-BR") + " kg" : "-"}</td>
-          <td colspan="2" style="text-align:center;color:#0d4f2e;">${totalCargas} cargas</td>
+          <td></td>
+          ${pricePerTon > 0 ? `<td style="text-align:right;color:#1d4ed8;font-size:13px;">R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ""}
+          <td style="text-align:center;color:#0d4f2e;">${totalCargas} cargas</td>
         </tr>
       </tfoot>
     </table>
@@ -1241,7 +1250,9 @@ export default function CargoControl() {
                         className="ml-auto gap-1.5 text-xs bg-white hover:bg-emerald-50 border-emerald-300 text-emerald-700"
                         onClick={(e) => {
                           e.stopPropagation();
-                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>);
+                          const client = clientsList.find(c => c.id === group.clientId);
+                          const price = parseFloat((client as any)?.pricePerTon || '0');
+                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>, price);
                         }}
                       >
                         <Download className="h-3.5 w-3.5" /> Relatório PDF

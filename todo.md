@@ -1564,3 +1564,4 @@
 - [ ] Fix: Erro ao editar/adicionar local de presença já registrada (colaborador Alessandro)
 
 - [x] Fix: Erro ao editar local de presença já registrada - procedure attendance.updateLocation criada
+- [ ] Adicionar valores (preço/ton, valor da carga, valor total) no PDF de Relatório de Cargas
