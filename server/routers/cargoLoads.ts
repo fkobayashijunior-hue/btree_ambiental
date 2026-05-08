@@ -146,6 +146,7 @@ export const cargoLoadsRouter = router({
           paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
           paymentStatus: cargoLoads.paymentStatus,
           paidAt: cargoLoads.paidAt,
+          humidity: cargoLoads.humidity,
           // Joins
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
@@ -245,6 +246,7 @@ export const cargoLoadsRouter = router({
           paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
           paymentStatus: cargoLoads.paymentStatus,
           paidAt: cargoLoads.paidAt,
+          humidity: cargoLoads.humidity,
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
           vehicleNameJoined: equipment.name,
@@ -345,6 +347,7 @@ export const cargoLoadsRouter = router({
       notes: z.string().optional(),
       status: z.enum(["pendente", "entregue", "cancelado"]).optional(),
       workLocationId: z.number().optional(),
+      humidity: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -403,6 +406,7 @@ export const cargoLoadsRouter = router({
       weightOutKg: z.string().optional(),
       weightInKg: z.string().optional(),
       workLocationId: z.number().optional(),
+      humidity: z.string().optional(),
       invoiceUrl: z.string().optional(),
       boletoUrl: z.string().optional(),
       boletoAmount: z.string().optional(),

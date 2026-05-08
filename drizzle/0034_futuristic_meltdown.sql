@@ -1,0 +1,1 @@
+ALTER TABLE `cargo_loads` ADD `humidity` varchar(20);

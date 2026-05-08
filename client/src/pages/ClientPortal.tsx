@@ -867,6 +867,7 @@ type CargoLoad = {
   weightOutPhotoUrl: string | null;
   weightInPhotoUrl: string | null;
   photosJson: string | null;
+  notes: string | null;
 };
 
 function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string; clientId: number; loadValue?: number }) {
@@ -1046,6 +1047,14 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
                   />
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Observações */}
+          {load.notes && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Observações</p>
+              <p className="text-sm text-amber-900">{load.notes}</p>
             </div>
           )}
 

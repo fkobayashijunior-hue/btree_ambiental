@@ -679,6 +679,7 @@ export default function CargoControl() {
     notes: "",
     status: "pendente" as "pendente" | "entregue" | "cancelado",
     workLocationId: "",
+    humidity: "",
   });
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -694,7 +695,7 @@ export default function CargoControl() {
   const { data: drivers = [] } = trpc.cargoLoads.listDrivers.useQuery();
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
-  const { data: buyersList = [] } = trpc.buyerClients.list.useQuery();
+  const { data: buyersList = [] } = trpc.buyerClients.listActive.useQuery();
   const { data: detailCargo } = trpc.cargoLoads.getById.useQuery(
     { id: detailId! }, { enabled: !!detailId }
   );
@@ -769,7 +770,7 @@ export default function CargoControl() {
   const volume = useMemo(() => calcVolume(form.heightM, form.widthM, form.lengthM), [form.heightM, form.widthM, form.lengthM]);
 
   const resetForm = () => {
-    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: 0, clientName: "", notes: "", status: "pendente", workLocationId: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: 0, clientName: "", notes: "", status: "pendente", workLocationId: "", humidity: "" });
     setPendingPhotos([]);
   };
 
@@ -797,7 +798,11 @@ export default function CargoControl() {
       notes: cargo.notes || "",
       status: cargo.status as "pendente" | "entregue" | "cancelado",
       workLocationId: (cargo as any).workLocationId ? String((cargo as any).workLocationId) : "",
+      humidity: (cargo as any).humidity || "",
     });
+    // Load existing photos when editing
+    const existingPhotos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson); } catch { return []; } })() : [];
+    setPendingPhotos(existingPhotos);
     setIsFormOpen(true);
   };
 
@@ -815,6 +820,7 @@ export default function CargoControl() {
       weightNetKg: form.weightNetKg || undefined,
       photosJson: pendingPhotos.length ? JSON.stringify(pendingPhotos) : undefined,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
+      humidity: form.humidity || undefined,
     };
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
@@ -1588,7 +1594,18 @@ export default function CargoControl() {
                 </select>
               </div>
               <div>
-                <Label>Observações</Label>
+                <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Umidade (%)</Label>
+                  <Input
+                    type="text"
+                    value={form.humidity}
+                    onChange={e => setForm(f => ({ ...f, humidity: e.target.value }))}
+                    placeholder="Ex: 35"
+                  />
+                </div>
+              </div>
+              <Label>Observações</Label>
                 <textarea
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}

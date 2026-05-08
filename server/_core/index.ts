@@ -176,6 +176,12 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE users ADD COLUMN loginMethod varchar(64) NOT NULL DEFAULT 'email'`);
     } catch(e) { /* column already exists */ }
     
+    // Add humidity column to cargo_loads if not exists
+    try {
+      await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN humidity varchar(20)`);
+      console.log('[AutoMigration] Added humidity column to cargo_loads');
+    } catch(e) { /* column already exists */ }
+    
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);

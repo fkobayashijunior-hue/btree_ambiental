@@ -88,8 +88,9 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 		boletoAmount: varchar("boleto_amount", { length: 20 }),
 		boletoDueDate: timestamp("boleto_due_date", { mode: 'string' }),
 		paymentReceiptUrl: text("payment_receipt_url"),
-		paymentStatus: mysqlEnum("payment_status", ['sem_boleto','a_pagar','pago']).default('sem_boleto'),
-		paidAt: timestamp("paid_at", { mode: 'string' }),
+			paymentStatus: mysqlEnum("payment_status", ['sem_boleto','a_pagar','pago']).default('sem_boleto'),
+			paidAt: timestamp("paid_at", { mode: 'string' }),
+			humidity: varchar({ length: 20 }),
 	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {

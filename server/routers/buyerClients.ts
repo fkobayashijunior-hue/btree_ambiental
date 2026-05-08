@@ -13,6 +13,13 @@ export const buyerClientsRouter = router({
     return rows;
   }),
 
+  listActive: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const rows = await db.select().from(buyerClients).where(eq(buyerClients.active, 1)).orderBy(buyerClients.name);
+    return rows;
+  }),
+
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {

@@ -1566,3 +1566,9 @@
 - [x] Fix: Erro ao editar local de presença já registrada - procedure attendance.updateLocation criada
 - [x] Adicionar valores (preço/ton, valor da carga, valor total) no PDF de Relatório de Cargas
 - [x] Adicionar botão 'Área do Cliente' visível no header ao lado de 'Área do Colaborador'
+- [ ] Fotos aparecerem ao editar carga (mostrar fotos já cadastradas no formulário de edição)
+- [ ] Atualização automática após cadastro (invalidate cache em cargas, presenças, gastos)
+- [ ] Campo de umidade (%) na carga
+- [ ] Vincular compradores (destinos) ativos com seleção de destino nas cargas
+- [ ] Campo "Ativo" nos compradores (só ativos aparecem na seleção)
+- [ ] Observações visíveis no Portal do Cliente

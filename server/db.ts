@@ -63,11 +63,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     }
 
     if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
+      (values as any).lastSignedIn = new Date().toISOString().slice(0, 19).replace('T', ' ');
     }
 
     if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
+      updateSet.lastSignedIn = new Date().toISOString().slice(0, 19).replace('T', ' ');
     }
 
     await db.insert(users).values(values).onDuplicateKeyUpdate({
@@ -130,7 +130,7 @@ export async function updateUserPasswordByEmail(email: string, passwordHash: str
   if (existing.length > 0) {
     // Atualizar usuário existente
     await db.update(users)
-      .set({ passwordHash, loginMethod: 'email', role, updatedAt: new Date() })
+      .set({ passwordHash, loginMethod: 'email', role, updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') } as any)
       .where(eq(users.email, email));
     return { action: 'updated' };
   } else {
@@ -141,7 +141,7 @@ export async function updateUserPasswordByEmail(email: string, passwordHash: str
       passwordHash,
       loginMethod: 'email',
       role,
-      lastSignedIn: new Date(),
+      lastSignedIn: new Date().toISOString().slice(0, 19).replace('T', ' ') as any,
     });
     return { action: 'created' };
   }
