@@ -1567,8 +1567,8 @@
 - [x] Adicionar valores (preço/ton, valor da carga, valor total) no PDF de Relatório de Cargas
 - [x] Adicionar botão 'Área do Cliente' visível no header ao lado de 'Área do Colaborador'
 - [ ] Fotos aparecerem ao editar carga (mostrar fotos já cadastradas no formulário de edição)
-- [ ] Atualização automática após cadastro (invalidate cache em cargas, presenças, gastos)
-- [ ] Campo de umidade (%) na carga
+- [x] Atualização automática após cadastro (invalidate cache em cargas, presenças, gastos)
+- [x] Campo de umidade (%) na carga
 - [ ] Vincular compradores (destinos) ativos com seleção de destino nas cargas
 - [ ] Campo "Ativo" nos compradores (só ativos aparecem na seleção)
-- [ ] Observações visíveis no Portal do Cliente
+- [x] Observações visíveis no Portal do Cliente
