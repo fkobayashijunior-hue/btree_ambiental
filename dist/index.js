@@ -8502,6 +8502,28 @@ async function runAutoMigrations() {
       );
     } catch (e) {
     }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE users ADD COLUMN password_hash varchar(255)`
+      );
+      console.log("[AutoMigration] Added password_hash column to users");
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE users ADD COLUMN lastSignedIn timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE users ADD COLUMN loginMethod varchar(64) NOT NULL DEFAULT 'email'`
+      );
+    } catch (e) {
+    }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
     console.error("[AutoMigration] Error:", err);

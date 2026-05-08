@@ -160,6 +160,22 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE client_documents DROP FOREIGN KEY client_documents_client_id_clients_id_fk`);
     } catch(e) { /* FK doesn't exist */ }
     
+    // Add password_hash column to users table if not exists
+    try {
+      await db.execute(/*sql*/`ALTER TABLE users ADD COLUMN password_hash varchar(255)`);
+      console.log('[AutoMigration] Added password_hash column to users');
+    } catch(e) { /* column already exists */ }
+    
+    // Add lastSignedIn column to users table if not exists
+    try {
+      await db.execute(/*sql*/`ALTER TABLE users ADD COLUMN lastSignedIn timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    } catch(e) { /* column already exists */ }
+    
+    // Add loginMethod column to users table if not exists
+    try {
+      await db.execute(/*sql*/`ALTER TABLE users ADD COLUMN loginMethod varchar(64) NOT NULL DEFAULT 'email'`);
+    } catch(e) { /* column already exists */ }
+    
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);
