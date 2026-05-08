@@ -66,13 +66,21 @@ export default function Landing() {
               ))}
               <a
                 href="/client-portal"
-                className="border border-[#2e7d32] text-[#2e7d32] px-5 py-2 rounded-full text-sm font-semibold hover:bg-[#2e7d32]/10 transition-colors"
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors border ${
+                  scrolled
+                    ? "border-[#2e7d32] text-[#2e7d32] hover:bg-[#2e7d32]/10"
+                    : "border-white text-white hover:bg-white/10"
+                }`}
               >
                 Área do Cliente
               </a>
               <a
                 href={getLoginUrl()}
-                className="bg-[#2e7d32] text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-[#1b5e20] transition-colors"
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${
+                  scrolled
+                    ? "bg-[#2e7d32] text-white hover:bg-[#1b5e20]"
+                    : "bg-white text-[#2e7d32] hover:bg-white/90"
+                }`}
               >
                 Área do Colaborador →
               </a>
