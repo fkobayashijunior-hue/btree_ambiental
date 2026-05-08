@@ -1565,4 +1565,4 @@
 
 - [x] Fix: Erro ao editar local de presença já registrada - procedure attendance.updateLocation criada
 - [x] Adicionar valores (preço/ton, valor da carga, valor total) no PDF de Relatório de Cargas
-- [ ] Adicionar botão 'Área do Cliente' visível no header ao lado de 'Área do Colaborador'
+- [x] Adicionar botão 'Área do Cliente' visível no header ao lado de 'Área do Colaborador'
