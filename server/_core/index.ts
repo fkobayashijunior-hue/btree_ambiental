@@ -227,6 +227,19 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE financial_entries ADD COLUMN auto_generated int DEFAULT 0`);
     } catch(e) { /* column already exists */ }
 
+    // Create fuel_price_history table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS fuel_price_history (
+        id int AUTO_INCREMENT NOT NULL,
+        supplier_id int NOT NULL,
+        old_price varchar(20) NOT NULL,
+        new_price varchar(20) NOT NULL,
+        changed_by int,
+        changed_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fuel_price_history_id PRIMARY KEY(id)
+      )
+    `);
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);

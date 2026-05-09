@@ -218,6 +218,7 @@ __export(schema_exports, {
   freightCalculations: () => freightCalculations,
   fuelContainerEvents: () => fuelContainerEvents,
   fuelContainers: () => fuelContainers,
+  fuelPriceHistory: () => fuelPriceHistory,
   fuelRecords: () => fuelRecords,
   fuelSuppliers: () => fuelSuppliers,
   gpsDeviceLinks: () => gpsDeviceLinks,
@@ -247,7 +248,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, timestamp, mysqlEnum, varchar, text, index, tinyint } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -1198,6 +1199,14 @@ var init_schema = __esm({
       notes: text(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    fuelPriceHistory = mysqlTable("fuel_price_history", {
+      id: int().autoincrement().notNull(),
+      supplierId: int("supplier_id").notNull(),
+      oldPrice: varchar("old_price", { length: 20 }).notNull(),
+      newPrice: varchar("new_price", { length: 20 }).notNull(),
+      changedBy: int("changed_by"),
+      changedAt: timestamp("changed_at", { mode: "string" }).defaultNow().notNull()
     });
   }
 });
@@ -8121,8 +8130,45 @@ var fuelSuppliersRouter = router({
     if (data.workLocationId !== void 0) updateData.workLocationId = data.workLocationId;
     if (data.isActive !== void 0) updateData.isActive = data.isActive;
     if (data.notes !== void 0) updateData.notes = data.notes;
+    if (data.pricePerLiter !== void 0) {
+      const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq26(fuelSuppliers.id, id));
+      if (existing && existing.pricePerLiter !== data.pricePerLiter) {
+        await db.insert(fuelPriceHistory).values({
+          supplierId: id,
+          oldPrice: existing.pricePerLiter,
+          newPrice: data.pricePerLiter,
+          changedBy: ctx.user?.id || null
+        });
+      }
+    }
     await db.update(fuelSuppliers).set(updateData).where(eq26(fuelSuppliers.id, id));
     return { success: true };
+  }),
+  priceHistory: protectedProcedure.input(z27.object({ supplierId: z27.number().optional() })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.supplierId) {
+      return db.select().from(fuelPriceHistory).where(eq26(fuelPriceHistory.supplierId, input.supplierId)).orderBy(desc22(fuelPriceHistory.changedAt));
+    }
+    return db.select().from(fuelPriceHistory).orderBy(desc22(fuelPriceHistory.changedAt));
+  }),
+  fuelReport: protectedProcedure.input(z27.object({
+    startDate: z27.string().optional(),
+    endDate: z27.string().optional()
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    const { vehicleRecords: vehicleRecords3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+    const { gte: gte8, lte: lte8 } = await import("drizzle-orm");
+    let conditions = [eq26(vehicleRecords3.recordType, "abastecimento")];
+    if (input.startDate) {
+      conditions.push(gte8(vehicleRecords3.date, input.startDate));
+    }
+    if (input.endDate) {
+      conditions.push(lte8(vehicleRecords3.date, input.endDate));
+    }
+    const records = await db.select().from(vehicleRecords3).where(and15(...conditions)).orderBy(desc22(vehicleRecords3.date));
+    return records;
   }),
   delete: protectedProcedure.input(z27.object({ id: z27.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -8912,6 +8958,20 @@ async function runAutoMigrations() {
       );
     } catch (e) {
     }
+    await db.execute(
+      /*sql*/
+      `
+      CREATE TABLE IF NOT EXISTS fuel_price_history (
+        id int AUTO_INCREMENT NOT NULL,
+        supplier_id int NOT NULL,
+        old_price varchar(20) NOT NULL,
+        new_price varchar(20) NOT NULL,
+        changed_by int,
+        changed_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fuel_price_history_id PRIMARY KEY(id)
+      )
+    `
+    );
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
     console.error("[AutoMigration] Error:", err);

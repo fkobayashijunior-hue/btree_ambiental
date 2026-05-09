@@ -7,7 +7,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Fuel, Edit, Trash2, ToggleLeft, ToggleRight, Building2, Phone, Mail, MapPin, User } from "lucide-react";
+import { Plus, Fuel, Edit, Trash2, ToggleLeft, ToggleRight, Building2, Phone, Mail, MapPin, User, History, TrendingUp, TrendingDown } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 const LOCATION_TYPE_LABELS: Record<string, string> = {
@@ -63,9 +64,16 @@ export default function FuelSuppliersPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(getEmptyForm());
   const [filterLocation, setFilterLocation] = useState<string>("all");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historySupplierId, setHistorySupplierId] = useState<number | null>(null);
+  const [historySupplierName, setHistorySupplierName] = useState("");
 
   const utils = trpc.useUtils();
   const { data: suppliers = [] } = trpc.fuelSuppliers.list.useQuery();
+  const { data: priceHistory = [] } = trpc.fuelSuppliers.priceHistory.useQuery(
+    { supplierId: historySupplierId || undefined },
+    { enabled: historyOpen && !!historySupplierId }
+  );
   const createMut = trpc.fuelSuppliers.create.useMutation({
     onSuccess: () => { utils.fuelSuppliers.list.invalidate(); utils.fuelSuppliers.listActive.invalidate(); setFormOpen(false); resetForm(); toast.success("Fornecedor cadastrado!"); },
     onError: (e) => toast.error(e.message),
@@ -243,6 +251,9 @@ export default function FuelSuppliersPage() {
 
                 {/* Ações */}
                 <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" onClick={() => { setHistorySupplierId(s.id); setHistorySupplierName(s.name); setHistoryOpen(true); }} title="Histórico de Preços">
+                    <History className="h-4 w-4 text-blue-600" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => toggleActive(s)} title={s.isActive ? "Desativar" : "Ativar"}>
                     {s.isActive ? <ToggleRight className="h-5 w-5 text-green-600" /> : <ToggleLeft className="h-5 w-5 text-gray-400" />}
                   </Button>
@@ -374,6 +385,49 @@ export default function FuelSuppliersPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Price History Dialog */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-blue-600" />
+              Histórico de Preços
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">{historySupplierName}</p>
+          </DialogHeader>
+          <div className="space-y-3 mt-4">
+            {(priceHistory as any[]).length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Nenhuma alteração de preço registrada ainda.</p>
+            ) : (
+              (priceHistory as any[]).map((h: any) => {
+                const oldP = parseFloat(h.oldPrice);
+                const newP = parseFloat(h.newPrice);
+                const increased = newP > oldP;
+                return (
+                  <div key={h.id} className="flex items-center justify-between p-3 rounded-lg border bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      {increased ? <TrendingUp className="h-4 w-4 text-red-500" /> : <TrendingDown className="h-4 w-4 text-green-500" />}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm line-through text-muted-foreground">R$ {oldP.toFixed(2)}</span>
+                          <span className="text-sm font-bold">→ R$ {newP.toFixed(2)}</span>
+                        </div>
+                        <span className={`text-xs ${increased ? 'text-red-600' : 'text-green-600'}`}>
+                          {increased ? '+' : ''}{((newP - oldP) / oldP * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {h.changedAt ? new Date(h.changedAt).toLocaleDateString('pt-BR') : ''}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

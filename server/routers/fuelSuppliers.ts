@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { fuelSuppliers } from "../../drizzle/schema";
+import { fuelSuppliers, fuelPriceHistory } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
 
 export const fuelSuppliersRouter = router({
@@ -113,8 +113,55 @@ export const fuelSuppliersRouter = router({
       if (data.workLocationId !== undefined) updateData.workLocationId = data.workLocationId;
       if (data.isActive !== undefined) updateData.isActive = data.isActive;
       if (data.notes !== undefined) updateData.notes = data.notes;
+      // If price changed, record in history
+      if (data.pricePerLiter !== undefined) {
+        const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq(fuelSuppliers.id, id));
+        if (existing && existing.pricePerLiter !== data.pricePerLiter) {
+          await db.insert(fuelPriceHistory).values({
+            supplierId: id,
+            oldPrice: existing.pricePerLiter,
+            newPrice: data.pricePerLiter,
+            changedBy: ctx.user?.id || null,
+          });
+        }
+      }
       await db.update(fuelSuppliers).set(updateData).where(eq(fuelSuppliers.id, id));
       return { success: true };
+    }),
+
+  priceHistory: protectedProcedure
+    .input(z.object({ supplierId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.supplierId) {
+        return db.select().from(fuelPriceHistory)
+          .where(eq(fuelPriceHistory.supplierId, input.supplierId))
+          .orderBy(desc(fuelPriceHistory.changedAt));
+      }
+      return db.select().from(fuelPriceHistory).orderBy(desc(fuelPriceHistory.changedAt));
+    }),
+
+  fuelReport: protectedProcedure
+    .input(z.object({
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Get all vehicle records of type abastecimento
+      const { vehicleRecords } = await import('../../drizzle/schema');
+      const { gte, lte } = await import('drizzle-orm');
+      let conditions: any[] = [eq(vehicleRecords.recordType, 'abastecimento')];
+      if (input.startDate) {
+        conditions.push(gte(vehicleRecords.date, input.startDate));
+      }
+      if (input.endDate) {
+        conditions.push(lte(vehicleRecords.date, input.endDate));
+      }
+      const records = await db.select().from(vehicleRecords).where(and(...conditions)).orderBy(desc(vehicleRecords.date));
+      return records;
     }),
 
   delete: protectedProcedure

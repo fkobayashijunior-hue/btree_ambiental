@@ -1077,3 +1077,12 @@ export const fuelSuppliers = mysqlTable("fuel_suppliers", {
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
+
+export const fuelPriceHistory = mysqlTable("fuel_price_history", {
+	id: int().autoincrement().notNull(),
+	supplierId: int("supplier_id").notNull(),
+	oldPrice: varchar("old_price", { length: 20 }).notNull(),
+	newPrice: varchar("new_price", { length: 20 }).notNull(),
+	changedBy: int("changed_by"),
+	changedAt: timestamp("changed_at", { mode: 'string' }).defaultNow().notNull(),
+});
