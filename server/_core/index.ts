@@ -176,13 +176,22 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE users ADD COLUMN loginMethod varchar(64) NOT NULL DEFAULT 'email'`);
     } catch(e) { /* column already exists */ }
     
-    // Create fuel_suppliers table if not exists
+    // Create fuel_suppliers table if not exists (with complete fields)
     await db.execute(/*sql*/`
       CREATE TABLE IF NOT EXISTS fuel_suppliers (
         id int AUTO_INCREMENT NOT NULL,
         name varchar(255) NOT NULL,
+        trade_name varchar(255),
+        cnpj varchar(20),
+        phone varchar(30),
+        email varchar(255),
+        contact_name varchar(255),
+        address text,
+        city varchar(100),
+        state varchar(2),
         fuel_type enum('diesel','gasolina','etanol','gnv') NOT NULL DEFAULT 'diesel',
         price_per_liter varchar(20) NOT NULL,
+        location_type enum('simflor','astorga','postos') NOT NULL DEFAULT 'simflor',
         location varchar(255),
         work_location_id int,
         is_active tinyint NOT NULL DEFAULT 1,
@@ -192,6 +201,17 @@ async function runAutoMigrations() {
         CONSTRAINT fuel_suppliers_id PRIMARY KEY(id)
       )
     `);
+
+    // Add new columns to fuel_suppliers if they don't exist
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN trade_name varchar(255)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN cnpj varchar(20)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN phone varchar(30)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN email varchar(255)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN contact_name varchar(255)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN address text`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN city varchar(100)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN state varchar(2)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN location_type enum('simflor','astorga','postos') NOT NULL DEFAULT 'simflor'`); } catch(e) {}
 
     // Add humidity column to cargo_loads if not exists
     try {
@@ -206,21 +226,6 @@ async function runAutoMigrations() {
     try {
       await db.execute(/*sql*/`ALTER TABLE financial_entries ADD COLUMN auto_generated int DEFAULT 0`);
     } catch(e) { /* column already exists */ }
-
-    // Create fuel_suppliers table if not exists
-    await db.execute(/*sql*/`
-      CREATE TABLE IF NOT EXISTS fuel_suppliers (
-        id int AUTO_INCREMENT PRIMARY KEY,
-        name varchar(255) NOT NULL,
-        fuel_type enum('diesel','gasolina','etanol','gnv') DEFAULT 'diesel' NOT NULL,
-        price_per_liter varchar(20) NOT NULL,
-        location varchar(255),
-        notes text,
-        is_active int DEFAULT 1 NOT NULL,
-        created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-        updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL
-      )
-    `);
 
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {

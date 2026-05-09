@@ -1581,3 +1581,12 @@
 - [ ] Módulo financeiro: despesas automáticas por carga (preço cliente × peso)
 - [x] Gastos de frete vinculados às viagens de carga
 - [ ] Dashboard financeiro com lucro por carga/cliente/período
+
+## ⛽ REFORMULAÇÃO FORNECEDORES DE COMBUSTÍVEL (09/05/2026)
+
+- [ ] Banco de dados completo de fornecedores (CNPJ, razão social, endereço, cidade, telefone, email, contato)
+- [ ] Campo "Ativo" — só ativa o fornecedor que está fornecendo no momento
+- [ ] Campo "Preço/Litro" atualizado a cada compra
+- [ ] Campo "Local de Abastecimento" (SIMFLOR, Sede Astorga, Postos)
+- [ ] Formulário de abastecimento: se local = SIMFLOR/Astorga → dropdown fornecedores ativos daquele local → preço auto
+- [ ] Formulário de abastecimento: se local = Postos → campo livre para nome do posto e preço manual

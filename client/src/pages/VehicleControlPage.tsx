@@ -37,6 +37,7 @@ const emptyForm = {
   fuelCost: "",
   pricePerLiter: "",
   supplier: "",
+  fuelLocation: "simflor" as "simflor" | "astorga" | "postos",
   odometer: "",
   kmDriven: "",
   maintenanceType: "",
@@ -147,6 +148,7 @@ export default function VehicleControlPage() {
       fuelCost: r.fuelCost || "",
       pricePerLiter: r.pricePerLiter || "",
       supplier: r.supplier || "",
+      fuelLocation: "simflor",
       odometer: r.odometer || "",
       kmDriven: r.kmDriven || "",
       maintenanceType: r.maintenanceType || "",
@@ -738,30 +740,50 @@ export default function VehicleControlPage() {
                     <option value="gnv">GNV</option>
                   </select>
                 </div>
+                {/* Local de Abastecimento */}
                 <div>
-                  <Label>Posto/Fornecedor</Label>
+                  <Label>Local de Abastecimento *</Label>
                   <select
-                    value={form.supplier}
-                    onChange={e => {
-                      const selected = (fuelSuppliersList as any[]).find((s: any) => s.name === e.target.value);
-                      if (selected) {
-                        setForm(f => ({ ...f, supplier: selected.name, pricePerLiter: selected.pricePerLiter }));
-                      } else {
-                        setForm(f => ({ ...f, supplier: e.target.value, pricePerLiter: '' }));
-                      }
-                    }}
+                    value={form.fuelLocation}
+                    onChange={e => setForm(f => ({ ...f, fuelLocation: e.target.value as any, supplier: '', pricePerLiter: '' }))}
                     className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="">— Selecione ou digite —</option>
-                    {(fuelSuppliersList as any[]).map((s: any) => (
-                      <option key={s.id} value={s.name}>{s.name} (R$ {s.pricePerLiter}/L)</option>
-                    ))}
-                    <option value="__outro">Outro (digitar manualmente)</option>
+                    <option value="simflor">SIMFLOR (tanque fazenda)</option>
+                    <option value="astorga">Sede Astorga (tanque sede)</option>
+                    <option value="postos">Postos de Gasolina</option>
                   </select>
-                  {form.supplier === '__outro' && (
-                    <Input className="mt-2" value="" onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do posto" />
-                  )}
                 </div>
+                {/* Fornecedor - dropdown para SIMFLOR/Astorga, campo livre para Postos */}
+                {form.fuelLocation !== "postos" ? (
+                  <div>
+                    <Label>Fornecedor</Label>
+                    <select
+                      value={form.supplier}
+                      onChange={e => {
+                        const selected = (fuelSuppliersList as any[]).find((s: any) => s.name === e.target.value);
+                        if (selected) {
+                          setForm(f => ({ ...f, supplier: selected.name, pricePerLiter: selected.pricePerLiter }));
+                        } else {
+                          setForm(f => ({ ...f, supplier: e.target.value, pricePerLiter: '' }));
+                        }
+                      }}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">— Selecione o fornecedor —</option>
+                      {(fuelSuppliersList as any[]).filter((s: any) => s.locationType === form.fuelLocation).map((s: any) => (
+                        <option key={s.id} value={s.name}>{s.name} (R$ {parseFloat(s.pricePerLiter).toFixed(2)}/L)</option>
+                      ))}
+                    </select>
+                    {(fuelSuppliersList as any[]).filter((s: any) => s.locationType === form.fuelLocation).length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">Nenhum fornecedor ativo cadastrado para este local. Cadastre em Fornecedores de Combustível.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <Label>Nome do Posto</Label>
+                    <Input value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Ex: Posto Shell, Posto Ipiranga..." />
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-3">
                   <div><Label>Litros</Label><Input value={form.liters} onChange={e => {
                     const liters = e.target.value;
@@ -772,9 +794,12 @@ export default function VehicleControlPage() {
                     const price = e.target.value;
                     const total = (parseFloat(form.liters.replace(',', '.')) || 0) * (parseFloat(price.replace(',', '.')) || 0);
                     setForm(f => ({ ...f, pricePerLiter: price, fuelCost: total > 0 ? total.toFixed(2) : '' }));
-                  }} placeholder="0,00" /></div>
-                  <div><Label>Total R$</Label><Input value={form.fuelCost} onChange={e => setForm(f => ({ ...f, fuelCost: e.target.value }))} placeholder="0,00" className="bg-gray-50 font-semibold" /></div>
+                  }} placeholder="0,00" readOnly={form.fuelLocation !== 'postos' && form.supplier !== ''} className={form.fuelLocation !== 'postos' && form.supplier !== '' ? 'bg-green-50 font-semibold' : ''} /></div>
+                  <div><Label>Total R$</Label><Input value={form.fuelCost} onChange={e => setForm(f => ({ ...f, fuelCost: e.target.value }))} placeholder="0,00" className="bg-gray-50 font-semibold" readOnly /></div>
                 </div>
+                {form.fuelLocation !== 'postos' && form.supplier && (
+                  <p className="text-xs text-green-700">Preço preenchido automaticamente pelo cadastro do fornecedor.</p>
+                )}
               </>
             )}
 

@@ -260,6 +260,13 @@
       "when": 1778340298455,
       "tag": "0036_square_echo",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "5",
+      "when": 1778342918300,
+      "tag": "0037_lovely_dagger",
+      "breakpoints": true
     }
   ]
 }
