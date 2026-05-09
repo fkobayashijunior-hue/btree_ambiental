@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkLocations } from "@/hooks/useWorkLocations";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -77,10 +78,25 @@ const emptyForm = {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function AttendanceList() {
-  const { isAdmin, profile } = usePermissions();
+  const { isAdmin, profile, allowedClientIds } = usePermissions();
+  const { locations: myLocations } = useWorkLocations();
   const isLider = profile === "lider";
   // Somente admin vê valores financeiros
   const canSeeFinancial = isAdmin;
+
+  // Local de trabalho padrão para usuários vinculados a um cliente
+  const defaultWorkLocationId = useMemo(() => {
+    if (isAdmin) return "";
+    if (allowedClientIds && allowedClientIds.length >= 1 && myLocations.length > 0) {
+      return String(myLocations[0].id);
+    }
+    return "";
+  }, [isAdmin, allowedClientIds, myLocations]);
+  const defaultLocationName = useMemo(() => {
+    if (!defaultWorkLocationId || myLocations.length === 0) return "";
+    const loc = myLocations.find(l => String(l.id) === defaultWorkLocationId);
+    return loc?.name || "";
+  }, [defaultWorkLocationId, myLocations]);
 
   const [tab, setTab] = useState<"semanal" | "diario" | "mensal" | "periodo">("semanal");
   // ── Seletor de período personalizado ─────────────────────────────────────
@@ -92,6 +108,12 @@ export default function AttendanceList() {
   const [monthRef, setMonthRef] = useState(new Date(_now.getFullYear(), _now.getMonth(), 1));
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
+  // Aplicar local padrão quando defaultWorkLocationId estiver disponível
+  const [defaultApplied, setDefaultApplied] = useState(false);
+  if (!defaultApplied && defaultWorkLocationId && !form.workLocationId) {
+    setForm(f => ({ ...f, workLocationId: defaultWorkLocationId, locationName: defaultLocationName }));
+    setDefaultApplied(true);
+  }
   const [expandedCollab, setExpandedCollab] = useState<Record<number, boolean>>({});
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [gpsStatus, setGpsStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -174,7 +196,7 @@ export default function AttendanceList() {
       toast.success("Presença registrada com sucesso!");
       utils.attendance.list.invalidate();
       setIsOpen(false);
-      setForm({ ...emptyForm });
+      setForm({ ...emptyForm, workLocationId: defaultWorkLocationId, locationName: defaultLocationName });
     },
     onError: (e) => toast.error(e.message || "Erro ao registrar presença"),
   });
@@ -726,7 +748,7 @@ export default function AttendanceList() {
             </Button>
           )}
           <Button
-            onClick={() => { setForm({ ...emptyForm }); setIsOpen(true); }}
+            onClick={() => { setForm({ ...emptyForm, workLocationId: defaultWorkLocationId, locationName: defaultLocationName }); setIsOpen(true); }}
             className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
           >
             <Plus className="h-4 w-4" /> Registrar Presença
@@ -1166,7 +1188,7 @@ export default function AttendanceList() {
       </Tabs>
 
       {/* ─── Sheet de cadastro ───────────────────────────────────────────── */}
-      <Sheet open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) setForm({ ...emptyForm }); }}>
+      <Sheet open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) setForm({ ...emptyForm, workLocationId: defaultWorkLocationId, locationName: defaultLocationName }); }}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-emerald-800">Registrar Presença</SheetTitle>

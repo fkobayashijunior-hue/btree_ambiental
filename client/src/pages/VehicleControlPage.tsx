@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { Car, Plus, Calendar, Camera, X, User, Pencil, ImageIcon, FileDown, FileSpreadsheet, MapPin } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkLocations } from "@/hooks/useWorkLocations";
 
 type RecordType = "abastecimento" | "manutencao" | "km";
 
@@ -65,7 +67,23 @@ export default function VehicleControlPage() {
 
   const { openFilePicker } = useFilePicker();
   const utils = trpc.useUtils();
+  const { allowedClientIds, isAdmin } = usePermissions();
+  const { locations } = useWorkLocations();
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
+  const { data: fuelSuppliersList = [] } = trpc.fuelSuppliers.listActive.useQuery();
+
+  // Auto-selecionar local de trabalho padrão para usuários vinculados a um cliente
+  const defaultWorkLocationId = useMemo(() => {
+    if (isAdmin) return "";
+    if (allowedClientIds && allowedClientIds.length === 1 && locations.length > 0) {
+      // Buscar o local de trabalho vinculado ao cliente do usuário
+      // gpsLocations tem clientId - precisamos buscar pelo backend
+      // Mas como locations já está filtrado para o usuário, pegamos o primeiro
+      const loc = locations[0];
+      if (loc) return String(loc.id);
+    }
+    return "";
+  }, [isAdmin, allowedClientIds, locations]);
   const { data: records = [], isLoading } = trpc.vehicleRecords.list.useQuery({
     equipmentId: filterEquipment ? parseInt(filterEquipment) : undefined,
   });
@@ -112,7 +130,7 @@ export default function VehicleControlPage() {
   });
 
   const resetForm = () => {
-    setForm({ ...emptyForm });
+    setForm({ ...emptyForm, workLocationId: defaultWorkLocationId });
     setPhotoPreview(null);
     setPhotoBase64(null);
     setEditingId(null);
@@ -720,12 +738,43 @@ export default function VehicleControlPage() {
                     <option value="gnv">GNV</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div><Label>Litros</Label><Input value={form.liters} onChange={e => setForm(f => ({ ...f, liters: e.target.value }))} placeholder="0,0" /></div>
-                  <div><Label>Preço/L</Label><Input value={form.pricePerLiter} onChange={e => setForm(f => ({ ...f, pricePerLiter: e.target.value }))} placeholder="0,00" /></div>
-                  <div><Label>Total R$</Label><Input value={form.fuelCost} onChange={e => setForm(f => ({ ...f, fuelCost: e.target.value }))} placeholder="0,00" /></div>
+                <div>
+                  <Label>Posto/Fornecedor</Label>
+                  <select
+                    value={form.supplier}
+                    onChange={e => {
+                      const selected = (fuelSuppliersList as any[]).find((s: any) => s.name === e.target.value);
+                      if (selected) {
+                        setForm(f => ({ ...f, supplier: selected.name, pricePerLiter: selected.pricePerLiter }));
+                      } else {
+                        setForm(f => ({ ...f, supplier: e.target.value, pricePerLiter: '' }));
+                      }
+                    }}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">— Selecione ou digite —</option>
+                    {(fuelSuppliersList as any[]).map((s: any) => (
+                      <option key={s.id} value={s.name}>{s.name} (R$ {s.pricePerLiter}/L)</option>
+                    ))}
+                    <option value="__outro">Outro (digitar manualmente)</option>
+                  </select>
+                  {form.supplier === '__outro' && (
+                    <Input className="mt-2" value="" onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do posto" />
+                  )}
                 </div>
-                <div><Label>Posto/Fornecedor</Label><Input value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do posto" /></div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div><Label>Litros</Label><Input value={form.liters} onChange={e => {
+                    const liters = e.target.value;
+                    const total = (parseFloat(liters.replace(',', '.')) || 0) * (parseFloat(form.pricePerLiter.replace(',', '.')) || 0);
+                    setForm(f => ({ ...f, liters, fuelCost: total > 0 ? total.toFixed(2) : '' }));
+                  }} placeholder="0,0" /></div>
+                  <div><Label>Preço/L</Label><Input value={form.pricePerLiter} onChange={e => {
+                    const price = e.target.value;
+                    const total = (parseFloat(form.liters.replace(',', '.')) || 0) * (parseFloat(price.replace(',', '.')) || 0);
+                    setForm(f => ({ ...f, pricePerLiter: price, fuelCost: total > 0 ? total.toFixed(2) : '' }));
+                  }} placeholder="0,00" /></div>
+                  <div><Label>Total R$</Label><Input value={form.fuelCost} onChange={e => setForm(f => ({ ...f, fuelCost: e.target.value }))} placeholder="0,00" className="bg-gray-50 font-semibold" /></div>
+                </div>
               </>
             )}
 

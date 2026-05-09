@@ -176,6 +176,23 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE users ADD COLUMN loginMethod varchar(64) NOT NULL DEFAULT 'email'`);
     } catch(e) { /* column already exists */ }
     
+    // Create fuel_suppliers table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS fuel_suppliers (
+        id int AUTO_INCREMENT NOT NULL,
+        name varchar(255) NOT NULL,
+        fuel_type enum('diesel','gasolina','etanol','gnv') NOT NULL DEFAULT 'diesel',
+        price_per_liter varchar(20) NOT NULL,
+        location varchar(255),
+        work_location_id int,
+        is_active tinyint NOT NULL DEFAULT 1,
+        notes text,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fuel_suppliers_id PRIMARY KEY(id)
+      )
+    `);
+
     // Add humidity column to cargo_loads if not exists
     try {
       await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN humidity varchar(20)`);

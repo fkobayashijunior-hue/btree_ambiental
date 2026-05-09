@@ -1052,3 +1052,17 @@ export const notifications = mysqlTable("notifications", {
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
+
+// Fornecedores de combustível (diesel, gasolina, etc.)
+export const fuelSuppliers = mysqlTable("fuel_suppliers", {
+	id: int().autoincrement().notNull(),
+	name: varchar({ length: 255 }).notNull(),
+	fuelType: mysqlEnum("fuel_type", ['diesel','gasolina','etanol','gnv']).default('diesel').notNull(),
+	pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
+	location: varchar({ length: 255 }),
+	workLocationId: int("work_location_id"),
+	isActive: tinyint("is_active").default(1).notNull(),
+	notes: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});

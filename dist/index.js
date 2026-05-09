@@ -1,4 +1,4 @@
-import { createRequire } from 'module'; const require = createRequire(import.meta.url);
+import{createRequire}from'module';const require=createRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -46161,6 +46161,7 @@ __export(schema_exports, {
   fuelContainerEvents: () => fuelContainerEvents,
   fuelContainers: () => fuelContainers,
   fuelRecords: () => fuelRecords,
+  fuelSuppliers: () => fuelSuppliers,
   gpsDeviceLinks: () => gpsDeviceLinks,
   gpsHoursLog: () => gpsHoursLog,
   gpsLocations: () => gpsLocations,
@@ -46187,7 +46188,7 @@ __export(schema_exports, {
   users: () => users,
   vehicleRecords: () => vehicleRecords
 });
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers;
 var init_schema2 = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -47116,6 +47117,18 @@ var init_schema2 = __esm({
       relatedType: varchar("related_type", { length: 50 }),
       isRead: tinyint("is_read").default(0).notNull(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
+    });
+    fuelSuppliers = mysqlTable("fuel_suppliers", {
+      id: int2().autoincrement().notNull(),
+      name: varchar({ length: 255 }).notNull(),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "etanol", "gnv"]).default("diesel").notNull(),
+      pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
+      location: varchar({ length: 255 }),
+      workLocationId: int2("work_location_id"),
+      isActive: tinyint("is_active").default(1).notNull(),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
   }
 });
@@ -71333,6 +71346,78 @@ var freightRouter = router({
 
 // server/routers.ts
 init_notifications();
+
+// server/routers/fuelSuppliers.ts
+init_zod();
+init_trpc();
+init_dist();
+init_db2();
+init_schema2();
+init_drizzle_orm();
+var fuelSuppliersRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(fuelSuppliers).orderBy(desc(fuelSuppliers.id));
+  }),
+  listActive: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(fuelSuppliers).where(eq(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
+  }),
+  create: protectedProcedure.input(external_exports.object({
+    name: external_exports.string().min(1),
+    fuelType: external_exports.enum(["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
+    pricePerLiter: external_exports.string().min(1),
+    location: external_exports.string().optional(),
+    workLocationId: external_exports.number().optional(),
+    notes: external_exports.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await db.insert(fuelSuppliers).values({
+      name: input.name,
+      fuelType: input.fuelType,
+      pricePerLiter: input.pricePerLiter,
+      location: input.location || null,
+      workLocationId: input.workLocationId || null,
+      notes: input.notes || null
+    });
+    return { success: true };
+  }),
+  update: protectedProcedure.input(external_exports.object({
+    id: external_exports.number(),
+    name: external_exports.string().min(1).optional(),
+    fuelType: external_exports.enum(["diesel", "gasolina", "etanol", "gnv"]).optional(),
+    pricePerLiter: external_exports.string().optional(),
+    location: external_exports.string().optional(),
+    workLocationId: external_exports.number().nullable().optional(),
+    isActive: external_exports.number().optional(),
+    notes: external_exports.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { id, ...data } = input;
+    const updateData = {};
+    if (data.name !== void 0) updateData.name = data.name;
+    if (data.fuelType !== void 0) updateData.fuelType = data.fuelType;
+    if (data.pricePerLiter !== void 0) updateData.pricePerLiter = data.pricePerLiter;
+    if (data.location !== void 0) updateData.location = data.location;
+    if (data.workLocationId !== void 0) updateData.workLocationId = data.workLocationId;
+    if (data.isActive !== void 0) updateData.isActive = data.isActive;
+    if (data.notes !== void 0) updateData.notes = data.notes;
+    await db.update(fuelSuppliers).set(updateData).where(eq(fuelSuppliers.id, id));
+    return { success: true };
+  }),
+  delete: protectedProcedure.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(fuelSuppliers).where(eq(fuelSuppliers.id, input.id));
+    return { success: true };
+  })
+});
+
+// server/routers.ts
 init_zod();
 
 // node_modules/.pnpm/jose@6.1.0/node_modules/jose/dist/webapi/lib/buffer_utils.js
@@ -72975,6 +73060,7 @@ var appRouter = router({
   buyerClients: buyerClientsRouter,
   freight: freightRouter,
   notifications: notificationsRouter,
+  fuelSuppliers: fuelSuppliersRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
     run: publicProcedure.input(external_exports.object({ key: external_exports.string() })).mutation(async ({ input }) => {
@@ -73373,6 +73459,24 @@ async function runAutoMigrations() {
       );
     } catch (e) {
     }
+    await db.execute(
+      /*sql*/
+      `
+      CREATE TABLE IF NOT EXISTS fuel_suppliers (
+        id int AUTO_INCREMENT NOT NULL,
+        name varchar(255) NOT NULL,
+        fuel_type enum('diesel','gasolina','etanol','gnv') NOT NULL DEFAULT 'diesel',
+        price_per_liter varchar(20) NOT NULL,
+        location varchar(255),
+        work_location_id int,
+        is_active tinyint NOT NULL DEFAULT 1,
+        notes text,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fuel_suppliers_id PRIMARY KEY(id)
+      )
+    `
+    );
     try {
       await db.execute(
         /*sql*/
