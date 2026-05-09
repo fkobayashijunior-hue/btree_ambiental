@@ -11,19 +11,19 @@ import { Plus, Truck, Fuel, Route, DollarSign, Trash2, Edit, TrendingUp, Calcula
 import { toast } from "sonner";
 
 export default function FreightPage() {
-
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(getEmptyForm());
-
   const { data: freights = [], refetch } = trpc.freight.list.useQuery();
   const { data: summary } = trpc.freight.summary.useQuery();
+  const { data: recentCargas = [] } = trpc.cargoLoads.list.useQuery({});
   const createMut = trpc.freight.create.useMutation({ onSuccess: () => { refetch(); setFormOpen(false); resetForm(); toast.success("Frete registrado!"); } });
   const updateMut = trpc.freight.update.useMutation({ onSuccess: () => { refetch(); setFormOpen(false); resetForm(); toast.success("Frete atualizado!"); } });
   const deleteMut = trpc.freight.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Frete removido!"); } });
 
   function getEmptyForm() {
     return {
+      cargoLoadId: undefined as number | undefined,
       date: new Date().toISOString().slice(0, 10),
       vehiclePlate: "", driverName: "", driverType: "proprio" as const,
       origin: "", destination: "", distanceKm: "",
@@ -35,10 +35,30 @@ export default function FreightPage() {
     };
   }
 
+  function linkCarga(cargoId: string) {
+    if (!cargoId || cargoId === 'none') {
+      setForm(f => ({ ...f, cargoLoadId: undefined }));
+      return;
+    }
+    const cargo = (recentCargas as any[]).find((c: any) => c.id === Number(cargoId));
+    if (cargo) {
+      setForm(f => ({
+        ...f,
+        cargoLoadId: cargo.id,
+        date: cargo.date ? new Date(cargo.date).toISOString().slice(0, 10) : f.date,
+        vehiclePlate: cargo.vehiclePlate || cargo.vehicle_plate || f.vehiclePlate,
+        driverName: cargo.driverName || cargo.driver_name || f.driverName,
+        destination: cargo.destination || f.destination,
+        weightTon: cargo.weightNetKg || cargo.weight_net_kg ? (parseFloat(cargo.weightNetKg || cargo.weight_net_kg) / 1000).toFixed(3) : f.weightTon,
+      }));
+    }
+  }
+
   function resetForm() { setForm(getEmptyForm()); setEditId(null); }
 
   function openEdit(f: any) {
     setForm({
+      cargoLoadId: f.cargoLoadId || f.cargo_load_id || undefined,
       date: f.date || "", vehiclePlate: f.vehiclePlate || f.vehicle_plate || "",
       driverName: f.driverName || f.driver_name || "", driverType: f.driverType || f.driver_type || "proprio",
       origin: f.origin || "", destination: f.destination || "",
@@ -199,6 +219,24 @@ export default function FreightPage() {
             <SheetTitle>{editId ? "Editar Frete" : "Novo Cálculo de Frete"}</SheetTitle>
           </SheetHeader>
           <div className="space-y-4 mt-4">
+            {/* Vincular Carga */}
+            <div className="bg-amber-50 p-3 rounded-lg space-y-2">
+              <label className="text-sm font-semibold text-amber-700 flex items-center gap-1">
+                <Truck className="h-4 w-4" /> Vincular a uma Carga (opcional)
+              </label>
+              <Select value={form.cargoLoadId?.toString() || 'none'} onValueChange={linkCarga}>
+                <SelectTrigger><SelectValue placeholder="Selecione uma carga..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Sem vínculo —</SelectItem>
+                  {(recentCargas as any[]).map((c: any) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>
+                      {c.date ? new Date(c.date).toLocaleDateString('pt-BR') : ''} - {c.vehiclePlate || c.vehicle_plate || 'S/P'} - {c.destination || 'S/D'} - {c.weightNetKg || c.weight_net_kg ? (parseFloat(c.weightNetKg || c.weight_net_kg)/1000).toFixed(1) + ' ton' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Dados básicos */}
             <div className="grid grid-cols-2 gap-3">
               <div>

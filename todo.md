@@ -1576,3 +1576,8 @@
 - [ ] Preenchimento automático de preço ao selecionar fornecedor no abastecimento
 - [ ] Cálculo automático do Total (Litros × Preço/L) no formulário de abastecimento
 - [ ] Local de trabalho padrão SIMFLOR para Juliano em todos os formulários
+- [ ] Tela de gerenciamento de fornecedores de combustível (CRUD + ativar/desativar)
+- [ ] Módulo financeiro: receitas automáticas por carga (preço comprador × peso)
+- [ ] Módulo financeiro: despesas automáticas por carga (preço cliente × peso)
+- [ ] Gastos de frete vinculados às viagens de carga
+- [ ] Dashboard financeiro com lucro por carga/cliente/período

@@ -373,7 +373,19 @@ export const cargoLoadsRouter = router({
           message: `Data: ${dateFmt} | ${weightInfo} | Placa: ${input.vehiclePlate || 'N/I'} | Por: ${ctx.user.name}`,
           relatedType: 'cargo_load',
         });
-      } catch (e) { /* silent */ }
+       } catch (e) { /* silent */ }
+
+      // Auto-generate financial entries if cargo is created with status 'entregue'
+      if (input.status === 'entregue' && input.weightNetKg && parseFloat(input.weightNetKg) > 0) {
+        try {
+          const { generateFinancialEntriesForCargo } = await import('../autoFinancial');
+          // Get the just-inserted cargo to have the ID
+          const [newCargo] = await db.select().from(cargoLoads).orderBy(desc(cargoLoads.id)).limit(1);
+          if (newCargo) {
+            await generateFinancialEntriesForCargo(newCargo as any, ctx.user.id, ctx.user.name);
+          }
+        } catch(e) { /* silent */ }
+      }
 
       return { success: true };
     }),
@@ -415,7 +427,7 @@ export const cargoLoadsRouter = router({
       paymentStatus: z.enum(['sem_boleto','a_pagar','pago']).optional(),
       paidAt: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       const { id, date, ...rest } = input;
@@ -424,6 +436,18 @@ export const cargoLoadsRouter = router({
       if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
       if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
       await db.update(cargoLoads).set(updateData).where(eq(cargoLoads.id, id));
+
+      // Auto-generate financial entries when status changes to 'entregue'
+      if (input.status === 'entregue') {
+        try {
+          const { generateFinancialEntriesForCargo } = await import('../autoFinancial');
+          const [cargo] = await db.select().from(cargoLoads).where(eq(cargoLoads.id, id)).limit(1);
+          if (cargo) {
+            await generateFinancialEntriesForCargo(cargo as any, ctx.user.id, ctx.user.name);
+          }
+        } catch(e) { /* silent - don't block update */ }
+      }
+
       return { success: true };
     }),
 
@@ -433,7 +457,7 @@ export const cargoLoadsRouter = router({
       trackingStatus: z.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
       trackingNotes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       await db.update(cargoLoads).set({
@@ -444,6 +468,18 @@ export const cargoLoadsRouter = router({
         // Finalizar carga quando tracking chega em "finalizado"
         status: input.trackingStatus === "finalizado" ? "entregue" : undefined,
       }).where(eq(cargoLoads.id, input.id));
+
+      // Auto-generate financial entries when tracking reaches 'finalizado'
+      if (input.trackingStatus === 'finalizado') {
+        try {
+          const { generateFinancialEntriesForCargo } = await import('../autoFinancial');
+          const [cargo] = await db.select().from(cargoLoads).where(eq(cargoLoads.id, input.id)).limit(1);
+          if (cargo) {
+            await generateFinancialEntriesForCargo(cargo as any, ctx.user.id, ctx.user.name);
+          }
+        } catch(e) { /* silent */ }
+      }
+
       return { success: true };
     }),
 

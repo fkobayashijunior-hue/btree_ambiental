@@ -199,6 +199,29 @@ async function runAutoMigrations() {
       console.log('[AutoMigration] Added humidity column to cargo_loads');
     } catch(e) { /* column already exists */ }
     
+    // Add cargo_load_id and auto_generated columns to financial_entries
+    try {
+      await db.execute(/*sql*/`ALTER TABLE financial_entries ADD COLUMN cargo_load_id int`);
+    } catch(e) { /* column already exists */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE financial_entries ADD COLUMN auto_generated int DEFAULT 0`);
+    } catch(e) { /* column already exists */ }
+
+    // Create fuel_suppliers table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS fuel_suppliers (
+        id int AUTO_INCREMENT PRIMARY KEY,
+        name varchar(255) NOT NULL,
+        fuel_type enum('diesel','gasolina','etanol','gnv') DEFAULT 'diesel' NOT NULL,
+        price_per_liter varchar(20) NOT NULL,
+        location varchar(255),
+        notes text,
+        is_active int DEFAULT 1 NOT NULL,
+        created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL
+      )
+    `);
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);

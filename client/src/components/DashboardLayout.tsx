@@ -76,6 +76,7 @@ const menuItems = [
   { icon: Truck, label: "Controle de Cargas", path: "/cargas", slug: "cargas" },
   { icon: ClipboardList, label: "Controle de Equipamentos", path: "/maquinas", slug: "manutencao" },
   { icon: Car, label: "Controle de Abastecimento", path: "/veiculos", slug: "abastecimento" },
+  { icon: Fuel, label: "Fornecedores Combustível", path: "/fornecedores-combustivel", slug: "fornecedores-combustivel" },
   { icon: Package, label: "Peças e Acessórios", path: "/pecas", slug: "pecas" },
   { icon: Globe, label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente" },
   { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },
