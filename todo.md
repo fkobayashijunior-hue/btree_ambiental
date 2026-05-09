@@ -1572,7 +1572,7 @@
 - [ ] Vincular compradores (destinos) ativos com seleção de destino nas cargas
 - [ ] Campo "Ativo" nos compradores (só ativos aparecem na seleção)
 - [x] Observações visíveis no Portal do Cliente
-- [ ] Cadastro de fornecedores de diesel com preço/litro atualizável
+- [x] Cadastro de fornecedores de diesel com preço/litro atualizável
 - [ ] Preenchimento automático de preço ao selecionar fornecedor no abastecimento
 - [ ] Cálculo automático do Total (Litros × Preço/L) no formulário de abastecimento
 - [ ] Local de trabalho padrão SIMFLOR para Juliano em todos os formulários
