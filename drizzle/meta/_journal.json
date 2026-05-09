@@ -267,6 +267,13 @@
       "when": 1778342918300,
       "tag": "0037_lovely_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1778352746191,
+      "tag": "0038_large_the_executioner",
+      "breakpoints": true
     }
   ]
 }

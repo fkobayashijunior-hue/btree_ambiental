@@ -1591,8 +1591,8 @@
 - [x] Formulário de abastecimento: se local = SIMFLOR/Astorga → dropdown fornecedores ativos daquele local → preço auto
 - [x] Formulário de abastecimento: se local = Postos → campo livre para nome do posto e preço manual
 
-- [ ] Corrigir formulário de fornecedores na Hostinger (deploy desatualizado, formulário simplificado)
-- [ ] SQL seguro com IF NOT EXISTS para produção
-- [ ] Histórico de preços por fornecedor (registrar cada alteração de preço com data)
-- [ ] Relatório PDF de consumo de combustível por local/período
-- [ ] Relatório Excel de consumo de combustível por local/período
+- [x] Corrigir formulário de fornecedores na Hostinger (deploy desatualizado, formulário simplificado)
+- [x] SQL seguro com IF NOT EXISTS para produção
+- [x] Histórico de preços por fornecedor (registrar cada alteração de preço com data)
+- [x] Relatório PDF de consumo de combustível por local/período
+- [x] Relatório Excel de consumo de combustível por local/período
