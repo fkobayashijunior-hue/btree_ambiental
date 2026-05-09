@@ -1584,9 +1584,9 @@
 
 ## ⛽ REFORMULAÇÃO FORNECEDORES DE COMBUSTÍVEL (09/05/2026)
 
-- [ ] Banco de dados completo de fornecedores (CNPJ, razão social, endereço, cidade, telefone, email, contato)
-- [ ] Campo "Ativo" — só ativa o fornecedor que está fornecendo no momento
-- [ ] Campo "Preço/Litro" atualizado a cada compra
-- [ ] Campo "Local de Abastecimento" (SIMFLOR, Sede Astorga, Postos)
-- [ ] Formulário de abastecimento: se local = SIMFLOR/Astorga → dropdown fornecedores ativos daquele local → preço auto
-- [ ] Formulário de abastecimento: se local = Postos → campo livre para nome do posto e preço manual
+- [x] Banco de dados completo de fornecedores (CNPJ, razão social, endereço, cidade, telefone, email, contato)
+- [x] Campo "Ativo" — só ativa o fornecedor que está fornecendo no momento
+- [x] Campo "Preço/Litro" atualizado a cada compra
+- [x] Campo "Local de Abastecimento" (SIMFLOR, Sede Astorga, Postos)
+- [x] Formulário de abastecimento: se local = SIMFLOR/Astorga → dropdown fornecedores ativos daquele local → preço auto
+- [x] Formulário de abastecimento: se local = Postos → campo livre para nome do posto e preço manual
