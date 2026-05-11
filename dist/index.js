@@ -1058,7 +1058,8 @@ var init_schema = __esm({
       maintenanceLocation: varchar("maintenance_location", { length: 255 }),
       photosJson: text("photos_json"),
       photoUrl: text("photo_url"),
-      workLocationId: int("work_location_id")
+      workLocationId: int("work_location_id"),
+      fuelInvoiceId: int("fuel_invoice_id")
     });
     cargoTrackingPhotos = mysqlTable("cargo_tracking_photos", {
       id: int("id").autoincrement().primaryKey(),
@@ -1198,6 +1199,8 @@ var init_schema = __esm({
       workLocationId: int("work_location_id"),
       isActive: tinyint("is_active").default(1).notNull(),
       notes: text(),
+      tankCapacity: varchar("tank_capacity", { length: 20 }),
+      tankAlertThreshold: varchar("tank_alert_threshold", { length: 5 }).default("20"),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
@@ -1230,6 +1233,7 @@ var init_schema = __esm({
       deliveryLocation: varchar("delivery_location", { length: 100 }),
       notes: text(),
       invoicePhotoUrl: text("invoice_photo_url"),
+      litersUsed: varchar("liters_used", { length: 20 }).default("0"),
       registeredBy: int("registered_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
@@ -3883,7 +3887,8 @@ var vehicleRecordsRouter = router({
     driverCollaboratorId: z8.number().optional(),
     photoBase64: z8.string().optional(),
     notes: z8.string().optional(),
-    workLocationId: z8.number().optional()
+    workLocationId: z8.number().optional(),
+    fuelInvoiceId: z8.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -3893,14 +3898,27 @@ var vehicleRecordsRouter = router({
       const result = await cloudinaryUpload2(input.photoBase64, "btree/vehicle-records");
       photoUrl = result.url;
     }
-    const { photoBase64, workLocationId, ...rest } = input;
+    const { photoBase64, workLocationId, fuelInvoiceId, ...rest } = input;
     await db.insert(vehicleRecords).values({
       ...rest,
       date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       photoUrl,
       registeredBy: ctx.user.id,
-      workLocationId: workLocationId || null
+      workLocationId: workLocationId || null,
+      fuelInvoiceId: fuelInvoiceId || null
     });
+    if (fuelInvoiceId && input.liters) {
+      try {
+        const [inv] = await db.select().from(fuelInvoices).where(eq8(fuelInvoices.id, fuelInvoiceId));
+        if (inv) {
+          const currentUsed = parseFloat(inv.litersUsed || "0");
+          const newUsed = currentUsed + parseFloat(input.liters.replace(",", "."));
+          await db.update(fuelInvoices).set({ litersUsed: String(newUsed.toFixed(2)) }).where(eq8(fuelInvoices.id, fuelInvoiceId));
+        }
+      } catch (e) {
+        console.error("Erro ao atualizar litros da NF:", e);
+      }
+    }
     if (input.recordType === "abastecimento") {
       const dateFormatted = new Date(input.date).toLocaleDateString("pt-BR");
       const fuelLabels = { diesel: "Diesel", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV" };
@@ -3941,7 +3959,8 @@ var vehicleRecordsRouter = router({
     driverCollaboratorId: z8.number().optional().nullable(),
     photoBase64: z8.string().optional().nullable(),
     notes: z8.string().optional().nullable(),
-    workLocationId: z8.number().optional().nullable()
+    workLocationId: z8.number().optional().nullable(),
+    fuelInvoiceId: z8.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -8311,7 +8330,9 @@ var fuelSuppliersRouter = router({
     locationType: z27.enum(["simflor", "astorga", "postos"]).default("simflor"),
     location: z27.string().optional(),
     workLocationId: z27.number().optional(),
-    notes: z27.string().optional()
+    notes: z27.string().optional(),
+    tankCapacity: z27.string().optional(),
+    tankAlertThreshold: z27.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
@@ -8330,7 +8351,9 @@ var fuelSuppliersRouter = router({
       locationType: input.locationType,
       location: input.location || null,
       workLocationId: input.workLocationId || null,
-      notes: input.notes || null
+      notes: input.notes || null,
+      tankCapacity: input.tankCapacity || null,
+      tankAlertThreshold: input.tankAlertThreshold || "20"
     });
     return { success: true };
   }),
@@ -8351,7 +8374,9 @@ var fuelSuppliersRouter = router({
     location: z27.string().nullable().optional(),
     workLocationId: z27.number().nullable().optional(),
     isActive: z27.number().optional(),
-    notes: z27.string().nullable().optional()
+    notes: z27.string().nullable().optional(),
+    tankCapacity: z27.string().nullable().optional(),
+    tankAlertThreshold: z27.string().nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
@@ -8373,6 +8398,8 @@ var fuelSuppliersRouter = router({
     if (data.workLocationId !== void 0) updateData.workLocationId = data.workLocationId;
     if (data.isActive !== void 0) updateData.isActive = data.isActive;
     if (data.notes !== void 0) updateData.notes = data.notes;
+    if (data.tankCapacity !== void 0) updateData.tankCapacity = data.tankCapacity;
+    if (data.tankAlertThreshold !== void 0) updateData.tankAlertThreshold = data.tankAlertThreshold;
     if (data.pricePerLiter !== void 0) {
       const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq26(fuelSuppliers.id, id));
       if (existing && existing.pricePerLiter !== data.pricePerLiter) {
@@ -8631,6 +8658,131 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelInvoices).where(eq26(fuelInvoices.id, input.id));
     return { success: true };
+  }),
+  // ===== SALDO DO TANQUE POR LOCAL =====
+  tankStatus: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    const { vehicleRecords: vehicleRecords3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+    const suppliers = await db.select().from(fuelSuppliers).where(and15(eq26(fuelSuppliers.isActive, 1)));
+    const tanksWithCapacity = suppliers.filter((s) => s.tankCapacity && parseFloat(s.tankCapacity) > 0);
+    const results = [];
+    for (const supplier of tanksWithCapacity) {
+      const latestInvoices = await db.select().from(fuelInvoices).where(eq26(fuelInvoices.supplierId, supplier.id)).orderBy(desc22(fuelInvoices.id));
+      const totalDelivered = latestInvoices.reduce((sum, inv) => sum + parseFloat(inv.liters || "0"), 0);
+      const invoiceIds = latestInvoices.map((inv) => inv.id);
+      let totalUsed = 0;
+      if (invoiceIds.length > 0) {
+        totalUsed = latestInvoices.reduce((sum, inv) => sum + parseFloat(inv.litersUsed || "0"), 0);
+      }
+      const unlinkedRecords = await db.select().from(vehicleRecords3).where(and15(
+        eq26(vehicleRecords3.recordType, "abastecimento"),
+        eq26(vehicleRecords3.supplier, supplier.name)
+      ));
+      const unlinkedLiters = unlinkedRecords.filter((r) => !r.fuelInvoiceId).reduce((sum, r) => sum + parseFloat(r.liters || "0"), 0);
+      const capacity = parseFloat(supplier.tankCapacity);
+      const currentLevel = Math.max(0, totalDelivered - totalUsed - unlinkedLiters);
+      const percentage = capacity > 0 ? Math.round(currentLevel / capacity * 100) : 0;
+      const threshold = parseInt(supplier.tankAlertThreshold || "20");
+      const isLow = percentage <= threshold;
+      results.push({
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        tradeName: supplier.tradeName,
+        locationType: supplier.locationType,
+        tankCapacity: capacity,
+        currentLevel: Math.round(currentLevel),
+        percentage: Math.min(100, percentage),
+        threshold,
+        isLow,
+        totalDelivered,
+        totalUsed: totalUsed + unlinkedLiters
+      });
+    }
+    return results;
+  }),
+  // ===== LISTAR NFs ATIVAS (com saldo) PARA VINCULAR NO ABASTECIMENTO =====
+  activeInvoices: protectedProcedure.input(z27.object({ supplierId: z27.number().optional() }).optional()).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    let conditions = [eq26(fuelInvoices.status, "pendente")];
+    if (input?.supplierId) conditions.push(eq26(fuelInvoices.supplierId, input.supplierId));
+    const invoices = await db.select().from(fuelInvoices).where(and15(...conditions)).orderBy(desc22(fuelInvoices.id));
+    const suppliers = await db.select().from(fuelSuppliers);
+    const supplierMap = Object.fromEntries(suppliers.map((s) => [s.id, s]));
+    return invoices.map((inv) => {
+      const totalLiters = parseFloat(inv.liters || "0");
+      const usedLiters = parseFloat(inv.litersUsed || "0");
+      const remainingLiters = Math.max(0, totalLiters - usedLiters);
+      return {
+        ...inv,
+        supplierName: supplierMap[inv.supplierId]?.name || "",
+        remainingLiters,
+        percentUsed: totalLiters > 0 ? Math.round(usedLiters / totalLiters * 100) : 0
+      };
+    }).filter((inv) => {
+      const totalLiters = parseFloat(inv.liters || "0");
+      const usedLiters = parseFloat(inv.litersUsed || "0");
+      return totalLiters === 0 || usedLiters < totalLiters;
+    });
+  }),
+  // ===== VINCULAR ABASTECIMENTO A UMA NF (atualizar liters_used) =====
+  linkFuelingToInvoice: protectedProcedure.input(z27.object({
+    invoiceId: z27.number(),
+    liters: z27.number(),
+    vehicleRecordId: z27.number().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    const [invoice] = await db.select().from(fuelInvoices).where(eq26(fuelInvoices.id, input.invoiceId));
+    if (!invoice) throw new TRPCError17({ code: "NOT_FOUND", message: "NF n\xE3o encontrada" });
+    const currentUsed = parseFloat(invoice.litersUsed || "0");
+    const newUsed = currentUsed + input.liters;
+    await db.update(fuelInvoices).set({
+      litersUsed: newUsed.toFixed(1)
+    }).where(eq26(fuelInvoices.id, input.invoiceId));
+    if (input.vehicleRecordId) {
+      const { vehicleRecords: vehicleRecords3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+      await db.update(vehicleRecords3).set({
+        fuelInvoiceId: input.invoiceId
+      }).where(eq26(vehicleRecords3.id, input.vehicleRecordId));
+    }
+    const [supplier] = await db.select().from(fuelSuppliers).where(eq26(fuelSuppliers.id, invoice.supplierId));
+    if (supplier?.tankCapacity) {
+      const capacity = parseFloat(supplier.tankCapacity);
+      const threshold = parseInt(supplier.tankAlertThreshold || "20");
+      const allInvoices = await db.select().from(fuelInvoices).where(eq26(fuelInvoices.supplierId, supplier.id));
+      const totalDelivered = allInvoices.reduce((s, i) => s + parseFloat(i.liters || "0"), 0);
+      const totalUsedAll = allInvoices.reduce((s, i) => s + parseFloat(i.litersUsed || "0"), 0) - currentUsed + newUsed;
+      const currentLevel = Math.max(0, totalDelivered - totalUsedAll);
+      const percentage = capacity > 0 ? Math.round(currentLevel / capacity * 100) : 100;
+      if (percentage <= threshold) {
+        try {
+          const { notifyFinanceiro: notifyFinanceiro2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+          const locationLabel = supplier.locationType === "simflor" ? "SIMFLOR" : supplier.locationType === "astorga" ? "Sede Astorga" : "Postos";
+          await notifyFinanceiro2({
+            type: "pagamento_boleto",
+            title: `\u{1F6E2}\uFE0F Tanque BAIXO: ${locationLabel}`,
+            message: `O tanque de ${locationLabel} (${supplier.name}) est\xE1 com apenas ${percentage}% \u2014 aproximadamente ${Math.round(currentLevel)}L de ${capacity}L.
+\xC9 necess\xE1rio solicitar nova entrega de combust\xEDvel.`
+          });
+        } catch (e) {
+          console.warn("[TankAlert] Error notifying:", e);
+        }
+        try {
+          const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
+          const locationLabel = supplier.locationType === "simflor" ? "SIMFLOR" : supplier.locationType === "astorga" ? "Sede Astorga" : "Postos";
+          await notifyOwner2({
+            title: `\u{1F6E2}\uFE0F Tanque BAIXO: ${locationLabel} \u2014 ${percentage}%`,
+            content: `O tanque de ${locationLabel} (${supplier.name}) est\xE1 com apenas ${Math.round(currentLevel)}L de ${capacity}L (${percentage}%).
+Solicite nova entrega de combust\xEDvel.`
+          });
+        } catch (e) {
+          console.warn("[TankAlert] Error notifying owner:", e);
+        }
+      }
+    }
+    return { success: true, newUsed };
   })
 });
 
@@ -8748,12 +8900,12 @@ var appRouter = router({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { error: "DB null" };
-        const { sql: sql16 } = await import("drizzle-orm");
-        const [permsRows] = await db.execute(sql16`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
-        const [collabRows] = await db.execute(sql16`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
-        const [countRows] = await db.execute(sql16`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
-        const [colsRows] = await db.execute(sql16`SHOW COLUMNS FROM collaborators`);
-        const [sampleRows] = await db.execute(sql16`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        const { sql: sql17 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql17`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql17`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql17`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql17`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql17`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -9465,6 +9617,34 @@ async function runAutoMigrations() {
       );
     } catch (e) {
       if (!e.message?.includes("Duplicate")) console.log("[AutoMigration] invoice_photo_url:", e.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE vehicle_records ADD COLUMN fuel_invoice_id int`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_suppliers ADD COLUMN tank_capacity varchar(20)`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_suppliers ADD COLUMN tank_alert_threshold varchar(5) DEFAULT '20'`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_invoices ADD COLUMN liters_used varchar(20) DEFAULT '0'`
+      );
+    } catch (e) {
     }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {

@@ -3,7 +3,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { fuelSuppliers, fuelPriceHistory, fuelInvoices } from "../../drizzle/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 
@@ -50,6 +50,8 @@ export const fuelSuppliersRouter = router({
       location: z.string().optional(),
       workLocationId: z.number().optional(),
       notes: z.string().optional(),
+      tankCapacity: z.string().optional(),
+      tankAlertThreshold: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -70,6 +72,8 @@ export const fuelSuppliersRouter = router({
         location: input.location || null,
         workLocationId: input.workLocationId || null,
         notes: input.notes || null,
+        tankCapacity: input.tankCapacity || null,
+        tankAlertThreshold: input.tankAlertThreshold || '20',
       });
       return { success: true };
     }),
@@ -93,6 +97,8 @@ export const fuelSuppliersRouter = router({
       workLocationId: z.number().nullable().optional(),
       isActive: z.number().optional(),
       notes: z.string().nullable().optional(),
+      tankCapacity: z.string().nullable().optional(),
+      tankAlertThreshold: z.string().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -115,6 +121,8 @@ export const fuelSuppliersRouter = router({
       if (data.workLocationId !== undefined) updateData.workLocationId = data.workLocationId;
       if (data.isActive !== undefined) updateData.isActive = data.isActive;
       if (data.notes !== undefined) updateData.notes = data.notes;
+      if (data.tankCapacity !== undefined) updateData.tankCapacity = data.tankCapacity;
+      if (data.tankAlertThreshold !== undefined) updateData.tankAlertThreshold = data.tankAlertThreshold;
       // If price changed, record in history
       if (data.pricePerLiter !== undefined) {
         const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq(fuelSuppliers.id, id));
@@ -409,5 +417,163 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(fuelInvoices).where(eq(fuelInvoices.id, input.id));
       return { success: true };
+    }),
+
+  // ===== SALDO DO TANQUE POR LOCAL =====
+  tankStatus: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { vehicleRecords } = await import('../../drizzle/schema');
+    
+    // Get suppliers with tank capacity (SIMFLOR and Astorga)
+    const suppliers = await db.select().from(fuelSuppliers)
+      .where(and(eq(fuelSuppliers.isActive, 1)));
+    
+    const tanksWithCapacity = suppliers.filter(s => s.tankCapacity && parseFloat(s.tankCapacity) > 0);
+    
+    const results = [];
+    for (const supplier of tanksWithCapacity) {
+      // Get the latest invoice for this supplier (most recent delivery)
+      const latestInvoices = await db.select().from(fuelInvoices)
+        .where(eq(fuelInvoices.supplierId, supplier.id))
+        .orderBy(desc(fuelInvoices.id));
+      
+      // Sum all liters from invoices
+      const totalDelivered = latestInvoices.reduce((sum, inv) => sum + parseFloat(inv.liters || '0'), 0);
+      
+      // Sum all liters used from vehicle records linked to this supplier's invoices
+      const invoiceIds = latestInvoices.map(inv => inv.id);
+      let totalUsed = 0;
+      
+      if (invoiceIds.length > 0) {
+        // Get liters_used from invoices
+        totalUsed = latestInvoices.reduce((sum, inv) => sum + parseFloat(inv.litersUsed || '0'), 0);
+      }
+      
+      // Also count vehicle records that reference this supplier by name but have no invoice link
+      const unlinkedRecords = await db.select().from(vehicleRecords)
+        .where(and(
+          eq(vehicleRecords.recordType, 'abastecimento'),
+          eq(vehicleRecords.supplier, supplier.name)
+        ));
+      const unlinkedLiters = unlinkedRecords
+        .filter(r => !r.fuelInvoiceId)
+        .reduce((sum, r) => sum + parseFloat(r.liters || '0'), 0);
+      
+      const capacity = parseFloat(supplier.tankCapacity!);
+      const currentLevel = Math.max(0, totalDelivered - totalUsed - unlinkedLiters);
+      const percentage = capacity > 0 ? Math.round((currentLevel / capacity) * 100) : 0;
+      const threshold = parseInt(supplier.tankAlertThreshold || '20');
+      const isLow = percentage <= threshold;
+      
+      results.push({
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        tradeName: supplier.tradeName,
+        locationType: supplier.locationType,
+        tankCapacity: capacity,
+        currentLevel: Math.round(currentLevel),
+        percentage: Math.min(100, percentage),
+        threshold,
+        isLow,
+        totalDelivered,
+        totalUsed: totalUsed + unlinkedLiters,
+      });
+    }
+    return results;
+  }),
+
+  // ===== LISTAR NFs ATIVAS (com saldo) PARA VINCULAR NO ABASTECIMENTO =====
+  activeInvoices: protectedProcedure
+    .input(z.object({ supplierId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      let conditions: any[] = [eq(fuelInvoices.status, 'pendente')];
+      if (input?.supplierId) conditions.push(eq(fuelInvoices.supplierId, input.supplierId));
+      const invoices = await db.select().from(fuelInvoices).where(and(...conditions)).orderBy(desc(fuelInvoices.id));
+      const suppliers = await db.select().from(fuelSuppliers);
+      const supplierMap = Object.fromEntries(suppliers.map(s => [s.id, s]));
+      return invoices.map(inv => {
+        const totalLiters = parseFloat(inv.liters || '0');
+        const usedLiters = parseFloat(inv.litersUsed || '0');
+        const remainingLiters = Math.max(0, totalLiters - usedLiters);
+        return {
+          ...inv,
+          supplierName: supplierMap[inv.supplierId]?.name || '',
+          remainingLiters,
+          percentUsed: totalLiters > 0 ? Math.round((usedLiters / totalLiters) * 100) : 0,
+        };
+      }).filter(inv => {
+        const totalLiters = parseFloat(inv.liters || '0');
+        const usedLiters = parseFloat(inv.litersUsed || '0');
+        return totalLiters === 0 || usedLiters < totalLiters; // Only show invoices with remaining liters
+      });
+    }),
+
+  // ===== VINCULAR ABASTECIMENTO A UMA NF (atualizar liters_used) =====
+  linkFuelingToInvoice: protectedProcedure
+    .input(z.object({
+      invoiceId: z.number(),
+      liters: z.number(),
+      vehicleRecordId: z.number().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      
+      // Get current invoice
+      const [invoice] = await db.select().from(fuelInvoices).where(eq(fuelInvoices.id, input.invoiceId));
+      if (!invoice) throw new TRPCError({ code: "NOT_FOUND", message: "NF não encontrada" });
+      
+      const currentUsed = parseFloat(invoice.litersUsed || '0');
+      const newUsed = currentUsed + input.liters;
+      
+      await db.update(fuelInvoices).set({
+        litersUsed: newUsed.toFixed(1),
+      }).where(eq(fuelInvoices.id, input.invoiceId));
+      
+      // Update vehicle record with invoice link if provided
+      if (input.vehicleRecordId) {
+        const { vehicleRecords } = await import('../../drizzle/schema');
+        await db.update(vehicleRecords).set({
+          fuelInvoiceId: input.invoiceId,
+        }).where(eq(vehicleRecords.id, input.vehicleRecordId));
+      }
+      
+      // Check tank level and notify if low
+      const [supplier] = await db.select().from(fuelSuppliers).where(eq(fuelSuppliers.id, invoice.supplierId));
+      if (supplier?.tankCapacity) {
+        const capacity = parseFloat(supplier.tankCapacity);
+        const threshold = parseInt(supplier.tankAlertThreshold || '20');
+        // Calculate approximate tank level
+        const allInvoices = await db.select().from(fuelInvoices).where(eq(fuelInvoices.supplierId, supplier.id));
+        const totalDelivered = allInvoices.reduce((s, i) => s + parseFloat(i.liters || '0'), 0);
+        const totalUsedAll = allInvoices.reduce((s, i) => s + parseFloat(i.litersUsed || '0'), 0) - currentUsed + newUsed;
+        const currentLevel = Math.max(0, totalDelivered - totalUsedAll);
+        const percentage = capacity > 0 ? Math.round((currentLevel / capacity) * 100) : 100;
+        
+        if (percentage <= threshold) {
+          try {
+            const { notifyFinanceiro } = await import('./notifications');
+            const locationLabel = supplier.locationType === 'simflor' ? 'SIMFLOR' : supplier.locationType === 'astorga' ? 'Sede Astorga' : 'Postos';
+            await notifyFinanceiro({
+              type: 'pagamento_boleto',
+              title: `🛢️ Tanque BAIXO: ${locationLabel}`,
+              message: `O tanque de ${locationLabel} (${supplier.name}) está com apenas ${percentage}% — aproximadamente ${Math.round(currentLevel)}L de ${capacity}L.\nÉ necessário solicitar nova entrega de combustível.`,
+            });
+          } catch (e) { console.warn('[TankAlert] Error notifying:', e); }
+          try {
+            const { notifyOwner } = await import('../_core/notification');
+            const locationLabel = supplier.locationType === 'simflor' ? 'SIMFLOR' : supplier.locationType === 'astorga' ? 'Sede Astorga' : 'Postos';
+            await notifyOwner({
+              title: `🛢️ Tanque BAIXO: ${locationLabel} — ${percentage}%`,
+              content: `O tanque de ${locationLabel} (${supplier.name}) está com apenas ${Math.round(currentLevel)}L de ${capacity}L (${percentage}%).\nSolicite nova entrega de combustível.`,
+            });
+          } catch (e) { console.warn('[TankAlert] Error notifying owner:', e); }
+        }
+      }
+      
+      return { success: true, newUsed };
     }),
 });

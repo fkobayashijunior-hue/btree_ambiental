@@ -46,6 +46,7 @@ const emptyForm = {
   mechanicName: "",
   notes: "",
   workLocationId: "",
+  fuelInvoiceId: "",
 };
 
 // Meses em português
@@ -76,6 +77,7 @@ export default function VehicleControlPage() {
   const { locations } = useWorkLocations();
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
   const { data: fuelSuppliersList = [] } = trpc.fuelSuppliers.listActive.useQuery();
+  const { data: invoicesList = [] } = trpc.fuelSuppliers.listInvoices.useQuery();
 
   // Auto-selecionar local de trabalho padrão para usuários vinculados a um cliente
   const defaultWorkLocationId = useMemo(() => {
@@ -176,6 +178,7 @@ export default function VehicleControlPage() {
       mechanicName: r.mechanicName || "",
       notes: r.notes || "",
       workLocationId: r.workLocationId ? String(r.workLocationId) : "",
+      fuelInvoiceId: r.fuelInvoiceId ? String(r.fuelInvoiceId) : "",
     });
     setPhotoPreview(r.photoUrl || null);
     setPhotoBase64(null);
@@ -220,6 +223,7 @@ export default function VehicleControlPage() {
       notes: form.notes || undefined,
       photoBase64: photoBase64 || undefined,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
+      fuelInvoiceId: form.fuelInvoiceId ? parseInt(form.fuelInvoiceId) : undefined,
     };
 
     if (editingId) {
@@ -886,6 +890,39 @@ export default function VehicleControlPage() {
                 {form.fuelLocation !== 'postos' && form.supplier && (
                   <p className="text-xs text-green-700">Preço preenchido automaticamente pelo cadastro do fornecedor.</p>
                 )}
+                {/* Vincular à Nota Fiscal */}
+                {form.fuelLocation !== 'postos' && (() => {
+                  const availableInvoices = (invoicesList as any[]).filter((inv: any) => {
+                    if (inv.status === 'cancelado') return false;
+                    const supplier = (fuelSuppliersList as any[]).find((s: any) => s.name === form.supplier);
+                    if (!supplier) return false;
+                    if (inv.supplierId !== supplier.id) return false;
+                    if (!inv.liters) return true;
+                    const remaining = parseFloat(inv.liters) - parseFloat(inv.litersUsed || '0');
+                    return remaining > 0;
+                  });
+                  return availableInvoices.length > 0 ? (
+                    <div>
+                      <Label className="flex items-center gap-1"><FileDown className="h-3 w-3" /> Vincular à Nota Fiscal</Label>
+                      <select
+                        value={form.fuelInvoiceId}
+                        onChange={e => setForm(f => ({ ...f, fuelInvoiceId: e.target.value }))}
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">— Sem vinculação —</option>
+                        {availableInvoices.map((inv: any) => {
+                          const remaining = inv.liters ? Math.max(0, parseFloat(inv.liters) - parseFloat(inv.litersUsed || '0')).toFixed(0) : '?';
+                          return (
+                            <option key={inv.id} value={inv.id}>
+                              NF {inv.invoiceNumber} — {inv.invoiceDate ? inv.invoiceDate.split('-').reverse().join('/') : ''} — Saldo: {remaining}L
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <p className="text-xs text-blue-600 mt-1">Os litros abastecidos serão abatidos do saldo da NF selecionada.</p>
+                    </div>
+                  ) : null;
+                })()}
               </>
             )}
 

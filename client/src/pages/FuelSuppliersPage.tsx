@@ -56,6 +56,8 @@ function getEmptyForm() {
     pricePerLiter: "",
     locationType: "simflor" as "simflor" | "astorga" | "postos",
     notes: "",
+    tankCapacity: "",
+    tankAlertThreshold: "20",
   };
 }
 
@@ -104,6 +106,8 @@ export default function FuelSuppliersPage() {
       pricePerLiter: s.pricePerLiter || "",
       locationType: s.locationType || "simflor",
       notes: s.notes || "",
+      tankCapacity: s.tankCapacity || "",
+      tankAlertThreshold: s.tankAlertThreshold || "20",
     });
     setEditId(s.id);
     setFormOpen(true);
@@ -128,6 +132,8 @@ export default function FuelSuppliersPage() {
       pricePerLiter: form.pricePerLiter,
       locationType: form.locationType,
       notes: form.notes || undefined,
+      tankCapacity: form.tankCapacity || undefined,
+      tankAlertThreshold: form.tankAlertThreshold || undefined,
     };
     if (editId) {
       updateMut.mutate({ id: editId, ...payload });
@@ -372,6 +378,29 @@ export default function FuelSuppliersPage() {
                 {form.locationType === "postos" && "Abastecimento feito em postos de gasolina (campo livre no formulário)"}
               </p>
             </div>
+
+            {/* Seção: Tanque (apenas para SIMFLOR e Astorga) */}
+            {(form.locationType === "simflor" || form.locationType === "astorga") && (
+              <>
+                <div className="border-b pb-2 mb-2 mt-4">
+                  <h3 className="text-sm font-semibold text-green-800 uppercase tracking-wide">Configuração do Tanque</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">Capacidade do Tanque (L)</label>
+                    <Input type="number" value={form.tankCapacity} onChange={e => setForm({ ...form, tankCapacity: e.target.value })} placeholder="Ex: 3000" />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {form.locationType === "simflor" ? "SIMFLOR: 3.000L" : "Astorga: 1.000L"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Alerta quando abaixo de (%)</label>
+                    <Input type="number" min="5" max="50" value={form.tankAlertThreshold} onChange={e => setForm({ ...form, tankAlertThreshold: e.target.value })} placeholder="20" />
+                    <p className="text-xs text-muted-foreground mt-1">Notifica quando o tanque atingir este %</p>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Observações */}
             <div className="mt-4">

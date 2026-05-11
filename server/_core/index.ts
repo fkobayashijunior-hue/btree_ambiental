@@ -274,6 +274,24 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE fuel_invoices ADD COLUMN invoice_photo_url text`);
     } catch(e: any) { if (!e.message?.includes('Duplicate')) console.log('[AutoMigration] invoice_photo_url:', e.message); }
 
+    // Add fuel_invoice_id column to vehicle_records for linking fueling to invoices
+    try {
+      await db.execute(/*sql*/`ALTER TABLE vehicle_records ADD COLUMN fuel_invoice_id int`);
+    } catch(e) { /* column already exists */ }
+
+    // Add tank_capacity and tank_alert_threshold to fuel_suppliers for tank level monitoring
+    try {
+      await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN tank_capacity varchar(20)`);
+    } catch(e) { /* column already exists */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN tank_alert_threshold varchar(5) DEFAULT '20'`);
+    } catch(e) { /* column already exists */ }
+
+    // Add liters_used column to fuel_invoices to track consumed liters
+    try {
+      await db.execute(/*sql*/`ALTER TABLE fuel_invoices ADD COLUMN liters_used varchar(20) DEFAULT '0'`);
+    } catch(e) { /* column already exists */ }
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);

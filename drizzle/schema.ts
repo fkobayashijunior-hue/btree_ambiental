@@ -847,6 +847,7 @@ export const vehicleRecords = mysqlTable("vehicle_records", {
 	photosJson: text("photos_json"),
 	photoUrl: text("photo_url"),
 	workLocationId: int("work_location_id"),
+	fuelInvoiceId: int("fuel_invoice_id"),
 });
 
 
@@ -1074,6 +1075,8 @@ export const fuelSuppliers = mysqlTable("fuel_suppliers", {
 	workLocationId: int("work_location_id"),
 	isActive: tinyint("is_active").default(1).notNull(),
 	notes: text(),
+	tankCapacity: varchar("tank_capacity", { length: 20 }),
+	tankAlertThreshold: varchar("tank_alert_threshold", { length: 5 }).default('20'),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
@@ -1108,6 +1111,7 @@ export const fuelInvoices = mysqlTable("fuel_invoices", {
 	deliveryLocation: varchar("delivery_location", { length: 100 }),
 	notes: text(),
 	invoicePhotoUrl: text("invoice_photo_url"),
+	litersUsed: varchar("liters_used", { length: 20 }).default('0'),
 	registeredBy: int("registered_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),

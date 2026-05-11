@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { vehicleRecords, users, gpsLocations, userPermissions, collaborators } from "../../drizzle/schema";
+import { vehicleRecords, users, gpsLocations, userPermissions, collaborators, fuelInvoices } from "../../drizzle/schema";
 import { eq, desc, inArray, sql } from "drizzle-orm";
 import { notifyTeam } from "../notifyTeam";
 
@@ -115,6 +115,7 @@ export const vehicleRecordsRouter = router({
       photoBase64: z.string().optional(),
       notes: z.string().optional(),
       workLocationId: z.number().optional(),
+      fuelInvoiceId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -125,14 +126,29 @@ export const vehicleRecordsRouter = router({
         const result = await cloudinaryUpload(input.photoBase64, "btree/vehicle-records");
         photoUrl = result.url;
       }
-      const { photoBase64, workLocationId, ...rest } = input;
+      const { photoBase64, workLocationId, fuelInvoiceId, ...rest } = input;
       await db.insert(vehicleRecords).values({
         ...rest,
         date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         photoUrl,
         registeredBy: ctx.user.id,
         workLocationId: workLocationId || null,
+        fuelInvoiceId: fuelInvoiceId || null,
       });
+
+      // Atualizar litros usados na NF vinculada
+      if (fuelInvoiceId && input.liters) {
+        try {
+          const [inv] = await db.select().from(fuelInvoices).where(eq(fuelInvoices.id, fuelInvoiceId));
+          if (inv) {
+            const currentUsed = parseFloat(inv.litersUsed || '0');
+            const newUsed = currentUsed + parseFloat(input.liters.replace(',', '.'));
+            await db.update(fuelInvoices).set({ litersUsed: String(newUsed.toFixed(2)) }).where(eq(fuelInvoices.id, fuelInvoiceId));
+          }
+        } catch (e) {
+          console.error('Erro ao atualizar litros da NF:', e);
+        }
+      }
 
       // Notificação por e-mail apenas para abastecimentos
       if (input.recordType === "abastecimento") {
@@ -178,6 +194,7 @@ export const vehicleRecordsRouter = router({
       photoBase64: z.string().optional().nullable(),
       notes: z.string().optional().nullable(),
       workLocationId: z.number().optional().nullable(),
+      fuelInvoiceId: z.number().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

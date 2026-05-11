@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  Plus, FileText, Calendar, DollarSign, Truck, CheckCircle2, Clock, AlertTriangle, X, Search, Filter, Pencil, Trash2, Eye, Camera, Upload, Loader2, Image as ImageIcon, Download
+  Plus, FileText, Calendar, DollarSign, Truck, CheckCircle2, Clock, AlertTriangle, X, Search, Filter, Pencil, Trash2, Eye, Camera, Upload, Loader2, Image as ImageIcon, Download, Copy, Droplets, Gauge
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -91,6 +91,7 @@ export default function FuelInvoicesPage() {
     filterStatus ? { status: filterStatus as any } : undefined
   );
   const { data: suppliers = [] } = trpc.fuelSuppliers.list.useQuery();
+  const { data: tankStatus = [] } = trpc.fuelSuppliers.tankStatus.useQuery();
 
   const createMutation = trpc.fuelSuppliers.createInvoice.useMutation({
     onSuccess: () => { utils.fuelSuppliers.listInvoices.invalidate(); toast.success("Nota cadastrada com sucesso! Mary será notificada."); setIsOpen(false); resetForm(); },
@@ -399,6 +400,50 @@ export default function FuelInvoicesPage() {
         </div>
       </div>
 
+      {/* Status dos Tanques */}
+      {(tankStatus as any[]).length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-2">
+            <Gauge className="h-4 w-4" /> Nível dos Tanques
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(tankStatus as any[]).map((tank: any) => (
+              <Card key={tank.supplierId} className={`${tank.isLow ? 'border-red-300 bg-red-50/30' : 'border-green-200'}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <span className="font-semibold text-sm">
+                        {tank.locationType === 'simflor' ? '🌳 SIMFLOR' : tank.locationType === 'astorga' ? '🏢 Sede Astorga' : '⛽ Postos'}
+                      </span>
+                      {tank.tradeName && <span className="text-xs text-gray-500 ml-1">({tank.tradeName})</span>}
+                    </div>
+                    <Badge className={tank.isLow ? 'bg-red-100 text-red-700 border-red-300' : 'bg-green-100 text-green-700 border-green-300'}>
+                      {tank.isLow ? '⚠️ Baixo' : '✅ OK'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-500">{tank.currentLevel}L de {tank.tankCapacity}L</span>
+                    <span className={`font-bold ${tank.isLow ? 'text-red-600' : 'text-green-600'}`}>{tank.percentage}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full transition-all ${
+                        tank.percentage <= 20 ? 'bg-red-500' : tank.percentage <= 40 ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${tank.percentage}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>Entregue: {tank.totalDelivered.toFixed(0)}L</span>
+                    <span>Consumido: {tank.totalUsed.toFixed(0)}L</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Lista de Notas */}
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}</div>
@@ -444,12 +489,70 @@ export default function FuelInvoicesPage() {
                           <DollarSign className="h-3 w-3" />
                           Venc: <span className={inv.effectiveStatus === "vencido" ? "text-red-600 font-semibold" : ""}>{formatDate(inv.dueDate)}</span>
                         </span>
-                        {inv.liters && <span>{inv.liters}L</span>}
+                        {inv.liters && (
+                          <span className="flex items-center gap-1">
+                            <Droplets className="h-3 w-3" />
+                            {inv.liters}L
+                            {inv.litersUsed && parseFloat(inv.litersUsed) > 0 && (
+                              <span className="text-orange-600 font-medium">
+                                (usado: {parseFloat(inv.litersUsed).toFixed(0)}L | restante: {Math.max(0, parseFloat(inv.liters) - parseFloat(inv.litersUsed)).toFixed(0)}L)
+                              </span>
+                            )}
+                          </span>
+                        )}
                         {inv.transporterName && <span className="flex items-center gap-1"><Truck className="h-3 w-3" /> {inv.transporterName}</span>}
                         {inv.effectiveStatus === "pago" && inv.paidAt && (
                           <span className="text-green-600 font-medium">Pago em {formatDate(inv.paidAt)}</span>
                         )}
                       </div>
+                      {/* Barra de saldo de litros */}
+                      {inv.liters && parseFloat(inv.liters) > 0 && (
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-gray-500">Saldo da NF:</span>
+                            <span className="font-medium">
+                              {Math.max(0, parseFloat(inv.liters) - parseFloat(inv.litersUsed || '0')).toFixed(0)}L de {parseFloat(inv.liters).toFixed(0)}L
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full transition-all ${
+                                parseFloat(inv.litersUsed || '0') / parseFloat(inv.liters) > 0.8
+                                  ? 'bg-red-500'
+                                  : parseFloat(inv.litersUsed || '0') / parseFloat(inv.liters) > 0.5
+                                  ? 'bg-yellow-500'
+                                  : 'bg-green-500'
+                              }`}
+                              style={{ width: `${Math.min(100, (parseFloat(inv.litersUsed || '0') / parseFloat(inv.liters)) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {/* Botão copiar código de barras */}
+                      {inv.barcodeNumber && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(inv.barcodeNumber).then(() => {
+                              toast.success("Código de barras copiado!");
+                            }).catch(() => {
+                              // Fallback for older browsers
+                              const textArea = document.createElement('textarea');
+                              textArea.value = inv.barcodeNumber;
+                              document.body.appendChild(textArea);
+                              textArea.select();
+                              document.execCommand('copy');
+                              document.body.removeChild(textArea);
+                              toast.success("Código de barras copiado!");
+                            });
+                          }}
+                          className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
+                          title="Copiar linha digitável"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          Copiar Código de Barras
+                        </button>
+                      )}
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
                       <button onClick={() => setViewInvoice(inv)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Ver detalhes">
