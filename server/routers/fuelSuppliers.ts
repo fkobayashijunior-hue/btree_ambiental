@@ -186,24 +186,80 @@ export const fuelSuppliersRouter = router({
   // ===== OCR - LEITURA AUTOMÁTICA DE NF POR FOTO =====
   extractInvoiceFromPhoto: protectedProcedure
     .input(z.object({
-      photoBase64: z.string().min(1),
-      mimeType: z.string().default("image/jpeg"),
+      photos: z.array(z.object({
+        base64: z.string().min(1),
+        mimeType: z.string().default("image/jpeg"),
+        label: z.string().default("nf"), // "nf" or "boleto"
+      })).min(1).max(3),
     }))
     .mutation(async ({ ctx, input }) => {
-      // 1. Upload photo to S3
-      const buffer = Buffer.from(input.photoBase64, "base64");
-      const ext = input.mimeType.includes("png") ? "png" : "jpg";
-      const randomSuffix = Math.random().toString(36).substring(2, 10);
-      const fileKey = `invoices/nf-${Date.now()}-${randomSuffix}.${ext}`;
-      const { url: photoUrl } = await storagePut(fileKey, buffer, input.mimeType);
+      // 1. Upload photos to Cloudinary (works on Hostinger)
+      const uploadedPhotos: { label: string; url: string }[] = [];
+      
+      for (const photo of input.photos) {
+        try {
+          // Try Cloudinary first (works on Hostinger)
+          const cloudinaryUrl = `https://api.cloudinary.com/v1_1/djob7pxme/image/upload`;
+          const formData = new URLSearchParams();
+          formData.append('file', `data:${photo.mimeType};base64,${photo.base64}`);
+          formData.append('upload_preset', 'azaconnect');
+          formData.append('folder', 'btree-invoices');
+          
+          const cloudRes = await fetch(cloudinaryUrl, {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (cloudRes.ok) {
+            const cloudData = await cloudRes.json();
+            uploadedPhotos.push({ label: photo.label, url: cloudData.secure_url });
+          } else {
+            // Fallback to S3 if Cloudinary fails
+            try {
+              const buffer = Buffer.from(photo.base64, "base64");
+              const ext = photo.mimeType.includes("png") ? "png" : "jpg";
+              const randomSuffix = Math.random().toString(36).substring(2, 10);
+              const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
+              const { url } = await storagePut(fileKey, buffer, photo.mimeType);
+              uploadedPhotos.push({ label: photo.label, url });
+            } catch (s3Err) {
+              console.warn('[OCR] Both Cloudinary and S3 upload failed for', photo.label);
+            }
+          }
+        } catch (err) {
+          // Fallback to S3
+          try {
+            const buffer = Buffer.from(photo.base64, "base64");
+            const ext = photo.mimeType.includes("png") ? "png" : "jpg";
+            const randomSuffix = Math.random().toString(36).substring(2, 10);
+            const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
+            const { url } = await storagePut(fileKey, buffer, photo.mimeType);
+            uploadedPhotos.push({ label: photo.label, url });
+          } catch (s3Err) {
+            console.warn('[OCR] Both Cloudinary and S3 upload failed for', photo.label);
+          }
+        }
+      }
+      
+      if (uploadedPhotos.length === 0) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível fazer upload das fotos. Tente novamente." });
+      }
 
-      // 2. Use LLM vision to extract data from the photo
+      // 2. Build image content array for LLM
+      const imageContents: any[] = uploadedPhotos.map(p => ({
+        type: "image_url",
+        image_url: { url: p.url, detail: "high" }
+      }));
+
+      const photoLabels = uploadedPhotos.map(p => p.label === 'boleto' ? 'boleto bancário' : 'nota fiscal').join(' e ');
+
+      // 3. Use LLM vision to extract data from all photos
       const result = await invokeLLM({
         messages: [
           {
             role: "system",
             content: `Você é um assistente especializado em extrair dados de notas fiscais e boletos brasileiros.
-Analise a imagem e extraia os seguintes dados em formato JSON:
+Analise TODAS as imagens enviadas (pode ser nota fiscal, boleto ou ambos) e extraia os seguintes dados em formato JSON:
 - invoiceNumber: número da nota fiscal (apenas números)
 - invoiceDate: data de emissão no formato YYYY-MM-DD
 - dueDate: data de vencimento no formato YYYY-MM-DD
@@ -212,20 +268,21 @@ Analise a imagem e extraia os seguintes dados em formato JSON:
 - pricePerLiter: preço por litro (apenas números com ponto decimal, se houver)
 - fuelType: tipo de combustível (diesel, gasolina, etanol ou gnv)
 - bankName: nome do banco (se for boleto)
-- barcodeNumber: linha digitável do boleto (se visível)
+- barcodeNumber: linha digitável COMPLETA do boleto (todos os números incluindo pontos e espaços, se visível)
 - transporterName: nome da transportadora (se houver)
 - transporterPlate: placa do veículo (se houver)
 - supplierName: razão social do fornecedor/emitente
 - supplierCnpj: CNPJ do fornecedor/emitente
 - deliveryLocation: local de entrega (se houver)
 - paymentMethod: forma de pagamento (boleto, pix, transferencia, cheque, dinheiro)
+Combine informações de TODAS as imagens. Se a NF tem dados do produto e o boleto tem dados de pagamento, combine ambos.
 Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use null.`
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "Extraia os dados desta nota fiscal/boleto:" },
-              { type: "image_url", image_url: { url: photoUrl, detail: "high" } }
+              { type: "text", text: `Extraia os dados destas imagens (${photoLabels}):` },
+              ...imageContents
             ]
           }
         ],
@@ -265,15 +322,18 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       try {
         extracted = typeof content === "string" ? JSON.parse(content) : {};
       } catch {
-        // Try to extract JSON from the response
         const jsonMatch = typeof content === "string" ? content.match(/\{[\s\S]*\}/) : null;
         if (jsonMatch) {
           try { extracted = JSON.parse(jsonMatch[0]); } catch { /* ignore */ }
         }
       }
 
+      const nfPhoto = uploadedPhotos.find(p => p.label === 'nf');
+      const boletoPhoto = uploadedPhotos.find(p => p.label === 'boleto');
+
       return {
-        photoUrl,
+        invoicePhotoUrl: nfPhoto?.url || uploadedPhotos[0]?.url || null,
+        boletoPhotoUrl: boletoPhoto?.url || null,
         extracted,
       };
     }),
@@ -321,6 +381,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       deliveryLocation: z.string().optional(),
       notes: z.string().optional(),
       invoicePhotoUrl: z.string().optional(),
+      boletoPhotoUrl: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -342,6 +403,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
         deliveryLocation: input.deliveryLocation || null,
         notes: input.notes || null,
         invoicePhotoUrl: input.invoicePhotoUrl || null,
+        boletoPhotoUrl: input.boletoPhotoUrl || null,
         registeredBy: ctx.user?.id || null,
       });
       // Notify Mary (financeiro) about new invoice

@@ -274,6 +274,11 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE fuel_invoices ADD COLUMN invoice_photo_url text`);
     } catch(e: any) { if (!e.message?.includes('Duplicate')) console.log('[AutoMigration] invoice_photo_url:', e.message); }
 
+    // Add boleto_photo_url column if not exists
+    try {
+      await db.execute(/*sql*/`ALTER TABLE fuel_invoices ADD COLUMN boleto_photo_url text`);
+    } catch(e: any) { if (!e.message?.includes('Duplicate')) console.log('[AutoMigration] boleto_photo_url:', e.message); }
+
     // Add fuel_invoice_id column to vehicle_records for linking fueling to invoices
     try {
       await db.execute(/*sql*/`ALTER TABLE vehicle_records ADD COLUMN fuel_invoice_id int`);

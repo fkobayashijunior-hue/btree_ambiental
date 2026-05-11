@@ -1111,6 +1111,7 @@ export const fuelInvoices = mysqlTable("fuel_invoices", {
 	deliveryLocation: varchar("delivery_location", { length: 100 }),
 	notes: text(),
 	invoicePhotoUrl: text("invoice_photo_url"),
+	boletoPhotoUrl: text("boleto_photo_url"),
 	litersUsed: varchar("liters_used", { length: 20 }).default('0'),
 	registeredBy: int("registered_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),

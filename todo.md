@@ -1638,3 +1638,10 @@
 - [x] Saldo do tanque = litros da última NF - litros abastecidos
 - [x] Alerta quando tanque abaixo de 20% da capacidade
 - [x] Notificação para Mary e ADM quando tanque baixo
+
+## 🔧 CORREÇÃO OCR - UPLOAD IMAGENS (11/05/2026)
+
+- [ ] Corrigir upload de foto NF: usar Cloudinary (djob7pxme) em vez de S3 (não funciona na Hostinger)
+- [ ] Suportar 2 imagens: foto da NF + foto do boleto
+- [ ] Enviar ambas imagens para IA extrair dados automaticamente
+- [ ] Salvar URLs das fotos (NF e boleto) no registro da nota

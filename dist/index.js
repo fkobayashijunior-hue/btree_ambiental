@@ -1233,6 +1233,7 @@ var init_schema = __esm({
       deliveryLocation: varchar("delivery_location", { length: 100 }),
       notes: text(),
       invoicePhotoUrl: text("invoice_photo_url"),
+      boletoPhotoUrl: text("boleto_photo_url"),
       litersUsed: varchar("liters_used", { length: 20 }).default("0"),
       registeredBy: int("registered_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
@@ -8448,20 +8449,67 @@ var fuelSuppliersRouter = router({
   }),
   // ===== OCR - LEITURA AUTOMÁTICA DE NF POR FOTO =====
   extractInvoiceFromPhoto: protectedProcedure.input(z27.object({
-    photoBase64: z27.string().min(1),
-    mimeType: z27.string().default("image/jpeg")
+    photos: z27.array(z27.object({
+      base64: z27.string().min(1),
+      mimeType: z27.string().default("image/jpeg"),
+      label: z27.string().default("nf")
+      // "nf" or "boleto"
+    })).min(1).max(3)
   })).mutation(async ({ ctx, input }) => {
-    const buffer = Buffer.from(input.photoBase64, "base64");
-    const ext = input.mimeType.includes("png") ? "png" : "jpg";
-    const randomSuffix = Math.random().toString(36).substring(2, 10);
-    const fileKey = `invoices/nf-${Date.now()}-${randomSuffix}.${ext}`;
-    const { url: photoUrl } = await storagePut(fileKey, buffer, input.mimeType);
+    const uploadedPhotos = [];
+    for (const photo of input.photos) {
+      try {
+        const cloudinaryUrl = `https://api.cloudinary.com/v1_1/djob7pxme/image/upload`;
+        const formData = new URLSearchParams();
+        formData.append("file", `data:${photo.mimeType};base64,${photo.base64}`);
+        formData.append("upload_preset", "azaconnect");
+        formData.append("folder", "btree-invoices");
+        const cloudRes = await fetch(cloudinaryUrl, {
+          method: "POST",
+          body: formData
+        });
+        if (cloudRes.ok) {
+          const cloudData = await cloudRes.json();
+          uploadedPhotos.push({ label: photo.label, url: cloudData.secure_url });
+        } else {
+          try {
+            const buffer = Buffer.from(photo.base64, "base64");
+            const ext = photo.mimeType.includes("png") ? "png" : "jpg";
+            const randomSuffix = Math.random().toString(36).substring(2, 10);
+            const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
+            const { url } = await storagePut(fileKey, buffer, photo.mimeType);
+            uploadedPhotos.push({ label: photo.label, url });
+          } catch (s3Err) {
+            console.warn("[OCR] Both Cloudinary and S3 upload failed for", photo.label);
+          }
+        }
+      } catch (err) {
+        try {
+          const buffer = Buffer.from(photo.base64, "base64");
+          const ext = photo.mimeType.includes("png") ? "png" : "jpg";
+          const randomSuffix = Math.random().toString(36).substring(2, 10);
+          const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
+          const { url } = await storagePut(fileKey, buffer, photo.mimeType);
+          uploadedPhotos.push({ label: photo.label, url });
+        } catch (s3Err) {
+          console.warn("[OCR] Both Cloudinary and S3 upload failed for", photo.label);
+        }
+      }
+    }
+    if (uploadedPhotos.length === 0) {
+      throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "N\xE3o foi poss\xEDvel fazer upload das fotos. Tente novamente." });
+    }
+    const imageContents = uploadedPhotos.map((p) => ({
+      type: "image_url",
+      image_url: { url: p.url, detail: "high" }
+    }));
+    const photoLabels = uploadedPhotos.map((p) => p.label === "boleto" ? "boleto banc\xE1rio" : "nota fiscal").join(" e ");
     const result = await invokeLLM({
       messages: [
         {
           role: "system",
           content: `Voc\xEA \xE9 um assistente especializado em extrair dados de notas fiscais e boletos brasileiros.
-Analise a imagem e extraia os seguintes dados em formato JSON:
+Analise TODAS as imagens enviadas (pode ser nota fiscal, boleto ou ambos) e extraia os seguintes dados em formato JSON:
 - invoiceNumber: n\xFAmero da nota fiscal (apenas n\xFAmeros)
 - invoiceDate: data de emiss\xE3o no formato YYYY-MM-DD
 - dueDate: data de vencimento no formato YYYY-MM-DD
@@ -8470,20 +8518,21 @@ Analise a imagem e extraia os seguintes dados em formato JSON:
 - pricePerLiter: pre\xE7o por litro (apenas n\xFAmeros com ponto decimal, se houver)
 - fuelType: tipo de combust\xEDvel (diesel, gasolina, etanol ou gnv)
 - bankName: nome do banco (se for boleto)
-- barcodeNumber: linha digit\xE1vel do boleto (se vis\xEDvel)
+- barcodeNumber: linha digit\xE1vel COMPLETA do boleto (todos os n\xFAmeros incluindo pontos e espa\xE7os, se vis\xEDvel)
 - transporterName: nome da transportadora (se houver)
 - transporterPlate: placa do ve\xEDculo (se houver)
 - supplierName: raz\xE3o social do fornecedor/emitente
 - supplierCnpj: CNPJ do fornecedor/emitente
 - deliveryLocation: local de entrega (se houver)
 - paymentMethod: forma de pagamento (boleto, pix, transferencia, cheque, dinheiro)
+Combine informa\xE7\xF5es de TODAS as imagens. Se a NF tem dados do produto e o boleto tem dados de pagamento, combine ambos.
 Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, use null.`
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Extraia os dados desta nota fiscal/boleto:" },
-            { type: "image_url", image_url: { url: photoUrl, detail: "high" } }
+            { type: "text", text: `Extraia os dados destas imagens (${photoLabels}):` },
+            ...imageContents
           ]
         }
       ],
@@ -8530,8 +8579,11 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
         }
       }
     }
+    const nfPhoto = uploadedPhotos.find((p) => p.label === "nf");
+    const boletoPhoto = uploadedPhotos.find((p) => p.label === "boleto");
     return {
-      photoUrl,
+      invoicePhotoUrl: nfPhoto?.url || uploadedPhotos[0]?.url || null,
+      boletoPhotoUrl: boletoPhoto?.url || null,
       extracted
     };
   }),
@@ -8570,7 +8622,8 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     transporterPlate: z27.string().optional(),
     deliveryLocation: z27.string().optional(),
     notes: z27.string().optional(),
-    invoicePhotoUrl: z27.string().optional()
+    invoicePhotoUrl: z27.string().optional(),
+    boletoPhotoUrl: z27.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
@@ -8591,6 +8644,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
       deliveryLocation: input.deliveryLocation || null,
       notes: input.notes || null,
       invoicePhotoUrl: input.invoicePhotoUrl || null,
+      boletoPhotoUrl: input.boletoPhotoUrl || null,
       registeredBy: ctx.user?.id || null
     });
     try {
@@ -9617,6 +9671,14 @@ async function runAutoMigrations() {
       );
     } catch (e) {
       if (!e.message?.includes("Duplicate")) console.log("[AutoMigration] invoice_photo_url:", e.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_invoices ADD COLUMN boleto_photo_url text`
+      );
+    } catch (e) {
+      if (!e.message?.includes("Duplicate")) console.log("[AutoMigration] boleto_photo_url:", e.message);
     }
     try {
       await db.execute(

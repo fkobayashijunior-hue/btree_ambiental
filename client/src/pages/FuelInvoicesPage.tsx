@@ -69,6 +69,7 @@ const emptyForm = {
   deliveryLocation: "",
   notes: "",
   invoicePhotoUrl: "",
+  boletoPhotoUrl: "",
 };
 
 export default function FuelInvoicesPage() {
@@ -83,8 +84,12 @@ export default function FuelInvoicesPage() {
   const [viewInvoice, setViewInvoice] = useState<any>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanPreview, setScanPreview] = useState<string | null>(null);
+  const [boletoPreview, setBoletoPreview] = useState<string | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<{base64: string; mimeType: string; label: string}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const boletoFileInputRef = useRef<HTMLInputElement>(null);
+  const boletoCameraInputRef = useRef<HTMLInputElement>(null);
 
   const utils = trpc.useUtils();
   const { data: invoices = [], isLoading } = trpc.fuelSuppliers.listInvoices.useQuery(
@@ -139,7 +144,8 @@ export default function FuelInvoicesPage() {
         transporterPlate: ext.transporterPlate || f.transporterPlate,
         deliveryLocation: ext.deliveryLocation || f.deliveryLocation,
         paymentMethod: ext.paymentMethod || f.paymentMethod,
-        invoicePhotoUrl: data.photoUrl || f.invoicePhotoUrl,
+        invoicePhotoUrl: data.invoicePhotoUrl || f.invoicePhotoUrl,
+        boletoPhotoUrl: data.boletoPhotoUrl || f.boletoPhotoUrl,
       }));
       setIsScanning(false);
       toast.success("Dados extraídos com sucesso! Confira e ajuste se necessário.");
@@ -150,26 +156,46 @@ export default function FuelInvoicesPage() {
     },
   });
 
-  const resetForm = () => { setForm({ ...emptyForm }); setEditingId(null); setScanPreview(null); };
+  const resetForm = () => { setForm({ ...emptyForm }); setEditingId(null); setScanPreview(null); setBoletoPreview(null); setPendingPhotos([]); };
 
-  const handleFileSelect = async (file: File) => {
+  const handleNFSelect = async (file: File) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Arquivo muito grande. Máximo 10MB.");
-      return;
-    }
-    setIsScanning(true);
+    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10MB."); return; }
     setScanPreview(URL.createObjectURL(file));
-
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = (reader.result as string).split(",")[1];
-      extractMutation.mutate({
-        photoBase64: base64,
-        mimeType: file.type || "image/jpeg",
+      const nfPhoto = { base64, mimeType: file.type || "image/jpeg", label: "nf" };
+      setPendingPhotos(prev => {
+        const filtered = prev.filter(p => p.label !== "nf");
+        return [...filtered, nfPhoto];
       });
+      toast.success("Foto da NF adicionada! Agora adicione o boleto ou clique em 'Analisar'.");
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleBoletoSelect = async (file: File) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10MB."); return; }
+    setBoletoPreview(URL.createObjectURL(file));
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      const boletoPhoto = { base64, mimeType: file.type || "image/jpeg", label: "boleto" };
+      setPendingPhotos(prev => {
+        const filtered = prev.filter(p => p.label !== "boleto");
+        return [...filtered, boletoPhoto];
+      });
+      toast.success("Foto do boleto adicionada!");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnalyzePhotos = () => {
+    if (pendingPhotos.length === 0) { toast.error("Adicione pelo menos uma foto."); return; }
+    setIsScanning(true);
+    extractMutation.mutate({ photos: pendingPhotos });
   };
 
   const filteredInvoices = useMemo(() => {
@@ -225,6 +251,7 @@ export default function FuelInvoicesPage() {
       deliveryLocation: form.deliveryLocation || undefined,
       notes: form.notes || undefined,
       invoicePhotoUrl: form.invoicePhotoUrl || undefined,
+      boletoPhotoUrl: form.boletoPhotoUrl || undefined,
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, ...payload });
@@ -252,8 +279,10 @@ export default function FuelInvoicesPage() {
       deliveryLocation: inv.deliveryLocation || "",
       notes: inv.notes || "",
       invoicePhotoUrl: inv.invoicePhotoUrl || "",
+      boletoPhotoUrl: inv.boletoPhotoUrl || "",
     });
     setScanPreview(inv.invoicePhotoUrl || null);
+    setBoletoPreview(inv.boletoPhotoUrl || null);
     setIsOpen(true);
   };
 
@@ -674,64 +703,89 @@ export default function FuelInvoicesPage() {
                   <Camera className="h-5 w-5 text-blue-600" />
                   <span className="font-semibold text-blue-800 text-sm">Escanear Nota Fiscal / Boleto</span>
                 </div>
-                <p className="text-xs text-blue-600">Tire uma foto ou envie uma imagem da NF/boleto. A IA extrai os dados automaticamente!</p>
+                <p className="text-xs text-blue-600">Envie a foto da NF e do boleto. A IA extrai os dados de ambos automaticamente!</p>
 
                 {isScanning ? (
                   <div className="flex flex-col items-center gap-3 py-4">
                     <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
-                    <p className="text-sm text-blue-700 font-medium">Analisando documento...</p>
-                    <p className="text-xs text-blue-500">A IA está extraindo os dados da nota fiscal</p>
-                    {scanPreview && (
-                      <img src={scanPreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border border-blue-200 mt-2" />
-                    )}
+                    <p className="text-sm text-blue-700 font-medium">Analisando documentos...</p>
+                    <p className="text-xs text-blue-500">A IA está extraindo os dados da NF e do boleto</p>
+                    <div className="flex gap-2">
+                      {scanPreview && <img src={scanPreview} alt="NF" className="w-20 h-20 object-cover rounded-lg border border-blue-200" />}
+                      {boletoPreview && <img src={boletoPreview} alt="Boleto" className="w-20 h-20 object-cover rounded-lg border border-blue-200" />}
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <input
-                      ref={cameraInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
-                    />
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 gap-2 border-blue-300 text-blue-700 hover:bg-blue-100"
-                      onClick={() => cameraInputRef.current?.click()}
-                    >
-                      <Camera className="h-4 w-4" /> Câmera
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 gap-2 border-blue-300 text-blue-700 hover:bg-blue-100"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Upload className="h-4 w-4" /> Galeria
-                    </Button>
-                  </div>
-                )}
-
-                {scanPreview && !isScanning && (
-                  <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-2">
-                    <img src={scanPreview} alt="Preview" className="w-12 h-12 object-cover rounded" />
-                    <div className="flex-1">
-                      <p className="text-xs text-green-700 font-medium">Dados extraídos com sucesso!</p>
-                      <p className="text-xs text-green-600">Confira os campos abaixo e ajuste se necessário.</p>
+                  <>
+                    {/* NOTA FISCAL */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-blue-800 uppercase tracking-wide">1. Foto da Nota Fiscal</label>
+                      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleNFSelect(f); e.target.value = ""; }} />
+                      <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleNFSelect(f); e.target.value = ""; }} />
+                      {scanPreview ? (
+                        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-2">
+                          <img src={scanPreview} alt="NF" className="w-12 h-12 object-cover rounded" />
+                          <span className="text-xs text-green-700 font-medium flex-1">Nota fiscal adicionada</span>
+                          <button onClick={() => { setScanPreview(null); setPendingPhotos(p => p.filter(x => x.label !== 'nf')); setForm(f => ({ ...f, invoicePhotoUrl: '' })); }} className="p-1 rounded hover:bg-green-100">
+                            <X className="h-4 w-4 text-green-600" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button type="button" variant="outline" className="flex-1 gap-2 border-blue-300 text-blue-700 hover:bg-blue-100 text-xs h-9"
+                            onClick={() => cameraInputRef.current?.click()}>
+                            <Camera className="h-3.5 w-3.5" /> Câmera
+                          </Button>
+                          <Button type="button" variant="outline" className="flex-1 gap-2 border-blue-300 text-blue-700 hover:bg-blue-100 text-xs h-9"
+                            onClick={() => fileInputRef.current?.click()}>
+                            <Upload className="h-3.5 w-3.5" /> Galeria
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <button onClick={() => { setScanPreview(null); setForm(f => ({ ...f, invoicePhotoUrl: "" })); }} className="p-1 rounded hover:bg-green-100">
-                      <X className="h-4 w-4 text-green-600" />
-                    </button>
-                  </div>
+
+                    {/* BOLETO */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-blue-800 uppercase tracking-wide">2. Foto do Boleto (opcional)</label>
+                      <input ref={boletoCameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleBoletoSelect(f); e.target.value = ""; }} />
+                      <input ref={boletoFileInputRef} type="file" accept="image/*" className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleBoletoSelect(f); e.target.value = ""; }} />
+                      {boletoPreview ? (
+                        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-2">
+                          <img src={boletoPreview} alt="Boleto" className="w-12 h-12 object-cover rounded" />
+                          <span className="text-xs text-green-700 font-medium flex-1">Boleto adicionado</span>
+                          <button onClick={() => { setBoletoPreview(null); setPendingPhotos(p => p.filter(x => x.label !== 'boleto')); setForm(f => ({ ...f, boletoPhotoUrl: '' })); }} className="p-1 rounded hover:bg-green-100">
+                            <X className="h-4 w-4 text-green-600" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button type="button" variant="outline" className="flex-1 gap-2 border-blue-300 text-blue-700 hover:bg-blue-100 text-xs h-9"
+                            onClick={() => boletoCameraInputRef.current?.click()}>
+                            <Camera className="h-3.5 w-3.5" /> Câmera
+                          </Button>
+                          <Button type="button" variant="outline" className="flex-1 gap-2 border-blue-300 text-blue-700 hover:bg-blue-100 text-xs h-9"
+                            onClick={() => boletoFileInputRef.current?.click()}>
+                            <Upload className="h-3.5 w-3.5" /> Galeria
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Analyze Button */}
+                    {pendingPhotos.length > 0 && (
+                      <Button
+                        type="button"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                        onClick={handleAnalyzePhotos}
+                      >
+                        <Loader2 className="h-4 w-4" /> Analisar {pendingPhotos.length} foto{pendingPhotos.length > 1 ? 's' : ''} com IA
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             )}
