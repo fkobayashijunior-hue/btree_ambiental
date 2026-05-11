@@ -1600,10 +1600,10 @@
 ## 💰 CONTAS A PAGAR - FORNECEDORES COMBUSTÍVEL (10/05/2026)
 
 - [x] Corrigir filtro de fornecedores no Controle de Abastecimento (fornecedor SIMFLOR não aparece) — estava correto, usuário confirmou
-- [ ] Corrigir exibição de data nos cards de abastecimento (mostrar data do registro, não data de cadastro)
-- [ ] Filtros avançados: por equipamento, local de abastecimento, período de datas
-- [ ] Criar tabela fuel_invoices (notas fiscais de combustível com boleto)
-- [ ] Backend: CRUD de notas/boletos vinculados ao fornecedor
-- [ ] Frontend: Página de Contas a Pagar com status (pendente/pago/vencido)
-- [ ] Registrar NF, valor, vencimento, marcar como pago
-- [ ] Filtros por fornecedor, status, período
+- [x] Corrigir exibição de data nos cards de abastecimento (mostrar data do registro, não data de cadastro)
+- [x] Filtros avançados: por equipamento, local de abastecimento, período de datas
+- [x] Criar tabela fuel_invoices (notas fiscais de combustível com boleto)
+- [x] Backend: CRUD de notas/boletos vinculados ao fornecedor
+- [x] Frontend: Página de Contas a Pagar com status (pendente/pago/vencido)
+- [x] Registrar NF, valor, vencimento, marcar como pago
+- [x] Filtros por fornecedor, status, período
