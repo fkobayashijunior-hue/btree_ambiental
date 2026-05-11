@@ -218,6 +218,7 @@ __export(schema_exports, {
   freightCalculations: () => freightCalculations,
   fuelContainerEvents: () => fuelContainerEvents,
   fuelContainers: () => fuelContainers,
+  fuelInvoices: () => fuelInvoices,
   fuelPriceHistory: () => fuelPriceHistory,
   fuelRecords: () => fuelRecords,
   fuelSuppliers: () => fuelSuppliers,
@@ -248,7 +249,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, timestamp, mysqlEnum, varchar, text, index, tinyint } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -1207,6 +1208,30 @@ var init_schema = __esm({
       newPrice: varchar("new_price", { length: 20 }).notNull(),
       changedBy: int("changed_by"),
       changedAt: timestamp("changed_at", { mode: "string" }).defaultNow().notNull()
+    });
+    fuelInvoices = mysqlTable("fuel_invoices", {
+      id: int().autoincrement().notNull(),
+      supplierId: int("supplier_id").notNull(),
+      invoiceNumber: varchar("invoice_number", { length: 50 }).notNull(),
+      invoiceDate: varchar("invoice_date", { length: 10 }).notNull(),
+      dueDate: varchar("due_date", { length: 10 }).notNull(),
+      totalAmount: varchar("total_amount", { length: 20 }).notNull(),
+      liters: varchar({ length: 20 }),
+      pricePerLiter: varchar("price_per_liter", { length: 20 }),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
+      paymentMethod: varchar("payment_method", { length: 50 }),
+      bankName: varchar("bank_name", { length: 100 }),
+      barcodeNumber: varchar("barcode_number", { length: 100 }),
+      status: mysqlEnum(["pendente", "pago", "vencido", "cancelado"]).default("pendente").notNull(),
+      paidAt: varchar("paid_at", { length: 10 }),
+      paidAmount: varchar("paid_amount", { length: 20 }),
+      transporterName: varchar("transporter_name", { length: 255 }),
+      transporterPlate: varchar("transporter_plate", { length: 20 }),
+      deliveryLocation: varchar("delivery_location", { length: 100 }),
+      notes: text(),
+      registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
   }
 });
@@ -8175,6 +8200,115 @@ var fuelSuppliersRouter = router({
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelSuppliers).where(eq26(fuelSuppliers.id, input.id));
     return { success: true };
+  }),
+  // ===== CONTAS A PAGAR (NOTAS FISCAIS / BOLETOS) =====
+  listInvoices: protectedProcedure.input(z27.object({
+    supplierId: z27.number().optional(),
+    status: z27.enum(["pendente", "pago", "vencido", "cancelado"]).optional()
+  }).optional()).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    let conditions = [];
+    if (input?.supplierId) conditions.push(eq26(fuelInvoices.supplierId, input.supplierId));
+    if (input?.status) conditions.push(eq26(fuelInvoices.status, input.status));
+    const invoices = conditions.length > 0 ? await db.select().from(fuelInvoices).where(and15(...conditions)).orderBy(desc22(fuelInvoices.id)) : await db.select().from(fuelInvoices).orderBy(desc22(fuelInvoices.id));
+    const suppliers = await db.select().from(fuelSuppliers);
+    const supplierMap = Object.fromEntries(suppliers.map((s) => [s.id, s]));
+    return invoices.map((inv) => ({
+      ...inv,
+      supplierName: supplierMap[inv.supplierId]?.name || `Fornecedor #${inv.supplierId}`,
+      supplierTradeName: supplierMap[inv.supplierId]?.tradeName || null
+    }));
+  }),
+  createInvoice: protectedProcedure.input(z27.object({
+    supplierId: z27.number(),
+    invoiceNumber: z27.string().min(1),
+    invoiceDate: z27.string().min(1),
+    dueDate: z27.string().min(1),
+    totalAmount: z27.string().min(1),
+    liters: z27.string().optional(),
+    pricePerLiter: z27.string().optional(),
+    fuelType: z27.enum(["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
+    paymentMethod: z27.string().optional(),
+    bankName: z27.string().optional(),
+    barcodeNumber: z27.string().optional(),
+    transporterName: z27.string().optional(),
+    transporterPlate: z27.string().optional(),
+    deliveryLocation: z27.string().optional(),
+    notes: z27.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    await db.insert(fuelInvoices).values({
+      supplierId: input.supplierId,
+      invoiceNumber: input.invoiceNumber,
+      invoiceDate: input.invoiceDate,
+      dueDate: input.dueDate,
+      totalAmount: input.totalAmount,
+      liters: input.liters || null,
+      pricePerLiter: input.pricePerLiter || null,
+      fuelType: input.fuelType,
+      paymentMethod: input.paymentMethod || null,
+      bankName: input.bankName || null,
+      barcodeNumber: input.barcodeNumber || null,
+      transporterName: input.transporterName || null,
+      transporterPlate: input.transporterPlate || null,
+      deliveryLocation: input.deliveryLocation || null,
+      notes: input.notes || null,
+      registeredBy: ctx.user?.id || null
+    });
+    return { success: true };
+  }),
+  updateInvoice: protectedProcedure.input(z27.object({
+    id: z27.number(),
+    supplierId: z27.number().optional(),
+    invoiceNumber: z27.string().optional(),
+    invoiceDate: z27.string().optional(),
+    dueDate: z27.string().optional(),
+    totalAmount: z27.string().optional(),
+    liters: z27.string().nullable().optional(),
+    pricePerLiter: z27.string().nullable().optional(),
+    fuelType: z27.enum(["diesel", "gasolina", "etanol", "gnv"]).optional(),
+    paymentMethod: z27.string().nullable().optional(),
+    bankName: z27.string().nullable().optional(),
+    barcodeNumber: z27.string().nullable().optional(),
+    status: z27.enum(["pendente", "pago", "vencido", "cancelado"]).optional(),
+    paidAt: z27.string().nullable().optional(),
+    paidAmount: z27.string().nullable().optional(),
+    transporterName: z27.string().nullable().optional(),
+    transporterPlate: z27.string().nullable().optional(),
+    deliveryLocation: z27.string().nullable().optional(),
+    notes: z27.string().nullable().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    const { id, ...data } = input;
+    const updateData = {};
+    for (const [key, val] of Object.entries(data)) {
+      if (val !== void 0) updateData[key] = val;
+    }
+    await db.update(fuelInvoices).set(updateData).where(eq26(fuelInvoices.id, id));
+    return { success: true };
+  }),
+  markInvoicePaid: protectedProcedure.input(z27.object({
+    id: z27.number(),
+    paidAt: z27.string().min(1),
+    paidAmount: z27.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(fuelInvoices).set({
+      status: "pago",
+      paidAt: input.paidAt,
+      paidAmount: input.paidAmount || null
+    }).where(eq26(fuelInvoices.id, input.id));
+    return { success: true };
+  }),
+  deleteInvoice: protectedProcedure.input(z27.object({ id: z27.number() })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(fuelInvoices).where(eq26(fuelInvoices.id, input.id));
+    return { success: true };
   })
 });
 
@@ -8969,6 +9103,36 @@ async function runAutoMigrations() {
         changed_by int,
         changed_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT fuel_price_history_id PRIMARY KEY(id)
+      )
+    `
+    );
+    await db.execute(
+      /*sql*/
+      `
+      CREATE TABLE IF NOT EXISTS fuel_invoices (
+        id int AUTO_INCREMENT NOT NULL,
+        supplier_id int NOT NULL,
+        invoice_number varchar(50) NOT NULL,
+        invoice_date varchar(10) NOT NULL,
+        due_date varchar(10) NOT NULL,
+        total_amount varchar(20) NOT NULL,
+        liters varchar(20),
+        price_per_liter varchar(20),
+        fuel_type enum('diesel','gasolina','etanol','gnv') DEFAULT 'diesel',
+        payment_method varchar(50),
+        bank_name varchar(100),
+        barcode_number varchar(100),
+        status enum('pendente','pago','vencido','cancelado') NOT NULL DEFAULT 'pendente',
+        paid_at varchar(10),
+        paid_amount varchar(20),
+        transporter_name varchar(255),
+        transporter_plate varchar(20),
+        delivery_location varchar(100),
+        notes text,
+        registered_by int,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fuel_invoices_id PRIMARY KEY(id)
       )
     `
     );

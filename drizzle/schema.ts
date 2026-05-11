@@ -1086,3 +1086,28 @@ export const fuelPriceHistory = mysqlTable("fuel_price_history", {
 	changedBy: int("changed_by"),
 	changedAt: timestamp("changed_at", { mode: 'string' }).defaultNow().notNull(),
 });
+
+export const fuelInvoices = mysqlTable("fuel_invoices", {
+	id: int().autoincrement().notNull(),
+	supplierId: int("supplier_id").notNull(),
+	invoiceNumber: varchar("invoice_number", { length: 50 }).notNull(),
+	invoiceDate: varchar("invoice_date", { length: 10 }).notNull(),
+	dueDate: varchar("due_date", { length: 10 }).notNull(),
+	totalAmount: varchar("total_amount", { length: 20 }).notNull(),
+	liters: varchar({ length: 20 }),
+	pricePerLiter: varchar("price_per_liter", { length: 20 }),
+	fuelType: mysqlEnum("fuel_type", ['diesel','gasolina','etanol','gnv']).default('diesel'),
+	paymentMethod: varchar("payment_method", { length: 50 }),
+	bankName: varchar("bank_name", { length: 100 }),
+	barcodeNumber: varchar("barcode_number", { length: 100 }),
+	status: mysqlEnum(['pendente', 'pago', 'vencido', 'cancelado']).default('pendente').notNull(),
+	paidAt: varchar("paid_at", { length: 10 }),
+	paidAmount: varchar("paid_amount", { length: 20 }),
+	transporterName: varchar("transporter_name", { length: 255 }),
+	transporterPlate: varchar("transporter_plate", { length: 20 }),
+	deliveryLocation: varchar("delivery_location", { length: 100 }),
+	notes: text(),
+	registeredBy: int("registered_by").references(() => users.id),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});

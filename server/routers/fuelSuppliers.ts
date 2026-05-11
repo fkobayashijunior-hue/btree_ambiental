@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { fuelSuppliers, fuelPriceHistory } from "../../drizzle/schema";
+import { fuelSuppliers, fuelPriceHistory, fuelInvoices } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
 
 export const fuelSuppliersRouter = router({
@@ -170,6 +170,133 @@ export const fuelSuppliersRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(fuelSuppliers).where(eq(fuelSuppliers.id, input.id));
+      return { success: true };
+    }),
+
+  // ===== CONTAS A PAGAR (NOTAS FISCAIS / BOLETOS) =====
+  listInvoices: protectedProcedure
+    .input(z.object({
+      supplierId: z.number().optional(),
+      status: z.enum(["pendente", "pago", "vencido", "cancelado"]).optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      let conditions: any[] = [];
+      if (input?.supplierId) conditions.push(eq(fuelInvoices.supplierId, input.supplierId));
+      if (input?.status) conditions.push(eq(fuelInvoices.status, input.status));
+      const invoices = conditions.length > 0
+        ? await db.select().from(fuelInvoices).where(and(...conditions)).orderBy(desc(fuelInvoices.id))
+        : await db.select().from(fuelInvoices).orderBy(desc(fuelInvoices.id));
+      // Enrich with supplier name
+      const suppliers = await db.select().from(fuelSuppliers);
+      const supplierMap = Object.fromEntries(suppliers.map(s => [s.id, s]));
+      return invoices.map(inv => ({
+        ...inv,
+        supplierName: supplierMap[inv.supplierId]?.name || `Fornecedor #${inv.supplierId}`,
+        supplierTradeName: supplierMap[inv.supplierId]?.tradeName || null,
+      }));
+    }),
+
+  createInvoice: protectedProcedure
+    .input(z.object({
+      supplierId: z.number(),
+      invoiceNumber: z.string().min(1),
+      invoiceDate: z.string().min(1),
+      dueDate: z.string().min(1),
+      totalAmount: z.string().min(1),
+      liters: z.string().optional(),
+      pricePerLiter: z.string().optional(),
+      fuelType: z.enum(["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
+      paymentMethod: z.string().optional(),
+      bankName: z.string().optional(),
+      barcodeNumber: z.string().optional(),
+      transporterName: z.string().optional(),
+      transporterPlate: z.string().optional(),
+      deliveryLocation: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.insert(fuelInvoices).values({
+        supplierId: input.supplierId,
+        invoiceNumber: input.invoiceNumber,
+        invoiceDate: input.invoiceDate,
+        dueDate: input.dueDate,
+        totalAmount: input.totalAmount,
+        liters: input.liters || null,
+        pricePerLiter: input.pricePerLiter || null,
+        fuelType: input.fuelType,
+        paymentMethod: input.paymentMethod || null,
+        bankName: input.bankName || null,
+        barcodeNumber: input.barcodeNumber || null,
+        transporterName: input.transporterName || null,
+        transporterPlate: input.transporterPlate || null,
+        deliveryLocation: input.deliveryLocation || null,
+        notes: input.notes || null,
+        registeredBy: ctx.user?.id || null,
+      });
+      return { success: true };
+    }),
+
+  updateInvoice: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      supplierId: z.number().optional(),
+      invoiceNumber: z.string().optional(),
+      invoiceDate: z.string().optional(),
+      dueDate: z.string().optional(),
+      totalAmount: z.string().optional(),
+      liters: z.string().nullable().optional(),
+      pricePerLiter: z.string().nullable().optional(),
+      fuelType: z.enum(["diesel", "gasolina", "etanol", "gnv"]).optional(),
+      paymentMethod: z.string().nullable().optional(),
+      bankName: z.string().nullable().optional(),
+      barcodeNumber: z.string().nullable().optional(),
+      status: z.enum(["pendente", "pago", "vencido", "cancelado"]).optional(),
+      paidAt: z.string().nullable().optional(),
+      paidAmount: z.string().nullable().optional(),
+      transporterName: z.string().nullable().optional(),
+      transporterPlate: z.string().nullable().optional(),
+      deliveryLocation: z.string().nullable().optional(),
+      notes: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { id, ...data } = input;
+      const updateData: any = {};
+      for (const [key, val] of Object.entries(data)) {
+        if (val !== undefined) updateData[key] = val;
+      }
+      await db.update(fuelInvoices).set(updateData).where(eq(fuelInvoices.id, id));
+      return { success: true };
+    }),
+
+  markInvoicePaid: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      paidAt: z.string().min(1),
+      paidAmount: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(fuelInvoices).set({
+        status: "pago",
+        paidAt: input.paidAt,
+        paidAmount: input.paidAmount || null,
+      }).where(eq(fuelInvoices.id, input.id));
+      return { success: true };
+    }),
+
+  deleteInvoice: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(fuelInvoices).where(eq(fuelInvoices.id, input.id));
       return { success: true };
     }),
 });

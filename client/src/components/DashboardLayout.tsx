@@ -78,6 +78,7 @@ const menuItems = [
   { icon: Car, label: "Controle de Abastecimento", path: "/veiculos", slug: "abastecimento" },
   { icon: Fuel, label: "Fornecedores Combustível", path: "/fornecedores-combustivel", slug: "fornecedores-combustivel" },
   { icon: Fuel, label: "Relatórios Combustível", path: "/relatorios-combustivel", slug: "relatorios-combustivel" },
+  { icon: Fuel, label: "Contas a Pagar (Combustível)", path: "/contas-pagar-combustivel", slug: "contas-pagar-combustivel" },
   { icon: Package, label: "Peças e Acessórios", path: "/pecas", slug: "pecas" },
   { icon: Globe, label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente" },
   { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },

@@ -61,6 +61,10 @@ export default function VehicleControlPage() {
   const [filterEquipment, setFilterEquipment] = useState<string>("");
   const [filterMonth, setFilterMonth] = useState<number>(now.getMonth()); // 0-indexed
   const [filterYear, setFilterYear] = useState<number>(now.getFullYear());
+  const [filterLocation, setFilterLocation] = useState<string>("");
+  const [filterDateFrom, setFilterDateFrom] = useState<string>("");
+  const [filterDateTo, setFilterDateTo] = useState<string>("");
+  const [filterMode, setFilterMode] = useState<"month" | "range">("month");
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [viewPhoto, setViewPhoto] = useState<string | null>(null);
@@ -89,13 +93,28 @@ export default function VehicleControlPage() {
     equipmentId: filterEquipment ? parseInt(filterEquipment) : undefined,
   });
 
-  // Filtrar por mês/ano no frontend
+  // Filtrar por mês/ano ou período + local
   const filteredRecords = useMemo(() => {
     return (records as any[]).filter((r: any) => {
-      const d = new Date(r.createdAt);
-      return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+      const d = new Date(r.date || r.createdAt);
+      // Filtro de período
+      if (filterMode === "month") {
+        if (d.getMonth() !== filterMonth || d.getFullYear() !== filterYear) return false;
+      } else {
+        if (filterDateFrom) {
+          const from = new Date(filterDateFrom + "T00:00:00");
+          if (d < from) return false;
+        }
+        if (filterDateTo) {
+          const to = new Date(filterDateTo + "T23:59:59");
+          if (d > to) return false;
+        }
+      }
+      // Filtro por local de trabalho
+      if (filterLocation && String(r.workLocationId) !== filterLocation) return false;
+      return true;
     });
-  }, [records, filterMonth, filterYear]);
+  }, [records, filterMonth, filterYear, filterLocation, filterDateFrom, filterDateTo, filterMode]);
 
   // Totais do período filtrado (apenas abastecimentos)
   const fuelRecords = useMemo(() => filteredRecords.filter((r: any) => r.recordType === "abastecimento"), [filteredRecords]);
@@ -210,7 +229,15 @@ export default function VehicleControlPage() {
     }
   };
 
-  const periodLabel = `${MONTHS[filterMonth]} ${filterYear}`;
+  const periodLabel = filterMode === "month"
+    ? `${MONTHS[filterMonth]} ${filterYear}`
+    : (filterDateFrom && filterDateTo)
+      ? `${new Date(filterDateFrom + "T12:00:00").toLocaleDateString("pt-BR")} a ${new Date(filterDateTo + "T12:00:00").toLocaleDateString("pt-BR")}`
+      : filterDateFrom
+        ? `A partir de ${new Date(filterDateFrom + "T12:00:00").toLocaleDateString("pt-BR")}`
+        : filterDateTo
+          ? `Até ${new Date(filterDateTo + "T12:00:00").toLocaleDateString("pt-BR")}`
+          : "Todos os registros";
 
   // ===== EXPORTAR PDF =====
   const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
@@ -224,7 +251,7 @@ export default function VehicleControlPage() {
 
     const tableRows = filteredRecords.map((r: any) => `
       <tr>
-        <td>${new Date(r.createdAt).toLocaleDateString("pt-BR")}</td>
+        <td>${new Date(r.date || r.createdAt).toLocaleDateString("pt-BR")}</td>
         <td>${equipMap[r.equipmentId] || `#${r.equipmentId}`}</td>
         <td>${RECORD_LABELS[r.recordType as RecordType] || r.recordType}</td>
         <td>${r.recordType === "abastecimento" ? (r.fuelType || "-") : "-"}</td>
@@ -410,7 +437,7 @@ export default function VehicleControlPage() {
         const row = ws.getRow(rowNum);
         const isEven = idx % 2 === 0;
         const values = [
-          new Date(r.createdAt).toLocaleDateString("pt-BR"),
+          new Date(r.date || r.createdAt).toLocaleDateString("pt-BR"),
           equipMap[r.equipmentId] || `#${r.equipmentId}`,
           RECORD_LABELS[r.recordType as RecordType] || r.recordType,
           r.fuelType || "-",
@@ -522,48 +549,107 @@ export default function VehicleControlPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 items-end">
-        {/* Mês */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-gray-500">Mês</label>
-          <select
-            value={filterMonth}
-            onChange={e => setFilterMonth(parseInt(e.target.value))}
-            className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      <div className="space-y-3">
+        {/* Toggle Modo de Filtro */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setFilterMode("month")}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${filterMode === "month" ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
-            {MONTHS.map((m, i) => (
-              <option key={i} value={i}>{m}</option>
-            ))}
-          </select>
+            Por Mês
+          </button>
+          <button
+            onClick={() => setFilterMode("range")}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${filterMode === "range" ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+          >
+            Por Período
+          </button>
         </div>
 
-        {/* Ano */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-gray-500">Ano</label>
-          <select
-            value={filterYear}
-            onChange={e => setFilterYear(parseInt(e.target.value))}
-            className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            {years.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
+        <div className="flex flex-wrap gap-3 items-end">
+          {filterMode === "month" ? (
+            <>
+              {/* Mês */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-500">Mês</label>
+                <select
+                  value={filterMonth}
+                  onChange={e => setFilterMonth(parseInt(e.target.value))}
+                  className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {MONTHS.map((m, i) => (
+                    <option key={i} value={i}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Ano */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-500">Ano</label>
+                <select
+                  value={filterYear}
+                  onChange={e => setFilterYear(parseInt(e.target.value))}
+                  className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {years.map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Data Inicial */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-500">De</label>
+                <Input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={e => setFilterDateFrom(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              {/* Data Final */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-500">Até</label>
+                <Input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={e => setFilterDateTo(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+            </>
+          )}
 
-        {/* Veículo */}
-        <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
-          <label className="text-xs font-medium text-gray-500">Veículo</label>
-          <select
-            value={filterEquipment}
-            onChange={e => setFilterEquipment(e.target.value)}
-            className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">Todos os veículos</option>
-            {equipmentList.map((eq: any) => (
-              <option key={eq.id} value={eq.id}>{eq.name}</option>
-            ))}
-          </select>
+          {/* Equipamento/Veículo */}
+          <div className="flex flex-col gap-1 min-w-[160px]">
+            <label className="text-xs font-medium text-gray-500">Equipamento</label>
+            <select
+              value={filterEquipment}
+              onChange={e => setFilterEquipment(e.target.value)}
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Todos</option>
+              {equipmentList.map((eq: any) => (
+                <option key={eq.id} value={eq.id}>{eq.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Local de Trabalho */}
+          <div className="flex flex-col gap-1 min-w-[160px]">
+            <label className="text-xs font-medium text-gray-500">Local</label>
+            <select
+              value={filterLocation}
+              onChange={e => setFilterLocation(e.target.value)}
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Todos os locais</option>
+              {locations.map((loc: any) => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -655,7 +741,7 @@ export default function VehicleControlPage() {
                     <div className="text-xs text-gray-500 mt-1 flex gap-3 flex-wrap">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {new Date(r.createdAt).toLocaleDateString("pt-BR")}
+                        {new Date(r.date || r.createdAt).toLocaleDateString("pt-BR")}
                       </span>
                       {r.odometer && <span>{r.odometer} km</span>}
                       {r.supplier && <span>{r.supplier}</span>}

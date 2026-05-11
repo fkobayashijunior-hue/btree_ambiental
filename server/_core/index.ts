@@ -240,6 +240,35 @@ async function runAutoMigrations() {
       )
     `);
 
+    // Create fuel_invoices table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS fuel_invoices (
+        id int AUTO_INCREMENT NOT NULL,
+        supplier_id int NOT NULL,
+        invoice_number varchar(50) NOT NULL,
+        invoice_date varchar(10) NOT NULL,
+        due_date varchar(10) NOT NULL,
+        total_amount varchar(20) NOT NULL,
+        liters varchar(20),
+        price_per_liter varchar(20),
+        fuel_type enum('diesel','gasolina','etanol','gnv') DEFAULT 'diesel',
+        payment_method varchar(50),
+        bank_name varchar(100),
+        barcode_number varchar(100),
+        status enum('pendente','pago','vencido','cancelado') NOT NULL DEFAULT 'pendente',
+        paid_at varchar(10),
+        paid_amount varchar(20),
+        transporter_name varchar(255),
+        transporter_plate varchar(20),
+        delivery_location varchar(100),
+        notes text,
+        registered_by int,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fuel_invoices_id PRIMARY KEY(id)
+      )
+    `);
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);
