@@ -1107,6 +1107,7 @@ export const fuelInvoices = mysqlTable("fuel_invoices", {
 	transporterPlate: varchar("transporter_plate", { length: 20 }),
 	deliveryLocation: varchar("delivery_location", { length: 100 }),
 	notes: text(),
+	invoicePhotoUrl: text("invoice_photo_url"),
 	registeredBy: int("registered_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),

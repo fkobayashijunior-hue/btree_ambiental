@@ -269,6 +269,11 @@ async function runAutoMigrations() {
       )
     `);
 
+    // Add invoice_photo_url column if not exists
+    try {
+      await db.execute(/*sql*/`ALTER TABLE fuel_invoices ADD COLUMN invoice_photo_url text`);
+    } catch(e: any) { if (!e.message?.includes('Duplicate')) console.log('[AutoMigration] invoice_photo_url:', e.message); }
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);
@@ -406,3 +411,98 @@ function schedulePendingPaymentsCheck() {
 }
 
 schedulePendingPaymentsCheck();
+
+// ── Cron job: verificar boletos de combustível próximos do vencimento (diário 8h) ────────
+function scheduleFuelInvoiceDueCheck() {
+  const checkAndSchedule = async () => {
+    const now = new Date();
+    // Próximo dia útil às 8h
+    const next = new Date(now);
+    next.setDate(next.getDate() + 1);
+    next.setHours(8, 0, 0, 0);
+    // Pular fins de semana
+    while (next.getDay() === 0 || next.getDay() === 6) {
+      next.setDate(next.getDate() + 1);
+    }
+    const msUntilNext = next.getTime() - now.getTime();
+
+    setTimeout(async () => {
+      try {
+        const mysql = await import('mysql2/promise');
+        const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+
+        // Buscar boletos pendentes com vencimento nos próximos 3 dias ou já vencidos
+        const today = new Date().toISOString().slice(0, 10);
+        const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        const [rows] = await conn.execute(
+          `SELECT fi.*, fs.name as supplier_name, fs.trade_name as supplier_trade_name
+           FROM fuel_invoices fi
+           LEFT JOIN fuel_suppliers fs ON fi.supplier_id = fs.id
+           WHERE fi.status = 'pendente'
+           AND fi.due_date <= ?
+           ORDER BY fi.due_date ASC`,
+          [threeDaysLater]
+        ) as any;
+
+        await conn.end();
+
+        if (rows.length > 0) {
+          const overdue = rows.filter((r: any) => r.due_date < today);
+          const dueSoon = rows.filter((r: any) => r.due_date >= today && r.due_date <= threeDaysLater);
+
+          let message = '';
+          if (overdue.length > 0) {
+            const totalOverdue = overdue.reduce((s: number, r: any) => s + parseFloat(r.total_amount || '0'), 0);
+            message += `🔴 VENCIDOS (${overdue.length}):\n`;
+            for (const inv of overdue) {
+              message += `• ${inv.supplier_name} — NF ${inv.invoice_number} — R$ ${inv.total_amount} — Venc: ${inv.due_date.split('-').reverse().join('/')}\n`;
+            }
+            message += `Total vencido: R$ ${totalOverdue.toFixed(2)}\n\n`;
+          }
+          if (dueSoon.length > 0) {
+            const totalDueSoon = dueSoon.reduce((s: number, r: any) => s + parseFloat(r.total_amount || '0'), 0);
+            message += `🟡 VENCE EM ATÉ 3 DIAS (${dueSoon.length}):\n`;
+            for (const inv of dueSoon) {
+              message += `• ${inv.supplier_name} — NF ${inv.invoice_number} — R$ ${inv.total_amount} — Venc: ${inv.due_date.split('-').reverse().join('/')}\n`;
+            }
+            message += `Total: R$ ${totalDueSoon.toFixed(2)}\n`;
+          }
+
+          // Notify Mary (financeiro) via internal notifications
+          try {
+            const { notifyFinanceiro } = await import('../routers/notifications');
+            await notifyFinanceiro({
+              type: 'pagamento_boleto',
+              title: `⚠️ Boletos combustível: ${overdue.length} vencido(s), ${dueSoon.length} próximo(s)`,
+              message,
+            });
+          } catch (e) { console.warn('[CronJob-Fuel] Error notifying financeiro:', e); }
+
+          // Also notify owner
+          try {
+            const { notifyOwner } = await import('./notification');
+            await notifyOwner({
+              title: `⚠️ Boletos combustível: ${overdue.length} vencido(s), ${dueSoon.length} próximo(s)`,
+              content: message,
+            });
+          } catch (e) { console.warn('[CronJob-Fuel] Error notifying owner:', e); }
+
+          console.log(`[CronJob-Fuel] Notificou ${rows.length} boletos (${overdue.length} vencidos, ${dueSoon.length} próximos).`);
+        } else {
+          console.log('[CronJob-Fuel] Nenhum boleto de combustível pendente ou próximo do vencimento.');
+        }
+      } catch (err) {
+        console.error('[CronJob-Fuel] Erro ao verificar boletos:', err);
+      }
+      checkAndSchedule();
+    }, msUntilNext);
+
+    const nextDate = new Date(now.getTime() + msUntilNext);
+    console.log(`[CronJob-Fuel] Próxima verificação de boletos combustível: ${nextDate.toLocaleString('pt-BR')}`);
+  };
+
+  checkAndSchedule();
+}
+
+scheduleFuelInvoiceDueCheck();

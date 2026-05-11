@@ -1229,6 +1229,7 @@ var init_schema = __esm({
       transporterPlate: varchar("transporter_plate", { length: 20 }),
       deliveryLocation: varchar("delivery_location", { length: 100 }),
       notes: text(),
+      invoicePhotoUrl: text("invoice_photo_url"),
       registeredBy: int("registered_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
@@ -8059,6 +8060,223 @@ init_schema();
 import { z as z27 } from "zod";
 import { TRPCError as TRPCError17 } from "@trpc/server";
 import { eq as eq26, desc as desc22, and as and15 } from "drizzle-orm";
+
+// server/_core/llm.ts
+init_env();
+var ensureArray = (value) => Array.isArray(value) ? value : [value];
+var normalizeContentPart = (part) => {
+  if (typeof part === "string") {
+    return { type: "text", text: part };
+  }
+  if (part.type === "text") {
+    return part;
+  }
+  if (part.type === "image_url") {
+    return part;
+  }
+  if (part.type === "file_url") {
+    return part;
+  }
+  throw new Error("Unsupported message content part");
+};
+var normalizeMessage = (message) => {
+  const { role, name, tool_call_id } = message;
+  if (role === "tool" || role === "function") {
+    const content = ensureArray(message.content).map((part) => typeof part === "string" ? part : JSON.stringify(part)).join("\n");
+    return {
+      role,
+      name,
+      tool_call_id,
+      content
+    };
+  }
+  const contentParts = ensureArray(message.content).map(normalizeContentPart);
+  if (contentParts.length === 1 && contentParts[0].type === "text") {
+    return {
+      role,
+      name,
+      content: contentParts[0].text
+    };
+  }
+  return {
+    role,
+    name,
+    content: contentParts
+  };
+};
+var normalizeToolChoice = (toolChoice, tools) => {
+  if (!toolChoice) return void 0;
+  if (toolChoice === "none" || toolChoice === "auto") {
+    return toolChoice;
+  }
+  if (toolChoice === "required") {
+    if (!tools || tools.length === 0) {
+      throw new Error(
+        "tool_choice 'required' was provided but no tools were configured"
+      );
+    }
+    if (tools.length > 1) {
+      throw new Error(
+        "tool_choice 'required' needs a single tool or specify the tool name explicitly"
+      );
+    }
+    return {
+      type: "function",
+      function: { name: tools[0].function.name }
+    };
+  }
+  if ("name" in toolChoice) {
+    return {
+      type: "function",
+      function: { name: toolChoice.name }
+    };
+  }
+  return toolChoice;
+};
+var resolveApiUrl = () => ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0 ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions` : "https://forge.manus.im/v1/chat/completions";
+var assertApiKey = () => {
+  if (!ENV.forgeApiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+};
+var normalizeResponseFormat = ({
+  responseFormat,
+  response_format,
+  outputSchema,
+  output_schema
+}) => {
+  const explicitFormat = responseFormat || response_format;
+  if (explicitFormat) {
+    if (explicitFormat.type === "json_schema" && !explicitFormat.json_schema?.schema) {
+      throw new Error(
+        "responseFormat json_schema requires a defined schema object"
+      );
+    }
+    return explicitFormat;
+  }
+  const schema = outputSchema || output_schema;
+  if (!schema) return void 0;
+  if (!schema.name || !schema.schema) {
+    throw new Error("outputSchema requires both name and schema");
+  }
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: schema.name,
+      schema: schema.schema,
+      ...typeof schema.strict === "boolean" ? { strict: schema.strict } : {}
+    }
+  };
+};
+async function invokeLLM(params) {
+  assertApiKey();
+  const {
+    messages,
+    tools,
+    toolChoice,
+    tool_choice,
+    outputSchema,
+    output_schema,
+    responseFormat,
+    response_format
+  } = params;
+  const payload = {
+    model: "gemini-2.5-flash",
+    messages: messages.map(normalizeMessage)
+  };
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+  const normalizedToolChoice = normalizeToolChoice(
+    toolChoice || tool_choice,
+    tools
+  );
+  if (normalizedToolChoice) {
+    payload.tool_choice = normalizedToolChoice;
+  }
+  payload.max_tokens = 32768;
+  payload.thinking = {
+    "budget_tokens": 128
+  };
+  const normalizedResponseFormat = normalizeResponseFormat({
+    responseFormat,
+    response_format,
+    outputSchema,
+    output_schema
+  });
+  if (normalizedResponseFormat) {
+    payload.response_format = normalizedResponseFormat;
+  }
+  const response = await fetch(resolveApiUrl(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${ENV.forgeApiKey}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `LLM invoke failed: ${response.status} ${response.statusText} \u2013 ${errorText}`
+    );
+  }
+  return await response.json();
+}
+
+// server/storage.ts
+init_env();
+function getStorageConfig() {
+  const baseUrl = ENV.forgeApiUrl;
+  const apiKey = ENV.forgeApiKey;
+  if (!baseUrl || !apiKey) {
+    throw new Error(
+      "Storage proxy credentials missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
+    );
+  }
+  return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
+}
+function buildUploadUrl(baseUrl, relKey) {
+  const url = new URL("v1/storage/upload", ensureTrailingSlash(baseUrl));
+  url.searchParams.set("path", normalizeKey(relKey));
+  return url;
+}
+function ensureTrailingSlash(value) {
+  return value.endsWith("/") ? value : `${value}/`;
+}
+function normalizeKey(relKey) {
+  return relKey.replace(/^\/+/, "");
+}
+function toFormData(data, contentType, fileName) {
+  const blob = typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data], { type: contentType });
+  const form = new FormData();
+  form.append("file", blob, fileName || "file");
+  return form;
+}
+function buildAuthHeaders(apiKey) {
+  return { Authorization: `Bearer ${apiKey}` };
+}
+async function storagePut(relKey, data, contentType = "application/octet-stream") {
+  const { baseUrl, apiKey } = getStorageConfig();
+  const key = normalizeKey(relKey);
+  const uploadUrl = buildUploadUrl(baseUrl, key);
+  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: buildAuthHeaders(apiKey),
+    body: formData
+  });
+  if (!response.ok) {
+    const message = await response.text().catch(() => response.statusText);
+    throw new Error(
+      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
+    );
+  }
+  const url = (await response.json()).url;
+  return { key, url };
+}
+
+// server/routers/fuelSuppliers.ts
 var fuelSuppliersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
@@ -8201,6 +8419,95 @@ var fuelSuppliersRouter = router({
     await db.delete(fuelSuppliers).where(eq26(fuelSuppliers.id, input.id));
     return { success: true };
   }),
+  // ===== OCR - LEITURA AUTOMÁTICA DE NF POR FOTO =====
+  extractInvoiceFromPhoto: protectedProcedure.input(z27.object({
+    photoBase64: z27.string().min(1),
+    mimeType: z27.string().default("image/jpeg")
+  })).mutation(async ({ ctx, input }) => {
+    const buffer = Buffer.from(input.photoBase64, "base64");
+    const ext = input.mimeType.includes("png") ? "png" : "jpg";
+    const randomSuffix = Math.random().toString(36).substring(2, 10);
+    const fileKey = `invoices/nf-${Date.now()}-${randomSuffix}.${ext}`;
+    const { url: photoUrl } = await storagePut(fileKey, buffer, input.mimeType);
+    const result = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `Voc\xEA \xE9 um assistente especializado em extrair dados de notas fiscais e boletos brasileiros.
+Analise a imagem e extraia os seguintes dados em formato JSON:
+- invoiceNumber: n\xFAmero da nota fiscal (apenas n\xFAmeros)
+- invoiceDate: data de emiss\xE3o no formato YYYY-MM-DD
+- dueDate: data de vencimento no formato YYYY-MM-DD
+- totalAmount: valor total (apenas n\xFAmeros com ponto decimal, ex: 17100.00)
+- liters: quantidade em litros (apenas n\xFAmeros, se houver)
+- pricePerLiter: pre\xE7o por litro (apenas n\xFAmeros com ponto decimal, se houver)
+- fuelType: tipo de combust\xEDvel (diesel, gasolina, etanol ou gnv)
+- bankName: nome do banco (se for boleto)
+- barcodeNumber: linha digit\xE1vel do boleto (se vis\xEDvel)
+- transporterName: nome da transportadora (se houver)
+- transporterPlate: placa do ve\xEDculo (se houver)
+- supplierName: raz\xE3o social do fornecedor/emitente
+- supplierCnpj: CNPJ do fornecedor/emitente
+- deliveryLocation: local de entrega (se houver)
+- paymentMethod: forma de pagamento (boleto, pix, transferencia, cheque, dinheiro)
+Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, use null.`
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extraia os dados desta nota fiscal/boleto:" },
+            { type: "image_url", image_url: { url: photoUrl, detail: "high" } }
+          ]
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "invoice_data",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              invoiceNumber: { type: ["string", "null"] },
+              invoiceDate: { type: ["string", "null"] },
+              dueDate: { type: ["string", "null"] },
+              totalAmount: { type: ["string", "null"] },
+              liters: { type: ["string", "null"] },
+              pricePerLiter: { type: ["string", "null"] },
+              fuelType: { type: ["string", "null"] },
+              bankName: { type: ["string", "null"] },
+              barcodeNumber: { type: ["string", "null"] },
+              transporterName: { type: ["string", "null"] },
+              transporterPlate: { type: ["string", "null"] },
+              supplierName: { type: ["string", "null"] },
+              supplierCnpj: { type: ["string", "null"] },
+              deliveryLocation: { type: ["string", "null"] },
+              paymentMethod: { type: ["string", "null"] }
+            },
+            required: ["invoiceNumber", "invoiceDate", "dueDate", "totalAmount", "liters", "pricePerLiter", "fuelType", "bankName", "barcodeNumber", "transporterName", "transporterPlate", "supplierName", "supplierCnpj", "deliveryLocation", "paymentMethod"],
+            additionalProperties: false
+          }
+        }
+      }
+    });
+    const content = result.choices?.[0]?.message?.content;
+    let extracted = {};
+    try {
+      extracted = typeof content === "string" ? JSON.parse(content) : {};
+    } catch {
+      const jsonMatch = typeof content === "string" ? content.match(/\{[\s\S]*\}/) : null;
+      if (jsonMatch) {
+        try {
+          extracted = JSON.parse(jsonMatch[0]);
+        } catch {
+        }
+      }
+    }
+    return {
+      photoUrl,
+      extracted
+    };
+  }),
   // ===== CONTAS A PAGAR (NOTAS FISCAIS / BOLETOS) =====
   listInvoices: protectedProcedure.input(z27.object({
     supplierId: z27.number().optional(),
@@ -8235,7 +8542,8 @@ var fuelSuppliersRouter = router({
     transporterName: z27.string().optional(),
     transporterPlate: z27.string().optional(),
     deliveryLocation: z27.string().optional(),
-    notes: z27.string().optional()
+    notes: z27.string().optional(),
+    invoicePhotoUrl: z27.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
@@ -8255,8 +8563,22 @@ var fuelSuppliersRouter = router({
       transporterPlate: input.transporterPlate || null,
       deliveryLocation: input.deliveryLocation || null,
       notes: input.notes || null,
+      invoicePhotoUrl: input.invoicePhotoUrl || null,
       registeredBy: ctx.user?.id || null
     });
+    try {
+      const { notifyFinanceiro: notifyFinanceiro2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+      const supplier = await db.select().from(fuelSuppliers).where(eq26(fuelSuppliers.id, input.supplierId));
+      const supplierName = supplier[0]?.name || `Fornecedor #${input.supplierId}`;
+      const dueDateFmt = input.dueDate.split("-").reverse().join("/");
+      await notifyFinanceiro2({
+        type: "pagamento_boleto",
+        title: `Nova NF combust\xEDvel: ${supplierName}`,
+        message: `NF ${input.invoiceNumber} | Valor: R$ ${input.totalAmount} | Vencimento: ${dueDateFmt}`
+      });
+    } catch (e) {
+      console.warn("[Notification] Error notifying financeiro:", e);
+    }
     return { success: true };
   }),
   updateInvoice: protectedProcedure.input(z27.object({
@@ -9136,6 +9458,14 @@ async function runAutoMigrations() {
       )
     `
     );
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_invoices ADD COLUMN invoice_photo_url text`
+      );
+    } catch (e) {
+      if (!e.message?.includes("Duplicate")) console.log("[AutoMigration] invoice_photo_url:", e.message);
+    }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
     console.error("[AutoMigration] Error:", err);
@@ -9247,3 +9577,90 @@ Acesse o sistema para realizar os pagamentos.`
   checkAndSchedule();
 }
 schedulePendingPaymentsCheck();
+function scheduleFuelInvoiceDueCheck() {
+  const checkAndSchedule = async () => {
+    const now = /* @__PURE__ */ new Date();
+    const next = new Date(now);
+    next.setDate(next.getDate() + 1);
+    next.setHours(8, 0, 0, 0);
+    while (next.getDay() === 0 || next.getDay() === 6) {
+      next.setDate(next.getDate() + 1);
+    }
+    const msUntilNext = next.getTime() - now.getTime();
+    setTimeout(async () => {
+      try {
+        const mysql3 = await import("mysql2/promise");
+        const conn = await mysql3.createConnection(process.env.DATABASE_URL);
+        const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+        const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1e3).toISOString().slice(0, 10);
+        const [rows] = await conn.execute(
+          `SELECT fi.*, fs.name as supplier_name, fs.trade_name as supplier_trade_name
+           FROM fuel_invoices fi
+           LEFT JOIN fuel_suppliers fs ON fi.supplier_id = fs.id
+           WHERE fi.status = 'pendente'
+           AND fi.due_date <= ?
+           ORDER BY fi.due_date ASC`,
+          [threeDaysLater]
+        );
+        await conn.end();
+        if (rows.length > 0) {
+          const overdue = rows.filter((r) => r.due_date < today);
+          const dueSoon = rows.filter((r) => r.due_date >= today && r.due_date <= threeDaysLater);
+          let message = "";
+          if (overdue.length > 0) {
+            const totalOverdue = overdue.reduce((s, r) => s + parseFloat(r.total_amount || "0"), 0);
+            message += `\u{1F534} VENCIDOS (${overdue.length}):
+`;
+            for (const inv of overdue) {
+              message += `\u2022 ${inv.supplier_name} \u2014 NF ${inv.invoice_number} \u2014 R$ ${inv.total_amount} \u2014 Venc: ${inv.due_date.split("-").reverse().join("/")}
+`;
+            }
+            message += `Total vencido: R$ ${totalOverdue.toFixed(2)}
+
+`;
+          }
+          if (dueSoon.length > 0) {
+            const totalDueSoon = dueSoon.reduce((s, r) => s + parseFloat(r.total_amount || "0"), 0);
+            message += `\u{1F7E1} VENCE EM AT\xC9 3 DIAS (${dueSoon.length}):
+`;
+            for (const inv of dueSoon) {
+              message += `\u2022 ${inv.supplier_name} \u2014 NF ${inv.invoice_number} \u2014 R$ ${inv.total_amount} \u2014 Venc: ${inv.due_date.split("-").reverse().join("/")}
+`;
+            }
+            message += `Total: R$ ${totalDueSoon.toFixed(2)}
+`;
+          }
+          try {
+            const { notifyFinanceiro: notifyFinanceiro2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+            await notifyFinanceiro2({
+              type: "pagamento_boleto",
+              title: `\u26A0\uFE0F Boletos combust\xEDvel: ${overdue.length} vencido(s), ${dueSoon.length} pr\xF3ximo(s)`,
+              message
+            });
+          } catch (e) {
+            console.warn("[CronJob-Fuel] Error notifying financeiro:", e);
+          }
+          try {
+            const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
+            await notifyOwner2({
+              title: `\u26A0\uFE0F Boletos combust\xEDvel: ${overdue.length} vencido(s), ${dueSoon.length} pr\xF3ximo(s)`,
+              content: message
+            });
+          } catch (e) {
+            console.warn("[CronJob-Fuel] Error notifying owner:", e);
+          }
+          console.log(`[CronJob-Fuel] Notificou ${rows.length} boletos (${overdue.length} vencidos, ${dueSoon.length} pr\xF3ximos).`);
+        } else {
+          console.log("[CronJob-Fuel] Nenhum boleto de combust\xEDvel pendente ou pr\xF3ximo do vencimento.");
+        }
+      } catch (err) {
+        console.error("[CronJob-Fuel] Erro ao verificar boletos:", err);
+      }
+      checkAndSchedule();
+    }, msUntilNext);
+    const nextDate = new Date(now.getTime() + msUntilNext);
+    console.log(`[CronJob-Fuel] Pr\xF3xima verifica\xE7\xE3o de boletos combust\xEDvel: ${nextDate.toLocaleString("pt-BR")}`);
+  };
+  checkAndSchedule();
+}
+scheduleFuelInvoiceDueCheck();

@@ -4,6 +4,8 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { fuelSuppliers, fuelPriceHistory, fuelInvoices } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
+import { invokeLLM } from "../_core/llm";
+import { storagePut } from "../storage";
 
 export const fuelSuppliersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -173,6 +175,101 @@ export const fuelSuppliersRouter = router({
       return { success: true };
     }),
 
+  // ===== OCR - LEITURA AUTOMÁTICA DE NF POR FOTO =====
+  extractInvoiceFromPhoto: protectedProcedure
+    .input(z.object({
+      photoBase64: z.string().min(1),
+      mimeType: z.string().default("image/jpeg"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // 1. Upload photo to S3
+      const buffer = Buffer.from(input.photoBase64, "base64");
+      const ext = input.mimeType.includes("png") ? "png" : "jpg";
+      const randomSuffix = Math.random().toString(36).substring(2, 10);
+      const fileKey = `invoices/nf-${Date.now()}-${randomSuffix}.${ext}`;
+      const { url: photoUrl } = await storagePut(fileKey, buffer, input.mimeType);
+
+      // 2. Use LLM vision to extract data from the photo
+      const result = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `Você é um assistente especializado em extrair dados de notas fiscais e boletos brasileiros.
+Analise a imagem e extraia os seguintes dados em formato JSON:
+- invoiceNumber: número da nota fiscal (apenas números)
+- invoiceDate: data de emissão no formato YYYY-MM-DD
+- dueDate: data de vencimento no formato YYYY-MM-DD
+- totalAmount: valor total (apenas números com ponto decimal, ex: 17100.00)
+- liters: quantidade em litros (apenas números, se houver)
+- pricePerLiter: preço por litro (apenas números com ponto decimal, se houver)
+- fuelType: tipo de combustível (diesel, gasolina, etanol ou gnv)
+- bankName: nome do banco (se for boleto)
+- barcodeNumber: linha digitável do boleto (se visível)
+- transporterName: nome da transportadora (se houver)
+- transporterPlate: placa do veículo (se houver)
+- supplierName: razão social do fornecedor/emitente
+- supplierCnpj: CNPJ do fornecedor/emitente
+- deliveryLocation: local de entrega (se houver)
+- paymentMethod: forma de pagamento (boleto, pix, transferencia, cheque, dinheiro)
+Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use null.`
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Extraia os dados desta nota fiscal/boleto:" },
+              { type: "image_url", image_url: { url: photoUrl, detail: "high" } }
+            ]
+          }
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "invoice_data",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                invoiceNumber: { type: ["string", "null"] },
+                invoiceDate: { type: ["string", "null"] },
+                dueDate: { type: ["string", "null"] },
+                totalAmount: { type: ["string", "null"] },
+                liters: { type: ["string", "null"] },
+                pricePerLiter: { type: ["string", "null"] },
+                fuelType: { type: ["string", "null"] },
+                bankName: { type: ["string", "null"] },
+                barcodeNumber: { type: ["string", "null"] },
+                transporterName: { type: ["string", "null"] },
+                transporterPlate: { type: ["string", "null"] },
+                supplierName: { type: ["string", "null"] },
+                supplierCnpj: { type: ["string", "null"] },
+                deliveryLocation: { type: ["string", "null"] },
+                paymentMethod: { type: ["string", "null"] },
+              },
+              required: ["invoiceNumber", "invoiceDate", "dueDate", "totalAmount", "liters", "pricePerLiter", "fuelType", "bankName", "barcodeNumber", "transporterName", "transporterPlate", "supplierName", "supplierCnpj", "deliveryLocation", "paymentMethod"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const content = result.choices?.[0]?.message?.content;
+      let extracted: any = {};
+      try {
+        extracted = typeof content === "string" ? JSON.parse(content) : {};
+      } catch {
+        // Try to extract JSON from the response
+        const jsonMatch = typeof content === "string" ? content.match(/\{[\s\S]*\}/) : null;
+        if (jsonMatch) {
+          try { extracted = JSON.parse(jsonMatch[0]); } catch { /* ignore */ }
+        }
+      }
+
+      return {
+        photoUrl,
+        extracted,
+      };
+    }),
+
   // ===== CONTAS A PAGAR (NOTAS FISCAIS / BOLETOS) =====
   listInvoices: protectedProcedure
     .input(z.object({
@@ -215,6 +312,7 @@ export const fuelSuppliersRouter = router({
       transporterPlate: z.string().optional(),
       deliveryLocation: z.string().optional(),
       notes: z.string().optional(),
+      invoicePhotoUrl: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -235,8 +333,21 @@ export const fuelSuppliersRouter = router({
         transporterPlate: input.transporterPlate || null,
         deliveryLocation: input.deliveryLocation || null,
         notes: input.notes || null,
+        invoicePhotoUrl: input.invoicePhotoUrl || null,
         registeredBy: ctx.user?.id || null,
       });
+      // Notify Mary (financeiro) about new invoice
+      try {
+        const { notifyFinanceiro } = await import('./notifications');
+        const supplier = await db.select().from(fuelSuppliers).where(eq(fuelSuppliers.id, input.supplierId));
+        const supplierName = supplier[0]?.name || `Fornecedor #${input.supplierId}`;
+        const dueDateFmt = input.dueDate.split('-').reverse().join('/');
+        await notifyFinanceiro({
+          type: 'pagamento_boleto',
+          title: `Nova NF combustível: ${supplierName}`,
+          message: `NF ${input.invoiceNumber} | Valor: R$ ${input.totalAmount} | Vencimento: ${dueDateFmt}`,
+        });
+      } catch (e) { console.warn('[Notification] Error notifying financeiro:', e); }
       return { success: true };
     }),
 

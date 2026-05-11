@@ -281,6 +281,13 @@
       "when": 1778510069260,
       "tag": "0039_secret_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "5",
+      "when": 1778515280718,
+      "tag": "0040_faithful_tusk",
+      "breakpoints": true
     }
   ]
 }

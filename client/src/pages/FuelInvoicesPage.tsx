@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  Plus, FileText, Calendar, DollarSign, Truck, CheckCircle2, Clock, AlertTriangle, X, Search, Filter, Pencil, Trash2, Eye
+  Plus, FileText, Calendar, DollarSign, Truck, CheckCircle2, Clock, AlertTriangle, X, Search, Filter, Pencil, Trash2, Eye, Camera, Upload, Loader2, Image as ImageIcon, Download
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -68,6 +68,7 @@ const emptyForm = {
   transporterPlate: "",
   deliveryLocation: "",
   notes: "",
+  invoicePhotoUrl: "",
 };
 
 export default function FuelInvoicesPage() {
@@ -80,6 +81,10 @@ export default function FuelInvoicesPage() {
   const [payingId, setPayingId] = useState<number | null>(null);
   const [payForm, setPayForm] = useState({ paidAt: "", paidAmount: "" });
   const [viewInvoice, setViewInvoice] = useState<any>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanPreview, setScanPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const utils = trpc.useUtils();
   const { data: invoices = [], isLoading } = trpc.fuelSuppliers.listInvoices.useQuery(
@@ -88,23 +93,83 @@ export default function FuelInvoicesPage() {
   const { data: suppliers = [] } = trpc.fuelSuppliers.list.useQuery();
 
   const createMutation = trpc.fuelSuppliers.createInvoice.useMutation({
-    onSuccess: () => { utils.fuelSuppliers.listInvoices.invalidate(); toast.success("Nota cadastrada!"); setIsOpen(false); resetForm(); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => { utils.fuelSuppliers.listInvoices.invalidate(); toast.success("Nota cadastrada com sucesso! Mary será notificada."); setIsOpen(false); resetForm(); },
+    onError: (e: any) => toast.error(e.message),
   });
   const updateMutation = trpc.fuelSuppliers.updateInvoice.useMutation({
     onSuccess: () => { utils.fuelSuppliers.listInvoices.invalidate(); toast.success("Nota atualizada!"); setIsOpen(false); resetForm(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
   const markPaidMutation = trpc.fuelSuppliers.markInvoicePaid.useMutation({
     onSuccess: () => { utils.fuelSuppliers.listInvoices.invalidate(); toast.success("Pagamento registrado!"); setPayingId(null); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
   const deleteMutation = trpc.fuelSuppliers.deleteInvoice.useMutation({
     onSuccess: () => { utils.fuelSuppliers.listInvoices.invalidate(); toast.success("Nota excluída!"); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const extractMutation = trpc.fuelSuppliers.extractInvoiceFromPhoto.useMutation({
+    onSuccess: (data: any) => {
+      const ext = data.extracted || {};
+      // Try to match supplier by CNPJ or name
+      let matchedSupplierId = "";
+      if (ext.supplierCnpj || ext.supplierName) {
+        const supplierList = suppliers as any[];
+        const match = supplierList.find((s: any) =>
+          (ext.supplierCnpj && s.cnpj && s.cnpj.replace(/\D/g, "") === ext.supplierCnpj.replace(/\D/g, "")) ||
+          (ext.supplierName && s.name && s.name.toLowerCase().includes(ext.supplierName.toLowerCase().substring(0, 15)))
+        );
+        if (match) matchedSupplierId = String(match.id);
+      }
+
+      setForm(f => ({
+        ...f,
+        supplierId: matchedSupplierId || f.supplierId,
+        invoiceNumber: ext.invoiceNumber || f.invoiceNumber,
+        invoiceDate: ext.invoiceDate || f.invoiceDate,
+        dueDate: ext.dueDate || f.dueDate,
+        totalAmount: ext.totalAmount || f.totalAmount,
+        liters: ext.liters || f.liters,
+        pricePerLiter: ext.pricePerLiter || f.pricePerLiter,
+        fuelType: (ext.fuelType as any) || f.fuelType,
+        bankName: ext.bankName || f.bankName,
+        barcodeNumber: ext.barcodeNumber || f.barcodeNumber,
+        transporterName: ext.transporterName || f.transporterName,
+        transporterPlate: ext.transporterPlate || f.transporterPlate,
+        deliveryLocation: ext.deliveryLocation || f.deliveryLocation,
+        paymentMethod: ext.paymentMethod || f.paymentMethod,
+        invoicePhotoUrl: data.photoUrl || f.invoicePhotoUrl,
+      }));
+      setIsScanning(false);
+      toast.success("Dados extraídos com sucesso! Confira e ajuste se necessário.");
+    },
+    onError: (e: any) => {
+      setIsScanning(false);
+      toast.error("Erro ao extrair dados: " + e.message);
+    },
   });
 
-  const resetForm = () => { setForm({ ...emptyForm }); setEditingId(null); };
+  const resetForm = () => { setForm({ ...emptyForm }); setEditingId(null); setScanPreview(null); };
+
+  const handleFileSelect = async (file: File) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Arquivo muito grande. Máximo 10MB.");
+      return;
+    }
+    setIsScanning(true);
+    setScanPreview(URL.createObjectURL(file));
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      extractMutation.mutate({
+        photoBase64: base64,
+        mimeType: file.type || "image/jpeg",
+      });
+    };
+    reader.readAsDataURL(file);
+  };
 
   const filteredInvoices = useMemo(() => {
     let result = invoices as any[];
@@ -119,14 +184,12 @@ export default function FuelInvoicesPage() {
         inv.supplierTradeName?.toLowerCase().includes(term)
       );
     }
-    // Mark overdue
     return result.map((inv: any) => ({
       ...inv,
       effectiveStatus: isOverdue(inv.dueDate, inv.status) ? "vencido" : inv.status,
     }));
   }, [invoices, filterSupplier, searchTerm]);
 
-  // Totais
   const totals = useMemo(() => {
     const pending = filteredInvoices.filter((i: any) => i.effectiveStatus === "pendente" || i.effectiveStatus === "vencido");
     const paid = filteredInvoices.filter((i: any) => i.effectiveStatus === "pago");
@@ -160,6 +223,7 @@ export default function FuelInvoicesPage() {
       transporterPlate: form.transporterPlate || undefined,
       deliveryLocation: form.deliveryLocation || undefined,
       notes: form.notes || undefined,
+      invoicePhotoUrl: form.invoicePhotoUrl || undefined,
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, ...payload });
@@ -186,8 +250,63 @@ export default function FuelInvoicesPage() {
       transporterPlate: inv.transporterPlate || "",
       deliveryLocation: inv.deliveryLocation || "",
       notes: inv.notes || "",
+      invoicePhotoUrl: inv.invoicePhotoUrl || "",
     });
+    setScanPreview(inv.invoicePhotoUrl || null);
     setIsOpen(true);
+  };
+
+  // PDF Report generation
+  const generatePDFReport = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) { toast.error("Permita popups para gerar o PDF"); return; }
+
+    const rows = filteredInvoices.map((inv: any) => `
+      <tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${inv.supplierName || ""}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${inv.invoiceNumber}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${formatDate(inv.invoiceDate)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${formatDate(inv.dueDate)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">${formatCurrency(inv.totalAmount)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${inv.liters ? inv.liters + "L" : "-"}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;"><span style="padding:2px 8px;border-radius:12px;font-size:11px;${inv.effectiveStatus === "pago" ? "background:#dcfce7;color:#166534;" : inv.effectiveStatus === "vencido" ? "background:#fee2e2;color:#991b1b;" : "background:#fef9c3;color:#854d0e;"}">${STATUS_LABELS[inv.effectiveStatus]}</span></td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${inv.effectiveStatus === "pago" && inv.paidAt ? formatDate(inv.paidAt) : "-"}</td>
+      </tr>
+    `).join("");
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Relatório Contas a Pagar - Combustível</title>
+      <style>body{font-family:Arial,sans-serif;margin:20px;color:#333;}table{width:100%;border-collapse:collapse;margin-top:16px;font-size:12px;}th{background:#166534;color:white;padding:8px;text-align:left;}h1{color:#166534;font-size:20px;}
+      .summary{display:flex;gap:20px;margin:16px 0;}.summary-card{padding:12px 20px;border-radius:8px;text-align:center;}.summary-card h3{margin:0;font-size:14px;}.summary-card p{margin:4px 0 0;font-size:20px;font-weight:bold;}
+      @media print{body{margin:10px;}}</style></head><body>
+      <h1>📋 Relatório de Contas a Pagar — Combustível</h1>
+      <p style="color:#666;">Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}</p>
+      <div class="summary">
+        <div class="summary-card" style="background:#fef9c3;"><h3>A Pagar</h3><p style="color:#854d0e;">R$ ${totals.pendingTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
+        <div class="summary-card" style="background:#fee2e2;"><h3>Vencidos (${totals.overdueCount})</h3><p style="color:#991b1b;">R$ ${totals.overdueTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
+        <div class="summary-card" style="background:#dcfce7;"><h3>Pagos</h3><p style="color:#166534;">R$ ${totals.paidTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
+      </div>
+      <table><thead><tr><th>Fornecedor</th><th>NF</th><th>Emissão</th><th>Vencimento</th><th style="text-align:right;">Valor</th><th>Litros</th><th>Status</th><th>Pago em</th></tr></thead><tbody>${rows}</tbody></table>
+      <p style="margin-top:20px;font-size:11px;color:#999;">BTREE Ambiental — Sistema de Gestão</p>
+    </body></html>`);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 500);
+  };
+
+  // Excel (CSV) export
+  const exportExcel = () => {
+    const header = "Fornecedor;NF;Emissão;Vencimento;Valor;Litros;Preço/L;Status;Pago em;Valor Pago;Banco;Transportadora;Placa\n";
+    const rows = filteredInvoices.map((inv: any) =>
+      `${inv.supplierName || ""};${inv.invoiceNumber};${formatDate(inv.invoiceDate)};${formatDate(inv.dueDate)};${inv.totalAmount};${inv.liters || ""};${inv.pricePerLiter || ""};${STATUS_LABELS[inv.effectiveStatus]};${inv.paidAt ? formatDate(inv.paidAt) : ""};${inv.paidAmount || ""};${inv.bankName || ""};${inv.transporterName || ""};${inv.transporterPlate || ""}`
+    ).join("\n");
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + header + rows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contas-pagar-combustivel-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Excel exportado!");
   };
 
   const supplierMap = useMemo(() => Object.fromEntries((suppliers as any[]).map((s: any) => [s.id, s])), [suppliers]);
@@ -203,9 +322,17 @@ export default function FuelInvoicesPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Notas fiscais, boletos e controle de pagamentos dos fornecedores.</p>
         </div>
-        <Button onClick={() => { resetForm(); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-          <Plus className="h-4 w-4" /> Nova Nota / Boleto
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={generatePDFReport} className="gap-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50">
+            <Download className="h-4 w-4" /> PDF
+          </Button>
+          <Button variant="outline" onClick={exportExcel} className="gap-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50">
+            <Download className="h-4 w-4" /> Excel
+          </Button>
+          <Button onClick={() => { resetForm(); setIsOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+            <Plus className="h-4 w-4" /> Nova Nota / Boleto
+          </Button>
+        </div>
       </div>
 
       {/* Cards de resumo */}
@@ -254,7 +381,6 @@ export default function FuelInvoicesPage() {
             <option value="">Todos</option>
             <option value="pendente">Pendente</option>
             <option value="pago">Pago</option>
-            <option value="vencido">Vencido</option>
             <option value="cancelado">Cancelado</option>
           </select>
         </div>
@@ -301,6 +427,11 @@ export default function FuelInvoicesPage() {
                           <Badge className={`text-xs ${STATUS_COLORS[inv.effectiveStatus]}`}>
                             {STATUS_LABELS[inv.effectiveStatus]}
                           </Badge>
+                          {inv.invoicePhotoUrl && (
+                            <span className="text-xs text-blue-500 flex items-center gap-0.5" title="Nota com foto anexada">
+                              <ImageIcon className="h-3 w-3" />
+                            </span>
+                          )}
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-lg text-gray-800">{formatCurrency(inv.totalAmount)}</p>
@@ -395,6 +526,11 @@ export default function FuelInvoicesPage() {
               <h3 className="text-lg font-bold text-gray-800">Detalhes da Nota</h3>
               <button onClick={() => setViewInvoice(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="h-5 w-5" /></button>
             </div>
+            {viewInvoice.invoicePhotoUrl && (
+              <div className="rounded-lg overflow-hidden border border-gray-200">
+                <img src={viewInvoice.invoicePhotoUrl} alt="Foto da NF" className="w-full max-h-[300px] object-contain bg-gray-50" />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-500">Fornecedor:</span><p className="font-medium">{viewInvoice.supplierName}</p></div>
               <div><span className="text-gray-500">NF:</span><p className="font-medium">{viewInvoice.invoiceNumber}</p></div>
@@ -427,6 +563,75 @@ export default function FuelInvoicesPage() {
               <h3 className="text-lg font-bold text-gray-800">{editingId ? "Editar Nota" : "Nova Nota / Boleto"}</h3>
               <button onClick={() => { setIsOpen(false); resetForm(); }} className="p-1 rounded-lg hover:bg-gray-100"><X className="h-5 w-5" /></button>
             </div>
+
+            {/* OCR Scanner Section */}
+            {!editingId && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Camera className="h-5 w-5 text-blue-600" />
+                  <span className="font-semibold text-blue-800 text-sm">Escanear Nota Fiscal / Boleto</span>
+                </div>
+                <p className="text-xs text-blue-600">Tire uma foto ou envie uma imagem da NF/boleto. A IA extrai os dados automaticamente!</p>
+
+                {isScanning ? (
+                  <div className="flex flex-col items-center gap-3 py-4">
+                    <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+                    <p className="text-sm text-blue-700 font-medium">Analisando documento...</p>
+                    <p className="text-xs text-blue-500">A IA está extraindo os dados da nota fiscal</p>
+                    {scanPreview && (
+                      <img src={scanPreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border border-blue-200 mt-2" />
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 gap-2 border-blue-300 text-blue-700 hover:bg-blue-100"
+                      onClick={() => cameraInputRef.current?.click()}
+                    >
+                      <Camera className="h-4 w-4" /> Câmera
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 gap-2 border-blue-300 text-blue-700 hover:bg-blue-100"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="h-4 w-4" /> Galeria
+                    </Button>
+                  </div>
+                )}
+
+                {scanPreview && !isScanning && (
+                  <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-2">
+                    <img src={scanPreview} alt="Preview" className="w-12 h-12 object-cover rounded" />
+                    <div className="flex-1">
+                      <p className="text-xs text-green-700 font-medium">Dados extraídos com sucesso!</p>
+                      <p className="text-xs text-green-600">Confira os campos abaixo e ajuste se necessário.</p>
+                    </div>
+                    <button onClick={() => { setScanPreview(null); setForm(f => ({ ...f, invoicePhotoUrl: "" })); }} className="p-1 rounded hover:bg-green-100">
+                      <X className="h-4 w-4 text-green-600" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-3">
               {/* Fornecedor */}
@@ -569,6 +774,8 @@ export default function FuelInvoicesPage() {
           </div>
         </div>
       )}
+
+      {/* Hidden file inputs */}
     </div>
   );
 }

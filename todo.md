@@ -1607,3 +1607,19 @@
 - [x] Frontend: Página de Contas a Pagar com status (pendente/pago/vencido)
 - [x] Registrar NF, valor, vencimento, marcar como pago
 - [x] Filtros por fornecedor, status, período
+
+## 📸 LEITURA AUTOMÁTICA DE NF POR FOTO (11/05/2026)
+
+- [ ] Backend: procedure para enviar foto de NF/boleto e extrair dados via IA (LLM vision)
+- [ ] Frontend: botão "Ler NF por Foto" no formulário de Contas a Pagar
+- [ ] Upload de foto → S3 → LLM extrai dados → preenche formulário automaticamente
+- [ ] Usuário confere dados extraídos e salva
+
+## 📄 RELATÓRIOS PDF - CONTAS A PAGAR (11/05/2026)
+
+- [ ] Relatório PDF de contas a pagar por período/fornecedor/status
+
+## 🔔 NOTIFICAÇÕES VENCIMENTO BOLETOS (11/05/2026)
+
+- [ ] Notificação automática para Mary quando boleto vencer em 3 dias
+- [ ] Notificação automática para Mary quando boleto estiver vencido
