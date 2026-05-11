@@ -295,6 +295,13 @@
       "when": 1778518136247,
       "tag": "0041_moaning_bastion",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "5",
+      "when": 1778519215630,
+      "tag": "0042_shocking_hellfire_club",
+      "breakpoints": true
     }
   ]
 }

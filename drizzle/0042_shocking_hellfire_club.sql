@@ -1,0 +1,1 @@
+ALTER TABLE `fuel_invoices` ADD `boleto_photo_url` text;

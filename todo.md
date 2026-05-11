@@ -1641,7 +1641,7 @@
 
 ## 🔧 CORREÇÃO OCR - UPLOAD IMAGENS (11/05/2026)
 
-- [ ] Corrigir upload de foto NF: usar Cloudinary (djob7pxme) em vez de S3 (não funciona na Hostinger)
-- [ ] Suportar 2 imagens: foto da NF + foto do boleto
-- [ ] Enviar ambas imagens para IA extrair dados automaticamente
-- [ ] Salvar URLs das fotos (NF e boleto) no registro da nota
+- [x] Corrigir upload de foto NF: usar Cloudinary (djob7pxme) em vez de S3 (não funciona na Hostinger)
+- [x] Suportar 2 imagens: foto da NF + foto do boleto
+- [x] Enviar ambas imagens para IA extrair dados automaticamente
+- [x] Salvar URLs das fotos (NF e boleto) no registro da nota
