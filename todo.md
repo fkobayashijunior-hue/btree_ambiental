@@ -1626,15 +1626,15 @@
 
 ## 🔗 VINCULAÇÃO NF ↔ ABASTECIMENTOS (11/05/2026)
 
-- [ ] Vincular abastecimentos às notas fiscais (campo invoiceId no registro de abastecimento)
-- [ ] Saldo de litros na NF: total da NF menos litros já abastecidos
-- [ ] Barra de progresso visual mostrando consumo vs. total da NF
-- [ ] No formulário de abastecimento, selecionar NF ativa do fornecedor para vincular
-- [ ] Botão "Copiar Código de Barras" nos boletos (Contas a Pagar)
+- [x] Vincular abastecimentos às notas fiscais (campo invoiceId no registro de abastecimento)
+- [x] Saldo de litros na NF: total da NF menos litros já abastecidos
+- [x] Barra de progresso visual mostrando consumo vs. total da NF
+- [x] No formulário de abastecimento, selecionar NF ativa do fornecedor para vincular
+- [x] Botão "Copiar Código de Barras" nos boletos (Contas a Pagar)
 
 ## 🛢️ ALERTA TANQUE BAIXO (11/05/2026)
 
-- [ ] Capacidade do tanque por local (SIMFLOR=3000L, Astorga=configurável)
-- [ ] Saldo do tanque = litros da última NF - litros abastecidos
-- [ ] Alerta quando tanque abaixo de 20% da capacidade
-- [ ] Notificação para Mary e ADM quando tanque baixo
+- [x] Capacidade do tanque por local (SIMFLOR=3000L, Astorga=configurável)
+- [x] Saldo do tanque = litros da última NF - litros abastecidos
+- [x] Alerta quando tanque abaixo de 20% da capacidade
+- [x] Notificação para Mary e ADM quando tanque baixo

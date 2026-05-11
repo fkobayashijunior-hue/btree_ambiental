@@ -288,6 +288,13 @@
       "when": 1778515280718,
       "tag": "0040_faithful_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "5",
+      "when": 1778518136247,
+      "tag": "0041_moaning_bastion",
+      "breakpoints": true
     }
   ]
 }
