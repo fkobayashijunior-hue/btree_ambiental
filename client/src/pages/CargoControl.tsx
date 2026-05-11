@@ -954,7 +954,50 @@ export default function CargoControl() {
     pendente: loads.filter(c => c.status === "pendente").length,
     entregue: loads.filter(c => c.status === "entregue").length,
     volumeTotal: loads.reduce((acc, c) => acc + parseFloat(c.volumeM3 || "0"), 0).toFixed(2),
+    pesoTotal: loads.reduce((acc, c) => acc + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || "0"), 0),
   }), [loads]);
+
+  // Resumo semanal (semana atual vs semana passada)
+  const weeklyStats = useMemo(() => {
+    const getWeekStart = (d: Date) => {
+      const day = d.getDay();
+      const diff = day === 0 ? -6 : 1 - day; // Monday as start
+      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+      start.setHours(0, 0, 0, 0);
+      return start;
+    };
+    const today = new Date();
+    const thisWeekStart = getWeekStart(today);
+    const lastWeekStart = new Date(thisWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    const thisWeekEnd = new Date(thisWeekStart);
+    thisWeekEnd.setDate(thisWeekEnd.getDate() + 6);
+    thisWeekEnd.setHours(23, 59, 59, 999);
+    const lastWeekEnd = new Date(lastWeekStart);
+    lastWeekEnd.setDate(lastWeekEnd.getDate() + 6);
+    lastWeekEnd.setHours(23, 59, 59, 999);
+
+    const thisWeekLoads = loads.filter(c => {
+      const d = new Date(c.date);
+      return d >= thisWeekStart && d <= thisWeekEnd;
+    });
+    const lastWeekLoads = loads.filter(c => {
+      const d = new Date(c.date);
+      return d >= lastWeekStart && d <= lastWeekEnd;
+    });
+
+    const calcStats = (arr: typeof loads) => ({
+      count: arr.length,
+      volume: arr.reduce((acc, c) => acc + parseFloat(c.volumeM3 || "0"), 0),
+      peso: arr.reduce((acc, c) => acc + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || "0"), 0),
+      entregues: arr.filter(c => c.status === "entregue").length,
+    });
+
+    return {
+      thisWeek: { ...calcStats(thisWeekLoads), start: thisWeekStart, end: thisWeekEnd },
+      lastWeek: { ...calcStats(lastWeekLoads), start: lastWeekStart, end: lastWeekEnd },
+    };
+  }, [loads]);
 
   // Lista de clientes únicos para filtro
   const uniqueClients = useMemo(() => {
@@ -1089,18 +1132,81 @@ export default function CargoControl() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: "Total", value: stats.total, color: "text-gray-700", bg: "bg-gray-50" },
           { label: "Pendentes", value: stats.pendente, color: "text-red-700", bg: "bg-red-50" },
           { label: "Entregues", value: stats.entregue, color: "text-green-700", bg: "bg-green-50" },
           { label: "Volume Total", value: `${stats.volumeTotal} m³`, color: "text-emerald-700", bg: "bg-emerald-50" },
+          { label: "Peso Total", value: stats.pesoTotal > 0 ? `${(stats.pesoTotal / 1000).toFixed(2)} ton` : "-", color: "text-purple-700", bg: "bg-purple-50" },
         ].map(s => (
           <div key={s.label} className={`${s.bg} rounded-xl p-3`}>
             <p className="text-xs text-gray-500">{s.label}</p>
             <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Resumo Semanal */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Calendar className="h-4 w-4 text-blue-600" />
+          <h3 className="text-sm font-semibold text-blue-800">Resumo Semanal</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Semana Atual */}
+          <div className="bg-white rounded-lg p-3 border border-blue-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Semana Atual</span>
+              <span className="text-[10px] text-gray-400">
+                {weeklyStats.thisWeek.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — {weeklyStats.thisWeek.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-lg font-bold text-blue-700">{weeklyStats.thisWeek.count}</p>
+                <p className="text-[10px] text-gray-500">Cargas</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-emerald-700">{weeklyStats.thisWeek.volume.toFixed(1)}</p>
+                <p className="text-[10px] text-gray-500">m³</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-purple-700">{weeklyStats.thisWeek.peso > 0 ? (weeklyStats.thisWeek.peso / 1000).toFixed(1) : '-'}</p>
+                <p className="text-[10px] text-gray-500">ton</p>
+              </div>
+            </div>
+            {weeklyStats.thisWeek.entregues > 0 && (
+              <p className="text-[10px] text-green-600 mt-1 text-center">{weeklyStats.thisWeek.entregues} entregue{weeklyStats.thisWeek.entregues > 1 ? 's' : ''}</p>
+            )}
+          </div>
+          {/* Semana Passada */}
+          <div className="bg-white rounded-lg p-3 border border-gray-200 opacity-90">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Semana Passada</span>
+              <span className="text-[10px] text-gray-400">
+                {weeklyStats.lastWeek.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — {weeklyStats.lastWeek.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-lg font-bold text-gray-700">{weeklyStats.lastWeek.count}</p>
+                <p className="text-[10px] text-gray-500">Cargas</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-emerald-600">{weeklyStats.lastWeek.volume.toFixed(1)}</p>
+                <p className="text-[10px] text-gray-500">m³</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-purple-600">{weeklyStats.lastWeek.peso > 0 ? (weeklyStats.lastWeek.peso / 1000).toFixed(1) : '-'}</p>
+                <p className="text-[10px] text-gray-500">ton</p>
+              </div>
+            </div>
+            {weeklyStats.lastWeek.entregues > 0 && (
+              <p className="text-[10px] text-green-600 mt-1 text-center">{weeklyStats.lastWeek.entregues} entregue{weeklyStats.lastWeek.entregues > 1 ? 's' : ''}</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Filtros */}

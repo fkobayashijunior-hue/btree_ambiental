@@ -8454,24 +8454,53 @@ var fuelSuppliersRouter = router({
       mimeType: z27.string().default("image/jpeg"),
       label: z27.string().default("nf")
       // "nf" or "boleto"
-    })).min(1).max(3)
+    })).max(3).default([]),
+    photoUrls: z27.array(z27.object({
+      url: z27.string().url(),
+      label: z27.string().default("nf")
+    })).max(3).optional()
   })).mutation(async ({ ctx, input }) => {
     const uploadedPhotos = [];
-    for (const photo of input.photos) {
-      try {
-        const cloudinaryUrl = `https://api.cloudinary.com/v1_1/djob7pxme/image/upload`;
-        const formData = new URLSearchParams();
-        formData.append("file", `data:${photo.mimeType};base64,${photo.base64}`);
-        formData.append("upload_preset", "azaconnect");
-        formData.append("folder", "btree-invoices");
-        const cloudRes = await fetch(cloudinaryUrl, {
-          method: "POST",
-          body: formData
-        });
-        if (cloudRes.ok) {
-          const cloudData = await cloudRes.json();
-          uploadedPhotos.push({ label: photo.label, url: cloudData.secure_url });
-        } else {
+    if (input.photoUrls && input.photoUrls.length > 0) {
+      for (const p of input.photoUrls) {
+        uploadedPhotos.push({ label: p.label, url: p.url });
+      }
+      console.log("[OCR] Using pre-uploaded URLs:", uploadedPhotos.map((p) => p.label).join(", "));
+    }
+    if (uploadedPhotos.length === 0) {
+      for (const photo of input.photos) {
+        try {
+          const cloudinaryUrl = `https://api.cloudinary.com/v1_1/djob7pxme/image/upload`;
+          const cloudRes = await fetch(cloudinaryUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              file: `data:${photo.mimeType};base64,${photo.base64}`,
+              upload_preset: "azaconnect",
+              folder: "btree-invoices"
+            })
+          });
+          if (cloudRes.ok) {
+            const cloudData = await cloudRes.json();
+            uploadedPhotos.push({ label: photo.label, url: cloudData.secure_url });
+            console.log("[OCR] Cloudinary upload OK for", photo.label, cloudData.secure_url);
+          } else {
+            const errText = await cloudRes.text().catch(() => "unknown");
+            console.warn("[OCR] Cloudinary failed for", photo.label, "status:", cloudRes.status, "body:", errText.substring(0, 200));
+            try {
+              const buffer = Buffer.from(photo.base64, "base64");
+              const ext = photo.mimeType.includes("png") ? "png" : "jpg";
+              const randomSuffix = Math.random().toString(36).substring(2, 10);
+              const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
+              const { url } = await storagePut(fileKey, buffer, photo.mimeType);
+              uploadedPhotos.push({ label: photo.label, url });
+              console.log("[OCR] S3 fallback OK for", photo.label);
+            } catch (s3Err) {
+              console.warn("[OCR] Both Cloudinary and S3 upload failed for", photo.label, s3Err?.message);
+            }
+          }
+        } catch (err) {
+          console.warn("[OCR] Cloudinary fetch error for", photo.label, err?.message);
           try {
             const buffer = Buffer.from(photo.base64, "base64");
             const ext = photo.mimeType.includes("png") ? "png" : "jpg";
@@ -8479,20 +8508,10 @@ var fuelSuppliersRouter = router({
             const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
             const { url } = await storagePut(fileKey, buffer, photo.mimeType);
             uploadedPhotos.push({ label: photo.label, url });
+            console.log("[OCR] S3 fallback OK for", photo.label);
           } catch (s3Err) {
-            console.warn("[OCR] Both Cloudinary and S3 upload failed for", photo.label);
+            console.warn("[OCR] Both Cloudinary and S3 upload failed for", photo.label, s3Err?.message);
           }
-        }
-      } catch (err) {
-        try {
-          const buffer = Buffer.from(photo.base64, "base64");
-          const ext = photo.mimeType.includes("png") ? "png" : "jpg";
-          const randomSuffix = Math.random().toString(36).substring(2, 10);
-          const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
-          const { url } = await storagePut(fileKey, buffer, photo.mimeType);
-          uploadedPhotos.push({ label: photo.label, url });
-        } catch (s3Err) {
-          console.warn("[OCR] Both Cloudinary and S3 upload failed for", photo.label);
         }
       }
     }

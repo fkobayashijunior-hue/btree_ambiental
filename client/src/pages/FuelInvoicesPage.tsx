@@ -158,6 +158,29 @@ export default function FuelInvoicesPage() {
 
   const resetForm = () => { setForm({ ...emptyForm }); setEditingId(null); setScanPreview(null); setBoletoPreview(null); setPendingPhotos([]); };
 
+  // Upload file directly to Cloudinary from frontend (avoids large base64 through tRPC)
+  const uploadToCloudinary = async (file: File, label: string): Promise<string | null> => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'azaconnect');
+      formData.append('folder', 'btree-invoices');
+      const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/image/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.secure_url;
+      }
+      console.error('[Cloudinary] Upload failed:', res.status, await res.text().catch(() => ''));
+      return null;
+    } catch (err) {
+      console.error('[Cloudinary] Upload error:', err);
+      return null;
+    }
+  };
+
   const handleNFSelect = async (file: File) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10MB."); return; }
@@ -170,9 +193,17 @@ export default function FuelInvoicesPage() {
         const filtered = prev.filter(p => p.label !== "nf");
         return [...filtered, nfPhoto];
       });
-      toast.success("Foto da NF adicionada! Agora adicione o boleto ou clique em 'Analisar'.");
     };
     reader.readAsDataURL(file);
+    // Upload to Cloudinary immediately
+    const url = await uploadToCloudinary(file, 'nf');
+    if (url) {
+      setForm(f => ({ ...f, invoicePhotoUrl: url }));
+      toast.success("Foto da NF enviada! Agora adicione o boleto ou clique em 'Analisar'.");
+    } else {
+      toast.error("Erro ao enviar foto da NF. Tente novamente.");
+      setScanPreview(null);
+    }
   };
 
   const handleBoletoSelect = async (file: File) => {
@@ -187,15 +218,39 @@ export default function FuelInvoicesPage() {
         const filtered = prev.filter(p => p.label !== "boleto");
         return [...filtered, boletoPhoto];
       });
-      toast.success("Foto do boleto adicionada!");
     };
     reader.readAsDataURL(file);
+    // Upload to Cloudinary immediately
+    const url = await uploadToCloudinary(file, 'boleto');
+    if (url) {
+      setForm(f => ({ ...f, boletoPhotoUrl: url }));
+      toast.success("Foto do boleto enviada!");
+    } else {
+      toast.error("Erro ao enviar foto do boleto. Tente novamente.");
+      setBoletoPreview(null);
+    }
   };
 
   const handleAnalyzePhotos = () => {
-    if (pendingPhotos.length === 0) { toast.error("Adicione pelo menos uma foto."); return; }
+    // If we have Cloudinary URLs, use URL-based extraction (no base64 through tRPC)
+    const nfUrl = form.invoicePhotoUrl;
+    const boletoUrl = form.boletoPhotoUrl;
+    if (!nfUrl && pendingPhotos.length === 0) { toast.error("Adicione pelo menos uma foto."); return; }
     setIsScanning(true);
-    extractMutation.mutate({ photos: pendingPhotos });
+    
+    // Prefer URL-based approach (sends URLs instead of base64)
+    if (nfUrl || boletoUrl) {
+      extractMutation.mutate({ 
+        photoUrls: [
+          ...(nfUrl ? [{ url: nfUrl, label: 'nf' }] : []),
+          ...(boletoUrl ? [{ url: boletoUrl, label: 'boleto' }] : []),
+        ],
+        photos: [], // empty, using URLs instead
+      });
+    } else {
+      // Fallback to base64 if Cloudinary upload failed
+      extractMutation.mutate({ photos: pendingPhotos });
+    }
   };
 
   const filteredInvoices = useMemo(() => {

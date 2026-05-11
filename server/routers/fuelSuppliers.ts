@@ -190,30 +190,49 @@ export const fuelSuppliersRouter = router({
         base64: z.string().min(1),
         mimeType: z.string().default("image/jpeg"),
         label: z.string().default("nf"), // "nf" or "boleto"
-      })).min(1).max(3),
+      })).max(3).default([]),
+      photoUrls: z.array(z.object({
+        url: z.string().url(),
+        label: z.string().default("nf"),
+      })).max(3).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // 1. Upload photos to Cloudinary (works on Hostinger)
+      // 1. Collect photo URLs (either pre-uploaded from frontend or upload here)
       const uploadedPhotos: { label: string; url: string }[] = [];
       
+      // If frontend already uploaded to Cloudinary, use those URLs directly
+      if (input.photoUrls && input.photoUrls.length > 0) {
+        for (const p of input.photoUrls) {
+          uploadedPhotos.push({ label: p.label, url: p.url });
+        }
+        console.log('[OCR] Using pre-uploaded URLs:', uploadedPhotos.map(p => p.label).join(', '));
+      }
+      
+      // Only upload base64 photos if no pre-uploaded URLs were provided
+      if (uploadedPhotos.length === 0) {
       for (const photo of input.photos) {
         try {
           // Try Cloudinary first (works on Hostinger)
           const cloudinaryUrl = `https://api.cloudinary.com/v1_1/djob7pxme/image/upload`;
-          const formData = new URLSearchParams();
-          formData.append('file', `data:${photo.mimeType};base64,${photo.base64}`);
-          formData.append('upload_preset', 'azaconnect');
-          formData.append('folder', 'btree-invoices');
           
+          // Use JSON body approach which is more reliable across Node.js versions
           const cloudRes = await fetch(cloudinaryUrl, {
             method: 'POST',
-            body: formData,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              file: `data:${photo.mimeType};base64,${photo.base64}`,
+              upload_preset: 'azaconnect',
+              folder: 'btree-invoices',
+            }),
           });
           
           if (cloudRes.ok) {
             const cloudData = await cloudRes.json();
             uploadedPhotos.push({ label: photo.label, url: cloudData.secure_url });
+            console.log('[OCR] Cloudinary upload OK for', photo.label, cloudData.secure_url);
           } else {
+            const errText = await cloudRes.text().catch(() => 'unknown');
+            console.warn('[OCR] Cloudinary failed for', photo.label, 'status:', cloudRes.status, 'body:', errText.substring(0, 200));
             // Fallback to S3 if Cloudinary fails
             try {
               const buffer = Buffer.from(photo.base64, "base64");
@@ -222,11 +241,13 @@ export const fuelSuppliersRouter = router({
               const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
               const { url } = await storagePut(fileKey, buffer, photo.mimeType);
               uploadedPhotos.push({ label: photo.label, url });
-            } catch (s3Err) {
-              console.warn('[OCR] Both Cloudinary and S3 upload failed for', photo.label);
+              console.log('[OCR] S3 fallback OK for', photo.label);
+            } catch (s3Err: any) {
+              console.warn('[OCR] Both Cloudinary and S3 upload failed for', photo.label, s3Err?.message);
             }
           }
-        } catch (err) {
+        } catch (err: any) {
+          console.warn('[OCR] Cloudinary fetch error for', photo.label, err?.message);
           // Fallback to S3
           try {
             const buffer = Buffer.from(photo.base64, "base64");
@@ -235,11 +256,13 @@ export const fuelSuppliersRouter = router({
             const fileKey = `invoices/${photo.label}-${Date.now()}-${randomSuffix}.${ext}`;
             const { url } = await storagePut(fileKey, buffer, photo.mimeType);
             uploadedPhotos.push({ label: photo.label, url });
-          } catch (s3Err) {
-            console.warn('[OCR] Both Cloudinary and S3 upload failed for', photo.label);
+            console.log('[OCR] S3 fallback OK for', photo.label);
+          } catch (s3Err: any) {
+            console.warn('[OCR] Both Cloudinary and S3 upload failed for', photo.label, s3Err?.message);
           }
         }
       }
+      } // end if (uploadedPhotos.length === 0)
       
       if (uploadedPhotos.length === 0) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível fazer upload das fotos. Tente novamente." });

@@ -1645,3 +1645,13 @@
 - [x] Suportar 2 imagens: foto da NF + foto do boleto
 - [x] Enviar ambas imagens para IA extrair dados automaticamente
 - [x] Salvar URLs das fotos (NF e boleto) no registro da nota
+
+## 🚛 CONTROLE DE CARGAS - PESO TOTAL E VISÃO SEMANAL (11/05/2026)
+
+- [ ] Adicionar card "Peso Total" no resumo (soma de todos os pesos em kg/toneladas)
+- [ ] Separar visão por semanas: semana atual e semana passada
+- [ ] Mostrar totais de cada semana (cargas, volume, peso) para facilitar fechamento semanal
+
+## 🐛 FIX: OCR UPLOAD ERRO EM PRODUÇÃO (11/05/2026)
+
+- [ ] Corrigir erro "Não foi possível fazer upload das fotos" na Hostinger
