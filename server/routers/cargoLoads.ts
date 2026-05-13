@@ -1072,11 +1072,16 @@ export const cargoLoadsRouter = router({
       title: z.string().min(1),
       fileBase64: z.string(),
       fileType: z.string().optional(),
+      fileName: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Upload file to Cloudinary first
-      const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
+      // Upload file to Cloudinary with original filename for proper download
+      const uploaded = await cloudinaryUpload(
+        input.fileBase64,
+        `btree/client-docs/${input.clientId}`,
+        input.fileName
+      );
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       
       let conn: any = null;

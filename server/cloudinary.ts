@@ -16,7 +16,8 @@ const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "btree_
  */
 export async function cloudinaryUpload(
   data: Buffer | string,
-  _folder = "btree" // aceito por compatibilidade, mas não enviado ao Cloudinary
+  _folder = "btree", // aceito por compatibilidade, mas não enviado ao Cloudinary
+  originalFileName?: string // nome original do arquivo para preservar extensão no download
 ): Promise<{ url: string; publicId: string }> {
   let base64: string;
   let contentType = "image/jpeg";
@@ -42,6 +43,14 @@ export async function cloudinaryUpload(
   params.append("file", dataUri);
   params.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
   // NÃO enviar o parâmetro "folder" — causa erro "Display name cannot contain slashes"
+  
+  // Se tiver nome original, usar como public_id para preservar no download
+  if (originalFileName) {
+    // Remover extensão e caracteres especiais para o public_id
+    const nameWithoutExt = originalFileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const timestamp = Date.now();
+    params.append("public_id", `${nameWithoutExt}_${timestamp}`);
+  }
 
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,

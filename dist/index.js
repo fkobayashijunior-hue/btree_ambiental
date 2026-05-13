@@ -1424,7 +1424,7 @@ var cloudinary_exports = {};
 __export(cloudinary_exports, {
   cloudinaryUpload: () => cloudinaryUpload
 });
-async function cloudinaryUpload(data, _folder = "btree") {
+async function cloudinaryUpload(data, _folder = "btree", originalFileName) {
   let base64;
   let contentType = "image/jpeg";
   if (Buffer.isBuffer(data)) {
@@ -1445,6 +1445,11 @@ async function cloudinaryUpload(data, _folder = "btree") {
   const params = new URLSearchParams();
   params.append("file", dataUri);
   params.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  if (originalFileName) {
+    const nameWithoutExt = originalFileName.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const timestamp2 = Date.now();
+    params.append("public_id", `${nameWithoutExt}_${timestamp2}`);
+  }
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
     {
@@ -3313,9 +3318,14 @@ var cargoLoadsRouter = router({
     title: z6.string().min(1),
     fileBase64: z6.string(),
     fileType: z6.string().optional(),
+    fileName: z6.string().optional(),
     notes: z6.string().optional()
   })).mutation(async ({ ctx, input }) => {
-    const uploaded = await cloudinaryUpload(input.fileBase64, `btree/client-docs/${input.clientId}`);
+    const uploaded = await cloudinaryUpload(
+      input.fileBase64,
+      `btree/client-docs/${input.clientId}`,
+      input.fileName
+    );
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     let conn = null;
     try {

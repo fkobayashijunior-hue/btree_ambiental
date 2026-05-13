@@ -77,6 +77,7 @@ export default function ClientsPage() {
         title: docTitle || file.name,
         fileBase64: base64,
         fileType: file.type || "application/pdf",
+        fileName: file.name,
       });
       setUploading(false);
     };
@@ -320,7 +321,16 @@ export default function ClientsPage() {
                           <p className="text-xs font-medium text-gray-800 truncate">{doc.title}</p>
                           <p className="text-[10px] text-gray-500">{doc.type} • {new Date(doc.createdAt).toLocaleDateString('pt-BR')}</p>
                         </div>
-                        <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                        <a 
+                          href={doc.fileUrl && (doc.fileType?.includes('word') || doc.fileType?.includes('doc') || doc.fileUrl?.includes('.docx') || doc.fileUrl?.includes('.doc'))
+                            ? `${doc.fileUrl}?fl_attachment=${encodeURIComponent(doc.title || 'documento')}`
+                            : doc.fileUrl
+                          } 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-blue-600 hover:text-blue-800"
+                          download={doc.fileType?.includes('word') || doc.fileType?.includes('doc') ? (doc.title || 'documento') : undefined}
+                        >
                           <ExternalLink className="h-4 w-4" />
                         </a>
                         <button type="button" onClick={() => deleteDocMutation.mutate({ id: doc.id })} className="text-red-400 hover:text-red-600">

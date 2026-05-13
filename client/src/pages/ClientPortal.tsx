@@ -861,7 +861,10 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       data?.documents?.map((doc: any) => (
                         <a
                           key={doc.id}
-                          href={doc.fileUrl}
+                          href={(doc.fileType?.includes('word') || doc.fileType?.includes('doc') || doc.fileUrl?.includes('.docx') || doc.fileUrl?.includes('.doc'))
+                            ? `${doc.fileUrl}${doc.fileUrl?.includes('?') ? '&' : '/'}fl_attachment:${encodeURIComponent(doc.title || 'documento')}`
+                            : doc.fileUrl
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="block border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:bg-blue-50/30 transition-colors"
