@@ -927,6 +927,7 @@ export const cargoWeeklyClosings = mysqlTable("cargo_weekly_closings", {
 	dueDate: timestamp("due_date", { mode: 'string' }),
 	status: mysqlEnum(['aberto','fechado','pago','atrasado']).default('aberto').notNull(),
 	paidAt: timestamp("paid_at", { mode: 'string' }),
+	receiptUrl: varchar("receipt_url", { length: 1000 }),
 	notes: text(),
 	closedBy: int("closed_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),

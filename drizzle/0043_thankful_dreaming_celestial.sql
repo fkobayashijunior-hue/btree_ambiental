@@ -1,0 +1,1 @@
+ALTER TABLE `cargo_weekly_closings` ADD `receipt_url` varchar(1000);

@@ -914,6 +914,7 @@ export const cargoLoadsRouter = router({
         dueDate: cargoWeeklyClosings.dueDate,
         status: cargoWeeklyClosings.status,
         paidAt: cargoWeeklyClosings.paidAt,
+        receiptUrl: cargoWeeklyClosings.receiptUrl,
         notes: cargoWeeklyClosings.notes,
         createdAt: cargoWeeklyClosings.createdAt,
       }).from(cargoWeeklyClosings)
@@ -1008,12 +1009,14 @@ export const cargoLoadsRouter = router({
       id: z.number(),
       status: z.enum(['aberto', 'fechado', 'pago', 'atrasado']),
       paidAt: z.string().optional(),
+      receiptUrl: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const updateData: any = { status: input.status };
       if (input.status === 'pago') updateData.paidAt = input.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ');
+      if (input.receiptUrl) updateData.receiptUrl = input.receiptUrl;
       await db.update(cargoWeeklyClosings).set(updateData).where(eq(cargoWeeklyClosings.id, input.id));
       return { success: true };
     }),

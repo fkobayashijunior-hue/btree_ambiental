@@ -1083,6 +1083,7 @@ var init_schema = __esm({
       dueDate: timestamp("due_date", { mode: "string" }),
       status: mysqlEnum(["aberto", "fechado", "pago", "atrasado"]).default("aberto").notNull(),
       paidAt: timestamp("paid_at", { mode: "string" }),
+      receiptUrl: varchar("receipt_url", { length: 1e3 }),
       notes: text(),
       closedBy: int("closed_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
@@ -3184,6 +3185,7 @@ var cargoLoadsRouter = router({
       dueDate: cargoWeeklyClosings.dueDate,
       status: cargoWeeklyClosings.status,
       paidAt: cargoWeeklyClosings.paidAt,
+      receiptUrl: cargoWeeklyClosings.receiptUrl,
       notes: cargoWeeklyClosings.notes,
       createdAt: cargoWeeklyClosings.createdAt
     }).from(cargoWeeklyClosings).leftJoin(clients, eq6(cargoWeeklyClosings.clientId, clients.id)).orderBy(desc3(cargoWeeklyClosings.weekEnd));
@@ -3256,12 +3258,14 @@ var cargoLoadsRouter = router({
   updateWeeklyClosingStatus: protectedProcedure.input(z6.object({
     id: z6.number(),
     status: z6.enum(["aberto", "fechado", "pago", "atrasado"]),
-    paidAt: z6.string().optional()
+    paidAt: z6.string().optional(),
+    receiptUrl: z6.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
     const updateData = { status: input.status };
     if (input.status === "pago") updateData.paidAt = input.paidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    if (input.receiptUrl) updateData.receiptUrl = input.receiptUrl;
     await db.update(cargoWeeklyClosings).set(updateData).where(eq6(cargoWeeklyClosings.id, input.id));
     return { success: true };
   }),

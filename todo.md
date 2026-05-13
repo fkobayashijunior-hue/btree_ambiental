@@ -1655,3 +1655,23 @@
 ## 🐛 FIX: OCR UPLOAD ERRO EM PRODUÇÃO (11/05/2026)
 
 - [x] Corrigir erro "Não foi possível fazer upload das fotos" na Hostinger (upload direto pelo frontend via Cloudinary)
+
+## 🔄 FECHAMENTO SEMANAL + ORDEM DE PAGAMENTO (13/05/2026)
+
+- [ ] Criar tabela weeklyClosings (clientId, weekStart, weekEnd, totalWeight, totalValue, status, closedAt)
+- [ ] Criar tabela paymentOrders (closingId, clientId, amount, dueDate=fechamento+20dias, status, paidAt, receiptUrl)
+- [ ] Procedure para fechar semana: agrupa cargas entregues da semana e gera fechamento
+- [ ] Procedure para gerar ordem de pagamento automática (vencimento 20 dias após fechamento)
+- [x] Procedure para registrar pagamento e upload de comprovante
+- [ ] Portal do Cliente: aba "Fechamentos" mostra fechamentos semanais com valores
+- [x] Portal do Cliente: aba "Pagamentos" mostra ordens de pagamento e comprovantes
+- [x] Quando pagamento registrado, comprovante aparece na área do cliente
+
+## 🐛 FIX: OCR UPLOAD AINDA COM ERRO EM PRODUÇÃO (13/05/2026)
+
+- [ ] Deploy na Hostinger do código corrigido (já no GitHub)
+
+## 🐛 FIX: Documentos do Cliente - Unknown column 'title' (13/05/2026)
+
+- [ ] Tabela client_documents na Hostinger não tem coluna 'title' - precisa criar via SQL
+- [ ] Tabela notifications não existe na Hostinger - precisa criar via SQL

@@ -689,7 +689,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       <EmptyState icon={<DollarSign />} text="Nenhum fechamento semanal registrado ainda." />
                     ) : (
                       data?.weeklyClosings?.map((closing: any) => (
-                        <div key={closing.id} className="border border-gray-100 rounded-xl p-4 hover:border-blue-200 transition-colors">
+                        <div key={closing.id} className={`border rounded-xl p-4 transition-colors ${
+                          closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
+                          closing.status === 'atrasado' ? 'border-red-200 bg-red-50/30' :
+                          'border-gray-100 hover:border-blue-200'
+                        }`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -702,7 +706,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                   closing.status === 'atrasado' ? 'bg-red-100 text-red-700' :
                                   'bg-blue-100 text-blue-700'
                                 }`}>
-                                  {closing.status}
+                                  {closing.status === 'pago' ? '✅ Pago' : closing.status === 'fechado' ? '⏳ Aguardando Pagamento' : closing.status === 'atrasado' ? '⚠️ Atrasado' : closing.status}
                                 </span>
                               </div>
                               <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
@@ -710,10 +714,25 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                 <span>{closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton</span>
                                 {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
                               </div>
-                              {closing.dueDate && (
+                              {closing.status !== 'pago' && closing.dueDate && (
                                 <p className="text-xs mt-1.5 text-orange-600 font-medium">
                                   📅 Previsão de pagamento: {new Date(closing.dueDate).toLocaleDateString('pt-BR')}
                                 </p>
+                              )}
+                              {closing.status === 'pago' && closing.paidAt && (
+                                <p className="text-xs mt-1.5 text-green-700 font-medium">
+                                  ✅ Pago em: {new Date(closing.paidAt).toLocaleDateString('pt-BR')}
+                                </p>
+                              )}
+                              {closing.status === 'pago' && closing.receiptUrl && (
+                                <a
+                                  href={closing.receiptUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 transition-colors"
+                                >
+                                  📄 Ver Comprovante de Pagamento
+                                </a>
                               )}
                             </div>
                             <div className="text-right shrink-0">

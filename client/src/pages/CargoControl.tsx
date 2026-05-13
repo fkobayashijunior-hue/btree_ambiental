@@ -613,12 +613,86 @@ function WeeklyClosingsView({
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 flex-wrap">
                     {closing.status === 'fechado' && (
                       <Button size="sm" variant="outline" className="text-xs gap-1 text-green-700 border-green-300 hover:bg-green-50"
-                        onClick={() => updateStatus.mutate({ id: closing.id, status: 'pago' })}>
-                        <CheckCircle2 className="h-3 w-3" /> Pago
+                        onClick={() => {
+                          // Open file picker for receipt
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*,application/pdf';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              toast.info('Enviando comprovante...');
+                              const formData = new FormData();
+                              formData.append('file', file);
+                              formData.append('upload_preset', 'azaconnect');
+                              formData.append('folder', 'btree-receipts');
+                              const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
+                                method: 'POST', body: formData
+                              });
+                              const data = await res.json();
+                              if (data.secure_url) {
+                                updateStatus.mutate({ id: closing.id, status: 'pago', receiptUrl: data.secure_url });
+                              } else {
+                                toast.error('Erro no upload do comprovante');
+                              }
+                            } catch {
+                              toast.error('Erro ao enviar comprovante');
+                            }
+                          };
+                          input.click();
+                        }}>
+                        <Upload className="h-3 w-3" /> Pago + Comprovante
                       </Button>
+                    )}
+                    {closing.status === 'fechado' && (
+                      <Button size="sm" variant="outline" className="text-xs gap-1 text-green-600 border-green-200 hover:bg-green-50"
+                        onClick={() => updateStatus.mutate({ id: closing.id, status: 'pago' })}>
+                        <CheckCircle2 className="h-3 w-3" /> Pago (sem comprovante)
+                      </Button>
+                    )}
+                    {closing.status === 'pago' && !(closing as any).receiptUrl && (
+                      <Button size="sm" variant="outline" className="text-xs gap-1 text-blue-700 border-blue-300 hover:bg-blue-50"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*,application/pdf';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              toast.info('Enviando comprovante...');
+                              const formData = new FormData();
+                              formData.append('file', file);
+                              formData.append('upload_preset', 'azaconnect');
+                              formData.append('folder', 'btree-receipts');
+                              const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
+                                method: 'POST', body: formData
+                              });
+                              const data = await res.json();
+                              if (data.secure_url) {
+                                updateStatus.mutate({ id: closing.id, status: 'pago', receiptUrl: data.secure_url });
+                              } else {
+                                toast.error('Erro no upload do comprovante');
+                              }
+                            } catch {
+                              toast.error('Erro ao enviar comprovante');
+                            }
+                          };
+                          input.click();
+                        }}>
+                        <Upload className="h-3 w-3" /> Anexar Comprovante
+                      </Button>
+                    )}
+                    {(closing as any).receiptUrl && (
+                      <a href={(closing as any).receiptUrl} target="_blank" rel="noopener noreferrer">
+                        <Button size="sm" variant="outline" className="text-xs gap-1 text-blue-700 border-blue-300 hover:bg-blue-50">
+                          <FileCheck className="h-3 w-3" /> Ver Comprovante
+                        </Button>
+                      </a>
                     )}
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-red-500"
                       onClick={() => { if (confirm('Remover este fechamento?')) deleteClosing.mutate({ id: closing.id }); }}>
