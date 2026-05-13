@@ -1663,7 +1663,7 @@
 - [ ] Procedure para fechar semana: agrupa cargas entregues da semana e gera fechamento
 - [ ] Procedure para gerar ordem de pagamento automática (vencimento 20 dias após fechamento)
 - [x] Procedure para registrar pagamento e upload de comprovante
-- [ ] Portal do Cliente: aba "Fechamentos" mostra fechamentos semanais com valores
+- [x] Portal do Cliente: aba "Fechamentos" mostra fechamentos semanais com valores (auto-agrupamento)
 - [x] Portal do Cliente: aba "Pagamentos" mostra ordens de pagamento e comprovantes
 - [x] Quando pagamento registrado, comprovante aparece na área do cliente
 
@@ -1678,10 +1678,10 @@
 
 ## 🐛 FIX: client_documents 'file_type' column missing on Hostinger (13/05/2026)
 
-- [ ] Corrigir coluna 'file_type' na tabela client_documents na Hostinger (SQL: ALTER TABLE)
+- [x] Corrigir coluna 'file_type' na tabela client_documents na Hostinger (SQL enviado ao usuário)
 
 ## 🔄 FECHAMENTO SEMANAL AUTOMÁTICO NO PORTAL DO CLIENTE
 
-- [ ] Implementar agrupamento automático de cargas por semana no Portal do Cliente (aba Fechamentos)
-- [ ] Mostrar semana atual em andamento e semanas anteriores fechadas
-- [ ] Exibir totais por semana: cargas, peso, valor
+- [x] Implementar agrupamento automático de cargas por semana no Portal do Cliente (aba Fechamentos)
+- [x] Mostrar semana atual em andamento e semanas anteriores fechadas
+- [x] Exibir totais por semana: cargas, peso, valor
