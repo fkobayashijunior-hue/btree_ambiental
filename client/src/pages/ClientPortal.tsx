@@ -685,63 +685,170 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 {/* ── FECHAMENTOS SEMANAIS ── */}
                 {activeTab === "fechamentos" && (
                   <div className="space-y-3">
-                    {(data?.weeklyClosings?.length ?? 0) === 0 ? (
-                      <EmptyState icon={<DollarSign />} text="Nenhum fechamento semanal registrado ainda." />
-                    ) : (
-                      data?.weeklyClosings?.map((closing: any) => (
-                        <div key={closing.id} className={`border rounded-xl p-4 transition-colors ${
-                          closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
-                          closing.status === 'atrasado' ? 'border-red-200 bg-red-50/30' :
-                          'border-gray-100 hover:border-blue-200'
-                        }`}>
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-gray-900 text-sm">
-                                  Semana {closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} → {closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                  closing.status === 'pago' ? 'bg-green-100 text-green-700' :
-                                  closing.status === 'fechado' ? 'bg-yellow-100 text-yellow-700' :
-                                  closing.status === 'atrasado' ? 'bg-red-100 text-red-700' :
-                                  'bg-blue-100 text-blue-700'
-                                }`}>
-                                  {closing.status === 'pago' ? '✅ Pago' : closing.status === 'fechado' ? '⏳ Aguardando Pagamento' : closing.status === 'atrasado' ? '⚠️ Atrasado' : closing.status}
-                                </span>
+                    {(() => {
+                      // Group loads by week (Monday-Sunday)
+                      const getWeekKey = (dateStr: string) => {
+                        const d = new Date(dateStr);
+                        const day = d.getDay();
+                        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+                        const monday = new Date(d);
+                        monday.setDate(diff);
+                        monday.setHours(0, 0, 0, 0);
+                        return monday.toISOString().slice(0, 10);
+                      };
+
+                      const getWeekEnd = (mondayStr: string) => {
+                        const d = new Date(mondayStr);
+                        d.setDate(d.getDate() + 6);
+                        return d.toISOString().slice(0, 10);
+                      };
+
+                      const pricePerTon = parseFloat(data?.client?.pricePerTon || '0');
+                      const paymentTermDays = (data?.client as any)?.paymentTermDays || 20;
+
+                      // Build weekly groups from loads
+                      const weekMap = new Map<string, { loads: any[], weekStart: string, weekEnd: string }>();
+                      (data?.loads || []).forEach((load: any) => {
+                        if (!load.date) return;
+                        const wk = getWeekKey(load.date);
+                        if (!weekMap.has(wk)) {
+                          weekMap.set(wk, { loads: [], weekStart: wk, weekEnd: getWeekEnd(wk) });
+                        }
+                        weekMap.get(wk)!.loads.push(load);
+                      });
+
+                      // Sort weeks descending
+                      const weeks = Array.from(weekMap.values()).sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+
+                      // Merge with formal closings from backend
+                      const formalClosings = data?.weeklyClosings || [];
+
+                      // Check if a formal closing covers a given week
+                      const hasFormalClosing = (weekStart: string) => {
+                        return formalClosings.find((c: any) => {
+                          if (!c.weekStart) return false;
+                          const cStart = new Date(c.weekStart).toISOString().slice(0, 10);
+                          return cStart === weekStart;
+                        });
+                      };
+
+                      // Current week check
+                      const today = new Date();
+                      const todayWeekKey = getWeekKey(today.toISOString());
+
+                      if (weeks.length === 0 && formalClosings.length === 0) {
+                        return <EmptyState icon={<DollarSign />} text="Nenhuma carga registrada para gerar fechamentos." />;
+                      }
+
+                      return (
+                        <>
+                          {/* Formal closings first */}
+                          {formalClosings.map((closing: any) => (
+                            <div key={`formal-${closing.id}`} className={`border rounded-xl p-4 transition-colors ${
+                              closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
+                              closing.status === 'atrasado' ? 'border-red-200 bg-red-50/30' :
+                              'border-yellow-100 bg-yellow-50/30'
+                            }`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-gray-900 text-sm">
+                                      Semana {closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} → {closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                                    </span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                      closing.status === 'pago' ? 'bg-green-100 text-green-700' :
+                                      closing.status === 'fechado' ? 'bg-yellow-100 text-yellow-700' :
+                                      closing.status === 'atrasado' ? 'bg-red-100 text-red-700' :
+                                      'bg-blue-100 text-blue-700'
+                                    }`}>
+                                      {closing.status === 'pago' ? '✅ Pago' : closing.status === 'fechado' ? '⏳ Aguardando Pagamento' : closing.status === 'atrasado' ? '⚠️ Atrasado' : closing.status}
+                                    </span>
+                                  </div>
+                                  <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                                    <span>{closing.totalLoads} carga{closing.totalLoads !== 1 ? 's' : ''}</span>
+                                    <span>{closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton</span>
+                                    {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
+                                  </div>
+                                  {closing.status !== 'pago' && closing.dueDate && (
+                                    <p className="text-xs mt-1.5 text-orange-600 font-medium">
+                                      📅 Vencimento: {new Date(closing.dueDate).toLocaleDateString('pt-BR')}
+                                    </p>
+                                  )}
+                                  {closing.status === 'pago' && closing.paidAt && (
+                                    <p className="text-xs mt-1.5 text-green-700 font-medium">
+                                      ✅ Pago em: {new Date(closing.paidAt).toLocaleDateString('pt-BR')}
+                                    </p>
+                                  )}
+                                  {closing.status === 'pago' && closing.receiptUrl && (
+                                    <a
+                                      href={closing.receiptUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 transition-colors"
+                                    >
+                                      📄 Ver Comprovante de Pagamento
+                                    </a>
+                                  )}
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="font-black text-blue-700 text-base">{formatCurrency(closing.totalAmount)}</p>
+                                </div>
                               </div>
-                              <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                                <span>{closing.totalLoads} carga{closing.totalLoads !== 1 ? 's' : ''}</span>
-                                <span>{closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton</span>
-                                {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
+                            </div>
+                          ))}
+
+                          {/* Auto-generated weekly groups (for weeks without formal closing) */}
+                          {weeks.filter(w => !hasFormalClosing(w.weekStart)).map((week) => {
+                            const isCurrentWeek = week.weekStart === todayWeekKey;
+                            const totalWeight = week.loads.reduce((sum: number, l: any) => sum + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+                            const totalValue = pricePerTon > 0 ? (totalWeight / 1000) * pricePerTon : 0;
+                            const dueDate = new Date(week.weekEnd + 'T12:00:00');
+                            dueDate.setDate(dueDate.getDate() + paymentTermDays);
+
+                            return (
+                              <div key={`auto-${week.weekStart}`} className={`border rounded-xl p-4 transition-colors ${
+                                isCurrentWeek ? 'border-blue-200 bg-blue-50/30' : 'border-gray-100 hover:border-gray-200'
+                              }`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-semibold text-gray-900 text-sm">
+                                        Semana {new Date(week.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} → {new Date(week.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                      </span>
+                                      {isCurrentWeek ? (
+                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700">
+                                          🔄 Em andamento
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
+                                          📋 Aguardando fechamento
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                                      <span>{week.loads.length} carga{week.loads.length !== 1 ? 's' : ''}</span>
+                                      <span>{(totalWeight / 1000).toFixed(2)} ton</span>
+                                      {pricePerTon > 0 && <span>R$ {pricePerTon.toFixed(2)}/ton</span>}
+                                    </div>
+                                    {!isCurrentWeek && (
+                                      <p className="text-xs mt-1.5 text-gray-500">
+                                        📅 Previsão de pagamento: {dueDate.toLocaleDateString('pt-BR')}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <p className={`font-black text-base ${isCurrentWeek ? 'text-blue-600' : 'text-gray-700'}`}>
+                                      {totalValue > 0 ? formatCurrency(totalValue.toString()) : '—'}
+                                    </p>
+                                    {isCurrentWeek && <p className="text-xs text-blue-500 mt-0.5">parcial</p>}
+                                  </div>
+                                </div>
                               </div>
-                              {closing.status !== 'pago' && closing.dueDate && (
-                                <p className="text-xs mt-1.5 text-orange-600 font-medium">
-                                  📅 Previsão de pagamento: {new Date(closing.dueDate).toLocaleDateString('pt-BR')}
-                                </p>
-                              )}
-                              {closing.status === 'pago' && closing.paidAt && (
-                                <p className="text-xs mt-1.5 text-green-700 font-medium">
-                                  ✅ Pago em: {new Date(closing.paidAt).toLocaleDateString('pt-BR')}
-                                </p>
-                              )}
-                              {closing.status === 'pago' && closing.receiptUrl && (
-                                <a
-                                  href={closing.receiptUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 transition-colors"
-                                >
-                                  📄 Ver Comprovante de Pagamento
-                                </a>
-                              )}
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="font-black text-blue-700 text-base">{formatCurrency(closing.totalAmount)}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
+                            );
+                          })}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 

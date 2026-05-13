@@ -1675,3 +1675,13 @@
 
 - [ ] Tabela client_documents na Hostinger não tem coluna 'title' - precisa criar via SQL
 - [ ] Tabela notifications não existe na Hostinger - precisa criar via SQL
+
+## 🐛 FIX: client_documents 'file_type' column missing on Hostinger (13/05/2026)
+
+- [ ] Corrigir coluna 'file_type' na tabela client_documents na Hostinger (SQL: ALTER TABLE)
+
+## 🔄 FECHAMENTO SEMANAL AUTOMÁTICO NO PORTAL DO CLIENTE
+
+- [ ] Implementar agrupamento automático de cargas por semana no Portal do Cliente (aba Fechamentos)
+- [ ] Mostrar semana atual em andamento e semanas anteriores fechadas
+- [ ] Exibir totais por semana: cargas, peso, valor
