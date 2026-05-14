@@ -1696,3 +1696,11 @@
 - [x] Geração de PDF para fechamento semanal (fatura para cliente)
 - [x] Notificação ao cliente quando comprovante de pagamento for anexado
 - [x] Polir UI do Portal do Cliente para ficar perfeito
+
+## 🐛 FIX: Rastreamento GPS - Viagens não registrando (14/05/2026)
+
+- [x] Investigar por que a aba Viagens não mostra viagens registradas (faltava Accept: application/json header)
+- [x] Corrigir busca de viagens (trips) do Traccar API
+- [x] Adicionar cálculo de km percorridos por viagem
+- [x] Exibir rota do caminhão para conferência de custo de frete (colunas Origem/Destino adicionadas)
+- [x] Testar com dispositivos reais do Traccar (Scania: 11 viagens em 12-14/mai)

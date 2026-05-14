@@ -26,6 +26,7 @@ function traccarAuth() {
     return {
       Authorization: `Bearer ${TRACCAR_TOKEN}`,
       "Content-Type": "application/json",
+      Accept: "application/json",
     };
   }
   // Fallback para Basic Auth (legado)
@@ -35,6 +36,7 @@ function traccarAuth() {
   return {
     Authorization: `Basic ${credentials}`,
     "Content-Type": "application/json",
+    Accept: "application/json",
   };
 }
 

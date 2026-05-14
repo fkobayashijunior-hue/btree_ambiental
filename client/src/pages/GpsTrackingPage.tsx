@@ -835,11 +835,13 @@ export default function GpsTrackingPage() {
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="text-left p-2 sm:p-3 font-medium">Início</th>
+                          <th className="text-left p-2 sm:p-3 font-medium hidden md:table-cell">Origem</th>
                           <th className="text-left p-2 sm:p-3 font-medium">Fim</th>
+                          <th className="text-left p-2 sm:p-3 font-medium hidden md:table-cell">Destino</th>
                           <th className="text-right p-2 sm:p-3 font-medium">Distância</th>
                           <th className="text-right p-2 sm:p-3 font-medium">Duração</th>
                           <th className="text-right p-2 sm:p-3 font-medium hidden sm:table-cell">Vel. média</th>
-                          <th className="text-right p-2 sm:p-3 font-medium">Vel. máx.</th>
+                          <th className="text-right p-2 sm:p-3 font-medium hidden sm:table-cell">Vel. máx.</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -851,13 +853,19 @@ export default function GpsTrackingPage() {
                                 hour: "2-digit", minute: "2-digit",
                               })}
                             </td>
+                            <td className="p-2 sm:p-3 text-xs hidden md:table-cell max-w-[180px] truncate" title={trip.startAddress || ''}>
+                              {trip.startAddress ? trip.startAddress.split(',').slice(0, 2).join(',') : '—'}
+                            </td>
                             <td className="p-2 sm:p-3 text-xs sm:text-sm">
                               {new Date(trip.endTime).toLocaleString("pt-BR", {
                                 day: "2-digit", month: "2-digit",
                                 hour: "2-digit", minute: "2-digit",
                               })}
                             </td>
-                            <td className="p-2 sm:p-3 text-right font-medium text-xs sm:text-sm">
+                            <td className="p-2 sm:p-3 text-xs hidden md:table-cell max-w-[180px] truncate" title={trip.endAddress || ''}>
+                              {trip.endAddress ? trip.endAddress.split(',').slice(0, 2).join(',') : '—'}
+                            </td>
+                            <td className="p-2 sm:p-3 text-right font-medium text-xs sm:text-sm text-blue-600">
                               {metersToKm(trip.distance)} km
                             </td>
                             <td className="p-2 sm:p-3 text-right text-muted-foreground text-xs sm:text-sm">
@@ -866,7 +874,7 @@ export default function GpsTrackingPage() {
                             <td className="p-2 sm:p-3 text-right hidden sm:table-cell text-xs sm:text-sm">
                               {knotsToKmh(trip.averageSpeed)} km/h
                             </td>
-                            <td className="p-2 sm:p-3 text-right text-orange-600 font-medium text-xs sm:text-sm">
+                            <td className="p-2 sm:p-3 text-right text-orange-600 font-medium hidden sm:table-cell text-xs sm:text-sm">
                               {knotsToKmh(trip.maxSpeed)} km/h
                             </td>
                           </tr>
