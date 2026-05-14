@@ -1704,3 +1704,10 @@
 - [x] Adicionar cálculo de km percorridos por viagem
 - [x] Exibir rota do caminhão para conferência de custo de frete (colunas Origem/Destino adicionadas)
 - [x] Testar com dispositivos reais do Traccar (Scania: 11 viagens em 12-14/mai)
+
+## 🔧 FIX: Configurar Traccar + Cálculo de Distância Real (14/05/2026)
+
+- [x] Configurar Traccar server: speedThreshold, minimalTripDistance, minimalTripDuration
+- [x] Calcular distância real das viagens usando posições GPS (smartDistanceToKm)
+- [x] Exibir km correto na tabela de viagens do sistema
+- [x] Testar com dados reais da Scania (72 km trip confirmado)

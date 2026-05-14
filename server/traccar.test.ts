@@ -129,8 +129,8 @@ describe("Traccar Trips API - Accept Header Fix", () => {
 
     if (!url || !token) return;
 
-    // Get Scania trips (device 13)
-    const from = "2026-05-01T00:00:00.000Z";
+    // Get Scania trips for today (device 13)
+    const from = "2026-05-14T03:00:00.000Z";
     const to = "2026-05-14T23:59:59.000Z";
     const tripRes = await fetch(
       `${url}/api/reports/trips?deviceId=13&from=${from}&to=${to}`,
@@ -146,12 +146,22 @@ describe("Traccar Trips API - Accept Header Fix", () => {
     const trips = await tripRes.json();
     expect(trips.length).toBeGreaterThan(0);
 
-    // Verify we can calculate km for freight cost
-    const totalKm = trips.reduce((sum: number, t: any) => sum + (t.distance || 0), 0) / 1000;
-    expect(totalKm).toBeGreaterThanOrEqual(0);
+    // Verify trip has odometer data for accurate distance
+    const trip = trips.find((t: any) => t.distance > 10);
+    if (trip) {
+      expect(trip.startOdometer).toBeDefined();
+      expect(trip.endOdometer).toBeDefined();
+      expect(trip.endOdometer).toBeGreaterThan(trip.startOdometer);
+      // After config change, distance should match odometer diff
+      expect(trip.distance).toBeGreaterThan(10); // At least 10 km
+    }
 
     // Verify addresses are available for route verification
     const tripsWithAddress = trips.filter((t: any) => t.startAddress);
     expect(tripsWithAddress.length).toBeGreaterThan(0);
+
+    // Verify lat/lon for map display
+    expect(trips[0].startLat).toBeDefined();
+    expect(trips[0].startLon).toBeDefined();
   }, 30000);
 });

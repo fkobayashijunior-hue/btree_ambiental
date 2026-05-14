@@ -61,15 +61,21 @@ interface TraccarPosition {
 interface TripSummary {
   deviceId: number;
   deviceName: string;
-  distance: number; // meters
+  distance: number; // meters or km (depends on Traccar config)
   averageSpeed: number;
   maxSpeed: number;
   spentFuel: number;
+  startOdometer: number;
+  endOdometer: number;
   duration: number; // ms
   startTime: string;
   endTime: string;
   startAddress?: string;
   endAddress?: string;
+  startLat?: number;
+  startLon?: number;
+  endLat?: number;
+  endLon?: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -78,8 +84,14 @@ function knotsToKmh(knots: number) {
   return Math.round(knots * 1.852);
 }
 
-function metersToKm(meters: number) {
-  return (meters / 1000).toFixed(1);
+function smartDistanceToKm(distance: number) {
+  // Traccar returns distance in meters for older trips (>1000)
+  // but in km for newer trips after config change (<= 1000)
+  // Smart detection: if > 1000, treat as meters; otherwise as km
+  if (distance > 1000) {
+    return (distance / 1000).toFixed(1);
+  }
+  return distance.toFixed(1);
 }
 
 function formatDuration(ms: number) {
@@ -730,7 +742,7 @@ export default function GpsTrackingPage() {
                   <Card>
                     <CardContent className="p-2 text-center">
                       <p className="text-[10px] text-muted-foreground">Distância</p>
-                      <p className="text-lg font-bold text-green-600">{metersToKm(summaryData[0]?.distance || 0)} km</p>
+                      <p className="text-lg font-bold text-green-600">{smartDistanceToKm(summaryData[0]?.distance || 0)} km</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -808,7 +820,7 @@ export default function GpsTrackingPage() {
                       <CardContent className="p-3 text-center">
                         <p className="text-xs text-muted-foreground">Km rodados</p>
                         <p className="text-2xl font-bold text-blue-600">
-                          {metersToKm(trips.reduce((s, t) => s + (t.distance || 0), 0))} km
+                          {smartDistanceToKm(trips.reduce((s, t) => s + (t.distance || 0), 0))} km
                         </p>
                       </CardContent>
                     </Card>
@@ -866,7 +878,7 @@ export default function GpsTrackingPage() {
                               {trip.endAddress ? trip.endAddress.split(',').slice(0, 2).join(',') : '—'}
                             </td>
                             <td className="p-2 sm:p-3 text-right font-medium text-xs sm:text-sm text-blue-600">
-                              {metersToKm(trip.distance)} km
+                              {smartDistanceToKm(trip.distance)} km
                             </td>
                             <td className="p-2 sm:p-3 text-right text-muted-foreground text-xs sm:text-sm">
                               {formatDuration(trip.duration)}
@@ -1217,7 +1229,7 @@ export default function GpsTrackingPage() {
                 <p className="text-xs text-muted-foreground">Odômetro</p>
                 <p className="font-semibold">
                   {selectedPosition.attributes.totalDistance !== undefined
-                    ? `${metersToKm(selectedPosition.attributes.totalDistance)} km`
+                    ? `${smartDistanceToKm(selectedPosition.attributes.totalDistance)} km`
                     : "\u2014"}
                 </p>
               </div>
