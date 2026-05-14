@@ -1018,6 +1018,41 @@ export const cargoLoadsRouter = router({
       if (input.status === 'pago') updateData.paidAt = input.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ');
       if (input.receiptUrl) updateData.receiptUrl = input.receiptUrl;
       await db.update(cargoWeeklyClosings).set(updateData).where(eq(cargoWeeklyClosings.id, input.id));
+
+      // Notificar quando comprovante é anexado ou status muda para pago
+      if (input.status === 'pago' || input.receiptUrl) {
+        try {
+          // Buscar dados do fechamento para notificação
+          const [closing] = await db.select().from(cargoWeeklyClosings).where(eq(cargoWeeklyClosings.id, input.id)).limit(1);
+          if (closing) {
+            const [client] = await db.select().from(clients).where(eq(clients.id, closing.clientId)).limit(1);
+            const clientName = client?.name || 'Cliente';
+            const weekStartFmt = closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR') : '-';
+            const weekEndFmt = closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
+            const totalAmount = closing.totalAmount ? parseFloat(closing.totalAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00';
+
+            // Notificar owner
+            const { notifyOwner } = await import('../_core/notification');
+            await notifyOwner({
+              title: `Fechamento ${input.status === 'pago' ? 'marcado como PAGO' : 'atualizado'}: ${clientName}`,
+              content: `Semana ${weekStartFmt} a ${weekEndFmt}\nValor: R$ ${totalAmount}${input.receiptUrl ? '\nComprovante anexado.' : ''}`,
+            }).catch(() => {});
+
+            // Notificar ADM
+            const { notifyAdmComercial } = await import('./notifications');
+            await notifyAdmComercial({
+              type: 'fechamento_semanal',
+              title: `Fechamento ${input.status === 'pago' ? 'PAGO' : 'atualizado'}: ${clientName}`,
+              message: `Semana ${weekStartFmt} a ${weekEndFmt} — R$ ${totalAmount}${input.receiptUrl ? ' (comprovante anexado)' : ''}`,
+              relatedId: closing.id,
+              relatedType: 'weekly_closing',
+            }).catch(() => {});
+          }
+        } catch (e) {
+          console.warn('[WeeklyClosing] Error sending notification:', e);
+        }
+      }
+
       return { success: true };
     }),
 

@@ -1685,3 +1685,14 @@
 - [x] Implementar agrupamento automático de cargas por semana no Portal do Cliente (aba Fechamentos)
 - [x] Mostrar semana atual em andamento e semanas anteriores fechadas
 - [x] Exibir totais por semana: cargas, peso, valor
+
+---
+
+## 🔄 FASE 22: FECHAMENTO SEMANAL AUTOMÁTICO + PORTAL PERFEITO (13/05/2026)
+
+- [x] Corrigir Portal do Cliente Fechamentos: mostrar APENAS fechamentos oficiais + semana atual "Em andamento"
+- [x] Adicionar resumo semanal no Portal do Cliente (semana atual + semana passada, igual ao admin)
+- [x] Implementar cron automático de fechamento semanal (toda sexta-feira à noite)
+- [x] Geração de PDF para fechamento semanal (fatura para cliente)
+- [x] Notificação ao cliente quando comprovante de pagamento for anexado
+- [x] Polir UI do Portal do Cliente para ficar perfeito

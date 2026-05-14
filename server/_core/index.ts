@@ -529,3 +529,148 @@ function scheduleFuelInvoiceDueCheck() {
 }
 
 scheduleFuelInvoiceDueCheck();
+
+// ── Cron job: Fechamento semanal automático de cargas (toda sexta-feira 22h) ────────
+function scheduleWeeklyClosingCron() {
+  const checkAndSchedule = async () => {
+    const now = new Date();
+    // Próxima sexta-feira às 22h (horário de Brasília = UTC-3)
+    const next = new Date(now);
+    // Avançar para a próxima sexta
+    const daysUntilFriday = (5 - now.getDay() + 7) % 7 || 7;
+    // Se hoje é sexta e já passou das 22h, pular para próxima semana
+    if (now.getDay() === 5 && now.getHours() >= 22) {
+      next.setDate(now.getDate() + 7);
+    } else if (now.getDay() === 5 && now.getHours() < 22) {
+      // Hoje é sexta mas ainda não deu 22h
+      next.setDate(now.getDate());
+    } else {
+      next.setDate(now.getDate() + daysUntilFriday);
+    }
+    next.setHours(22, 0, 0, 0);
+    const msUntilNext = Math.max(next.getTime() - now.getTime(), 60000); // mínimo 1 min
+
+    setTimeout(async () => {
+      try {
+        console.log('[CronJob-WeeklyClosing] Iniciando fechamento semanal automático...');
+        const mysql = await import('mysql2/promise');
+        const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+
+        // Calcular semana atual (segunda a domingo)
+        const today = new Date();
+        const day = today.getDay();
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diffToMonday);
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+
+        const weekStartStr = weekStart.toISOString().slice(0, 10);
+        const weekEndStr = weekEnd.toISOString().slice(0, 10);
+
+        // Buscar todos os clientes ativos
+        const [clientRows] = await conn.execute(
+          `SELECT id, name, price_per_ton, payment_term_days, billing_cycle FROM clients WHERE active = 1`
+        ) as any;
+
+        let closedCount = 0;
+        for (const client of clientRows) {
+          // Verificar se já existe fechamento para esta semana/cliente
+          const [existing] = await conn.execute(
+            `SELECT id FROM cargo_weekly_closings WHERE client_id = ? AND DATE(week_start) = ?`,
+            [client.id, weekStartStr]
+          ) as any;
+
+          if (existing.length > 0) {
+            console.log(`[CronJob-WeeklyClosing] Cliente ${client.name} já tem fechamento para semana ${weekStartStr}. Pulando.`);
+            continue;
+          }
+
+          // Buscar cargas do cliente nesta semana
+          const [loadsInWeek] = await conn.execute(
+            `SELECT weight_net_kg, weight_out_kg FROM cargo_loads 
+             WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
+            [client.id, weekStartStr, weekEndStr]
+          ) as any;
+
+          if (loadsInWeek.length === 0) {
+            continue; // Sem cargas, não criar fechamento
+          }
+
+          const totalLoads = loadsInWeek.length;
+          const totalWeightKg = loadsInWeek.reduce((sum: number, l: any) => {
+            return sum + parseFloat(l.weight_net_kg || l.weight_out_kg || '0');
+          }, 0);
+
+          const pricePerTon = parseFloat(client.price_per_ton || '130');
+          const totalWeightTon = totalWeightKg / 1000;
+          const totalAmount = (totalWeightTon * pricePerTon).toFixed(2);
+
+          // Calcular data de vencimento
+          const paymentTermDays = client.payment_term_days || 20;
+          const dueDate = new Date(weekEnd);
+          dueDate.setDate(dueDate.getDate() + paymentTermDays);
+          const dueDateStr = dueDate.toISOString().slice(0, 19).replace('T', ' ');
+
+          const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+          await conn.execute(
+            `INSERT INTO cargo_weekly_closings 
+             (client_id, week_start, week_end, total_loads, total_weight_kg, total_amount, price_per_ton, due_date, status, notes, created_at) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'fechado', ?, ?)`,
+            [
+              client.id,
+              weekStartStr + ' 00:00:00',
+              weekEndStr + ' 23:59:59',
+              totalLoads,
+              totalWeightKg.toFixed(2),
+              totalAmount,
+              pricePerTon.toString(),
+              dueDateStr,
+              'Fechamento automático (sexta-feira)',
+              nowStr,
+            ]
+          );
+
+          closedCount++;
+          console.log(`[CronJob-WeeklyClosing] Fechamento criado: ${client.name} — ${totalLoads} cargas — ${totalWeightTon.toFixed(2)} ton — R$ ${totalAmount}`);
+        }
+
+        await conn.end();
+
+        // Notificar owner
+        if (closedCount > 0) {
+          try {
+            const { notifyOwner } = await import('./notification');
+            await notifyOwner({
+              title: `Fechamento semanal automático: ${closedCount} cliente(s)`,
+              content: `Fechamentos da semana ${weekStartStr.split('-').reverse().join('/')} a ${weekEndStr.split('-').reverse().join('/')} foram criados automaticamente para ${closedCount} cliente(s).`,
+            });
+          } catch (e) { console.warn('[CronJob-WeeklyClosing] Error notifying owner:', e); }
+
+          try {
+            const { notifyAdmComercial } = await import('../routers/notifications');
+            await notifyAdmComercial({
+              type: 'fechamento_semanal',
+              title: `Fechamento semanal automático: ${closedCount} cliente(s)`,
+              message: `Semana ${weekStartStr.split('-').reverse().join('/')} a ${weekEndStr.split('-').reverse().join('/')}: ${closedCount} fechamento(s) criado(s) automaticamente.`,
+            });
+          } catch (e) { console.warn('[CronJob-WeeklyClosing] Error notifying adm:', e); }
+        }
+
+        console.log(`[CronJob-WeeklyClosing] Concluído. ${closedCount} fechamento(s) criado(s).`);
+      } catch (err) {
+        console.error('[CronJob-WeeklyClosing] Erro:', err);
+      }
+      checkAndSchedule();
+    }, msUntilNext);
+
+    const nextDate = new Date(now.getTime() + msUntilNext);
+    console.log(`[CronJob-WeeklyClosing] Próximo fechamento automático: ${nextDate.toLocaleString('pt-BR')}`);
+  };
+
+  checkAndSchedule();
+}
+
+scheduleWeeklyClosingCron();
