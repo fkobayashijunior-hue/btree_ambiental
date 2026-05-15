@@ -14,7 +14,7 @@ import {
   CheckCircle2, Clock, AlertCircle, ChevronRight, Pencil, Trash2,
   BarChart3, Download, Eye, RefreshCw, Building2, ChevronDown, ChevronUp,
   Filter, Users, Receipt, CreditCard, FileCheck, Upload, ExternalLink,
-  DollarSign, CalendarClock
+  DollarSign, CalendarClock, AlertTriangle
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
@@ -775,6 +775,12 @@ export default function CargoControl() {
   );
   const { data: detailTrackingPhotos = [] } = trpc.cargoLoads.listTrackingPhotos.useQuery(
     { cargoId: detailId! }, { enabled: !!detailId }
+  );
+
+  // Verificação de nota fiscal duplicada em tempo real
+  const { data: invoiceDuplicate } = trpc.cargoLoads.checkInvoice.useQuery(
+    { invoiceNumber: form.invoiceNumber, excludeId: editId || undefined },
+    { enabled: !!form.invoiceNumber && form.invoiceNumber.trim().length > 0 }
   );
 
   // Mutations
@@ -1668,7 +1674,13 @@ export default function CargoControl() {
               </div>
               <div>
                 <Label>Nº Nota Fiscal</Label>
-                <Input value={form.invoiceNumber} onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="ex: NF-001234" />
+                <Input value={form.invoiceNumber} onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="ex: NF-001234" className={invoiceDuplicate?.exists ? 'border-red-500 ring-red-200' : ''} />
+                {invoiceDuplicate?.exists && (
+                  <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Nota já usada na carga {invoiceDuplicate.cargo?.vehiclePlate || ''} ({invoiceDuplicate.cargo?.date ? new Date(invoiceDuplicate.cargo.date).toLocaleDateString('pt-BR') : ''}) - {invoiceDuplicate.cargo?.clientName || ''}
+                  </p>
+                )}
               </div>
             </div>
 

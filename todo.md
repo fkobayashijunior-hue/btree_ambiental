@@ -1711,3 +1711,9 @@
 - [x] Calcular distância real das viagens usando posições GPS (smartDistanceToKm)
 - [x] Exibir km correto na tabela de viagens do sistema
 - [x] Testar com dados reais da Scania (72 km trip confirmado)
+
+## 🛡️ FIX: Validação de Nota Fiscal Duplicada (15/05/2026)
+
+- [ ] Adicionar validação no backend para rejeitar nota fiscal duplicada ao criar/editar carga
+- [ ] Mostrar alerta no frontend quando nota já existe no sistema
+- [ ] Testar com dados reais (nota 323 duplicada)

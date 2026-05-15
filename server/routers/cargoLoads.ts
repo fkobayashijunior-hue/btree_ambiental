@@ -6,7 +6,7 @@ import {
   cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos, gpsLocations,
   cargoWeeklyClosings, clientDocuments
 } from "../../drizzle/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, ne } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 import mysql from "mysql2/promise";
 
@@ -18,6 +18,27 @@ async function getDirectConnection() {
 
 export const cargoLoadsRouter = router({
   // ===== DESTINOS =====
+  // Verificar se nota fiscal já existe (para validação em tempo real no frontend)
+  checkInvoice: protectedProcedure
+    .input(z.object({ invoiceNumber: z.string(), excludeId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { exists: false, cargo: null };
+      const trimmed = input.invoiceNumber.trim();
+      if (!trimmed) return { exists: false, cargo: null };
+      const conditions = input.excludeId
+        ? and(eq(cargoLoads.invoiceNumber, trimmed), ne(cargoLoads.id, input.excludeId))
+        : eq(cargoLoads.invoiceNumber, trimmed);
+      const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date, clientName: cargoLoads.clientName })
+        .from(cargoLoads)
+        .where(conditions)
+        .limit(1);
+      if (existing.length > 0) {
+        return { exists: true, cargo: existing[0] };
+      }
+      return { exists: false, cargo: null };
+    }),
+
   listDestinations: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
@@ -352,6 +373,22 @@ export const cargoLoadsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      // Validação: nota fiscal duplicada
+      if (input.invoiceNumber && input.invoiceNumber.trim() !== '') {
+        const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date })
+          .from(cargoLoads)
+          .where(eq(cargoLoads.invoiceNumber, input.invoiceNumber.trim()))
+          .limit(1);
+        if (existing.length > 0) {
+          const dateFmt = existing[0].date ? new Date(existing[0].date).toLocaleDateString('pt-BR') : 'N/I';
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Nota fiscal ${input.invoiceNumber} já está sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || 'N/I'}, Data: ${dateFmt}). Verifique o número da nota.`,
+          });
+        }
+      }
+
       await db.insert(cargoLoads).values({
         ...input,
         date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
@@ -430,6 +467,25 @@ export const cargoLoadsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      // Validação: nota fiscal duplicada (excluindo a própria carga)
+      if (input.invoiceNumber && input.invoiceNumber.trim() !== '') {
+        const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date })
+          .from(cargoLoads)
+          .where(and(
+            eq(cargoLoads.invoiceNumber, input.invoiceNumber.trim()),
+            ne(cargoLoads.id, input.id)
+          ))
+          .limit(1);
+        if (existing.length > 0) {
+          const dateFmt = existing[0].date ? new Date(existing[0].date).toLocaleDateString('pt-BR') : 'N/I';
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Nota fiscal ${input.invoiceNumber} já está sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || 'N/I'}, Data: ${dateFmt}). Verifique o número da nota.`,
+          });
+        }
+      }
+
       const { id, date, ...rest } = input;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
