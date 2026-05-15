@@ -1717,3 +1717,10 @@
 - [x] Adicionar validação no backend para rejeitar nota fiscal duplicada ao criar/editar carga
 - [x] Mostrar alerta no frontend quando nota já existe no sistema (tempo real + bloqueio no submit)
 - [x] Push para GitHub realizado
+
+## 🗺️ FIX: Rotas GPS e KM para Cálculo de Frete (15/05/2026)
+
+- [x] Resolver endAddress null - usar geocoding reverso do Traccar com endLat/endLon
+- [x] Melhorar exibição de rotas: Origem → Destino com km corretos (geocoding para ambos)
+- [x] Usar odômetro como fallback quando distance = 0
+- [x] Preparar estrutura para cálculo automático de frete futuro (realDistance no backend)

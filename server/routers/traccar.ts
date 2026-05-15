@@ -145,12 +145,60 @@ export const traccarRouter = router({
       return traccarFetch(`/reports/route?${params}`);
     }),
 
-  /** Resumo de viagens de um dispositivo */
+  /** Resumo de viagens de um dispositivo - enriquecido com endereços e distância real */
   trips: protectedProcedure
     .input(z.object({ deviceId: z.number(), from: z.string(), to: z.string() }))
     .query(async ({ input }) => {
       const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
-      return traccarFetch(`/reports/trips?${params}`);
+      const trips = await traccarFetch(`/reports/trips?${params}`);
+      
+      // Enriquecer cada viagem com endereço de destino e distância corrigida
+      const enriched = await Promise.all(
+        (trips as any[]).map(async (trip: any) => {
+          // Calcular distância real: usar odometro se distance for 0
+          let realDistance = trip.distance || 0;
+          if (realDistance === 0 && trip.endOdometer && trip.startOdometer) {
+            realDistance = trip.endOdometer - trip.startOdometer;
+          }
+          
+          // Resolver endAddress via geocoding reverso do Traccar
+          let endAddress = trip.endAddress;
+          if (!endAddress && trip.endLat && trip.endLon) {
+            try {
+              const geoRes = await fetch(
+                `${TRACCAR_URL}/api/server/geocode?latitude=${trip.endLat}&longitude=${trip.endLon}`,
+                { headers: traccarAuth() }
+              );
+              if (geoRes.ok) {
+                endAddress = await geoRes.text();
+              }
+            } catch { /* ignorar erro de geocoding */ }
+          }
+          
+          // Resolver startAddress via geocoding se tambem estiver null
+          let startAddress = trip.startAddress;
+          if (!startAddress && trip.startLat && trip.startLon) {
+            try {
+              const geoRes = await fetch(
+                `${TRACCAR_URL}/api/server/geocode?latitude=${trip.startLat}&longitude=${trip.startLon}`,
+                { headers: traccarAuth() }
+              );
+              if (geoRes.ok) {
+                startAddress = await geoRes.text();
+              }
+            } catch { /* ignorar */ }
+          }
+          
+          return {
+            ...trip,
+            startAddress,
+            endAddress,
+            realDistance, // distância corrigida em km
+          };
+        })
+      );
+      
+      return enriched;
     }),
 
   /** Resumo de paradas de um dispositivo */

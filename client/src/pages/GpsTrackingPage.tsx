@@ -76,6 +76,7 @@ interface TripSummary {
   startLon?: number;
   endLat?: number;
   endLon?: number;
+  realDistance?: number; // distância corrigida em km (calculada pelo backend)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -820,7 +821,7 @@ export default function GpsTrackingPage() {
                       <CardContent className="p-3 text-center">
                         <p className="text-xs text-muted-foreground">Km rodados</p>
                         <p className="text-2xl font-bold text-blue-600">
-                          {smartDistanceToKm(trips.reduce((s, t) => s + (t.distance || 0), 0))} km
+                           {smartDistanceToKm(trips.reduce((s, t) => s + (t.realDistance || t.distance || 0), 0))} km
                         </p>
                       </CardContent>
                     </Card>
@@ -878,7 +879,7 @@ export default function GpsTrackingPage() {
                               {trip.endAddress ? trip.endAddress.split(',').slice(0, 2).join(',') : '—'}
                             </td>
                             <td className="p-2 sm:p-3 text-right font-medium text-xs sm:text-sm text-blue-600">
-                              {smartDistanceToKm(trip.distance)} km
+                              {smartDistanceToKm(trip.realDistance || trip.distance)} km
                             </td>
                             <td className="p-2 sm:p-3 text-right text-muted-foreground text-xs sm:text-sm">
                               {formatDuration(trip.duration)}
