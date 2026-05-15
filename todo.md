@@ -1714,6 +1714,6 @@
 
 ## 🛡️ FIX: Validação de Nota Fiscal Duplicada (15/05/2026)
 
-- [ ] Adicionar validação no backend para rejeitar nota fiscal duplicada ao criar/editar carga
-- [ ] Mostrar alerta no frontend quando nota já existe no sistema
-- [ ] Testar com dados reais (nota 323 duplicada)
+- [x] Adicionar validação no backend para rejeitar nota fiscal duplicada ao criar/editar carga
+- [x] Mostrar alerta no frontend quando nota já existe no sistema (tempo real + bloqueio no submit)
+- [x] Push para GitHub realizado
