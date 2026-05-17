@@ -1724,3 +1724,11 @@
 - [x] Melhorar exibição de rotas: Origem → Destino com km corretos (geocoding para ambos)
 - [x] Usar odômetro como fallback quando distance = 0
 - [x] Preparar estrutura para cálculo automático de frete futuro (realDistance no backend)
+
+## 🚛 GPS VIAGENS: EXIBIÇÃO DE ROTAS + CUSTO DE FRETE (17/05/2026)
+
+- [ ] GPS Viagens: mostrar colunas Origem e Destino com endereços reais na tabela
+- [ ] GPS Viagens: identificar rotas SIMFLOR → Líder (ida) e Líder → SIMFLOR (volta)
+- [ ] GPS Viagens: corrigir Km rodados total (mostra 1.5 km mas deveria somar todos os km)
+- [ ] GPS Viagens: corrigir Vel. máxima (mostra 0 km/h)
+- [ ] Módulo Custo de Frete diário: km percorridos + combustível + manutenção = custo total

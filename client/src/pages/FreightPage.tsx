@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,13 +7,43 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Truck, Fuel, Route, DollarSign, Trash2, Edit, TrendingUp, Calculator } from "lucide-react";
+import { Plus, Truck, Fuel, Route, DollarSign, Trash2, Edit, TrendingUp, Calculator, Navigation, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { useSearch } from "wouter";
 
 export default function FreightPage() {
+  const searchString = useSearch();
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(getEmptyForm());
+
+  // Auto-open form with GPS trip data from URL params
+  useEffect(() => {
+    if (!searchString) return;
+    const params = new URLSearchParams(searchString);
+    const date = params.get('date');
+    const origin = params.get('origin');
+    const destination = params.get('destination');
+    const distanceKm = params.get('distanceKm');
+    const vehiclePlate = params.get('vehiclePlate');
+    const routeType = params.get('routeType');
+    const duration = params.get('duration');
+    
+    if (date || origin || destination || distanceKm) {
+      setForm(f => ({
+        ...f,
+        date: date || f.date,
+        origin: origin || f.origin,
+        destination: destination || f.destination,
+        distanceKm: distanceKm || f.distanceKm,
+        vehiclePlate: vehiclePlate || f.vehiclePlate,
+        notes: routeType && duration ? `Viagem GPS (${routeType}) - Dura\u00e7\u00e3o: ${duration}` : f.notes,
+      }));
+      setFormOpen(true);
+      // Clean URL params
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchString]);
   const { data: freights = [], refetch } = trpc.freight.list.useQuery();
   const { data: summary } = trpc.freight.summary.useQuery();
   const { data: recentCargas = [] } = trpc.cargoLoads.list.useQuery({});
@@ -211,6 +241,19 @@ export default function FreightPage() {
           </div>
         )}
       </div>
+
+      {/* Dica: Integração GPS */}
+      <Card className="border-blue-200 bg-blue-50/50">
+        <CardContent className="p-3">
+          <div className="flex items-start gap-2">
+            <Navigation className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">Integração GPS</p>
+              <p className="text-xs text-blue-600">Acesse Rastreamento GPS → Viagens e clique no botão "Frete" em qualquer viagem para importar automaticamente os dados de km, origem e destino.</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Form Sheet */}
       <Sheet open={formOpen} onOpenChange={setFormOpen}>

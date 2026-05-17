@@ -13,8 +13,9 @@ import {
   MapPin, Navigation, Clock, Gauge, Wifi, WifiOff,
   RefreshCw, Route, AlertTriangle, Car, Zap, ZapOff, History,
   Link2, Wrench, Bell, CheckCircle, XCircle, Plus, Trash2, Timer,
-  Calendar, Search
+  Calendar, Search, Truck, DollarSign, ArrowRight
 } from "lucide-react";
+import { useLocation } from "wouter";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -86,13 +87,74 @@ function knotsToKmh(knots: number) {
 }
 
 function smartDistanceToKm(distance: number) {
-  // Traccar returns distance in meters for older trips (>1000)
-  // but in km for newer trips after config change (<= 1000)
-  // Smart detection: if > 1000, treat as meters; otherwise as km
+  // Traccar returns distance in km after config change
+  // Values > 1000 are likely in meters (legacy data)
   if (distance > 1000) {
     return (distance / 1000).toFixed(1);
   }
   return distance.toFixed(1);
+}
+
+// Simplificar endereço para exibição mobile
+function shortAddress(addr: string | null | undefined): string {
+  if (!addr) return '—';
+  // Remove "BR" e estado, mantém rua/rodovia + cidade
+  const parts = addr.split(',').map(p => p.trim());
+  if (parts.length >= 2) {
+    const road = parts[0];
+    const city = parts[1];
+    return `${road}, ${city}`;
+  }
+  return addr;
+}
+
+// Identificar se é rota SIMFLOR→Líder ou Líder→SIMFLOR
+function identifyRoute(startAddr: string | null | undefined, endAddr: string | null | undefined, distKm: number): { label: string; type: 'ida' | 'volta' | 'local' | 'desconhecido' } {
+  const s = (startAddr || '').toLowerCase();
+  const e = (endAddr || '').toLowerCase();
+  const isLobato = (a: string) => a.includes('lobato') || a.includes('líder') || a.includes('lider') || a.includes('pr-461') || a.includes('pr 461');
+  const isMaua = (a: string) => a.includes('mauá da serra') || a.includes('maua da serra') || a.includes('simflor') || a.includes('maua');
+  const isOrtigueira = (a: string) => a.includes('ortigueira');
+  const isFaxinal = (a: string) => a.includes('faxinal');
+  
+  // Viagens longas (>50km) são provavelmente ida/volta SIMFLOR↔Líder
+  if (distKm > 50) {
+    // Ida: qualquer origem na região de Mauá/Faxinal/Ortigueira → Lobato
+    if ((isMaua(s) || isFaxinal(s) || isOrtigueira(s)) && isLobato(e)) return { label: '🟢 IDA: SIMFLOR → Líder (Lobato)', type: 'ida' };
+    if (isMaua(s) && !isLobato(e) && distKm > 100) return { label: '🟢 IDA: SIMFLOR → Destino', type: 'ida' };
+    
+    // Volta: Lobato → região de Mauá/Faxinal/Ortigueira
+    if (isLobato(s) && (isMaua(e) || isFaxinal(e) || isOrtigueira(e))) return { label: '🔵 VOLTA: Líder → SIMFLOR', type: 'volta' };
+    if (isLobato(s) && distKm > 100) return { label: '🔵 VOLTA: Líder → Origem', type: 'volta' };
+    
+    // Viagem longa genérica (>100km) sem endereço reconhecido
+    if (distKm > 100) {
+      if (isMaua(s)) return { label: '🟢 IDA: SIMFLOR → ?', type: 'ida' };
+      if (isMaua(e)) return { label: '🔵 VOLTA: ? → SIMFLOR', type: 'volta' };
+      return { label: '🚛 Viagem Longa', type: 'desconhecido' };
+    }
+    
+    // Via Sabáudia
+    if (s.includes('sabáudia') || s.includes('sabaudia')) return { label: '🟢 IDA via Sabáudia', type: 'ida' };
+    if (e.includes('sabáudia') || e.includes('sabaudia')) return { label: '🔵 VOLTA via Sabáudia', type: 'volta' };
+    
+    return { label: '🚛 Viagem +50km', type: 'desconhecido' };
+  }
+  
+  // Viagens médias (15-50km) podem ser Mauá↔Ortigueira
+  if (distKm > 15 && distKm <= 50) {
+    if (isMaua(s) && isOrtigueira(e)) return { label: 'Mauá → Ortigueira', type: 'local' };
+    if (isOrtigueira(s) && isMaua(e)) return { label: 'Ortigueira → Mauá', type: 'local' };
+    if (isMaua(s) && isFaxinal(e)) return { label: 'Mauá → Faxinal', type: 'local' };
+    if (isFaxinal(s) && isMaua(e)) return { label: 'Faxinal → Mauá', type: 'local' };
+    return { label: 'Regional', type: 'local' };
+  }
+  
+  // Viagens curtas (<15km) são deslocamentos locais
+  if (distKm < 5) return { label: 'Local', type: 'local' };
+  if (distKm >= 5 && distKm <= 15) return { label: 'Deslocamento', type: 'local' };
+  
+  return { label: '', type: 'desconhecido' };
 }
 
 function formatDuration(ms: number) {
@@ -352,6 +414,7 @@ function DateRangeSelector({
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function GpsTrackingPage() {
+  const [, navigate] = useLocation();
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
   const [tab, setTab] = useState("mapa");
 
@@ -810,90 +873,157 @@ export default function GpsTrackingPage() {
                 </Card>
               ) : (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {/* Resumo cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                     <Card>
-                      <CardContent className="p-3 text-center">
-                        <p className="text-xs text-muted-foreground">Total de viagens</p>
-                        <p className="text-2xl font-bold">{trips.length}</p>
+                      <CardContent className="p-2 sm:p-3 text-center">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Total de viagens</p>
+                        <p className="text-xl sm:text-2xl font-bold">{trips.length}</p>
                       </CardContent>
                     </Card>
                     <Card>
-                      <CardContent className="p-3 text-center">
-                        <p className="text-xs text-muted-foreground">Km rodados</p>
-                        <p className="text-2xl font-bold text-blue-600">
-                           {smartDistanceToKm(trips.reduce((s, t) => s + (t.realDistance || t.distance || 0), 0))} km
+                      <CardContent className="p-2 sm:p-3 text-center">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Km rodados</p>
+                        <p className="text-xl sm:text-2xl font-bold text-blue-600">
+                           {trips.reduce((s, t) => {
+                             const d = t.realDistance || t.distance || 0;
+                             return s + (d > 1000 ? d / 1000 : d);
+                           }, 0).toFixed(1)} km
                         </p>
                       </CardContent>
                     </Card>
                     <Card>
-                      <CardContent className="p-3 text-center">
-                        <p className="text-xs text-muted-foreground">Duração total</p>
-                        <p className="text-2xl font-bold text-purple-600">
+                      <CardContent className="p-2 sm:p-3 text-center">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Duração total</p>
+                        <p className="text-xl sm:text-2xl font-bold text-purple-600">
                           {formatDuration(trips.reduce((s, t) => s + (t.duration || 0), 0))}
                         </p>
                       </CardContent>
                     </Card>
                     <Card>
-                      <CardContent className="p-3 text-center">
-                        <p className="text-xs text-muted-foreground">Vel. máxima</p>
-                        <p className="text-2xl font-bold text-orange-600">
-                          {knotsToKmh(Math.max(...trips.map((t) => t.maxSpeed || 0)))} km/h
+                      <CardContent className="p-2 sm:p-3 text-center">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Vel. máxima</p>
+                        <p className="text-xl sm:text-2xl font-bold text-orange-600">
+                          {(() => {
+                            const speeds = trips.map((t) => t.maxSpeed || 0);
+                            const maxKnots = Math.max(...speeds);
+                            const maxKmh = knotsToKmh(maxKnots);
+                            // Se todos maxSpeed=0, calcular via distância/duração
+                            if (maxKmh === 0) {
+                              const avgSpeeds = trips.map(t => {
+                                const d = t.realDistance || t.distance || 0;
+                                const km = d > 1000 ? d / 1000 : d;
+                                const hours = (t.duration || 1) / 3600000;
+                                return hours > 0 ? km / hours : 0;
+                              });
+                              const best = Math.max(...avgSpeeds);
+                              return best > 0 ? `~${Math.round(best)} km/h` : '—';
+                            }
+                            return `${maxKmh} km/h`;
+                          })()}
                         </p>
                       </CardContent>
                     </Card>
                   </div>
 
-                  <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="text-left p-2 sm:p-3 font-medium">Início</th>
-                          <th className="text-left p-2 sm:p-3 font-medium hidden md:table-cell">Origem</th>
-                          <th className="text-left p-2 sm:p-3 font-medium">Fim</th>
-                          <th className="text-left p-2 sm:p-3 font-medium hidden md:table-cell">Destino</th>
-                          <th className="text-right p-2 sm:p-3 font-medium">Distância</th>
-                          <th className="text-right p-2 sm:p-3 font-medium">Duração</th>
-                          <th className="text-right p-2 sm:p-3 font-medium hidden sm:table-cell">Vel. média</th>
-                          <th className="text-right p-2 sm:p-3 font-medium hidden sm:table-cell">Vel. máx.</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trips.map((trip, i) => (
-                          <tr key={i} className="border-t hover:bg-muted/30">
-                            <td className="p-2 sm:p-3 text-xs sm:text-sm">
-                              {new Date(trip.startTime).toLocaleString("pt-BR", {
-                                day: "2-digit", month: "2-digit",
-                                hour: "2-digit", minute: "2-digit",
-                              })}
-                            </td>
-                            <td className="p-2 sm:p-3 text-xs hidden md:table-cell max-w-[180px] truncate" title={trip.startAddress || ''}>
-                              {trip.startAddress ? trip.startAddress.split(',').slice(0, 2).join(',') : '—'}
-                            </td>
-                            <td className="p-2 sm:p-3 text-xs sm:text-sm">
-                              {new Date(trip.endTime).toLocaleString("pt-BR", {
-                                day: "2-digit", month: "2-digit",
-                                hour: "2-digit", minute: "2-digit",
-                              })}
-                            </td>
-                            <td className="p-2 sm:p-3 text-xs hidden md:table-cell max-w-[180px] truncate" title={trip.endAddress || ''}>
-                              {trip.endAddress ? trip.endAddress.split(',').slice(0, 2).join(',') : '—'}
-                            </td>
-                            <td className="p-2 sm:p-3 text-right font-medium text-xs sm:text-sm text-blue-600">
-                              {smartDistanceToKm(trip.realDistance || trip.distance)} km
-                            </td>
-                            <td className="p-2 sm:p-3 text-right text-muted-foreground text-xs sm:text-sm">
-                              {formatDuration(trip.duration)}
-                            </td>
-                            <td className="p-2 sm:p-3 text-right hidden sm:table-cell text-xs sm:text-sm">
-                              {knotsToKmh(trip.averageSpeed)} km/h
-                            </td>
-                            <td className="p-2 sm:p-3 text-right text-orange-600 font-medium hidden sm:table-cell text-xs sm:text-sm">
-                              {knotsToKmh(trip.maxSpeed)} km/h
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  {/* Lista de viagens - cards para mobile */}
+                  <div className="space-y-2">
+                    {trips.map((trip, i) => {
+                      const distKm = parseFloat(smartDistanceToKm(trip.realDistance || trip.distance));
+                      const route = identifyRoute(trip.startAddress, trip.endAddress, distKm);
+                      const routeColor = route.type === 'ida' ? 'text-green-700 bg-green-50 border-green-200' 
+                        : route.type === 'volta' ? 'text-blue-700 bg-blue-50 border-blue-200'
+                        : route.type === 'local' ? 'text-gray-600 bg-gray-50 border-gray-200'
+                        : 'text-gray-500 bg-gray-50 border-gray-200';
+                      const avgSpeed = (() => {
+                        const km = distKm;
+                        const hours = (trip.duration || 1) / 3600000;
+                        return hours > 0 ? Math.round(km / hours) : 0;
+                      })();
+                      
+                      return (
+                        <Card key={i} className={`overflow-hidden ${distKm > 50 ? 'border-l-4 border-l-green-500' : ''}`}>
+                          <CardContent className="p-3">
+                            {/* Linha 1: Data/hora + Distância */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(trip.startTime).toLocaleString("pt-BR", {
+                                    day: "2-digit", month: "2-digit",
+                                    hour: "2-digit", minute: "2-digit",
+                                  })}
+                                  {" → "}
+                                  {new Date(trip.endTime).toLocaleString("pt-BR", {
+                                    hour: "2-digit", minute: "2-digit",
+                                  })}
+                                </span>
+                                <span className="text-xs text-muted-foreground">({formatDuration(trip.duration)})</span>
+                              </div>
+                              <span className="text-base font-bold text-blue-600">
+                                {smartDistanceToKm(trip.realDistance || trip.distance)} km
+                              </span>
+                            </div>
+                            
+                            {/* Linha 2: Rota identificada */}
+                            {route.label && (
+                              <div className="mb-2">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${routeColor}`}>
+                                  <Navigation className="h-3 w-3" />
+                                  {route.label}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Linha 3: Origem → Destino */}
+                            <div className="text-xs space-y-0.5">
+                              <div className="flex items-start gap-1.5">
+                                <span className="text-green-600 font-medium shrink-0">De:</span>
+                                <span className="text-foreground">{shortAddress(trip.startAddress)}</span>
+                              </div>
+                              <div className="flex items-start gap-1.5">
+                                <span className="text-red-600 font-medium shrink-0">Até:</span>
+                                <span className="text-foreground">{shortAddress(trip.endAddress)}</span>
+                              </div>
+                            </div>
+                            
+                            {/* Linha 4: Velocidade + Botão Frete */}
+                            <div className="flex items-center justify-between mt-2">
+                              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                                <span>Vel. média: {avgSpeed > 0 ? `${avgSpeed} km/h` : '—'}</span>
+                                {knotsToKmh(trip.maxSpeed) > 0 && (
+                                  <span className="text-orange-600">Vel. máx: {knotsToKmh(trip.maxSpeed)} km/h</span>
+                                )}
+                              </div>
+                              {distKm > 15 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] gap-1 border-blue-300 text-blue-700 hover:bg-blue-50"
+                                  onClick={() => {
+                                    const tripDate = new Date(trip.startTime).toISOString().slice(0, 10);
+                                    const origin = shortAddress(trip.startAddress) || 'SIMFLOR';
+                                    const destination = shortAddress(trip.endAddress) || 'Líder';
+                                    const params = new URLSearchParams({
+                                      date: tripDate,
+                                      origin,
+                                      destination,
+                                      distanceKm: distKm.toFixed(1),
+                                      vehiclePlate: selectedDevice?.name || '',
+                                      routeType: route.type,
+                                      duration: formatDuration(trip.duration),
+                                    });
+                                    navigate(`/fretes?${params.toString()}`);
+                                    toast.success('Dados da viagem copiados para Cálculo de Frete!');
+                                  }}
+                                >
+                                  <Truck className="h-3 w-3" /> Frete
+                                </Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
