@@ -2455,7 +2455,7 @@ init_schema();
 init_cloudinary();
 import { z as z6 } from "zod";
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq6, desc as desc3, and as and3 } from "drizzle-orm";
+import { eq as eq6, desc as desc3, and as and3, ne } from "drizzle-orm";
 import mysql2 from "mysql2/promise";
 async function getDirectConnection() {
   const conn = await mysql2.createConnection(process.env.DATABASE_URL);
@@ -2463,6 +2463,19 @@ async function getDirectConnection() {
 }
 var cargoLoadsRouter = router({
   // ===== DESTINOS =====
+  // Verificar se nota fiscal já existe (para validação em tempo real no frontend)
+  checkInvoice: protectedProcedure.input(z6.object({ invoiceNumber: z6.string(), excludeId: z6.number().optional() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { exists: false, cargo: null };
+    const trimmed = input.invoiceNumber.trim();
+    if (!trimmed) return { exists: false, cargo: null };
+    const conditions = input.excludeId ? and3(eq6(cargoLoads.invoiceNumber, trimmed), ne(cargoLoads.id, input.excludeId)) : eq6(cargoLoads.invoiceNumber, trimmed);
+    const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date, clientName: cargoLoads.clientName }).from(cargoLoads).where(conditions).limit(1);
+    if (existing.length > 0) {
+      return { exists: true, cargo: existing[0] };
+    }
+    return { exists: false, cargo: null };
+  }),
   listDestinations: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2733,6 +2746,16 @@ var cargoLoadsRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (input.invoiceNumber && input.invoiceNumber.trim() !== "") {
+      const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date }).from(cargoLoads).where(eq6(cargoLoads.invoiceNumber, input.invoiceNumber.trim())).limit(1);
+      if (existing.length > 0) {
+        const dateFmt = existing[0].date ? new Date(existing[0].date).toLocaleDateString("pt-BR") : "N/I";
+        throw new TRPCError4({
+          code: "CONFLICT",
+          message: `Nota fiscal ${input.invoiceNumber} j\xE1 est\xE1 sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || "N/I"}, Data: ${dateFmt}). Verifique o n\xFAmero da nota.`
+        });
+      }
+    }
     await db.insert(cargoLoads).values({
       ...input,
       date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
@@ -2804,6 +2827,19 @@ var cargoLoadsRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (input.invoiceNumber && input.invoiceNumber.trim() !== "") {
+      const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date }).from(cargoLoads).where(and3(
+        eq6(cargoLoads.invoiceNumber, input.invoiceNumber.trim()),
+        ne(cargoLoads.id, input.id)
+      )).limit(1);
+      if (existing.length > 0) {
+        const dateFmt = existing[0].date ? new Date(existing[0].date).toLocaleDateString("pt-BR") : "N/I";
+        throw new TRPCError4({
+          code: "CONFLICT",
+          message: `Nota fiscal ${input.invoiceNumber} j\xE1 est\xE1 sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || "N/I"}, Data: ${dateFmt}). Verifique o n\xFAmero da nota.`
+        });
+      }
+    }
     const { id, date, ...rest } = input;
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = { ...rest, updatedAt: now };
@@ -3272,6 +3308,36 @@ var cargoLoadsRouter = router({
     if (input.status === "pago") updateData.paidAt = input.paidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     if (input.receiptUrl) updateData.receiptUrl = input.receiptUrl;
     await db.update(cargoWeeklyClosings).set(updateData).where(eq6(cargoWeeklyClosings.id, input.id));
+    if (input.status === "pago" || input.receiptUrl) {
+      try {
+        const [closing] = await db.select().from(cargoWeeklyClosings).where(eq6(cargoWeeklyClosings.id, input.id)).limit(1);
+        if (closing) {
+          const [client] = await db.select().from(clients).where(eq6(clients.id, closing.clientId)).limit(1);
+          const clientName = client?.name || "Cliente";
+          const weekStartFmt = closing.weekStart ? new Date(closing.weekStart).toLocaleDateString("pt-BR") : "-";
+          const weekEndFmt = closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString("pt-BR") : "-";
+          const totalAmount = closing.totalAmount ? parseFloat(closing.totalAmount).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "0,00";
+          const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
+          await notifyOwner2({
+            title: `Fechamento ${input.status === "pago" ? "marcado como PAGO" : "atualizado"}: ${clientName}`,
+            content: `Semana ${weekStartFmt} a ${weekEndFmt}
+Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
+          }).catch(() => {
+          });
+          const { notifyAdmComercial: notifyAdmComercial2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+          await notifyAdmComercial2({
+            type: "fechamento_semanal",
+            title: `Fechamento ${input.status === "pago" ? "PAGO" : "atualizado"}: ${clientName}`,
+            message: `Semana ${weekStartFmt} a ${weekEndFmt} \u2014 R$ ${totalAmount}${input.receiptUrl ? " (comprovante anexado)" : ""}`,
+            relatedId: closing.id,
+            relatedType: "weekly_closing"
+          }).catch(() => {
+          });
+        }
+      } catch (e) {
+        console.warn("[WeeklyClosing] Error sending notification:", e);
+      }
+    }
     return { success: true };
   }),
   deleteWeeklyClosing: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ input }) => {
@@ -5239,7 +5305,8 @@ function traccarAuth() {
   if (TRACCAR_TOKEN) {
     return {
       Authorization: `Bearer ${TRACCAR_TOKEN}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      Accept: "application/json"
     };
   }
   const email = process.env.TRACCAR_EMAIL || "";
@@ -5247,7 +5314,8 @@ function traccarAuth() {
   const credentials = Buffer.from(`${email}:${password}`).toString("base64");
   return {
     Authorization: `Basic ${credentials}`,
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    Accept: "application/json"
   };
 }
 async function traccarFetch(path2, options) {
@@ -5331,10 +5399,52 @@ var traccarRouter = router({
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     return traccarFetch(`/reports/route?${params}`);
   }),
-  /** Resumo de viagens de um dispositivo */
+  /** Resumo de viagens de um dispositivo - enriquecido com endereços e distância real */
   trips: protectedProcedure.input(z16.object({ deviceId: z16.number(), from: z16.string(), to: z16.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
-    return traccarFetch(`/reports/trips?${params}`);
+    const trips = await traccarFetch(`/reports/trips?${params}`);
+    const enriched = await Promise.all(
+      trips.map(async (trip) => {
+        let realDistance = trip.distance || 0;
+        if (realDistance === 0 && trip.endOdometer && trip.startOdometer) {
+          realDistance = trip.endOdometer - trip.startOdometer;
+        }
+        let endAddress = trip.endAddress;
+        if (!endAddress && trip.endLat && trip.endLon) {
+          try {
+            const geoRes = await fetch(
+              `${TRACCAR_URL}/api/server/geocode?latitude=${trip.endLat}&longitude=${trip.endLon}`,
+              { headers: traccarAuth() }
+            );
+            if (geoRes.ok) {
+              endAddress = await geoRes.text();
+            }
+          } catch {
+          }
+        }
+        let startAddress = trip.startAddress;
+        if (!startAddress && trip.startLat && trip.startLon) {
+          try {
+            const geoRes = await fetch(
+              `${TRACCAR_URL}/api/server/geocode?latitude=${trip.startLat}&longitude=${trip.startLon}`,
+              { headers: traccarAuth() }
+            );
+            if (geoRes.ok) {
+              startAddress = await geoRes.text();
+            }
+          } catch {
+          }
+        }
+        return {
+          ...trip,
+          startAddress,
+          endAddress,
+          realDistance
+          // distância corrigida em km
+        };
+      })
+    );
+    return enriched;
   }),
   /** Resumo de paradas de um dispositivo */
   stops: protectedProcedure.input(z16.object({ deviceId: z16.number(), from: z16.string(), to: z16.string() })).query(async ({ input }) => {
@@ -9939,3 +10049,119 @@ function scheduleFuelInvoiceDueCheck() {
   checkAndSchedule();
 }
 scheduleFuelInvoiceDueCheck();
+function scheduleWeeklyClosingCron() {
+  const checkAndSchedule = async () => {
+    const now = /* @__PURE__ */ new Date();
+    const next = new Date(now);
+    const daysUntilFriday = (5 - now.getDay() + 7) % 7 || 7;
+    if (now.getDay() === 5 && now.getHours() >= 22) {
+      next.setDate(now.getDate() + 7);
+    } else if (now.getDay() === 5 && now.getHours() < 22) {
+      next.setDate(now.getDate());
+    } else {
+      next.setDate(now.getDate() + daysUntilFriday);
+    }
+    next.setHours(22, 0, 0, 0);
+    const msUntilNext = Math.max(next.getTime() - now.getTime(), 6e4);
+    setTimeout(async () => {
+      try {
+        console.log("[CronJob-WeeklyClosing] Iniciando fechamento semanal autom\xE1tico...");
+        const mysql3 = await import("mysql2/promise");
+        const conn = await mysql3.createConnection(process.env.DATABASE_URL);
+        const today = /* @__PURE__ */ new Date();
+        const day = today.getDay();
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diffToMonday);
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+        const weekStartStr = weekStart.toISOString().slice(0, 10);
+        const weekEndStr = weekEnd.toISOString().slice(0, 10);
+        const [clientRows] = await conn.execute(
+          `SELECT id, name, price_per_ton, payment_term_days, billing_cycle FROM clients WHERE active = 1`
+        );
+        let closedCount = 0;
+        for (const client of clientRows) {
+          const [existing] = await conn.execute(
+            `SELECT id FROM cargo_weekly_closings WHERE client_id = ? AND DATE(week_start) = ?`,
+            [client.id, weekStartStr]
+          );
+          if (existing.length > 0) {
+            console.log(`[CronJob-WeeklyClosing] Cliente ${client.name} j\xE1 tem fechamento para semana ${weekStartStr}. Pulando.`);
+            continue;
+          }
+          const [loadsInWeek] = await conn.execute(
+            `SELECT weight_net_kg, weight_out_kg FROM cargo_loads 
+             WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
+            [client.id, weekStartStr, weekEndStr]
+          );
+          if (loadsInWeek.length === 0) {
+            continue;
+          }
+          const totalLoads = loadsInWeek.length;
+          const totalWeightKg = loadsInWeek.reduce((sum, l) => {
+            return sum + parseFloat(l.weight_net_kg || l.weight_out_kg || "0");
+          }, 0);
+          const pricePerTon = parseFloat(client.price_per_ton || "130");
+          const totalWeightTon = totalWeightKg / 1e3;
+          const totalAmount = (totalWeightTon * pricePerTon).toFixed(2);
+          const paymentTermDays = client.payment_term_days || 20;
+          const dueDate = new Date(weekEnd);
+          dueDate.setDate(dueDate.getDate() + paymentTermDays);
+          const dueDateStr = dueDate.toISOString().slice(0, 19).replace("T", " ");
+          const nowStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+          await conn.execute(
+            `INSERT INTO cargo_weekly_closings 
+             (client_id, week_start, week_end, total_loads, total_weight_kg, total_amount, price_per_ton, due_date, status, notes, created_at) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'fechado', ?, ?)`,
+            [
+              client.id,
+              weekStartStr + " 00:00:00",
+              weekEndStr + " 23:59:59",
+              totalLoads,
+              totalWeightKg.toFixed(2),
+              totalAmount,
+              pricePerTon.toString(),
+              dueDateStr,
+              "Fechamento autom\xE1tico (sexta-feira)",
+              nowStr
+            ]
+          );
+          closedCount++;
+          console.log(`[CronJob-WeeklyClosing] Fechamento criado: ${client.name} \u2014 ${totalLoads} cargas \u2014 ${totalWeightTon.toFixed(2)} ton \u2014 R$ ${totalAmount}`);
+        }
+        await conn.end();
+        if (closedCount > 0) {
+          try {
+            const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
+            await notifyOwner2({
+              title: `Fechamento semanal autom\xE1tico: ${closedCount} cliente(s)`,
+              content: `Fechamentos da semana ${weekStartStr.split("-").reverse().join("/")} a ${weekEndStr.split("-").reverse().join("/")} foram criados automaticamente para ${closedCount} cliente(s).`
+            });
+          } catch (e) {
+            console.warn("[CronJob-WeeklyClosing] Error notifying owner:", e);
+          }
+          try {
+            const { notifyAdmComercial: notifyAdmComercial2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+            await notifyAdmComercial2({
+              type: "fechamento_semanal",
+              title: `Fechamento semanal autom\xE1tico: ${closedCount} cliente(s)`,
+              message: `Semana ${weekStartStr.split("-").reverse().join("/")} a ${weekEndStr.split("-").reverse().join("/")}: ${closedCount} fechamento(s) criado(s) automaticamente.`
+            });
+          } catch (e) {
+            console.warn("[CronJob-WeeklyClosing] Error notifying adm:", e);
+          }
+        }
+        console.log(`[CronJob-WeeklyClosing] Conclu\xEDdo. ${closedCount} fechamento(s) criado(s).`);
+      } catch (err) {
+        console.error("[CronJob-WeeklyClosing] Erro:", err);
+      }
+      checkAndSchedule();
+    }, msUntilNext);
+    const nextDate = new Date(now.getTime() + msUntilNext);
+    console.log(`[CronJob-WeeklyClosing] Pr\xF3ximo fechamento autom\xE1tico: ${nextDate.toLocaleString("pt-BR")}`);
+  };
+  checkAndSchedule();
+}
+scheduleWeeklyClosingCron();
