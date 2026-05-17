@@ -1727,8 +1727,11 @@
 
 ## 🚛 GPS VIAGENS: EXIBIÇÃO DE ROTAS + CUSTO DE FRETE (17/05/2026)
 
-- [ ] GPS Viagens: mostrar colunas Origem e Destino com endereços reais na tabela
-- [ ] GPS Viagens: identificar rotas SIMFLOR → Líder (ida) e Líder → SIMFLOR (volta)
-- [ ] GPS Viagens: corrigir Km rodados total (mostra 1.5 km mas deveria somar todos os km)
-- [ ] GPS Viagens: corrigir Vel. máxima (mostra 0 km/h)
+- [x] GPS Viagens: mostrar colunas Origem e Destino com endereços reais na tabela
+- [x] GPS Viagens: identificar rotas SIMFLOR → Líder (ida) e Líder → SIMFLOR (volta)
+- [x] GPS Viagens: corrigir Km rodados total (mostra 1.5 km mas deveria somar todos os km)
+- [x] GPS Viagens: corrigir Vel. máxima (mostra 0 km/h)
+- [x] Botão 'Frete' em viagens >15km para importar dados GPS automaticamente
+- [x] FreightPage: auto-preencher formulário com dados GPS (km, origem, destino, data)
+- [x] Card de integração GPS na página de Cálculo de Fretes
 - [ ] Módulo Custo de Frete diário: km percorridos + combustível + manutenção = custo total
