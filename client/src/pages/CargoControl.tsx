@@ -408,6 +408,125 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
 
 // ===== COMPONENTE PRINCIPAL =====
 // ===== COMPONENTE: FECHAMENTOS SEMANAIS =====
+function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: any[], pricePerTon: number) {
+  const weekStartFmt = closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR') : '-';
+  const weekEndFmt = closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
+  const totalWeightTon = closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0';
+  const dueDateFmt = closing.dueDate ? new Date(closing.dueDate).toLocaleDateString('pt-BR') : '-';
+  const statusLabel = closing.status === 'pago' ? 'PAGO' : closing.status === 'atrasado' ? 'ATRASADO' : 'AGUARDANDO PAGAMENTO';
+  const statusClass = closing.status === 'pago' ? 'badge-pago' : closing.status === 'atrasado' ? 'badge-atrasado' : 'badge-pendente';
+
+  const weekStart = new Date(closing.weekStart);
+  const weekEnd = new Date(closing.weekEnd);
+  weekEnd.setHours(23, 59, 59, 999);
+  const weekLoads = loadsAll.filter((l: any) => {
+    const d = new Date(l.date);
+    return d >= weekStart && d <= weekEnd;
+  });
+
+  const loadsRows = weekLoads.map((l: any, i: number) => {
+    const date = l.date ? new Date(l.date).toLocaleDateString('pt-BR') : '-';
+    const weight = l.weightNetKg || l.weightOutKg || '-';
+    const weightTon = parseFloat(weight) > 0 ? (parseFloat(weight) / 1000).toFixed(3) : '-';
+    const vol = l.volumeM3 || '-';
+    const dest = l.destination || '-';
+    const plate = l.vehiclePlate || '-';
+    const driver = l.driverName || '-';
+    return `<tr>
+      <td style="text-align:center">${i + 1}</td>
+      <td>${date}</td>
+      <td>${dest}</td>
+      <td>${plate}</td>
+      <td>${driver}</td>
+      <td style="text-align:right">${vol} m\u00b3</td>
+      <td style="text-align:right">${weight} kg</td>
+      <td style="text-align:right">${weightTon} ton</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Fechamento Semanal - ${clientName} - BTREE Ambiental</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
+  @page { size: A4; margin: 0; }
+  .page { min-height: 100vh; display: flex; flex-direction: column; }
+  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
+  .pdf-header img { height: 52px; filter: brightness(0) invert(1); }
+  .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
+  .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
+  .pdf-subheader { background: #f0fdf4; padding: 12px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .badge-pago { background: #dcfce7; color: #166534; padding: 4px 14px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .badge-pendente { background: #fef9c3; color: #854d0e; padding: 4px 14px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .badge-atrasado { background: #fee2e2; color: #991b1b; padding: 4px 14px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .pdf-content { padding: 20px 32px; flex: 1; }
+  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px 24px; margin-bottom: 20px; display: flex; gap: 32px; flex-wrap: wrap; }
+  .summary-item { text-align: center; }
+  .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+  .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }
+  .summary-item .value.blue { color: #1d4ed8; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 16px; }
+  table th { background: #0d4f2e; color: white; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+  table td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+  table tr:nth-child(even) { background: #f9fafb; }
+  .pdf-footer { padding: 12px 32px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+  .pdf-footer-left { display: flex; align-items: center; gap: 10px; }
+  .pdf-footer-left img { height: 28px; }
+  .pdf-footer-text { font-size: 10px; color: #555; }
+  .pdf-footer-text strong { color: #0d4f2e; }
+  .pdf-footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+  .pdf-footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .pdf-footer-right img { width: 60px; height: 60px; }
+  .pdf-footer-right span { font-size: 9px; color: #555; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<div class="page">
+  <div class="pdf-header">
+    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <div class="pdf-header-text">
+      <h1>Fechamento Semanal</h1>
+      <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+  </div>
+  <div class="pdf-subheader">
+    <div>
+      <span style="font-size:15px;font-weight:700;color:#0d4f2e;">Cliente: ${clientName}</span><br/>
+      <span style="font-size:12px;color:#6b7280;">Per\u00edodo: ${weekStartFmt} a ${weekEndFmt}</span>
+    </div>
+    <span class="${statusClass}">${statusLabel}</span>
+  </div>
+  <div class="pdf-content">
+    <div class="summary-box">
+      <div class="summary-item"><div class="label">Cargas</div><div class="value">${closing.totalLoads}</div></div>
+      <div class="summary-item"><div class="label">Peso Total</div><div class="value">${totalWeightTon} ton</div></div>
+      <div class="summary-item"><div class="label">Pre\u00e7o/Ton</div><div class="value">R$ ${closing.pricePerTon || pricePerTon}</div></div>
+      <div class="summary-item"><div class="label">Valor Total</div><div class="value blue">R$ ${parseFloat(closing.totalAmount || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div></div>
+      <div class="summary-item"><div class="label">Vencimento</div><div class="value">${dueDateFmt}</div></div>
+    </div>
+    ${weekLoads.length > 0 ? `
+    <h3 style="font-size:13px;color:#0d4f2e;margin-bottom:8px;">Detalhamento das Cargas</h3>
+    <table>
+      <thead><tr>
+        <th style="text-align:center">#</th>
+        <th>Data</th>
+        <th>Destino</th>
+        <th>Placa</th>
+        <th>Motorista</th>
+        <th style="text-align:right">Volume</th>
+        <th style="text-align:right">Peso</th>
+        <th style="text-align:right">Tonelada</th>
+      </tr></thead>
+      <tbody>${loadsRows}</tbody>
+    </table>` : ''}
+  </div>
+  ${PDF_FOOTER_HTML}
+</div>
+<script>window.onload = () => { setTimeout(() => { window.print(); }, 500); }</script>
+</body></html>`;
+  const win = window.open('', '_blank');
+  if (win) { win.document.write(html); win.document.close(); }
+}
+
 function WeeklyClosingsView({
   clientsList, loads, closingClientId, setClosingClientId,
   closingWeekStart, setClosingWeekStart, closingWeekEnd, setClosingWeekEnd,
@@ -448,29 +567,168 @@ function WeeklyClosingsView({
   // Auto-calculate next friday from current date for week end
   const getNextFriday = () => {
     const d = new Date();
-    const day = d.getDay(); // 0=Sun, 5=Fri
+    const day = d.getDay();
     const diff = day <= 5 ? 5 - day : 7 - day + 5;
     d.setDate(d.getDate() + diff);
     return d.toISOString().slice(0, 10);
   };
   const getLastSaturday = () => {
     const d = new Date();
-    const day = d.getDay(); // 0=Sun, 6=Sat
+    const day = d.getDay();
     const diff = day >= 6 ? 0 : day + 1;
     d.setDate(d.getDate() - diff);
     return d.toISOString().slice(0, 10);
   };
 
-  const STATUS_BADGE: Record<string, string> = {
-    aberto: 'bg-blue-100 text-blue-800',
-    fechado: 'bg-yellow-100 text-yellow-800',
-    pago: 'bg-green-100 text-green-800',
-    atrasado: 'bg-red-100 text-red-800',
+  // ── Calcular semana atual e passada ──
+  const getWeekStart = (d: Date) => {
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+    start.setHours(0, 0, 0, 0);
+    return start;
   };
+  const today = new Date();
+  const thisWeekStart = getWeekStart(today);
+  const lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  const thisWeekEnd = new Date(thisWeekStart);
+  thisWeekEnd.setDate(thisWeekEnd.getDate() + 6);
+  thisWeekEnd.setHours(23, 59, 59, 999);
+  const lastWeekEnd = new Date(lastWeekStart);
+  lastWeekEnd.setDate(lastWeekEnd.getDate() + 6);
+  lastWeekEnd.setHours(23, 59, 59, 999);
+
+  const thisWeekLoads = loads.filter((c: any) => {
+    const d = new Date(c.date);
+    return d >= thisWeekStart && d <= thisWeekEnd;
+  });
+  const lastWeekLoads = loads.filter((c: any) => {
+    const d = new Date(c.date);
+    return d >= lastWeekStart && d <= lastWeekEnd;
+  });
+
+  const calcStats = (arr: any[]) => ({
+    count: arr.length,
+    peso: arr.reduce((acc: number, c: any) => acc + parseFloat(c.weightNetKg || c.weightOutKg || '0'), 0),
+    entregues: arr.filter((c: any) => c.status === 'entregue').length,
+  });
+
+  const thisWeek = { ...calcStats(thisWeekLoads), start: thisWeekStart, end: thisWeekEnd };
+  const lastWeek = { ...calcStats(lastWeekLoads), start: lastWeekStart, end: lastWeekEnd };
+
+  // Financial summary from closings
+  const totalAReceber = closings.filter(c => c.status === 'fechado').reduce((sum, c) => sum + parseFloat(c.totalAmount || '0'), 0);
+  const totalPago = closings.filter(c => c.status === 'pago').reduce((sum, c) => sum + parseFloat(c.totalAmount || '0'), 0);
+  const totalAtrasado = closings.filter(c => {
+    if (c.status !== 'fechado') return false;
+    return c.dueDate && new Date(c.dueDate) < new Date();
+  }).reduce((sum, c) => sum + parseFloat(c.totalAmount || '0'), 0);
+
+  const formatCurrency = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
+    <div className="space-y-5">
+      {/* ── RESUMO FINANCEIRO ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <p className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">A Receber</p>
+          <p className="text-amber-800 text-xl font-black">{formatCurrency(totalAReceber)}</p>
+          <p className="text-amber-600 text-[10px] mt-1">{closings.filter(c => c.status === 'fechado').length} fechamento(s) pendente(s)</p>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <p className="text-green-700 text-xs font-semibold uppercase tracking-wide mb-1">Total Recebido</p>
+          <p className="text-green-800 text-xl font-black">{formatCurrency(totalPago)}</p>
+          <p className="text-green-600 text-[10px] mt-1">{closings.filter(c => c.status === 'pago').length} fechamento(s) pago(s)</p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="text-red-700 text-xs font-semibold uppercase tracking-wide mb-1">Atrasados</p>
+          <p className="text-red-800 text-xl font-black">{formatCurrency(totalAtrasado)}</p>
+          <p className="text-red-600 text-[10px] mt-1">{closings.filter(c => c.status === 'fechado' && c.dueDate && new Date(c.dueDate) < new Date()).length} vencido(s)</p>
+        </div>
+      </div>
+
+      {/* ── RESUMO SEMANAL ── */}
+      <div className="bg-gradient-to-r from-emerald-50/80 to-emerald-100/40 rounded-xl border border-emerald-200/60 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Calendar className="h-4 w-4 text-emerald-700" />
+          <h3 className="text-sm font-bold text-emerald-800">Resumo Semanal</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Semana Atual */}
+          <div className="bg-white rounded-xl p-3 border border-emerald-200/50 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Semana Atual</span>
+              <span className="text-[9px] text-gray-400">
+                {thisWeek.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — {thisWeek.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-baseline">
+                <span className="text-xs text-gray-500">Cargas</span>
+                <span className="text-lg font-black text-emerald-800">{thisWeek.count}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-xs text-gray-500">Peso</span>
+                <span className="text-sm font-bold text-emerald-700">{thisWeek.peso > 0 ? (thisWeek.peso / 1000).toFixed(2) : '0'} ton</span>
+              </div>
+              {thisWeek.entregues > 0 && (
+                <p className="text-[10px] text-green-600 text-right">{thisWeek.entregues} entregue{thisWeek.entregues > 1 ? 's' : ''}</p>
+              )}
+            </div>
+          </div>
+          {/* Semana Passada */}
+          <div className="bg-white rounded-xl p-3 border border-gray-200 opacity-90">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Semana Passada</span>
+              <span className="text-[9px] text-gray-400">
+                {lastWeek.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — {lastWeek.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-baseline">
+                <span className="text-xs text-gray-500">Cargas</span>
+                <span className="text-lg font-black text-gray-700">{lastWeek.count}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-xs text-gray-500">Peso</span>
+                <span className="text-sm font-bold text-emerald-600">{lastWeek.peso > 0 ? (lastWeek.peso / 1000).toFixed(2) : '0'} ton</span>
+              </div>
+              {lastWeek.entregues > 0 && (
+                <p className="text-[10px] text-green-600 text-right">{lastWeek.entregues} entregue{lastWeek.entregues > 1 ? 's' : ''}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── SEMANA ATUAL EM ANDAMENTO ── */}
+      {thisWeek.count > 0 && (
+        <div className="border-2 border-blue-200 bg-blue-50/40 rounded-xl p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-gray-900 text-sm">
+                  Semana {thisWeek.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} a {thisWeek.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                </span>
+                <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-blue-100 text-blue-700 animate-pulse">
+                  Em andamento
+                </span>
+              </div>
+              <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                <span>{thisWeek.count} carga{thisWeek.count !== 1 ? 's' : ''}</span>
+                <span>{(thisWeek.peso / 1000).toFixed(2)} ton</span>
+              </div>
+              <p className="text-[10px] text-blue-600 mt-1.5 italic">Fechamento na sexta-feira</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[10px] text-blue-400 font-medium">parcial</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── HEADER + ACTIONS ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <select
@@ -570,7 +828,7 @@ function WeeklyClosingsView({
         </Card>
       )}
 
-      {/* Lista de fechamentos */}
+      {/* ── FECHAMENTOS OFICIAIS ── */}
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
@@ -583,126 +841,172 @@ function WeeklyClosingsView({
         </div>
       ) : (
         <div className="space-y-3">
-          {closings.map(closing => (
-            <Card key={closing.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-800" translate="no">{closing.clientName || 'Cliente'}</span>
-                      <Badge className={STATUS_BADGE[closing.status || 'aberto']}>{closing.status}</Badge>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+            <FileCheck className="h-3.5 w-3.5" />
+            Fechamentos Oficiais ({closings.length})
+          </p>
+          {closings.map(closing => {
+            const isOverdue = closing.status === 'fechado' && closing.dueDate && new Date(closing.dueDate) < new Date();
+            const clientForClosing = clientsList.find(c => c.id === closing.clientId);
+            const pricePerTon = parseFloat(closing.pricePerTon || (clientForClosing as any)?.pricePerTon || '130');
+            return (
+              <div key={closing.id} className={`border rounded-xl p-4 transition-all hover:shadow-md ${
+                closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
+                isOverdue ? 'border-red-200 bg-red-50/30' :
+                'border-yellow-100 bg-yellow-50/30'
+              }`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-gray-900 text-sm" translate="no">
+                        {closing.clientName || 'Cliente'}
+                      </span>
+                      <span className="font-semibold text-gray-600 text-xs">
+                        Semana {closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} a {closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        closing.status === 'pago' ? 'bg-green-100 text-green-700' :
+                        isOverdue ? 'bg-red-100 text-red-700' :
+                        closing.status === 'fechado' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {closing.status === 'pago' ? 'Pago' : isOverdue ? 'Atrasado' : closing.status === 'fechado' ? 'Aguardando' : 'Aberto'}
+                      </span>
                     </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR') : '-'} → {closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR') : '-'}
-                      </span>
-                      <span className="flex items-center gap-1 font-semibold">
-                        <Package className="h-3 w-3" /> {closing.totalLoads} cargas
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Weight className="h-3 w-3" /> {closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton
-                      </span>
-                      <span className="flex items-center gap-1 font-bold text-blue-700">
-                        <DollarSign className="h-3 w-3" /> R$ {closing.totalAmount || '0.00'}
-                      </span>
-                      {closing.dueDate && (
-                        <span className="flex items-center gap-1 text-orange-600">
-                          <CalendarClock className="h-3 w-3" /> Venc: {new Date(closing.dueDate).toLocaleDateString('pt-BR')}
-                        </span>
-                      )}
+                    <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                      <span>{closing.totalLoads} carga{closing.totalLoads !== 1 ? 's' : ''}</span>
+                      <span>{closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton</span>
+                      {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
                     </div>
-                  </div>
-                  <div className="flex gap-1 flex-wrap">
-                    {closing.status === 'fechado' && (
-                      <Button size="sm" variant="outline" className="text-xs gap-1 text-green-700 border-green-300 hover:bg-green-50"
-                        onClick={() => {
-                          // Open file picker for receipt
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/*,application/pdf';
-                          input.onchange = async (e: any) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              toast.info('Enviando comprovante...');
-                              const formData = new FormData();
-                              formData.append('file', file);
-                              formData.append('upload_preset', 'azaconnect');
-                              formData.append('folder', 'btree-receipts');
-                              const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
-                                method: 'POST', body: formData
-                              });
-                              const data = await res.json();
-                              if (data.secure_url) {
-                                updateStatus.mutate({ id: closing.id, status: 'pago', receiptUrl: data.secure_url });
-                              } else {
-                                toast.error('Erro no upload do comprovante');
-                              }
-                            } catch {
-                              toast.error('Erro ao enviar comprovante');
-                            }
-                          };
-                          input.click();
-                        }}>
-                        <Upload className="h-3 w-3" /> Pago + Comprovante
-                      </Button>
+                    {closing.status !== 'pago' && closing.dueDate && (
+                      <p className={`text-xs mt-1.5 font-medium ${isOverdue ? 'text-red-600' : 'text-orange-600'}`}>
+                        Vencimento: {new Date(closing.dueDate).toLocaleDateString('pt-BR')}
+                        {isOverdue && ' (VENCIDO)'}
+                      </p>
                     )}
-                    {closing.status === 'fechado' && (
-                      <Button size="sm" variant="outline" className="text-xs gap-1 text-green-600 border-green-200 hover:bg-green-50"
-                        onClick={() => updateStatus.mutate({ id: closing.id, status: 'pago' })}>
-                        <CheckCircle2 className="h-3 w-3" /> Pago (sem comprovante)
-                      </Button>
-                    )}
-                    {closing.status === 'pago' && !(closing as any).receiptUrl && (
-                      <Button size="sm" variant="outline" className="text-xs gap-1 text-blue-700 border-blue-300 hover:bg-blue-50"
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/*,application/pdf';
-                          input.onchange = async (e: any) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              toast.info('Enviando comprovante...');
-                              const formData = new FormData();
-                              formData.append('file', file);
-                              formData.append('upload_preset', 'azaconnect');
-                              formData.append('folder', 'btree-receipts');
-                              const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
-                                method: 'POST', body: formData
-                              });
-                              const data = await res.json();
-                              if (data.secure_url) {
-                                updateStatus.mutate({ id: closing.id, status: 'pago', receiptUrl: data.secure_url });
-                              } else {
-                                toast.error('Erro no upload do comprovante');
-                              }
-                            } catch {
-                              toast.error('Erro ao enviar comprovante');
-                            }
-                          };
-                          input.click();
-                        }}>
-                        <Upload className="h-3 w-3" /> Anexar Comprovante
-                      </Button>
+                    {closing.status === 'pago' && closing.paidAt && (
+                      <p className="text-xs mt-1.5 text-green-700 font-medium">
+                        Pago em: {new Date(closing.paidAt).toLocaleDateString('pt-BR')}
+                      </p>
                     )}
                     {(closing as any).receiptUrl && (
-                      <a href={(closing as any).receiptUrl} target="_blank" rel="noopener noreferrer">
-                        <Button size="sm" variant="outline" className="text-xs gap-1 text-blue-700 border-blue-300 hover:bg-blue-50">
-                          <FileCheck className="h-3 w-3" /> Ver Comprovante
-                        </Button>
+                      <a
+                        href={(closing as any).receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 transition-colors"
+                      >
+                        <FileCheck className="h-3 w-3" /> Ver Comprovante
                       </a>
                     )}
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-red-500"
-                      onClick={() => { if (confirm('Remover este fechamento?')) deleteClosing.mutate({ id: closing.id }); }}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {closing.notes && (
+                      <p className="text-xs text-gray-500 mt-1.5 italic">{closing.notes}</p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                    <p className="font-black text-emerald-800 text-lg">{formatCurrency(parseFloat(closing.totalAmount || '0'))}</p>
+                    {/* PDF Button */}
+                    <button
+                      onClick={() => {
+                        const clientLoads = loads.filter((l: any) => l.clientId === closing.clientId);
+                        generateWeeklyClosingPDF(closing, closing.clientName || 'Cliente', clientLoads, pricePerTon);
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-semibold hover:bg-emerald-200 transition-colors mt-1"
+                    >
+                      <Download className="h-3 w-3" /> PDF
+                    </button>
+                    {/* Action buttons */}
+                    <div className="flex gap-1 mt-1 flex-wrap justify-end">
+                      {closing.status === 'fechado' && (
+                        <button
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*,application/pdf';
+                            input.onchange = async (e: any) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                toast.info('Enviando comprovante...');
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                formData.append('upload_preset', 'azaconnect');
+                                formData.append('folder', 'btree-receipts');
+                                const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
+                                  method: 'POST', body: formData
+                                });
+                                const data = await res.json();
+                                if (data.secure_url) {
+                                  updateStatus.mutate({ id: closing.id, status: 'pago', receiptUrl: data.secure_url });
+                                } else {
+                                  toast.error('Erro no upload do comprovante');
+                                }
+                              } catch {
+                                toast.error('Erro ao enviar comprovante');
+                              }
+                            };
+                            input.click();
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-lg text-[10px] font-semibold hover:bg-green-200 transition-colors"
+                        >
+                          <Upload className="h-3 w-3" /> Pago
+                        </button>
+                      )}
+                      {closing.status === 'fechado' && (
+                        <button
+                          onClick={() => updateStatus.mutate({ id: closing.id, status: 'pago' })}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded-lg text-[10px] font-semibold hover:bg-green-100 transition-colors"
+                        >
+                          <CheckCircle2 className="h-3 w-3" /> Sem comp.
+                        </button>
+                      )}
+                      {closing.status === 'pago' && !(closing as any).receiptUrl && (
+                        <button
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*,application/pdf';
+                            input.onchange = async (e: any) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                toast.info('Enviando comprovante...');
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                formData.append('upload_preset', 'azaconnect');
+                                formData.append('folder', 'btree-receipts');
+                                const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
+                                  method: 'POST', body: formData
+                                });
+                                const data = await res.json();
+                                if (data.secure_url) {
+                                  updateStatus.mutate({ id: closing.id, status: 'pago', receiptUrl: data.secure_url });
+                                } else {
+                                  toast.error('Erro no upload do comprovante');
+                                }
+                              } catch {
+                                toast.error('Erro ao enviar comprovante');
+                              }
+                            };
+                            input.click();
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-semibold hover:bg-blue-100 transition-colors"
+                        >
+                          <Upload className="h-3 w-3" /> Comprovante
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { if (confirm('Remover este fechamento?')) deleteClosing.mutate({ id: closing.id }); }}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-gray-400 hover:text-red-500 rounded-lg text-[10px] transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

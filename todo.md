@@ -1735,3 +1735,10 @@
 - [x] FreightPage: auto-preencher formulário com dados GPS (km, origem, destino, data)
 - [x] Card de integração GPS na página de Cálculo de Fretes
 - [ ] Módulo Custo de Frete diário: km percorridos + combustível + manutenção = custo total
+
+## 💰 FECHAMENTO FINANCEIRO - CONTROLE DE CARGAS (18/05/2026)
+- [ ] Melhorar aba Fechamentos com resumo financeiro (Total a Receber, Total Pago, Atrasados)
+- [ ] Adicionar preview da semana atual "em andamento" no topo dos fechamentos
+- [ ] Cards de fechamento com visual melhor: valor e vencimento em destaque
+- [ ] Botão PDF Semanal em cada fechamento (igual ao PDF do portal do cliente)
+- [ ] Mostrar status colorido: verde=pago, amarelo=aguardando, vermelho=atrasado
