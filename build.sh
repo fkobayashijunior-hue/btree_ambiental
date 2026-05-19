@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-echo "=== BTREE Ambiental Build ==="
-echo "Node: $(node --version)"
+echo "=== Construção Ambiental BTREE ==="
+echo "Nó: $(node --version)"
 
 # ─── Estratégia de build ──────────────────────────────────────────────────────
 #
@@ -28,7 +28,7 @@ if command -v pnpm &> /dev/null; then
 else
   # ── Ambiente de produção (Hostinger) ──
   # dist/ já está pré-compilado no repositório
-  echo "Production environment (Hostinger). Installing runtime deps only..."
+  echo "Ambiente de produção (Hostinger). Instalando apenas as dependências de tempo de execução..."
 
   if [ -f "package.hostinger.json" ]; then
     # Usar package.hostinger.json (sem dependências de build com workspace:*)
@@ -42,17 +42,37 @@ else
     npm install --legacy-peer-deps
   fi
 
-  echo "Using pre-built dist/ from repository."
+  echo "Usando dist/ pré-compilado do repositório."
 
   # ── Copiar arquivos estáticos para public_html ──
   # O LiteSpeed/Passenger da Hostinger serve arquivos estáticos de public_html
   # Sem isso, rotas SPA como /login retornam 403 Forbidden
   PUBLIC_HTML="$HOME/domains/btreeambiental.com/public_html"
   if [ -d "$PUBLIC_HTML" ] && [ -d "dist/public" ]; then
-    echo "Copying static assets to public_html..."
-    cp -r dist/public/* "$PUBLIC_HTML/" 2>/dev/null || true
-    echo "Static assets copied to public_html."
+    echo "Limpando assets antigos do public_html..."
+    rm -rf "$PUBLIC_HTML/assets" 2>/dev/null || true
+    rm -f "$PUBLIC_HTML/index.html" 2>/dev/null || true
+    rm -f "$PUBLIC_HTML/registerSW.js" 2>/dev/null || true
+    rm -f "$PUBLIC_HTML/manifest.json" 2>/dev/null || true
+    rm -f "$PUBLIC_HTML/manifest.webmanifest" 2>/dev/null || true
+    rm -f "$PUBLIC_HTML/sw.js" 2>/dev/null || true
+
+    echo "Copiando novos assets estáticos para public_html..."
+    cp -r dist/public/* "$PUBLIC_HTML/"
+    echo "Assets estáticos copiados para public_html."
+
+    # Verificar que o index.html correto foi copiado
+    if [ -f "$PUBLIC_HTML/index.html" ]; then
+      echo "index.html verificado em public_html:"
+      grep -o 'assets/index-[^"]*' "$PUBLIC_HTML/index.html" || true
+    fi
   fi
+
+  # ── Reiniciar o Passenger (Node.js app) ──
+  # Criar tmp/restart.txt para sinalizar ao Passenger que deve reiniciar
+  mkdir -p tmp
+  touch tmp/restart.txt
+  echo "Passenger restart sinalizado (tmp/restart.txt)."
 fi
 
-echo "Build complete!"
+echo "Build completo!"
