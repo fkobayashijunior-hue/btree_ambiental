@@ -613,7 +613,7 @@ function scheduleWeeklyClosingCron() {
           const paymentTermDays = client.payment_term_days || 21;
           const dueDate = new Date(weekEnd);
           dueDate.setDate(dueDate.getDate() + paymentTermDays);
-          const dueDateStr = dueDate.toISOString().slice(0, 19).replace('T', ' ');
+          const dueDateStr = dueDate.toISOString().slice(0, 10) + ' 12:00:00';
 
           const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
@@ -623,8 +623,8 @@ function scheduleWeeklyClosingCron() {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'fechado', ?, ?)`,
             [
               client.id,
-              weekStartStr + ' 00:00:00',
-              weekEndStr + ' 23:59:59',
+              weekStartStr + ' 12:00:00',
+              weekEndStr + ' 12:00:00',
               totalLoads,
               totalWeightKg.toFixed(2),
               totalAmount,

@@ -3,6 +3,19 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone, FileCheck, Calendar } from "lucide-react";
 
+// ── HELPERS ──
+// Fix timezone issue: date-only strings like "2026-05-08" are parsed as UTC midnight,
+// which in Brazil (UTC-3) becomes May 7 at 21:00. Adding T12:00:00 prevents day shift.
+function safeDate(dateStr: string | null | undefined): Date {
+  if (!dateStr) return new Date();
+  const s = String(dateStr);
+  if (s.length === 10 && s[4] === '-') return new Date(s + 'T12:00:00');
+  if (s.includes('T') && s.endsWith('Z') && s.includes('T00:00:00')) {
+    return new Date(s.replace('T00:00:00.000Z', 'T12:00:00'));
+  }
+  return new Date(s);
+}
+
 // ── PWA INSTALL HOOK ──
 function useInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -199,19 +212,19 @@ const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=ht
 
 // ===== PDF FECHAMENTO SEMANAL =====
 function generateClosingPDF(closing: any, clientName: string, loads: any[], pricePerTon: number) {
-  const weekStartFmt = closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR') : '-';
-  const weekEndFmt = closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
+  const weekStartFmt = closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR') : '-';
+  const weekEndFmt = closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
   const totalWeightTon = closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0';
-  const dueDateFmt = closing.dueDate ? new Date(closing.dueDate).toLocaleDateString('pt-BR') : '-';
+  const dueDateFmt = closing.dueDate ? safeDate(closing.dueDate).toLocaleDateString('pt-BR') : '-';
   const statusLabel = closing.status === 'pago' ? 'PAGO' : closing.status === 'atrasado' ? 'ATRASADO' : 'AGUARDANDO PAGAMENTO';
   const statusClass = closing.status === 'pago' ? 'badge-pago' : closing.status === 'atrasado' ? 'badge-atrasado' : 'badge-pendente';
 
   // Filter loads in this week period
-  const weekStart = new Date(closing.weekStart);
-  const weekEnd = new Date(closing.weekEnd);
+  const weekStart = safeDate(closing.weekStart);
+  const weekEnd = safeDate(closing.weekEnd);
   weekEnd.setHours(23, 59, 59, 999);
   const weekLoads = loads.filter((l: any) => {
-    const d = new Date(l.date);
+    const d = safeDate(l.date);
     return d >= weekStart && d <= weekEnd;
   });
 
@@ -225,7 +238,7 @@ function generateClosingPDF(closing: any, clientName: string, loads: any[], pric
   const actualTotalAmount = (actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon)).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
-    const date = l.date ? new Date(l.date).toLocaleDateString('pt-BR') : '-';
+    const date = l.date ? safeDate(l.date).toLocaleDateString('pt-BR') : '-';
     const weight = l.weightNetKg || l.weightOutKg || '-';
     const weightTon = parseFloat(weight) > 0 ? (parseFloat(weight) / 1000).toFixed(3) : '-';
     const vol = l.volumeM3 || '-';
@@ -594,7 +607,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
 
   const formatDate = (d: Date | string | null) => {
     if (!d) return "—";
-    return new Date(d).toLocaleDateString("pt-BR");
+    return safeDate(d as string).toLocaleDateString("pt-BR");
   };
 
   const formatCurrency = (v: string | number | null) => {
@@ -855,11 +868,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       lastWeekEnd.setHours(23, 59, 59, 999);
 
                       const thisWeekLoads = allLoads.filter((c: any) => {
-                        const d = new Date(c.date);
+                        const d = safeDate(c.date);
                         return d >= thisWeekStart && d <= thisWeekEnd;
                       });
                       const lastWeekLoads = allLoads.filter((c: any) => {
-                        const d = new Date(c.date);
+                        const d = safeDate(c.date);
                         return d >= lastWeekStart && d <= lastWeekEnd;
                       });
 
@@ -878,7 +891,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       const lastWeekKey = lastWeekStart.toISOString().slice(0, 10);
                       const lastWeekClosing = formalClosings.find((c: any) => {
                         if (!c.weekStart) return false;
-                        return new Date(c.weekStart).toISOString().slice(0, 10) === lastWeekKey;
+                        return safeDate(c.weekStart).toISOString().slice(0, 10) === lastWeekKey;
                       });
 
                       return (
@@ -988,7 +1001,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                 Fechamentos Oficiais
                               </p>
                               {formalClosings.map((closing: any) => {
-                                const isOverdue = closing.status === 'fechado' && closing.dueDate && new Date(closing.dueDate) < new Date();
+                                const isOverdue = closing.status === 'fechado' && closing.dueDate && safeDate(closing.dueDate) < new Date();
                                 return (
                                   <div key={`formal-${closing.id}`} className={`border rounded-xl p-4 transition-all ${
                                     closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
@@ -999,7 +1012,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <span className="font-semibold text-gray-900 text-sm">
-                                            Semana {closing.weekStart ? new Date(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} a {closing.weekEnd ? new Date(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                                            Semana {closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} a {closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
                                           </span>
                                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                             closing.status === 'pago' ? 'bg-green-100 text-green-700' :
@@ -1012,11 +1025,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                         </div>
                                         <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                                           {(() => {
-                                            const wStart = new Date(closing.weekStart);
-                                            const wEnd = new Date(closing.weekEnd);
+                                            const wStart = safeDate(closing.weekStart);
+                                            const wEnd = safeDate(closing.weekEnd);
                                             wEnd.setHours(23, 59, 59, 999);
                                             const realLoads = (data?.loads || []).filter((l: any) => {
-                                              const d = new Date(l.date);
+                                              const d = safeDate(l.date);
                                               return d >= wStart && d <= wEnd;
                                             });
                                             const realWeight = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
@@ -1032,13 +1045,13 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                         </div>
                                         {closing.status !== 'pago' && closing.dueDate && (
                                           <p className={`text-xs mt-1.5 font-medium ${isOverdue ? 'text-red-600' : 'text-orange-600'}`}>
-                                            Vencimento: {new Date(closing.dueDate).toLocaleDateString('pt-BR')}
+                                            Vencimento: {safeDate(closing.dueDate).toLocaleDateString('pt-BR')}
                                             {isOverdue && ' (VENCIDO)'}
                                           </p>
                                         )}
                                         {closing.status === 'pago' && closing.paidAt && (
                                           <p className="text-xs mt-1.5 text-green-700 font-medium">
-                                            Pago em: {new Date(closing.paidAt).toLocaleDateString('pt-BR')}
+                                            Pago em: {safeDate(closing.paidAt).toLocaleDateString('pt-BR')}
                                           </p>
                                         )}
                                         {closing.status === 'pago' && closing.receiptUrl && (
@@ -1102,7 +1115,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                               <div className="text-gray-500 text-xs mt-0.5 flex items-center gap-2">
                                 <span className="capitalize">{(doc.type || '').replace('_', ' ')}</span>
                                 <span>•</span>
-                                <span>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('pt-BR') : ''}</span>
+                                <span>{doc.createdAt ? safeDate(doc.createdAt).toLocaleDateString('pt-BR') : ''}</span>
                               </div>
                               {doc.notes && <p className="text-gray-400 text-xs mt-0.5 italic truncate">{doc.notes}</p>}
                             </div>
@@ -1499,7 +1512,7 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
                 }`}>
                   {(load as any).paymentStatus === 'pago' ? '✅ Pago' : '⏳ A Pagar'}
                   {(load as any).boletoDueDate && (load as any).paymentStatus !== 'pago' && (
-                    <span className="ml-1">· Venc: {new Date((load as any).boletoDueDate).toLocaleDateString('pt-BR')}</span>
+                    <span className="ml-1">· Venc: {safeDate((load as any).boletoDueDate).toLocaleDateString('pt-BR')}</span>
                   )}
                 </div>
               )}

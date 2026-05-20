@@ -994,6 +994,11 @@ export const cargoLoadsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       
+      // Normalize date strings to avoid timezone issues (add T12:00:00 to date-only strings)
+      const normalizeDate = (d: string) => d.length === 10 ? d + 'T12:00:00' : d;
+      const weekStartStr = input.weekStart.slice(0, 10); // Keep as YYYY-MM-DD for storage
+      const weekEndStr = input.weekEnd.slice(0, 10);
+      
       // Get client price if not provided
       let pricePerTon = input.pricePerTon;
       if (!pricePerTon) {
@@ -1005,8 +1010,8 @@ export const cargoLoadsRouter = router({
       const allLoads = await db.select().from(cargoLoads)
         .where(eq(cargoLoads.clientId, input.clientId));
       
-      const weekStartDate = new Date(input.weekStart);
-      const weekEndDate = new Date(input.weekEnd);
+      const weekStartDate = new Date(normalizeDate(input.weekStart));
+      const weekEndDate = new Date(normalizeDate(input.weekEnd));
       weekEndDate.setHours(23, 59, 59, 999);
       
       const loadsInPeriod = allLoads.filter(l => {
@@ -1026,18 +1031,19 @@ export const cargoLoadsRouter = router({
       // Due date = weekEnd + paymentTermDays
       const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId));
       const paymentTermDays = client?.paymentTermDays || 21;
-      const dueDate = new Date(input.weekEnd);
+      const dueDate = new Date(normalizeDate(input.weekEnd));
       dueDate.setDate(dueDate.getDate() + paymentTermDays);
+      const dueDateStr = dueDate.toISOString().slice(0, 10) + ' 12:00:00';
       
       const result = await db.insert(cargoWeeklyClosings).values({
         clientId: input.clientId,
-        weekStart: input.weekStart,
-        weekEnd: input.weekEnd,
+        weekStart: weekStartStr + ' 12:00:00',
+        weekEnd: weekEndStr + ' 12:00:00',
         totalLoads,
         totalWeightKg: totalWeightKg.toFixed(2),
         totalAmount,
         pricePerTon,
-        dueDate: dueDate.toISOString().slice(0, 19).replace('T', ' '),
+        dueDate: dueDateStr,
         status: 'fechado',
         closedBy: ctx.user.id,
         notes: input.notes,
