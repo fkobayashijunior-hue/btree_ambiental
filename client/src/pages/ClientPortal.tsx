@@ -834,10 +834,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       const formalClosings = data?.weeklyClosings || [];
                       const allLoads = data?.loads || [];
 
-                      // ── Calcular semana atual e semana passada ──
+                      // ── Calcular semana atual e semana passada (Sábado a Sexta) ──
                       const getWeekStart = (d: Date) => {
                         const day = d.getDay();
-                        const diff = day === 0 ? -6 : 1 - day;
+                        // Week starts on Saturday: if today is Sat (6), start is today; otherwise go back (day+1) days
+                        const diff = day >= 6 ? 0 : -(day + 1);
                         const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
                         start.setHours(0, 0, 0, 0);
                         return start;
@@ -1010,8 +1011,23 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                           </span>
                                         </div>
                                         <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                                          <span>{closing.totalLoads} carga{closing.totalLoads !== 1 ? 's' : ''}</span>
-                                          <span>{closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton</span>
+                                          {(() => {
+                                            const wStart = new Date(closing.weekStart);
+                                            const wEnd = new Date(closing.weekEnd);
+                                            wEnd.setHours(23, 59, 59, 999);
+                                            const realLoads = (data?.loads || []).filter((l: any) => {
+                                              const d = new Date(l.date);
+                                              return d >= wStart && d <= wEnd;
+                                            });
+                                            const realWeight = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+                                            const realCount = realLoads.length;
+                                            return (
+                                              <>
+                                                <span>{realCount} carga{realCount !== 1 ? 's' : ''}</span>
+                                                <span>{(realWeight / 1000).toFixed(2)} ton</span>
+                                              </>
+                                            );
+                                          })()}
                                           {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
                                         </div>
                                         {closing.status !== 'pago' && closing.dueDate && (

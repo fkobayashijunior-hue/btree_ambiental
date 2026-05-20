@@ -357,6 +357,8 @@ export const cargoLoadsRouter = router({
       lengthM: z.string(),
       volumeM3: z.string(),
       weightKg: z.string().optional(),
+      weightOutKg: z.string().optional(),
+      weightInKg: z.string().optional(),
       weightNetKg: z.string().optional(),
       woodType: z.string().optional(),
       destination: z.string().optional(),
@@ -373,7 +375,6 @@ export const cargoLoadsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-
       // Validação: nota fiscal duplicada
       if (input.invoiceNumber && input.invoiceNumber.trim() !== '') {
         const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date })
@@ -1024,7 +1025,7 @@ export const cargoLoadsRouter = router({
       
       // Due date = weekEnd + paymentTermDays
       const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId));
-      const paymentTermDays = client?.paymentTermDays || 20;
+      const paymentTermDays = client?.paymentTermDays || 21;
       const dueDate = new Date(input.weekEnd);
       dueDate.setDate(dueDate.getDate() + paymentTermDays);
       

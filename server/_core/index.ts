@@ -556,12 +556,14 @@ function scheduleWeeklyClosingCron() {
         const mysql = await import('mysql2/promise');
         const conn = await mysql.createConnection(process.env.DATABASE_URL!);
 
-        // Calcular semana atual (segunda a domingo)
+        // Calcular semana atual (sábado a sexta-feira)
         const today = new Date();
-        const day = today.getDay();
-        const diffToMonday = day === 0 ? -6 : 1 - day;
-        const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diffToMonday);
+        const day = today.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+        // Find last Saturday: if today is Sat (6), it's today; otherwise go back (day+1) days
+        const diffToSaturday = day >= 6 ? 0 : -(day + 1);
+        const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diffToSaturday);
         weekStart.setHours(0, 0, 0, 0);
+        // Week ends on Friday (6 days after Saturday)
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
         weekEnd.setHours(23, 59, 59, 999);
@@ -608,7 +610,7 @@ function scheduleWeeklyClosingCron() {
           const totalAmount = (totalWeightTon * pricePerTon).toFixed(2);
 
           // Calcular data de vencimento
-          const paymentTermDays = client.payment_term_days || 20;
+          const paymentTermDays = client.payment_term_days || 21;
           const dueDate = new Date(weekEnd);
           dueDate.setDate(dueDate.getDate() + paymentTermDays);
           const dueDateStr = dueDate.toISOString().slice(0, 19).replace('T', ' ');

@@ -2731,6 +2731,8 @@ var cargoLoadsRouter = router({
     lengthM: z6.string(),
     volumeM3: z6.string(),
     weightKg: z6.string().optional(),
+    weightOutKg: z6.string().optional(),
+    weightInKg: z6.string().optional(),
     weightNetKg: z6.string().optional(),
     woodType: z6.string().optional(),
     destination: z6.string().optional(),
@@ -3264,7 +3266,7 @@ var cargoLoadsRouter = router({
     const totalWeightTon = totalWeightKg / 1e3;
     const totalAmount = (totalWeightTon * parseFloat(pricePerTon)).toFixed(2);
     const [client] = await db.select().from(clients).where(eq6(clients.id, input.clientId));
-    const paymentTermDays = client?.paymentTermDays || 20;
+    const paymentTermDays = client?.paymentTermDays || 21;
     const dueDate = new Date(input.weekEnd);
     dueDate.setDate(dueDate.getDate() + paymentTermDays);
     const result = await db.insert(cargoWeeklyClosings).values({
@@ -10070,8 +10072,8 @@ function scheduleWeeklyClosingCron() {
         const conn = await mysql3.createConnection(process.env.DATABASE_URL);
         const today = /* @__PURE__ */ new Date();
         const day = today.getDay();
-        const diffToMonday = day === 0 ? -6 : 1 - day;
-        const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diffToMonday);
+        const diffToSaturday = day >= 6 ? 0 : -(day + 1);
+        const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diffToSaturday);
         weekStart.setHours(0, 0, 0, 0);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
@@ -10106,7 +10108,7 @@ function scheduleWeeklyClosingCron() {
           const pricePerTon = parseFloat(client.price_per_ton || "130");
           const totalWeightTon = totalWeightKg / 1e3;
           const totalAmount = (totalWeightTon * pricePerTon).toFixed(2);
-          const paymentTermDays = client.payment_term_days || 20;
+          const paymentTermDays = client.payment_term_days || 21;
           const dueDate = new Date(weekEnd);
           dueDate.setDate(dueDate.getDate() + paymentTermDays);
           const dueDateStr = dueDate.toISOString().slice(0, 19).replace("T", " ");

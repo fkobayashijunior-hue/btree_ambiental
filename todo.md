@@ -1742,3 +1742,11 @@
 - [ ] Cards de fechamento com visual melhor: valor e vencimento em destaque
 - [ ] Botão PDF Semanal em cada fechamento (igual ao PDF do portal do cliente)
 - [ ] Mostrar status colorido: verde=pago, amarelo=aguardando, vermelho=atrasado
+
+## 🔧 CORREÇÕES FECHAMENTO (20/05/2026)
+- [ ] Exibição no site: mostrar contagem real de cargas (não totalLoads do banco)
+- [ ] Corrigir data de fechamento da semana (sexta-feira correta - ex: 30/04 a 08/05)
+- [ ] Alterar prazo de pagamento para 21 dias
+## 🐛 FIX: PDF Relatório de Cargas - P.Saída e P.Cheg. vazios (20/05/2026)
+- [ ] Backend create mutation não aceitava weightOutKg/weightInKg - campos adicionados ao schema
+- [ ] Cargas antigas que foram criadas sem esses campos continuarão mostrando "-" (dados não foram salvos)

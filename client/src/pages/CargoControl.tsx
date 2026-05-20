@@ -589,10 +589,11 @@ function WeeklyClosingsView({
     return d.toISOString().slice(0, 10);
   };
 
-  // ── Calcular semana atual e passada ──
+  // ── Calcular semana atual e passada (Sábado a Sexta) ──
   const getWeekStart = (d: Date) => {
     const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
+    // Week starts on Saturday: if today is Sat (6), start is today; otherwise go back (day+1) days
+    const diff = day >= 6 ? 0 : -(day + 1);
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
     start.setHours(0, 0, 0, 0);
     return start;
@@ -807,7 +808,7 @@ function WeeklyClosingsView({
               });
               const totalWeight = loadsInPeriod.reduce((sum: number, l: any) => sum + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
               const totalValue = (totalWeight / 1000) * pricePerTon;
-              const paymentTermDays = (client as any)?.paymentTermDays || 20;
+              const paymentTermDays = (client as any)?.paymentTermDays || 21;
               const dueDate = new Date(closingWeekEnd);
               dueDate.setDate(dueDate.getDate() + paymentTermDays);
               return (
@@ -883,8 +884,25 @@ function WeeklyClosingsView({
                       </span>
                     </div>
                     <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      <span>{closing.totalLoads} carga{closing.totalLoads !== 1 ? 's' : ''}</span>
-                      <span>{closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0'} ton</span>
+                      {(() => {
+                        // Use real count from actual loads in period
+                        const wStart = new Date(closing.weekStart);
+                        const wEnd = new Date(closing.weekEnd);
+                        wEnd.setHours(23, 59, 59, 999);
+                        const realLoads = loads.filter((l: any) => {
+                          if (l.clientId !== closing.clientId) return false;
+                          const d = new Date(l.date);
+                          return d >= wStart && d <= wEnd;
+                        });
+                        const realWeight = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+                        const realCount = realLoads.length;
+                        return (
+                          <>
+                            <span>{realCount} carga{realCount !== 1 ? 's' : ''}</span>
+                            <span>{(realWeight / 1000).toFixed(2)} ton</span>
+                          </>
+                        );
+                      })()}
                       {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
                     </div>
                     {closing.status !== 'pago' && closing.dueDate && (
@@ -1354,7 +1372,8 @@ export default function CargoControl() {
   const weeklyStats = useMemo(() => {
     const getWeekStart = (d: Date) => {
       const day = d.getDay();
-      const diff = day === 0 ? -6 : 1 - day; // Monday as start
+      // Week starts on Saturday: if today is Sat (6), start is today; otherwise go back (day+1) days
+      const diff = day >= 6 ? 0 : -(day + 1);
       const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
       start.setHours(0, 0, 0, 0);
       return start;
