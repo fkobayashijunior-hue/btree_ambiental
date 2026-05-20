@@ -424,6 +424,15 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
     return d >= weekStart && d <= weekEnd;
   });
 
+  // Use actual filtered loads count (not the saved totalLoads which may be stale)
+  const actualTotalLoads = weekLoads.length;
+  const actualTotalWeightKg = weekLoads.reduce((sum: number, l: any) => {
+    const w = parseFloat(l.weightNetKg || l.weightOutKg || '0');
+    return sum + w;
+  }, 0);
+  const actualTotalWeightTon = (actualTotalWeightKg / 1000).toFixed(2);
+  const actualTotalAmount = (actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon)).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
   const loadsRows = weekLoads.map((l: any, i: number) => {
     const date = l.date ? new Date(l.date).toLocaleDateString('pt-BR') : '-';
     const weight = l.weightNetKg || l.weightOutKg || '-';
@@ -497,10 +506,10 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
   </div>
   <div class="pdf-content">
     <div class="summary-box">
-      <div class="summary-item"><div class="label">Cargas</div><div class="value">${closing.totalLoads}</div></div>
-      <div class="summary-item"><div class="label">Peso Total</div><div class="value">${totalWeightTon} ton</div></div>
+      <div class="summary-item"><div class="label">Cargas</div><div class="value">${actualTotalLoads}</div></div>
+      <div class="summary-item"><div class="label">Peso Total</div><div class="value">${actualTotalWeightTon} ton</div></div>
       <div class="summary-item"><div class="label">Pre\u00e7o/Ton</div><div class="value">R$ ${closing.pricePerTon || pricePerTon}</div></div>
-      <div class="summary-item"><div class="label">Valor Total</div><div class="value blue">R$ ${parseFloat(closing.totalAmount || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div></div>
+      <div class="summary-item"><div class="label">Valor Total</div><div class="value blue">R$ ${actualTotalAmount}</div></div>
       <div class="summary-item"><div class="label">Vencimento</div><div class="value">${dueDateFmt}</div></div>
     </div>
     ${weekLoads.length > 0 ? `
