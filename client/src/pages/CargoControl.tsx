@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { formatBR, formatBRL } from "@/lib/formatBR";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,7 +83,7 @@ function calcVolume(h: string, w: string, l: string): string {
   const wN = parseFloat(w.replace(",", "."));
   const lN = parseFloat(l.replace(",", "."));
   if (isNaN(hN) || isNaN(wN) || isNaN(lN)) return "";
-  return (hN * wN * lN).toFixed(3);
+  return formatBR(hN * wN * lN, 3);
 }
 
 function compressImage(file: File): Promise<string> {
@@ -312,7 +313,7 @@ function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE 
 // ===== PDF RELATÓRIO COMPLETO POR CLIENTE =====
 function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>, pricePerTon: number = 0) {
   const totalCargas = cargas.length;
-  const totalVolume = cargas.reduce((acc, c) => acc + parseFloat((c.volumeM3 as string) || "0"), 0).toFixed(2);
+  const totalVolume = formatBR(cargas.reduce((acc, c) => acc + parseFloat((c.volumeM3 as string) || "0"), 0), 2);
   const totalPendentes = cargas.filter(c => c.status === "pendente").length;
   const totalEntregues = cargas.filter(c => c.status === "entregue").length;
   const totalPesoLiquido = cargas.reduce((acc, c) => {
@@ -341,7 +342,7 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
       <td style="text-align:right;">${(c as any).weightInKg || "-"}</td>
       <td style="text-align:right;font-weight:700;">${(c as any).weightNetKg || "-"}</td>
       <td>${c.invoiceNumber || "-"}</td>
-      ${pricePerTon > 0 ? `<td style="text-align:right;font-weight:600;color:#1d4ed8;">${valorCarga > 0 ? "R$ " + valorCarga.toFixed(2) : "-"}</td>` : ""}
+      ${pricePerTon > 0 ? `<td style="text-align:right;font-weight:600;color:#1d4ed8;">${valorCarga > 0 ? "R$ " + formatBR(valorCarga, 2) : "-"}</td>` : ""}
       <td style="color:${statusColor};font-weight:600;">${statusLabel}</td>
     </tr>`;
   }).join("");
@@ -370,7 +371,7 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
       <div class="summary-item"><div class="label">Total de Cargas</div><div class="value">${totalCargas}</div></div>
       <div class="summary-item"><div class="label">Volume Total</div><div class="value">${totalVolume} m³</div></div>
       <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? totalPesoLiquido.toLocaleString("pt-BR") + " kg" : "-"}</div></div>
-      ${pricePerTon > 0 ? `<div class="summary-item"><div class="label">Preço/Ton</div><div class="value" style="color:#1d4ed8;">R$ ${pricePerTon.toFixed(0)}</div></div>` : ""}
+      ${pricePerTon > 0 ? `<div class="summary-item"><div class="label">Preço/Ton</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(pricePerTon, 0)}</div></div>` : ""}
       ${totalValor > 0 ? `<div class="summary-item"><div class="label">Valor Total</div><div class="value" style="color:#1d4ed8;">R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>` : ""}
       <div class="summary-item"><div class="label">Entregues</div><div class="value" style="color:#166534;">${totalEntregues}</div></div>
       <div class="summary-item"><div class="label">Pendentes</div><div class="value" style="color:#854d0e;">${totalPendentes}</div></div>
@@ -427,7 +428,7 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
 function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: any[], pricePerTon: number) {
   const weekStartFmt = closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR') : '-';
   const weekEndFmt = closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
-  const totalWeightTon = closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0';
+  const totalWeightTon = closing.totalWeightKg ? formatBR(parseFloat(closing.totalWeightKg) / 1000, 2) : '0';
   const dueDateFmt = closing.dueDate ? safeDate(closing.dueDate).toLocaleDateString('pt-BR') : '-';
   const statusLabel = closing.status === 'pago' ? 'PAGO' : closing.status === 'atrasado' ? 'ATRASADO' : 'AGUARDANDO PAGAMENTO';
   const statusClass = closing.status === 'pago' ? 'badge-pago' : closing.status === 'atrasado' ? 'badge-atrasado' : 'badge-pendente';
@@ -446,13 +447,13 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
     const w = parseFloat(l.weightNetKg || l.weightOutKg || '0');
     return sum + w;
   }, 0);
-  const actualTotalWeightTon = (actualTotalWeightKg / 1000).toFixed(2);
+  const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
   const actualTotalAmount = (actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon)).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
     const date = l.date ? safeDate(l.date).toLocaleDateString('pt-BR') : '-';
     const weight = l.weightNetKg || l.weightOutKg || '-';
-    const weightTon = parseFloat(weight) > 0 ? (parseFloat(weight) / 1000).toFixed(3) : '-';
+    const weightTon = parseFloat(weight) > 0 ? formatBR(parseFloat(weight) / 1000, 3) : '-';
     const vol = l.volumeM3 || '-';
     const dest = l.destination || '-';
     const plate = l.vehiclePlate || '-';
@@ -696,7 +697,7 @@ function WeeklyClosingsView({
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-xs text-gray-500">Peso</span>
-                <span className="text-sm font-bold text-emerald-700">{thisWeek.peso > 0 ? (thisWeek.peso / 1000).toFixed(2) : '0'} ton</span>
+                <span className="text-sm font-bold text-emerald-700">{thisWeek.peso > 0 ? formatBR(thisWeek.peso / 1000) : '0'} ton</span>
               </div>
               {thisWeek.entregues > 0 && (
                 <p className="text-[10px] text-green-600 text-right">{thisWeek.entregues} entregue{thisWeek.entregues > 1 ? 's' : ''}</p>
@@ -718,7 +719,7 @@ function WeeklyClosingsView({
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-xs text-gray-500">Peso</span>
-                <span className="text-sm font-bold text-emerald-600">{lastWeek.peso > 0 ? (lastWeek.peso / 1000).toFixed(2) : '0'} ton</span>
+                <span className="text-sm font-bold text-emerald-600">{lastWeek.peso > 0 ? formatBR(lastWeek.peso / 1000) : '0'} ton</span>
               </div>
               {lastWeek.entregues > 0 && (
                 <p className="text-[10px] text-green-600 text-right">{lastWeek.entregues} entregue{lastWeek.entregues > 1 ? 's' : ''}</p>
@@ -743,7 +744,7 @@ function WeeklyClosingsView({
               </div>
               <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                 <span>{thisWeek.count} carga{thisWeek.count !== 1 ? 's' : ''}</span>
-                <span>{(thisWeek.peso / 1000).toFixed(2)} ton</span>
+                <span>{formatBR(thisWeek.peso / 1000)} ton</span>
               </div>
               <p className="text-[10px] text-blue-600 mt-1.5 italic">Fechamento na sexta-feira</p>
             </div>
@@ -830,8 +831,8 @@ function WeeklyClosingsView({
               return (
                 <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
                   <p><strong>Preview:</strong> {loadsInPeriod.length} cargas no período</p>
-                  <p>Peso total: {(totalWeight / 1000).toFixed(2)} toneladas ({totalWeight.toFixed(0)} kg)</p>
-                  <p>Valor: <strong className="text-blue-700">R$ {totalValue.toFixed(2)}</strong> ({(totalWeight / 1000).toFixed(2)} ton x R$ {pricePerTon.toFixed(0)}/ton)</p>
+                  <p>Peso total: {formatBR(totalWeight / 1000)} toneladas ({formatBR(totalWeight, 0)} kg)</p>
+                  <p>Valor: <strong className="text-blue-700">R$ {formatBR(totalValue)}</strong> ({formatBR(totalWeight / 1000)} ton x R$ {formatBR(pricePerTon, 0)}/ton)</p>
                   <p>Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong> ({paymentTermDays} dias após fechamento)</p>
                 </div>
               );
@@ -915,7 +916,7 @@ function WeeklyClosingsView({
                         return (
                           <>
                             <span>{realCount} carga{realCount !== 1 ? 's' : ''}</span>
-                            <span>{(realWeight / 1000).toFixed(2)} ton</span>
+                            <span>{formatBR(realWeight / 1000)} ton</span>
                           </>
                         );
                       })()}
@@ -1197,7 +1198,15 @@ export default function CargoControl() {
   const volume = useMemo(() => calcVolume(form.heightM, form.widthM, form.lengthM), [form.heightM, form.widthM, form.lengthM]);
 
   const resetForm = () => {
-    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: 0, clientName: "", notes: "", status: "pendente", workLocationId: "", humidity: "" });
+    // Auto-selecionar cliente se usuário só tem acesso a um cliente
+    let autoClientId = 0;
+    let autoClientName = "";
+    if (allowedClientIds && allowedClientIds.length === 1) {
+      autoClientId = allowedClientIds[0];
+      const c = clientsList.find((cl: { id: number; name: string }) => cl.id === autoClientId);
+      autoClientName = c?.name || "";
+    }
+    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: "", humidity: "" });
     setPendingPhotos([]);
   };
 
@@ -1380,7 +1389,7 @@ export default function CargoControl() {
     total: loads.length,
     pendente: loads.filter(c => c.status === "pendente").length,
     entregue: loads.filter(c => c.status === "entregue").length,
-    volumeTotal: loads.reduce((acc, c) => acc + parseFloat(c.volumeM3 || "0"), 0).toFixed(2),
+    volumeTotal: formatBR(loads.reduce((acc, c) => acc + parseFloat(c.volumeM3 || "0"), 0), 2),
     pesoTotal: loads.reduce((acc, c) => acc + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || "0"), 0),
   }), [loads]);
 
@@ -1474,7 +1483,7 @@ export default function CargoControl() {
                   const pricePerTon = parseFloat((client as any)?.pricePerTon || '0');
                   if (weightNet > 0 && pricePerTon > 0) {
                     const valor = (weightNet / 1000) * pricePerTon;
-                    return <span className="flex items-center gap-1 font-semibold text-blue-700"><DollarSign className="h-3 w-3" />R$ {valor.toFixed(2)}</span>;
+                    return <span className="flex items-center gap-1 font-semibold text-blue-700"><DollarSign className="h-3 w-3" />R$ {formatBR(valor)}</span>;
                   }
                   return null;
                 })()}
@@ -1566,7 +1575,7 @@ export default function CargoControl() {
           { label: "Pendentes", value: stats.pendente, color: "text-red-700", bg: "bg-red-50" },
           { label: "Entregues", value: stats.entregue, color: "text-green-700", bg: "bg-green-50" },
           { label: "Volume Total", value: `${stats.volumeTotal} m³`, color: "text-emerald-700", bg: "bg-emerald-50" },
-          { label: "Peso Total", value: stats.pesoTotal > 0 ? `${(stats.pesoTotal / 1000).toFixed(2)} ton` : "-", color: "text-purple-700", bg: "bg-purple-50" },
+          { label: "Peso Total", value: stats.pesoTotal > 0 ? `${formatBR(stats.pesoTotal / 1000)} ton` : "-", color: "text-purple-700", bg: "bg-purple-50" },
         ].map(s => (
           <div key={s.label} className={`${s.bg} rounded-xl p-3`}>
             <p className="text-xs text-gray-500">{s.label}</p>
@@ -1596,11 +1605,11 @@ export default function CargoControl() {
                 <p className="text-[10px] text-gray-500">Cargas</p>
               </div>
               <div>
-                <p className="text-lg font-bold text-emerald-700">{weeklyStats.thisWeek.volume.toFixed(1)}</p>
+                <p className="text-lg font-bold text-emerald-700">{formatBR(weeklyStats.thisWeek.volume, 1)}</p>
                 <p className="text-[10px] text-gray-500">m³</p>
               </div>
               <div>
-                <p className="text-lg font-bold text-purple-700">{weeklyStats.thisWeek.peso > 0 ? (weeklyStats.thisWeek.peso / 1000).toFixed(1) : '-'}</p>
+                <p className="text-lg font-bold text-purple-700">{weeklyStats.thisWeek.peso > 0 ? formatBR(weeklyStats.thisWeek.peso / 1000, 1) : '-'}</p>
                 <p className="text-[10px] text-gray-500">ton</p>
               </div>
             </div>
@@ -1622,11 +1631,11 @@ export default function CargoControl() {
                 <p className="text-[10px] text-gray-500">Cargas</p>
               </div>
               <div>
-                <p className="text-lg font-bold text-emerald-600">{weeklyStats.lastWeek.volume.toFixed(1)}</p>
+                <p className="text-lg font-bold text-emerald-600">{formatBR(weeklyStats.lastWeek.volume, 1)}</p>
                 <p className="text-[10px] text-gray-500">m³</p>
               </div>
               <div>
-                <p className="text-lg font-bold text-purple-600">{weeklyStats.lastWeek.peso > 0 ? (weeklyStats.lastWeek.peso / 1000).toFixed(1) : '-'}</p>
+                <p className="text-lg font-bold text-purple-600">{weeklyStats.lastWeek.peso > 0 ? formatBR(weeklyStats.lastWeek.peso / 1000, 1) : '-'}</p>
                 <p className="text-[10px] text-gray-500">ton</p>
               </div>
             </div>
@@ -1694,7 +1703,7 @@ export default function CargoControl() {
                     <div className="text-left">
                       <h3 className="font-bold text-sm sm:text-base" translate="no">{group.clientName}</h3>
                       <p className="text-xs opacity-90">
-                        {group.totalCargas} carga{group.totalCargas !== 1 ? "s" : ""} · {group.totalVolume.toFixed(2)} m³
+                        {group.totalCargas} carga{group.totalCargas !== 1 ? "s" : ""} · {formatBR(group.totalVolume)} m³
                         {group.pendentes > 0 && ` · ${group.pendentes} pendente${group.pendentes !== 1 ? "s" : ""}`}
                       </p>
                     </div>
@@ -1751,7 +1760,7 @@ export default function CargoControl() {
                         Total: {group.totalCargas} carga{group.totalCargas !== 1 ? "s" : ""}
                       </span>
                       <span className={`font-semibold ${colors.text}`}>
-                        Volume: {group.totalVolume.toFixed(2)} m³
+                        Volume: {formatBR(group.totalVolume)} m³
                       </span>
                       {(() => {
                         const client = clientsList.find(c => c.id === group.clientId);
@@ -1763,12 +1772,12 @@ export default function CargoControl() {
                           <>
                             {totalWeight > 0 && (
                               <span className="font-semibold text-emerald-700">
-                                Peso líq.: {(totalWeight / 1000).toFixed(2)} ton ({totalWeight.toLocaleString('pt-BR')} kg)
+                                Peso líq.: {formatBR(totalWeight / 1000)} ton ({formatBR(totalWeight, 0)} kg)
                               </span>
                             )}
                             {pricePerTon > 0 && totalWeight > 0 && (
                               <span className="font-semibold text-blue-700">
-                                Valor: R$ {((totalWeight / 1000) * pricePerTon).toFixed(2)} ({(totalWeight / 1000).toFixed(2)} ton x R$ {pricePerTon.toFixed(0)}/ton)
+                                Valor: R$ {formatBR((totalWeight / 1000) * pricePerTon)} ({formatBR(totalWeight / 1000)} ton x R$ {formatBR(pricePerTon, 0)}/ton)
                               </span>
                             )}
                           </>

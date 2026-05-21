@@ -1,5 +1,6 @@
 import { useWorkLocations } from "@/hooks/useWorkLocations";
 import { MapPin } from "lucide-react";
+import { useEffect } from "react";
 
 interface WorkLocationSelectProps {
   value: string; // workLocationId como string (ou "")
@@ -12,6 +13,7 @@ interface WorkLocationSelectProps {
 /**
  * Componente reutilizável de seletor de local de trabalho.
  * Busca os locais cadastrados no GPS Locations e exibe como dropdown.
+ * Auto-seleciona o primeiro local se houver apenas um disponível.
  */
 export default function WorkLocationSelect({
   value,
@@ -21,6 +23,13 @@ export default function WorkLocationSelect({
   showLabel = true,
 }: WorkLocationSelectProps) {
   const { locations, isLoading } = useWorkLocations();
+
+  // Auto-selecionar se há apenas um local disponível e nenhum selecionado
+  useEffect(() => {
+    if (!isLoading && locations.length === 1 && !value) {
+      onChange(String(locations[0].id), locations[0].name);
+    }
+  }, [isLoading, locations, value, onChange]);
 
   return (
     <div className={className}>

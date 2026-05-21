@@ -2758,8 +2758,26 @@ var cargoLoadsRouter = router({
         });
       }
     }
+    let finalPhotosJson = input.photosJson;
+    if (input.photosJson) {
+      try {
+        const photos = JSON.parse(input.photosJson);
+        const uploadedUrls = [];
+        for (const photo of photos) {
+          if (photo.startsWith("data:")) {
+            const uploaded = await cloudinaryUpload(photo, `btree/cargo/new`);
+            uploadedUrls.push(uploaded.url);
+          } else {
+            uploadedUrls.push(photo);
+          }
+        }
+        finalPhotosJson = JSON.stringify(uploadedUrls);
+      } catch {
+      }
+    }
     await db.insert(cargoLoads).values({
       ...input,
+      photosJson: finalPhotosJson || null,
       date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       status: input.status || "pendente",
       trackingStatus: "aguardando",
@@ -2847,6 +2865,22 @@ var cargoLoadsRouter = router({
     const updateData = { ...rest, updatedAt: now };
     if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
     if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
+    if (rest.photosJson) {
+      try {
+        const photos = JSON.parse(rest.photosJson);
+        const uploadedUrls = [];
+        for (const photo of photos) {
+          if (photo.startsWith("data:")) {
+            const uploaded = await cloudinaryUpload(photo, `btree/cargo/${id}`);
+            uploadedUrls.push(uploaded.url);
+          } else {
+            uploadedUrls.push(photo);
+          }
+        }
+        updateData.photosJson = JSON.stringify(uploadedUrls);
+      } catch {
+      }
+    }
     await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, id));
     if (input.status === "entregue") {
       try {

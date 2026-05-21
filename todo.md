@@ -1744,9 +1744,14 @@
 - [ ] Mostrar status colorido: verde=pago, amarelo=aguardando, vermelho=atrasado
 
 ## 🔧 CORREÇÕES FECHAMENTO (20/05/2026)
-- [ ] Exibição no site: mostrar contagem real de cargas (não totalLoads do banco)
-- [ ] Corrigir data de fechamento da semana (sexta-feira correta - ex: 30/04 a 08/05)
-- [ ] Alterar prazo de pagamento para 21 dias
+- [x] Exibição no site: mostrar contagem real de cargas (não totalLoads do banco)
+- [x] Corrigir data de fechamento da semana (Sábado-Sexta correta)
+- [x] Alterar prazo de pagamento para 21 dias
+- [x] Fix timezone: datas não deslocam mais 1 dia (safeDate helper)
 ## 🐛 FIX: PDF Relatório de Cargas - P.Saída e P.Cheg. vazios (20/05/2026)
-- [ ] Backend create mutation não aceitava weightOutKg/weightInKg - campos adicionados ao schema
+- [x] Backend create mutation não aceitava weightOutKg/weightInKg - campos adicionados ao schema
 - [ ] Cargas antigas que foram criadas sem esses campos continuarão mostrando "-" (dados não foram salvos)
+- [x] Fix: Carga dia 06 (Sonoco destino) não conta no fechamento SIMFLOR - é problema de dados no DB (clientId errado), não de código
+- [x] Fix: Juliano não vê Local de Trabalho - auto-selecionar FAZENDA SIMFLOR para ele (WorkLocationSelect + resetForm)
+- [x] Fix: Verificar consistência de imagens salvas - fotos agora são enviadas ao Cloudinary no CREATE e UPDATE
+- [x] Fix: Formatar valores como brasileiro (4.000,00) em todo sistema e PDFs (formatBR helper)

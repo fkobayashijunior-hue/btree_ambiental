@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatBR, formatBRL } from "@/lib/formatBR";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone, FileCheck, Calendar } from "lucide-react";
@@ -214,7 +215,7 @@ const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=ht
 function generateClosingPDF(closing: any, clientName: string, loads: any[], pricePerTon: number) {
   const weekStartFmt = closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR') : '-';
   const weekEndFmt = closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
-  const totalWeightTon = closing.totalWeightKg ? (parseFloat(closing.totalWeightKg) / 1000).toFixed(2) : '0';
+  const totalWeightTon = closing.totalWeightKg ? formatBR(parseFloat(closing.totalWeightKg) / 1000, 2) : '0';
   const dueDateFmt = closing.dueDate ? safeDate(closing.dueDate).toLocaleDateString('pt-BR') : '-';
   const statusLabel = closing.status === 'pago' ? 'PAGO' : closing.status === 'atrasado' ? 'ATRASADO' : 'AGUARDANDO PAGAMENTO';
   const statusClass = closing.status === 'pago' ? 'badge-pago' : closing.status === 'atrasado' ? 'badge-atrasado' : 'badge-pendente';
@@ -234,13 +235,13 @@ function generateClosingPDF(closing: any, clientName: string, loads: any[], pric
     const w = parseFloat(l.weightNetKg || l.weightOutKg || '0');
     return sum + w;
   }, 0);
-  const actualTotalWeightTon = (actualTotalWeightKg / 1000).toFixed(2);
-  const actualTotalAmount = (actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon)).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
+  const actualTotalAmount = formatBR(actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon), 2);
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
     const date = l.date ? safeDate(l.date).toLocaleDateString('pt-BR') : '-';
     const weight = l.weightNetKg || l.weightOutKg || '-';
-    const weightTon = parseFloat(weight) > 0 ? (parseFloat(weight) / 1000).toFixed(3) : '-';
+    const weightTon = parseFloat(weight) > 0 ? formatBR(parseFloat(weight) / 1000, 3) : '-';
     const vol = l.volumeM3 || '-';
     const dest = l.destination || '-';
     const plate = l.vehiclePlate || '-';
@@ -825,7 +826,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2">
                                 <p className="text-blue-700 text-xs font-semibold uppercase tracking-wide">Valor Total das Cargas</p>
                                 <p className="text-blue-900 text-lg font-black">{formatCurrency(totalValue)}</p>
-                                <p className="text-blue-600 text-xs">Peso líquido: {(totalWeightNet / 1000).toFixed(2)} ton x R$ {data?.client?.pricePerTon || '0'}/ton</p>
+                                <p className="text-blue-600 text-xs">Peso líquido: {formatBR(totalWeightNet / 1000)} ton x R$ {data?.client?.pricePerTon || '0'}/ton</p>
                               </div>
                             );
                           }
@@ -918,7 +919,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                   </div>
                                   <div className="flex justify-between items-baseline">
                                     <span className="text-xs text-gray-500">Peso</span>
-                                    <span className="text-sm font-bold text-emerald-700">{thisWeek.peso > 0 ? (thisWeek.peso / 1000).toFixed(2) : '0'} ton</span>
+                                    <span className="text-sm font-bold text-emerald-700">{thisWeek.peso > 0 ? formatBR(thisWeek.peso / 1000) : '0'} ton</span>
                                   </div>
                                   <div className="flex justify-between items-baseline">
                                     <span className="text-xs text-gray-500">Valor</span>
@@ -944,7 +945,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                   </div>
                                   <div className="flex justify-between items-baseline">
                                     <span className="text-xs text-gray-500">Peso</span>
-                                    <span className="text-sm font-bold text-emerald-600">{lastWeek.peso > 0 ? (lastWeek.peso / 1000).toFixed(2) : '0'} ton</span>
+                                    <span className="text-sm font-bold text-emerald-600">{lastWeek.peso > 0 ? formatBR(lastWeek.peso / 1000) : '0'} ton</span>
                                   </div>
                                   <div className="flex justify-between items-baseline">
                                     <span className="text-xs text-gray-500">Valor</span>
@@ -976,8 +977,8 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                   </div>
                                   <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                                     <span>{thisWeek.count} carga{thisWeek.count !== 1 ? 's' : ''}</span>
-                                    <span>{(thisWeek.peso / 1000).toFixed(2)} ton</span>
-                                    {pricePerTon > 0 && <span>R$ {pricePerTon.toFixed(2)}/ton</span>}
+                                    <span>{formatBR(thisWeek.peso / 1000)} ton</span>
+                                    {pricePerTon > 0 && <span>R$ {formatBR(pricePerTon)}/ton</span>}
                                   </div>
                                   <p className="text-[10px] text-blue-600 mt-1.5 italic">Fechamento na sexta-feira</p>
                                 </div>
@@ -1037,7 +1038,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                             return (
                                               <>
                                                 <span>{realCount} carga{realCount !== 1 ? 's' : ''}</span>
-                                                <span>{(realWeight / 1000).toFixed(2)} ton</span>
+                                                <span>{formatBR(realWeight / 1000)} ton</span>
                                               </>
                                             );
                                           })()}
@@ -1282,7 +1283,7 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
             </div>
             {(loadValue ?? 0) > 0 && (
               <p className="text-blue-700 text-xs font-bold mt-1">
-                R$ {loadValue!.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {formatBR(loadValue!)}
               </p>
             )}
           </div>
@@ -1461,7 +1462,7 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
                 <p className="text-gray-400">Metragem Final</p>
                 <p className="font-medium text-gray-700">
                   {(load as any).finalHeightM} x {(load as any).finalWidthM} x {(load as any).finalLengthM} m
-                  {' = '}{(parseFloat(((load as any).finalHeightM || '0').replace(',','.')) * parseFloat(((load as any).finalWidthM || '0').replace(',','.')) * parseFloat(((load as any).finalLengthM || '0').replace(',','.'))).toFixed(2)} m³
+                  {' = '}{formatBR(parseFloat(((load as any).finalHeightM || '0').replace(',','.')) * parseFloat(((load as any).finalWidthM || '0').replace(',','.')) * parseFloat(((load as any).finalLengthM || '0').replace(',','.')), 2)} m³
                 </p>
               </div>
             )}

@@ -390,8 +390,27 @@ export const cargoLoadsRouter = router({
         }
       }
 
+      // Upload photos to Cloudinary if they are base64 (not URLs)
+      let finalPhotosJson = input.photosJson;
+      if (input.photosJson) {
+        try {
+          const photos: string[] = JSON.parse(input.photosJson);
+          const uploadedUrls: string[] = [];
+          for (const photo of photos) {
+            if (photo.startsWith('data:')) {
+              const uploaded = await cloudinaryUpload(photo, `btree/cargo/new`);
+              uploadedUrls.push(uploaded.url);
+            } else {
+              uploadedUrls.push(photo);
+            }
+          }
+          finalPhotosJson = JSON.stringify(uploadedUrls);
+        } catch { /* keep original */ }
+      }
+
       await db.insert(cargoLoads).values({
         ...input,
+        photosJson: finalPhotosJson || null,
         date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         status: input.status || "pendente",
         trackingStatus: "aguardando",
@@ -492,6 +511,24 @@ export const cargoLoadsRouter = router({
       const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
       if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
       if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
+
+      // Upload base64 photos to Cloudinary before storing
+      if (rest.photosJson) {
+        try {
+          const photos: string[] = JSON.parse(rest.photosJson as string);
+          const uploadedUrls: string[] = [];
+          for (const photo of photos) {
+            if (photo.startsWith('data:')) {
+              const uploaded = await cloudinaryUpload(photo, `btree/cargo/${id}`);
+              uploadedUrls.push(uploaded.url);
+            } else {
+              uploadedUrls.push(photo);
+            }
+          }
+          updateData.photosJson = JSON.stringify(uploadedUrls);
+        } catch { /* keep original */ }
+      }
+
       await db.update(cargoLoads).set(updateData).where(eq(cargoLoads.id, id));
 
       // Auto-generate financial entries when status changes to 'entregue'
