@@ -246,9 +246,11 @@ function generateClosingPDF(closing: any, clientName: string, loads: any[], pric
     const dest = l.destination || '-';
     const plate = l.vehiclePlate || '-';
     const driver = l.driverName || '-';
+    const nf = l.invoiceNumber || '-';
     return `<tr>
       <td style="text-align:center">${i + 1}</td>
       <td>${date}</td>
+      <td>${nf}</td>
       <td>${dest}</td>
       <td>${plate}</td>
       <td>${driver}</td>
@@ -313,7 +315,7 @@ function generateClosingPDF(closing: any, clientName: string, loads: any[], pric
     <div class="summary-box">
       <div class="summary-item"><div class="label">Cargas</div><div class="value">${actualTotalLoads}</div></div>
       <div class="summary-item"><div class="label">Peso Total</div><div class="value">${actualTotalWeightTon} ton</div></div>
-      <div class="summary-item"><div class="label">Pre\u00e7o/Ton</div><div class="value">R$ ${closing.pricePerTon || pricePerTon}</div></div>
+      <div class="summary-item"><div class="label">Pre\u00e7o/Ton</div><div class="value">R$ ${formatBR(parseFloat(String(closing.pricePerTon || pricePerTon)))}</div></div>
       <div class="summary-item"><div class="label">Valor Total</div><div class="value blue">R$ ${actualTotalAmount}</div></div>
       <div class="summary-item"><div class="label">Vencimento</div><div class="value">${dueDateFmt}</div></div>
     </div>
@@ -323,6 +325,7 @@ function generateClosingPDF(closing: any, clientName: string, loads: any[], pric
       <thead><tr>
         <th style="text-align:center">#</th>
         <th>Data</th>
+        <th>Nota Fiscal</th>
         <th>Destino</th>
         <th>Placa</th>
         <th>Motorista</th>

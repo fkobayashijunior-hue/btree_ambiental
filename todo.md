@@ -1755,3 +1755,8 @@
 - [x] Fix: Juliano não vê Local de Trabalho - auto-selecionar FAZENDA SIMFLOR para ele (WorkLocationSelect + resetForm)
 - [x] Fix: Verificar consistência de imagens salvas - fotos agora são enviadas ao Cloudinary no CREATE e UPDATE
 - [x] Fix: Formatar valores como brasileiro (4.000,00) em todo sistema e PDFs (formatBR helper)
+
+## 🐛 FIX: Fechamento - formatação e contagem (21/05/2026)
+- [x] Fix: R$ 130.00/ton no card do fechamento oficial → agora R$ 130,00/ton (formatBR aplicado)
+- [ ] Fix: Preview mostra 5 cargas no período 04/05-08/05 - investigar se carga do dia 06 (Sonoco) tem client_id correto no banco
+- [x] Adicionar coluna Nota Fiscal no PDF do fechamento semanal (admin + portal do cliente)

@@ -370,9 +370,9 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
     <div class="summary-box">
       <div class="summary-item"><div class="label">Total de Cargas</div><div class="value">${totalCargas}</div></div>
       <div class="summary-item"><div class="label">Volume Total</div><div class="value">${totalVolume} m³</div></div>
-      <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? totalPesoLiquido.toLocaleString("pt-BR") + " kg" : "-"}</div></div>
+      <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</div></div>
       ${pricePerTon > 0 ? `<div class="summary-item"><div class="label">Preço/Ton</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(pricePerTon, 0)}</div></div>` : ""}
-      ${totalValor > 0 ? `<div class="summary-item"><div class="label">Valor Total</div><div class="value" style="color:#1d4ed8;">R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>` : ""}
+      ${totalValor > 0 ? `<div class="summary-item"><div class="label">Valor Total</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(totalValor, 2)}</div></div>` : ""}
       <div class="summary-item"><div class="label">Entregues</div><div class="value" style="color:#166534;">${totalEntregues}</div></div>
       <div class="summary-item"><div class="label">Pendentes</div><div class="value" style="color:#854d0e;">${totalPendentes}</div></div>
     </div>
@@ -406,9 +406,9 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
           <td colspan="8" style="text-align:right;color:#0d4f2e;">TOTAIS:</td>
           <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalVolume} m³</td>
           <td colspan="2"></td>
-          <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalPesoLiquido > 0 ? totalPesoLiquido.toLocaleString("pt-BR") + " kg" : "-"}</td>
+          <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</td>
           <td></td>
-          ${pricePerTon > 0 ? `<td style="text-align:right;color:#1d4ed8;font-size:13px;">R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ""}
+          ${pricePerTon > 0 ? `<td style="text-align:right;color:#1d4ed8;font-size:13px;">R$ ${formatBR(totalValor, 2)}</td>` : ""}
           <td style="text-align:center;color:#0d4f2e;">${totalCargas} cargas</td>
         </tr>
       </tfoot>
@@ -448,7 +448,7 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
     return sum + w;
   }, 0);
   const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
-  const actualTotalAmount = (actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon)).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  const actualTotalAmount = formatBR(actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon), 2);
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
     const date = l.date ? safeDate(l.date).toLocaleDateString('pt-BR') : '-';
@@ -458,9 +458,11 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
     const dest = l.destination || '-';
     const plate = l.vehiclePlate || '-';
     const driver = l.driverName || '-';
+    const nf = l.invoiceNumber || '-';
     return `<tr>
       <td style="text-align:center">${i + 1}</td>
       <td>${date}</td>
+      <td>${nf}</td>
       <td>${dest}</td>
       <td>${plate}</td>
       <td>${driver}</td>
@@ -525,7 +527,7 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
     <div class="summary-box">
       <div class="summary-item"><div class="label">Cargas</div><div class="value">${actualTotalLoads}</div></div>
       <div class="summary-item"><div class="label">Peso Total</div><div class="value">${actualTotalWeightTon} ton</div></div>
-      <div class="summary-item"><div class="label">Pre\u00e7o/Ton</div><div class="value">R$ ${closing.pricePerTon || pricePerTon}</div></div>
+      <div class="summary-item"><div class="label">Pre\u00e7o/Ton</div><div class="value">R$ ${formatBR(parseFloat(String(closing.pricePerTon || pricePerTon)))}</div></div>
       <div class="summary-item"><div class="label">Valor Total</div><div class="value blue">R$ ${actualTotalAmount}</div></div>
       <div class="summary-item"><div class="label">Vencimento</div><div class="value">${dueDateFmt}</div></div>
     </div>
@@ -535,6 +537,7 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
       <thead><tr>
         <th style="text-align:center">#</th>
         <th>Data</th>
+        <th>Nota Fiscal</th>
         <th>Destino</th>
         <th>Placa</th>
         <th>Motorista</th>
@@ -652,7 +655,7 @@ function WeeklyClosingsView({
     return c.dueDate && new Date(c.dueDate) < new Date();
   }).reduce((sum, c) => sum + parseFloat(c.totalAmount || '0'), 0);
 
-  const formatCurrency = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatCurrency = (v: number) => `R$ ${formatBR(v, 2)}`;
 
   return (
     <div className="space-y-5">
@@ -920,7 +923,7 @@ function WeeklyClosingsView({
                           </>
                         );
                       })()}
-                      {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
+                      {closing.pricePerTon && <span>R$ {formatBR(parseFloat(closing.pricePerTon))}/ton</span>}
                     </div>
                     {closing.status !== 'pago' && closing.dueDate && (
                       <p className={`text-xs mt-1.5 font-medium ${isOverdue ? 'text-red-600' : 'text-orange-600'}`}>
@@ -2026,7 +2029,7 @@ export default function CargoControl() {
               </div>
               <div className="bg-green-50 border border-green-200 rounded-lg p-2">
                 <Label className="text-xs font-semibold text-green-800">Peso Líquido (kg) — calculado automaticamente</Label>
-                <div className="text-lg font-bold text-green-700">{form.weightNetKg ? `${Number(form.weightNetKg).toLocaleString('pt-BR')} kg` : '—'}</div>
+                <div className="text-lg font-bold text-green-700">{form.weightNetKg ? `${formatBR(Number(form.weightNetKg), 0)} kg` : '—'}</div>
                 <p className="text-[10px] text-green-600">Entrada - Saída = Líquido (usado para cálculo de pagamento)</p>
               </div>
               <div>
