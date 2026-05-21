@@ -24,7 +24,7 @@ type FormData = {
 const emptyForm: FormData = {
   name: "", document: "", email: "", phone: "",
   address: "", city: "", state: "", notes: "",
-  pricePerTon: "", paymentTermDays: "20",
+  pricePerTon: "", paymentTermDays: "21",
 };
 
 const BRAZIL_STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
@@ -130,7 +130,7 @@ export default function ClientsPage() {
   const openEdit = (c: any) => {
     setEditId(c.id);
     setDocClientId(c.id);
-    setForm({ name: c.name, document: c.document || "", email: c.email || "", phone: c.phone || "", address: c.address || "", city: c.city || "", state: c.state || "", notes: c.notes || "", pricePerTon: c.pricePerTon || "", paymentTermDays: c.paymentTermDays ? String(c.paymentTermDays) : "20" });
+    setForm({ name: c.name, document: c.document || "", email: c.email || "", phone: c.phone || "", address: c.address || "", city: c.city || "", state: c.state || "", notes: c.notes || "", pricePerTon: c.pricePerTon || "", paymentTermDays: c.paymentTermDays ? String(c.paymentTermDays) : "21" });
     setIsOpen(true);
   };
 
@@ -304,7 +304,7 @@ export default function ClientsPage() {
               <p className="text-sm font-semibold text-blue-800">Configurações de Pagamento</p>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Preço por Tonelada (R$)</Label><Input type="number" step="0.01" value={form.pricePerTon} onChange={e => setForm(f => ({ ...f, pricePerTon: e.target.value }))} placeholder="130.00" /></div>
-                <div><Label>Prazo Pagamento (dias)</Label><Input type="number" value={form.paymentTermDays} onChange={e => setForm(f => ({ ...f, paymentTermDays: e.target.value }))} placeholder="20" /></div>
+                <div><Label>Prazo Pagamento (dias)</Label><Input type="number" value={form.paymentTermDays} onChange={e => setForm(f => ({ ...f, paymentTermDays: e.target.value }))} placeholder="21" /></div>
               </div>
             </div>
             {/* Seção de Documentos - só aparece ao editar */}

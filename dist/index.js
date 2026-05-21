@@ -3258,7 +3258,7 @@ var cargoLoadsRouter = router({
     const weekEndDate = new Date(normalizeDate(input.weekEnd));
     weekEndDate.setHours(23, 59, 59, 999);
     const loadsInPeriod = allLoads.filter((l) => {
-      const loadDate = new Date(l.date);
+      const loadDate = new Date(normalizeDate(l.date));
       return loadDate >= weekStartDate && loadDate <= weekEndDate;
     });
     const totalLoads = loadsInPeriod.length;
