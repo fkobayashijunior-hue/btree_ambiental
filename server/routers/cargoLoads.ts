@@ -168,6 +168,7 @@ export const cargoLoadsRouter = router({
           paymentStatus: cargoLoads.paymentStatus,
           paidAt: cargoLoads.paidAt,
           humidity: cargoLoads.humidity,
+          deliveryDate: cargoLoads.deliveryDate,
           // Joins
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
@@ -268,6 +269,7 @@ export const cargoLoadsRouter = router({
           paymentStatus: cargoLoads.paymentStatus,
           paidAt: cargoLoads.paidAt,
           humidity: cargoLoads.humidity,
+          deliveryDate: cargoLoads.deliveryDate,
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
           vehicleNameJoined: equipment.name,
@@ -371,6 +373,7 @@ export const cargoLoadsRouter = router({
       status: z.enum(["pendente", "entregue", "cancelado"]).optional(),
       workLocationId: z.number().optional(),
       humidity: z.string().optional(),
+      deliveryDate: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -412,6 +415,7 @@ export const cargoLoadsRouter = router({
         ...input,
         photosJson: finalPhotosJson || null,
         date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
+        deliveryDate: input.deliveryDate ? new Date(input.deliveryDate).toISOString().slice(0, 19).replace('T', ' ') : null,
         status: input.status || "pendente",
         trackingStatus: "aguardando",
         registeredBy: ctx.user.id,
@@ -476,6 +480,7 @@ export const cargoLoadsRouter = router({
       weightInKg: z.string().optional(),
       workLocationId: z.number().optional(),
       humidity: z.string().optional(),
+      deliveryDate: z.string().optional(),
       invoiceUrl: z.string().optional(),
       boletoUrl: z.string().optional(),
       boletoAmount: z.string().optional(),
@@ -506,10 +511,11 @@ export const cargoLoadsRouter = router({
         }
       }
 
-      const { id, date, ...rest } = input;
+      const { id, date, deliveryDate, ...rest } = input;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
       if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
+      if (deliveryDate !== undefined) updateData.deliveryDate = deliveryDate ? new Date(deliveryDate).toISOString().slice(0, 19).replace('T', ' ') : null;
       if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
 
       // Upload base64 photos to Cloudinary before storing

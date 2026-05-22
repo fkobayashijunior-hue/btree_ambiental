@@ -309,6 +309,13 @@
       "when": 1778693331652,
       "tag": "0043_thankful_dreaming_celestial",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "5",
+      "when": 1779434855739,
+      "tag": "0044_curious_ego",
+      "breakpoints": true
     }
   ]
 }

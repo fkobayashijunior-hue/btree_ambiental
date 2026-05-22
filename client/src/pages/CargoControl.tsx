@@ -437,7 +437,7 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
   const weekEnd = safeDate(closing.weekEnd);
   weekEnd.setHours(23, 59, 59, 999);
   const weekLoads = loadsAll.filter((l: any) => {
-    const d = safeDate(l.date);
+    const d = safeDate(l.deliveryDate || l.date);
     return d >= weekStart && d <= weekEnd;
   });
 
@@ -451,7 +451,7 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
   const actualTotalAmount = formatBR(actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon), 2);
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
-    const date = l.date ? safeDate(l.date).toLocaleDateString('pt-BR') : '-';
+    const date = (l.deliveryDate || l.date) ? safeDate(l.deliveryDate || l.date).toLocaleDateString('pt-BR') : '-';
     const weight = l.weightNetKg || l.weightOutKg || '-';
     const weightTon = parseFloat(weight) > 0 ? formatBR(parseFloat(weight) / 1000, 3) : '-';
     const vol = l.volumeM3 || '-';
@@ -823,7 +823,7 @@ function WeeklyClosingsView({
               weekEndDate.setHours(23, 59, 59, 999);
               const loadsInPeriod = loads.filter((l: any) => {
                 if (l.clientId !== closingClientId) return false;
-                const loadDate = safeDate(l.date);
+                const loadDate = safeDate(l.deliveryDate || l.date);
                 return loadDate >= weekStartDate && loadDate <= weekEndDate;
               });
               const totalWeight = loadsInPeriod.reduce((sum: number, l: any) => sum + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
@@ -1105,6 +1105,7 @@ export default function CargoControl() {
     status: "pendente" as "pendente" | "entregue" | "cancelado",
     workLocationId: "",
     humidity: "",
+    deliveryDate: "",
   });
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -1209,7 +1210,7 @@ export default function CargoControl() {
       const c = clientsList.find((cl: { id: number; name: string }) => cl.id === autoClientId);
       autoClientName = c?.name || "";
     }
-    setForm({ date: new Date().toISOString().slice(0, 10), vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: "", humidity: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: "", humidity: "" });
     setPendingPhotos([]);
   };
 
@@ -1238,6 +1239,7 @@ export default function CargoControl() {
       status: cargo.status as "pendente" | "entregue" | "cancelado",
       workLocationId: (cargo as any).workLocationId ? String((cargo as any).workLocationId) : "",
       humidity: (cargo as any).humidity || "",
+      deliveryDate: (cargo as any).deliveryDate ? safeDate((cargo as any).deliveryDate).toISOString().slice(0, 10) : "",
     });
     // Load existing photos when editing
     const existingPhotos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson); } catch { return []; } })() : [];
@@ -1260,6 +1262,7 @@ export default function CargoControl() {
       photosJson: pendingPhotos.length ? JSON.stringify(pendingPhotos) : undefined,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
       humidity: form.humidity || undefined,
+      deliveryDate: form.deliveryDate || undefined,
     };
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
@@ -1924,8 +1927,13 @@ export default function CargoControl() {
           <form onSubmit={handleSubmit} className="space-y-5 pt-4 pb-8">
             {/* Data */}
             <div>
-              <Label>Data *</Label>
+              <Label>Data (Carregamento) *</Label>
               <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
+            </div>
+            <div>
+              <Label>Data de Entrega</Label>
+              <Input type="date" value={form.deliveryDate || ''} onChange={e => setForm(f => ({ ...f, deliveryDate: e.target.value }))} />
+              <p className="text-[10px] text-gray-500 mt-0.5">Usada no fechamento semanal. Se vazio, usa a data de carregamento.</p>
             </div>
 
             {/* Veículo */}

@@ -91,6 +91,7 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 			paymentStatus: mysqlEnum("payment_status", ['sem_boleto','a_pagar','pago']).default('sem_boleto'),
 			paidAt: timestamp("paid_at", { mode: 'string' }),
 			humidity: varchar({ length: 20 }),
+		deliveryDate: timestamp("delivery_date", { mode: 'string' }),
 	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {

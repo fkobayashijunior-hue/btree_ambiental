@@ -225,7 +225,7 @@ function generateClosingPDF(closing: any, clientName: string, loads: any[], pric
   const weekEnd = safeDate(closing.weekEnd);
   weekEnd.setHours(23, 59, 59, 999);
   const weekLoads = loads.filter((l: any) => {
-    const d = safeDate(l.date);
+    const d = safeDate(l.deliveryDate || l.date);
     return d >= weekStart && d <= weekEnd;
   });
 
@@ -239,7 +239,7 @@ function generateClosingPDF(closing: any, clientName: string, loads: any[], pric
   const actualTotalAmount = formatBR(actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon), 2);
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
-    const date = l.date ? safeDate(l.date).toLocaleDateString('pt-BR') : '-';
+    const date = (l.deliveryDate || l.date) ? safeDate(l.deliveryDate || l.date).toLocaleDateString('pt-BR') : '-';
     const weight = l.weightNetKg || l.weightOutKg || '-';
     const weightTon = parseFloat(weight) > 0 ? formatBR(parseFloat(weight) / 1000, 3) : '-';
     const vol = l.volumeM3 || '-';
@@ -1033,7 +1033,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                             const wEnd = safeDate(closing.weekEnd);
                                             wEnd.setHours(23, 59, 59, 999);
                                             const realLoads = (data?.loads || []).filter((l: any) => {
-                                              const d = safeDate(l.date);
+                                              const d = safeDate(l.deliveryDate || l.date);
                                               return d >= wStart && d <= wEnd;
                                             });
                                             const realWeight = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
