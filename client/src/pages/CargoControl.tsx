@@ -2114,7 +2114,11 @@ export default function CargoControl() {
                 >
                   <option value={0}>Selecionar destino cadastrado...</option>
                   {destinations.length > 0 && <optgroup label="Destinos">
-                    {destinations.map(d => (
+                    {[...destinations].sort((a, b) => {
+                      const countA = loads.filter(l => l.destinationId === a.id).length;
+                      const countB = loads.filter(l => l.destinationId === b.id).length;
+                      return countB - countA;
+                    }).map(d => (
                       <option key={`dest-${d.id}`} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}</option>
                     ))}
                   </optgroup>}
