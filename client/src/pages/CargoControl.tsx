@@ -83,7 +83,7 @@ function calcVolume(h: string, w: string, l: string): string {
   const wN = parseFloat(w.replace(",", "."));
   const lN = parseFloat(l.replace(",", "."));
   if (isNaN(hN) || isNaN(wN) || isNaN(lN)) return "";
-  return formatBR(hN * wN * lN, 3);
+  return (hN * wN * lN).toFixed(3);
 }
 
 function compressImage(file: File): Promise<string> {
@@ -248,7 +248,7 @@ function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE 
         <div class="field"><div class="field-label">Altura (m)</div><div class="field-value">${cargo.heightM || "-"}</div></div>
         <div class="field"><div class="field-label">Largura (m)</div><div class="field-value">${cargo.widthM || "-"}</div></div>
         <div class="field"><div class="field-label">Comprimento (m)</div><div class="field-value">${cargo.lengthM || "-"}</div></div>
-        <div class="field"><div class="field-label">Volume (m³)</div><div class="field-value highlight">${cargo.volumeM3 || "-"} m³</div></div>
+        <div class="field"><div class="field-label">Volume (m³)</div><div class="field-value highlight">${cargo.volumeM3 ? formatBR(parseFloat(cargo.volumeM3), 3) : "-"} m³</div></div>
         <div class="field"><div class="field-label">Peso Bruto Saída</div><div class="field-value">${(cargo as any).weightOutKg ? (cargo as any).weightOutKg + " kg" : "-"}</div></div>
         <div class="field"><div class="field-label">Peso Bruto Chegada</div><div class="field-value">${(cargo as any).weightInKg ? (cargo as any).weightInKg + " kg" : "-"}</div></div>
         <div class="field"><div class="field-label">Peso Líquido</div><div class="field-value highlight">${(cargo as any).weightNetKg ? (cargo as any).weightNetKg + " kg" : "-"}</div></div>
@@ -337,7 +337,7 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
       <td style="text-align:right;">${c.heightM || "-"}</td>
       <td style="text-align:right;">${c.widthM || "-"}</td>
       <td style="text-align:right;">${c.lengthM || "-"}</td>
-      <td style="text-align:right;font-weight:700;color:#0d4f2e;">${c.volumeM3 || "-"}</td>
+      <td style="text-align:right;font-weight:700;color:#0d4f2e;">${c.volumeM3 ? formatBR(parseFloat(c.volumeM3), 3) : "-"}</td>
       <td style="text-align:right;">${(c as any).weightOutKg || "-"}</td>
       <td style="text-align:right;">${(c as any).weightInKg || "-"}</td>
       <td style="text-align:right;font-weight:700;">${(c as any).weightNetKg || "-"}</td>
@@ -1481,7 +1481,7 @@ export default function CargoControl() {
                 {cargo.driverName && <span className="flex items-center gap-1"><User className="h-3 w-3" /><span translate="no">{cargo.driverName}</span></span>}
                 {cargo.destination && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /><span translate="no">{cargo.destination}</span></span>}
                 <span className="flex items-center gap-1 font-semibold text-emerald-700">
-                  <Package className="h-3 w-3" />{cargo.volumeM3} m³{(cargo as any).weightNetKg ? ` · ${(cargo as any).weightNetKg} kg (líq.)` : cargo.weightKg ? ` · ${cargo.weightKg} kg` : ""}
+                  <Package className="h-3 w-3" />{cargo.volumeM3 ? formatBR(parseFloat(cargo.volumeM3), 3) : '0'} m³{(cargo as any).weightNetKg ? ` · ${formatBR(parseFloat((cargo as any).weightNetKg), 0)} kg (líq.)` : cargo.weightKg ? ` · ${formatBR(parseFloat(cargo.weightKg), 0)} kg` : ""}
                 </span>
                 {(() => {
                   const weightNet = parseFloat((cargo as any).weightNetKg || (cargo as any).weightOutKg || '0');
@@ -2018,7 +2018,7 @@ export default function CargoControl() {
               {volume && (
                 <div className="bg-white rounded-lg p-2 text-center">
                   <span className="text-xs text-gray-500">Volume calculado: </span>
-                  <span className="font-bold text-emerald-700">{volume} m³</span>
+                  <span className="font-bold text-emerald-700">{volume ? formatBR(parseFloat(volume), 3) : '0'} m³</span>
                 </div>
               )}
               <div>
@@ -2240,7 +2240,7 @@ export default function CargoControl() {
                   ["Cliente", detailCargo.clientName || "-"],
                   ["Destino", detailCargo.destination || "-"],
                   ["Tipo de Madeira", detailCargo.woodType || "-"],
-                  ["Volume Previsto", `${detailCargo.volumeM3} m³`],
+                  ["Volume Previsto", `${detailCargo.volumeM3 ? formatBR(parseFloat(detailCargo.volumeM3), 3) : '-'} m³`],
                   ["Peso Previsto", detailCargo.weightKg ? `${detailCargo.weightKg} kg` : "-"],
                   ["Nota Fiscal", detailCargo.invoiceNumber || "-"],
                   ["Status", detailCargo.status],
