@@ -1294,4 +1294,68 @@ export const cargoLoadsRouter = router({
       await db.update(clients).set(rest as any).where(eq(clients.id, clientId));
       return { success: true };
     }),
+
+  // ===== RELATÓRIO POR DESTINO/COMPRADOR =====
+  markReceivedByBuyer: protectedProcedure
+    .input(z.object({ id: z.number(), received: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      await db.update(cargoLoads).set({
+        receivedByBuyer: input.received ? 1 : 0,
+        receivedAt: input.received ? now : null,
+      }).where(eq(cargoLoads.id, input.id));
+      return { success: true };
+    }),
+
+  listByDestination: protectedProcedure
+    .input(z.object({
+      destinationId: z.number().optional(),
+      buyerId: z.number().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      receivedFilter: z.enum(['all', 'received', 'pending']).optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const conditions: any[] = [eq(cargoLoads.status, 'entregue')];
+      if (input.destinationId) {
+        conditions.push(eq(cargoLoads.destinationId, input.destinationId));
+      }
+      if (input.startDate) {
+        conditions.push(sql`${cargoLoads.date} >= ${input.startDate}`);
+      }
+      if (input.endDate) {
+        conditions.push(sql`${cargoLoads.date} <= ${input.endDate + ' 23:59:59'}`);
+      }
+      if (input.receivedFilter === 'received') {
+        conditions.push(eq(cargoLoads.receivedByBuyer, 1));
+      } else if (input.receivedFilter === 'pending') {
+        conditions.push(eq(cargoLoads.receivedByBuyer, 0));
+      }
+      const results = await db.select({
+        id: cargoLoads.id,
+        date: cargoLoads.date,
+        deliveryDate: cargoLoads.deliveryDate,
+        vehiclePlate: cargoLoads.vehiclePlate,
+        driverName: cargoLoads.driverName,
+        destination: cargoLoads.destination,
+        destinationId: cargoLoads.destinationId,
+        clientName: cargoLoads.clientName,
+        invoiceNumber: cargoLoads.invoiceNumber,
+        volumeM3: cargoLoads.volumeM3,
+        weightKg: cargoLoads.weightKg,
+        weightNetKg: cargoLoads.weightNetKg,
+        woodType: cargoLoads.woodType,
+        photosJson: cargoLoads.photosJson,
+        receivedByBuyer: cargoLoads.receivedByBuyer,
+        receivedAt: cargoLoads.receivedAt,
+        status: cargoLoads.status,
+      }).from(cargoLoads)
+        .where(and(...conditions))
+        .orderBy(desc(cargoLoads.date));
+      return results;
+    }),
 });

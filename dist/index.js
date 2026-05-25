@@ -340,7 +340,9 @@ var init_schema = __esm({
       paymentStatus: mysqlEnum("payment_status", ["sem_boleto", "a_pagar", "pago"]).default("sem_boleto"),
       paidAt: timestamp("paid_at", { mode: "string" }),
       humidity: varchar({ length: 20 }),
-      deliveryDate: timestamp("delivery_date", { mode: "string" })
+      deliveryDate: timestamp("delivery_date", { mode: "string" }),
+      receivedByBuyer: int("received_by_buyer").default(0).notNull(),
+      receivedAt: timestamp("received_at", { mode: "string" })
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -2456,7 +2458,7 @@ init_schema();
 init_cloudinary();
 import { z as z6 } from "zod";
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq6, desc as desc3, and as and3, ne } from "drizzle-orm";
+import { eq as eq6, desc as desc3, and as and3, sql as sql2, ne } from "drizzle-orm";
 import mysql2 from "mysql2/promise";
 async function getDirectConnection() {
   const conn = await mysql2.createConnection(process.env.DATABASE_URL);
@@ -3502,6 +3504,62 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     const { clientId, ...rest } = input;
     await db.update(clients).set(rest).where(eq6(clients.id, clientId));
     return { success: true };
+  }),
+  // ===== RELATÓRIO POR DESTINO/COMPRADOR =====
+  markReceivedByBuyer: protectedProcedure.input(z6.object({ id: z6.number(), received: z6.boolean() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    await db.update(cargoLoads).set({
+      receivedByBuyer: input.received ? 1 : 0,
+      receivedAt: input.received ? now : null
+    }).where(eq6(cargoLoads.id, input.id));
+    return { success: true };
+  }),
+  listByDestination: protectedProcedure.input(z6.object({
+    destinationId: z6.number().optional(),
+    buyerId: z6.number().optional(),
+    startDate: z6.string().optional(),
+    endDate: z6.string().optional(),
+    receivedFilter: z6.enum(["all", "received", "pending"]).optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const conditions = [eq6(cargoLoads.status, "entregue")];
+    if (input.destinationId) {
+      conditions.push(eq6(cargoLoads.destinationId, input.destinationId));
+    }
+    if (input.startDate) {
+      conditions.push(sql2`${cargoLoads.date} >= ${input.startDate}`);
+    }
+    if (input.endDate) {
+      conditions.push(sql2`${cargoLoads.date} <= ${input.endDate + " 23:59:59"}`);
+    }
+    if (input.receivedFilter === "received") {
+      conditions.push(eq6(cargoLoads.receivedByBuyer, 1));
+    } else if (input.receivedFilter === "pending") {
+      conditions.push(eq6(cargoLoads.receivedByBuyer, 0));
+    }
+    const results = await db.select({
+      id: cargoLoads.id,
+      date: cargoLoads.date,
+      deliveryDate: cargoLoads.deliveryDate,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      driverName: cargoLoads.driverName,
+      destination: cargoLoads.destination,
+      destinationId: cargoLoads.destinationId,
+      clientName: cargoLoads.clientName,
+      invoiceNumber: cargoLoads.invoiceNumber,
+      volumeM3: cargoLoads.volumeM3,
+      weightKg: cargoLoads.weightKg,
+      weightNetKg: cargoLoads.weightNetKg,
+      woodType: cargoLoads.woodType,
+      photosJson: cargoLoads.photosJson,
+      receivedByBuyer: cargoLoads.receivedByBuyer,
+      receivedAt: cargoLoads.receivedAt,
+      status: cargoLoads.status
+    }).from(cargoLoads).where(and3(...conditions)).orderBy(desc3(cargoLoads.date));
+    return results;
   })
 });
 
@@ -5773,6 +5831,8 @@ var SYSTEM_MODULES = [
   { slug: "clientes", label: "Clientes", group: "Comercial" },
   { slug: "portal-cliente", label: "Portal do Cliente", group: "Comercial" },
   { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" },
+  { slug: "compradores", label: "Compradores", group: "Comercial" },
+  { slug: "relatorio-destinos", label: "Relat\xF3rio Destinos", group: "Comercial" },
   // Administrativo (valores financeiros)
   { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Administrativo" },
   { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },

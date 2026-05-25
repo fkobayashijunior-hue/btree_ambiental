@@ -40,6 +40,7 @@ import FreightPage from "./pages/FreightPage";
 import FuelSuppliersPage from "./pages/FuelSuppliersPage";
 import FuelReportsPage from "./pages/FuelReportsPage";
 import FuelInvoicesPage from "./pages/FuelInvoicesPage";
+import DestinationReportPage from "./pages/DestinationReportPage";
 
 // Wrapper que aplica DashboardLayout a páginas protegidas
 function WithLayout({ component: Component }: { component: React.ComponentType }) {
@@ -141,6 +142,9 @@ function Router() {
       </Route>
       <Route path={"/contas-pagar-combustivel"}>
         {() => <WithLayout component={FuelInvoicesPage} />}
+      </Route>
+      <Route path={"/relatorio-destinos"}>
+        {() => <WithLayout component={DestinationReportPage} />}
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

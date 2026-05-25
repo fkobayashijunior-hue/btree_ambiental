@@ -29,6 +29,8 @@ export const SYSTEM_MODULES = [
   { slug: "clientes",        label: "Clientes",              group: "Comercial" },
   { slug: "portal-cliente",  label: "Portal do Cliente",     group: "Comercial" },
   { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" },
+  { slug: "compradores",     label: "Compradores",           group: "Comercial" },
+  { slug: "relatorio-destinos", label: "Relatório Destinos",  group: "Comercial" },
   // Administrativo (valores financeiros)
   { slug: "financeiro",      label: "Módulo Financeiro",     group: "Administrativo" },
   { slug: "relatorios",      label: "Relatórios",            group: "Administrativo" },

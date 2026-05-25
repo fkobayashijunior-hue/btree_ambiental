@@ -1768,3 +1768,13 @@
 - [x] Frontend: campo "Data de Entrega" no formulário de carga
 - [x] Fechamento semanal: usar deliveryDate (ou date como fallback) para agrupar cargas
 - [x] PDF: mostrar Data de Entrega quando disponível
+
+## 🆕 FEATURE: Relatório por Destino/Comprador (25/05/2026)
+- [ ] Adicionar campo receivedByBuyer (boolean) ao schema cargo_loads
+- [ ] Backend: procedure para marcar carga como recebida pelo comprador
+- [ ] Backend: procedure para listar cargas filtradas por destino/comprador
+- [ ] Frontend: Página "Relatório por Destino" com filtros (destino, período)
+- [ ] Frontend: Tabela com dados de entrega + checkbox "Recebido"
+- [ ] Frontend: Exibição de fotos/comprovantes na tela
+- [ ] Frontend: PDF com dados de entrega + fotos dos comprovantes
+- [ ] Registrar rota no App.tsx e navegação

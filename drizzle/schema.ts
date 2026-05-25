@@ -92,6 +92,8 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 			paidAt: timestamp("paid_at", { mode: 'string' }),
 			humidity: varchar({ length: 20 }),
 		deliveryDate: timestamp("delivery_date", { mode: 'string' }),
+		receivedByBuyer: int("received_by_buyer").default(0).notNull(),
+		receivedAt: timestamp("received_at", { mode: 'string' }),
 	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {
