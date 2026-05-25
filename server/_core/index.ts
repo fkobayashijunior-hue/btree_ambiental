@@ -351,17 +351,20 @@ async function runAutoMigrations() {
     } catch(e) { /* constraint already dropped or doesn't exist */ }
     // Drop ALL remaining FK constraints on cargo_loads to prevent any future issues
     try {
-      const [fks]: any = await db.execute(/*sql*/`
+      const fks: any = await db.execute(/*sql*/`
         SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cargo_loads' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
       `);
-      for (const fk of fks) {
-        try {
-          await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
-          console.log('[AutoMigration] Dropped remaining FK:', fk.CONSTRAINT_NAME);
-        } catch(e) { /* already dropped */ }
+      const fkList = Array.isArray(fks) ? fks : [];
+      for (const fk of fkList) {
+        if (fk && fk.CONSTRAINT_NAME) {
+          try {
+            await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+            console.log('[AutoMigration] Dropped remaining FK:', fk.CONSTRAINT_NAME);
+          } catch(e) { /* already dropped */ }
+        }
       }
-    } catch(e) { console.log('[AutoMigration] Could not query remaining FKs:', e); }
+    } catch(e: any) { console.log('[AutoMigration] Could not query remaining FKs:', e?.message); }
 
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
@@ -403,6 +406,56 @@ async function startServer() {
 
   // Storage proxy for serving uploaded assets
   registerStorageProxy(app);
+
+  // Diagnostic endpoint to debug DB issues on Hostinger
+  app.get('/api/db-diagnostic', async (req, res) => {
+    try {
+      const { getDb } = await import('../db');
+      const db = await getDb();
+      if (!db) {
+        return res.json({ error: 'Database not available', DATABASE_URL_SET: !!process.env.DATABASE_URL });
+      }
+      // Test 1: SHOW COLUMNS FROM users
+      let columns: any = null;
+      try {
+        columns = await db.execute(/*sql*/`SHOW COLUMNS FROM users`);
+      } catch(e: any) {
+        columns = { error: e.message, cause: e.cause?.message };
+      }
+      // Test 2: Raw SELECT * FROM users LIMIT 1
+      let rawSelect: any = null;
+      try {
+        rawSelect = await db.execute(/*sql*/`SELECT * FROM users LIMIT 1`);
+      } catch(e: any) {
+        rawSelect = { error: e.message, cause: e.cause?.message };
+      }
+      // Test 3: Exact Drizzle query columns
+      let drizzleSelect: any = null;
+      try {
+        drizzleSelect = await db.execute(/*sql*/`SELECT id, openId, name, email, loginMethod, role, createdAt, updatedAt, lastSignedIn, password_hash FROM users LIMIT 1`);
+      } catch(e: any) {
+        drizzleSelect = { error: e.message, cause: e.cause?.message };
+      }
+      // Test 4: Check with backticks (in case of reserved words)
+      let backtickSelect: any = null;
+      try {
+        backtickSelect = await db.execute(/*sql*/`SELECT \`id\`, \`openId\`, \`name\`, \`email\`, \`loginMethod\`, \`role\`, \`createdAt\`, \`updatedAt\`, \`lastSignedIn\`, \`password_hash\` FROM \`users\` LIMIT 1`);
+      } catch(e: any) {
+        backtickSelect = { error: e.message, cause: e.cause?.message };
+      }
+      return res.json({
+        timestamp: new Date().toISOString(),
+        node_version: process.version,
+        columns,
+        rawSelect,
+        drizzleSelect,
+        backtickSelect,
+      });
+    } catch(e: any) {
+      return res.status(500).json({ error: e.message, stack: e.stack });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

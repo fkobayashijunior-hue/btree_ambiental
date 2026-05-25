@@ -97,8 +97,38 @@ export async function getUserByEmail(email: string) {
     console.warn("[Database] Cannot get user: database not available");
     return undefined;
   }
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  try {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  } catch (drizzleError: any) {
+    console.error('[getUserByEmail] Drizzle query failed:', drizzleError.message);
+    console.error('[getUserByEmail] Cause:', drizzleError.cause?.message || drizzleError.cause?.sqlMessage || 'unknown');
+    // Fallback: try raw SQL query
+    try {
+      console.log('[getUserByEmail] Attempting raw SQL fallback...');
+      const rows: any = await db.execute(/*sql*/`SELECT * FROM users WHERE email = '${email.replace(/'/g, "''")}' LIMIT 1`);
+      if (rows && rows.length > 0) {
+        const row = rows[0];
+        // Map raw DB columns to expected Drizzle field names
+        return {
+          id: row.id,
+          openId: row.openId || row.open_id || null,
+          name: row.name,
+          email: row.email,
+          loginMethod: row.loginMethod || row.login_method || 'email',
+          role: row.role || 'user',
+          createdAt: row.createdAt || row.created_at || null,
+          updatedAt: row.updatedAt || row.updated_at || null,
+          lastSignedIn: row.lastSignedIn || row.last_signed_in || null,
+          passwordHash: row.password_hash || row.passwordHash || null,
+        };
+      }
+      return undefined;
+    } catch (rawError: any) {
+      console.error('[getUserByEmail] Raw SQL also failed:', rawError.message);
+      throw drizzleError; // Re-throw original error
+    }
+  }
 }
 
 export async function getUserById(id: number) {

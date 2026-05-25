@@ -189,8 +189,11 @@ export const appRouter = router({
             success: true,
             user,
           };
-        } catch (error) {
-          throw new Error(error instanceof Error ? error.message : 'Erro ao fazer login');
+        } catch (error: any) {
+          const msg = error?.message || 'Erro ao fazer login';
+          const cause = error?.cause?.message || error?.cause?.sqlMessage || '';
+          console.error('[Login Error]', msg, cause ? `| Cause: ${cause}` : '', error?.stack);
+          throw new Error(cause ? `${msg} | DB: ${cause}` : msg);
         }
       }),
 

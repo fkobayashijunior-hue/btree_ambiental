@@ -1,4 +1,3 @@
-import { createRequire } from 'module'; const require = createRequire(import.meta.url);
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
@@ -1339,8 +1338,39 @@ async function getUserByEmail(email) {
     console.warn("[Database] Cannot get user: database not available");
     return void 0;
   }
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
+  try {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result.length > 0 ? result[0] : void 0;
+  } catch (drizzleError) {
+    console.error("[getUserByEmail] Drizzle query failed:", drizzleError.message);
+    console.error("[getUserByEmail] Cause:", drizzleError.cause?.message || drizzleError.cause?.sqlMessage || "unknown");
+    try {
+      console.log("[getUserByEmail] Attempting raw SQL fallback...");
+      const rows = await db.execute(
+        /*sql*/
+        `SELECT * FROM users WHERE email = '${email.replace(/'/g, "''")}' LIMIT 1`
+      );
+      if (rows && rows.length > 0) {
+        const row = rows[0];
+        return {
+          id: row.id,
+          openId: row.openId || row.open_id || null,
+          name: row.name,
+          email: row.email,
+          loginMethod: row.loginMethod || row.login_method || "email",
+          role: row.role || "user",
+          createdAt: row.createdAt || row.created_at || null,
+          updatedAt: row.updatedAt || row.updated_at || null,
+          lastSignedIn: row.lastSignedIn || row.last_signed_in || null,
+          passwordHash: row.password_hash || row.passwordHash || null
+        };
+      }
+      return void 0;
+    } catch (rawError) {
+      console.error("[getUserByEmail] Raw SQL also failed:", rawError.message);
+      throw drizzleError;
+    }
+  }
 }
 async function getUserById(id) {
   const db = await getDb();
@@ -9369,7 +9399,10 @@ var appRouter = router({
           user
         };
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Erro ao fazer login");
+        const msg = error?.message || "Erro ao fazer login";
+        const cause = error?.cause?.message || error?.cause?.sqlMessage || "";
+        console.error("[Login Error]", msg, cause ? `| Cause: ${cause}` : "", error?.stack);
+        throw new Error(cause ? `${msg} | DB: ${cause}` : msg);
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
@@ -10092,25 +10125,28 @@ async function runAutoMigrations() {
     } catch (e) {
     }
     try {
-      const [fks] = await db.execute(
+      const fks = await db.execute(
         /*sql*/
         `
         SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cargo_loads' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
       `
       );
-      for (const fk of fks) {
-        try {
-          await db.execute(
-            /*sql*/
-            `ALTER TABLE cargo_loads DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``
-          );
-          console.log("[AutoMigration] Dropped remaining FK:", fk.CONSTRAINT_NAME);
-        } catch (e) {
+      const fkList = Array.isArray(fks) ? fks : [];
+      for (const fk of fkList) {
+        if (fk && fk.CONSTRAINT_NAME) {
+          try {
+            await db.execute(
+              /*sql*/
+              `ALTER TABLE cargo_loads DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``
+            );
+            console.log("[AutoMigration] Dropped remaining FK:", fk.CONSTRAINT_NAME);
+          } catch (e) {
+          }
         }
       }
     } catch (e) {
-      console.log("[AutoMigration] Could not query remaining FKs:", e);
+      console.log("[AutoMigration] Could not query remaining FKs:", e?.message);
     }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
@@ -10142,6 +10178,61 @@ async function startServer() {
   app.use(express2.json({ limit: "50mb" }));
   app.use(express2.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
+  app.get("/api/db-diagnostic", async (req, res) => {
+    try {
+      const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+      const db = await getDb2();
+      if (!db) {
+        return res.json({ error: "Database not available", DATABASE_URL_SET: !!process.env.DATABASE_URL });
+      }
+      let columns = null;
+      try {
+        columns = await db.execute(
+          /*sql*/
+          `SHOW COLUMNS FROM users`
+        );
+      } catch (e) {
+        columns = { error: e.message, cause: e.cause?.message };
+      }
+      let rawSelect = null;
+      try {
+        rawSelect = await db.execute(
+          /*sql*/
+          `SELECT * FROM users LIMIT 1`
+        );
+      } catch (e) {
+        rawSelect = { error: e.message, cause: e.cause?.message };
+      }
+      let drizzleSelect = null;
+      try {
+        drizzleSelect = await db.execute(
+          /*sql*/
+          `SELECT id, openId, name, email, loginMethod, role, createdAt, updatedAt, lastSignedIn, password_hash FROM users LIMIT 1`
+        );
+      } catch (e) {
+        drizzleSelect = { error: e.message, cause: e.cause?.message };
+      }
+      let backtickSelect = null;
+      try {
+        backtickSelect = await db.execute(
+          /*sql*/
+          `SELECT \`id\`, \`openId\`, \`name\`, \`email\`, \`loginMethod\`, \`role\`, \`createdAt\`, \`updatedAt\`, \`lastSignedIn\`, \`password_hash\` FROM \`users\` LIMIT 1`
+        );
+      } catch (e) {
+        backtickSelect = { error: e.message, cause: e.cause?.message };
+      }
+      return res.json({
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        node_version: process.version,
+        columns,
+        rawSelect,
+        drizzleSelect,
+        backtickSelect
+      });
+    } catch (e) {
+      return res.status(500).json({ error: e.message, stack: e.stack });
+    }
+  });
   app.use(
     "/api/trpc",
     createExpressMiddleware({
