@@ -4,9 +4,9 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos, gpsLocations,
-  cargoWeeklyClosings, clientDocuments
+  cargoWeeklyClosings, clientDocuments, buyerClients
 } from "../../drizzle/schema";
-import { eq, desc, and, sql, ne } from "drizzle-orm";
+import { eq, desc, and, sql, ne, or } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 import mysql from "mysql2/promise";
 
@@ -434,11 +434,12 @@ export const cargoLoadsRouter = router({
           workLocationId: input.workLocationId || null,
         });
       } catch (dbErr: any) {
-        console.error('[cargoLoads.create] DB ERROR:', dbErr.code, dbErr.errno, dbErr.sqlState, dbErr.sqlMessage || dbErr.message);
-        console.error('[cargoLoads.create] Input keys:', Object.keys(input));
+        const realErr = dbErr.cause || dbErr;
+        console.error('[cargoLoads.create] DB ERROR:', realErr.code, realErr.errno, realErr.sqlState, realErr.sqlMessage || realErr.message);
+        console.error('[cargoLoads.create] Full error:', dbErr.message);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: `Erro DB [${dbErr.code || 'UNKNOWN'}]: ${dbErr.sqlMessage || dbErr.message}`,
+          message: `Erro DB [${realErr.code || 'UNKNOWN'}]: ${realErr.sqlMessage || realErr.message || dbErr.message}`,
         });
       }
 
@@ -573,11 +574,13 @@ export const cargoLoadsRouter = router({
       try {
         await db.update(cargoLoads).set(updateData).where(eq(cargoLoads.id, id));
       } catch (dbErr: any) {
-        console.error('[cargoLoads.update] DB ERROR:', dbErr.code, dbErr.errno, dbErr.sqlState, dbErr.sqlMessage || dbErr.message);
-        console.error('[cargoLoads.update] Full updateData:', JSON.stringify(updateData));
+        // DrizzleQueryError wraps the real MySQL error in .cause
+        const realErr = dbErr.cause || dbErr;
+        console.error('[cargoLoads.update] DB ERROR:', realErr.code, realErr.errno, realErr.sqlState, realErr.sqlMessage || realErr.message);
+        console.error('[cargoLoads.update] Full error:', dbErr.message);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: `Erro DB [${dbErr.code || 'UNKNOWN'}]: ${dbErr.sqlMessage || dbErr.message}`,
+          message: `Erro DB [${realErr.code || 'UNKNOWN'}]: ${realErr.sqlMessage || realErr.message || dbErr.message}`,
         });
       }
       // Auto-generate financial entries when status changes to 'entregue'
@@ -1365,8 +1368,36 @@ export const cargoLoadsRouter = router({
         conditions.push(eq(cargoLoads.status, input.statusFilter));
       }
       // Destination filter - handle both regular destinations and buyers (offset 10000)
+      // Also match by destination text name for cargas saved before destinationId was implemented
       if (input.destinationId) {
-        conditions.push(eq(cargoLoads.destinationId, input.destinationId));
+        // Get the destination name to also match by text
+        let destName: string | null = null;
+        if (input.destinationId >= 10000) {
+          // It's a buyer - get buyer name
+          const buyerResult = await db.select({ name: buyerClients.name })
+            .from(buyerClients)
+            .where(eq(buyerClients.id, input.destinationId - 10000))
+            .limit(1);
+          if (buyerResult.length > 0) destName = buyerResult[0].name;
+        } else {
+          // It's a regular destination - get destination name
+          const destResult = await db.select({ name: cargoDestinations.name })
+            .from(cargoDestinations)
+            .where(eq(cargoDestinations.id, input.destinationId))
+            .limit(1);
+          if (destResult.length > 0) destName = destResult[0].name;
+        }
+        // Match by destinationId OR by destination text name
+        if (destName) {
+          conditions.push(
+            or(
+              eq(cargoLoads.destinationId, input.destinationId),
+              eq(cargoLoads.destination, destName)
+            )!
+          );
+        } else {
+          conditions.push(eq(cargoLoads.destinationId, input.destinationId));
+        }
       }
       if (input.startDate) {
         conditions.push(sql`${cargoLoads.date} >= ${input.startDate}`);

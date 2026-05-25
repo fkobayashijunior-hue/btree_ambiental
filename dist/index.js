@@ -1,3 +1,4 @@
+import { createRequire } from 'module'; const require = createRequire(import.meta.url);
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
@@ -298,9 +299,9 @@ var init_schema = __esm({
     cargoLoads = mysqlTable("cargo_loads", {
       id: int().autoincrement().notNull(),
       date: timestamp({ mode: "string" }).notNull(),
-      vehicleId: int("vehicle_id").references(() => equipment.id),
+      vehicleId: int("vehicle_id"),
       vehiclePlate: varchar("vehicle_plate", { length: 20 }),
-      driverCollaboratorId: int("driver_collaborator_id").references(() => collaborators.id),
+      driverCollaboratorId: int("driver_collaborator_id"),
       driverName: varchar("driver_name", { length: 255 }),
       heightM: varchar("height_m", { length: 20 }).notNull(),
       widthM: varchar("width_m", { length: 20 }).notNull(),
@@ -309,12 +310,12 @@ var init_schema = __esm({
       woodType: varchar("wood_type", { length: 100 }),
       destination: varchar({ length: 255 }),
       invoiceNumber: varchar("invoice_number", { length: 100 }),
-      clientId: int("client_id").references(() => clients.id),
+      clientId: int("client_id"),
       clientName: varchar("client_name", { length: 255 }),
       photosJson: text("photos_json"),
       notes: text(),
       status: mysqlEnum(["pendente", "entregue", "cancelado"]).default("pendente").notNull(),
-      registeredBy: int("registered_by").references(() => users.id),
+      registeredBy: int("registered_by"),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
       weightKg: varchar("weight_kg", { length: 20 }),
@@ -2458,7 +2459,7 @@ init_schema();
 init_cloudinary();
 import { z as z6 } from "zod";
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq6, desc as desc3, and as and3, sql as sql2, ne } from "drizzle-orm";
+import { eq as eq6, desc as desc3, and as and3, sql as sql2, ne, or as or3 } from "drizzle-orm";
 import mysql2 from "mysql2/promise";
 async function getDirectConnection() {
   const conn = await mysql2.createConnection(process.env.DATABASE_URL);
@@ -2803,11 +2804,12 @@ var cargoLoadsRouter = router({
         workLocationId: input.workLocationId || null
       });
     } catch (dbErr) {
-      console.error("[cargoLoads.create] DB ERROR:", dbErr.code, dbErr.errno, dbErr.sqlState, dbErr.sqlMessage || dbErr.message);
-      console.error("[cargoLoads.create] Input keys:", Object.keys(input));
+      const realErr = dbErr.cause || dbErr;
+      console.error("[cargoLoads.create] DB ERROR:", realErr.code, realErr.errno, realErr.sqlState, realErr.sqlMessage || realErr.message);
+      console.error("[cargoLoads.create] Full error:", dbErr.message);
       throw new TRPCError4({
         code: "INTERNAL_SERVER_ERROR",
-        message: `Erro DB [${dbErr.code || "UNKNOWN"}]: ${dbErr.sqlMessage || dbErr.message}`
+        message: `Erro DB [${realErr.code || "UNKNOWN"}]: ${realErr.sqlMessage || realErr.message || dbErr.message}`
       });
     }
     try {
@@ -2924,11 +2926,12 @@ var cargoLoadsRouter = router({
     try {
       await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, id));
     } catch (dbErr) {
-      console.error("[cargoLoads.update] DB ERROR:", dbErr.code, dbErr.errno, dbErr.sqlState, dbErr.sqlMessage || dbErr.message);
-      console.error("[cargoLoads.update] Full updateData:", JSON.stringify(updateData));
+      const realErr = dbErr.cause || dbErr;
+      console.error("[cargoLoads.update] DB ERROR:", realErr.code, realErr.errno, realErr.sqlState, realErr.sqlMessage || realErr.message);
+      console.error("[cargoLoads.update] Full error:", dbErr.message);
       throw new TRPCError4({
         code: "INTERNAL_SERVER_ERROR",
-        message: `Erro DB [${dbErr.code || "UNKNOWN"}]: ${dbErr.sqlMessage || dbErr.message}`
+        message: `Erro DB [${realErr.code || "UNKNOWN"}]: ${realErr.sqlMessage || realErr.message || dbErr.message}`
       });
     }
     if (input.status === "entregue") {
@@ -3567,7 +3570,24 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       conditions.push(eq6(cargoLoads.status, input.statusFilter));
     }
     if (input.destinationId) {
-      conditions.push(eq6(cargoLoads.destinationId, input.destinationId));
+      let destName = null;
+      if (input.destinationId >= 1e4) {
+        const buyerResult = await db.select({ name: buyerClients.name }).from(buyerClients).where(eq6(buyerClients.id, input.destinationId - 1e4)).limit(1);
+        if (buyerResult.length > 0) destName = buyerResult[0].name;
+      } else {
+        const destResult = await db.select({ name: cargoDestinations.name }).from(cargoDestinations).where(eq6(cargoDestinations.id, input.destinationId)).limit(1);
+        if (destResult.length > 0) destName = destResult[0].name;
+      }
+      if (destName) {
+        conditions.push(
+          or3(
+            eq6(cargoLoads.destinationId, input.destinationId),
+            eq6(cargoLoads.destination, destName)
+          )
+        );
+      } else {
+        conditions.push(eq6(cargoLoads.destinationId, input.destinationId));
+      }
     }
     if (input.startDate) {
       conditions.push(sql2`${cargoLoads.date} >= ${input.startDate}`);
@@ -10000,6 +10020,38 @@ async function runAutoMigrations() {
         /*sql*/
         `ALTER TABLE fuel_invoices ADD COLUMN liters_used varchar(20) DEFAULT '0'`
       );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_vehicle_id_equipment_id_fk`
+      );
+      console.log("[AutoMigration] Dropped FK cargo_loads_vehicle_id_equipment_id_fk");
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_driver_collaborator_id_collaborators_id_fk`
+      );
+      console.log("[AutoMigration] Dropped FK cargo_loads_driver_collaborator_id_collaborators_id_fk");
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_client_id_clients_id_fk`
+      );
+      console.log("[AutoMigration] Dropped FK cargo_loads_client_id_clients_id_fk");
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_registered_by_users_id_fk`
+      );
+      console.log("[AutoMigration] Dropped FK cargo_loads_registered_by_users_id_fk");
     } catch (e) {
     }
     console.log("[AutoMigration] Tables verified/created successfully");

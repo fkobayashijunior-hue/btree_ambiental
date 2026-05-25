@@ -297,6 +297,26 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE fuel_invoices ADD COLUMN liters_used varchar(20) DEFAULT '0'`);
     } catch(e) { /* column already exists */ }
 
+    // Drop FK constraints on cargo_loads that reference wrong/empty tables
+    // vehicle_id should NOT reference equipment (user uses trucks table)
+    // driver_collaborator_id should NOT reference collaborators (user uses separate driver system)
+    try {
+      await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_vehicle_id_equipment_id_fk`);
+      console.log('[AutoMigration] Dropped FK cargo_loads_vehicle_id_equipment_id_fk');
+    } catch(e) { /* constraint already dropped or doesn't exist */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_driver_collaborator_id_collaborators_id_fk`);
+      console.log('[AutoMigration] Dropped FK cargo_loads_driver_collaborator_id_collaborators_id_fk');
+    } catch(e) { /* constraint already dropped or doesn't exist */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_client_id_clients_id_fk`);
+      console.log('[AutoMigration] Dropped FK cargo_loads_client_id_clients_id_fk');
+    } catch(e) { /* constraint already dropped or doesn't exist */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_registered_by_users_id_fk`);
+      console.log('[AutoMigration] Dropped FK cargo_loads_registered_by_users_id_fk');
+    } catch(e) { /* constraint already dropped or doesn't exist */ }
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);
