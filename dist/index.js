@@ -339,7 +339,8 @@ var init_schema = __esm({
       paymentReceiptUrl: text("payment_receipt_url"),
       paymentStatus: mysqlEnum("payment_status", ["sem_boleto", "a_pagar", "pago"]).default("sem_boleto"),
       paidAt: timestamp("paid_at", { mode: "string" }),
-      humidity: varchar({ length: 20 })
+      humidity: varchar({ length: 20 }),
+      deliveryDate: timestamp("delivery_date", { mode: "string" })
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -2586,6 +2587,7 @@ var cargoLoadsRouter = router({
       paymentStatus: cargoLoads.paymentStatus,
       paidAt: cargoLoads.paidAt,
       humidity: cargoLoads.humidity,
+      deliveryDate: cargoLoads.deliveryDate,
       // Joins
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
@@ -2665,6 +2667,7 @@ var cargoLoadsRouter = router({
       paymentStatus: cargoLoads.paymentStatus,
       paidAt: cargoLoads.paidAt,
       humidity: cargoLoads.humidity,
+      deliveryDate: cargoLoads.deliveryDate,
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
       vehicleNameJoined: equipment.name,
@@ -2744,7 +2747,8 @@ var cargoLoadsRouter = router({
     notes: z6.string().optional(),
     status: z6.enum(["pendente", "entregue", "cancelado"]).optional(),
     workLocationId: z6.number().optional(),
-    humidity: z6.string().optional()
+    humidity: z6.string().optional(),
+    deliveryDate: z6.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2778,7 +2782,9 @@ var cargoLoadsRouter = router({
     await db.insert(cargoLoads).values({
       ...input,
       photosJson: finalPhotosJson || null,
+      volumeM3: input.volumeM3 ? input.volumeM3.replace(",", ".") : input.volumeM3,
       date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
+      deliveryDate: input.deliveryDate ? new Date(input.deliveryDate).toISOString().slice(0, 19).replace("T", " ") : null,
       status: input.status || "pendente",
       trackingStatus: "aguardando",
       registeredBy: ctx.user.id,
@@ -2837,6 +2843,7 @@ var cargoLoadsRouter = router({
     weightInKg: z6.string().optional(),
     workLocationId: z6.number().optional(),
     humidity: z6.string().optional(),
+    deliveryDate: z6.string().optional(),
     invoiceUrl: z6.string().optional(),
     boletoUrl: z6.string().optional(),
     boletoAmount: z6.string().optional(),
@@ -2860,11 +2867,15 @@ var cargoLoadsRouter = router({
         });
       }
     }
-    const { id, date, ...rest } = input;
+    const { id, date, deliveryDate, ...rest } = input;
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = { ...rest, updatedAt: now };
     if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
+    if (deliveryDate !== void 0) updateData.deliveryDate = deliveryDate ? new Date(deliveryDate).toISOString().slice(0, 19).replace("T", " ") : null;
     if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
+    if (updateData.volumeM3 && typeof updateData.volumeM3 === "string") {
+      updateData.volumeM3 = updateData.volumeM3.replace(",", ".");
+    }
     if (rest.photosJson) {
       try {
         const photos = JSON.parse(rest.photosJson);
