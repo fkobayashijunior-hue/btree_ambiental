@@ -2194,7 +2194,7 @@ export default function CargoControl() {
               <div className="flex flex-wrap gap-2">
                 {pendingPhotos.map((p, i) => (
                   <div key={i} className="relative w-20 h-20">
-                    <img src={p} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border border-gray-200" />
+                    <img src={p} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border border-gray-200 cursor-pointer" onClick={() => window.open(p, '_blank')} />
                     <button type="button" onClick={() => setPendingPhotos(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">×</button>
                   </div>
                 ))}
@@ -2347,7 +2347,12 @@ export default function CargoControl() {
                       <p className="text-sm font-semibold text-gray-700 mb-2">Fotos da Carga ({photos.length})</p>
                       <div className="flex flex-wrap gap-2">
                         {photos.map((p, i) => (
-                          <img key={i} src={p} alt={`Foto ${i + 1}`} className="w-24 h-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90" onClick={() => window.open(p, "_blank")} />
+                          <div key={i} className="relative group cursor-pointer" onClick={() => window.open(p, '_blank')}>
+                            <img src={p} alt={`Foto ${i + 1}`} className="w-32 h-32 object-cover rounded-lg border border-gray-200 group-hover:opacity-80 transition-opacity" />
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
+                              <ExternalLink className="h-6 w-6 text-white drop-shadow-lg" />
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>

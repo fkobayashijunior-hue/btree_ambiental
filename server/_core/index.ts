@@ -316,6 +316,23 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_registered_by_users_id_fk`);
       console.log('[AutoMigration] Dropped FK cargo_loads_registered_by_users_id_fk');
     } catch(e) { /* constraint already dropped or doesn't exist */ }
+    try {
+      await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY cargo_loads_destination_id_cargo_destinations_id_fk`);
+      console.log('[AutoMigration] Dropped FK cargo_loads_destination_id_cargo_destinations_id_fk');
+    } catch(e) { /* constraint already dropped or doesn't exist */ }
+    // Drop ALL remaining FK constraints on cargo_loads to prevent any future issues
+    try {
+      const [fks]: any = await db.execute(/*sql*/`
+        SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cargo_loads' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+      `);
+      for (const fk of fks) {
+        try {
+          await db.execute(/*sql*/`ALTER TABLE cargo_loads DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+          console.log('[AutoMigration] Dropped remaining FK:', fk.CONSTRAINT_NAME);
+        } catch(e) { /* already dropped */ }
+      }
+    } catch(e) { console.log('[AutoMigration] Could not query remaining FKs:', e); }
 
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
