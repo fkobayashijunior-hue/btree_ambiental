@@ -1263,10 +1263,48 @@ __export(db_exports, {
 });
 import { eq, and, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
+function getDbConnectionConfig() {
+  const dbHost = process.env.DB_HOST;
+  const dbUser = process.env.DB_USER;
+  const dbPassword = process.env.DB_PASSWORD;
+  const dbName = process.env.DB_NAME;
+  const dbPort = process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306;
+  if (dbHost && dbUser && dbPassword && dbName) {
+    console.log(`[Database] Using individual DB params: ${dbUser}@${dbHost}:${dbPort}/${dbName}`);
+    return {
+      host: dbHost,
+      port: dbPort,
+      user: dbUser,
+      password: dbPassword,
+      database: dbName
+    };
+  }
+  if (process.env.DATABASE_URL) {
+    console.log("[Database] Using DATABASE_URL connection string");
+    return process.env.DATABASE_URL;
+  }
+  return null;
+}
 async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db) {
+    const config = getDbConnectionConfig();
+    if (!config) {
+      console.warn("[Database] No database configuration available");
+      return null;
+    }
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      if (typeof config === "string") {
+        _db = drizzle(config);
+      } else {
+        const pool = mysql.createPool({
+          ...config,
+          waitForConnections: true,
+          connectionLimit: 10,
+          queueLimit: 0
+        });
+        _db = drizzle(pool);
+      }
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -1523,9 +1561,9 @@ __export(notifications_exports, {
   notifyUsers: () => notifyUsers
 });
 import { z as z5 } from "zod";
-import mysql from "mysql2/promise";
+import mysql2 from "mysql2/promise";
 async function getConnection() {
-  return mysql.createConnection(process.env.DATABASE_URL);
+  return mysql2.createConnection(process.env.DATABASE_URL);
 }
 async function createNotification(params) {
   const conn = await getConnection();
@@ -2491,9 +2529,9 @@ init_cloudinary();
 import { z as z6 } from "zod";
 import { TRPCError as TRPCError4 } from "@trpc/server";
 import { eq as eq6, desc as desc3, and as and3, sql as sql2, ne, or as or3 } from "drizzle-orm";
-import mysql2 from "mysql2/promise";
+import mysql3 from "mysql2/promise";
 async function getDirectConnection() {
-  const conn = await mysql2.createConnection(process.env.DATABASE_URL);
+  const conn = await mysql3.createConnection(process.env.DATABASE_URL);
   return conn;
 }
 var cargoLoadsRouter = router({
@@ -10334,8 +10372,14 @@ function scheduleFuelInvoiceDueCheck() {
     const msUntilNext = next.getTime() - now.getTime();
     setTimeout(async () => {
       try {
-        const mysql3 = await import("mysql2/promise");
-        const conn = await mysql3.createConnection(process.env.DATABASE_URL);
+        const mysql4 = await import("mysql2/promise");
+        const conn = await mysql4.createConnection({
+          host: process.env.DB_HOST || "localhost",
+          port: parseInt(process.env.DB_PORT || "3306"),
+          user: process.env.DB_USER || "",
+          password: process.env.DB_PASSWORD || "",
+          database: process.env.DB_NAME || ""
+        });
         const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
         const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1e3).toISOString().slice(0, 10);
         const [rows] = await conn.execute(
@@ -10426,8 +10470,14 @@ function scheduleWeeklyClosingCron() {
     setTimeout(async () => {
       try {
         console.log("[CronJob-WeeklyClosing] Iniciando fechamento semanal autom\xE1tico...");
-        const mysql3 = await import("mysql2/promise");
-        const conn = await mysql3.createConnection(process.env.DATABASE_URL);
+        const mysql4 = await import("mysql2/promise");
+        const conn = await mysql4.createConnection({
+          host: process.env.DB_HOST || "localhost",
+          port: parseInt(process.env.DB_PORT || "3306"),
+          user: process.env.DB_USER || "",
+          password: process.env.DB_PASSWORD || "",
+          database: process.env.DB_NAME || ""
+        });
         const today = /* @__PURE__ */ new Date();
         const day = today.getDay();
         const diffToSaturday = day >= 6 ? 0 : -(day + 1);

@@ -585,7 +585,13 @@ function scheduleFuelInvoiceDueCheck() {
     setTimeout(async () => {
       try {
         const mysql = await import('mysql2/promise');
-        const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+        const conn = await mysql.createConnection({
+          host: process.env.DB_HOST || 'localhost',
+          port: parseInt(process.env.DB_PORT || '3306'),
+          user: process.env.DB_USER || '',
+          password: process.env.DB_PASSWORD || '',
+          database: process.env.DB_NAME || '',
+        });
 
         // Buscar boletos pendentes com vencimento nos próximos 3 dias ou já vencidos
         const today = new Date().toISOString().slice(0, 10);
@@ -687,7 +693,13 @@ function scheduleWeeklyClosingCron() {
       try {
         console.log('[CronJob-WeeklyClosing] Iniciando fechamento semanal automático...');
         const mysql = await import('mysql2/promise');
-        const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+        const conn = await mysql.createConnection({
+          host: process.env.DB_HOST || 'localhost',
+          port: parseInt(process.env.DB_PORT || '3306'),
+          user: process.env.DB_USER || '',
+          password: process.env.DB_PASSWORD || '',
+          database: process.env.DB_NAME || '',
+        });
 
         // Calcular semana atual (sábado a sexta-feira)
         const today = new Date();

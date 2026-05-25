@@ -1,15 +1,61 @@
 import { eq, and, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
 import { InsertUser, users, passwordResetTokens } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+// Build a connection string or config that properly handles special chars in password
+function getDbConnectionConfig() {
+  // Prefer individual DB params (avoids URL-encoding issues with @ in password)
+  const dbHost = process.env.DB_HOST;
+  const dbUser = process.env.DB_USER;
+  const dbPassword = process.env.DB_PASSWORD;
+  const dbName = process.env.DB_NAME;
+  const dbPort = process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306;
+
+  if (dbHost && dbUser && dbPassword && dbName) {
+    console.log(`[Database] Using individual DB params: ${dbUser}@${dbHost}:${dbPort}/${dbName}`);
+    return {
+      host: dbHost,
+      port: dbPort,
+      user: dbUser,
+      password: dbPassword,
+      database: dbName,
+    };
+  }
+
+  // Fallback to DATABASE_URL
+  if (process.env.DATABASE_URL) {
+    console.log('[Database] Using DATABASE_URL connection string');
+    return process.env.DATABASE_URL;
+  }
+
+  return null;
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db) {
+    const config = getDbConnectionConfig();
+    if (!config) {
+      console.warn('[Database] No database configuration available');
+      return null;
+    }
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      if (typeof config === 'string') {
+        _db = drizzle(config);
+      } else {
+        // Use mysql2 pool with explicit connection params
+        const pool = mysql.createPool({
+          ...config,
+          waitForConnections: true,
+          connectionLimit: 10,
+          queueLimit: 0,
+        });
+        _db = drizzle(pool);
+      }
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
