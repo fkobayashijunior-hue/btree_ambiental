@@ -413,25 +413,34 @@ export const cargoLoadsRouter = router({
 
       // Sanitize all numeric string fields: replace comma with dot for MySQL
       const sanitizeNum = (v: string | undefined) => v ? v.replace(',', '.') : v;
-      await db.insert(cargoLoads).values({
-        ...input,
-        photosJson: finalPhotosJson || null,
-        heightM: sanitizeNum(input.heightM),
-        widthM: sanitizeNum(input.widthM),
-        lengthM: sanitizeNum(input.lengthM),
-        volumeM3: sanitizeNum(input.volumeM3),
-        weightKg: sanitizeNum(input.weightKg),
-        weightNetKg: sanitizeNum(input.weightNetKg),
-        weightOutKg: sanitizeNum(input.weightOutKg),
-        weightInKg: sanitizeNum(input.weightInKg),
-        humidity: sanitizeNum(input.humidity),
-        date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
-        deliveryDate: input.deliveryDate ? new Date(input.deliveryDate).toISOString().slice(0, 19).replace('T', ' ') : null,
-        status: input.status || "pendente",
-        trackingStatus: "aguardando",
-        registeredBy: ctx.user.id,
-        workLocationId: input.workLocationId || null,
-      });
+      try {
+        await db.insert(cargoLoads).values({
+          ...input,
+          photosJson: finalPhotosJson || null,
+          heightM: sanitizeNum(input.heightM),
+          widthM: sanitizeNum(input.widthM),
+          lengthM: sanitizeNum(input.lengthM),
+          volumeM3: sanitizeNum(input.volumeM3),
+          weightKg: sanitizeNum(input.weightKg),
+          weightNetKg: sanitizeNum(input.weightNetKg),
+          weightOutKg: sanitizeNum(input.weightOutKg),
+          weightInKg: sanitizeNum(input.weightInKg),
+          humidity: sanitizeNum(input.humidity),
+          date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
+          deliveryDate: input.deliveryDate ? new Date(input.deliveryDate).toISOString().slice(0, 19).replace('T', ' ') : null,
+          status: input.status || "pendente",
+          trackingStatus: "aguardando",
+          registeredBy: ctx.user.id,
+          workLocationId: input.workLocationId || null,
+        });
+      } catch (dbErr: any) {
+        console.error('[cargoLoads.create] DB ERROR:', dbErr.code, dbErr.errno, dbErr.sqlState, dbErr.sqlMessage || dbErr.message);
+        console.error('[cargoLoads.create] Input keys:', Object.keys(input));
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Erro DB [${dbErr.code || 'UNKNOWN'}]: ${dbErr.sqlMessage || dbErr.message}`,
+        });
+      }
 
       // Notificação interna para Fábio (ADM/Comercial) - nova carga
       try {
@@ -553,8 +562,24 @@ export const cargoLoadsRouter = router({
         } catch { /* keep original */ }
       }
 
-      await db.update(cargoLoads).set(updateData).where(eq(cargoLoads.id, id));
-
+      // Remove undefined values from updateData to prevent Drizzle errors
+      for (const key of Object.keys(updateData)) {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      }
+      // Debug: log the updateData keys and values for troubleshooting
+      console.log('[cargoLoads.update] id:', id, 'keys:', Object.keys(updateData), 'destinationId:', updateData.destinationId);
+      try {
+        await db.update(cargoLoads).set(updateData).where(eq(cargoLoads.id, id));
+      } catch (dbErr: any) {
+        console.error('[cargoLoads.update] DB ERROR:', dbErr.code, dbErr.errno, dbErr.sqlState, dbErr.sqlMessage || dbErr.message);
+        console.error('[cargoLoads.update] Full updateData:', JSON.stringify(updateData));
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Erro DB [${dbErr.code || 'UNKNOWN'}]: ${dbErr.sqlMessage || dbErr.message}`,
+        });
+      }
       // Auto-generate financial entries when status changes to 'entregue'
       if (input.status === 'entregue') {
         try {

@@ -2782,25 +2782,34 @@ var cargoLoadsRouter = router({
       }
     }
     const sanitizeNum = (v) => v ? v.replace(",", ".") : v;
-    await db.insert(cargoLoads).values({
-      ...input,
-      photosJson: finalPhotosJson || null,
-      heightM: sanitizeNum(input.heightM),
-      widthM: sanitizeNum(input.widthM),
-      lengthM: sanitizeNum(input.lengthM),
-      volumeM3: sanitizeNum(input.volumeM3),
-      weightKg: sanitizeNum(input.weightKg),
-      weightNetKg: sanitizeNum(input.weightNetKg),
-      weightOutKg: sanitizeNum(input.weightOutKg),
-      weightInKg: sanitizeNum(input.weightInKg),
-      humidity: sanitizeNum(input.humidity),
-      date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
-      deliveryDate: input.deliveryDate ? new Date(input.deliveryDate).toISOString().slice(0, 19).replace("T", " ") : null,
-      status: input.status || "pendente",
-      trackingStatus: "aguardando",
-      registeredBy: ctx.user.id,
-      workLocationId: input.workLocationId || null
-    });
+    try {
+      await db.insert(cargoLoads).values({
+        ...input,
+        photosJson: finalPhotosJson || null,
+        heightM: sanitizeNum(input.heightM),
+        widthM: sanitizeNum(input.widthM),
+        lengthM: sanitizeNum(input.lengthM),
+        volumeM3: sanitizeNum(input.volumeM3),
+        weightKg: sanitizeNum(input.weightKg),
+        weightNetKg: sanitizeNum(input.weightNetKg),
+        weightOutKg: sanitizeNum(input.weightOutKg),
+        weightInKg: sanitizeNum(input.weightInKg),
+        humidity: sanitizeNum(input.humidity),
+        date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
+        deliveryDate: input.deliveryDate ? new Date(input.deliveryDate).toISOString().slice(0, 19).replace("T", " ") : null,
+        status: input.status || "pendente",
+        trackingStatus: "aguardando",
+        registeredBy: ctx.user.id,
+        workLocationId: input.workLocationId || null
+      });
+    } catch (dbErr) {
+      console.error("[cargoLoads.create] DB ERROR:", dbErr.code, dbErr.errno, dbErr.sqlState, dbErr.sqlMessage || dbErr.message);
+      console.error("[cargoLoads.create] Input keys:", Object.keys(input));
+      throw new TRPCError4({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Erro DB [${dbErr.code || "UNKNOWN"}]: ${dbErr.sqlMessage || dbErr.message}`
+      });
+    }
     try {
       const { notifyAdmComercial: notifyAdmComercial2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
       const dateFmt = new Date(input.date).toLocaleDateString("pt-BR");
@@ -2906,7 +2915,22 @@ var cargoLoadsRouter = router({
       } catch {
       }
     }
-    await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, id));
+    for (const key of Object.keys(updateData)) {
+      if (updateData[key] === void 0) {
+        delete updateData[key];
+      }
+    }
+    console.log("[cargoLoads.update] id:", id, "keys:", Object.keys(updateData), "destinationId:", updateData.destinationId);
+    try {
+      await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, id));
+    } catch (dbErr) {
+      console.error("[cargoLoads.update] DB ERROR:", dbErr.code, dbErr.errno, dbErr.sqlState, dbErr.sqlMessage || dbErr.message);
+      console.error("[cargoLoads.update] Full updateData:", JSON.stringify(updateData));
+      throw new TRPCError4({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Erro DB [${dbErr.code || "UNKNOWN"}]: ${dbErr.sqlMessage || dbErr.message}`
+      });
+    }
     if (input.status === "entregue") {
       try {
         const { generateFinancialEntriesForCargo: generateFinancialEntriesForCargo2 } = await Promise.resolve().then(() => (init_autoFinancial(), autoFinancial_exports));

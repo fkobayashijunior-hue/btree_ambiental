@@ -1483,6 +1483,15 @@ export default function CargoControl() {
                 <span className="flex items-center gap-1 font-semibold text-emerald-700">
                   <Package className="h-3 w-3" />{cargo.volumeM3 ? formatBR(parseFloat(cargo.volumeM3), 3) : '0'} m³{(cargo as any).weightNetKg ? ` · ${formatBR(parseFloat((cargo as any).weightNetKg), 0)} kg (líq.)` : cargo.weightKg ? ` · ${formatBR(parseFloat(cargo.weightKg), 0)} kg` : ""}
                 </span>
+                {((cargo as any).weightOutKg || (cargo as any).weightInKg) && (
+                  <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">
+                    <Weight className="h-2.5 w-2.5" />
+                    {(cargo as any).weightOutKg ? `Saída: ${formatBR(parseFloat((cargo as any).weightOutKg), 0)}` : ''}
+                    {(cargo as any).weightOutKg && (cargo as any).weightInKg ? ' | ' : ''}
+                    {(cargo as any).weightInKg ? `Entrada: ${formatBR(parseFloat((cargo as any).weightInKg), 0)}` : ''}
+                    {(cargo as any).weightNetKg ? ` | Líq: ${formatBR(parseFloat((cargo as any).weightNetKg), 0)}` : ''}
+                  </span>
+                )}
                 {(() => {
                   const weightNet = parseFloat((cargo as any).weightNetKg || (cargo as any).weightOutKg || '0');
                   const client = clientsList.find(c => c.id === cargo.clientId);
