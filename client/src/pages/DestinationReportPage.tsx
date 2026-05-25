@@ -44,6 +44,7 @@ export default function DestinationReportPage() {
       startDate: startDate || undefined,
       endDate: endDate || undefined,
       receivedFilter,
+      statusFilter: 'all',
     },
     { enabled: selectedDestId > 0 }
   );

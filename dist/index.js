@@ -3533,11 +3533,15 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     buyerId: z6.number().optional(),
     startDate: z6.string().optional(),
     endDate: z6.string().optional(),
-    receivedFilter: z6.enum(["all", "received", "pending"]).optional()
+    receivedFilter: z6.enum(["all", "received", "pending"]).optional(),
+    statusFilter: z6.enum(["all", "entregue", "pendente"]).optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const conditions = [eq6(cargoLoads.status, "entregue")];
+    const conditions = [];
+    if (input.statusFilter && input.statusFilter !== "all") {
+      conditions.push(eq6(cargoLoads.status, input.statusFilter));
+    }
     if (input.destinationId) {
       conditions.push(eq6(cargoLoads.destinationId, input.destinationId));
     }
@@ -3570,7 +3574,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       receivedByBuyer: cargoLoads.receivedByBuyer,
       receivedAt: cargoLoads.receivedAt,
       status: cargoLoads.status
-    }).from(cargoLoads).where(and3(...conditions)).orderBy(desc3(cargoLoads.date));
+    }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(desc3(cargoLoads.date));
     return results;
   })
 });

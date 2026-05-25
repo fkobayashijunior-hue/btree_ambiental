@@ -1329,11 +1329,17 @@ export const cargoLoadsRouter = router({
       startDate: z.string().optional(),
       endDate: z.string().optional(),
       receivedFilter: z.enum(['all', 'received', 'pending']).optional(),
+      statusFilter: z.enum(['all', 'entregue', 'pendente']).optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      const conditions: any[] = [eq(cargoLoads.status, 'entregue')];
+      const conditions: any[] = [];
+      // Status filter - default to 'all' (show all statuses)
+      if (input.statusFilter && input.statusFilter !== 'all') {
+        conditions.push(eq(cargoLoads.status, input.statusFilter));
+      }
+      // Destination filter - handle both regular destinations and buyers (offset 10000)
       if (input.destinationId) {
         conditions.push(eq(cargoLoads.destinationId, input.destinationId));
       }
@@ -1367,7 +1373,7 @@ export const cargoLoadsRouter = router({
         receivedAt: cargoLoads.receivedAt,
         status: cargoLoads.status,
       }).from(cargoLoads)
-        .where(and(...conditions))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(cargoLoads.date));
       return results;
     }),
