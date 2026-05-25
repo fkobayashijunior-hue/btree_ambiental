@@ -414,6 +414,7 @@ export const cargoLoadsRouter = router({
       await db.insert(cargoLoads).values({
         ...input,
         photosJson: finalPhotosJson || null,
+        volumeM3: input.volumeM3 ? input.volumeM3.replace(',', '.') : input.volumeM3,
         date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         deliveryDate: input.deliveryDate ? new Date(input.deliveryDate).toISOString().slice(0, 19).replace('T', ' ') : null,
         status: input.status || "pendente",
@@ -517,6 +518,10 @@ export const cargoLoadsRouter = router({
       if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
       if (deliveryDate !== undefined) updateData.deliveryDate = deliveryDate ? new Date(deliveryDate).toISOString().slice(0, 19).replace('T', ' ') : null;
       if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
+      // Sanitize volumeM3: replace comma with dot for MySQL compatibility
+      if (updateData.volumeM3 && typeof updateData.volumeM3 === 'string') {
+        updateData.volumeM3 = (updateData.volumeM3 as string).replace(',', '.');
+      }
 
       // Upload base64 photos to Cloudinary before storing
       if (rest.photosJson) {
