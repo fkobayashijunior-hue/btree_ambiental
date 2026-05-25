@@ -213,11 +213,40 @@ async function runAutoMigrations() {
     try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN state varchar(2)`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN location_type enum('simflor','astorga','postos') NOT NULL DEFAULT 'simflor'`); } catch(e) {}
 
-    // Add humidity column to cargo_loads if not exists
-    try {
-      await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN humidity varchar(20)`);
-      console.log('[AutoMigration] Added humidity column to cargo_loads');
-    } catch(e) { /* column already exists */ }
+    // Add missing columns to cargo_loads if not exists
+    const cargoColsToAdd = [
+      { col: 'humidity', def: 'varchar(20)' },
+      { col: 'delivery_date', def: 'timestamp NULL' },
+      { col: 'received_by_buyer', def: 'varchar(255)' },
+      { col: 'received_at', def: 'timestamp NULL' },
+      { col: 'weight_net_kg', def: 'varchar(20)' },
+      { col: 'weight_in_kg', def: 'varchar(20)' },
+      { col: 'weight_out_kg', def: 'varchar(20)' },
+      { col: 'weight_in_photo_url', def: 'text' },
+      { col: 'weight_out_photo_url', def: 'text' },
+      { col: 'tracking_status', def: "varchar(50) DEFAULT 'em_carregamento'" },
+      { col: 'tracking_notes', def: 'text' },
+      { col: 'tracking_updated_at', def: 'timestamp NULL' },
+      { col: 'photos_json', def: 'text' },
+      { col: 'boleto_amount', def: 'varchar(20)' },
+      { col: 'boleto_due_date', def: 'timestamp NULL' },
+      { col: 'boleto_url', def: 'text' },
+      { col: 'paid_at', def: 'timestamp NULL' },
+      { col: 'payment_status', def: "varchar(30) DEFAULT 'pendente'" },
+      { col: 'payment_receipt_url', def: 'text' },
+      { col: 'invoice_url', def: 'text' },
+      { col: 'final_height_m', def: 'varchar(20)' },
+      { col: 'final_width_m', def: 'varchar(20)' },
+      { col: 'final_length_m', def: 'varchar(20)' },
+      { col: 'final_volume_m3', def: 'varchar(20)' },
+      { col: 'images_urls', def: 'text' },
+    ];
+    for (const { col, def } of cargoColsToAdd) {
+      try {
+        await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN ${col} ${def}`);
+        console.log(`[AutoMigration] Added ${col} column to cargo_loads`);
+      } catch(e) { /* column already exists */ }
+    }
     
     // Add cargo_load_id and auto_generated columns to financial_entries
     try {
