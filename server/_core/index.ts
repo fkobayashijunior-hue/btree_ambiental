@@ -1,4 +1,18 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import path from "path";
+
+// Force override system env vars with .env file values
+// This is needed because Hostinger/LiteSpeed sets env vars at process level
+// and dotenv/config doesn't override existing vars by default
+try {
+  const envPath = path.resolve(process.cwd(), '.env');
+  dotenv.config({ path: envPath, override: true });
+  console.log('[ENV] Loaded .env with override from:', envPath);
+} catch(e) {
+  console.log('[ENV] No .env override:', e);
+}
+
 import express from "express";
 import { createServer } from "http";
 import net from "net";

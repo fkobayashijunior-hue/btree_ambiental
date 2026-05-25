@@ -1764,7 +1764,8 @@ var init_autoFinancial = __esm({
 });
 
 // server/_core/index.ts
-import "dotenv/config";
+import dotenv from "dotenv";
+import path2 from "path";
 import express2 from "express";
 import { createServer } from "http";
 import cors from "cors";
@@ -5517,11 +5518,11 @@ function traccarAuth() {
     Accept: "application/json"
   };
 }
-async function traccarFetch(path2, options) {
+async function traccarFetch(path3, options) {
   if (!TRACCAR_URL) {
     throw new Error("Traccar nao configurado. Configure TRACCAR_URL e TRACCAR_TOKEN.");
   }
-  const url = `${TRACCAR_URL}/api${path2}`;
+  const url = `${TRACCAR_URL}/api${path3}`;
   const res = await fetch(url, {
     ...options,
     headers: { ...traccarAuth(), ...options?.headers || {} }
@@ -9681,6 +9682,13 @@ function registerStorageProxy(app) {
 }
 
 // server/_core/index.ts
+try {
+  const envPath = path2.resolve(process.cwd(), ".env");
+  dotenv.config({ path: envPath, override: true });
+  console.log("[ENV] Loaded .env with override from:", envPath);
+} catch (e) {
+  console.log("[ENV] No .env override:", e);
+}
 async function runAutoMigrations() {
   try {
     const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
