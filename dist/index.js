@@ -2781,10 +2781,19 @@ var cargoLoadsRouter = router({
       } catch {
       }
     }
+    const sanitizeNum = (v) => v ? v.replace(",", ".") : v;
     await db.insert(cargoLoads).values({
       ...input,
       photosJson: finalPhotosJson || null,
-      volumeM3: input.volumeM3 ? input.volumeM3.replace(",", ".") : input.volumeM3,
+      heightM: sanitizeNum(input.heightM),
+      widthM: sanitizeNum(input.widthM),
+      lengthM: sanitizeNum(input.lengthM),
+      volumeM3: sanitizeNum(input.volumeM3),
+      weightKg: sanitizeNum(input.weightKg),
+      weightNetKg: sanitizeNum(input.weightNetKg),
+      weightOutKg: sanitizeNum(input.weightOutKg),
+      weightInKg: sanitizeNum(input.weightInKg),
+      humidity: sanitizeNum(input.humidity),
       date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       deliveryDate: input.deliveryDate ? new Date(input.deliveryDate).toISOString().slice(0, 19).replace("T", " ") : null,
       status: input.status || "pendente",
@@ -2875,8 +2884,11 @@ var cargoLoadsRouter = router({
     if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
     if (deliveryDate !== void 0) updateData.deliveryDate = deliveryDate ? new Date(deliveryDate).toISOString().slice(0, 19).replace("T", " ") : null;
     if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
-    if (updateData.volumeM3 && typeof updateData.volumeM3 === "string") {
-      updateData.volumeM3 = updateData.volumeM3.replace(",", ".");
+    const numericFields = ["heightM", "widthM", "lengthM", "volumeM3", "weightKg", "weightNetKg", "weightOutKg", "weightInKg", "humidity", "finalHeightM", "finalWidthM", "finalLengthM", "finalVolumeM3", "boletoAmount"];
+    for (const field of numericFields) {
+      if (updateData[field] && typeof updateData[field] === "string") {
+        updateData[field] = updateData[field].replace(",", ".");
+      }
     }
     if (rest.photosJson) {
       try {
