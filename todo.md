@@ -1780,7 +1780,7 @@
 - [ ] Registrar rota no App.tsx e navegação
 
 ## 🐛 FIX: PDF Relatório por Destino + Cálculo Valores a Receber (26/05/2026)
-- [ ] Fix: Status no PDF mostra "Pendente" quando carga está "Finalizado" - clarificar que "Pendente" é status de PAGAMENTO, não da carga
-- [ ] Criar dois estilos de PDF: (1) Resumido (só texto, todas informações) e (2) Completo (com imagens para enviar ao cliente)
-- [ ] Implementar cálculo de valores a receber do cliente (preço por unidade × peso/volume entregue)
-- [ ] Exibir totais financeiros no relatório (valor total a receber, valor recebido, saldo)
+- [x] Fix: Status no PDF mostra "Pendente" quando carga está "Finalizado" - clarificar que "Pendente" é status de PAGAMENTO, não da carga
+- [x] Criar dois estilos de PDF: (1) Resumido (só texto, todas informações) e (2) Completo (com imagens para enviar ao cliente)
+- [x] Implementar cálculo de valores a receber do cliente (preço por unidade × peso/volume entregue)
+- [x] Exibir totais financeiros no relatório (valor total a receber, valor recebido, saldo)

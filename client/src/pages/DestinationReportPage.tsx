@@ -9,6 +9,70 @@ import { FileBarChart, Download, CheckCircle2, Clock, Package, Weight, Image as 
 import { toast } from "sonner";
 import { formatBR, formatBRL } from "@/lib/formatBR";
 
+const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
+
+const PDF_DEST_STYLES = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
+  .page { min-height: 100vh; display: flex; flex-direction: column; }
+  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
+  .pdf-header img { height: 52px; filter: brightness(0) invert(1); }
+  .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
+  .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
+  .pdf-subheader { background: #f0fdf4; padding: 10px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .pdf-content { padding: 20px 32px; flex: 1; }
+  .pdf-footer { padding: 12px 32px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+  .pdf-footer-left { display: flex; align-items: center; gap: 10px; }
+  .pdf-footer-left img { height: 28px; }
+  .pdf-footer-text { font-size: 10px; color: #555; }
+  .pdf-footer-text strong { color: #0d4f2e; }
+  .pdf-footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
+  .pdf-footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .pdf-footer-right img { width: 60px; height: 60px; }
+  .pdf-footer-right span { font-size: 9px; color: #555; }
+  .stats { display: flex; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+  .stat { background: #f0fdf4; padding: 8px 16px; border-radius: 8px; font-size: 11px; border: 1px solid #bbf7d0; }
+  .stat strong { color: #0d4f2e; font-size: 15px; display: block; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th { background: #0d4f2e; color: white; padding: 8px 6px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+  td { padding: 7px 6px; border-bottom: 1px solid #e5e7eb; font-size: 11px; }
+  tr:nth-child(even) { background: #f9fafb; }
+  tfoot td { background: #f0fdf4; font-weight: bold; padding: 8px 6px; font-size: 11px; color: #0d4f2e; border-top: 2px solid #0d4f2e; }
+  .badge-finalizado { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+  .badge-transito { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+  .financial { margin-top: 20px; padding: 16px 20px; background: #f0fdf4; border: 2px solid #0d4f2e; border-radius: 8px; }
+  .financial h3 { color: #0d4f2e; font-size: 14px; margin-bottom: 10px; }
+  .financial table { margin-top: 0; }
+  .financial td { border: none; padding: 4px 0; font-size: 12px; }
+  .financial .total-row td { border-top: 2px solid #0d4f2e; padding-top: 8px; font-size: 15px; font-weight: bold; color: #0d4f2e; }
+  .card { page-break-inside: avoid; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #fff; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .card-title { font-size: 15px; font-weight: bold; color: #0d4f2e; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 11px; }
+  .card-label { color: #6b7280; }
+  .card-value { font-weight: 500; }
+  .photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .photos img { width: 160px; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+`;
+
+const PDF_DEST_FOOTER = `
+<div class="pdf-footer">
+  <div class="pdf-footer-left">
+    <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+    <div class="pdf-footer-text">
+      Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+      <a href="https://btreeambiental.com">btreeambiental.com</a>
+    </div>
+  </div>
+  <div class="pdf-footer-right">
+    <img src="${BTREE_QR}" alt="QR Code" />
+    <span>Acesse nosso site</span>
+  </div>
+</div>`;
+
 function safeDate(dateStr: string | null | undefined): Date {
   if (!dateStr) return new Date();
   const s = String(dateStr);
@@ -144,20 +208,21 @@ export default function DestinationReportPage() {
       </table>
     </div>` : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório - ${destName}</title>
-    <style>
-      body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-      th { background: #1a5c3a; color: white; padding: 8px 4px; text-align: left; font-size: 10px; text-transform: uppercase; }
-      h1 { color: #1a5c3a; margin-bottom: 4px; font-size: 18px; }
-      .stats { display: flex; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
-      .stat { background: #f3f4f6; padding: 6px 12px; border-radius: 6px; font-size: 11px; }
-      .stat strong { color: #1a5c3a; }
-      tfoot td { background: #f3f4f6; font-weight: bold; padding: 8px 4px; font-size: 11px; }
-      @media print { body { padding: 10px; } }
-    </style></head><body>
-    <h1>📋 Relatório de Entregas — ${destName}</h1>
-    <p style="color:#666;font-size:11px;">Período: ${periodStr} | Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</p>
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório - ${destName}</title>
+    <style>${PDF_DEST_STYLES}</style></head><body>
+    <div class="page">
+    <div class="pdf-header">
+      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+      <div class="pdf-header-text">
+        <h1>Relatório de Entregas</h1>
+        <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+      </div>
+    </div>
+    <div class="pdf-subheader">
+      <span style="font-size:15px;font-weight:700;color:#0d4f2e;">📍 Destino: ${destName}</span>
+      <span style="font-size:12px;color:#6b7280;">Período: ${periodStr}</span>
+    </div>
+    <div class="pdf-content">
     <div class="stats">
       <div class="stat"><strong>${totalLoads}</strong> cargas</div>
       <div class="stat"><strong>${formatBR(totalWeight / 1000)} ton</strong> peso total</div>
@@ -171,17 +236,17 @@ export default function DestinationReportPage() {
       <tbody>${rows}</tbody>
       <tfoot>
         <tr>
-          <td colspan="6" style="text-align:left;">TOTAIS (${totalLoads} cargas)</td>
+          <td colspan="6">TOTAIS (${totalLoads} cargas)</td>
           <td style="text-align:right;">${formatBR(totalVolume, 3)} m³</td>
           <td style="text-align:right;">${formatBR(totalWeight / 1000)} ton</td>
           <td colspan="3"></td>
-          ${pricePerUnit > 0 ? `<td style="text-align:right;font-size:12px;color:#166534;">R$ ${formatBR(totalValue)}</td>` : ''}
+          ${pricePerUnit > 0 ? `<td style="text-align:right;">R$ ${formatBR(totalValue)}</td>` : ''}
         </tr>
       </tfoot>
     </table>
     ${financialSection}
-    <div style="margin-top:24px;text-align:center;color:#999;font-size:10px;">
-      BTREE Ambiental — Sistema de Gestão | btreeambiental.com
+    </div>
+    ${PDF_DEST_FOOTER}
     </div>
     </body></html>`;
 
@@ -262,17 +327,21 @@ export default function DestinationReportPage() {
       </table>
     </div>` : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório Completo - ${destName}</title>
-    <style>
-      body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; background: #f9fafb; }
-      h1 { color: #1a5c3a; margin-bottom: 4px; font-size: 20px; }
-      .stats { display: flex; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
-      .stat { background: white; padding: 8px 16px; border-radius: 8px; font-size: 12px; border: 1px solid #e5e7eb; }
-      .stat strong { color: #1a5c3a; }
-      @media print { body { padding: 10px; background: white; } }
-    </style></head><body>
-    <h1>📦 Relatório Completo de Entregas — ${destName}</h1>
-    <p style="color:#666;font-size:11px;">Período: ${periodStr} | Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</p>
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Completo - ${destName}</title>
+    <style>${PDF_DEST_STYLES}</style></head><body>
+    <div class="page">
+    <div class="pdf-header">
+      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+      <div class="pdf-header-text">
+        <h1>Relatório Completo de Entregas</h1>
+        <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+      </div>
+    </div>
+    <div class="pdf-subheader">
+      <span style="font-size:15px;font-weight:700;color:#0d4f2e;">📍 Destino: ${destName}</span>
+      <span style="font-size:12px;color:#6b7280;">Período: ${periodStr}</span>
+    </div>
+    <div class="pdf-content">
     <div class="stats">
       <div class="stat"><strong>${totalLoads}</strong> cargas</div>
       <div class="stat"><strong>${formatBR(totalWeight / 1000)} ton</strong> peso total</div>
@@ -281,8 +350,8 @@ export default function DestinationReportPage() {
     </div>
     <div style="margin-top:16px;">${cards}</div>
     ${financialSection}
-    <div style="margin-top:24px;text-align:center;color:#999;font-size:10px;">
-      BTREE Ambiental — Sistema de Gestão | btreeambiental.com
+    </div>
+    ${PDF_DEST_FOOTER}
     </div>
     </body></html>`;
 
