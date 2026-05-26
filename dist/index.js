@@ -3682,13 +3682,29 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       volumeM3: cargoLoads.volumeM3,
       weightKg: cargoLoads.weightKg,
       weightNetKg: cargoLoads.weightNetKg,
+      weightInKg: cargoLoads.weightInKg,
+      weightOutKg: cargoLoads.weightOutKg,
       woodType: cargoLoads.woodType,
       photosJson: cargoLoads.photosJson,
       receivedByBuyer: cargoLoads.receivedByBuyer,
       receivedAt: cargoLoads.receivedAt,
-      status: cargoLoads.status
+      status: cargoLoads.status,
+      paymentStatus: cargoLoads.paymentStatus,
+      trackingStatus: cargoLoads.trackingStatus,
+      heightM: cargoLoads.heightM,
+      widthM: cargoLoads.widthM,
+      lengthM: cargoLoads.lengthM
     }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(desc3(cargoLoads.date));
-    return results;
+    let buyerInfo = null;
+    if (input.destinationId && input.destinationId >= 1e4) {
+      const buyerRows = await db.select({
+        name: buyerClients.name,
+        pricePerUnit: buyerClients.pricePerUnit,
+        unit: buyerClients.unit
+      }).from(buyerClients).where(eq6(buyerClients.id, input.destinationId - 1e4)).limit(1);
+      if (buyerRows.length > 0) buyerInfo = buyerRows[0];
+    }
+    return { loads: results, buyerInfo };
   })
 });
 

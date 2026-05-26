@@ -1423,14 +1423,33 @@ export const cargoLoadsRouter = router({
         volumeM3: cargoLoads.volumeM3,
         weightKg: cargoLoads.weightKg,
         weightNetKg: cargoLoads.weightNetKg,
+        weightInKg: cargoLoads.weightInKg,
+        weightOutKg: cargoLoads.weightOutKg,
         woodType: cargoLoads.woodType,
         photosJson: cargoLoads.photosJson,
         receivedByBuyer: cargoLoads.receivedByBuyer,
         receivedAt: cargoLoads.receivedAt,
         status: cargoLoads.status,
+        paymentStatus: cargoLoads.paymentStatus,
+        trackingStatus: cargoLoads.trackingStatus,
+        heightM: cargoLoads.heightM,
+        widthM: cargoLoads.widthM,
+        lengthM: cargoLoads.lengthM,
       }).from(cargoLoads)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(cargoLoads.date));
-      return results;
+
+      // If it's a buyer (id >= 10000), also fetch buyer info for financial calculations
+      let buyerInfo: { pricePerUnit: string | null; unit: string | null; name: string } | null = null;
+      if (input.destinationId && input.destinationId >= 10000) {
+        const buyerRows = await db.select({
+          name: buyerClients.name,
+          pricePerUnit: buyerClients.pricePerUnit,
+          unit: buyerClients.unit,
+        }).from(buyerClients).where(eq(buyerClients.id, input.destinationId - 10000)).limit(1);
+        if (buyerRows.length > 0) buyerInfo = buyerRows[0];
+      }
+
+      return { loads: results, buyerInfo };
     }),
 });
