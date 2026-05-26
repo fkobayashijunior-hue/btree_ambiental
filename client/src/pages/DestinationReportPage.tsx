@@ -16,14 +16,14 @@ const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=ht
 const PDF_DEST_STYLES = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
-  .page { min-height: 100vh; display: flex; flex-direction: column; }
+  .page { display: block; }
   .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
   .pdf-header img { height: 52px; filter: brightness(0) invert(1); }
   .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
   .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
   .pdf-subheader { background: #f0fdf4; padding: 10px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
   .pdf-content { padding: 20px 32px; flex: 1; }
-  .pdf-footer { padding: 12px 32px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+  .pdf-footer { padding: 12px 32px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; margin-top: 32px; }
   .pdf-footer-left { display: flex; align-items: center; gap: 10px; }
   .pdf-footer-left img { height: 28px; }
   .pdf-footer-text { font-size: 10px; color: #555; }
@@ -172,15 +172,18 @@ export default function DestinationReportPage() {
       : "Todo período";
 
     const rows = loads.map((l: any, i: number) => {
-      const date = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : safeDate(l.date).toLocaleDateString('pt-BR');
+      const loadDate = safeDate(l.date).toLocaleDateString('pt-BR');
+      const delivDate = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : '-';
       const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.'));
       const weightTon = weight / 1000;
       const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.'));
       const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
+      const obs = l.observations ? `<tr><td colspan="12" style="padding:3px 4px 6px;font-size:10px;color:#6b7280;font-style:italic;">Obs: ${l.observations}</td></tr>` : '';
 
       return `<tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:6px 4px;text-align:center;font-size:11px;">${i + 1}</td>
-        <td style="padding:6px 4px;font-size:11px;">${date}</td>
+        <td style="padding:6px 4px;font-size:11px;">${loadDate}</td>
+        <td style="padding:6px 4px;font-size:11px;">${delivDate}</td>
         <td style="padding:6px 4px;font-size:11px;">${l.invoiceNumber || '-'}</td>
         <td style="padding:6px 4px;font-size:11px;font-family:monospace;">${l.vehiclePlate || '-'}</td>
         <td style="padding:6px 4px;font-size:11px;">${l.driverName || '-'}</td>
@@ -195,7 +198,7 @@ export default function DestinationReportPage() {
           </span>
         </td>
         ${pricePerUnit > 0 ? `<td style="padding:6px 4px;text-align:right;font-size:11px;font-weight:600;">R$ ${formatBR(lineValue)}</td>` : ''}
-      </tr>`;
+      </tr>${obs}`;
     }).join('');
 
     const financialSection = pricePerUnit > 0 ? `
@@ -231,12 +234,12 @@ export default function DestinationReportPage() {
     </div>
     <table>
       <thead><tr>
-        <th>#</th><th>DATA</th><th>NF</th><th>PLACA</th><th>MOTORISTA</th><th>MADEIRA</th><th>VOLUME</th><th>PESO LÍQ.</th><th>P.SAÍDA</th><th>P.CHEG.</th><th>SITUAÇÃO</th>${pricePerUnit > 0 ? '<th style="text-align:right;">VALOR</th>' : ''}
+        <th>#</th><th>DATA</th><th>DT.ENTREGA</th><th>NF</th><th>PLACA</th><th>MOTORISTA</th><th>MADEIRA</th><th>VOLUME</th><th>PESO LÍQ.</th><th>P.SAÍDA</th><th>P.CHEG.</th><th>SITUAÇÃO</th>${pricePerUnit > 0 ? '<th style="text-align:right;">VALOR</th>' : ''}
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot>
         <tr>
-          <td colspan="6">TOTAIS (${totalLoads} cargas)</td>
+          <td colspan="7">TOTAIS (${totalLoads} cargas)</td>
           <td style="text-align:right;">${formatBR(totalVolume, 3)} m³</td>
           <td style="text-align:right;">${formatBR(totalWeight / 1000)} ton</td>
           <td colspan="3"></td>
@@ -250,12 +253,14 @@ export default function DestinationReportPage() {
     </div>
     </body></html>`;
 
-    const w = window.open('', '_blank');
-    if (w) {
-      w.document.write(html);
-      w.document.close();
-      setTimeout(() => w.print(), 500);
-    }
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.html`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast.success('PDF gerado! Abra o arquivo baixado e use Imprimir → Salvar como PDF para compartilhar.');
   }
 
   // ========= PDF COMPLETO (com imagens) =========
@@ -267,7 +272,8 @@ export default function DestinationReportPage() {
       : "Todo período";
 
     const cards = loads.map((l: any, i: number) => {
-      const date = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : safeDate(l.date).toLocaleDateString('pt-BR');
+      const loadDate = safeDate(l.date).toLocaleDateString('pt-BR');
+      const delivDate = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : null;
       const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.'));
       const weightTon = weight / 1000;
       const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.'));
@@ -275,9 +281,13 @@ export default function DestinationReportPage() {
       const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
 
       const photoHtml = photos.length > 0
-        ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
+        ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
             ${photos.map((p: string) => `<img src="${p}" style="width:180px;height:135px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />`).join('')}
            </div>`
+        : '';
+
+      const obsHtml = l.observations
+        ? `<div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:#78350f;"><strong>Obs:</strong> ${l.observations}</div>`
         : '';
 
       return `<div style="page-break-inside:avoid;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;">
@@ -289,7 +299,10 @@ export default function DestinationReportPage() {
               ${getTrackingLabel(l.trackingStatus)}
             </span>
           </div>
-          <span style="font-size:12px;color:#666;">${date}</span>
+          <div style="text-align:right;font-size:11px;color:#666;">
+            <div>Saída: ${loadDate}</div>
+            ${delivDate ? `<div style="color:#166534;font-weight:600;">Entrega: ${delivDate}</div>` : ''}
+          </div>
         </div>
         <table style="width:100%;font-size:11px;border-collapse:collapse;">
           <tr>
@@ -313,6 +326,7 @@ export default function DestinationReportPage() {
             <td></td><td></td>
           </tr>` : ''}
         </table>
+        ${obsHtml}
         ${photoHtml}
       </div>`;
     }).join('');
@@ -355,12 +369,14 @@ export default function DestinationReportPage() {
     </div>
     </body></html>`;
 
-    const w = window.open('', '_blank');
-    if (w) {
-      w.document.write(html);
-      w.document.close();
-      setTimeout(() => w.print(), 500);
-    }
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio-completo-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.html`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast.success('PDF gerado! Abra o arquivo baixado e use Imprimir → Salvar como PDF para compartilhar.');
   }
 
   return (
