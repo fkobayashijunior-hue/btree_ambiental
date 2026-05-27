@@ -342,7 +342,8 @@ var init_schema = __esm({
       humidity: varchar({ length: 20 }),
       deliveryDate: timestamp("delivery_date", { mode: "string" }),
       receivedByBuyer: int("received_by_buyer").default(0).notNull(),
-      receivedAt: timestamp("received_at", { mode: "string" })
+      receivedAt: timestamp("received_at", { mode: "string" }),
+      receiverName: varchar("receiver_name", { length: 255 })
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -2820,7 +2821,8 @@ var cargoLoadsRouter = router({
     status: z6.enum(["pendente", "entregue", "cancelado"]).optional(),
     workLocationId: z6.number().optional(),
     humidity: z6.string().optional(),
-    deliveryDate: z6.string().optional()
+    deliveryDate: z6.string().optional(),
+    receiverName: z6.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2941,7 +2943,8 @@ var cargoLoadsRouter = router({
     boletoDueDate: z6.string().optional(),
     paymentReceiptUrl: z6.string().optional(),
     paymentStatus: z6.enum(["sem_boleto", "a_pagar", "pago"]).optional(),
-    paidAt: z6.string().optional()
+    paidAt: z6.string().optional(),
+    receiverName: z6.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -3630,7 +3633,8 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     startDate: z6.string().optional(),
     endDate: z6.string().optional(),
     receivedFilter: z6.enum(["all", "received", "pending"]).optional(),
-    statusFilter: z6.enum(["all", "entregue", "pendente"]).optional()
+    statusFilter: z6.enum(["all", "entregue", "pendente"]).optional(),
+    paymentStatusFilter: z6.enum(["all", "sem_boleto", "a_pagar", "pago"]).optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -3669,6 +3673,9 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     } else if (input.receivedFilter === "pending") {
       conditions.push(eq6(cargoLoads.receivedByBuyer, 0));
     }
+    if (input.paymentStatusFilter && input.paymentStatusFilter !== "all") {
+      conditions.push(eq6(cargoLoads.paymentStatus, input.paymentStatusFilter));
+    }
     const results = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
@@ -3693,7 +3700,9 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       trackingStatus: cargoLoads.trackingStatus,
       heightM: cargoLoads.heightM,
       widthM: cargoLoads.widthM,
-      lengthM: cargoLoads.lengthM
+      lengthM: cargoLoads.lengthM,
+      notes: cargoLoads.notes,
+      receiverName: cargoLoads.receiverName
     }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(desc3(cargoLoads.date));
     let buyerInfo = null;
     if (input.destinationId && input.destinationId >= 1e4) {

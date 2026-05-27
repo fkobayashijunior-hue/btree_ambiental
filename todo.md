@@ -1784,3 +1784,11 @@
 - [x] Criar dois estilos de PDF: (1) Resumido (só texto, todas informações) e (2) Completo (com imagens para enviar ao cliente)
 - [x] Implementar cálculo de valores a receber do cliente (preço por unidade × peso/volume entregue)
 - [x] Exibir totais financeiros no relatório (valor total a receber, valor recebido, saldo)
+
+## 🆕 Novos recursos confirmados (27/05/2026)
+
+- [ ] Adicionar campo "Responsável pelo recebimento" (receiver_name) na carga — para registrar quem assinou o recibo na granja
+- [ ] Mostrar receiver_name no formulário de edição/cadastro de carga
+- [ ] Mostrar receiver_name no PDF completo (com fotos) e no PDF resumido
+- [ ] Adicionar filtro por status de pagamento no relatório por destino (Todos / Pendentes / Recebidos)
+- [ ] Implementar geração de PDF real no servidor (puppeteer/html-pdf) para download direto sem dialog de impressão

@@ -316,6 +316,13 @@
       "when": 1779434855739,
       "tag": "0044_curious_ego",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "5",
+      "when": 1779874876546,
+      "tag": "0045_wide_captain_america",
+      "breakpoints": true
     }
   ]
 }

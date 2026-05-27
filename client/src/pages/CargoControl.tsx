@@ -1106,6 +1106,7 @@ export default function CargoControl() {
     workLocationId: "",
     humidity: "",
     deliveryDate: "",
+    receiverName: "",
   });
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -1210,7 +1211,7 @@ export default function CargoControl() {
       const c = clientsList.find((cl: { id: number; name: string }) => cl.id === autoClientId);
       autoClientName = c?.name || "";
     }
-    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: "", humidity: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: "", humidity: "", receiverName: "" });
     setPendingPhotos([]);
   };
 
@@ -1240,6 +1241,7 @@ export default function CargoControl() {
       workLocationId: (cargo as any).workLocationId ? String((cargo as any).workLocationId) : "",
       humidity: (cargo as any).humidity || "",
       deliveryDate: (cargo as any).deliveryDate ? safeDate((cargo as any).deliveryDate).toISOString().slice(0, 10) : "",
+      receiverName: (cargo as any).receiverName || "",
     });
     // Load existing photos when editing
     const existingPhotos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson); } catch { return []; } })() : [];
@@ -1263,6 +1265,7 @@ export default function CargoControl() {
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
       humidity: form.humidity || undefined,
       deliveryDate: form.deliveryDate || undefined,
+      receiverName: form.receiverName || undefined,
     };
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
@@ -1943,6 +1946,15 @@ export default function CargoControl() {
               <Label>Data de Entrega</Label>
               <Input type="date" value={form.deliveryDate || ''} onChange={e => setForm(f => ({ ...f, deliveryDate: e.target.value }))} />
               <p className="text-[10px] text-gray-500 mt-0.5">Usada no fechamento semanal. Se vazio, usa a data de carregamento.</p>
+            </div>
+            <div>
+              <Label>Responsável pelo Recebimento</Label>
+              <Input
+                value={form.receiverName || ''}
+                onChange={e => setForm(f => ({ ...f, receiverName: e.target.value }))}
+                placeholder="Ex: João da Silva (granjeiro)"
+              />
+              <p className="text-[10px] text-gray-500 mt-0.5">Nome de quem assinou o recibo na granja/destino.</p>
             </div>
 
             {/* Veículo */}

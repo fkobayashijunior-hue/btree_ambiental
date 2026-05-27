@@ -374,6 +374,7 @@ export const cargoLoadsRouter = router({
       workLocationId: z.number().optional(),
       humidity: z.string().optional(),
       deliveryDate: z.string().optional(),
+      receiverName: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -509,6 +510,7 @@ export const cargoLoadsRouter = router({
       paymentReceiptUrl: z.string().optional(),
       paymentStatus: z.enum(['sem_boleto','a_pagar','pago']).optional(),
       paidAt: z.string().optional(),
+      receiverName: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1358,6 +1360,7 @@ export const cargoLoadsRouter = router({
       endDate: z.string().optional(),
       receivedFilter: z.enum(['all', 'received', 'pending']).optional(),
       statusFilter: z.enum(['all', 'entregue', 'pendente']).optional(),
+      paymentStatusFilter: z.enum(['all', 'sem_boleto', 'a_pagar', 'pago']).optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1410,6 +1413,9 @@ export const cargoLoadsRouter = router({
       } else if (input.receivedFilter === 'pending') {
         conditions.push(eq(cargoLoads.receivedByBuyer, 0));
       }
+      if (input.paymentStatusFilter && input.paymentStatusFilter !== 'all') {
+        conditions.push(eq(cargoLoads.paymentStatus, input.paymentStatusFilter));
+      }
       const results = await db.select({
         id: cargoLoads.id,
         date: cargoLoads.date,
@@ -1435,6 +1441,8 @@ export const cargoLoadsRouter = router({
         heightM: cargoLoads.heightM,
         widthM: cargoLoads.widthM,
         lengthM: cargoLoads.lengthM,
+        notes: cargoLoads.notes,
+        receiverName: cargoLoads.receiverName,
       }).from(cargoLoads)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(cargoLoads.date));

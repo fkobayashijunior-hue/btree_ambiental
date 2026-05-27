@@ -1,6 +1,23 @@
-Options -MultiViews
-RewriteEngine On
-RewriteBase /
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.html [QSA,L]
+PassengerEnabled on
+PassengerAppRoot /home/u629128033/domains/btreeambiental.com/nodejs
+PassengerStartupFile dist/index.js
+PassengerAppType node
+PassengerNodejs /opt/alt/alt-nodejs22/root/bin/node
+PassengerRestartDir /home/u629128033/domains/btreeambiental.com/nodejs/tmp
+
+SetEnv NODE_OPTIONS "--experimental-vm-modules"
+SetEnv LSNODE_CONSOLE_LOG /home/u629128033/domains/btreeambiental.com/logs/node_console.log
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Route /api/* to Passenger (Node.js) - MUST come before SPA fallback
+  RewriteCond %{REQUEST_URI} ^/api/
+  RewriteRule ^ - [L]
+
+  # SPA fallback: serve index.html for all non-file, non-api routes
+  RewriteCond %{REQUEST_URI} !^/api/
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ /index.html [L]
+</IfModule>

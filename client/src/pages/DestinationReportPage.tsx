@@ -1,13 +1,70 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileBarChart, Download, CheckCircle2, Clock, Package, Weight, Image as ImageIcon, X, DollarSign, FileText, FileImage } from "lucide-react";
+import { FileBarChart, Download, CheckCircle2, Clock, Package, Weight, Image as ImageIcon, X, DollarSign, FileText, FileImage, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBR, formatBRL } from "@/lib/formatBR";
+
+// PDF generation helper: renders HTML in hidden iframe, captures with html2canvas, saves as PDF
+async function generatePDFFromHtml(html: string, filename: string, onProgress?: (msg: string) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:794px;height:1123px;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); reject(new Error('iframe error')); return; }
+    doc.open();
+    doc.write(html);
+    doc.close();
+    // Wait for images to load
+    const allImgs = Array.from(doc.querySelectorAll('img'));
+    const imgPromises = allImgs.map(img => new Promise<void>(res => {
+      if (img.complete) { res(); return; }
+      img.onload = () => res();
+      img.onerror = () => res();
+      setTimeout(res, 3000);
+    }));
+    Promise.all(imgPromises).then(async () => {
+      try {
+        onProgress?.('Gerando PDF...');
+        const { default: html2canvas } = await import('html2canvas');
+        const { jsPDF } = await import('jspdf');
+        const body = doc.body;
+        const totalHeight = body.scrollHeight;
+        const pageWidth = 794;
+        const pageHeight = 1123;
+        const pages = Math.ceil(totalHeight / pageHeight);
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4', compress: true });
+        for (let i = 0; i < pages; i++) {
+          if (i > 0) pdf.addPage();
+          const canvas = await html2canvas(body, {
+            scale: 1.5,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            width: pageWidth,
+            height: pageHeight,
+            y: i * pageHeight,
+            windowWidth: pageWidth,
+            windowHeight: pageHeight,
+          });
+          const imgData = canvas.toDataURL('image/jpeg', 0.92);
+          pdf.addImage(imgData, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+        }
+        pdf.save(filename);
+        document.body.removeChild(iframe);
+        resolve();
+      } catch (err) {
+        document.body.removeChild(iframe);
+        reject(err);
+      }
+    });
+  });
+}
 
 const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
 const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
@@ -110,7 +167,9 @@ export default function DestinationReportPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [receivedFilter, setReceivedFilter] = useState<"all" | "received" | "pending">("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "sem_boleto" | "a_pagar" | "pago">("all");
   const [photoModal, setPhotoModal] = useState<string[] | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState<'resumido' | 'completo' | null>(null);
 
   // Fetch destinations and buyers
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
@@ -131,6 +190,7 @@ export default function DestinationReportPage() {
       endDate: endDate || undefined,
       receivedFilter,
       statusFilter: 'all',
+      paymentStatusFilter: paymentStatusFilter !== 'all' ? paymentStatusFilter : undefined,
     },
     { enabled: selectedDestId > 0 }
   );
@@ -164,7 +224,7 @@ export default function DestinationReportPage() {
   const selectedDest = allDestinations.find(d => d.id === selectedDestId);
 
   // ========= PDF RESUMIDO (sem imagens) =========
-  function generatePDFResumido() {
+  async function generatePDFResumido() {
     if (loads.length === 0) { toast.error("Nenhuma carga para gerar relatório"); return; }
     const destName = selectedDest?.name || "Todos";
     const periodStr = startDate && endDate
@@ -178,7 +238,8 @@ export default function DestinationReportPage() {
       const weightTon = weight / 1000;
       const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.'));
       const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
-      const obs = l.observations ? `<tr><td colspan="12" style="padding:3px 4px 6px;font-size:10px;color:#6b7280;font-style:italic;">Obs: ${l.observations}</td></tr>` : '';
+      const obs = l.notes ? `<tr><td colspan="12" style="padding:3px 4px 6px;font-size:10px;color:#6b7280;font-style:italic;">Obs: ${l.notes}</td></tr>` : '';
+      const receiverRow = l.receiverName ? `<tr><td colspan="12" style="padding:2px 4px 5px;font-size:10px;color:#166534;">✍ Recebido por: <strong>${l.receiverName}</strong></td></tr>` : '';
 
       return `<tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:6px 4px;text-align:center;font-size:11px;">${i + 1}</td>
@@ -198,7 +259,7 @@ export default function DestinationReportPage() {
           </span>
         </td>
         ${pricePerUnit > 0 ? `<td style="padding:6px 4px;text-align:right;font-size:11px;font-weight:600;">R$ ${formatBR(lineValue)}</td>` : ''}
-      </tr>${obs}`;
+      </tr>${obs}${receiverRow}`;
     }).join('');
 
     const financialSection = pricePerUnit > 0 ? `
@@ -253,18 +314,28 @@ export default function DestinationReportPage() {
     </div>
     </body></html>`;
 
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relatorio-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.html`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast.success('PDF gerado! Abra o arquivo baixado e use Imprimir → Salvar como PDF para compartilhar.');
+    const filename = `relatorio-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`;
+    setIsGeneratingPDF('resumido');
+    try {
+      await generatePDFFromHtml(html, filename);
+      toast.success('PDF gerado e salvo! Compartilhe o arquivo pelo WhatsApp.');
+    } catch (err) {
+      // Fallback: download as HTML
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename.replace('.pdf', '.html');
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast.info('PDF salvo como HTML. Abra e use Imprimir → Salvar como PDF.');
+    } finally {
+      setIsGeneratingPDF(null);
+    }
   }
 
   // ========= PDF COMPLETO (com imagens) =========
-  function generatePDFCompleto() {
+  async function generatePDFCompleto() {
     if (loads.length === 0) { toast.error("Nenhuma carga para gerar relatório"); return; }
     const destName = selectedDest?.name || "Todos";
     const periodStr = startDate && endDate
@@ -286,8 +357,11 @@ export default function DestinationReportPage() {
            </div>`
         : '';
 
-      const obsHtml = l.observations
-        ? `<div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:#78350f;"><strong>Obs:</strong> ${l.observations}</div>`
+      const obsHtml = l.notes
+        ? `<div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:#78350f;"><strong>Obs:</strong> ${l.notes}</div>`
+        : '';
+      const receiverHtml = l.receiverName
+        ? `<div style="margin-top:6px;padding:6px 10px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:4px;font-size:11px;color:#166534;">✍ <strong>Recebido por:</strong> ${l.receiverName}</div>`
         : '';
 
       return `<div style="page-break-inside:avoid;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;">
@@ -327,6 +401,7 @@ export default function DestinationReportPage() {
           </tr>` : ''}
         </table>
         ${obsHtml}
+        ${receiverHtml}
         ${photoHtml}
       </div>`;
     }).join('');
@@ -369,14 +444,24 @@ export default function DestinationReportPage() {
     </div>
     </body></html>`;
 
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relatorio-completo-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.html`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast.success('PDF gerado! Abra o arquivo baixado e use Imprimir → Salvar como PDF para compartilhar.');
+    const filename = `relatorio-completo-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`;
+    setIsGeneratingPDF('completo');
+    try {
+      await generatePDFFromHtml(html, filename);
+      toast.success('PDF completo gerado! Compartilhe o arquivo pelo WhatsApp.');
+    } catch (err) {
+      // Fallback: download as HTML
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename.replace('.pdf', '.html');
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast.info('PDF salvo como HTML. Abra e use Imprimir → Salvar como PDF.');
+    } finally {
+      setIsGeneratingPDF(null);
+    }
   }
 
   return (
@@ -389,11 +474,13 @@ export default function DestinationReportPage() {
         </div>
         {loads.length > 0 && (
           <div className="flex gap-2">
-            <Button onClick={generatePDFResumido} variant="outline" className="gap-2 text-xs">
-              <FileText className="h-4 w-4" /> PDF Resumido
+            <Button onClick={generatePDFResumido} variant="outline" className="gap-2 text-xs" disabled={isGeneratingPDF !== null}>
+              {isGeneratingPDF === 'resumido' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              {isGeneratingPDF === 'resumido' ? 'Gerando...' : 'PDF Resumido'}
             </Button>
-            <Button onClick={generatePDFCompleto} variant="outline" className="gap-2 text-xs">
-              <FileImage className="h-4 w-4" /> PDF Completo
+            <Button onClick={generatePDFCompleto} variant="outline" className="gap-2 text-xs" disabled={isGeneratingPDF !== null}>
+              {isGeneratingPDF === 'completo' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileImage className="h-4 w-4" />}
+              {isGeneratingPDF === 'completo' ? 'Gerando...' : 'PDF Completo'}
             </Button>
           </div>
         )}
@@ -445,6 +532,21 @@ export default function DestinationReportPage() {
                 <option value="all">Todos</option>
                 <option value="received">Recebidos pelo comprador</option>
                 <option value="pending">Pendente recebimento</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Status de Pagamento</label>
+              <select
+                value={paymentStatusFilter}
+                onChange={e => setPaymentStatusFilter(e.target.value as any)}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              >
+                <option value="all">Todos</option>
+                <option value="a_pagar">A Pagar (pendente)</option>
+                <option value="pago">Pago</option>
+                <option value="sem_boleto">Sem Boleto</option>
               </select>
             </div>
           </div>
@@ -545,6 +647,7 @@ export default function DestinationReportPage() {
                     <tr className="bg-green-800 text-white text-xs">
                       <th className="p-2 text-center w-10">✓</th>
                       <th className="p-2">DATA</th>
+                      <th className="p-2">ENTREGA</th>
                       <th className="p-2">NF</th>
                       <th className="p-2">PLACA</th>
                       <th className="p-2">MOTORISTA</th>
@@ -578,6 +681,7 @@ export default function DestinationReportPage() {
                             />
                           </td>
                           <td className="p-2 whitespace-nowrap">{date}</td>
+                          <td className="p-2 whitespace-nowrap text-xs text-green-700">{l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : '-'}</td>
                           <td className="p-2 font-mono">{l.invoiceNumber || '-'}</td>
                           <td className="p-2 font-mono">{l.vehiclePlate || '-'}</td>
                           <td className="p-2">{l.driverName || '-'}</td>
@@ -603,6 +707,7 @@ export default function DestinationReportPage() {
                             ) : (
                               <Badge className="bg-amber-100 text-amber-800 text-xs">{getTrackingLabel(l.trackingStatus)}</Badge>
                             )}
+                            {l.receiverName && <div className="text-xs text-green-700 mt-0.5">✍ {l.receiverName}</div>}
                           </td>
                           {isBuyer && pricePerUnit > 0 && (
                             <td className="p-2 text-right font-semibold text-green-700">
