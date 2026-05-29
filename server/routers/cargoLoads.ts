@@ -6,7 +6,7 @@ import {
   cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos, gpsLocations,
   cargoWeeklyClosings, clientDocuments, buyerClients
 } from "../../drizzle/schema";
-import { eq, desc, and, sql, ne, or } from "drizzle-orm";
+import { eq, desc, asc, and, sql, ne, or } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 import mysql from "mysql2/promise";
 
@@ -1445,7 +1445,7 @@ export const cargoLoadsRouter = router({
         receiverName: cargoLoads.receiverName,
       }).from(cargoLoads)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .orderBy(desc(cargoLoads.date));
+        .orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
 
       // If it's a buyer (id >= 10000), also fetch buyer info for financial calculations
       let buyerInfo: { pricePerUnit: string | null; unit: string | null; name: string } | null = null;

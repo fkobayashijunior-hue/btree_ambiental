@@ -1792,3 +1792,25 @@
 - [ ] Mostrar receiver_name no PDF completo (com fotos) e no PDF resumido
 - [ ] Adicionar filtro por status de pagamento no relatório por destino (Todos / Pendentes / Recebidos)
 - [ ] Implementar geração de PDF real no servidor (puppeteer/html-pdf) para download direto sem dialog de impressão
+
+---
+
+## 🔧 CORREÇÕES PDF E NOVAS FUNCIONALIDADES — 29/05/2026
+
+### Correções PDF (Relatório por Destino)
+- [x] Corrigir CORS do logo BTREE nos PDFs (embutir como base64 diretamente)
+- [x] Corrigir CORS das fotos das cargas nos PDFs (proxy de imagem no servidor /api/image-proxy)
+- [x] Corrigir ordem das cargas nos relatórios (mais antiga = Carga #1, mais recente = última)
+- [x] Corrigir quebra de página no PDF completo (renderizar cada card em página separada)
+
+### Novas Funcionalidades
+- [x] Botão "Registrar Pagamento" no Relatório por Destino (para compradores)
+- [x] Modal de registro de pagamento com valor, data, método e NF
+- [x] Dashboard Financeiro (/dashboard-financeiro) — totais por comprador
+- [x] Dashboard Financeiro: saldo a receber, recebido e pendente por comprador
+- [x] Dashboard Financeiro: histórico de pagamentos por comprador (expandível)
+- [x] Dashboard Financeiro: botão "Registrar Pagamento" por comprador
+- [x] Dashboard Financeiro: botão WhatsApp para contato rápido
+- [x] Menu lateral: item "Dashboard Financeiro" adicionado
+- [x] Procedure `financialDashboard` no router buyerClients
+- [x] Procedure `getPayments` no router buyerClients

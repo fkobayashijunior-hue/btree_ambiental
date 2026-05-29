@@ -470,6 +470,43 @@ async function startServer() {
     }
   });
 
+  // Image proxy endpoint - fetches external images and returns as base64 to avoid CORS issues in PDF generation
+  app.get('/api/image-proxy', async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      if (!url || !url.startsWith('http')) {
+        return res.status(400).json({ error: 'Invalid URL' });
+      }
+      // Only allow known domains
+      const allowed = ['d2xsxph8kpxj0f.cloudfront.net', 'api.qrserver.com', 'btreeambiental.com'];
+      const urlObj = new URL(url);
+      if (!allowed.some(d => urlObj.hostname.endsWith(d))) {
+        return res.status(403).json({ error: 'Domain not allowed' });
+      }
+      const https = await import('https');
+      const http = await import('http');
+      const protocol = urlObj.protocol === 'https:' ? https : http;
+      const chunks: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        protocol.default.get(url, (imgRes: any) => {
+          imgRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          imgRes.on('end', () => resolve());
+          imgRes.on('error', reject);
+        }).on('error', reject);
+      });
+      const buffer = Buffer.concat(chunks);
+      // Detect content type from first bytes (PNG, JPEG, etc.)
+      let contentType = 'image/png';
+      if (buffer[0] === 0xFF && buffer[1] === 0xD8) contentType = 'image/jpeg';
+      else if (buffer[0] === 0x47 && buffer[1] === 0x49) contentType = 'image/gif';
+      else if (buffer[0] === 0x52 && buffer[1] === 0x49) contentType = 'image/webp';
+      const base64 = buffer.toString('base64');
+      res.json({ base64: `data:${contentType};base64,${base64}` });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

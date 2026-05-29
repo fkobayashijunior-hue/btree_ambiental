@@ -1,60 +1,109 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileBarChart, Download, CheckCircle2, Clock, Package, Weight, Image as ImageIcon, X, DollarSign, FileText, FileImage, Loader2 } from "lucide-react";
+import { FileBarChart, Download, CheckCircle2, Clock, Package, Weight, Image as ImageIcon, X, DollarSign, FileText, FileImage, Loader2, CreditCard, PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBR, formatBRL } from "@/lib/formatBR";
+import { BTREE_LOGO_B64 } from "@/lib/btreeLogo";
 
-// PDF generation helper: renders HTML in hidden iframe, captures with html2canvas, saves as PDF
+// ─── Image proxy helper ──────────────────────────────────────────────────────
+// Fetches an external image via server proxy and returns base64 data URI
+// This avoids CORS issues when html2canvas tries to render external images
+async function fetchImageAsBase64(url: string): Promise<string> {
+  try {
+    const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl);
+    if (!res.ok) return url; // fallback to original URL
+    const data = await res.json();
+    return data.base64 || url;
+  } catch {
+    return url;
+  }
+}
+
+// ─── PDF generation helper ───────────────────────────────────────────────────
+// Renders HTML in a hidden iframe, captures with html2canvas, saves as PDF
+// Uses full-height canvas approach to avoid content cuts at page boundaries
 async function generatePDFFromHtml(html: string, filename: string, onProgress?: (msg: string) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:794px;height:1123px;border:none;visibility:hidden;';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:794px;height:auto;min-height:1123px;border:none;visibility:hidden;';
     document.body.appendChild(iframe);
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!doc) { document.body.removeChild(iframe); reject(new Error('iframe error')); return; }
     doc.open();
     doc.write(html);
     doc.close();
+
     // Wait for images to load
     const allImgs = Array.from(doc.querySelectorAll('img'));
     const imgPromises = allImgs.map(img => new Promise<void>(res => {
-      if (img.complete) { res(); return; }
+      if (img.complete && img.naturalHeight > 0) { res(); return; }
       img.onload = () => res();
       img.onerror = () => res();
-      setTimeout(res, 3000);
+      setTimeout(res, 5000);
     }));
+
     Promise.all(imgPromises).then(async () => {
       try {
         onProgress?.('Gerando PDF...');
         const { default: html2canvas } = await import('html2canvas');
         const { jsPDF } = await import('jspdf');
+
         const body = doc.body;
-        const totalHeight = body.scrollHeight;
-        const pageWidth = 794;
-        const pageHeight = 1123;
-        const pages = Math.ceil(totalHeight / pageHeight);
+        const pageWidthPx = 794;
+        const pageHeightPx = 1123;
+
+        // Capture the FULL document at once (no slicing)
+        const canvas = await html2canvas(body, {
+          scale: 1.5,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          width: pageWidthPx,
+          windowWidth: pageWidthPx,
+          scrollX: 0,
+          scrollY: 0,
+          logging: false,
+        });
+
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4', compress: true });
-        for (let i = 0; i < pages; i++) {
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = pdf.internal.pageSize.getHeight();
+
+        const totalCanvasHeight = canvas.height;
+        const totalCanvasWidth = canvas.width;
+
+        // How many pixels of canvas = one PDF page height?
+        const canvasPageHeight = Math.floor(pageHeightPx * 1.5); // scale factor 1.5
+
+        const totalPages = Math.ceil(totalCanvasHeight / canvasPageHeight);
+
+        for (let i = 0; i < totalPages; i++) {
           if (i > 0) pdf.addPage();
-          const canvas = await html2canvas(body, {
-            scale: 1.5,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            width: pageWidth,
-            height: pageHeight,
-            y: i * pageHeight,
-            windowWidth: pageWidth,
-            windowHeight: pageHeight,
-          });
-          const imgData = canvas.toDataURL('image/jpeg', 0.92);
-          pdf.addImage(imgData, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+
+          const srcY = i * canvasPageHeight;
+          const srcH = Math.min(canvasPageHeight, totalCanvasHeight - srcY);
+
+          // Create a temporary canvas for this page slice
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = totalCanvasWidth;
+          pageCanvas.height = canvasPageHeight;
+          const ctx = pageCanvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+            ctx.drawImage(canvas, 0, srcY, totalCanvasWidth, srcH, 0, 0, totalCanvasWidth, srcH);
+          }
+
+          const imgData = pageCanvas.toDataURL('image/jpeg', 0.92);
+          pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
         }
+
         pdf.save(filename);
         document.body.removeChild(iframe);
         resolve();
@@ -66,10 +115,12 @@ async function generatePDFFromHtml(html: string, filename: string, onProgress?: 
   });
 }
 
+// ─── Constants ───────────────────────────────────────────────────────────────
 const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
 const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
 const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 
+// ─── PDF Styles ───────────────────────────────────────────────────────────────
 const PDF_DEST_STYLES = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
@@ -115,21 +166,7 @@ const PDF_DEST_STYLES = `
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 `;
 
-const PDF_DEST_FOOTER = `
-<div class="pdf-footer">
-  <div class="pdf-footer-left">
-    <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
-    <div class="pdf-footer-text">
-      Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
-      <a href="https://btreeambiental.com">btreeambiental.com</a>
-    </div>
-  </div>
-  <div class="pdf-footer-right">
-    <img src="${BTREE_QR}" alt="QR Code" />
-    <span>Acesse nosso site</span>
-  </div>
-</div>`;
-
+// ─── Helper functions ─────────────────────────────────────────────────────────
 function safeDate(dateStr: string | null | undefined): Date {
   if (!dateStr) return new Date();
   const s = String(dateStr);
@@ -162,6 +199,7 @@ function getPaymentLabel(status: string | null | undefined): string {
   return map[status || ''] || 'Sem Boleto';
 }
 
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function DestinationReportPage() {
   const [selectedDestId, setSelectedDestId] = useState<number>(0);
   const [startDate, setStartDate] = useState("");
@@ -170,6 +208,9 @@ export default function DestinationReportPage() {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "sem_boleto" | "a_pagar" | "pago">("all");
   const [photoModal, setPhotoModal] = useState<string[] | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState<'resumido' | 'completo' | null>(null);
+  const [pdfProgress, setPdfProgress] = useState<string>('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ amount: '', paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'pix', invoiceNumber: '', notes: '' });
 
   // Fetch destinations and buyers
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
@@ -204,6 +245,33 @@ export default function DestinationReportPage() {
     onError: (err) => toast.error(err.message),
   });
 
+  // Payment registration for buyers
+  const addPaymentMut = trpc.buyerClients.addPayment.useMutation({
+    onSuccess: () => {
+      toast.success('Pagamento registrado com sucesso!');
+      setShowPaymentModal(false);
+      setPaymentForm({ amount: '', paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'pix', invoiceNumber: '', notes: '' });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  function handleRegisterPayment() {
+    if (!paymentForm.amount || !paymentForm.paymentDate) {
+      toast.error('Preencha o valor e a data do pagamento');
+      return;
+    }
+    const buyerId = selectedDestId - 10000;
+    addPaymentMut.mutate({
+      buyerId,
+      amount: paymentForm.amount,
+      paymentDate: paymentForm.paymentDate,
+      paymentMethod: paymentForm.paymentMethod || undefined,
+      invoiceNumber: paymentForm.invoiceNumber || undefined,
+      notes: paymentForm.notes || undefined,
+      status: 'pago',
+    });
+  }
+
   // Stats
   const totalLoads = loads.length;
   const totalReceived = loads.filter((l: any) => l.receivedByBuyer === 1).length;
@@ -223,247 +291,298 @@ export default function DestinationReportPage() {
   // Get selected destination info
   const selectedDest = allDestinations.find(d => d.id === selectedDestId);
 
-  // ========= PDF RESUMIDO (sem imagens) =========
+  // ─── PDF Footer HTML (with base64 logos via proxy) ─────────────────────────
+  function buildFooterHtml(kobayashiB64: string, qrB64: string): string {
+    return `
+<div class="pdf-footer">
+  <div class="pdf-footer-left">
+    ${kobayashiB64 ? `<img src="${kobayashiB64}" alt="Kobayashi" />` : ''}
+    <div class="pdf-footer-text">
+      Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+      <a href="https://btreeambiental.com">btreeambiental.com</a>
+    </div>
+  </div>
+  <div class="pdf-footer-right">
+    ${qrB64 ? `<img src="${qrB64}" alt="QR Code" />` : ''}
+    <span>Acesse nosso site</span>
+  </div>
+</div>`;
+  }
+
+  // ─── PDF RESUMIDO (sem imagens) ─────────────────────────────────────────────
   async function generatePDFResumido() {
     if (loads.length === 0) { toast.error("Nenhuma carga para gerar relatório"); return; }
-    const destName = selectedDest?.name || "Todos";
-    const periodStr = startDate && endDate
-      ? `${safeDate(startDate).toLocaleDateString('pt-BR')} a ${safeDate(endDate).toLocaleDateString('pt-BR')}`
-      : "Todo período";
-
-    const rows = loads.map((l: any, i: number) => {
-      const loadDate = safeDate(l.date).toLocaleDateString('pt-BR');
-      const delivDate = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : '-';
-      const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.'));
-      const weightTon = weight / 1000;
-      const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.'));
-      const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
-      const obs = l.notes ? `<tr><td colspan="12" style="padding:3px 4px 6px;font-size:10px;color:#6b7280;font-style:italic;">Obs: ${l.notes}</td></tr>` : '';
-      const receiverRow = l.receiverName ? `<tr><td colspan="12" style="padding:2px 4px 5px;font-size:10px;color:#166534;">✍ Recebido por: <strong>${l.receiverName}</strong></td></tr>` : '';
-
-      return `<tr style="border-bottom:1px solid #e5e7eb;">
-        <td style="padding:6px 4px;text-align:center;font-size:11px;">${i + 1}</td>
-        <td style="padding:6px 4px;font-size:11px;">${loadDate}</td>
-        <td style="padding:6px 4px;font-size:11px;">${delivDate}</td>
-        <td style="padding:6px 4px;font-size:11px;">${l.invoiceNumber || '-'}</td>
-        <td style="padding:6px 4px;font-size:11px;font-family:monospace;">${l.vehiclePlate || '-'}</td>
-        <td style="padding:6px 4px;font-size:11px;">${l.driverName || '-'}</td>
-        <td style="padding:6px 4px;font-size:11px;">${l.woodType || '-'}</td>
-        <td style="padding:6px 4px;text-align:right;font-size:11px;">${formatBR(vol, 3)}</td>
-        <td style="padding:6px 4px;text-align:right;font-size:11px;">${weight > 0 ? formatBR(weightTon) + ' ton' : '-'}</td>
-        <td style="padding:6px 4px;text-align:center;font-size:11px;">${l.weightOutKg ? formatBR(parseFloat(String(l.weightOutKg).replace(',', '.'))) : '-'}</td>
-        <td style="padding:6px 4px;text-align:center;font-size:11px;">${l.weightInKg ? formatBR(parseFloat(String(l.weightInKg).replace(',', '.'))) : '-'}</td>
-        <td style="padding:6px 4px;text-align:center;font-size:10px;">
-          <span style="padding:2px 6px;border-radius:4px;background:${l.trackingStatus === 'finalizado' ? '#dcfce7' : '#fef3c7'};color:${l.trackingStatus === 'finalizado' ? '#166534' : '#92400e'};">
-            ${getTrackingLabel(l.trackingStatus)}
-          </span>
-        </td>
-        ${pricePerUnit > 0 ? `<td style="padding:6px 4px;text-align:right;font-size:11px;font-weight:600;">R$ ${formatBR(lineValue)}</td>` : ''}
-      </tr>${obs}${receiverRow}`;
-    }).join('');
-
-    const financialSection = pricePerUnit > 0 ? `
-    <div style="margin-top:20px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
-      <h3 style="margin:0 0 8px;color:#166534;font-size:14px;">💰 Resumo Financeiro</h3>
-      <table style="width:100%;font-size:12px;">
-        <tr><td style="padding:4px 0;">Preço por ${unit}:</td><td style="text-align:right;font-weight:bold;">R$ ${formatBR(pricePerUnit)}</td></tr>
-        <tr><td style="padding:4px 0;">Quantidade total (${unit}):</td><td style="text-align:right;font-weight:bold;">${formatBR(totalQuantity, 3)}</td></tr>
-        <tr style="border-top:2px solid #166534;"><td style="padding:8px 0;font-size:14px;font-weight:bold;color:#166534;">VALOR TOTAL A RECEBER:</td><td style="text-align:right;font-size:16px;font-weight:bold;color:#166534;">R$ ${formatBR(totalValue)}</td></tr>
-      </table>
-    </div>` : '';
-
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório - ${destName}</title>
-    <style>${PDF_DEST_STYLES}</style></head><body>
-    <div class="page">
-    <div class="pdf-header">
-      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
-      <div class="pdf-header-text">
-        <h1>Relatório de Entregas</h1>
-        <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
-      </div>
-    </div>
-    <div class="pdf-subheader">
-      <span style="font-size:15px;font-weight:700;color:#0d4f2e;">📍 Destino: ${destName}</span>
-      <span style="font-size:12px;color:#6b7280;">Período: ${periodStr}</span>
-    </div>
-    <div class="pdf-content">
-    <div class="stats">
-      <div class="stat"><strong>${totalLoads}</strong> cargas</div>
-      <div class="stat"><strong>${formatBR(totalWeight / 1000)} ton</strong> peso total</div>
-      <div class="stat"><strong>${formatBR(totalVolume, 3)} m³</strong> volume total</div>
-      <div class="stat"><strong>${totalReceived}</strong> recebidas | <strong>${totalPending}</strong> pendentes</div>
-    </div>
-    <table>
-      <thead><tr>
-        <th>#</th><th>DATA</th><th>DT.ENTREGA</th><th>NF</th><th>PLACA</th><th>MOTORISTA</th><th>MADEIRA</th><th>VOLUME</th><th>PESO LÍQ.</th><th>P.SAÍDA</th><th>P.CHEG.</th><th>SITUAÇÃO</th>${pricePerUnit > 0 ? '<th style="text-align:right;">VALOR</th>' : ''}
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot>
-        <tr>
-          <td colspan="7">TOTAIS (${totalLoads} cargas)</td>
-          <td style="text-align:right;">${formatBR(totalVolume, 3)} m³</td>
-          <td style="text-align:right;">${formatBR(totalWeight / 1000)} ton</td>
-          <td colspan="3"></td>
-          ${pricePerUnit > 0 ? `<td style="text-align:right;">R$ ${formatBR(totalValue)}</td>` : ''}
-        </tr>
-      </tfoot>
-    </table>
-    ${financialSection}
-    </div>
-    ${PDF_DEST_FOOTER}
-    </div>
-    </body></html>`;
-
-    const filename = `relatorio-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`;
     setIsGeneratingPDF('resumido');
+    setPdfProgress('Carregando logos...');
     try {
-      await generatePDFFromHtml(html, filename);
-      toast.success('PDF gerado e salvo! Compartilhe o arquivo pelo WhatsApp.');
-    } catch (err) {
-      // Fallback: download as HTML
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename.replace('.pdf', '.html');
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast.info('PDF salvo como HTML. Abra e use Imprimir → Salvar como PDF.');
-    } finally {
-      setIsGeneratingPDF(null);
-    }
-  }
+      // Pre-load logos as base64 via proxy
+      const [kobayashiB64, qrB64] = await Promise.all([
+        fetchImageAsBase64(KOBAYASHI_LOGO),
+        fetchImageAsBase64(BTREE_QR),
+      ]);
 
-  // ========= PDF COMPLETO (com imagens) =========
-  async function generatePDFCompleto() {
-    if (loads.length === 0) { toast.error("Nenhuma carga para gerar relatório"); return; }
-    const destName = selectedDest?.name || "Todos";
-    const periodStr = startDate && endDate
-      ? `${safeDate(startDate).toLocaleDateString('pt-BR')} a ${safeDate(endDate).toLocaleDateString('pt-BR')}`
-      : "Todo período";
+      setPdfProgress('Gerando tabela...');
+      const destName = selectedDest?.name || "Todos";
+      const periodStr = startDate && endDate
+        ? `${safeDate(startDate).toLocaleDateString('pt-BR')} a ${safeDate(endDate).toLocaleDateString('pt-BR')}`
+        : "Todo período";
 
-    const cards = loads.map((l: any, i: number) => {
-      const loadDate = safeDate(l.date).toLocaleDateString('pt-BR');
-      const delivDate = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : null;
-      const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.'));
-      const weightTon = weight / 1000;
-      const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.'));
-      const photos: string[] = l.photosJson ? JSON.parse(l.photosJson) : [];
-      const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
+      // loads already come ordered ASC from backend (oldest first = #1)
+      const rows = loads.map((l: any, i: number) => {
+        const loadDate = safeDate(l.date).toLocaleDateString('pt-BR');
+        const delivDate = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : '-';
+        const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.'));
+        const weightTon = weight / 1000;
+        const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.'));
+        const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
+        const obs = l.notes ? `<tr><td colspan="12" style="padding:3px 4px 6px;font-size:10px;color:#6b7280;font-style:italic;">Obs: ${l.notes}</td></tr>` : '';
+        const receiverRow = l.receiverName ? `<tr><td colspan="12" style="padding:2px 4px 5px;font-size:10px;color:#166534;">✍ Recebido por: <strong>${l.receiverName}</strong></td></tr>` : '';
 
-      const photoHtml = photos.length > 0
-        ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
-            ${photos.map((p: string) => `<img src="${p}" style="width:180px;height:135px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />`).join('')}
-           </div>`
-        : '';
-
-      const obsHtml = l.notes
-        ? `<div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:#78350f;"><strong>Obs:</strong> ${l.notes}</div>`
-        : '';
-      const receiverHtml = l.receiverName
-        ? `<div style="margin-top:6px;padding:6px 10px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:4px;font-size:11px;color:#166534;">✍ <strong>Recebido por:</strong> ${l.receiverName}</div>`
-        : '';
-
-      return `<div style="page-break-inside:avoid;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div>
-            <span style="font-size:16px;font-weight:bold;color:#1a5c3a;">#${i + 1}</span>
-            <span style="font-size:14px;font-weight:bold;margin-left:8px;">${l.vehiclePlate || '-'}</span>
-            <span style="margin-left:12px;padding:3px 8px;border-radius:4px;font-size:10px;background:${l.trackingStatus === 'finalizado' ? '#dcfce7' : '#fef3c7'};color:${l.trackingStatus === 'finalizado' ? '#166534' : '#92400e'};">
+        return `<tr style="border-bottom:1px solid #e5e7eb;">
+          <td style="padding:6px 4px;text-align:center;font-size:11px;">${i + 1}</td>
+          <td style="padding:6px 4px;font-size:11px;">${loadDate}</td>
+          <td style="padding:6px 4px;font-size:11px;">${delivDate}</td>
+          <td style="padding:6px 4px;font-size:11px;">${l.invoiceNumber || '-'}</td>
+          <td style="padding:6px 4px;font-size:11px;font-family:monospace;">${l.vehiclePlate || '-'}</td>
+          <td style="padding:6px 4px;font-size:11px;">${l.driverName || '-'}</td>
+          <td style="padding:6px 4px;font-size:11px;">${l.woodType || '-'}</td>
+          <td style="padding:6px 4px;text-align:right;font-size:11px;">${formatBR(vol, 3)}</td>
+          <td style="padding:6px 4px;text-align:right;font-size:11px;">${weight > 0 ? formatBR(weightTon) + ' ton' : '-'}</td>
+          <td style="padding:6px 4px;text-align:center;font-size:11px;">${l.weightOutKg ? formatBR(parseFloat(String(l.weightOutKg).replace(',', '.'))) : '-'}</td>
+          <td style="padding:6px 4px;text-align:center;font-size:11px;">${l.weightInKg ? formatBR(parseFloat(String(l.weightInKg).replace(',', '.'))) : '-'}</td>
+          <td style="padding:6px 4px;text-align:center;font-size:10px;">
+            <span style="padding:2px 6px;border-radius:4px;background:${l.trackingStatus === 'finalizado' ? '#dcfce7' : '#fef3c7'};color:${l.trackingStatus === 'finalizado' ? '#166534' : '#92400e'};">
               ${getTrackingLabel(l.trackingStatus)}
             </span>
-          </div>
-          <div style="text-align:right;font-size:11px;color:#666;">
-            <div>Saída: ${loadDate}</div>
-            ${delivDate ? `<div style="color:#166534;font-weight:600;">Entrega: ${delivDate}</div>` : ''}
-          </div>
-        </div>
-        <table style="width:100%;font-size:11px;border-collapse:collapse;">
-          <tr>
-            <td style="padding:3px 0;color:#666;width:120px;">Motorista:</td><td style="font-weight:500;">${l.driverName || '-'}</td>
-            <td style="padding:3px 0;color:#666;width:100px;">Nota Fiscal:</td><td style="font-weight:500;">${l.invoiceNumber || '-'}</td>
-          </tr>
-          <tr>
-            <td style="padding:3px 0;color:#666;">Madeira:</td><td style="font-weight:500;">${l.woodType || '-'}</td>
-            <td style="padding:3px 0;color:#666;">Volume:</td><td style="font-weight:500;">${formatBR(vol, 3)} m³</td>
-          </tr>
-          <tr>
-            <td style="padding:3px 0;color:#666;">Peso Líquido:</td><td style="font-weight:500;">${weight > 0 ? formatBR(weightTon) + ' ton' : '-'}</td>
-            <td style="padding:3px 0;color:#666;">Medidas:</td><td style="font-weight:500;">${l.heightM || '-'} × ${l.widthM || '-'} × ${l.lengthM || '-'} m</td>
-          </tr>
-          <tr>
-            <td style="padding:3px 0;color:#666;">P. Saída:</td><td style="font-weight:500;">${l.weightOutKg ? formatBR(parseFloat(String(l.weightOutKg).replace(',', '.'))) + ' kg' : '-'}</td>
-            <td style="padding:3px 0;color:#666;">P. Chegada:</td><td style="font-weight:500;">${l.weightInKg ? formatBR(parseFloat(String(l.weightInKg).replace(',', '.'))) + ' kg' : '-'}</td>
-          </tr>
-          ${pricePerUnit > 0 ? `<tr>
-            <td style="padding:3px 0;color:#666;">Valor:</td><td style="font-weight:bold;color:#166534;">R$ ${formatBR(lineValue)}</td>
-            <td></td><td></td>
-          </tr>` : ''}
+          </td>
+          ${pricePerUnit > 0 ? `<td style="padding:6px 4px;text-align:right;font-size:11px;font-weight:600;">R$ ${formatBR(lineValue)}</td>` : ''}
+        </tr>${obs}${receiverRow}`;
+      }).join('');
+
+      const financialSection = pricePerUnit > 0 ? `
+      <div style="margin-top:20px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
+        <h3 style="margin:0 0 8px;color:#166534;font-size:14px;">💰 Resumo Financeiro</h3>
+        <table style="width:100%;font-size:12px;">
+          <tr><td style="padding:4px 0;">Preço por ${unit}:</td><td style="text-align:right;font-weight:bold;">R$ ${formatBR(pricePerUnit)}</td></tr>
+          <tr><td style="padding:4px 0;">Quantidade total (${unit}):</td><td style="text-align:right;font-weight:bold;">${formatBR(totalQuantity, 3)}</td></tr>
+          <tr style="border-top:2px solid #166534;"><td style="padding:8px 0;font-size:14px;font-weight:bold;color:#166534;">VALOR TOTAL A RECEBER:</td><td style="text-align:right;font-size:16px;font-weight:bold;color:#166534;">R$ ${formatBR(totalValue)}</td></tr>
         </table>
-        ${obsHtml}
-        ${receiverHtml}
-        ${photoHtml}
-      </div>`;
-    }).join('');
+      </div>` : '';
 
-    const financialSection = pricePerUnit > 0 ? `
-    <div style="page-break-inside:avoid;margin-top:20px;padding:16px;background:#f0fdf4;border:2px solid #166534;border-radius:8px;">
-      <h3 style="margin:0 0 12px;color:#166534;font-size:16px;">💰 Resumo Financeiro</h3>
-      <table style="width:100%;font-size:13px;">
-        <tr><td style="padding:4px 0;">Preço por ${unit}:</td><td style="text-align:right;font-weight:bold;">R$ ${formatBR(pricePerUnit)}</td></tr>
-        <tr><td style="padding:4px 0;">Quantidade total (${unit}):</td><td style="text-align:right;font-weight:bold;">${formatBR(totalQuantity, 3)}</td></tr>
-        <tr style="border-top:2px solid #166534;"><td style="padding:8px 0;font-size:16px;font-weight:bold;color:#166534;">VALOR TOTAL A RECEBER:</td><td style="text-align:right;font-size:20px;font-weight:bold;color:#166534;">R$ ${formatBR(totalValue)}</td></tr>
-      </table>
-    </div>` : '';
-
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Completo - ${destName}</title>
-    <style>${PDF_DEST_STYLES}</style></head><body>
-    <div class="page">
-    <div class="pdf-header">
-      <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
-      <div class="pdf-header-text">
-        <h1>Relatório Completo de Entregas</h1>
-        <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório - ${destName}</title>
+      <style>${PDF_DEST_STYLES}</style></head><body>
+      <div class="page">
+      <div class="pdf-header">
+        <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" />
+        <div class="pdf-header-text">
+          <h1>Relatório de Entregas</h1>
+          <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+        </div>
       </div>
-    </div>
-    <div class="pdf-subheader">
-      <span style="font-size:15px;font-weight:700;color:#0d4f2e;">📍 Destino: ${destName}</span>
-      <span style="font-size:12px;color:#6b7280;">Período: ${periodStr}</span>
-    </div>
-    <div class="pdf-content">
-    <div class="stats">
-      <div class="stat"><strong>${totalLoads}</strong> cargas</div>
-      <div class="stat"><strong>${formatBR(totalWeight / 1000)} ton</strong> peso total</div>
-      <div class="stat"><strong>${formatBR(totalVolume, 3)} m³</strong> volume total</div>
-      <div class="stat"><strong>${totalReceived}</strong> recebidas | <strong>${totalPending}</strong> pendentes</div>
-    </div>
-    <div style="margin-top:16px;">${cards}</div>
-    ${financialSection}
-    </div>
-    ${PDF_DEST_FOOTER}
-    </div>
-    </body></html>`;
+      <div class="pdf-subheader">
+        <span style="font-size:15px;font-weight:700;color:#0d4f2e;">📍 Destino: ${destName}</span>
+        <span style="font-size:12px;color:#6b7280;">Período: ${periodStr}</span>
+      </div>
+      <div class="pdf-content">
+      <div class="stats">
+        <div class="stat"><strong>${totalLoads}</strong> cargas</div>
+        <div class="stat"><strong>${formatBR(totalWeight / 1000)} ton</strong> peso total</div>
+        <div class="stat"><strong>${formatBR(totalVolume, 3)} m³</strong> volume total</div>
+        <div class="stat"><strong>${totalReceived}</strong> recebidas | <strong>${totalPending}</strong> pendentes</div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>DATA</th><th>DT.ENTREGA</th><th>NF</th><th>PLACA</th><th>MOTORISTA</th><th>MADEIRA</th><th>VOLUME</th><th>PESO LÍQ.</th><th>P.SAÍDA</th><th>P.CHEG.</th><th>SITUAÇÃO</th>${pricePerUnit > 0 ? '<th style="text-align:right;">VALOR</th>' : ''}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="7">TOTAIS (${totalLoads} cargas)</td>
+            <td style="text-align:right;">${formatBR(totalVolume, 3)} m³</td>
+            <td style="text-align:right;">${formatBR(totalWeight / 1000)} ton</td>
+            <td colspan="3"></td>
+            ${pricePerUnit > 0 ? `<td style="text-align:right;">R$ ${formatBR(totalValue)}</td>` : ''}
+          </tr>
+        </tfoot>
+      </table>
+      ${financialSection}
+      </div>
+      ${buildFooterHtml(kobayashiB64, qrB64)}
+      </div>
+      </body></html>`;
 
-    const filename = `relatorio-completo-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`;
-    setIsGeneratingPDF('completo');
-    try {
-      await generatePDFFromHtml(html, filename);
-      toast.success('PDF completo gerado! Compartilhe o arquivo pelo WhatsApp.');
+      const filename = `relatorio-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`;
+      await generatePDFFromHtml(html, filename, setPdfProgress);
+      toast.success('PDF gerado e salvo! Compartilhe o arquivo pelo WhatsApp.');
     } catch (err) {
-      // Fallback: download as HTML
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename.replace('.pdf', '.html');
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast.info('PDF salvo como HTML. Abra e use Imprimir → Salvar como PDF.');
+      toast.error('Erro ao gerar PDF. Tente novamente.');
+      console.error(err);
     } finally {
       setIsGeneratingPDF(null);
+      setPdfProgress('');
     }
   }
 
+  // ─── PDF COMPLETO (com imagens) ─────────────────────────────────────────────
+  async function generatePDFCompleto() {
+    if (loads.length === 0) { toast.error("Nenhuma carga para gerar relatório"); return; }
+    setIsGeneratingPDF('completo');
+    setPdfProgress('Carregando logos...');
+    try {
+      // Pre-load logos as base64 via proxy
+      const [kobayashiB64, qrB64] = await Promise.all([
+        fetchImageAsBase64(KOBAYASHI_LOGO),
+        fetchImageAsBase64(BTREE_QR),
+      ]);
+
+      // Pre-load all cargo photos as base64 via proxy
+      setPdfProgress('Carregando fotos das cargas...');
+      const allPhotoUrls: string[] = [];
+      for (const l of loads) {
+        if (l.photosJson) {
+          try {
+            const photos: string[] = JSON.parse(l.photosJson);
+            allPhotoUrls.push(...photos);
+          } catch {}
+        }
+      }
+
+      // Fetch all photos in parallel (max 10 at a time to avoid overload)
+      const photoBase64Map: Record<string, string> = {};
+      const batchSize = 10;
+      for (let i = 0; i < allPhotoUrls.length; i += batchSize) {
+        const batch = allPhotoUrls.slice(i, i + batchSize);
+        setPdfProgress(`Carregando fotos ${i + 1}–${Math.min(i + batchSize, allPhotoUrls.length)} de ${allPhotoUrls.length}...`);
+        const results = await Promise.all(batch.map(url => fetchImageAsBase64(url)));
+        batch.forEach((url, idx) => { photoBase64Map[url] = results[idx]; });
+      }
+
+      setPdfProgress('Gerando PDF completo...');
+      const destName = selectedDest?.name || "Todos";
+      const periodStr = startDate && endDate
+        ? `${safeDate(startDate).toLocaleDateString('pt-BR')} a ${safeDate(endDate).toLocaleDateString('pt-BR')}`
+        : "Todo período";
+
+      // loads already come ordered ASC from backend (oldest first = #1)
+      const cards = loads.map((l: any, i: number) => {
+        const loadDate = safeDate(l.date).toLocaleDateString('pt-BR');
+        const delivDate = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : null;
+        const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.'));
+        const weightTon = weight / 1000;
+        const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.'));
+        const photos: string[] = l.photosJson ? JSON.parse(l.photosJson) : [];
+        const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
+
+        // Use base64 versions of photos (no CORS issues)
+        const photoHtml = photos.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+              ${photos.map((p: string) => {
+                const b64 = photoBase64Map[p] || p;
+                return `<img src="${b64}" style="width:180px;height:135px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />`;
+              }).join('')}
+             </div>`
+          : '';
+
+        const obsHtml = l.notes
+          ? `<div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:#78350f;"><strong>Obs:</strong> ${l.notes}</div>`
+          : '';
+        const receiverHtml = l.receiverName
+          ? `<div style="margin-top:6px;padding:6px 10px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:4px;font-size:11px;color:#166534;">✍ <strong>Recebido por:</strong> ${l.receiverName}</div>`
+          : '';
+
+        return `<div style="page-break-inside:avoid;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+              <span style="font-size:16px;font-weight:bold;color:#1a5c3a;">#${i + 1}</span>
+              <span style="font-size:14px;font-weight:bold;margin-left:8px;">${l.vehiclePlate || '-'}</span>
+              <span style="margin-left:12px;padding:3px 8px;border-radius:4px;font-size:10px;background:${l.trackingStatus === 'finalizado' ? '#dcfce7' : '#fef3c7'};color:${l.trackingStatus === 'finalizado' ? '#166534' : '#92400e'};">
+                ${getTrackingLabel(l.trackingStatus)}
+              </span>
+            </div>
+            <div style="text-align:right;font-size:11px;color:#666;">
+              <div>Saída: ${loadDate}</div>
+              ${delivDate ? `<div style="color:#166534;font-weight:600;">Entrega: ${delivDate}</div>` : ''}
+            </div>
+          </div>
+          <table style="width:100%;font-size:11px;border-collapse:collapse;">
+            <tr>
+              <td style="padding:3px 0;color:#666;width:120px;">Motorista:</td><td style="font-weight:500;">${l.driverName || '-'}</td>
+              <td style="padding:3px 0;color:#666;width:100px;">Nota Fiscal:</td><td style="font-weight:500;">${l.invoiceNumber || '-'}</td>
+            </tr>
+            <tr>
+              <td style="padding:3px 0;color:#666;">Madeira:</td><td style="font-weight:500;">${l.woodType || '-'}</td>
+              <td style="padding:3px 0;color:#666;">Volume:</td><td style="font-weight:500;">${formatBR(vol, 3)} m³</td>
+            </tr>
+            <tr>
+              <td style="padding:3px 0;color:#666;">Peso Líquido:</td><td style="font-weight:500;">${weight > 0 ? formatBR(weightTon) + ' ton' : '-'}</td>
+              <td style="padding:3px 0;color:#666;">Medidas:</td><td style="font-weight:500;">${l.heightM || '-'} × ${l.widthM || '-'} × ${l.lengthM || '-'} m</td>
+            </tr>
+            <tr>
+              <td style="padding:3px 0;color:#666;">P. Saída:</td><td style="font-weight:500;">${l.weightOutKg ? formatBR(parseFloat(String(l.weightOutKg).replace(',', '.'))) + ' kg' : '-'}</td>
+              <td style="padding:3px 0;color:#666;">P. Chegada:</td><td style="font-weight:500;">${l.weightInKg ? formatBR(parseFloat(String(l.weightInKg).replace(',', '.'))) + ' kg' : '-'}</td>
+            </tr>
+            ${pricePerUnit > 0 ? `<tr>
+              <td style="padding:3px 0;color:#666;">Valor:</td><td style="font-weight:bold;color:#166534;">R$ ${formatBR(lineValue)}</td>
+              <td></td><td></td>
+            </tr>` : ''}
+          </table>
+          ${obsHtml}
+          ${receiverHtml}
+          ${photoHtml}
+        </div>`;
+      }).join('');
+
+      const financialSection = pricePerUnit > 0 ? `
+      <div style="page-break-inside:avoid;margin-top:20px;padding:16px;background:#f0fdf4;border:2px solid #166534;border-radius:8px;">
+        <h3 style="margin:0 0 12px;color:#166534;font-size:16px;">💰 Resumo Financeiro</h3>
+        <table style="width:100%;font-size:13px;">
+          <tr><td style="padding:4px 0;">Preço por ${unit}:</td><td style="text-align:right;font-weight:bold;">R$ ${formatBR(pricePerUnit)}</td></tr>
+          <tr><td style="padding:4px 0;">Quantidade total (${unit}):</td><td style="text-align:right;font-weight:bold;">${formatBR(totalQuantity, 3)}</td></tr>
+          <tr style="border-top:2px solid #166534;"><td style="padding:8px 0;font-size:16px;font-weight:bold;color:#166534;">VALOR TOTAL A RECEBER:</td><td style="text-align:right;font-size:20px;font-weight:bold;color:#166534;">R$ ${formatBR(totalValue)}</td></tr>
+        </table>
+      </div>` : '';
+
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Completo - ${destName}</title>
+      <style>${PDF_DEST_STYLES}</style></head><body>
+      <div class="page">
+      <div class="pdf-header">
+        <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" />
+        <div class="pdf-header-text">
+          <h1>Relatório Completo de Entregas</h1>
+          <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+        </div>
+      </div>
+      <div class="pdf-subheader">
+        <span style="font-size:15px;font-weight:700;color:#0d4f2e;">📍 Destino: ${destName}</span>
+        <span style="font-size:12px;color:#6b7280;">Período: ${periodStr}</span>
+      </div>
+      <div class="pdf-content">
+      <div class="stats">
+        <div class="stat"><strong>${totalLoads}</strong> cargas</div>
+        <div class="stat"><strong>${formatBR(totalWeight / 1000)} ton</strong> peso total</div>
+        <div class="stat"><strong>${formatBR(totalVolume, 3)} m³</strong> volume total</div>
+        <div class="stat"><strong>${totalReceived}</strong> recebidas | <strong>${totalPending}</strong> pendentes</div>
+      </div>
+      <div style="margin-top:16px;">${cards}</div>
+      ${financialSection}
+      </div>
+      ${buildFooterHtml(kobayashiB64, qrB64)}
+      </div>
+      </body></html>`;
+
+      const filename = `relatorio-completo-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`;
+      await generatePDFFromHtml(html, filename, setPdfProgress);
+      toast.success('PDF completo gerado! Compartilhe o arquivo pelo WhatsApp.');
+    } catch (err) {
+      toast.error('Erro ao gerar PDF completo. Tente novamente.');
+      console.error(err);
+    } finally {
+      setIsGeneratingPDF(null);
+      setPdfProgress('');
+    }
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-4 max-w-7xl mx-auto">
       {/* Header */}
@@ -473,14 +592,20 @@ export default function DestinationReportPage() {
           <h1 className="text-xl font-bold text-green-800">Relatório por Destino</h1>
         </div>
         {loads.length > 0 && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {isBuyer && (
+              <Button onClick={() => setShowPaymentModal(true)} className="gap-2 text-xs bg-green-700 hover:bg-green-800 text-white">
+                <CreditCard className="h-4 w-4" />
+                Registrar Pagamento
+              </Button>
+            )}
             <Button onClick={generatePDFResumido} variant="outline" className="gap-2 text-xs" disabled={isGeneratingPDF !== null}>
               {isGeneratingPDF === 'resumido' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              {isGeneratingPDF === 'resumido' ? 'Gerando...' : 'PDF Resumido'}
+              {isGeneratingPDF === 'resumido' ? (pdfProgress || 'Gerando...') : 'PDF Resumido'}
             </Button>
             <Button onClick={generatePDFCompleto} variant="outline" className="gap-2 text-xs" disabled={isGeneratingPDF !== null}>
               {isGeneratingPDF === 'completo' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileImage className="h-4 w-4" />}
-              {isGeneratingPDF === 'completo' ? 'Gerando...' : 'PDF Completo'}
+              {isGeneratingPDF === 'completo' ? (pdfProgress || 'Gerando...') : 'PDF Completo'}
             </Button>
           </div>
         )}
@@ -646,6 +771,7 @@ export default function DestinationReportPage() {
                   <thead>
                     <tr className="bg-green-800 text-white text-xs">
                       <th className="p-2 text-center w-10">✓</th>
+                      <th className="p-2">#</th>
                       <th className="p-2">DATA</th>
                       <th className="p-2">ENTREGA</th>
                       <th className="p-2">NF</th>
@@ -660,7 +786,7 @@ export default function DestinationReportPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {loads.map((l: any) => {
+                    {loads.map((l: any, idx: number) => {
                       const photos: string[] = l.photosJson ? JSON.parse(l.photosJson) : [];
                       const date = l.deliveryDate
                         ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR')
@@ -680,6 +806,7 @@ export default function DestinationReportPage() {
                               }}
                             />
                           </td>
+                          <td className="p-2 text-center text-xs text-muted-foreground">{idx + 1}</td>
                           <td className="p-2 whitespace-nowrap">{date}</td>
                           <td className="p-2 whitespace-nowrap text-xs text-green-700">{l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : '-'}</td>
                           <td className="p-2 font-mono">{l.invoiceNumber || '-'}</td>
@@ -720,7 +847,7 @@ export default function DestinationReportPage() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-100 font-semibold text-xs">
-                      <td className="p-2" colSpan={6}>TOTAIS ({totalLoads} cargas)</td>
+                      <td className="p-2" colSpan={7}>TOTAIS ({totalLoads} cargas)</td>
                       <td className="p-2 text-right">{formatBR(totalVolume, 3)} m³</td>
                       <td className="p-2 text-right">{formatBR(totalWeight / 1000)} ton</td>
                       <td className="p-2" colSpan={2}></td>
@@ -743,6 +870,91 @@ export default function DestinationReportPage() {
             <p>Selecione um destino ou comprador acima para visualizar o relatório de entregas.</p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Payment Registration Modal */}
+      {showPaymentModal && isBuyer && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setShowPaymentModal(false)}>
+          <div className="bg-white rounded-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-green-700" />
+                <h3 className="font-semibold text-lg">Registrar Pagamento</h3>
+              </div>
+              <button onClick={() => setShowPaymentModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="text-sm text-muted-foreground mb-4">
+              Comprador: <strong className="text-green-800">{selectedDest?.name}</strong>
+              {pricePerUnit > 0 && (
+                <div className="mt-1">Valor sugerido: <strong className="text-green-700">R$ {formatBR(totalValue)}</strong> ({formatBR(totalQuantity, 3)} {unit} × R$ {formatBR(pricePerUnit)}/{unit})</div>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Valor Recebido (R$) *</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder={pricePerUnit > 0 ? formatBR(totalValue) : '0,00'}
+                  value={paymentForm.amount}
+                  onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Data do Pagamento *</label>
+                <Input
+                  type="date"
+                  value={paymentForm.paymentDate}
+                  onChange={e => setPaymentForm(f => ({ ...f, paymentDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Método de Pagamento</label>
+                <select
+                  value={paymentForm.paymentMethod}
+                  onChange={e => setPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value="pix">PIX</option>
+                  <option value="transferencia">Transferência Bancária</option>
+                  <option value="boleto">Boleto</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Nº da Nota Fiscal / Referência</label>
+                <Input
+                  placeholder="Ex: NF-001234"
+                  value={paymentForm.invoiceNumber}
+                  onChange={e => setPaymentForm(f => ({ ...f, invoiceNumber: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Observações</label>
+                <Input
+                  placeholder="Observações sobre o pagamento..."
+                  value={paymentForm.notes}
+                  onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <Button variant="outline" className="flex-1" onClick={() => setShowPaymentModal(false)}>Cancelar</Button>
+              <Button
+                className="flex-1 bg-green-700 hover:bg-green-800 text-white"
+                onClick={handleRegisterPayment}
+                disabled={addPaymentMut.isPending}
+              >
+                {addPaymentMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                {addPaymentMut.isPending ? 'Salvando...' : 'Confirmar Pagamento'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Photo Modal */}

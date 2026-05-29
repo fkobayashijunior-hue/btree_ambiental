@@ -188,4 +188,113 @@ export const buyerClientsRouter = router({
       await db.delete(buyerPayments).where(eq(buyerPayments.id, input.id));
       return { success: true };
     }),
+
+  // === DASHBOARD FINANCEIRO ===
+  // Returns financial summary per buyer: total receivables (from cargo loads), total paid, balance
+  financialDashboard: protectedProcedure
+    .input(z.object({
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Get all active buyers
+      const buyers = await db.select().from(buyerClients).where(eq(buyerClients.active, 1)).orderBy(buyerClients.name);
+
+      // For each buyer, calculate receivables from cargo loads and payments received
+      const results = await Promise.all(buyers.map(async (buyer) => {
+        // Build date conditions for cargo loads
+        let dateConditions = '';
+        const params: any[] = [buyer.id, buyer.name];
+        if (input.startDate) {
+          dateConditions += ` AND (cl.date >= ? OR cl.delivery_date >= ?)`;
+          params.push(input.startDate, input.startDate);
+        }
+        if (input.endDate) {
+          dateConditions += ` AND (cl.date <= ? OR cl.delivery_date <= ?)`;
+          params.push(input.endDate + ' 23:59:59', input.endDate + ' 23:59:59');
+        }
+
+        // Get cargo loads for this buyer
+        const [loadsResult] = await db.execute(sql`
+          SELECT 
+            COUNT(*) as total_loads,
+            SUM(CAST(REPLACE(COALESCE(cl.weight_net_kg, cl.weight_kg, '0'), ',', '.') AS DECIMAL(15,3))) as total_weight_kg,
+            SUM(CAST(REPLACE(COALESCE(cl.volume_m3, '0'), ',', '.') AS DECIMAL(15,3))) as total_volume_m3
+          FROM cargo_loads cl
+          WHERE (cl.destination_id = ${buyer.id + 10000} OR cl.destination = ${buyer.name})
+          ${input.startDate ? sql`AND cl.date >= ${input.startDate}` : sql``}
+          ${input.endDate ? sql`AND cl.date <= ${input.endDate + ' 23:59:59'}` : sql``}
+        `);
+
+        const loads = Array.isArray(loadsResult) ? loadsResult[0] as any : loadsResult as any;
+        const totalWeightKg = parseFloat(String(loads?.total_weight_kg || 0)) || 0;
+        const totalVolumeM3 = parseFloat(String(loads?.total_volume_m3 || 0)) || 0;
+        const totalLoads = parseInt(String(loads?.total_loads || 0)) || 0;
+
+        // Calculate receivable based on buyer's price and unit
+        const pricePerUnit = parseFloat(String(buyer.pricePerUnit || 0).replace(',', '.')) || 0;
+        const unit = buyer.unit || 'ton';
+        const totalQuantity = unit === 'ton' ? totalWeightKg / 1000 : totalVolumeM3;
+        const totalReceivable = pricePerUnit * totalQuantity;
+
+        // Get payments received for this buyer
+        const paymentsResult = await db.execute(sql`
+          SELECT 
+            SUM(CAST(REPLACE(amount, ',', '.') AS DECIMAL(15,2))) as total_paid,
+            COUNT(*) as payment_count
+          FROM buyer_payments
+          WHERE buyer_id = ${buyer.id} AND status = 'pago'
+          ${input.startDate ? sql`AND payment_date >= ${input.startDate}` : sql``}
+          ${input.endDate ? sql`AND payment_date <= ${input.endDate}` : sql``}
+        `);
+
+        const paymentsData = Array.isArray(paymentsResult) ? paymentsResult[0] as any : paymentsResult as any;
+        const totalPaid = parseFloat(String(paymentsData?.total_paid || 0)) || 0;
+        const paymentCount = parseInt(String(paymentsData?.payment_count || 0)) || 0;
+
+        return {
+          id: buyer.id,
+          name: buyer.name,
+          city: buyer.city,
+          state: buyer.state,
+          phone: buyer.phone,
+          email: buyer.email,
+          pricePerUnit: buyer.pricePerUnit,
+          unit: buyer.unit || 'ton',
+          totalLoads,
+          totalWeightKg,
+          totalVolumeM3,
+          totalQuantity,
+          totalReceivable,
+          totalPaid,
+          balance: totalReceivable - totalPaid,
+          paymentCount,
+        };
+      }));
+
+      // Calculate totals
+      const grandTotalReceivable = results.reduce((s, r) => s + r.totalReceivable, 0);
+      const grandTotalPaid = results.reduce((s, r) => s + r.totalPaid, 0);
+      const grandBalance = grandTotalReceivable - grandTotalPaid;
+
+      return {
+        buyers: results,
+        totals: { grandTotalReceivable, grandTotalPaid, grandBalance },
+      };
+    }),
+
+  // Get payment history for a specific buyer
+  getPayments: protectedProcedure
+    .input(z.object({ buyerId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const payments = await db.select().from(buyerPayments)
+        .where(eq(buyerPayments.buyerId, input.buyerId))
+        .orderBy(desc(buyerPayments.id));
+      return payments;
+    }),
 });
