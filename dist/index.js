@@ -2529,7 +2529,7 @@ init_schema();
 init_cloudinary();
 import { z as z6 } from "zod";
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq6, desc as desc3, and as and3, sql as sql2, ne, or as or3 } from "drizzle-orm";
+import { eq as eq6, desc as desc3, asc, and as and3, sql as sql2, ne, or as or3 } from "drizzle-orm";
 import mysql3 from "mysql2/promise";
 async function getDirectConnection() {
   const conn = await mysql3.createConnection(process.env.DATABASE_URL);
@@ -3703,7 +3703,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       lengthM: cargoLoads.lengthM,
       notes: cargoLoads.notes,
       receiverName: cargoLoads.receiverName
-    }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(desc3(cargoLoads.date));
+    }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
     let buyerInfo = null;
     if (input.destinationId && input.destinationId >= 1e4) {
       const buyerRows = await db.select({
@@ -8286,6 +8286,90 @@ var buyerClientsRouter = router({
     if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(buyerPayments).where(eq24(buyerPayments.id, input.id));
     return { success: true };
+  }),
+  // === DASHBOARD FINANCEIRO ===
+  // Returns financial summary per buyer: total receivables (from cargo loads), total paid, balance
+  financialDashboard: protectedProcedure.input(z25.object({
+    startDate: z25.string().optional(),
+    endDate: z25.string().optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
+    const buyers = await db.select().from(buyerClients).where(eq24(buyerClients.active, 1)).orderBy(buyerClients.name);
+    const results = await Promise.all(buyers.map(async (buyer) => {
+      let dateConditions = "";
+      const params = [buyer.id, buyer.name];
+      if (input.startDate) {
+        dateConditions += ` AND (cl.date >= ? OR cl.delivery_date >= ?)`;
+        params.push(input.startDate, input.startDate);
+      }
+      if (input.endDate) {
+        dateConditions += ` AND (cl.date <= ? OR cl.delivery_date <= ?)`;
+        params.push(input.endDate + " 23:59:59", input.endDate + " 23:59:59");
+      }
+      const [loadsResult] = await db.execute(sql14`
+          SELECT 
+            COUNT(*) as total_loads,
+            SUM(CAST(REPLACE(COALESCE(cl.weight_net_kg, cl.weight_kg, '0'), ',', '.') AS DECIMAL(15,3))) as total_weight_kg,
+            SUM(CAST(REPLACE(COALESCE(cl.volume_m3, '0'), ',', '.') AS DECIMAL(15,3))) as total_volume_m3
+          FROM cargo_loads cl
+          WHERE (cl.destination_id = ${buyer.id + 1e4} OR cl.destination = ${buyer.name})
+          ${input.startDate ? sql14`AND cl.date >= ${input.startDate}` : sql14``}
+          ${input.endDate ? sql14`AND cl.date <= ${input.endDate + " 23:59:59"}` : sql14``}
+        `);
+      const loads = Array.isArray(loadsResult) ? loadsResult[0] : loadsResult;
+      const totalWeightKg = parseFloat(String(loads?.total_weight_kg || 0)) || 0;
+      const totalVolumeM3 = parseFloat(String(loads?.total_volume_m3 || 0)) || 0;
+      const totalLoads = parseInt(String(loads?.total_loads || 0)) || 0;
+      const pricePerUnit = parseFloat(String(buyer.pricePerUnit || 0).replace(",", ".")) || 0;
+      const unit = buyer.unit || "ton";
+      const totalQuantity = unit === "ton" ? totalWeightKg / 1e3 : totalVolumeM3;
+      const totalReceivable = pricePerUnit * totalQuantity;
+      const paymentsResult = await db.execute(sql14`
+          SELECT 
+            SUM(CAST(REPLACE(amount, ',', '.') AS DECIMAL(15,2))) as total_paid,
+            COUNT(*) as payment_count
+          FROM buyer_payments
+          WHERE buyer_id = ${buyer.id} AND status = 'pago'
+          ${input.startDate ? sql14`AND payment_date >= ${input.startDate}` : sql14``}
+          ${input.endDate ? sql14`AND payment_date <= ${input.endDate}` : sql14``}
+        `);
+      const paymentsData = Array.isArray(paymentsResult) ? paymentsResult[0] : paymentsResult;
+      const totalPaid = parseFloat(String(paymentsData?.total_paid || 0)) || 0;
+      const paymentCount = parseInt(String(paymentsData?.payment_count || 0)) || 0;
+      return {
+        id: buyer.id,
+        name: buyer.name,
+        city: buyer.city,
+        state: buyer.state,
+        phone: buyer.phone,
+        email: buyer.email,
+        pricePerUnit: buyer.pricePerUnit,
+        unit: buyer.unit || "ton",
+        totalLoads,
+        totalWeightKg,
+        totalVolumeM3,
+        totalQuantity,
+        totalReceivable,
+        totalPaid,
+        balance: totalReceivable - totalPaid,
+        paymentCount
+      };
+    }));
+    const grandTotalReceivable = results.reduce((s, r) => s + r.totalReceivable, 0);
+    const grandTotalPaid = results.reduce((s, r) => s + r.totalPaid, 0);
+    const grandBalance = grandTotalReceivable - grandTotalPaid;
+    return {
+      buyers: results,
+      totals: { grandTotalReceivable, grandTotalPaid, grandBalance }
+    };
+  }),
+  // Get payment history for a specific buyer
+  getPayments: protectedProcedure.input(z25.object({ buyerId: z25.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
+    const payments = await db.select().from(buyerPayments).where(eq24(buyerPayments.buyerId, input.buyerId)).orderBy(desc20(buyerPayments.id));
+    return payments;
   })
 });
 
@@ -10302,6 +10386,39 @@ async function startServer() {
       });
     } catch (e) {
       return res.status(500).json({ error: e.message, stack: e.stack });
+    }
+  });
+  app.get("/api/image-proxy", async (req, res) => {
+    try {
+      const url = req.query.url;
+      if (!url || !url.startsWith("http")) {
+        return res.status(400).json({ error: "Invalid URL" });
+      }
+      const allowed = ["d2xsxph8kpxj0f.cloudfront.net", "api.qrserver.com", "btreeambiental.com"];
+      const urlObj = new URL(url);
+      if (!allowed.some((d) => urlObj.hostname.endsWith(d))) {
+        return res.status(403).json({ error: "Domain not allowed" });
+      }
+      const https = await import("https");
+      const http = await import("http");
+      const protocol = urlObj.protocol === "https:" ? https : http;
+      const chunks = [];
+      await new Promise((resolve, reject) => {
+        protocol.default.get(url, (imgRes) => {
+          imgRes.on("data", (chunk) => chunks.push(chunk));
+          imgRes.on("end", () => resolve());
+          imgRes.on("error", reject);
+        }).on("error", reject);
+      });
+      const buffer = Buffer.concat(chunks);
+      let contentType = "image/png";
+      if (buffer[0] === 255 && buffer[1] === 216) contentType = "image/jpeg";
+      else if (buffer[0] === 71 && buffer[1] === 73) contentType = "image/gif";
+      else if (buffer[0] === 82 && buffer[1] === 73) contentType = "image/webp";
+      const base64 = buffer.toString("base64");
+      res.json({ base64: `data:${contentType};base64,${base64}` });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
     }
   });
   app.use(
