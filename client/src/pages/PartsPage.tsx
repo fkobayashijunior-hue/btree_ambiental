@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +15,7 @@ import {
 } from "lucide-react";
 
 // ─── Logos e dados de contato ────────────────────────────────────────────────
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1741107516/btree/logos/logo-kobayashi_ycxsqj.png";
+const BTREE_LOGO = BTREE_LOGO_B64; // base64 embedded, no CORS
 const BTREE_SITE = "https://btreeambiental.com";
 const BTREE_CONTATO = "(44) 99999-9999 | contato@btreeambiental.com";
 const BTREE_ENDERECO = "Astorga - PR | BTREE Ambiental";
@@ -35,13 +35,14 @@ type CartItem = {
 };
 
 // ─── Geração de PDF ───────────────────────────────────────────────────────────
-function generatePDF(items: CartItem[], title: string, supplierFilter?: string) {
+async function generatePDF(items: CartItem[], title: string, supplierFilter?: string) {
+  const [kobayashiB64, qrB64] = await loadPdfAssets();
   const filteredItems = supplierFilter
     ? items.filter(i => (i.supplier || "Sem fornecedor") === supplierFilter)
     : items;
 
   const now = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(BTREE_SITE)}`;
+  const qrUrl = qrB64;
 
   const rows = filteredItems.map(item => {
     const total = item.unitCost
@@ -95,7 +96,7 @@ function generatePDF(items: CartItem[], title: string, supplierFilter?: string) 
 </head>
 <body>
   <div class="pdf-header">
-    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
     <div class="pdf-header-text">
       <h1>Lista de Compras — ${title}</h1>
       <p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${now}</p>
@@ -133,7 +134,7 @@ function generatePDF(items: CartItem[], title: string, supplierFilter?: string) 
 
   <div class="footer">
     <div class="footer-left" style="display:flex;align-items:center;gap:10px;">
-      <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" style="height:28px;" onerror="this.style.display='none'" />
+      <img src="${kobayashiB64}" alt="Kobayashi" style="height:28px;" />
       <div style="font-size:10px;color:#555;">
         Desenvolvido por <strong style="color:#0d4f2e;">Kobayashi Desenvolvimento de Sistemas</strong><br/>
         <a href="${BTREE_SITE}" style="color:#15803d;text-decoration:none;font-weight:bold;">${BTREE_SITE}</a>
@@ -147,12 +148,8 @@ function generatePDF(items: CartItem[], title: string, supplierFilter?: string) 
 </body>
 </html>`;
 
-  const win = window.open("", "_blank");
-  if (!win) { toast.error("Permita pop-ups para gerar o PDF"); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 500);
+  toast.info("Gerando PDF...");
+  await generatePDFFromHtml(html, `lista-compras-${title.replace(/\s+/g, '-')}.pdf`);
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -346,13 +347,10 @@ export default function MachineHoursPage() {
   };
 
   // ===== EXPORTAR PDF =====
-  const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-  const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
-  const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
-
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const allRecords = [...filteredHours, ...filteredMaint, ...filteredFuel];
     if (allRecords.length === 0) { toast.error("Nenhum registro para exportar"); return; }
+    const [kobayashiB64, qrB64] = await loadPdfAssets();
     const vehicleName = filterEquipment ? (equipMap[parseInt(filterEquipment)] || "Todos") : "Todos os equipamentos";
     const now = new Date().toLocaleString("pt-BR");
 
@@ -421,7 +419,7 @@ export default function MachineHoursPage() {
 </head>
 <body>
 <div class="header">
-  <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+  <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" />
   <div class="header-text">
     <h1>Relatório de Controle de Máquinas</h1>
     <p>BTREE Empreendimentos LTDA · btreeambiental.com · Equipamento: ${vehicleName} · Emitido em ${now}</p>
@@ -449,24 +447,21 @@ export default function MachineHoursPage() {
 </div>
 <div class="footer">
   <div class="footer-left">
-    <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+    <img src="${kobayashiB64}" alt="Kobayashi" />
     <div class="footer-text">
       Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
       <a href="https://btreeambiental.com">btreeambiental.com</a>
     </div>
   </div>
   <div class="footer-right">
-    <img src="${BTREE_QR}" alt="QR Code" />
+    <img src="${qrB64}" alt="QR Code" />
     <span>Acesse nosso site</span>
   </div>
 </div>
-<script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
 </body>
 </html>`;
-    const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
-    win.document.write(html);
-    win.document.close();
+    toast.info("Gerando PDF...");
+    await generatePDFFromHtml(html, `maquinas-${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
   const isPending = createHoursMutation.isPending || createMaintMutation.isPending || createFuelMutation.isPending || updateHoursMutation.isPending || updateMaintMutation.isPending;

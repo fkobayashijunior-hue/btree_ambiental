@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
+import { BTREE_LOGO_B64, fetchImageAsBase64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -22,8 +23,7 @@ import {
 } from "@/components/ui/select";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1741107516/btree/logos/logo-kobayashi_ycxsqj.png";
+const BTREE_LOGO = BTREE_LOGO_B64; // base64 embedded, no CORS
 const BTREE_SITE = "https://btreeambiental.com";
 const BTREE_CONTATO = "(44) 99999-9999 | contato@btreeambiental.com";
 const BTREE_ENDERECO = "Astorga - PR | BTREE Ambiental";
@@ -82,7 +82,7 @@ function formatCurrency(val?: string | null) {
 }
 
 // ─── PDF da Ficha de Manutenção ───────────────────────────────────────────────
-function generateMaintenancePDF(opts: {
+async function generateMaintenancePDF(opts: {
   equipName: string;
   equipBrand?: string | null;
   equipModel?: string | null;
@@ -95,7 +95,11 @@ function generateMaintenancePDF(opts: {
   photos?: string[];
 }) {
   const now = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(BTREE_SITE)}`;
+  const [kobayashiB64, qrB64] = await loadPdfAssets();
+  // Pre-load part photos via proxy
+  const partPhotosB64 = await Promise.all(
+    opts.parts.map(p => p.partPhotoUrl ? fetchImageAsBase64(p.partPhotoUrl) : Promise.resolve(''))
+  );
 
   const totalParts = opts.parts.reduce((acc, p) => {
     if (p.unitCost) acc += parseFloat(p.unitCost.replace(",", ".")) * p.quantity;
@@ -104,12 +108,12 @@ function generateMaintenancePDF(opts: {
   const laborNum = opts.laborCost ? parseFloat(opts.laborCost.replace(",", ".")) : 0;
   const totalGeral = totalParts + laborNum;
 
-  const partsRows = opts.parts.map(p => {
+  const partsRows = opts.parts.map((p, idx) => {
     const total = p.unitCost
       ? `R$ ${(parseFloat(p.unitCost.replace(",", ".")) * p.quantity).toFixed(2)}`
       : "—";
-    const photoCell = p.partPhotoUrl
-      ? `<img src="${p.partPhotoUrl}" style="height:40px;width:40px;object-fit:cover;border-radius:4px;" />`
+    const photoCell = partPhotosB64[idx]
+      ? `<img src="${partPhotosB64[idx]}" style="height:40px;width:40px;object-fit:cover;border-radius:4px;" />`
       : "—";
     return `
       <tr>
@@ -160,7 +164,7 @@ function generateMaintenancePDF(opts: {
 </head>
 <body>
   <div class="pdf-header">
-    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
     <div class="pdf-header-text">
       <h1>Ficha de Manutenção — ${typeLabel}</h1>
       <p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${now}</p>
@@ -214,25 +218,21 @@ function generateMaintenancePDF(opts: {
 
   <div class="footer">
     <div class="footer-left" style="display:flex;align-items:center;gap:10px;">
-      <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" style="height:28px;" onerror="this.style.display='none'" />
+      ${kobayashiB64 ? `<img src="${kobayashiB64}" alt="Kobayashi" style="height:28px;" />` : ''}
       <div style="font-size:10px;color:#555;">
         Desenvolvido por <strong style="color:#0d4f2e;">Kobayashi Desenvolvimento de Sistemas</strong><br/>
         <a href="${BTREE_SITE}" style="color:#15803d;text-decoration:none;font-weight:bold;">${BTREE_SITE}</a>
       </div>
     </div>
     <div class="footer-right">
-      <img class="qr" src="${qrUrl}" alt="QR Code" />
+      ${qrB64 ? `<img class="qr" src="${qrB64}" alt="QR Code" />` : ''}
       <span class="qr-label">Acesse nosso site</span>
     </div>
   </div>
 </body>
 </html>`;
 
-  const win = window.open("", "_blank");
-  if (!win) { toast.error("Popup bloqueado. Permita popups para gerar o PDF."); return; }
-  win.document.write(html);
-  win.document.close();
-  win.onload = () => { win.print(); };
+  await generatePDFFromHtml(html, `manutencao-${opts.equipName.replace(/\s+/g,'-')}.pdf`);
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────

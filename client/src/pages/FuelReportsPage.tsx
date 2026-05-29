@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,16 +111,12 @@ export default function FuelReportsPage() {
   }
 
   // Export to PDF (printable HTML)
-  function exportPDF() {
+  async function exportPDF() {
     if (filteredRecords.length === 0) {
       toast.error("Nenhum registro para exportar");
       return;
     }
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error("Popup bloqueado. Permita popups para gerar PDF.");
-      return;
-    }
+    const [kobayashiB64, qrB64] = await loadPdfAssets();
 
     const supplierRows = bySupplier.map(([name, data]) => `
       <tr>
@@ -140,71 +137,66 @@ export default function FuelReportsPage() {
       </tr>
     `).join('');
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Relatório de Combustível - BTREE Ambiental</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-          h1 { color: #15803d; margin-bottom: 5px; }
-          h2 { color: #166534; margin-top: 30px; }
-          .subtitle { color: #666; margin-bottom: 20px; }
-          .stats { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
-          .stat-card { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 15px; min-width: 150px; }
-          .stat-value { font-size: 24px; font-weight: bold; color: #15803d; }
-          .stat-label { font-size: 12px; color: #666; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          th { background: #15803d; color: white; padding: 8px; text-align: left; }
-          @media print { body { padding: 0; } }
-        </style>
-      </head>
-      <body>
-        <h1>BTREE Ambiental</h1>
-        <p class="subtitle">Relatório de Consumo de Combustível — ${new Date(startDate).toLocaleDateString('pt-BR')} a ${new Date(endDate).toLocaleDateString('pt-BR')}${filterLocation !== 'all' ? ` — Local: ${LOCATION_LABELS[filterLocation] || filterLocation}` : ''}</p>
-        
-        <div class="stats">
-          <div class="stat-card">
-            <div class="stat-value">${stats.totalLiters.toFixed(0)} L</div>
-            <div class="stat-label">Total Litros</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">R$ ${stats.totalCost.toFixed(2)}</div>
-            <div class="stat-label">Total Gasto</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">R$ ${stats.avgPrice.toFixed(2)}/L</div>
-            <div class="stat-label">Preço Médio</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${stats.count}</div>
-            <div class="stat-label">Abastecimentos</div>
-          </div>
+    const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Combustível - BTREE Ambiental</title>
+      <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;background:#fff;}
+      .header{background:#14532d;color:white;padding:18px 24px;display:flex;align-items:center;gap:18px;}
+      .header img{height:50px;}
+      .header-text h1{font-size:20px;font-weight:bold;}
+      .header-text p{font-size:12px;opacity:.85;margin-top:2px;}
+      .content{padding:20px 24px;}
+      h1{color:#15803d;margin-bottom:5px;font-size:16px;}
+      h2{color:#166534;margin-top:24px;font-size:14px;}
+      .subtitle{color:#666;margin-bottom:16px;font-size:12px;}
+      .stats{display:flex;gap:16px;margin:16px 0;flex-wrap:wrap;}
+      .stat-card{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;min-width:130px;}
+      .stat-value{font-size:20px;font-weight:bold;color:#15803d;}
+      .stat-label{font-size:11px;color:#666;}
+      table{width:100%;border-collapse:collapse;margin-top:8px;}
+      th{background:#15803d;color:white;padding:7px 8px;text-align:left;font-size:11px;}
+      td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;}
+      tr:nth-child(even) td{background:#f0fdf4;}
+      .footer{margin-top:24px;padding:14px 24px;border-top:2px solid #14532d;display:flex;align-items:center;justify-content:space-between;}
+      .footer-left{display:flex;align-items:center;gap:10px;}
+      .footer-left img{height:28px;}
+      .footer-text{font-size:10px;color:#555;}
+      .footer-text a{color:#15803d;text-decoration:none;font-weight:bold;}
+      .footer-right{display:flex;flex-direction:column;align-items:center;gap:4px;}
+      .footer-right img{width:60px;height:60px;}
+      .footer-right span{font-size:9px;color:#555;}
+      </style></head><body>
+      <div class="header">
+        <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" />
+        <div class="header-text">
+          <h1>BTREE Ambiental</h1>
+          <p>Relatório de Consumo de Combustível &middot; Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
         </div>
-
+      </div>
+      <div class="content">
+        <p class="subtitle">Período: ${new Date(startDate).toLocaleDateString('pt-BR')} a ${new Date(endDate).toLocaleDateString('pt-BR')}${filterLocation !== 'all' ? ` &mdash; Local: ${LOCATION_LABELS[filterLocation] || filterLocation}` : ''}</p>
+        <div class="stats">
+          <div class="stat-card"><div class="stat-value">${stats.totalLiters.toFixed(0)} L</div><div class="stat-label">Total Litros</div></div>
+          <div class="stat-card"><div class="stat-value">R$ ${stats.totalCost.toFixed(2)}</div><div class="stat-label">Total Gasto</div></div>
+          <div class="stat-card"><div class="stat-value">R$ ${stats.avgPrice.toFixed(2)}/L</div><div class="stat-label">Preço Médio</div></div>
+          <div class="stat-card"><div class="stat-value">${stats.count}</div><div class="stat-label">Abastecimentos</div></div>
+        </div>
         <h2>Resumo por Fornecedor</h2>
-        <table>
-          <thead><tr><th>Fornecedor</th><th style="text-align:right">Litros</th><th style="text-align:right">Custo</th><th style="text-align:center">Qtd</th></tr></thead>
-          <tbody>${supplierRows}</tbody>
-        </table>
-
+        <table><thead><tr><th>Fornecedor</th><th style="text-align:right">Litros</th><th style="text-align:right">Custo</th><th style="text-align:center">Qtd</th></tr></thead><tbody>${supplierRows}</tbody></table>
         <h2>Detalhamento</h2>
-        <table>
-          <thead><tr><th>Data</th><th>Fornecedor</th><th style="text-align:right">Litros</th><th style="text-align:right">Preço/L</th><th style="text-align:right">Total</th></tr></thead>
-          <tbody>${detailRows}</tbody>
-        </table>
-
-        <p style="margin-top:30px;font-size:11px;color:#999">Gerado em ${new Date().toLocaleString('pt-BR')} — BTREE Ambiental</p>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
-    toast.success("PDF gerado! Use Ctrl+P para salvar.");
+        <table><thead><tr><th>Data</th><th>Fornecedor</th><th style="text-align:right">Litros</th><th style="text-align:right">Preço/L</th><th style="text-align:right">Total</th></tr></thead><tbody>${detailRows}</tbody></table>
+      </div>
+      <div class="footer">
+        <div class="footer-left">
+          <img src="${kobayashiB64}" alt="Kobayashi" />
+          <div class="footer-text">Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/><a href="https://btreeambiental.com">btreeambiental.com</a></div>
+        </div>
+        <div class="footer-right">
+          <img src="${qrB64}" alt="QR Code" />
+          <span>Acesse nosso site</span>
+        </div>
+      </div>
+    </body></html>`;
+    toast.info("Gerando PDF...");
+    await generatePDFFromHtml(fullHtml, `combustivel-${startDate}-${endDate}.pdf`);
   }
 
   return (

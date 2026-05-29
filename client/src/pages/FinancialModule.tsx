@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,10 +64,8 @@ const STATUS_LABELS: Record<string, string> = {
 const COLORS_INCOME = ["#16a34a", "#22c55e", "#4ade80", "#86efac", "#bbf7d0", "#dcfce7"];
 const COLORS_EXPENSE = ["#dc2626", "#ef4444", "#f87171", "#fca5a5", "#fecaca", "#fee2e2", "#fef2f2", "#fef9c3", "#fef08a", "#fde047"];
 
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+const BTREE_LOGO = BTREE_LOGO_B64; // base64 embedded, no CORS
 const BTREE_SITE = "btreeambiental.com";
-const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 
 function getCurrentMonth() {
   const now = new Date();
@@ -219,11 +218,12 @@ export default function FinancialModule() {
   }));
 
   // ── Exportar PDF mensal ──────────────────────────────────────────────────
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!summary || (summary.entries as any[]).length === 0) {
       toast.error("Nenhum lançamento neste mês");
       return;
     }
+    const [kobayashiB64, qrB64] = await loadPdfAssets();
     const monthLabel = fmtMonth(selectedMonth);
     const allEntries = summary.entries as any[];
     const receitas = allEntries.filter(e => e.type === "receita");
@@ -343,23 +343,20 @@ export default function FinancialModule() {
       </div>
       <div class="footer">
         <div class="footer-left">
-          <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+          <img class="kobayashi" src="${kobayashiB64}" alt="Kobayashi" />
           <div class="footer-text">
             Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
             <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
           </div>
         </div>
         <div class="footer-right">
-          <img src="${BTREE_QR}" alt="QR Code" />
+          <img src="${qrB64}" alt="QR Code" />
           <span>Acesse nosso site</span>
         </div>
       </div>
-      <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
     </body></html>`;
-    const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
-    win.document.write(html);
-    win.document.close();
+    toast.info("Gerando PDF...");
+    await generatePDFFromHtml(html, `financeiro-${selectedMonth}.pdf`);
   };
 
   const categories = form.type === "receita" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;

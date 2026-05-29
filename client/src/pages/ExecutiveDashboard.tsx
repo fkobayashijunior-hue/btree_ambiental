@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -71,13 +72,8 @@ export default function ExecutiveDashboard() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const generatePdfMutation = trpc.reportPdf.generatePdfHtml.useMutation({
-    onSuccess: (data) => {
-      const w = window.open("", "_blank");
-      if (w) {
-        w.document.write(data.html);
-        w.document.close();
-        setTimeout(() => w.print(), 500);
-      }
+    onSuccess: async (data) => {
+      await generatePDFFromHtml(data.html, `relatorio-executivo-${new Date().toISOString().slice(0,10)}.pdf`);
       setIsGeneratingPdf(false);
     },
     onError: () => setIsGeneratingPdf(false),

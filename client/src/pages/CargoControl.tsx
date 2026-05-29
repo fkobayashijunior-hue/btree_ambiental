@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { formatBR, formatBRL } from "@/lib/formatBR";
+import { BTREE_LOGO_B64, fetchImageAsBase64, loadPdfAssets, generatePDFFromHtml, buildPdfFooterHtml, PDF_BASE_STYLES } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,9 +110,8 @@ function compressImage(file: File): Promise<string> {
 }
 
 // ===== GERAÇÃO DE PDF =====
-// ===== CONSTANTES DE LOGOS =====
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+// Logo constants are now imported from pdfUtils (base64 for CORS-free rendering)
+const BTREE_LOGO = BTREE_LOGO_B64; // base64 embedded, no CORS
 const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 
 const PDF_STYLES = `
@@ -178,31 +178,72 @@ const PDF_STYLES = `
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 `;
 
-const PDF_FOOTER_HTML = `
-<div class="pdf-footer">
-  <div class="pdf-footer-left">
-    <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
-    <div class="pdf-footer-text">
-      Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
-      <a href="https://btreeambiental.com">btreeambiental.com</a>
-    </div>
-  </div>
-  <div class="pdf-footer-right">
-    <img src="${BTREE_QR}" alt="QR Code" />
-    <span>Acesse nosso site</span>
-  </div>
-</div>`;
+// PDF_FOOTER_HTML is now built dynamically with base64 logos via loadPdfAssets()
+// Use buildPdfFooterHtml(kobayashiB64, qrB64) from pdfUtils instead
 
 // ===== PDF INDIVIDUAL: FICHA DA CARGA =====
-function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE Ambiental") {
+async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE Ambiental") {
+  const [kobayashiB64, qrB64] = await loadPdfAssets();
+  // Pre-load photos via proxy to avoid CORS
+  const photos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson as string); } catch { return []; } })() : [];
+  const [driverPhotoB64, weightOutPhotoB64, weightInPhotoB64, ...photoB64s] = await Promise.all([
+    (cargo as any).driverPhotoUrl ? fetchImageAsBase64((cargo as any).driverPhotoUrl) : Promise.resolve(''),
+    (cargo as any).weightOutPhotoUrl ? fetchImageAsBase64((cargo as any).weightOutPhotoUrl) : Promise.resolve(''),
+    (cargo as any).weightInPhotoUrl ? fetchImageAsBase64((cargo as any).weightInPhotoUrl) : Promise.resolve(''),
+    ...photos.map((p: string) => fetchImageAsBase64(p)),
+  ]);
+  const footerHtml = buildPdfFooterHtml(kobayashiB64, qrB64);
   const date = cargo.date ? safeDate(cargo.date as string).toLocaleDateString("pt-BR") : "-";
   const statusBadge = cargo.status === "entregue" ? "Entregue" : cargo.status === "cancelado" ? "Cancelado" : "Pendente";
   const statusClass = cargo.status === "entregue" ? "badge-entregue" : cargo.status === "cancelado" ? "badge-cancelado" : "badge-pendente";
-  const photos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson as string); } catch { return []; } })() : [];
-
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Ficha de Carga #${cargo.id} - BTREE Ambiental</title>
-<style>${PDF_STYLES}</style></head><body>
+<style>${PDF_BASE_STYLES}
+  @page { size: A4; margin: 0; }
+  .page { page-break-after: always; min-height: 100vh; display: flex; flex-direction: column; }
+  .page:last-child { page-break-after: auto; }
+  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
+  .pdf-header img { height: 52px; }
+  .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
+  .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
+  .pdf-subheader { background: #f0fdf4; padding: 10px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .pdf-subheader .badge { display: inline-block; padding: 4px 14px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .badge-pendente { background: #fef9c3; color: #854d0e; }
+  .badge-entregue { background: #dcfce7; color: #166534; }
+  .badge-cancelado { background: #fee2e2; color: #991b1b; }
+  .pdf-content { padding: 20px 32px; flex: 1; }
+  .section { margin-bottom: 18px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 13px; color: #0d4f2e; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+  .field { padding: 10px 16px; border-bottom: 1px solid #f3f4f6; border-right: 1px solid #f3f4f6; }
+  .field:last-child { border-bottom: none; }
+  .field-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .field-value { font-size: 13px; font-weight: 500; margin-top: 2px; color: #111; }
+  .field-value.highlight { color: #0d4f2e; font-weight: 700; font-size: 15px; }
+  .driver-card { display: flex; gap: 16px; padding: 16px; align-items: center; }
+  .driver-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #0d4f2e; }
+  .driver-avatar-placeholder { width: 80px; height: 80px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #9ca3af; border: 3px solid #0d4f2e; }
+  .driver-info { flex: 1; }
+  .driver-name { font-size: 18px; font-weight: bold; color: #0d4f2e; }
+  .driver-role { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .vehicle-badge { display: inline-flex; align-items: center; gap: 6px; background: #0d4f2e; color: white; padding: 6px 14px; border-radius: 6px; font-size: 14px; font-weight: bold; margin-top: 6px; }
+  .tracking { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 16px; }
+  .tracking-step { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .step-done { background: #dcfce7; color: #166534; }
+  .step-current { background: #0d4f2e; color: white; }
+  .step-pending { background: #f3f4f6; color: #9ca3af; }
+  .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px 16px; }
+  .photo-item { text-align: center; }
+  .photo-item img { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; }
+  .photo-item .photo-label { font-size: 10px; color: #6b7280; margin-top: 4px; text-transform: uppercase; font-weight: 600; }
+  .doc-link { color: #0d4f2e; text-decoration: none; font-weight: 600; font-size: 12px; }
+  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 18px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .summary-item { text-align: center; }
+  .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+  .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
 <div class="page">
   <div class="pdf-header">
     <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
@@ -221,7 +262,7 @@ function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE 
     <div class="section">
       <div class="section-title">&#128104;&#8205;&#9877;&#65039; Motorista e Veículo</div>
       <div class="driver-card">
-        ${(cargo as any).driverPhotoUrl ? `<img class="driver-avatar" src="${(cargo as any).driverPhotoUrl}" alt="${cargo.driverName || 'Motorista'}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="driver-avatar-placeholder" style="display:none">&#128100;</div>` : `<div class="driver-avatar-placeholder">&#128100;</div>`}
+        ${driverPhotoB64 ? `<img class="driver-avatar" src="${driverPhotoB64}" alt="${cargo.driverName || 'Motorista'}" />` : `<div class="driver-avatar-placeholder">&#128100;</div>`}
         <div class="driver-info">
           <div class="driver-name">${cargo.driverName || "Não informado"}</div>
           <div class="driver-role">Motorista</div>
@@ -295,23 +336,21 @@ function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "BTREE 
     <div class="section">
       <div class="section-title">&#128247; Registro Fotográfico</div>
       <div class="photos-grid">
-        ${cargo.weightOutPhotoUrl ? `<div class="photo-item"><img src="${cargo.weightOutPhotoUrl}" alt="Pesagem saída" /><div class="photo-label">Pesagem Saída</div></div>` : ""}
-        ${cargo.weightInPhotoUrl ? `<div class="photo-item"><img src="${cargo.weightInPhotoUrl}" alt="Pesagem chegada" /><div class="photo-label">Pesagem Chegada</div></div>` : ""}
-        ${photos.map((p: string, i: number) => `<div class="photo-item"><img src="${p}" alt="Foto ${i + 1}" /><div class="photo-label">Foto ${i + 1}</div></div>`).join("")}
+        ${weightOutPhotoB64 ? `<div class="photo-item"><img src="${weightOutPhotoB64}" alt="Pesagem saída" /><div class="photo-label">Pesagem Saída</div></div>` : ""}
+        ${weightInPhotoB64 ? `<div class="photo-item"><img src="${weightInPhotoB64}" alt="Pesagem chegada" /><div class="photo-label">Pesagem Chegada</div></div>` : ""}
+        ${photoB64s.map((p: string, i: number) => p ? `<div class="photo-item"><img src="${p}" alt="Foto ${i + 1}" /><div class="photo-label">Foto ${i + 1}</div></div>` : '').join("")}
       </div>
     </div>` : ""}
 
   </div>
-  ${PDF_FOOTER_HTML}
+  ${footerHtml}
 </div>
-<script>window.onload = () => { setTimeout(() => { window.print(); }, 500); }</script>
 </body></html>`;
-  const win = window.open("", "_blank");
-  if (win) { win.document.write(html); win.document.close(); }
+  await generatePDFFromHtml(html, `carga-${cargo.id}-btree.pdf`);
 }
 
 // ===== PDF RELATÓRIO COMPLETO POR CLIENTE =====
-function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>, pricePerTon: number = 0) {
+async function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>, pricePerTon: number = 0) {
   const totalCargas = cargas.length;
   const totalVolume = formatBR(cargas.reduce((acc, c) => acc + parseFloat((c.volumeM3 as string) || "0"), 0), 2);
   const totalPendentes = cargas.filter(c => c.status === "pendente").length;
@@ -347,14 +386,28 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
     </tr>`;
   }).join("");
 
+  const [kobayashiB64, qrB64] = await loadPdfAssets();
+  const footerHtml = buildPdfFooterHtml(kobayashiB64, qrB64);
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Relatório de Cargas - ${clientName} - BTREE Ambiental</title>
-<style>${PDF_STYLES}
+<style>${PDF_BASE_STYLES}
   @page { size: A4 landscape; margin: 0; }
+  .page { min-height: 100vh; display: flex; flex-direction: column; }
+  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
+  .pdf-header img { height: 52px; }
+  .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
+  .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
+  .pdf-subheader { background: #f0fdf4; padding: 10px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .pdf-content { padding: 20px 32px; flex: 1; }
+  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 18px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .summary-item { text-align: center; }
+  .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+  .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="page">
   <div class="pdf-header">
-    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
     <div class="pdf-header-text">
       <h1>Relatório de Cargas</h1>
       <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString("pt-BR")}</p>
@@ -415,17 +468,15 @@ function generateClientReportPDF(clientName: string, cargas: Array<Record<string
     </table>
 
   </div>
-  ${PDF_FOOTER_HTML}
+  ${footerHtml}
 </div>
-<script>window.onload = () => { setTimeout(() => { window.print(); }, 500); }</script>
 </body></html>`;
-  const win = window.open("", "_blank");
-  if (win) { win.document.write(html); win.document.close(); }
+  await generatePDFFromHtml(html, `relatorio-cargas-${clientName.replace(/\s+/g,'-')}.pdf`);
 }
 
 // ===== COMPONENTE PRINCIPAL =====
 // ===== COMPONENTE: FECHAMENTOS SEMANAIS =====
-function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: any[], pricePerTon: number) {
+async function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: any[], pricePerTon: number) {
   const weekStartFmt = closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR') : '-';
   const weekEndFmt = closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
   const totalWeightTon = closing.totalWeightKg ? formatBR(parseFloat(closing.totalWeightKg) / 1000, 2) : '0';
@@ -472,15 +523,16 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
     </tr>`;
   }).join('');
 
+  const [kobayashiB64, qrB64] = await loadPdfAssets();
+  const footerHtml = buildPdfFooterHtml(kobayashiB64, qrB64);
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Fechamento Semanal - ${clientName} - BTREE Ambiental</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
+  ${PDF_BASE_STYLES}
   @page { size: A4; margin: 0; }
   .page { min-height: 100vh; display: flex; flex-direction: column; }
   .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
-  .pdf-header img { height: 52px; filter: brightness(0) invert(1); }
+  .pdf-header img { height: 52px; }
   .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
   .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
   .pdf-subheader { background: #f0fdf4; padding: 12px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
@@ -493,24 +545,11 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
   .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
   .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }
   .summary-item .value.blue { color: #1d4ed8; }
-  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 16px; }
-  table th { background: #0d4f2e; color: white; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
-  table td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
-  table tr:nth-child(even) { background: #f9fafb; }
-  .pdf-footer { padding: 12px 32px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
-  .pdf-footer-left { display: flex; align-items: center; gap: 10px; }
-  .pdf-footer-left img { height: 28px; }
-  .pdf-footer-text { font-size: 10px; color: #555; }
-  .pdf-footer-text strong { color: #0d4f2e; }
-  .pdf-footer-text a { color: #15803d; text-decoration: none; font-weight: bold; }
-  .pdf-footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .pdf-footer-right img { width: 60px; height: 60px; }
-  .pdf-footer-right span { font-size: 9px; color: #555; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="page">
   <div class="pdf-header">
-    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <img src="${BTREE_LOGO}" alt="BTREE Ambiental" />
     <div class="pdf-header-text">
       <h1>Fechamento Semanal</h1>
       <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
@@ -548,12 +587,10 @@ function generateWeeklyClosingPDF(closing: any, clientName: string, loadsAll: an
       <tbody>${loadsRows}</tbody>
     </table>` : ''}
   </div>
-  ${PDF_FOOTER_HTML}
+  ${footerHtml}
 </div>
-<script>window.onload = () => { setTimeout(() => { window.print(); }, 500); }</script>
 </body></html>`;
-  const win = window.open('', '_blank');
-  if (win) { win.document.write(html); win.document.close(); }
+  await generatePDFFromHtml(html, `fechamento-semanal-${clientName.replace(/\s+/g,'-')}.pdf`);
 }
 
 function WeeklyClosingsView({

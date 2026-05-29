@@ -17,6 +17,7 @@ import {
   MapPin, Navigation, AlertCircle, Banknote, Bell, Edit3
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO } from "date-fns";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { ptBR } from "date-fns/locale";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -384,15 +385,14 @@ export default function AttendanceList() {
   };
 
   // ── Constantes de logo para PDF ────────────────────────────────────────────
-  const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-  const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+  const BTREE_LOGO = BTREE_LOGO_B64; // base64 embedded, no CORS
   const BTREE_SITE = "btreeambiental.com";
-  const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 
-  // ──  // ── Exportar PDF por período personalizado ───────────────────────────────
-  const handleExportPeriodoPDF = () => {
+  // ── Exportar PDF por período personalizado ───────────────────────────────
+  const handleExportPeriodoPDF = async () => {
     const records = periodoRecords as any[];
     if (records.length === 0) { toast.error("Nenhuma presença no período"); return; }
+    const [kobayashiB64, qrB64] = await loadPdfAssets();
     const fromLabel = format(parseISO(periodoFrom), "dd/MM/yyyy");
     const toLabel = format(parseISO(periodoTo), "dd/MM/yyyy");
     const periodoLabel = periodoFrom === periodoTo ? fromLabel : `${fromLabel} a ${toLabel}`;
@@ -494,28 +494,26 @@ export default function AttendanceList() {
       </div>
       <div class="footer">
         <div class="footer-left">
-          <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+          <img class="kobayashi" src="${kobayashiB64}" alt="Kobayashi" />
           <div class="footer-text">
             Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
             <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
           </div>
         </div>
         <div class="footer-right">
-          <img src="${BTREE_QR}" alt="QR Code" />
+          <img src="${qrB64}" alt="QR Code" />
           <span>Acesse nosso site</span>
         </div>
       </div>
-      <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
     </body></html>`;
-    const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
-    win.document.write(html);
-    win.document.close();
+    toast.info("Gerando PDF...");
+    await generatePDFFromHtml(html, `presencas-periodo-${periodoFrom}-${periodoTo}.pdf`);
   };
 
   // ── Exportar PDF semanal ─────────────────────────────────────────
-  const handleExportWeekPDF = () => {
+  const handleExportWeekPDF = async () => {
     if (weekByCollab.length === 0) { toast.error("Nenhuma presença na semana"); return; }
+    const [kobayashiB64, qrB64] = await loadPdfAssets();
     const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;
     const rows = weekByCollab.map(c => `
       <tr>
@@ -587,28 +585,26 @@ export default function AttendanceList() {
       </div>
       <div class="footer">
         <div class="footer-left">
-          <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+          <img class="kobayashi" src="${kobayashiB64}" alt="Kobayashi" />
           <div class="footer-text">
             Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
             <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
           </div>
         </div>
         <div class="footer-right">
-          <img src="${BTREE_QR}" alt="QR Code" />
+          <img src="${qrB64}" alt="QR Code" />
           <span>Acesse nosso site</span>
         </div>
       </div>
-      <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
     </body></html>`;
-    const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
-    win.document.write(html);
-    win.document.close();
+    toast.info("Gerando PDF...");
+    await generatePDFFromHtml(html, `presencas-semana-${fmtDate(weekStart).replace('/','-')}.pdf`);
   };
 
   // ── Exportar PDF diário ──────────────────────────────────────────────────
-  const handleExportDayPDF = () => {
+  const handleExportDayPDF = async () => {
     if ((dayRecords as any[]).length === 0) { toast.error("Nenhuma presença neste dia"); return; }
+    const [kobayashiB64, qrB64] = await loadPdfAssets();
     const dateLabel = format(parseISO(searchDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
     const sortedDayRecords = [...(dayRecords as any[])].sort((a: any, b: any) => (a.collaboratorName || "").localeCompare(b.collaboratorName || ""));
     const rows = sortedDayRecords.map((r: any) => `
@@ -678,23 +674,20 @@ export default function AttendanceList() {
       </div>
       <div class="footer">
         <div class="footer-left">
-          <img class="kobayashi" src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+          <img class="kobayashi" src="${kobayashiB64}" alt="Kobayashi" />
           <div class="footer-text">
             Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
             <a href="https://${BTREE_SITE}">${BTREE_SITE}</a>
           </div>
         </div>
         <div class="footer-right">
-          <img src="${BTREE_QR}" alt="QR Code" />
+          <img src="${qrB64}" alt="QR Code" />
           <span>Acesse nosso site</span>
         </div>
       </div>
-      <script>window.onload = () => { setTimeout(() => { window.print(); }, 400); }</script>
     </body></html>`;
-    const win = window.open("", "_blank");
-    if (!win) { toast.error("Permita popups para gerar o PDF"); return; }
-    win.document.write(html);
-    win.document.close();
+    toast.info("Gerando PDF...");
+    await generatePDFFromHtml(html, `presencas-dia-${searchDate}.pdf`);
   };
 
   const weekLabel = `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}/${format(weekEnd, "yyyy")}`;

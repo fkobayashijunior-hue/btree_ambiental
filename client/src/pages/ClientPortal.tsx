@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { formatBR, formatBRL } from "@/lib/formatBR";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -207,12 +208,12 @@ const TRACKING_STEPS: { key: TrackingStatus; label: string; icon: string; desc: 
   { key: "finalizado", label: "Finalizado", icon: "✅", desc: "Entrega concluída com sucesso" },
 ];
 
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const BTREE_LOGO = BTREE_LOGO_B64; // base64 embedded, no CORS
 const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
-const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 
 // ===== PDF FECHAMENTO SEMANAL =====
-function generateClosingPDF(closing: any, clientName: string, loads: any[], pricePerTon: number) {
+async function generateClosingPDF(closing: any, clientName: string, loads: any[], pricePerTon: number) {
+  const [kobayashiB64, qrB64] = await loadPdfAssets();
   const weekStartFmt = closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR') : '-';
   const weekEndFmt = closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
   const totalWeightTon = closing.totalWeightKg ? formatBR(parseFloat(closing.totalWeightKg) / 1000, 2) : '0';
@@ -338,23 +339,21 @@ function generateClosingPDF(closing: any, clientName: string, loads: any[], pric
   </div>
   <div class="pdf-footer">
     <div class="pdf-footer-left">
-      <img src="${KOBAYASHI_LOGO}" alt="Kobayashi" onerror="this.style.display='none'" />
+      <img src="${kobayashiB64}" alt="Kobayashi" />
       <div class="pdf-footer-text">
         Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
         <a href="https://btreeambiental.com">btreeambiental.com</a>
       </div>
     </div>
     <div class="pdf-footer-right">
-      <img src="${BTREE_QR}" alt="QR Code" />
+      <img src="${qrB64}" alt="QR Code" />
       <span>Acesse nosso site</span>
     </div>
   </div>
 </div>
-<script>window.onload = () => { setTimeout(() => { window.print(); }, 500); }</script>
 </body></html>`;
 
-  const win = window.open('', '_blank');
-  if (win) { win.document.write(html); win.document.close(); }
+  await generatePDFFromHtml(html, `fechamento-${clientName.replace(/\s+/g,'-')}-${closing.weekStart || 'semana'}.pdf`);
 }
 
 function DevContactButton() {

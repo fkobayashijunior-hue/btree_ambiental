@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useEffect } from "react";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -342,10 +343,8 @@ export default function FuelInvoicesPage() {
   };
 
   // PDF Report generation
-  const generatePDFReport = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) { toast.error("Permita popups para gerar o PDF"); return; }
-
+  const generatePDFReport = async () => {
+    const [kobayashiB64, qrB64] = await loadPdfAssets();
     const rows = filteredInvoices.map((inv: any) => `
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${inv.supplierName || ""}</td>
@@ -359,22 +358,58 @@ export default function FuelInvoicesPage() {
       </tr>
     `).join("");
 
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Relatório Contas a Pagar - Combustível</title>
-      <style>body{font-family:Arial,sans-serif;margin:20px;color:#333;}table{width:100%;border-collapse:collapse;margin-top:16px;font-size:12px;}th{background:#166534;color:white;padding:8px;text-align:left;}h1{color:#166534;font-size:20px;}
-      .summary{display:flex;gap:20px;margin:16px 0;}.summary-card{padding:12px 20px;border-radius:8px;text-align:center;}.summary-card h3{margin:0;font-size:14px;}.summary-card p{margin:4px 0 0;font-size:20px;font-weight:bold;}
-      @media print{body{margin:10px;}}</style></head><body>
-      <h1>📋 Relatório de Contas a Pagar — Combustível</h1>
-      <p style="color:#666;">Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}</p>
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Contas a Pagar - Combustível</title>
+      <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;background:#fff;}
+      .header{background:#14532d;color:white;padding:18px 24px;display:flex;align-items:center;gap:18px;}
+      .header img{height:50px;}
+      .header-text h1{font-size:20px;font-weight:bold;}
+      .header-text p{font-size:12px;opacity:.85;margin-top:2px;}
+      .content{padding:20px 24px;}
+      .summary{display:flex;gap:16px;margin:16px 0;flex-wrap:wrap;}
+      .summary-card{padding:10px 16px;border-radius:8px;text-align:center;min-width:120px;}
+      .summary-card h3{margin:0;font-size:11px;text-transform:uppercase;}
+      .summary-card p{margin:4px 0 0;font-size:16px;font-weight:bold;}
+      table{width:100%;border-collapse:collapse;margin-top:16px;font-size:11px;}
+      th{background:#14532d;color:white;padding:7px 8px;text-align:left;}
+      td{padding:6px 8px;border-bottom:1px solid #e5e7eb;}
+      tr:nth-child(even) td{background:#f0fdf4;}
+      .footer{margin-top:24px;padding:14px 24px;border-top:2px solid #14532d;display:flex;align-items:center;justify-content:space-between;}
+      .footer-left{display:flex;align-items:center;gap:10px;}
+      .footer-left img{height:28px;}
+      .footer-text{font-size:10px;color:#555;}
+      .footer-text a{color:#15803d;text-decoration:none;font-weight:bold;}
+      .footer-right{display:flex;flex-direction:column;align-items:center;gap:4px;}
+      .footer-right img{width:60px;height:60px;}
+      .footer-right span{font-size:9px;color:#555;}
+      </style></head><body>
+      <div class="header">
+        <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" />
+        <div class="header-text">
+          <h1>BTREE Ambiental</h1>
+          <p>Relatório de Contas a Pagar — Combustível &middot; Gerado em ${new Date().toLocaleDateString("pt-BR")}</p>
+        </div>
+      </div>
+      <div class="content">
       <div class="summary">
         <div class="summary-card" style="background:#fef9c3;"><h3>A Pagar</h3><p style="color:#854d0e;">R$ ${totals.pendingTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
         <div class="summary-card" style="background:#fee2e2;"><h3>Vencidos (${totals.overdueCount})</h3><p style="color:#991b1b;">R$ ${totals.overdueTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
         <div class="summary-card" style="background:#dcfce7;"><h3>Pagos</h3><p style="color:#166534;">R$ ${totals.paidTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
       </div>
       <table><thead><tr><th>Fornecedor</th><th>NF</th><th>Emissão</th><th>Vencimento</th><th style="text-align:right;">Valor</th><th>Litros</th><th>Status</th><th>Pago em</th></tr></thead><tbody>${rows}</tbody></table>
-      <p style="margin-top:20px;font-size:11px;color:#999;">BTREE Ambiental — Sistema de Gestão</p>
-    </body></html>`);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
+      </div>
+      <div class="footer">
+        <div class="footer-left">
+          <img src="${kobayashiB64}" alt="Kobayashi" />
+          <div class="footer-text">Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/><a href="https://btreeambiental.com">btreeambiental.com</a></div>
+        </div>
+        <div class="footer-right">
+          <img src="${qrB64}" alt="QR Code" />
+          <span>Acesse nosso site</span>
+        </div>
+      </div>
+    </body></html>`;
+    toast.info("Gerando PDF...");
+    await generatePDFFromHtml(html, `contas-pagar-combustivel-${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
   // Excel (CSV) export
