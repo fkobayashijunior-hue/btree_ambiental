@@ -1456,7 +1456,7 @@ async function createPasswordResetToken(userId, token) {
 async function getValidResetToken(token) {
   const db = await getDb();
   if (!db) return void 0;
-  const now = /* @__PURE__ */ new Date();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   const result = await db.select().from(passwordResetTokens).where(and(
     eq(passwordResetTokens.token, token),
     gt(passwordResetTokens.expiresAt, now),
@@ -1467,7 +1467,7 @@ async function getValidResetToken(token) {
 async function markTokenAsUsed(tokenId) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(passwordResetTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(eq(passwordResetTokens.id, tokenId));
+  await db.update(passwordResetTokens).set({ usedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(passwordResetTokens.id, tokenId));
 }
 async function linkCollaboratorToUser(email, openId) {
   if (!email) return;
@@ -2123,8 +2123,8 @@ var collaboratorsRouter = router({
     const checkOutTime = input.checkOutOverride ? new Date(input.checkOutOverride) : void 0;
     const [inserted] = await db.insert(biometricAttendance).values({
       collaboratorId: input.collaboratorId,
-      checkIn: checkInTime,
-      checkOut: checkOutTime,
+      checkInTime: checkInTime instanceof Date ? checkInTime.toISOString().replace("T", " ").slice(0, 19) : checkInTime,
+      checkOutTime: checkOutTime instanceof Date ? checkOutTime.toISOString().replace("T", " ").slice(0, 19) : checkOutTime,
       location: input.location,
       latitude: input.latitude,
       longitude: input.longitude,
@@ -2150,8 +2150,8 @@ var collaboratorsRouter = router({
       collaboratorRole: collaborators.role,
       collaboratorPhoto: collaborators.photoUrl,
       collaboratorClientId: collaborators.clientId,
-      checkInTime: biometricAttendance.checkIn,
-      checkOutTime: biometricAttendance.checkOut,
+      checkInTime: biometricAttendance.checkInTime,
+      checkOutTime: biometricAttendance.checkOutTime,
       location: biometricAttendance.location,
       latitude: biometricAttendance.latitude,
       longitude: biometricAttendance.longitude,
@@ -2166,10 +2166,10 @@ var collaboratorsRouter = router({
       conditions.push(inArray(collaborators.clientId, allowedClientIds));
     }
     if (conditions.length > 0) {
-      const records2 = await baseQuery.where(conditions.length === 1 ? conditions[0] : and2(...conditions)).orderBy(desc(biometricAttendance.checkIn));
+      const records2 = await baseQuery.where(conditions.length === 1 ? conditions[0] : and2(...conditions)).orderBy(desc(biometricAttendance.checkInTime));
       return records2;
     }
-    const records = await baseQuery.orderBy(desc(biometricAttendance.checkIn));
+    const records = await baseQuery.orderBy(desc(biometricAttendance.checkInTime));
     return records;
   }),
   // Buscar todos os descritores faciais (para reconhecimento)
@@ -2480,7 +2480,7 @@ var usersManagementRouter = router({
       passwordHash,
       loginMethod: "email",
       role: input.role,
-      lastSignedIn: /* @__PURE__ */ new Date()
+      lastSignedIn: (/* @__PURE__ */ new Date()).toISOString()
     });
     return { success: true };
   }),
@@ -2497,7 +2497,7 @@ var usersManagementRouter = router({
     }
     const db = await getDb();
     if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
-    const updateData = { updatedAt: /* @__PURE__ */ new Date() };
+    const updateData = { updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     if (input.name) updateData.name = input.name;
     if (input.email) updateData.email = input.email;
     if (input.role) updateData.role = input.role;
@@ -4392,7 +4392,7 @@ var partsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, photoBase64, ...rest } = input;
-    const updateData = { ...rest, updatedAt: /* @__PURE__ */ new Date() };
+    const updateData = { ...rest, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     if (photoBase64) {
       const result = await cloudinaryUpload(photoBase64, "btree/parts");
       updateData.photoUrl = result.url;
@@ -4463,11 +4463,11 @@ var partsRouter = router({
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const updateData = {
       status: input.status,
-      updatedAt: /* @__PURE__ */ new Date()
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     if (input.status === "aprovado") {
       updateData.approvedBy = ctx.user.id;
-      updateData.approvedAt = /* @__PURE__ */ new Date();
+      updateData.approvedAt = (/* @__PURE__ */ new Date()).toISOString();
     }
     if (input.rejectionReason) updateData.rejectionReason = input.rejectionReason;
     await db.update(partsRequests).set(updateData).where(eq9(partsRequests.id, input.id));
@@ -4536,14 +4536,14 @@ var clientsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, ...rest } = input;
-    await db.update(clients).set({ ...rest, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(clients.id, id));
+    await db.update(clients).set({ ...rest, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq10(clients.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError8({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    await db.update(clients).set({ active: 0, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(clients.id, input.id));
+    await db.update(clients).set({ active: 0, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq10(clients.id, input.id));
     return { success: true };
   })
 });
@@ -5212,10 +5212,10 @@ var purchaseOrdersRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const updateData = { status: input.status, updatedAt: /* @__PURE__ */ new Date() };
+    const updateData = { status: input.status, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     if (input.status === "aprovado") {
       updateData.approvedBy = ctx.user.id;
-      updateData.approvedAt = /* @__PURE__ */ new Date();
+      updateData.approvedAt = (/* @__PURE__ */ new Date()).toISOString();
     }
     await db.update(purchaseOrders).set(updateData).where(eq14(purchaseOrders.id, input.id));
     if (input.status === "enviado") {
@@ -5798,14 +5798,14 @@ var traccarRouter = router({
         if (hours > 0) {
           const existing = await db.select().from(gpsHoursLog).where(and7(
             eq16(gpsHoursLog.equipmentId, link.equipmentId),
-            gte2(gpsHoursLog.date, from),
-            lte2(gpsHoursLog.date, to)
+            gte2(gpsHoursLog.date, from.toISOString()),
+            lte2(gpsHoursLog.date, to.toISOString())
           )).limit(1);
           if (existing.length === 0) {
             await db.insert(gpsHoursLog).values({
               equipmentId: link.equipmentId,
               gpsDeviceLinkId: link.id,
-              date: from,
+              date: from.toISOString(),
               hoursWorked: String(hours),
               source: "gps_auto"
             });
@@ -5928,7 +5928,7 @@ var traccarRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
-    const now = /* @__PURE__ */ new Date();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
     await db.update(preventiveMaintenanceAlerts).set({
       status: input.status,
       resolvedAt: now,
@@ -6976,9 +6976,9 @@ var dashboardRouter = router({
     const now = /* @__PURE__ */ new Date();
     const targetMonth = input?.month ?? now.getMonth();
     const targetYear = input?.year ?? now.getFullYear();
-    const startOfMonth = new Date(targetYear, targetMonth, 1);
-    const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(targetYear, targetMonth, 1).toISOString();
+    const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999).toISOString();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     const [{ count: totalCollaborators }] = await db.select({ count: sql10`count(*)` }).from(collaborators);
@@ -7096,12 +7096,10 @@ var financialRouter = router({
       conditions.push(eq20(financialEntries.type, input.type));
     }
     if (input.dateFrom) {
-      conditions.push(gte5(financialEntries.date, new Date(input.dateFrom)));
+      conditions.push(gte5(financialEntries.date, new Date(input.dateFrom).toISOString().slice(0, 10)));
     }
     if (input.dateTo) {
-      const to = new Date(input.dateTo);
-      to.setHours(23, 59, 59, 999);
-      conditions.push(lte5(financialEntries.date, to));
+      conditions.push(lte5(financialEntries.date, input.dateTo + " 23:59:59"));
     }
     if (input.referenceMonth) {
       conditions.push(eq20(financialEntries.referenceMonth, input.referenceMonth));
@@ -7122,8 +7120,8 @@ var financialRouter = router({
     const db = await getDb();
     if (!db) return { totalReceitas: 0, totalDespesas: 0, saldo: 0, entries: [] };
     const [year, month] = input.referenceMonth.split("-").map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
     const entries = await db.select().from(financialEntries).where(and11(
       gte5(financialEntries.date, startDate),
       lte5(financialEntries.date, endDate),
@@ -7146,8 +7144,8 @@ var financialRouter = router({
     const db = await getDb();
     if (!db) return [];
     const [year, month] = input.referenceMonth.split("-").map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
     const rows = await db.select({
       category: financialEntries.category,
       total: sql11`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
@@ -7209,7 +7207,7 @@ var financialRouter = router({
       category: input.category,
       description: input.description,
       amount: input.amount,
-      date: dateObj,
+      date: dateObj.toISOString().slice(0, 10),
       referenceMonth: refMonth,
       paymentMethod: input.paymentMethod,
       status: input.status,
@@ -7241,7 +7239,7 @@ var financialRouter = router({
     const updateData = { ...rest };
     if (date) {
       const dateObj = new Date(date);
-      updateData.date = dateObj;
+      updateData.date = dateObj.toISOString().slice(0, 10);
       updateData.referenceMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
     }
     await db.update(financialEntries).set(updateData).where(eq20(financialEntries.id, id));
@@ -7270,8 +7268,8 @@ var financialRouter = router({
       return { success: false, alreadyExists: true, message: "Folha de pagamento j\xE1 foi lan\xE7ada para este m\xEAs." };
     }
     const [year, month] = input.referenceMonth.split("-").map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59);
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
     const attendances = await db.select().from(collaboratorAttendance).where(and11(
       gte5(collaboratorAttendance.date, startDate),
       lte5(collaboratorAttendance.date, endDate)
@@ -7513,7 +7511,7 @@ var reportsRouter = router({
         id: fuelRecords.id,
         date: fuelRecords.date,
         equipmentName: equipment.name,
-        equipmentPlate: equipment.plate,
+        equipmentPlate: equipment.licensePlate,
         fuelType: fuelRecords.fuelType,
         liters: fuelRecords.liters,
         totalValue: fuelRecords.totalValue,
@@ -9598,7 +9596,7 @@ var appRouter = router({
       const { eq: eq27 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: /* @__PURE__ */ new Date() }).where(eq27(users3.id, resetToken.userId));
+      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq27(users3.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
