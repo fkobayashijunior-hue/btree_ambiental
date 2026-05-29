@@ -259,7 +259,7 @@ export const appRouter = router({
         if (!dbInstance) throw new Error('Database not available');
 
         await dbInstance.update(users)
-          .set({ passwordHash, loginMethod: 'email', updatedAt: new Date() })
+          .set({ passwordHash, loginMethod: 'email', updatedAt: new Date().toISOString() })
           .where(eq(users.id, resetToken.userId));
 
         await markTokenAsUsed(resetToken.id);

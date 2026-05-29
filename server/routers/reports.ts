@@ -116,7 +116,7 @@ export const reportsRouter = router({
             id: fuelRecords.id,
             date: fuelRecords.date,
             equipmentName: equipment.name,
-            equipmentPlate: equipment.plate,
+            equipmentPlate: equipment.licensePlate,
             fuelType: fuelRecords.fuelType,
             liters: fuelRecords.liters,
             totalValue: fuelRecords.totalValue,

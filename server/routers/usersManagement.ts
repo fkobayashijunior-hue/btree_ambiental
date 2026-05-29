@@ -72,7 +72,7 @@ export const usersManagementRouter = router({
         passwordHash,
         loginMethod: "email",
         role: input.role,
-        lastSignedIn: new Date(),
+        lastSignedIn: new Date().toISOString(),
       });
 
       return { success: true };
@@ -94,7 +94,7 @@ export const usersManagementRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível" });
 
-      const updateData: Record<string, unknown> = { updatedAt: new Date() };
+      const updateData: Record<string, unknown> = { updatedAt: new Date().toISOString() };
       if (input.name) updateData.name = input.name;
       if (input.email) updateData.email = input.email;
       if (input.role) updateData.role = input.role;

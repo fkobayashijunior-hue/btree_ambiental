@@ -45,12 +45,10 @@ export const financialRouter = router({
         conditions.push(eq(financialEntries.type, input.type));
       }
       if (input.dateFrom) {
-        conditions.push(gte(financialEntries.date, new Date(input.dateFrom)));
+        conditions.push(gte(financialEntries.date, new Date(input.dateFrom).toISOString().slice(0,10)));
       }
       if (input.dateTo) {
-        const to = new Date(input.dateTo);
-        to.setHours(23, 59, 59, 999);
-        conditions.push(lte(financialEntries.date, to));
+        conditions.push(lte(financialEntries.date, input.dateTo + " 23:59:59"));
       }
       if (input.referenceMonth) {
         conditions.push(eq(financialEntries.referenceMonth, input.referenceMonth));
@@ -78,8 +76,8 @@ export const financialRouter = router({
       if (!db) return { totalReceitas: 0, totalDespesas: 0, saldo: 0, entries: [] };
 
       const [year, month] = input.referenceMonth.split("-").map(Number);
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
 
       const entries = await db
         .select()
@@ -117,8 +115,8 @@ export const financialRouter = router({
       if (!db) return [];
 
       const [year, month] = input.referenceMonth.split("-").map(Number);
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
 
       const rows = await db
         .select({
@@ -201,7 +199,7 @@ export const financialRouter = router({
         category: input.category,
         description: input.description,
         amount: input.amount,
-        date: dateObj,
+        date: dateObj.toISOString().slice(0,10),
         referenceMonth: refMonth,
         paymentMethod: input.paymentMethod,
         status: input.status,
@@ -236,7 +234,7 @@ export const financialRouter = router({
       const updateData: any = { ...rest };
       if (date) {
         const dateObj = new Date(date);
-        updateData.date = dateObj;
+        updateData.date = dateObj.toISOString().slice(0,10);
         updateData.referenceMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
       }
       await db.update(financialEntries).set(updateData).where(eq(financialEntries.id, id));
@@ -278,14 +276,14 @@ export const financialRouter = router({
 
       // Buscar todas as presenças do mês
       const [year, month] = input.referenceMonth.split("-").map(Number);
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0, 23, 59, 59);
+      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
 
       const attendances = await db.select()
         .from(collaboratorAttendance)
         .where(and(
-          gte(collaboratorAttendance.date, startDate),
-          lte(collaboratorAttendance.date, endDate)
+          gte(collaboratorAttendance.date, startDate as string),
+          lte(collaboratorAttendance.date, endDate as string)
         ));
 
       if (attendances.length === 0) {

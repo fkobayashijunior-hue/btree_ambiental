@@ -74,7 +74,7 @@ export const partsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
       const { id, photoBase64, ...rest } = input;
-      const updateData: any = { ...rest, updatedAt: new Date() };
+      const updateData: any = { ...rest, updatedAt: new Date().toISOString() };
 
       if (photoBase64) {
         const result = await cloudinaryUpload(photoBase64, "btree/parts");
@@ -162,11 +162,11 @@ export const partsRouter = router({
 
       const updateData: Record<string, unknown> = {
         status: input.status,
-        updatedAt: new Date(),
+        updatedAt: new Date().toISOString(),
       };
       if (input.status === "aprovado") {
         updateData.approvedBy = ctx.user.id;
-        updateData.approvedAt = new Date();
+        updateData.approvedAt = new Date().toISOString();
       }
       if (input.rejectionReason) updateData.rejectionReason = input.rejectionReason;
 

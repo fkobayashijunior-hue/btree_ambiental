@@ -315,8 +315,8 @@ export const collaboratorsRouter = router({
 
       const [inserted] = await db.insert(biometricAttendance).values({
         collaboratorId: input.collaboratorId,
-        checkIn: checkInTime,
-        checkOut: checkOutTime,
+        checkInTime: checkInTime instanceof Date ? checkInTime.toISOString().replace('T', ' ').slice(0, 19) : checkInTime,
+        checkOutTime: checkOutTime instanceof Date ? checkOutTime.toISOString().replace('T', ' ').slice(0, 19) : checkOutTime,
         location: input.location,
         latitude: input.latitude,
         longitude: input.longitude,
@@ -349,8 +349,8 @@ export const collaboratorsRouter = router({
           collaboratorRole: collaborators.role,
           collaboratorPhoto: collaborators.photoUrl,
           collaboratorClientId: collaborators.clientId,
-          checkInTime: biometricAttendance.checkIn,
-          checkOutTime: biometricAttendance.checkOut,
+          checkInTime: biometricAttendance.checkInTime,
+          checkOutTime: biometricAttendance.checkOutTime,
           location: biometricAttendance.location,
           latitude: biometricAttendance.latitude,
           longitude: biometricAttendance.longitude,
@@ -372,11 +372,11 @@ export const collaboratorsRouter = router({
       if (conditions.length > 0) {
         const records = await (baseQuery as any)
           .where(conditions.length === 1 ? conditions[0] : and(...conditions))
-          .orderBy(desc(biometricAttendance.checkIn));
+          .orderBy(desc(biometricAttendance.checkInTime));
         return records;
       }
 
-      const records = await (baseQuery as any).orderBy(desc(biometricAttendance.checkIn));
+      const records = await (baseQuery as any).orderBy(desc(biometricAttendance.checkInTime));
       return records;
     }),
 

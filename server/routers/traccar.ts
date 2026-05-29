@@ -333,8 +333,8 @@ export const traccarRouter = router({
               .from(gpsHoursLog)
               .where(and(
                 eq(gpsHoursLog.equipmentId, link.equipmentId),
-                gte(gpsHoursLog.date, from),
-                lte(gpsHoursLog.date, to)
+                gte(gpsHoursLog.date, from.toISOString()),
+                lte(gpsHoursLog.date, to.toISOString())
               ))
               .limit(1);
 
@@ -342,7 +342,7 @@ export const traccarRouter = router({
               await db.insert(gpsHoursLog).values({
                 equipmentId: link.equipmentId,
                 gpsDeviceLinkId: link.id,
-                date: from,
+                date: from.toISOString(),
                 hoursWorked: String(hours),
                 source: "gps_auto",
               });
@@ -523,7 +523,7 @@ export const traccarRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
-      const now = new Date();
+      const now = new Date().toISOString();
 
       await db
         .update(preventiveMaintenanceAlerts)

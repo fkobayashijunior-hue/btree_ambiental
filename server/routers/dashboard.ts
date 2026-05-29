@@ -24,9 +24,9 @@ export const dashboardRouter = router({
       const targetMonth = input?.month ?? now.getMonth();
       const targetYear = input?.year ?? now.getFullYear();
 
-      const startOfMonth = new Date(targetYear, targetMonth, 1);
-      const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfMonth = new Date(targetYear, targetMonth, 1).toISOString();
+      const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999).toISOString();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
       const db = await getDb();
       if (!db) throw new Error("Banco indisponível");

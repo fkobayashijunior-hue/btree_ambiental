@@ -289,7 +289,7 @@ async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "
         <div class="field"><div class="field-label">Altura (m)</div><div class="field-value">${cargo.heightM || "-"}</div></div>
         <div class="field"><div class="field-label">Largura (m)</div><div class="field-value">${cargo.widthM || "-"}</div></div>
         <div class="field"><div class="field-label">Comprimento (m)</div><div class="field-value">${cargo.lengthM || "-"}</div></div>
-        <div class="field"><div class="field-label">Volume (m³)</div><div class="field-value highlight">${cargo.volumeM3 ? formatBR(parseFloat(cargo.volumeM3), 3) : "-"} m³</div></div>
+        <div class="field"><div class="field-label">Volume (m³)</div><div class="field-value highlight">${cargo.volumeM3 ? formatBR(parseFloat(String(cargo.volumeM3)), 3) : "-"} m³</div></div>
         <div class="field"><div class="field-label">Peso Bruto Saída</div><div class="field-value">${(cargo as any).weightOutKg ? (cargo as any).weightOutKg + " kg" : "-"}</div></div>
         <div class="field"><div class="field-label">Peso Bruto Chegada</div><div class="field-value">${(cargo as any).weightInKg ? (cargo as any).weightInKg + " kg" : "-"}</div></div>
         <div class="field"><div class="field-label">Peso Líquido</div><div class="field-value highlight">${(cargo as any).weightNetKg ? (cargo as any).weightNetKg + " kg" : "-"}</div></div>
@@ -376,7 +376,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       <td style="text-align:right;">${c.heightM || "-"}</td>
       <td style="text-align:right;">${c.widthM || "-"}</td>
       <td style="text-align:right;">${c.lengthM || "-"}</td>
-      <td style="text-align:right;font-weight:700;color:#0d4f2e;">${c.volumeM3 ? formatBR(parseFloat(c.volumeM3), 3) : "-"}</td>
+      <td style="text-align:right;font-weight:700;color:#0d4f2e;">${c.volumeM3 ? formatBR(parseFloat(String(c.volumeM3)), 3) : "-"}</td>
       <td style="text-align:right;">${(c as any).weightOutKg || "-"}</td>
       <td style="text-align:right;">${(c as any).weightInKg || "-"}</td>
       <td style="text-align:right;font-weight:700;">${(c as any).weightNetKg || "-"}</td>

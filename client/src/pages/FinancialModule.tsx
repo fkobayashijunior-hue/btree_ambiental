@@ -765,7 +765,7 @@ export default function FinancialModule() {
                                   className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white"
                                   onClick={() => {
                                     if (confirm('Confirmar pagamento deste boleto?')) {
-                                      markAsPaidMutation.mutate({ cargoId: boleto.id });
+                                      markAsPaidMutation.mutate({ id: boleto.id });
                                     }
                                   }}
                                   disabled={markAsPaidMutation.isPending}

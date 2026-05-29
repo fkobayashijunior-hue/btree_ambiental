@@ -63,7 +63,7 @@ export const clientsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       const { id, ...rest } = input;
-      await db.update(clients).set({ ...rest, updatedAt: new Date() }).where(eq(clients.id, id));
+      await db.update(clients).set({ ...rest, updatedAt: new Date().toISOString() }).where(eq(clients.id, id));
       return { success: true };
     }),
 
@@ -74,7 +74,7 @@ export const clientsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       // Soft delete
-      await db.update(clients).set({ active: 0, updatedAt: new Date() }).where(eq(clients.id, input.id));
+      await db.update(clients).set({ active: 0, updatedAt: new Date().toISOString() }).where(eq(clients.id, input.id));
       return { success: true };
     }),
 });

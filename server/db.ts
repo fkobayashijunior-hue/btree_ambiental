@@ -239,7 +239,7 @@ export async function getValidResetToken(token: string) {
   const db = await getDb();
   if (!db) return undefined;
 
-  const now = new Date();
+  const now = new Date().toISOString();
   const result = await db.select()
     .from(passwordResetTokens)
     .where(and(
@@ -256,7 +256,7 @@ export async function markTokenAsUsed(tokenId: number): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(passwordResetTokens)
-    .set({ usedAt: new Date() })
+    .set({ usedAt: new Date().toISOString() })
     .where(eq(passwordResetTokens.id, tokenId));
 }
 

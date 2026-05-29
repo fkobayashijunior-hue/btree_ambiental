@@ -100,10 +100,10 @@ export const purchaseOrdersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      const updateData: Record<string, unknown> = { status: input.status, updatedAt: new Date() };
+      const updateData: Record<string, unknown> = { status: input.status, updatedAt: new Date().toISOString() };
       if (input.status === "aprovado") {
         updateData.approvedBy = ctx.user.id;
-        updateData.approvedAt = new Date();
+        updateData.approvedAt = new Date().toISOString();
       }
       await db.update(purchaseOrders).set(updateData).where(eq(purchaseOrders.id, input.id));
 
