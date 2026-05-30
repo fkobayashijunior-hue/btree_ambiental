@@ -2992,7 +2992,7 @@ var cargoLoadsRouter = router({
         });
       }
     }
-    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, ...rest } = input;
+    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, ...rest } = input;
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = { ...rest, updatedAt: now };
     if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
@@ -3041,6 +3041,10 @@ var cargoLoadsRouter = router({
       if (thirdPartyCost !== void 0) {
         extraUpdates.push("third_party_cost = ?");
         extraParams.push(thirdPartyCost || null);
+      }
+      if (notes !== void 0) {
+        extraUpdates.push("notes = ?");
+        extraParams.push(notes || null);
       }
       if (extraUpdates.length > 0) {
         extraParams.push(id);

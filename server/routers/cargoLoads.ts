@@ -554,7 +554,7 @@ export const cargoLoadsRouter = router({
         }
       }
 
-      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, ...rest } = input;
+      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, ...rest } = input;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
       // These fields use snake_case column names - must be set explicitly via Drizzle schema fields
@@ -603,6 +603,7 @@ export const cargoLoadsRouter = router({
         if (receiverName !== undefined) { extraUpdates.push('receiver_name = ?'); extraParams.push(receiverName || null); }
         if (thirdPartyContractor !== undefined) { extraUpdates.push('third_party_contractor = ?'); extraParams.push(thirdPartyContractor || null); }
         if (thirdPartyCost !== undefined) { extraUpdates.push('third_party_cost = ?'); extraParams.push(thirdPartyCost || null); }
+        if (notes !== undefined) { extraUpdates.push('notes = ?'); extraParams.push(notes || null); }
         if (extraUpdates.length > 0) {
           extraParams.push(id);
           const conn = await getDirectConnection();
