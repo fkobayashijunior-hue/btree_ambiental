@@ -343,7 +343,9 @@ var init_schema = __esm({
       deliveryDate: timestamp("delivery_date", { mode: "string" }),
       receivedByBuyer: int("received_by_buyer").default(0).notNull(),
       receivedAt: timestamp("received_at", { mode: "string" }),
-      receiverName: varchar("receiver_name", { length: 255 })
+      receiverName: varchar("receiver_name", { length: 255 }),
+      thirdPartyContractor: varchar("third_party_contractor", { length: 255 }),
+      thirdPartyCost: varchar("third_party_cost", { length: 20 })
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -2667,7 +2669,10 @@ var cargoLoadsRouter = router({
       vehicleNameJoined: equipment.name,
       vehiclePlateJoined: equipment.licensePlate,
       locationName: gpsLocations.name,
-      driverPhotoUrl: collaborators.photoUrl
+      driverPhotoUrl: collaborators.photoUrl,
+      receiverName: cargoLoads.receiverName,
+      thirdPartyContractor: cargoLoads.thirdPartyContractor,
+      thirdPartyCost: cargoLoads.thirdPartyCost
     }).from(cargoLoads).leftJoin(clients, eq6(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq6(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq6(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq6(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq6(cargoLoads.driverCollaboratorId, collaborators.id)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     let filtered = results;
     if (userAllowedClientIds && userAllowedClientIds.length > 0) {
@@ -2746,7 +2751,10 @@ var cargoLoadsRouter = router({
       vehicleNameJoined: equipment.name,
       vehiclePlateJoined: equipment.licensePlate,
       locationName: gpsLocations.name,
-      driverPhotoUrl: collaborators.photoUrl
+      driverPhotoUrl: collaborators.photoUrl,
+      receiverName: cargoLoads.receiverName,
+      thirdPartyContractor: cargoLoads.thirdPartyContractor,
+      thirdPartyCost: cargoLoads.thirdPartyCost
     }).from(cargoLoads).leftJoin(clients, eq6(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq6(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq6(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq6(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq6(cargoLoads.driverCollaboratorId, collaborators.id)).where(eq6(cargoLoads.id, input.id)).limit(1);
     if (!result.length) throw new TRPCError4({ code: "NOT_FOUND" });
     const r = result[0];
@@ -2822,7 +2830,9 @@ var cargoLoadsRouter = router({
     workLocationId: z6.number().optional(),
     humidity: z6.string().optional(),
     deliveryDate: z6.string().optional(),
-    receiverName: z6.string().optional()
+    receiverName: z6.string().optional(),
+    thirdPartyContractor: z6.string().optional(),
+    thirdPartyCost: z6.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2944,7 +2954,9 @@ var cargoLoadsRouter = router({
     paymentReceiptUrl: z6.string().optional(),
     paymentStatus: z6.enum(["sem_boleto", "a_pagar", "pago"]).optional(),
     paidAt: z6.string().optional(),
-    receiverName: z6.string().optional()
+    receiverName: z6.string().optional(),
+    thirdPartyContractor: z6.string().optional(),
+    thirdPartyCost: z6.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -2961,7 +2973,7 @@ var cargoLoadsRouter = router({
         });
       }
     }
-    const { id, date, deliveryDate, ...rest } = input;
+    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, ...rest } = input;
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = { ...rest, updatedAt: now };
     if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
@@ -2994,9 +3006,32 @@ var cargoLoadsRouter = router({
         delete updateData[key];
       }
     }
-    console.log("[cargoLoads.update] id:", id, "keys:", Object.keys(updateData), "destinationId:", updateData.destinationId);
+    console.log("[cargoLoads.update] id:", id, "keys:", Object.keys(updateData), "receiverName:", receiverName);
     try {
       await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, id));
+      const extraUpdates = [];
+      const extraParams = [];
+      if (receiverName !== void 0) {
+        extraUpdates.push("receiver_name = ?");
+        extraParams.push(receiverName || null);
+      }
+      if (thirdPartyContractor !== void 0) {
+        extraUpdates.push("third_party_contractor = ?");
+        extraParams.push(thirdPartyContractor || null);
+      }
+      if (thirdPartyCost !== void 0) {
+        extraUpdates.push("third_party_cost = ?");
+        extraParams.push(thirdPartyCost || null);
+      }
+      if (extraUpdates.length > 0) {
+        extraParams.push(id);
+        const conn = await getDirectConnection();
+        try {
+          await conn.execute(`UPDATE cargo_loads SET ${extraUpdates.join(", ")} WHERE id = ?`, extraParams);
+        } finally {
+          await conn.end();
+        }
+      }
     } catch (dbErr) {
       const realErr = dbErr.cause || dbErr;
       console.error("[cargoLoads.update] DB ERROR:", realErr.code, realErr.errno, realErr.sqlState, realErr.sqlMessage || realErr.message);
@@ -3702,7 +3737,9 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       widthM: cargoLoads.widthM,
       lengthM: cargoLoads.lengthM,
       notes: cargoLoads.notes,
-      receiverName: cargoLoads.receiverName
+      receiverName: cargoLoads.receiverName,
+      thirdPartyContractor: cargoLoads.thirdPartyContractor,
+      thirdPartyCost: cargoLoads.thirdPartyCost
     }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
     let buyerInfo = null;
     if (input.destinationId && input.destinationId >= 1e4) {
@@ -3714,6 +3751,44 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       if (buyerRows.length > 0) buyerInfo = buyerRows[0];
     }
     return { loads: results, buyerInfo };
+  }),
+  listThirdParty: protectedProcedure.input(z6.object({
+    startDate: z6.string().optional(),
+    endDate: z6.string().optional(),
+    contractor: z6.string().optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const conditions = [
+      sql2`${cargoLoads.thirdPartyContractor} IS NOT NULL AND ${cargoLoads.thirdPartyContractor} != ''`
+    ];
+    if (input.startDate) {
+      conditions.push(sql2`${cargoLoads.date} >= ${input.startDate}`);
+    }
+    if (input.endDate) {
+      conditions.push(sql2`${cargoLoads.date} <= ${input.endDate + " 23:59:59"}`);
+    }
+    if (input.contractor) {
+      conditions.push(sql2`${cargoLoads.thirdPartyContractor} = ${input.contractor}`);
+    }
+    const results = await db.select({
+      id: cargoLoads.id,
+      date: cargoLoads.date,
+      deliveryDate: cargoLoads.deliveryDate,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      driverName: cargoLoads.driverName,
+      destination: cargoLoads.destination,
+      clientName: cargoLoads.clientName,
+      invoiceNumber: cargoLoads.invoiceNumber,
+      volumeM3: cargoLoads.volumeM3,
+      weightNetKg: cargoLoads.weightNetKg,
+      woodType: cargoLoads.woodType,
+      status: cargoLoads.status,
+      thirdPartyContractor: cargoLoads.thirdPartyContractor,
+      thirdPartyCost: cargoLoads.thirdPartyCost,
+      notes: cargoLoads.notes
+    }).from(cargoLoads).where(and3(...conditions)).orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
+    return results;
   })
 });
 
@@ -5991,7 +6066,13 @@ var SYSTEM_MODULES = [
   { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Administrativo" },
   { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
   { slug: "dashboard-exec", label: "Dashboard Executivo", group: "Administrativo" },
-  { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" }
+  { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" },
+  { slug: "corte-terceirizado", label: "Corte Terceirizado", group: "Administrativo" },
+  { slug: "dashboard-financeiro", label: "Dashboard Financeiro", group: "Administrativo" },
+  { slug: "fretes", label: "C\xE1lculo de Fretes", group: "Administrativo" },
+  { slug: "fornecedores-combustivel", label: "Fornecedores Combust\xEDvel", group: "Administrativo" },
+  { slug: "relatorios-combustivel", label: "Relat\xF3rios Combust\xEDvel", group: "Administrativo" },
+  { slug: "contas-pagar-combustivel", label: "Contas a Pagar (Combust\xEDvel)", group: "Administrativo" }
 ];
 var PROFILES = {
   admin: {
@@ -10123,7 +10204,10 @@ async function runAutoMigrations() {
       { col: "final_width_m", def: "varchar(20)" },
       { col: "final_length_m", def: "varchar(20)" },
       { col: "final_volume_m3", def: "varchar(20)" },
-      { col: "images_urls", def: "text" }
+      { col: "images_urls", def: "text" },
+      { col: "receiver_name", def: "varchar(255)" },
+      { col: "third_party_contractor", def: "varchar(255)" },
+      { col: "third_party_cost", def: "varchar(20)" }
     ];
     for (const { col, def } of cargoColsToAdd) {
       try {
@@ -10392,7 +10476,14 @@ async function startServer() {
       if (!url || !url.startsWith("http")) {
         return res.status(400).json({ error: "Invalid URL" });
       }
-      const allowed = ["d2xsxph8kpxj0f.cloudfront.net", "api.qrserver.com", "btreeambiental.com"];
+      const allowed = [
+        "d2xsxph8kpxj0f.cloudfront.net",
+        "api.qrserver.com",
+        "btreeambiental.com",
+        "res.cloudinary.com",
+        "cloudinary.com",
+        "amazonaws.com"
+      ];
       const urlObj = new URL(url);
       if (!allowed.some((d) => urlObj.hostname.endsWith(d))) {
         return res.status(403).json({ error: "Domain not allowed" });
