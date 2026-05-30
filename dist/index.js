@@ -243,13 +243,14 @@ __export(schema_exports, {
   replantingRecords: () => replantingRecords,
   rolePermissions: () => rolePermissions,
   sectors: () => sectors,
+  thirdPartyContractors: () => thirdPartyContractors,
   userPermissions: () => userPermissions,
   userProfiles: () => userProfiles,
   users: () => users,
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, timestamp, mysqlEnum, varchar, text, index, tinyint } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, thirdPartyContractors;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -1243,6 +1244,17 @@ var init_schema = __esm({
       boletoPhotoUrl: text("boleto_photo_url"),
       litersUsed: varchar("liters_used", { length: 20 }).default("0"),
       registeredBy: int("registered_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    thirdPartyContractors = mysqlTable("third_party_contractors", {
+      id: int().autoincrement().notNull(),
+      name: varchar({ length: 255 }).notNull(),
+      ratePerM3: varchar("rate_per_m3", { length: 20 }).notNull().default("0"),
+      phone: varchar({ length: 30 }),
+      notes: text(),
+      isActive: tinyint("is_active").default(1).notNull(),
+      createdBy: int("created_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
@@ -4087,21 +4099,21 @@ var machineHoursRouter = router({
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
-    return equipmentList.map((eq27) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq27.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq27.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq27.id);
+    return equipmentList.map((eq28) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq28.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq28.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq28.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq27.id,
-        equipmentName: eq27.name,
-        brand: eq27.brand,
-        model: eq27.model,
-        status: eq27.status,
+        equipmentId: eq28.id,
+        equipmentName: eq28.name,
+        brand: eq28.brand,
+        model: eq28.model,
+        status: eq28.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -6068,6 +6080,7 @@ var SYSTEM_MODULES = [
   { slug: "dashboard-exec", label: "Dashboard Executivo", group: "Administrativo" },
   { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" },
   { slug: "corte-terceirizado", label: "Corte Terceirizado", group: "Administrativo" },
+  { slug: "terceirizados", label: "Terceirizados de Corte", group: "Administrativo" },
   { slug: "dashboard-financeiro", label: "Dashboard Financeiro", group: "Administrativo" },
   { slug: "fretes", label: "C\xE1lculo de Fretes", group: "Administrativo" },
   { slug: "fornecedores-combustivel", label: "Fornecedores Combust\xEDvel", group: "Administrativo" },
@@ -9411,8 +9424,74 @@ Solicite nova entrega de combust\xEDvel.`
   })
 });
 
-// server/routers.ts
+// server/routers/thirdPartyContractors.ts
+init_trpc();
+init_db();
+init_schema();
 import { z as z28 } from "zod";
+import { TRPCError as TRPCError18 } from "@trpc/server";
+import { eq as eq27, asc as asc2 } from "drizzle-orm";
+var thirdPartyContractorsRouter = router({
+  list: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const rows = await db.select().from(thirdPartyContractors).orderBy(asc2(thirdPartyContractors.name));
+    return rows;
+  }),
+  listActive: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const rows = await db.select().from(thirdPartyContractors).where(eq27(thirdPartyContractors.isActive, 1)).orderBy(asc2(thirdPartyContractors.name));
+    return rows;
+  }),
+  create: protectedProcedure.input(z28.object({
+    name: z28.string().min(1, "Nome obrigat\xF3rio"),
+    ratePerM3: z28.string().default("0"),
+    phone: z28.string().optional(),
+    notes: z28.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.insert(thirdPartyContractors).values({
+      name: input.name.trim(),
+      ratePerM3: input.ratePerM3.replace(",", "."),
+      phone: input.phone || null,
+      notes: input.notes || null,
+      isActive: 1,
+      createdBy: ctx.user.id
+    });
+    return { success: true };
+  }),
+  update: protectedProcedure.input(z28.object({
+    id: z28.number(),
+    name: z28.string().min(1).optional(),
+    ratePerM3: z28.string().optional(),
+    phone: z28.string().optional(),
+    notes: z28.string().optional(),
+    isActive: z28.number().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const { id, ...rest } = input;
+    const updateData = {};
+    if (rest.name !== void 0) updateData.name = rest.name.trim();
+    if (rest.ratePerM3 !== void 0) updateData.ratePerM3 = rest.ratePerM3.replace(",", ".");
+    if (rest.phone !== void 0) updateData.phone = rest.phone || null;
+    if (rest.notes !== void 0) updateData.notes = rest.notes || null;
+    if (rest.isActive !== void 0) updateData.isActive = rest.isActive;
+    await db.update(thirdPartyContractors).set(updateData).where(eq27(thirdPartyContractors.id, id));
+    return { success: true };
+  }),
+  delete: protectedProcedure.input(z28.object({ id: z28.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.delete(thirdPartyContractors).where(eq27(thirdPartyContractors.id, input.id));
+    return { success: true };
+  })
+});
+
+// server/routers.ts
+import { z as z29 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -9534,12 +9613,12 @@ var appRouter = router({
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-          const { eq: eq27 } = await import("drizzle-orm");
-          const permResult = await db.select().from(upTable).where(eq27(upTable.userId, ctx.user.id));
+          const { eq: eq28 } = await import("drizzle-orm");
+          const permResult = await db.select().from(upTable).where(eq28(upTable.userId, ctx.user.id));
           const collabResult = await db.select({
             clientId: collabTable.clientId,
             role: collabTable.role
-          }).from(collabTable).where(eq27(collabTable.userId, ctx.user.id));
+          }).from(collabTable).where(eq28(collabTable.userId, ctx.user.id));
           myPermsResult = {
             permResultLength: permResult.length,
             permResult: permResult[0] || null,
@@ -9574,7 +9653,7 @@ var appRouter = router({
         const [cols] = await db.execute(__require("drizzle-orm/sql").sql`SHOW COLUMNS FROM collaborator_attendance`);
         const [countResult] = await db.execute(__require("drizzle-orm/sql").sql`SELECT COUNT(*) as cnt FROM collaborator_attendance`);
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq27, desc: desc23 } = await import("drizzle-orm");
+        const { eq: eq28, desc: desc24 } = await import("drizzle-orm");
         try {
           const records = await db.select({
             id: collaboratorAttendance2.id,
@@ -9594,10 +9673,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z28.object({
-      name: z28.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z28.string().email("Email inv\xE1lido"),
-      password: z28.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z29.object({
+      name: z29.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z29.string().email("Email inv\xE1lido"),
+      password: z29.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -9612,9 +9691,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z28.object({
-      email: z28.string().email("Email inv\xE1lido"),
-      password: z28.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z29.object({
+      email: z29.string().email("Email inv\xE1lido"),
+      password: z29.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -9633,11 +9712,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z28.object({
-      seedKey: z28.string(),
-      email: z28.string().email(),
-      name: z28.string(),
-      password: z28.string().min(4)
+    seedAdmin: publicProcedure.input(z29.object({
+      seedKey: z29.string(),
+      email: z29.string().email(),
+      name: z29.string(),
+      password: z29.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -9647,9 +9726,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z28.object({
-      email: z28.string().email("Email inv\xE1lido"),
-      origin: z28.string().url().optional()
+    forgotPassword: publicProcedure.input(z29.object({
+      email: z29.string().email("Email inv\xE1lido"),
+      origin: z29.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -9663,9 +9742,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z28.object({
-      token: z28.string().min(1),
-      password: z28.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z29.object({
+      token: z29.string().min(1),
+      password: z29.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -9674,10 +9753,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq27 } = await import("drizzle-orm");
+      const { eq: eq28 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq27(users3.id, resetToken.userId));
+      await dbInstance.update(users3).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq28(users3.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -9714,9 +9793,10 @@ var appRouter = router({
   freight: freightRouter,
   notifications: notificationsRouter,
   fuelSuppliers: fuelSuppliersRouter,
+  thirdPartyContractors: thirdPartyContractorsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z28.object({ key: z28.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z29.object({ key: z29.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -10385,6 +10465,26 @@ async function runAutoMigrations() {
     } catch (e) {
       console.log("[AutoMigration] Could not query remaining FKs:", e?.message);
     }
+    try {
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS third_party_contractors (
+          id int NOT NULL AUTO_INCREMENT,
+          name varchar(255) NOT NULL,
+          rate_per_m3 varchar(20) NOT NULL DEFAULT '0',
+          phone varchar(30),
+          notes text,
+          is_active tinyint NOT NULL DEFAULT 1,
+          created_by int,
+          created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT third_party_contractors_id PRIMARY KEY(id)
+        )
+      `
+      );
+    } catch (e) {
+    }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
     console.error("[AutoMigration] Error:", err);
@@ -10542,7 +10642,7 @@ function schedulePendingPaymentsCheck() {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq27, and: and16, lt: lt2 } = await import("drizzle-orm");
+        const { eq: eq28, and: and16, lt: lt2 } = await import("drizzle-orm");
         const db = await getDb2();
         if (!db) return;
         const sevenDaysAgo = /* @__PURE__ */ new Date();
@@ -10552,8 +10652,8 @@ function schedulePendingPaymentsCheck() {
           collaboratorName: collaborators2.name,
           date: collaboratorAttendance2.date,
           dailyValue: collaboratorAttendance2.dailyValue
-        }).from(collaboratorAttendance2).innerJoin(collaborators2, eq27(collaboratorAttendance2.collaboratorId, collaborators2.id)).where(and16(
-          eq27(collaboratorAttendance2.paymentStatusCa, "pendente"),
+        }).from(collaboratorAttendance2).innerJoin(collaborators2, eq28(collaboratorAttendance2.collaboratorId, collaborators2.id)).where(and16(
+          eq28(collaboratorAttendance2.paymentStatusCa, "pendente"),
           lt2(collaboratorAttendance2.date, sevenDaysAgo)
         ));
         if (pendingRecords.length > 0) {
