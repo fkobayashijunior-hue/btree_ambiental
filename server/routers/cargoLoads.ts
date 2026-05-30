@@ -12,7 +12,17 @@ import mysql from "mysql2/promise";
 
 // Direct mysql2 connection for client_documents (bypasses Drizzle pool issues)
 async function getDirectConnection() {
-  const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+  // Use individual DB env vars (Hostinger) or DATABASE_URL (Manus/dev)
+  const connConfig = process.env.DB_HOST
+    ? {
+        host: process.env.DB_HOST,
+        port: parseInt(process.env.DB_PORT || '3306'),
+        user: process.env.DB_USER || '',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || '',
+      }
+    : process.env.DATABASE_URL!;
+  const conn = await mysql.createConnection(connConfig as any);
   return conn;
 }
 

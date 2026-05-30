@@ -2546,7 +2546,14 @@ import { TRPCError as TRPCError4 } from "@trpc/server";
 import { eq as eq6, desc as desc3, asc, and as and3, sql as sql2, ne, or as or3 } from "drizzle-orm";
 import mysql3 from "mysql2/promise";
 async function getDirectConnection() {
-  const conn = await mysql3.createConnection(process.env.DATABASE_URL);
+  const connConfig = process.env.DB_HOST ? {
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || "3306"),
+    user: process.env.DB_USER || "",
+    password: process.env.DB_PASSWORD || "",
+    database: process.env.DB_NAME || ""
+  } : process.env.DATABASE_URL;
+  const conn = await mysql3.createConnection(connConfig);
   return conn;
 }
 var cargoLoadsRouter = router({
