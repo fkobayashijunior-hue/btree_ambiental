@@ -324,6 +324,9 @@ export default function DestinationReportPage() {
     setIsGeneratingPDF('completo');
     setPdfProgress('Carregando logos...');
     try {
+      const { jsPDF } = await import("jspdf");
+      const { default: html2canvas } = await import("html2canvas");
+
       // Pre-load logos as base64 via proxy
       const [kobayashiB64, qrB64] = await Promise.all([
         fetchImageAsBase64(KOBAYASHI_LOGO),
@@ -341,10 +344,8 @@ export default function DestinationReportPage() {
           } catch {}
         }
       }
-
-      // Fetch all photos in parallel (max 10 at a time to avoid overload)
       const photoBase64Map: Record<string, string> = {};
-      const batchSize = 10;
+      const batchSize = 8;
       for (let i = 0; i < allPhotoUrls.length; i += batchSize) {
         const batch = allPhotoUrls.slice(i, i + batchSize);
         setPdfProgress(`Carregando fotos ${i + 1}–${Math.min(i + batchSize, allPhotoUrls.length)} de ${allPhotoUrls.length}...`);
@@ -352,14 +353,110 @@ export default function DestinationReportPage() {
         batch.forEach((url, idx) => { photoBase64Map[url] = results[idx]; });
       }
 
-      setPdfProgress('Gerando PDF completo...');
       const destName = selectedDest?.name || "Todos";
       const periodStr = startDate && endDate
         ? `${safeDate(startDate).toLocaleDateString('pt-BR')} a ${safeDate(endDate).toLocaleDateString('pt-BR')}`
         : "Todo período";
 
-      // loads already come ordered ASC from backend (oldest first = #1)
-      const cards = loads.map((l: any, i: number) => {
+      const PAGE_W = 794;
+      const SCALE = 1.5;
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4", compress: true });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      let isFirstPage = true;
+
+      // Helper: render an HTML string in a hidden iframe and add all pages to the PDF
+      const renderHtmlToPdf = async (html: string): Promise<void> => {
+        return new Promise<void>((resolve, reject) => {
+          const iframe = document.createElement("iframe");
+          iframe.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${PAGE_W}px;height:auto;min-height:200px;border:none;visibility:hidden;`;
+          document.body.appendChild(iframe);
+          const doc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (!doc) { document.body.removeChild(iframe); reject(new Error("iframe error")); return; }
+          doc.open(); doc.write(html); doc.close();
+          const imgs = Array.from(doc.querySelectorAll("img"));
+          const imgPromises = imgs.map(img => new Promise<void>(res => {
+            if (img.complete && img.naturalHeight > 0) { res(); return; }
+            img.onload = () => res();
+            img.onerror = () => res();
+            setTimeout(res, 8000);
+          }));
+          Promise.all(imgPromises).then(async () => {
+            try {
+              const canvas = await html2canvas(doc.body, {
+                scale: SCALE, useCORS: true, allowTaint: false,
+                backgroundColor: "#ffffff", width: PAGE_W, windowWidth: PAGE_W,
+                scrollX: 0, scrollY: 0, logging: false,
+              });
+              const canvasPageH = Math.floor(pdfH * SCALE);
+              const totalH = canvas.height;
+              let srcY = 0;
+              while (srcY < totalH) {
+                const sliceH = Math.min(canvasPageH, totalH - srcY);
+                const pageCanvas = document.createElement("canvas");
+                pageCanvas.width = canvas.width;
+                pageCanvas.height = canvasPageH;
+                const ctx = pageCanvas.getContext("2d");
+                if (ctx) {
+                  ctx.fillStyle = "#ffffff";
+                  ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+                  ctx.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+                }
+                if (!isFirstPage) pdf.addPage();
+                isFirstPage = false;
+                pdf.addImage(pageCanvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pdfW, pdfH);
+                srcY += canvasPageH;
+              }
+              document.body.removeChild(iframe);
+              resolve();
+            } catch (err) { document.body.removeChild(iframe); reject(err); }
+          });
+        });
+      }
+
+      // ── Page 1: Cover / Summary ──────────────────────────────────────────────
+      setPdfProgress('Gerando capa do relatório...');
+      const coverHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+      <style>${PDF_DEST_STYLES}
+        body { width: ${PAGE_W}px; }
+      </style></head><body>
+      <div class="pdf-header">
+        <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" />
+        <div class="pdf-header-text">
+          <h1>Relatório Completo de Entregas</h1>
+          <p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+        </div>
+      </div>
+      <div class="pdf-subheader">
+        <span style="font-size:15px;font-weight:700;color:#0d4f2e;">📍 Destino: ${destName}</span>
+        <span style="font-size:12px;color:#6b7280;">Período: ${periodStr}</span>
+      </div>
+      <div class="pdf-content">
+        <div class="stats">
+          <div class="stat"><strong>${totalLoads}</strong> cargas</div>
+          <div class="stat"><strong>${formatBR(totalWeight / 1000)} ton</strong> peso total</div>
+          <div class="stat"><strong>${formatBR(totalVolume, 3)} m³</strong> volume total</div>
+          <div class="stat"><strong>${totalReceived}</strong> recebidas | <strong>${totalPending}</strong> pendentes</div>
+        </div>
+        ${pricePerUnit > 0 ? `
+        <div style="margin-top:20px;padding:16px;background:#f0fdf4;border:2px solid #166534;border-radius:8px;">
+          <h3 style="margin:0 0 12px;color:#166534;font-size:16px;">💰 Resumo Financeiro</h3>
+          <table style="width:100%;font-size:13px;">
+            <tr><td>Preço por ${unit}:</td><td style="text-align:right;font-weight:bold;">R$ ${formatBR(pricePerUnit)}</td></tr>
+            <tr><td>Quantidade total (${unit}):</td><td style="text-align:right;font-weight:bold;">${formatBR(totalQuantity, 3)}</td></tr>
+            <tr style="border-top:2px solid #166534;"><td style="font-size:15px;font-weight:bold;color:#166534;">VALOR TOTAL A RECEBER:</td><td style="text-align:right;font-size:18px;font-weight:bold;color:#166534;">R$ ${formatBR(totalValue)}</td></tr>
+          </table>
+        </div>` : ''}
+      </div>
+      ${buildFooterHtml(kobayashiB64, qrB64)}
+      </body></html>`;
+      await renderHtmlToPdf(coverHtml);
+
+      // ── Pages 2+: One page per cargo ─────────────────────────────────────────
+      for (let i = 0; i < loads.length; i++) {
+        const l = loads[i];
+        setPdfProgress(`Gerando carga ${i + 1} de ${loads.length}...`);
         const loadDate = safeDate(l.date).toLocaleDateString('pt-BR');
         const delivDate = l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : null;
         const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.'));
@@ -368,105 +465,81 @@ export default function DestinationReportPage() {
         const photos: string[] = l.photosJson ? JSON.parse(l.photosJson) : [];
         const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
 
-        // Use base64 versions of photos (no CORS issues)
         const photoHtml = photos.length > 0
-          ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+          ? `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">
               ${photos.map((p: string) => {
                 const b64 = photoBase64Map[p] || p;
-                return `<img src="${b64}" style="width:180px;height:135px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />`;
+                return `<img src="${b64}" style="width:220px;height:165px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />`;
               }).join('')}
              </div>`
-          : '';
+          : '<p style="color:#9ca3af;font-size:11px;margin-top:10px;">Nenhuma foto registrada.</p>';
 
         const obsHtml = l.notes
-          ? `<div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:#78350f;"><strong>Obs:</strong> ${l.notes}</div>`
+          ? `<div style="margin-top:10px;padding:8px 12px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:#78350f;"><strong>Obs:</strong> ${l.notes}</div>`
           : '';
         const receiverHtml = l.receiverName
-          ? `<div style="margin-top:6px;padding:6px 10px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:4px;font-size:11px;color:#166534;">✍ <strong>Recebido por:</strong> ${l.receiverName}</div>`
+          ? `<div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:4px;font-size:11px;color:#166534;">✍ <strong>Recebido por:</strong> ${l.receiverName}</div>`
           : '';
 
-        return `<div style="page-break-inside:avoid;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        const cargoHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+        <style>${PDF_DEST_STYLES}
+          body { width: ${PAGE_W}px; }
+        </style></head><body>
+        <div class="pdf-header">
+          <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" />
+          <div class="pdf-header-text">
+            <h1>Carga #${i + 1} — ${l.vehiclePlate || '-'}</h1>
+            <p>${destName} · ${periodStr}</p>
+          </div>
+        </div>
+        <div class="pdf-content" style="padding-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <div>
-              <span style="font-size:16px;font-weight:bold;color:#1a5c3a;">#${i + 1}</span>
-              <span style="font-size:14px;font-weight:bold;margin-left:8px;">${l.vehiclePlate || '-'}</span>
-              <span style="margin-left:12px;padding:3px 8px;border-radius:4px;font-size:10px;background:${l.trackingStatus === 'finalizado' ? '#dcfce7' : '#fef3c7'};color:${l.trackingStatus === 'finalizado' ? '#166534' : '#92400e'};">
+              <span style="font-size:18px;font-weight:bold;color:#0d4f2e;">#${i + 1}</span>
+              <span style="font-size:16px;font-weight:bold;margin-left:10px;">${l.vehiclePlate || '-'}</span>
+              <span style="margin-left:14px;padding:4px 10px;border-radius:4px;font-size:11px;background:${l.trackingStatus === 'finalizado' ? '#dcfce7' : '#fef3c7'};color:${l.trackingStatus === 'finalizado' ? '#166534' : '#92400e'};">
                 ${getTrackingLabel(l.trackingStatus)}
               </span>
             </div>
-            <div style="text-align:right;font-size:11px;color:#666;">
-              <div>Saída: ${loadDate}</div>
+            <div style="text-align:right;font-size:12px;color:#555;">
+              <div>Saída: <strong>${loadDate}</strong></div>
               ${delivDate ? `<div style="color:#166534;font-weight:600;">Entrega: ${delivDate}</div>` : ''}
             </div>
           </div>
-          <table style="width:100%;font-size:11px;border-collapse:collapse;">
+          <table style="width:100%;font-size:12px;border-collapse:collapse;">
             <tr>
-              <td style="padding:3px 0;color:#666;width:120px;">Motorista:</td><td style="font-weight:500;">${l.driverName || '-'}</td>
-              <td style="padding:3px 0;color:#666;width:100px;">Nota Fiscal:</td><td style="font-weight:500;">${l.invoiceNumber || '-'}</td>
+              <td style="padding:5px 0;color:#6b7280;width:130px;">Motorista:</td><td style="font-weight:500;">${l.driverName || '-'}</td>
+              <td style="padding:5px 0;color:#6b7280;width:110px;">Nota Fiscal:</td><td style="font-weight:500;">${l.invoiceNumber || '-'}</td>
             </tr>
             <tr>
-              <td style="padding:3px 0;color:#666;">Madeira:</td><td style="font-weight:500;">${l.woodType || '-'}</td>
-              <td style="padding:3px 0;color:#666;">Volume:</td><td style="font-weight:500;">${formatBR(vol, 3)} m³</td>
+              <td style="padding:5px 0;color:#6b7280;">Tipo de Madeira:</td><td style="font-weight:500;">${l.woodType || '-'}</td>
+              <td style="padding:5px 0;color:#6b7280;">Volume:</td><td style="font-weight:500;">${formatBR(vol, 3)} m³</td>
             </tr>
             <tr>
-              <td style="padding:3px 0;color:#666;">Peso Líquido:</td><td style="font-weight:500;">${weight > 0 ? formatBR(weightTon) + ' ton' : '-'}</td>
-              <td style="padding:3px 0;color:#666;">Medidas:</td><td style="font-weight:500;">${l.heightM || '-'} × ${l.widthM || '-'} × ${l.lengthM || '-'} m</td>
+              <td style="padding:5px 0;color:#6b7280;">Peso Líquido:</td><td style="font-weight:500;">${weight > 0 ? formatBR(weightTon) + ' ton' : '-'}</td>
+              <td style="padding:5px 0;color:#6b7280;">Medidas:</td><td style="font-weight:500;">${l.heightM || '-'} × ${l.widthM || '-'} × ${l.lengthM || '-'} m</td>
             </tr>
             <tr>
-              <td style="padding:3px 0;color:#666;">P. Saída:</td><td style="font-weight:500;">${l.weightOutKg ? formatBR(parseFloat(String(l.weightOutKg).replace(',', '.'))) + ' kg' : '-'}</td>
-              <td style="padding:3px 0;color:#666;">P. Chegada:</td><td style="font-weight:500;">${l.weightInKg ? formatBR(parseFloat(String(l.weightInKg).replace(',', '.'))) + ' kg' : '-'}</td>
+              <td style="padding:5px 0;color:#6b7280;">Peso Saída:</td><td style="font-weight:500;">${l.weightOutKg ? formatBR(parseFloat(String(l.weightOutKg).replace(',', '.'))) + ' kg' : '-'}</td>
+              <td style="padding:5px 0;color:#6b7280;">Peso Chegada:</td><td style="font-weight:500;">${l.weightInKg ? formatBR(parseFloat(String(l.weightInKg).replace(',', '.'))) + ' kg' : '-'}</td>
             </tr>
-            ${pricePerUnit > 0 ? `<tr>
-              <td style="padding:3px 0;color:#666;">Valor:</td><td style="font-weight:bold;color:#166534;">R$ ${formatBR(lineValue)}</td>
-              <td></td><td></td>
-            </tr>` : ''}
+            ${l.humidity ? `<tr><td style="padding:5px 0;color:#6b7280;">Umidade:</td><td style="font-weight:500;">${l.humidity}%</td><td></td><td></td></tr>` : ''}
+            ${pricePerUnit > 0 ? `<tr><td style="padding:5px 0;color:#6b7280;">Valor:</td><td style="font-weight:bold;color:#166534;font-size:14px;">R$ ${formatBR(lineValue)}</td><td></td><td></td></tr>` : ''}
           </table>
           ${obsHtml}
           ${receiverHtml}
-          ${photoHtml}
-        </div>`;
-      }).join('');
-
-      const financialSection = pricePerUnit > 0 ? `
-      <div style="page-break-inside:avoid;margin-top:20px;padding:16px;background:#f0fdf4;border:2px solid #166534;border-radius:8px;">
-        <h3 style="margin:0 0 12px;color:#166534;font-size:16px;">💰 Resumo Financeiro</h3>
-        <table style="width:100%;font-size:13px;">
-          <tr><td style="padding:4px 0;">Preço por ${unit}:</td><td style="text-align:right;font-weight:bold;">R$ ${formatBR(pricePerUnit)}</td></tr>
-          <tr><td style="padding:4px 0;">Quantidade total (${unit}):</td><td style="text-align:right;font-weight:bold;">${formatBR(totalQuantity, 3)}</td></tr>
-          <tr style="border-top:2px solid #166534;"><td style="padding:8px 0;font-size:16px;font-weight:bold;color:#166534;">VALOR TOTAL A RECEBER:</td><td style="text-align:right;font-size:20px;font-weight:bold;color:#166534;">R$ ${formatBR(totalValue)}</td></tr>
-        </table>
-      </div>` : '';
-
-      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Completo - ${destName}</title>
-      <style>${PDF_DEST_STYLES}</style></head><body>
-      <div class="page">
-      <div class="pdf-header">
-        <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" />
-        <div class="pdf-header-text">
-          <h1>Relatório Completo de Entregas</h1>
-          <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+          <div style="margin-top:16px;">
+            <p style="font-size:12px;font-weight:600;color:#0d4f2e;margin-bottom:8px;">📷 Fotos da Carga</p>
+            ${photoHtml}
+          </div>
         </div>
-      </div>
-      <div class="pdf-subheader">
-        <span style="font-size:15px;font-weight:700;color:#0d4f2e;">📍 Destino: ${destName}</span>
-        <span style="font-size:12px;color:#6b7280;">Período: ${periodStr}</span>
-      </div>
-      <div class="pdf-content">
-      <div class="stats">
-        <div class="stat"><strong>${totalLoads}</strong> cargas</div>
-        <div class="stat"><strong>${formatBR(totalWeight / 1000)} ton</strong> peso total</div>
-        <div class="stat"><strong>${formatBR(totalVolume, 3)} m³</strong> volume total</div>
-        <div class="stat"><strong>${totalReceived}</strong> recebidas | <strong>${totalPending}</strong> pendentes</div>
-      </div>
-      <div style="margin-top:16px;">${cards}</div>
-      ${financialSection}
-      </div>
-      ${buildFooterHtml(kobayashiB64, qrB64)}
-      </div>
-      </body></html>`;
+        ${buildFooterHtml(kobayashiB64, qrB64)}
+        </body></html>`;
+        await renderHtmlToPdf(cargoHtml);
+      }
 
       const filename = `relatorio-completo-${(selectedDest?.name || 'destino').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`;
-      await generatePDFFromHtml(html, filename, setPdfProgress);
+      pdf.save(filename);
       toast.success('PDF completo gerado! Compartilhe o arquivo pelo WhatsApp.');
     } catch (err) {
       toast.error('Erro ao gerar PDF completo. Tente novamente.');

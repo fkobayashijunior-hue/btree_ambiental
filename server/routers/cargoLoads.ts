@@ -544,9 +544,11 @@ export const cargoLoadsRouter = router({
         }
       }
 
-      const { id, date, deliveryDate, ...rest } = input;
+      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, ...rest } = input;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
+      // These fields use snake_case column names - must be set explicitly via Drizzle schema fields
+      // They are handled separately at the db.update() call below
       if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
       if (deliveryDate !== undefined) updateData.deliveryDate = deliveryDate ? new Date(deliveryDate).toISOString().slice(0, 19).replace('T', ' ') : null;
       if (rest.trackingStatus) updateData.trackingUpdatedAt = now;
@@ -582,9 +584,22 @@ export const cargoLoadsRouter = router({
         }
       }
       // Debug: log the updateData keys and values for troubleshooting
-      console.log('[cargoLoads.update] id:', id, 'keys:', Object.keys(updateData), 'destinationId:', updateData.destinationId);
+      console.log('[cargoLoads.update] id:', id, 'keys:', Object.keys(updateData), 'receiverName:', receiverName);
       try {
-        await db.update(cargoLoads).set(updateData).where(eq(cargoLoads.id, id));
+        await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, id));
+        // Separately update snake_case fields that Drizzle may not map from Record<string,unknown>
+        const extraUpdates: string[] = [];
+        const extraParams: unknown[] = [];
+        if (receiverName !== undefined) { extraUpdates.push('receiver_name = ?'); extraParams.push(receiverName || null); }
+        if (thirdPartyContractor !== undefined) { extraUpdates.push('third_party_contractor = ?'); extraParams.push(thirdPartyContractor || null); }
+        if (thirdPartyCost !== undefined) { extraUpdates.push('third_party_cost = ?'); extraParams.push(thirdPartyCost || null); }
+        if (extraUpdates.length > 0) {
+          extraParams.push(id);
+          const conn = await getDirectConnection();
+          try {
+            await conn.execute(`UPDATE cargo_loads SET ${extraUpdates.join(', ')} WHERE id = ?`, extraParams);
+          } finally { await conn.end(); }
+        }
       } catch (dbErr: any) {
         // DrizzleQueryError wraps the real MySQL error in .cause
         const realErr = dbErr.cause || dbErr;
