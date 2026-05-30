@@ -139,7 +139,7 @@ const PDF_STYLES = `
   .pdf-footer-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .pdf-footer-right img { width: 60px; height: 60px; }
   .pdf-footer-right span { font-size: 9px; color: #555; }
-  .section { margin-bottom: 18px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .section { margin-bottom: 18px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; page-break-inside: avoid; break-inside: avoid; }
   .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 13px; color: #0d4f2e; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
   .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
@@ -148,7 +148,7 @@ const PDF_STYLES = `
   .field-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
   .field-value { font-size: 13px; font-weight: 500; margin-top: 2px; color: #111; }
   .field-value.highlight { color: #0d4f2e; font-weight: 700; font-size: 15px; }
-  .driver-card { display: flex; gap: 16px; padding: 16px; align-items: center; }
+  .driver-card { display: flex; gap: 16px; padding: 16px; align-items: center; page-break-inside: avoid; break-inside: avoid; }
   .driver-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #0d4f2e; }
   .driver-avatar-placeholder { width: 80px; height: 80px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #9ca3af; border: 3px solid #0d4f2e; }
   .driver-info { flex: 1; }
@@ -160,8 +160,8 @@ const PDF_STYLES = `
   .step-done { background: #dcfce7; color: #166534; }
   .step-current { background: #0d4f2e; color: white; }
   .step-pending { background: #f3f4f6; color: #9ca3af; }
-  .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px 16px; }
-  .photo-item { text-align: center; }
+  .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px 16px; page-break-inside: avoid; break-inside: avoid; }
+  .photo-item { text-align: center; page-break-inside: avoid; break-inside: avoid; }
   .photo-item img { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; }
   .photo-item .photo-label { font-size: 10px; color: #6b7280; margin-top: 4px; text-transform: uppercase; font-weight: 600; }
   .doc-link { color: #0d4f2e; text-decoration: none; font-weight: 600; font-size: 12px; }
@@ -169,9 +169,10 @@ const PDF_STYLES = `
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
   table th { background: #0d4f2e; color: white; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
   table td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+  table tr { page-break-inside: avoid; break-inside: avoid; }
   table tr:nth-child(even) { background: #f9fafb; }
   table tr:hover { background: #f0fdf4; }
-  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 18px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 18px; display: flex; gap: 24px; flex-wrap: wrap; page-break-inside: avoid; break-inside: avoid; }
   .summary-item { text-align: center; }
   .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
   .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }
@@ -212,7 +213,7 @@ async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "
   .badge-entregue { background: #dcfce7; color: #166534; }
   .badge-cancelado { background: #fee2e2; color: #991b1b; }
   .pdf-content { padding: 20px 32px; flex: 1; }
-  .section { margin-bottom: 18px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .section { margin-bottom: 18px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; page-break-inside: avoid; break-inside: avoid; }
   .section-title { background: #f0fdf4; padding: 10px 16px; font-weight: bold; font-size: 13px; color: #0d4f2e; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
   .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
@@ -221,7 +222,7 @@ async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "
   .field-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
   .field-value { font-size: 13px; font-weight: 500; margin-top: 2px; color: #111; }
   .field-value.highlight { color: #0d4f2e; font-weight: 700; font-size: 15px; }
-  .driver-card { display: flex; gap: 16px; padding: 16px; align-items: center; }
+  .driver-card { display: flex; gap: 16px; padding: 16px; align-items: center; page-break-inside: avoid; break-inside: avoid; }
   .driver-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #0d4f2e; }
   .driver-avatar-placeholder { width: 80px; height: 80px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #9ca3af; border: 3px solid #0d4f2e; }
   .driver-info { flex: 1; }
@@ -233,12 +234,12 @@ async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "
   .step-done { background: #dcfce7; color: #166534; }
   .step-current { background: #0d4f2e; color: white; }
   .step-pending { background: #f3f4f6; color: #9ca3af; }
-  .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px 16px; }
-  .photo-item { text-align: center; }
+  .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px 16px; page-break-inside: avoid; break-inside: avoid; }
+  .photo-item { text-align: center; page-break-inside: avoid; break-inside: avoid; }
   .photo-item img { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; }
   .photo-item .photo-label { font-size: 10px; color: #6b7280; margin-top: 4px; text-transform: uppercase; font-weight: 600; }
   .doc-link { color: #0d4f2e; text-decoration: none; font-weight: 600; font-size: 12px; }
-  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 18px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 18px; display: flex; gap: 24px; flex-wrap: wrap; page-break-inside: avoid; break-inside: avoid; }
   .summary-item { text-align: center; }
   .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
   .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }

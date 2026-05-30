@@ -481,7 +481,14 @@ async function startServer() {
         return res.status(400).json({ error: 'Invalid URL' });
       }
       // Only allow known domains
-      const allowed = ['d2xsxph8kpxj0f.cloudfront.net', 'api.qrserver.com', 'btreeambiental.com'];
+      const allowed = [
+        'd2xsxph8kpxj0f.cloudfront.net',
+        'api.qrserver.com',
+        'btreeambiental.com',
+        'res.cloudinary.com',
+        'cloudinary.com',
+        'amazonaws.com',
+      ];
       const urlObj = new URL(url);
       if (!allowed.some(d => urlObj.hostname.endsWith(d))) {
         return res.status(403).json({ error: 'Domain not allowed' });

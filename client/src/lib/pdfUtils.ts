@@ -148,11 +148,75 @@ export const PDF_BASE_STYLES = `
 // ─── PDF generation engine ────────────────────────────────────────────────────
 
 /**
- * Renders an HTML string in a hidden iframe, captures it with html2canvas,
- * and saves as a PDF file using jsPDF.
+ * Computes smart page-break offsets by scanning the rendered DOM for
+ * block-level elements (.section, tr, .photo-item, .cargo-block) and
+ * ensuring none are sliced across a page boundary.
  *
- * The full document is captured at once (no content slicing) to avoid
- * content being cut at page boundaries.
+ * Returns an array of Y pixel offsets (in canvas pixels at `scale`) where
+ * each new page should start.
+ */
+function computeSmartBreaks(
+  doc: Document,
+  scale: number,
+  pageHeightPx: number
+): number[] {
+  const canvasPageH = Math.floor(pageHeightPx * scale);
+  // Elements we never want to cut through
+  const blockSelectors = [
+    ".section",
+    ".cargo-block",
+    ".photo-item",
+    ".photos-grid",
+    ".summary-box",
+    "tr",
+    "tfoot",
+    "thead",
+  ];
+  const elements = Array.from(
+    doc.querySelectorAll(blockSelectors.join(","))
+  ) as HTMLElement[];
+
+  const bodyTop = doc.body.getBoundingClientRect().top;
+
+  // Build sorted list of element boundaries (top, bottom) in canvas coords
+  const boundaries: { top: number; bottom: number }[] = elements.map((el) => {
+    const rect = el.getBoundingClientRect();
+    return {
+      top: Math.floor((rect.top - bodyTop) * scale),
+      bottom: Math.ceil((rect.bottom - bodyTop) * scale),
+    };
+  });
+
+  const totalH = Math.ceil(doc.body.scrollHeight * scale);
+  const breaks: number[] = [0];
+  let pageStart = 0;
+
+  while (pageStart + canvasPageH < totalH) {
+    const idealEnd = pageStart + canvasPageH;
+
+    // Find the best cut point: just before any element that straddles idealEnd
+    let cutAt = idealEnd;
+    for (const b of boundaries) {
+      if (b.top < idealEnd && b.bottom > idealEnd) {
+        // This element straddles the cut — move cut to just before it
+        cutAt = Math.min(cutAt, b.top);
+      }
+    }
+
+    // Safety: if cutAt hasn't moved or moved too far back, just use idealEnd
+    if (cutAt <= pageStart + 100) cutAt = idealEnd;
+
+    pageStart = cutAt;
+    breaks.push(pageStart);
+  }
+
+  return breaks;
+}
+
+/**
+ * Renders an HTML string in a hidden iframe, captures it with html2canvas,
+ * and saves as a multi-page PDF. Uses smart page-break detection to avoid
+ * slicing sections, photos, and table rows across page boundaries.
  */
 export async function generatePDFFromHtml(
   html: string,
@@ -187,7 +251,8 @@ export async function generatePDFFromHtml(
           }
           img.onload = () => res();
           img.onerror = () => res();
-          setTimeout(res, 5000); // timeout fallback
+          // Longer timeout for Cloudinary images
+          setTimeout(res, 8000);
         })
     );
 
@@ -197,12 +262,14 @@ export async function generatePDFFromHtml(
         const { default: html2canvas } = await import("html2canvas");
         const { jsPDF } = await import("jspdf");
 
-        const body = doc.body;
         const pageWidthPx = 794;
         const pageHeightPx = 1123;
         const scale = 1.5;
 
-        const canvas = await html2canvas(body, {
+        // Compute smart breaks BEFORE capturing (DOM is still live)
+        const breaks = computeSmartBreaks(doc, scale, pageHeightPx);
+
+        const canvas = await html2canvas(doc.body, {
           scale,
           useCORS: true,
           allowTaint: false,
@@ -223,34 +290,31 @@ export async function generatePDFFromHtml(
         const pdfW = pdf.internal.pageSize.getWidth();
         const pdfH = pdf.internal.pageSize.getHeight();
 
-        const totalCanvasHeight = canvas.height;
-        const totalCanvasWidth = canvas.width;
-        const canvasPageHeight = Math.floor(pageHeightPx * scale);
-        const totalPages = Math.ceil(totalCanvasHeight / canvasPageHeight);
+        const totalCanvasH = canvas.height;
+        const totalCanvasW = canvas.width;
+        const canvasPageH = Math.floor(pageHeightPx * scale);
 
-        for (let i = 0; i < totalPages; i++) {
+        for (let i = 0; i < breaks.length; i++) {
           if (i > 0) pdf.addPage();
 
-          const srcY = i * canvasPageHeight;
-          const srcH = Math.min(canvasPageHeight, totalCanvasHeight - srcY);
+          const srcY = breaks[i];
+          const nextBreak = breaks[i + 1] ?? totalCanvasH;
+          const srcH = Math.min(nextBreak - srcY, canvasPageH, totalCanvasH - srcY);
+          if (srcH <= 0) break;
 
           const pageCanvas = document.createElement("canvas");
-          pageCanvas.width = totalCanvasWidth;
-          pageCanvas.height = canvasPageHeight;
+          pageCanvas.width = totalCanvasW;
+          pageCanvas.height = canvasPageH;
           const ctx = pageCanvas.getContext("2d");
           if (ctx) {
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
             ctx.drawImage(
               canvas,
-              0,
-              srcY,
-              totalCanvasWidth,
-              srcH,
-              0,
-              0,
-              totalCanvasWidth,
-              srcH
+              0, srcY,
+              totalCanvasW, srcH,
+              0, 0,
+              totalCanvasW, srcH
             );
           }
 
