@@ -1163,6 +1163,7 @@ export default function CargoControl() {
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
   const { data: buyersList = [] } = trpc.buyerClients.listActive.useQuery();
+  const { data: contractorsList = [] } = trpc.thirdPartyContractors.listActive.useQuery();
   const { data: detailCargo } = trpc.cargoLoads.getById.useQuery(
     { id: detailId! }, { enabled: !!detailId }
   );
@@ -2006,22 +2007,37 @@ export default function CargoControl() {
               <div className="space-y-3 p-3 bg-orange-50 rounded-xl border border-orange-200">
                 <p className="text-sm font-semibold text-orange-800">🔧 Corte Terceirizado (Interno)</p>
                 <div>
-                  <Label>Nome do Terceirizado</Label>
-                  <Input
+                  <Label>Terceirizado</Label>
+                  <select
+                    className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
                     value={form.thirdPartyContractor || ''}
-                    onChange={e => setForm(f => ({ ...f, thirdPartyContractor: e.target.value }))}
-                    placeholder="Ex: João Corte & Cia"
-                  />
-                  <p className="text-[10px] text-gray-500 mt-0.5">Empresa ou pessoa que realizou o corte terceirizado.</p>
+                    onChange={e => {
+                      const selected = contractorsList.find((c: any) => c.name === e.target.value);
+                      const volStr = calcVolume(form.heightM, form.widthM, form.lengthM);
+                      const vol = parseFloat(volStr || '0');
+                      const rate = selected ? parseFloat(selected.ratePerM3 || '0') : 0;
+                      const autoCost = selected && vol > 0 ? (vol * rate).toFixed(2) : form.thirdPartyCost;
+                      setForm(f => ({ ...f, thirdPartyContractor: e.target.value, thirdPartyCost: autoCost || '' }));
+                    }}
+                  >
+                    <option value="">-- Selecionar terceirizado --</option>
+                    {contractorsList.map((c: any) => (
+                      <option key={c.id} value={c.name}>{c.name} (R$ {parseFloat(c.ratePerM3 || '0').toFixed(2)}/m³)</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Selecione o terceirizado. Cadastre novos em <strong>Terceirizados</strong> no menu.</p>
                 </div>
                 <div>
                   <Label>Custo do Corte (R$)</Label>
                   <Input
                     value={form.thirdPartyCost || ''}
                     onChange={e => setForm(f => ({ ...f, thirdPartyCost: e.target.value }))}
-                    placeholder="Ex: 1500.00"
+                    placeholder="Calculado automaticamente (volume × taxa/m³)"
+                    type="number"
+                    step="0.01"
+                    min="0"
                   />
-                  <p className="text-[10px] text-gray-500 mt-0.5">Valor pago pelo corte terceirizado. Não aparece para clientes.</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Calculado automaticamente. Pode ser editado manualmente.</p>
                 </div>
               </div>
             )}

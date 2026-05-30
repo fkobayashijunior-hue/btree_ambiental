@@ -37,6 +37,7 @@ export const SYSTEM_MODULES = [
   { slug: "dashboard-exec",           label: "Dashboard Executivo",             group: "Administrativo" },
   { slug: "acesso",                   label: "Controle de Acesso",              group: "Administrativo" },
   { slug: "corte-terceirizado",       label: "Corte Terceirizado",              group: "Administrativo" },
+  { slug: "terceirizados",             label: "Terceirizados de Corte",           group: "Administrativo" },
   { slug: "dashboard-financeiro",     label: "Dashboard Financeiro",           group: "Administrativo" },
   { slug: "fretes",                   label: "Cálculo de Fretes",               group: "Administrativo" },
   { slug: "fornecedores-combustivel", label: "Fornecedores Combustível",        group: "Administrativo" },

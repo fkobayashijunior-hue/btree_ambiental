@@ -383,6 +383,24 @@ async function runAutoMigrations() {
       }
     } catch(e: any) { console.log('[AutoMigration] Could not query remaining FKs:', e?.message); }
 
+    // Create third_party_contractors table if not exists
+    try {
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS third_party_contractors (
+          id int NOT NULL AUTO_INCREMENT,
+          name varchar(255) NOT NULL,
+          rate_per_m3 varchar(20) NOT NULL DEFAULT '0',
+          phone varchar(30),
+          notes text,
+          is_active tinyint NOT NULL DEFAULT 1,
+          created_by int,
+          created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT third_party_contractors_id PRIMARY KEY(id)
+        )
+      `);
+    } catch(e) { /* table already exists */ }
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);

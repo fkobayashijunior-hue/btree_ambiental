@@ -1124,3 +1124,15 @@ export const fuelInvoices = mysqlTable("fuel_invoices", {
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
+
+export const thirdPartyContractors = mysqlTable("third_party_contractors", {
+	id: int().autoincrement().notNull(),
+	name: varchar({ length: 255 }).notNull(),
+	ratePerM3: varchar("rate_per_m3", { length: 20 }).notNull().default('0'),
+	phone: varchar({ length: 30 }),
+	notes: text(),
+	isActive: tinyint("is_active").default(1).notNull(),
+	createdBy: int("created_by").references(() => users.id),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
