@@ -1144,6 +1144,8 @@ export default function CargoControl() {
     humidity: "",
     deliveryDate: "",
     receiverName: "",
+    thirdPartyContractor: "",
+    thirdPartyCost: "",
   });
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -1248,7 +1250,7 @@ export default function CargoControl() {
       const c = clientsList.find((cl: { id: number; name: string }) => cl.id === autoClientId);
       autoClientName = c?.name || "";
     }
-    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: "", humidity: "", receiverName: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: "", humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
     setPendingPhotos([]);
   };
 
@@ -1279,6 +1281,8 @@ export default function CargoControl() {
       humidity: (cargo as any).humidity || "",
       deliveryDate: (cargo as any).deliveryDate ? safeDate((cargo as any).deliveryDate).toISOString().slice(0, 10) : "",
       receiverName: (cargo as any).receiverName || "",
+      thirdPartyContractor: (cargo as any).thirdPartyContractor || "",
+      thirdPartyCost: (cargo as any).thirdPartyCost || "",
     });
     // Load existing photos when editing
     const existingPhotos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson); } catch { return []; } })() : [];
@@ -1303,6 +1307,8 @@ export default function CargoControl() {
       humidity: form.humidity || undefined,
       deliveryDate: form.deliveryDate || undefined,
       receiverName: form.receiverName || undefined,
+      thirdPartyContractor: form.thirdPartyContractor || undefined,
+      thirdPartyCost: form.thirdPartyCost || undefined,
     };
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
@@ -1993,6 +1999,31 @@ export default function CargoControl() {
               />
               <p className="text-[10px] text-gray-500 mt-0.5">Nome de quem assinou o recibo na granja/destino.</p>
             </div>
+
+            {/* Corte Terceirizado - apenas para admin */}
+            {isAdmin && (
+              <div className="space-y-3 p-3 bg-orange-50 rounded-xl border border-orange-200">
+                <p className="text-sm font-semibold text-orange-800">🔧 Corte Terceirizado (Interno)</p>
+                <div>
+                  <Label>Nome do Terceirizado</Label>
+                  <Input
+                    value={form.thirdPartyContractor || ''}
+                    onChange={e => setForm(f => ({ ...f, thirdPartyContractor: e.target.value }))}
+                    placeholder="Ex: João Corte & Cia"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-0.5">Empresa ou pessoa que realizou o corte terceirizado.</p>
+                </div>
+                <div>
+                  <Label>Custo do Corte (R$)</Label>
+                  <Input
+                    value={form.thirdPartyCost || ''}
+                    onChange={e => setForm(f => ({ ...f, thirdPartyCost: e.target.value }))}
+                    placeholder="Ex: 1500.00"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-0.5">Valor pago pelo corte terceirizado. Não aparece para clientes.</p>
+                </div>
+              </div>
+            )}
 
             {/* Veículo */}
             <div className="space-y-3 p-3 bg-blue-50 rounded-xl">

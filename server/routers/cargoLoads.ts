@@ -176,6 +176,9 @@ export const cargoLoadsRouter = router({
           vehiclePlateJoined: equipment.licensePlate,
           locationName: gpsLocations.name,
           driverPhotoUrl: collaborators.photoUrl,
+          receiverName: cargoLoads.receiverName,
+          thirdPartyContractor: cargoLoads.thirdPartyContractor,
+          thirdPartyCost: cargoLoads.thirdPartyCost,
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
@@ -276,6 +279,9 @@ export const cargoLoadsRouter = router({
           vehiclePlateJoined: equipment.licensePlate,
           locationName: gpsLocations.name,
           driverPhotoUrl: collaborators.photoUrl,
+          receiverName: cargoLoads.receiverName,
+          thirdPartyContractor: cargoLoads.thirdPartyContractor,
+          thirdPartyCost: cargoLoads.thirdPartyCost,
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
@@ -375,6 +381,8 @@ export const cargoLoadsRouter = router({
       humidity: z.string().optional(),
       deliveryDate: z.string().optional(),
       receiverName: z.string().optional(),
+      thirdPartyContractor: z.string().optional(),
+      thirdPartyCost: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -511,6 +519,8 @@ export const cargoLoadsRouter = router({
       paymentStatus: z.enum(['sem_boleto','a_pagar','pago']).optional(),
       paidAt: z.string().optional(),
       receiverName: z.string().optional(),
+      thirdPartyContractor: z.string().optional(),
+      thirdPartyCost: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1443,6 +1453,8 @@ export const cargoLoadsRouter = router({
         lengthM: cargoLoads.lengthM,
         notes: cargoLoads.notes,
         receiverName: cargoLoads.receiverName,
+        thirdPartyContractor: cargoLoads.thirdPartyContractor,
+        thirdPartyCost: cargoLoads.thirdPartyCost,
       }).from(cargoLoads)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
@@ -1459,5 +1471,48 @@ export const cargoLoadsRouter = router({
       }
 
       return { loads: results, buyerInfo };
+    }),
+
+  listThirdParty: protectedProcedure
+    .input(z.object({
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      contractor: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const conditions: any[] = [
+        sql`${cargoLoads.thirdPartyContractor} IS NOT NULL AND ${cargoLoads.thirdPartyContractor} != ''`,
+      ];
+      if (input.startDate) {
+        conditions.push(sql`${cargoLoads.date} >= ${input.startDate}`);
+      }
+      if (input.endDate) {
+        conditions.push(sql`${cargoLoads.date} <= ${input.endDate + ' 23:59:59'}`);
+      }
+      if (input.contractor) {
+        conditions.push(sql`${cargoLoads.thirdPartyContractor} = ${input.contractor}`);
+      }
+      const results = await db.select({
+        id: cargoLoads.id,
+        date: cargoLoads.date,
+        deliveryDate: cargoLoads.deliveryDate,
+        vehiclePlate: cargoLoads.vehiclePlate,
+        driverName: cargoLoads.driverName,
+        destination: cargoLoads.destination,
+        clientName: cargoLoads.clientName,
+        invoiceNumber: cargoLoads.invoiceNumber,
+        volumeM3: cargoLoads.volumeM3,
+        weightNetKg: cargoLoads.weightNetKg,
+        woodType: cargoLoads.woodType,
+        status: cargoLoads.status,
+        thirdPartyContractor: cargoLoads.thirdPartyContractor,
+        thirdPartyCost: cargoLoads.thirdPartyCost,
+        notes: cargoLoads.notes,
+      }).from(cargoLoads)
+        .where(and(...conditions))
+        .orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
+      return results;
     }),
 });

@@ -254,6 +254,9 @@ async function runAutoMigrations() {
       { col: 'final_length_m', def: 'varchar(20)' },
       { col: 'final_volume_m3', def: 'varchar(20)' },
       { col: 'images_urls', def: 'text' },
+      { col: 'receiver_name', def: 'varchar(255)' },
+      { col: 'third_party_contractor', def: 'varchar(255)' },
+      { col: 'third_party_cost', def: 'varchar(20)' },
     ];
     for (const { col, def } of cargoColsToAdd) {
       try {

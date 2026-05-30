@@ -32,10 +32,16 @@ export const SYSTEM_MODULES = [
   { slug: "compradores",     label: "Compradores",           group: "Comercial" },
   { slug: "relatorio-destinos", label: "Relatório Destinos",  group: "Comercial" },
   // Administrativo (valores financeiros)
-  { slug: "financeiro",      label: "Módulo Financeiro",     group: "Administrativo" },
-  { slug: "relatorios",      label: "Relatórios",            group: "Administrativo" },
-  { slug: "dashboard-exec",  label: "Dashboard Executivo",   group: "Administrativo" },
-  { slug: "acesso",          label: "Controle de Acesso",    group: "Administrativo" },
+  { slug: "financeiro",               label: "Módulo Financeiro",               group: "Administrativo" },
+  { slug: "relatorios",               label: "Relatórios",                      group: "Administrativo" },
+  { slug: "dashboard-exec",           label: "Dashboard Executivo",             group: "Administrativo" },
+  { slug: "acesso",                   label: "Controle de Acesso",              group: "Administrativo" },
+  { slug: "corte-terceirizado",       label: "Corte Terceirizado",              group: "Administrativo" },
+  { slug: "dashboard-financeiro",     label: "Dashboard Financeiro",           group: "Administrativo" },
+  { slug: "fretes",                   label: "Cálculo de Fretes",               group: "Administrativo" },
+  { slug: "fornecedores-combustivel", label: "Fornecedores Combustível",        group: "Administrativo" },
+  { slug: "relatorios-combustivel",   label: "Relatórios Combustível",          group: "Administrativo" },
+  { slug: "contas-pagar-combustivel", label: "Contas a Pagar (Combustível)",    group: "Administrativo" },
 ] as const;
 
 export type ModuleSlug = typeof SYSTEM_MODULES[number]["slug"];

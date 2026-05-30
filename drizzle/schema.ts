@@ -95,6 +95,8 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 		receivedByBuyer: int("received_by_buyer").default(0).notNull(),
 		receivedAt: timestamp("received_at", { mode: 'string' }),
 		receiverName: varchar("receiver_name", { length: 255 }),
+		thirdPartyContractor: varchar("third_party_contractor", { length: 255 }),
+		thirdPartyCost: varchar("third_party_cost", { length: 20 }),
 	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {

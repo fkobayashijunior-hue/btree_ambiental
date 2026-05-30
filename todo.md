@@ -1814,3 +1814,29 @@
 - [x] Menu lateral: item "Dashboard Financeiro" adicionado
 - [x] Procedure `financialDashboard` no router buyerClients
 - [x] Procedure `getPayments` no router buyerClients
+
+---
+
+## 🐛 BUGS E MELHORIAS (2026-05-30)
+
+- [ ] Bug: receiverName (Responsável pelo Recebimento) não salva ao editar carga existente
+- [ ] Bug: PDF Completo - imagens não carregam para algumas cargas (proxy timeout)
+- [ ] Bug: PDF Completo - última página em branco (quebra de página errada)
+- [ ] Feature: Campo "Corte Terceirizado" no registro de cargas (nome do terceirizado + valor pago)
+- [ ] Feature: Relatório de Corte Terceirizado (filtro por período + PDF financeiro)
+
+---
+
+## 🔧 CORREÇÕES E MELHORIAS (Mai/2026)
+
+- [x] Corrigir bug: receiver_name não estava sendo salvo (faltava na autoMigration)
+- [x] Adicionar campos thirdPartyContractor e thirdPartyCost ao schema Drizzle (cargoLoads)
+- [x] Adicionar receiver_name, third_party_contractor, third_party_cost à autoMigration
+- [x] Adicionar campos de Corte Terceirizado ao formulário de carga (visível apenas para admin)
+- [x] Adicionar procedimento listThirdParty ao router cargoLoads
+- [x] Criar página ThirdPartyReport (/corte-terceirizado) com filtros e exportação PDF
+- [x] Adicionar rota /corte-terceirizado ao App.tsx
+- [x] Adicionar slug "corte-terceirizado" ao SYSTEM_MODULES em permissions.ts
+- [x] Adicionar slugs faltantes (dashboard-financeiro, fretes, fornecedores-combustivel, etc.) ao SYSTEM_MODULES
+- [ ] Corrigir relatório completo: imagens de algumas cargas não carregam
+- [ ] Corrigir relatório completo: quebras de página incorretas
