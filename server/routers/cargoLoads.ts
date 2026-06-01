@@ -63,12 +63,24 @@ export const cargoLoadsRouter = router({
       state: z.string().optional(),
       notes: z.string().optional(),
       clientId: z.number().optional(), // cliente vinculado ao destino
+      pricePerTon: z.string().optional(), // valor por tonelada
+      pricePerM3: z.string().optional(), // valor por m³
+      priceType: z.enum(['ton', 'm3']).optional().default('ton'), // tipo de preço
     }))
     .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      const result = await db.insert(cargoDestinations).values({ ...input, createdBy: ctx.user.id });
-      return { success: true, id: (result as { insertId?: number }).insertId };
+      const { name, address, city, state, notes, clientId, pricePerTon, pricePerM3, priceType } = input;
+      let conn: any = null;
+      try {
+        conn = await getDirectConnection();
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const [result] = await conn.execute(
+          'INSERT INTO cargo_destinations (name, address, city, state, notes, client_id, price_per_ton, price_per_m3, price_type, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [name, address || null, city || null, state || null, notes || null, clientId || null, pricePerTon || null, pricePerM3 || null, priceType || 'ton', ctx.user.id, now]
+        );
+        return { success: true, id: (result as any)?.insertId };
+      } finally {
+        if (conn) await conn.end().catch(() => {});
+      }
     }),
 
   updateDestination: protectedProcedure
@@ -80,13 +92,33 @@ export const cargoLoadsRouter = router({
       state: z.string().optional(),
       notes: z.string().optional(),
       clientId: z.number().nullable().optional(),
+      pricePerTon: z.string().nullable().optional(), // valor por tonelada
+      pricePerM3: z.string().nullable().optional(), // valor por m³
+      priceType: z.enum(['ton', 'm3']).nullable().optional(), // tipo de preço
     }))
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      const { id, ...rest } = input;
-      await db.update(cargoDestinations).set(rest as Record<string, unknown>).where(eq(cargoDestinations.id, id));
-      return { success: true };
+      const { id, name, address, city, state, notes, clientId, pricePerTon, pricePerM3, priceType } = input;
+      let conn: any = null;
+      try {
+        conn = await getDirectConnection();
+        const setClauses: string[] = [];
+        const params: unknown[] = [];
+        if (name !== undefined) { setClauses.push('name = ?'); params.push(name); }
+        if (address !== undefined) { setClauses.push('address = ?'); params.push(address || null); }
+        if (city !== undefined) { setClauses.push('city = ?'); params.push(city || null); }
+        if (state !== undefined) { setClauses.push('state = ?'); params.push(state || null); }
+        if (notes !== undefined) { setClauses.push('notes = ?'); params.push(notes || null); }
+        if (clientId !== undefined) { setClauses.push('client_id = ?'); params.push(clientId || null); }
+        if (pricePerTon !== undefined) { setClauses.push('price_per_ton = ?'); params.push(pricePerTon || null); }
+        if (pricePerM3 !== undefined) { setClauses.push('price_per_m3 = ?'); params.push(pricePerM3 || null); }
+        if (priceType !== undefined) { setClauses.push('price_type = ?'); params.push(priceType || 'ton'); }
+        if (setClauses.length === 0) return { success: true };
+        params.push(id);
+        await conn.execute(`UPDATE cargo_destinations SET ${setClauses.join(', ')} WHERE id = ?`, params);
+        return { success: true };
+      } finally {
+        if (conn) await conn.end().catch(() => {});
+      }
     }),
 
   deleteDestination: protectedProcedure

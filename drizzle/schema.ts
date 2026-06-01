@@ -44,6 +44,10 @@ export const cargoDestinations = mysqlTable("cargo_destinations", {
 	active: int().default(1).notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	createdBy: int("created_by"),
+	clientId: int("client_id"),
+	pricePerTon: varchar("price_per_ton", { length: 20 }),
+	pricePerM3: varchar("price_per_m3", { length: 20 }),
+	priceType: varchar("price_type", { length: 10 }).default("ton"),
 });
 
 export const cargoLoads = mysqlTable("cargo_loads", {

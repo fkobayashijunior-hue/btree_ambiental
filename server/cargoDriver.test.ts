@@ -148,3 +148,88 @@ describe("cargoLoads.listTrucks", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 });
+
+describe("cargoLoads.createDestination with price fields", () => {
+  it("creates a destination with pricePerTon and returns it in listDestinations", async () => {
+    const ctx = createAuthContext(1, "admin");
+    const caller = appRouter.createCaller(ctx);
+
+    // Create destination with price per ton
+    const created = await caller.cargoLoads.createDestination({
+      name: `Destino Teste Preço ${Date.now()}`,
+      city: "Astorga",
+      state: "PR",
+      pricePerTon: "135.50",
+      priceType: "ton",
+    });
+
+    expect(created).toHaveProperty("id");
+    expect(created.id).toBeGreaterThan(0);
+
+    // Verify it appears in listDestinations with price fields
+    const list = await caller.cargoLoads.listDestinations();
+    const found = list.find((d: any) => d.id === created.id);
+
+    expect(found).toBeDefined();
+    expect(found?.pricePerTon).toBe("135.50");
+    expect(found?.priceType).toBe("ton");
+  });
+
+  it("creates a destination with pricePerM3", async () => {
+    const ctx = createAuthContext(1, "admin");
+    const caller = appRouter.createCaller(ctx);
+
+    const created = await caller.cargoLoads.createDestination({
+      name: `Destino Teste M3 ${Date.now()}`,
+      pricePerM3: "48.00",
+      priceType: "m3",
+    });
+
+    expect(created).toHaveProperty("id");
+
+    const list = await caller.cargoLoads.listDestinations();
+    const found = list.find((d: any) => d.id === created.id);
+
+    expect(found).toBeDefined();
+    expect(found?.pricePerM3).toBe("48.00");
+    expect(found?.priceType).toBe("m3");
+  });
+
+  it("creates a destination without price (price fields are null)", async () => {
+    const ctx = createAuthContext(1, "admin");
+    const caller = appRouter.createCaller(ctx);
+
+    const created = await caller.cargoLoads.createDestination({
+      name: `Destino Sem Preço ${Date.now()}`,
+    });
+
+    expect(created).toHaveProperty("id");
+
+    const list = await caller.cargoLoads.listDestinations();
+    const found = list.find((d: any) => d.id === created.id);
+
+    expect(found).toBeDefined();
+    expect(found?.pricePerTon == null || found?.pricePerTon === "").toBe(true);
+    expect(found?.pricePerM3 == null || found?.pricePerM3 === "").toBe(true);
+  });
+});
+
+describe("cargoLoads.listDestinations shape", () => {
+  it("each destination has the expected price fields", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const list = await caller.cargoLoads.listDestinations();
+
+    expect(Array.isArray(list)).toBe(true);
+
+    // If there are any destinations, check they have the new fields
+    if (list.length > 0) {
+      const first = list[0] as any;
+      // These fields should exist (even if null)
+      expect("pricePerTon" in first).toBe(true);
+      expect("pricePerM3" in first).toBe(true);
+      expect("priceType" in first).toBe(true);
+    }
+  });
+});

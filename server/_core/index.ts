@@ -401,6 +401,12 @@ async function runAutoMigrations() {
       `);
     } catch(e) { /* table already exists */ }
 
+    // Add new columns to cargo_destinations if they don't exist
+    try { await db.execute(/*sql*/`ALTER TABLE cargo_destinations ADD COLUMN client_id int NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE cargo_destinations ADD COLUMN price_per_ton varchar(20) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE cargo_destinations ADD COLUMN price_per_m3 varchar(20) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE cargo_destinations ADD COLUMN price_type varchar(10) NULL DEFAULT 'ton'`); } catch(e) {}
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);

@@ -1118,6 +1118,9 @@ export default function CargoControl() {
   const [newDestCity, setNewDestCity] = useState("");
   const [newDestState, setNewDestState] = useState("");
   const [newDestClientId, setNewDestClientId] = useState(0);
+  const [newDestPricePerTon, setNewDestPricePerTon] = useState("");
+  const [newDestPricePerM3, setNewDestPricePerM3] = useState("");
+  const [newDestPriceType, setNewDestPriceType] = useState<'ton' | 'm3'>('ton');
   const [collapsedClients, setCollapsedClients] = useState<Set<string>>(new Set());
   const { openFilePicker } = useFilePicker();
 
@@ -1210,7 +1213,7 @@ export default function CargoControl() {
     onError: (e) => { toast.error(e.message); setUploadingPhoto(false); },
   });
   const createDestination = trpc.cargoLoads.createDestination.useMutation({
-    onSuccess: () => { toast.success("Destino cadastrado!"); utils.cargoLoads.listDestinations.invalidate(); setIsDestinationOpen(false); setNewDestName(""); setNewDestCity(""); setNewDestState(""); },
+    onSuccess: () => { toast.success("Destino cadastrado!"); utils.cargoLoads.listDestinations.invalidate(); setIsDestinationOpen(false); setNewDestName(""); setNewDestCity(""); setNewDestState(""); setNewDestClientId(0); setNewDestPricePerTon(""); setNewDestPricePerM3(""); setNewDestPriceType('ton'); },
     onError: (e) => toast.error(e.message),
   });
   const uploadDocMutation = trpc.cargoLoads.uploadDocument.useMutation({
@@ -2205,7 +2208,7 @@ export default function CargoControl() {
                         destination: buyer?.name || f.destination,
                       }));
                     } else {
-                      const dest = destinations.find(d => d.id === id) as (typeof destinations[number] & { clientId?: number | null }) | undefined;
+                      const dest = destinations.find(d => d.id === id) as (typeof destinations[number] & { clientId?: number | null; pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null }) | undefined;
                       const linkedClientId = dest?.clientId;
                       const linkedClient = linkedClientId ? (clientsList as { id: number; name: string }[]).find(c => c.id === linkedClientId) : null;
                       setForm(f => ({
@@ -2224,9 +2227,11 @@ export default function CargoControl() {
                       const countA = loads.filter(l => l.destinationId === a.id).length;
                       const countB = loads.filter(l => l.destinationId === b.id).length;
                       return countB - countA;
-                    }).map(d => (
-                      <option key={`dest-${d.id}`} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}</option>
-                    ))}
+                    }).map(d => {
+                      const dExt = d as typeof d & { pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null };
+                      const priceLabel = dExt.priceType === 'm3' && dExt.pricePerM3 ? ` (R$${dExt.pricePerM3}/m³)` : dExt.pricePerTon ? ` (R$${dExt.pricePerTon}/ton)` : '';
+                      return <option key={`dest-${d.id}`} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}{priceLabel}</option>;
+                    })}
                   </optgroup>}
                   {buyersList.length > 0 && <optgroup label="💰 Compradores">
                     {buyersList.map((b: any) => (
@@ -2241,6 +2246,21 @@ export default function CargoControl() {
                   <Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} placeholder="Nome do destino" />
                 </div>
               )}
+              {/* Exibe o preço cadastrado no destino selecionado */}
+              {form.destinationId > 0 && form.destinationId < 10000 && (() => {
+                const dExt = destinations.find(d => d.id === form.destinationId) as (typeof destinations[number] & { pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null }) | undefined;
+                const price = dExt?.priceType === 'm3' ? dExt?.pricePerM3 : dExt?.pricePerTon;
+                const unit = dExt?.priceType === 'm3' ? 'm³' : 'ton';
+                if (!price) return null;
+                return (
+                  <div className="flex items-center gap-2 mt-1 p-2 bg-emerald-50 border border-emerald-200 rounded-md">
+                    <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="text-sm text-emerald-700">
+                      Valor cadastrado: <strong>R$ {price}/{unit}</strong>
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Local de Trabalho */}
@@ -2673,8 +2693,8 @@ export default function CargoControl() {
       </Dialog>
 
       {/* ===== DIALOG: CADASTRAR DESTINO ===== */}
-      <Dialog open={isDestinationOpen} onOpenChange={v => { setIsDestinationOpen(v); if (!v) { setNewDestName(""); setNewDestCity(""); setNewDestState(""); setNewDestClientId(0); } }}>
-        <DialogContent className="max-w-sm">
+      <Dialog open={isDestinationOpen} onOpenChange={v => { setIsDestinationOpen(v); if (!v) { setNewDestName(""); setNewDestCity(""); setNewDestState(""); setNewDestClientId(0); setNewDestPricePerTon(""); setNewDestPricePerM3(""); setNewDestPriceType('ton'); } }}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Cadastrar Destino</DialogTitle>
           </DialogHeader>
@@ -2694,7 +2714,7 @@ export default function CargoControl() {
               </div>
             </div>
             <div>
-              <Label>Vincular ao Cliente (Portal)</Label>
+              <Label>Vincular ao Comprador (Portal)</Label>
               <select
                 value={newDestClientId}
                 onChange={e => setNewDestClientId(parseInt(e.target.value))}
@@ -2705,14 +2725,54 @@ export default function CargoControl() {
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground mt-1">Se vinculado, o cliente verá as cargas deste destino no portal automaticamente.</p>
+              <p className="text-xs text-muted-foreground mt-1">Se vinculado, o comprador verá as cargas deste destino no portal.</p>
+            </div>
+            {/* Tipo de preço */}
+            <div>
+              <Label>Tipo de Preço</Label>
+              <div className="flex gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setNewDestPriceType('ton')}
+                  className={`flex-1 py-2 px-3 rounded-md border text-sm font-medium transition-colors ${newDestPriceType === 'ton' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-background border-input text-foreground'}`}
+                >
+                  Por Tonelada (ton)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewDestPriceType('m3')}
+                  className={`flex-1 py-2 px-3 rounded-md border text-sm font-medium transition-colors ${newDestPriceType === 'm3' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-background border-input text-foreground'}`}
+                >
+                  Por M³
+                </button>
+              </div>
+            </div>
+            {/* Valor */}
+            <div>
+              <Label>{newDestPriceType === 'ton' ? 'Valor por Tonelada (R$)' : 'Valor por M³ (R$)'}</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={newDestPriceType === 'ton' ? newDestPricePerTon : newDestPricePerM3}
+                onChange={e => newDestPriceType === 'ton' ? setNewDestPricePerTon(e.target.value) : setNewDestPricePerM3(e.target.value)}
+                placeholder={newDestPriceType === 'ton' ? 'ex: 130.00' : 'ex: 45.00'}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Ao selecionar este destino na carga, o valor será preenchido automaticamente.</p>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setIsDestinationOpen(false)}>Cancelar</Button>
               <Button
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={!newDestName || createDestination.isPending}
-                onClick={() => createDestination.mutate({ name: newDestName, city: newDestCity || undefined, state: newDestState || undefined, clientId: newDestClientId || undefined })}
+                onClick={() => createDestination.mutate({
+                  name: newDestName,
+                  city: newDestCity || undefined,
+                  state: newDestState || undefined,
+                  clientId: newDestClientId || undefined,
+                  pricePerTon: newDestPriceType === 'ton' && newDestPricePerTon ? newDestPricePerTon : undefined,
+                  pricePerM3: newDestPriceType === 'm3' && newDestPricePerM3 ? newDestPricePerM3 : undefined,
+                  priceType: newDestPriceType,
+                })}
               >
                 {createDestination.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar"}
               </Button>

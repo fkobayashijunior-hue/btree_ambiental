@@ -1840,3 +1840,15 @@
 - [x] Adicionar slugs faltantes (dashboard-financeiro, fretes, fornecedores-combustivel, etc.) ao SYSTEM_MODULES
 - [ ] Corrigir relatório completo: imagens de algumas cargas não carregam
 - [ ] Corrigir relatório completo: quebras de página incorretas
+
+---
+## 🆕 FEATURE: Múltiplos Destinos por Comprador com Valores Diferentes (Jun/2026)
+- [x] Adicionar clientId, pricePerTon, pricePerM3, priceType ao schema Drizzle (cargoDestinations)
+- [x] Adicionar client_id, price_per_ton, price_per_m3, price_type à autoMigration (cargo_destinations)
+- [x] Backend: adicionar pricePerTon, pricePerM3, priceType ao input de createDestination e updateDestination
+- [x] Backend: salvar clientId, pricePerTon, pricePerM3, priceType via SQL direto (evitar bug Drizzle)
+- [x] Frontend: adicionar campos de preço (pricePerTon/pricePerM3) e tipo (ton/m3) no formulário de destino
+- [x] Frontend: ao selecionar destino na carga, mostrar badge com preço cadastrado
+- [x] Frontend: mostrar preço no dropdown de seleção de destino
+- [x] Frontend: Resumo Financeiro no Relatório por Destino para destinos com preço cadastrado
+- [x] Testes Vitest: createDestination com pricePerTon/pricePerM3, listDestinations com novos campos

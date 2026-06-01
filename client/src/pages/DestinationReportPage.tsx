@@ -113,8 +113,8 @@ export default function DestinationReportPage() {
 
   // Combined list for the select
   const allDestinations = useMemo(() => {
-    const dests = destinations.map((d: any) => ({ id: d.id, name: d.name, city: d.city, state: d.state, type: 'destination' as const }));
-    const buyers = (buyersList as any[]).map(b => ({ id: 10000 + b.id, name: b.name, city: b.city, state: b.state, type: 'buyer' as const }));
+    const dests = destinations.map((d: any) => ({ id: d.id, name: d.name, city: d.city, state: d.state, type: 'destination' as const, pricePerTon: d.pricePerTon, pricePerM3: d.pricePerM3, priceType: d.priceType }));
+    const buyers = (buyersList as any[]).map(b => ({ id: 10000 + b.id, name: b.name, city: b.city, state: b.state, type: 'buyer' as const, pricePerTon: null, pricePerM3: null, priceType: null }));
     return [...dests, ...buyers];
   }, [destinations, buyersList]);
 
@@ -185,6 +185,15 @@ export default function DestinationReportPage() {
 
   // Get selected destination info
   const selectedDest = allDestinations.find(d => d.id === selectedDestId);
+
+  // Destination (non-buyer) price calculations
+  const destPriceType = (selectedDest as any)?.priceType || 'ton';
+  const destPricePerTon = (selectedDest as any)?.pricePerTon ? parseFloat(String((selectedDest as any).pricePerTon).replace(',', '.')) : 0;
+  const destPricePerM3 = (selectedDest as any)?.pricePerM3 ? parseFloat(String((selectedDest as any).pricePerM3).replace(',', '.')) : 0;
+  const destPricePerUnit = destPriceType === 'm3' ? destPricePerM3 : destPricePerTon;
+  const destUnit = destPriceType === 'm3' ? 'm³' : 'ton';
+  const destTotalQuantity = destPriceType === 'm3' ? totalVolume : totalWeight / 1000;
+  const destTotalValue = destPricePerUnit * destTotalQuantity;
 
   // ─── PDF Footer HTML (with base64 logos via proxy) ─────────────────────────
   function buildFooterHtml(kobayashiB64: string, qrB64: string): string {
@@ -713,6 +722,36 @@ export default function DestinationReportPage() {
               <div>
                 <span className="text-green-600 text-xs">Valor Total a Receber</span>
                 <div className="font-bold text-green-900 text-lg">R$ {formatBR(totalValue)}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Destination (non-buyer) financial info */}
+      {!isBuyer && destPricePerUnit > 0 && loads.length > 0 && (
+        <Card className="border-emerald-300 bg-emerald-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="h-5 w-5 text-emerald-700" />
+              <h3 className="font-semibold text-emerald-800">Resumo Financeiro — {selectedDest?.name}</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-emerald-600 text-xs">Preço por {destUnit}</span>
+                <div className="font-bold text-emerald-900">R$ {formatBR(destPricePerUnit)}</div>
+              </div>
+              <div>
+                <span className="text-emerald-600 text-xs">Qtd. Total ({destUnit})</span>
+                <div className="font-bold text-emerald-900">{formatBR(destTotalQuantity, 3)}</div>
+              </div>
+              <div>
+                <span className="text-emerald-600 text-xs">Total Cargas</span>
+                <div className="font-bold text-emerald-900">{totalLoads}</div>
+              </div>
+              <div>
+                <span className="text-emerald-600 text-xs">Valor Total a Receber</span>
+                <div className="font-bold text-emerald-900 text-lg">R$ {formatBR(destTotalValue)}</div>
               </div>
             </div>
           </CardContent>
