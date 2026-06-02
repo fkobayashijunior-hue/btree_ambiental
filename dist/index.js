@@ -3772,23 +3772,34 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       conditions.push(eq6(cargoLoads.status, input.statusFilter));
     }
     if (input.destinationId) {
-      let destName = null;
       if (input.destinationId >= 1e4) {
-        const buyerResult = await db.select({ name: buyerClients.name }).from(buyerClients).where(eq6(buyerClients.id, input.destinationId - 1e4)).limit(1);
-        if (buyerResult.length > 0) destName = buyerResult[0].name;
+        const realBuyerId = input.destinationId - 1e4;
+        const linkedDests = await db.select({ id: cargoDestinations.id, name: cargoDestinations.name }).from(cargoDestinations).where(eq6(cargoDestinations.clientId, realBuyerId));
+        const buyerResult = await db.select({ name: buyerClients.name }).from(buyerClients).where(eq6(buyerClients.id, realBuyerId)).limit(1);
+        const buyerName = buyerResult.length > 0 ? buyerResult[0].name : null;
+        const orClauses = [
+          eq6(cargoLoads.destinationId, input.destinationId)
+          // legacy buyer destinationId
+        ];
+        if (buyerName) orClauses.push(eq6(cargoLoads.destination, buyerName));
+        for (const ld of linkedDests) {
+          orClauses.push(eq6(cargoLoads.destinationId, ld.id));
+          orClauses.push(eq6(cargoLoads.destination, ld.name));
+        }
+        conditions.push(or3(...orClauses));
       } else {
         const destResult = await db.select({ name: cargoDestinations.name }).from(cargoDestinations).where(eq6(cargoDestinations.id, input.destinationId)).limit(1);
-        if (destResult.length > 0) destName = destResult[0].name;
-      }
-      if (destName) {
-        conditions.push(
-          or3(
-            eq6(cargoLoads.destinationId, input.destinationId),
-            eq6(cargoLoads.destination, destName)
-          )
-        );
-      } else {
-        conditions.push(eq6(cargoLoads.destinationId, input.destinationId));
+        const destName = destResult.length > 0 ? destResult[0].name : null;
+        if (destName) {
+          conditions.push(
+            or3(
+              eq6(cargoLoads.destinationId, input.destinationId),
+              eq6(cargoLoads.destination, destName)
+            )
+          );
+        } else {
+          conditions.push(eq6(cargoLoads.destinationId, input.destinationId));
+        }
       }
     }
     if (input.startDate) {

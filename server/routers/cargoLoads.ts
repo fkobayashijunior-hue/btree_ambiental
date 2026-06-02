@@ -1441,33 +1441,46 @@ export const cargoLoadsRouter = router({
       // Destination filter - handle both regular destinations and buyers (offset 10000)
       // Also match by destination text name for cargas saved before destinationId was implemented
       if (input.destinationId) {
-        // Get the destination name to also match by text
-        let destName: string | null = null;
         if (input.destinationId >= 10000) {
-          // It's a buyer - get buyer name
+          // It's a buyer - fetch ALL destinations linked to this buyer via client_id
+          const realBuyerId = input.destinationId - 10000;
+          const linkedDests = await db.select({ id: cargoDestinations.id, name: cargoDestinations.name })
+            .from(cargoDestinations)
+            .where(eq(cargoDestinations.clientId, realBuyerId));
+          // Also get buyer name to match cargas saved by name
           const buyerResult = await db.select({ name: buyerClients.name })
             .from(buyerClients)
-            .where(eq(buyerClients.id, input.destinationId - 10000))
+            .where(eq(buyerClients.id, realBuyerId))
             .limit(1);
-          if (buyerResult.length > 0) destName = buyerResult[0].name;
+          const buyerName = buyerResult.length > 0 ? buyerResult[0].name : null;
+          // Build OR conditions: buyer destinationId, all linked dest IDs, buyer name, all linked dest names
+          const orClauses: any[] = [
+            eq(cargoLoads.destinationId, input.destinationId), // legacy buyer destinationId
+          ];
+          if (buyerName) orClauses.push(eq(cargoLoads.destination, buyerName));
+          for (const ld of linkedDests) {
+            orClauses.push(eq(cargoLoads.destinationId, ld.id));
+            orClauses.push(eq(cargoLoads.destination, ld.name));
+          }
+          conditions.push(or(...orClauses)!);
         } else {
           // It's a regular destination - get destination name
           const destResult = await db.select({ name: cargoDestinations.name })
             .from(cargoDestinations)
             .where(eq(cargoDestinations.id, input.destinationId))
             .limit(1);
-          if (destResult.length > 0) destName = destResult[0].name;
-        }
-        // Match by destinationId OR by destination text name
-        if (destName) {
-          conditions.push(
-            or(
-              eq(cargoLoads.destinationId, input.destinationId),
-              eq(cargoLoads.destination, destName)
-            )!
-          );
-        } else {
-          conditions.push(eq(cargoLoads.destinationId, input.destinationId));
+          const destName = destResult.length > 0 ? destResult[0].name : null;
+          // Match by destinationId OR by destination text name
+          if (destName) {
+            conditions.push(
+              or(
+                eq(cargoLoads.destinationId, input.destinationId),
+                eq(cargoLoads.destination, destName)
+              )!
+            );
+          } else {
+            conditions.push(eq(cargoLoads.destinationId, input.destinationId));
+          }
         }
       }
       if (input.startDate) {

@@ -2714,18 +2714,18 @@ export default function CargoControl() {
               </div>
             </div>
             <div>
-              <Label>Vincular ao Comprador (Portal)</Label>
+              <Label>Vincular ao Comprador de Lenha</Label>
               <select
                 value={newDestClientId}
                 onChange={e => setNewDestClientId(parseInt(e.target.value))}
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
               >
-                <option value={0}>Nenhum (sem portal)</option>
-                {(clientsList as { id: number; name: string }[]).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                <option value={0}>Nenhum</option>
+                {(buyersList as { id: number; name: string }[]).map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground mt-1">Se vinculado, o comprador verá as cargas deste destino no portal.</p>
+              <p className="text-xs text-muted-foreground mt-1">Vincule ao comprador de lenha para agrupar os destinos no relatório.</p>
             </div>
             {/* Tipo de preço */}
             <div>
