@@ -294,7 +294,11 @@ var init_schema = __esm({
       notes: text(),
       active: int().default(1).notNull(),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
-      createdBy: int("created_by")
+      createdBy: int("created_by"),
+      clientId: int("client_id"),
+      pricePerTon: varchar("price_per_ton", { length: 20 }),
+      pricePerM3: varchar("price_per_m3", { length: 20 }),
+      priceType: varchar("price_type", { length: 10 }).default("ton")
     });
     cargoLoads = mysqlTable("cargo_loads", {
       id: int().autoincrement().notNull(),
@@ -2582,13 +2586,29 @@ var cargoLoadsRouter = router({
     city: z6.string().optional(),
     state: z6.string().optional(),
     notes: z6.string().optional(),
-    clientId: z6.number().optional()
+    clientId: z6.number().optional(),
     // cliente vinculado ao destino
+    pricePerTon: z6.string().optional(),
+    // valor por tonelada
+    pricePerM3: z6.string().optional(),
+    // valor por m³
+    priceType: z6.enum(["ton", "m3"]).optional().default("ton")
+    // tipo de preço
   })).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const result = await db.insert(cargoDestinations).values({ ...input, createdBy: ctx.user.id });
-    return { success: true, id: result.insertId };
+    const { name, address, city, state, notes, clientId, pricePerTon, pricePerM3, priceType } = input;
+    let conn = null;
+    try {
+      conn = await getDirectConnection();
+      const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+      const [result] = await conn.execute(
+        "INSERT INTO cargo_destinations (name, address, city, state, notes, client_id, price_per_ton, price_per_m3, price_type, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [name, address || null, city || null, state || null, notes || null, clientId || null, pricePerTon || null, pricePerM3 || null, priceType || "ton", ctx.user.id, now]
+      );
+      return { success: true, id: result?.insertId };
+    } finally {
+      if (conn) await conn.end().catch(() => {
+      });
+    }
   }),
   updateDestination: protectedProcedure.input(z6.object({
     id: z6.number(),
@@ -2597,13 +2617,64 @@ var cargoLoadsRouter = router({
     city: z6.string().optional(),
     state: z6.string().optional(),
     notes: z6.string().optional(),
-    clientId: z6.number().nullable().optional()
+    clientId: z6.number().nullable().optional(),
+    pricePerTon: z6.string().nullable().optional(),
+    // valor por tonelada
+    pricePerM3: z6.string().nullable().optional(),
+    // valor por m³
+    priceType: z6.enum(["ton", "m3"]).nullable().optional()
+    // tipo de preço
   })).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, ...rest } = input;
-    await db.update(cargoDestinations).set(rest).where(eq6(cargoDestinations.id, id));
-    return { success: true };
+    const { id, name, address, city, state, notes, clientId, pricePerTon, pricePerM3, priceType } = input;
+    let conn = null;
+    try {
+      conn = await getDirectConnection();
+      const setClauses = [];
+      const params = [];
+      if (name !== void 0) {
+        setClauses.push("name = ?");
+        params.push(name);
+      }
+      if (address !== void 0) {
+        setClauses.push("address = ?");
+        params.push(address || null);
+      }
+      if (city !== void 0) {
+        setClauses.push("city = ?");
+        params.push(city || null);
+      }
+      if (state !== void 0) {
+        setClauses.push("state = ?");
+        params.push(state || null);
+      }
+      if (notes !== void 0) {
+        setClauses.push("notes = ?");
+        params.push(notes || null);
+      }
+      if (clientId !== void 0) {
+        setClauses.push("client_id = ?");
+        params.push(clientId || null);
+      }
+      if (pricePerTon !== void 0) {
+        setClauses.push("price_per_ton = ?");
+        params.push(pricePerTon || null);
+      }
+      if (pricePerM3 !== void 0) {
+        setClauses.push("price_per_m3 = ?");
+        params.push(pricePerM3 || null);
+      }
+      if (priceType !== void 0) {
+        setClauses.push("price_type = ?");
+        params.push(priceType || "ton");
+      }
+      if (setClauses.length === 0) return { success: true };
+      params.push(id);
+      await conn.execute(`UPDATE cargo_destinations SET ${setClauses.join(", ")} WHERE id = ?`, params);
+      return { success: true };
+    } finally {
+      if (conn) await conn.end().catch(() => {
+      });
+    }
   }),
   deleteDestination: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -10493,6 +10564,34 @@ async function runAutoMigrations() {
           CONSTRAINT third_party_contractors_id PRIMARY KEY(id)
         )
       `
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_destinations ADD COLUMN client_id int NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_destinations ADD COLUMN price_per_ton varchar(20) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_destinations ADD COLUMN price_per_m3 varchar(20) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_destinations ADD COLUMN price_type varchar(10) NULL DEFAULT 'ton'`
       );
     } catch (e) {
     }
