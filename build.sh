@@ -59,7 +59,9 @@ else
 
     echo "Copiando novos assets estáticos para public_html..."
     cp -r dist/public/* "$PUBLIC_HTML/"
-    echo "Assets estáticos copiados para public_html."
+    # Copiar arquivos ocultos (como .htaccess) explicitamente — cp * não copia arquivos que começam com ponto
+    cp dist/public/.htaccess "$PUBLIC_HTML/.htaccess" 2>/dev/null || true
+    echo "Assets estáticos copiados para public_html (incluindo .htaccess)."
 
     # Verificar que o index.html correto foi copiado
     if [ -f "$PUBLIC_HTML/index.html" ]; then
