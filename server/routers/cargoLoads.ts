@@ -1623,10 +1623,76 @@ export const cargoLoadsRouter = router({
         status: cargoLoads.status,
         thirdPartyContractor: cargoLoads.thirdPartyContractor,
         thirdPartyCost: cargoLoads.thirdPartyCost,
+        thirdPartyPaid: cargoLoads.thirdPartyPaid,
+        thirdPartyPaidAt: cargoLoads.thirdPartyPaidAt,
+        thirdPartyPaymentNotes: cargoLoads.thirdPartyPaymentNotes,
         notes: cargoLoads.notes,
       }).from(cargoLoads)
         .where(and(...conditions))
         .orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
       return results;
+    }),
+
+  // Marcar carga de corte terceirizado como paga
+  markThirdPartyPaid: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      paidAt: z.string(), // YYYY-MM-DD
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const conn = await getDirectConnection();
+      try {
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const paidAtDatetime = input.paidAt + ' 12:00:00';
+        await conn.execute(
+          'UPDATE cargo_loads SET third_party_paid = 1, third_party_paid_at = ?, third_party_payment_notes = ?, updated_at = ? WHERE id = ?',
+          [paidAtDatetime, input.notes || null, now, input.id]
+        );
+        return { success: true };
+      } finally {
+        await conn.end();
+      }
+    }),
+
+  // Desfazer pagamento de corte terceirizado
+  markThirdPartyUnpaid: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDirectConnection();
+      try {
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        await conn.execute(
+          'UPDATE cargo_loads SET third_party_paid = 0, third_party_paid_at = NULL, third_party_payment_notes = NULL, updated_at = ? WHERE id = ?',
+          [now, input.id]
+        );
+        return { success: true };
+      } finally {
+        await conn.end();
+      }
+    }),
+
+  // Marcar múltiplas cargas de um terceirizado como pagas de uma vez
+  markThirdPartyPaidBulk: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number()),
+      paidAt: z.string(), // YYYY-MM-DD
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      if (!input.ids.length) return { success: true, count: 0 };
+      const conn = await getDirectConnection();
+      try {
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const paidAtDatetime = input.paidAt + ' 12:00:00';
+        const placeholders = input.ids.map(() => '?').join(',');
+        await conn.execute(
+          `UPDATE cargo_loads SET third_party_paid = 1, third_party_paid_at = ?, third_party_payment_notes = ?, updated_at = ? WHERE id IN (${placeholders})`,
+          [paidAtDatetime, input.notes || null, now, ...input.ids]
+        );
+        return { success: true, count: input.ids.length };
+      } finally {
+        await conn.end();
+      }
     }),
 });

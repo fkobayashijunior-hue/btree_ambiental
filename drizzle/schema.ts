@@ -1,4 +1,4 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, foreignKey, int, timestamp, mysqlEnum, varchar, text, index, tinyint } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, foreignKey, int, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const attendanceRecords = mysqlTable("attendance_records", {
@@ -101,6 +101,9 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 		receiverName: varchar("receiver_name", { length: 255 }),
 		thirdPartyContractor: varchar("third_party_contractor", { length: 255 }),
 		thirdPartyCost: varchar("third_party_cost", { length: 20 }),
+		thirdPartyPaid: tinyint("third_party_paid").default(0),
+		thirdPartyPaidAt: datetime("third_party_paid_at"),
+		thirdPartyPaymentNotes: text("third_party_payment_notes"),
 	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {

@@ -249,7 +249,7 @@ __export(schema_exports, {
   users: () => users,
   vehicleRecords: () => vehicleRecords
 });
-import { mysqlTable, int, timestamp, mysqlEnum, varchar, text, index, tinyint } from "drizzle-orm/mysql-core";
+import { mysqlTable, int, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core";
 var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, thirdPartyContractors;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
@@ -350,7 +350,10 @@ var init_schema = __esm({
       receivedAt: timestamp("received_at", { mode: "string" }),
       receiverName: varchar("receiver_name", { length: 255 }),
       thirdPartyContractor: varchar("third_party_contractor", { length: 255 }),
-      thirdPartyCost: varchar("third_party_cost", { length: 20 })
+      thirdPartyCost: varchar("third_party_cost", { length: 20 }),
+      thirdPartyPaid: tinyint("third_party_paid").default(0),
+      thirdPartyPaidAt: datetime("third_party_paid_at"),
+      thirdPartyPaymentNotes: text("third_party_payment_notes")
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -3929,9 +3932,68 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       status: cargoLoads.status,
       thirdPartyContractor: cargoLoads.thirdPartyContractor,
       thirdPartyCost: cargoLoads.thirdPartyCost,
+      thirdPartyPaid: cargoLoads.thirdPartyPaid,
+      thirdPartyPaidAt: cargoLoads.thirdPartyPaidAt,
+      thirdPartyPaymentNotes: cargoLoads.thirdPartyPaymentNotes,
       notes: cargoLoads.notes
     }).from(cargoLoads).where(and3(...conditions)).orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
     return results;
+  }),
+  // Marcar carga de corte terceirizado como paga
+  markThirdPartyPaid: protectedProcedure.input(z6.object({
+    id: z6.number(),
+    paidAt: z6.string(),
+    // YYYY-MM-DD
+    notes: z6.string().optional()
+  })).mutation(async ({ input }) => {
+    const conn = await getDirectConnection();
+    try {
+      const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+      const paidAtDatetime = input.paidAt + " 12:00:00";
+      await conn.execute(
+        "UPDATE cargo_loads SET third_party_paid = 1, third_party_paid_at = ?, third_party_payment_notes = ?, updated_at = ? WHERE id = ?",
+        [paidAtDatetime, input.notes || null, now, input.id]
+      );
+      return { success: true };
+    } finally {
+      await conn.end();
+    }
+  }),
+  // Desfazer pagamento de corte terceirizado
+  markThirdPartyUnpaid: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ input }) => {
+    const conn = await getDirectConnection();
+    try {
+      const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+      await conn.execute(
+        "UPDATE cargo_loads SET third_party_paid = 0, third_party_paid_at = NULL, third_party_payment_notes = NULL, updated_at = ? WHERE id = ?",
+        [now, input.id]
+      );
+      return { success: true };
+    } finally {
+      await conn.end();
+    }
+  }),
+  // Marcar múltiplas cargas de um terceirizado como pagas de uma vez
+  markThirdPartyPaidBulk: protectedProcedure.input(z6.object({
+    ids: z6.array(z6.number()),
+    paidAt: z6.string(),
+    // YYYY-MM-DD
+    notes: z6.string().optional()
+  })).mutation(async ({ input }) => {
+    if (!input.ids.length) return { success: true, count: 0 };
+    const conn = await getDirectConnection();
+    try {
+      const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+      const paidAtDatetime = input.paidAt + " 12:00:00";
+      const placeholders = input.ids.map(() => "?").join(",");
+      await conn.execute(
+        `UPDATE cargo_loads SET third_party_paid = 1, third_party_paid_at = ?, third_party_payment_notes = ?, updated_at = ? WHERE id IN (${placeholders})`,
+        [paidAtDatetime, input.notes || null, now, ...input.ids]
+      );
+      return { success: true, count: input.ids.length };
+    } finally {
+      await conn.end();
+    }
   })
 });
 
