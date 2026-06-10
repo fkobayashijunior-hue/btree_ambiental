@@ -1852,3 +1852,10 @@
 - [x] Frontend: mostrar preço no dropdown de seleção de destino
 - [x] Frontend: Resumo Financeiro no Relatório por Destino para destinos com preço cadastrado
 - [x] Testes Vitest: createDestination com pricePerTon/pricePerM3, listDestinations com novos campos
+
+
+## 🆕 FEATURE: Editar data de pagamento de boletos de clientes (09/06/2026)
+- [ ] Backend: mutation updateBoletoPaymentDate (recebe boletoId + nova data)
+- [ ] Frontend: botão de editar data de pagamento no card do boleto (ícone lápis ao lado de "Pago em: DD/MM/AAAA")
+- [ ] Frontend: dialog com campo de data para corrigir a data de pagamento
+- [ ] Compilar e push para GitHub

@@ -1230,6 +1230,12 @@ export default function CargoControl() {
     onSuccess: () => { toast.success('Marcado como pago!'); utils.cargoLoads.getById.invalidate(); utils.cargoLoads.list.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
+  const updatePaymentDateMutation = trpc.cargoLoads.updatePaymentDate.useMutation({
+    onSuccess: () => { toast.success('Data de pagamento atualizada!'); utils.cargoLoads.getById.invalidate(); utils.cargoLoads.list.invalidate(); setEditPaymentDateId(null); setEditPaymentDateValue(''); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [editPaymentDateId, setEditPaymentDateId] = useState<number | null>(null);
+  const [editPaymentDateValue, setEditPaymentDateValue] = useState('');
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [boletoAmount, setBoletoAmount] = useState('');
   const [boletoDueDate, setBoletoDueDate] = useState('');
@@ -2623,7 +2629,25 @@ export default function CargoControl() {
                         : 'bg-orange-50 text-orange-700 border border-orange-200'
                     }`}>
                       {(detailCargo as any).paymentStatus === 'pago' ? (
-                        <><CheckCircle2 className="h-3.5 w-3.5" /> Pago{(detailCargo as any).paidAt && ` em ${safeDate((detailCargo as any).paidAt).toLocaleDateString('pt-BR')}`}</>
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Pago{(detailCargo as any).paidAt && ` em ${safeDate((detailCargo as any).paidAt).toLocaleDateString('pt-BR')}`}</span>
+                          <button
+                            type="button"
+                            title="Corrigir data de pagamento"
+                            className="ml-auto p-0.5 rounded hover:bg-green-100 text-green-600 hover:text-green-800 transition-colors"
+                            onClick={() => {
+                              const current = (detailCargo as any).paidAt;
+                              const dateVal = current
+                                ? safeDate(current).toISOString().slice(0, 10)
+                                : new Date().toISOString().slice(0, 10);
+                              setEditPaymentDateValue(dateVal);
+                              setEditPaymentDateId(detailCargo.id);
+                            }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        </>
                       ) : (
                         <><Clock className="h-3.5 w-3.5" /> A Pagar{(detailCargo as any).boletoDueDate && ` · Venc: ${safeDate((detailCargo as any).boletoDueDate).toLocaleDateString('pt-BR')}`}</>
                       )}
@@ -2775,6 +2799,48 @@ export default function CargoControl() {
                 })}
               >
                 {createDestination.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: EDITAR DATA DE PAGAMENTO ===== */}
+      <Dialog open={!!editPaymentDateId} onOpenChange={v => { if (!v) { setEditPaymentDateId(null); setEditPaymentDateValue(''); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-800">Corrigir Data de Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Informe a data correta em que o pagamento foi recebido:</p>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-payment-date">Data de Pagamento</Label>
+              <Input
+                id="edit-payment-date"
+                type="date"
+                value={editPaymentDateValue}
+                onChange={e => setEditPaymentDateValue(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setEditPaymentDateId(null); setEditPaymentDateValue(''); }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!editPaymentDateValue || updatePaymentDateMutation.isPending}
+                onClick={() => {
+                  if (editPaymentDateId && editPaymentDateValue) {
+                    updatePaymentDateMutation.mutate({ id: editPaymentDateId, paidAt: editPaymentDateValue });
+                  }
+                }}
+              >
+                {updatePaymentDateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
               </Button>
             </div>
           </div>

@@ -801,6 +801,28 @@ export const cargoLoadsRouter = router({
       return { success: true };
     }),
 
+  // Atualizar data de pagamento de um boleto já pago
+  updatePaymentDate: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      paidAt: z.string(), // formato YYYY-MM-DD
+    }))
+    .mutation(async ({ input }) => {
+      const conn = await getDirectConnection();
+      try {
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        // Converte YYYY-MM-DD para datetime (meio-dia para evitar problemas de fuso)
+        const paidAtDatetime = input.paidAt + ' 12:00:00';
+        await conn.execute(
+          'UPDATE cargo_loads SET paid_at = ?, updated_at = ? WHERE id = ?',
+          [paidAtDatetime, now, input.id]
+        );
+        return { success: true };
+      } finally {
+        await conn.end();
+      }
+    }),
+
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
