@@ -3658,6 +3658,25 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     await db.delete(cargoWeeklyClosings).where(eq6(cargoWeeklyClosings.id, input.id));
     return { success: true };
   }),
+  // Atualizar data de pagamento de um fechamento semanal já pago
+  updateWeeklyClosingPaymentDate: protectedProcedure.input(z6.object({
+    id: z6.number(),
+    paidAt: z6.string()
+    // formato YYYY-MM-DD
+  })).mutation(async ({ input }) => {
+    const conn = await getDirectConnection();
+    try {
+      const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+      const paidAtDatetime = input.paidAt + " 12:00:00";
+      await conn.execute(
+        "UPDATE cargo_weekly_closings SET paid_at = ?, updated_at = ? WHERE id = ?",
+        [paidAtDatetime, now, input.id]
+      );
+      return { success: true };
+    } finally {
+      await conn.end();
+    }
+  }),
   // ===== DOCUMENTOS DO CLIENTE =====
   listClientDocuments: protectedProcedure.input(z6.object({ clientId: z6.number() })).query(async ({ input }) => {
     let conn = null;

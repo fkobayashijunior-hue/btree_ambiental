@@ -630,6 +630,12 @@ function WeeklyClosingsView({
     onSuccess: () => { toast.success('Fechamento removido!'); utils.cargoLoads.listWeeklyClosings.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
+  const updateClosingPaymentDate = trpc.cargoLoads.updateWeeklyClosingPaymentDate.useMutation({
+    onSuccess: () => { toast.success('Data de pagamento atualizada!'); utils.cargoLoads.listWeeklyClosings.invalidate(); setEditClosingPaymentId(null); setEditClosingPaymentValue(''); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [editClosingPaymentId, setEditClosingPaymentId] = useState<number | null>(null);
+  const [editClosingPaymentValue, setEditClosingPaymentValue] = useState('');
 
   // Auto-calculate next friday from current date for week end
   const getNextFriday = () => {
@@ -970,8 +976,20 @@ function WeeklyClosingsView({
                       </p>
                     )}
                     {closing.status === 'pago' && closing.paidAt && (
-                      <p className="text-xs mt-1.5 text-green-700 font-medium">
+                      <p className="text-xs mt-1.5 text-green-700 font-medium flex items-center gap-1">
                         Pago em: {safeDate(closing.paidAt).toLocaleDateString('pt-BR')}
+                        <button
+                          type="button"
+                          title="Corrigir data de pagamento"
+                          className="p-0.5 rounded hover:bg-green-100 text-green-600 hover:text-green-800 transition-colors"
+                          onClick={() => {
+                            const dateVal = safeDate(closing.paidAt!).toISOString().slice(0, 10);
+                            setEditClosingPaymentValue(dateVal);
+                            setEditClosingPaymentId(closing.id);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
                       </p>
                     )}
                     {(closing as any).receiptUrl && (
@@ -1094,6 +1112,48 @@ function WeeklyClosingsView({
           })}
         </div>
       )}
+
+      {/* ===== DIALOG: EDITAR DATA DE PAGAMENTO DO FECHAMENTO ===== */}
+      <Dialog open={!!editClosingPaymentId} onOpenChange={v => { if (!v) { setEditClosingPaymentId(null); setEditClosingPaymentValue(''); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-800">Corrigir Data de Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Informe a data correta em que o pagamento foi recebido:</p>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-closing-payment-date">Data de Pagamento</Label>
+              <Input
+                id="edit-closing-payment-date"
+                type="date"
+                value={editClosingPaymentValue}
+                onChange={e => setEditClosingPaymentValue(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setEditClosingPaymentId(null); setEditClosingPaymentValue(''); }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!editClosingPaymentValue || updateClosingPaymentDate.isPending}
+                onClick={() => {
+                  if (editClosingPaymentId && editClosingPaymentValue) {
+                    updateClosingPaymentDate.mutate({ id: editClosingPaymentId, paidAt: editClosingPaymentValue });
+                  }
+                }}
+              >
+                {updateClosingPaymentDate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
