@@ -1861,13 +1861,13 @@
 - [x] Compilar e push para GitHub
 
 ## 🆕 FEATURE: Controle de Pagamentos — Corte Terceirizado (10/06/2026)
-- [ ] Schema/DB: adicionar colunas third_party_paid (tinyint), third_party_paid_at (datetime), third_party_payment_notes (text) na tabela cargo_loads via SQL direto (ALTER TABLE)
-- [ ] Backend: mutation markThirdPartyPaid (id, paidAt, notes) em cargoLoads.ts
-- [ ] Backend: mutation markThirdPartyUnpaid (id) para desfazer pagamento
-- [ ] Backend: incluir third_party_paid/paid_at/notes no listThirdParty query
-- [ ] Frontend ThirdPartyReport: coluna "Pagamento" na tabela de cargas com badge Pago/Pendente
-- [ ] Frontend ThirdPartyReport: botão "Marcar como Pago" por carga individual (abre dialog com data + observação)
-- [ ] Frontend ThirdPartyReport: botão "Marcar Todas como Pagas" por grupo de terceirizado
-- [ ] Frontend ThirdPartyReport: totais separados — "Total Pago" (verde) e "Total Pendente" (vermelho) por grupo e geral
-- [ ] Frontend ThirdPartyReport: filtro por status de pagamento (Todos / Pendentes / Pagos)
-- [ ] Build e push para GitHub
+- [x] Schema/DB: adicionar colunas third_party_paid (tinyint), third_party_paid_at (datetime), third_party_payment_notes (text) na tabela cargo_loads via SQL direto (ALTER TABLE)
+- [x] Backend: mutation markThirdPartyPaid (id, paidAt, notes) em cargoLoads.ts
+- [x] Backend: mutation markThirdPartyUnpaid (id) para desfazer pagamento
+- [x] Backend: incluir third_party_paid/paid_at/notes no listThirdParty query
+- [x] Frontend ThirdPartyReport: coluna "Pagamento" na tabela de cargas com badge Pago/Pendente
+- [x] Frontend ThirdPartyReport: botão "Marcar como Pago" por carga individual (abre dialog com data + observação)
+- [x] Frontend ThirdPartyReport: botão "Marcar Todas como Pagas" por grupo de terceirizado
+- [x] Frontend ThirdPartyReport: totais separados — "Total Pago" (verde) e "Total Pendente" (âmbar) por grupo e geral
+- [x] Frontend ThirdPartyReport: filtro por status de pagamento (Todos / Pendentes / Pagos)
+- [x] Build e push para GitHub
