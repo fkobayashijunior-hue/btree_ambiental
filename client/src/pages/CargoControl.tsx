@@ -28,10 +28,14 @@ import { usePermissions } from "@/hooks/usePermissions";
 function safeDate(dateStr: string | null | undefined): Date {
   if (!dateStr) return new Date();
   const s = String(dateStr);
-  // If it's a date-only string (YYYY-MM-DD), add T12:00:00
+  // If it's a date-only string (YYYY-MM-DD), add T12:00:00 to avoid timezone shift
   if (s.length === 10 && s[4] === '-') return new Date(s + 'T12:00:00');
-  // If it's a timestamp without T (e.g. "2026-05-08 12:00:00"), it's parsed as local time - OK
-  // If it contains 'T' or is ISO format, parse as-is but check if midnight UTC
+  // MySQL timestamps like '2026-05-08 00:00:00' - extract date part and use T12:00:00
+  // This avoids timezone conversion that would shift midnight to previous day
+  if (s.length >= 10 && s[4] === '-' && s[7] === '-' && !s.includes('T')) {
+    return new Date(s.slice(0, 10) + 'T12:00:00');
+  }
+  // ISO format ending in Z with midnight - shift to noon to avoid day shift
   if (s.includes('T') && s.endsWith('Z') && s.includes('T00:00:00')) {
     return new Date(s.replace('T00:00:00.000Z', 'T12:00:00'));
   }
@@ -889,11 +893,17 @@ function WeeklyClosingsView({
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={!closingClientId || !closingWeekStart || !closingWeekEnd || createClosing.isPending}
-                onClick={() => createClosing.mutate({
-                  clientId: closingClientId,
-                  weekStart: closingWeekStart,
-                  weekEnd: closingWeekEnd,
-                })}
+                onClick={() => {
+                  const client = clientsList.find(c => c.id === closingClientId);
+                  const pricePerTon = parseFloat((client as any)?.pricePerTon || '130');
+                  const effectivePrice = pricePerTon > 0 ? pricePerTon : 130;
+                  createClosing.mutate({
+                    clientId: closingClientId,
+                    weekStart: closingWeekStart,
+                    weekEnd: closingWeekEnd,
+                    pricePerTon: String(effectivePrice),
+                  });
+                }}
               >
                 {createClosing.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Fechar Semana'}
               </Button>
