@@ -4947,7 +4947,28 @@ var clientPortalRouter = router({
     }
     let payments = [];
     try {
-      payments = await db.select().from(clientPayments).where(eq11(clientPayments.clientId, input.clientId)).orderBy(desc8(clientPayments.referenceDate)).limit(50);
+      const paidClosings = await db.select().from(cargoWeeklyClosings).where(
+        and4(
+          eq11(cargoWeeklyClosings.clientId, input.clientId),
+          eq11(cargoWeeklyClosings.status, "pago")
+        )
+      ).orderBy(desc8(cargoWeeklyClosings.paidAt)).limit(50);
+      payments = paidClosings.map((c) => ({
+        id: c.id,
+        clientId: c.clientId,
+        referenceDate: c.weekEnd,
+        description: `Semana ${c.weekStart ? new Date(c.weekStart).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""} a ${c.weekEnd ? new Date(c.weekEnd).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }) : ""}`,
+        grossAmount: c.totalAmount,
+        netAmount: c.totalAmount,
+        status: "pago",
+        paidAt: c.paidAt,
+        dueDate: c.dueDate,
+        paymentReceiptUrl: c.receiptUrl,
+        loadCount: c.totalLoads,
+        totalWeightKg: c.totalWeightKg,
+        pricePerTon: c.pricePerTon,
+        createdAt: c.createdAt
+      }));
     } catch (e) {
       console.error("[Portal] Erro ao buscar pagamentos:", e);
     }

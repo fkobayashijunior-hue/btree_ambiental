@@ -122,15 +122,37 @@ export const clientPortalRouter = router({
         console.error('[Portal] Erro ao buscar replantios:', e);
       }
 
-      // Pagamentos vinculados ao cliente
+      // Pagamentos: fechamentos semanais marcados como pagos
       let payments: any[] = [];
       try {
-        payments = await db
+        const paidClosings = await db
           .select()
-          .from(clientPayments)
-          .where(eq(clientPayments.clientId, input.clientId))
-          .orderBy(desc(clientPayments.referenceDate))
+          .from(cargoWeeklyClosings)
+          .where(
+            and(
+              eq(cargoWeeklyClosings.clientId, input.clientId),
+              eq(cargoWeeklyClosings.status, 'pago')
+            )
+          )
+          .orderBy(desc(cargoWeeklyClosings.paidAt))
           .limit(50);
+        // Mapear fechamentos pagos para o formato de pagamento esperado pelo frontend
+        payments = paidClosings.map(c => ({
+          id: c.id,
+          clientId: c.clientId,
+          referenceDate: c.weekEnd,
+          description: `Semana ${c.weekStart ? new Date(c.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} a ${c.weekEnd ? new Date(c.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}`,
+          grossAmount: c.totalAmount,
+          netAmount: c.totalAmount,
+          status: 'pago',
+          paidAt: c.paidAt,
+          dueDate: c.dueDate,
+          paymentReceiptUrl: c.receiptUrl,
+          loadCount: c.totalLoads,
+          totalWeightKg: c.totalWeightKg,
+          pricePerTon: c.pricePerTon,
+          createdAt: c.createdAt,
+        }));
       } catch (e) {
         console.error('[Portal] Erro ao buscar pagamentos:', e);
       }
