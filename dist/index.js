@@ -4513,6 +4513,8 @@ var vehicleRecordsRouter = router({
     mechanicName: z8.string().optional(),
     driverCollaboratorId: z8.number().optional(),
     photoBase64: z8.string().optional(),
+    photosBase64: z8.array(z8.string()).optional(),
+    // múltiplas fotos
     notes: z8.string().optional(),
     workLocationId: z8.number().optional(),
     fuelInvoiceId: z8.number().optional()
@@ -4520,16 +4522,29 @@ var vehicleRecordsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let photoUrl;
-    if (input.photoBase64 && input.photoBase64.startsWith("data:")) {
+    let photosJson;
+    const photosToUpload = input.photosBase64?.filter((p) => p.startsWith("data:")) || [];
+    if (photosToUpload.length > 0) {
+      const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
+      const uploadedUrls = [];
+      for (const b64 of photosToUpload) {
+        const result = await cloudinaryUpload2(b64, "btree/vehicle-records");
+        uploadedUrls.push(result.url);
+      }
+      photosJson = JSON.stringify(uploadedUrls);
+      photoUrl = uploadedUrls[0];
+    } else if (input.photoBase64 && input.photoBase64.startsWith("data:")) {
       const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
       const result = await cloudinaryUpload2(input.photoBase64, "btree/vehicle-records");
       photoUrl = result.url;
+      photosJson = JSON.stringify([photoUrl]);
     }
-    const { photoBase64, workLocationId, fuelInvoiceId, ...rest } = input;
+    const { photoBase64, photosBase64, workLocationId, fuelInvoiceId, ...rest } = input;
     await db.insert(vehicleRecords).values({
       ...rest,
       date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       photoUrl,
+      photosJson,
       registeredBy: ctx.user.id,
       workLocationId: workLocationId || null,
       fuelInvoiceId: fuelInvoiceId || null
@@ -4585,22 +4600,43 @@ var vehicleRecordsRouter = router({
     mechanicName: z8.string().optional().nullable(),
     driverCollaboratorId: z8.number().optional().nullable(),
     photoBase64: z8.string().optional().nullable(),
+    photosBase64: z8.array(z8.string()).optional().nullable(),
+    // múltiplas fotos
     notes: z8.string().optional().nullable(),
     workLocationId: z8.number().optional().nullable(),
     fuelInvoiceId: z8.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const { id, photoBase64, date, ...rest } = input;
+    const { id, photoBase64, photosBase64, date, ...rest } = input;
     let photoUrl;
-    if (photoBase64 && photoBase64.startsWith("data:")) {
+    let photosJson;
+    const photosToUpload = photosBase64?.filter((p) => !!p && p.startsWith("data:")) || [];
+    if (photosToUpload.length > 0) {
+      const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
+      const uploadedUrls = [];
+      for (const b64 of photosToUpload) {
+        const result = await cloudinaryUpload2(b64, "btree/vehicle-records");
+        uploadedUrls.push(result.url);
+      }
+      photosJson = JSON.stringify(uploadedUrls);
+      photoUrl = uploadedUrls[0];
+    } else if (photosBase64 && photosBase64.length > 0) {
+      const existingUrls = photosBase64.filter((p) => !!p && !p.startsWith("data:"));
+      if (existingUrls.length > 0) {
+        photosJson = JSON.stringify(existingUrls);
+        photoUrl = existingUrls[0];
+      }
+    } else if (photoBase64 && photoBase64.startsWith("data:")) {
       const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
       const result = await cloudinaryUpload2(photoBase64, "btree/vehicle-records");
       photoUrl = result.url;
+      photosJson = JSON.stringify([photoUrl]);
     }
     const updateData = { ...rest };
     if (date) updateData.date = new Date(date);
-    if (photoUrl) updateData.photoUrl = photoUrl;
+    if (photoUrl !== void 0) updateData.photoUrl = photoUrl;
+    if (photosJson !== void 0) updateData.photosJson = photosJson;
     await db.update(vehicleRecords).set(updateData).where(eq8(vehicleRecords.id, id));
     return { success: true };
   }),

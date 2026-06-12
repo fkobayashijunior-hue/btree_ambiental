@@ -67,9 +67,9 @@ export default function VehicleControlPage() {
   const [filterDateFrom, setFilterDateFrom] = useState<string>("");
   const [filterDateTo, setFilterDateTo] = useState<string>("");
   const [filterMode, setFilterMode] = useState<"month" | "range">("month");
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
-  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+  // Múltiplas fotos: cada item é { preview: string, base64: string | null } onde base64 é null se já é URL
+  const [photos, setPhotos] = useState<Array<{ preview: string; base64: string | null }>>([]);
+  const [viewPhotoIndex, setViewPhotoIndex] = useState<number | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
 
   const { openFilePicker } = useFilePicker();
@@ -154,8 +154,7 @@ export default function VehicleControlPage() {
 
   const resetForm = () => {
     setForm({ ...emptyForm, workLocationId: defaultWorkLocationId });
-    setPhotoPreview(null);
-    setPhotoBase64(null);
+    setPhotos([]);
     setEditingId(null);
   };
 
@@ -181,26 +180,39 @@ export default function VehicleControlPage() {
       workLocationId: r.workLocationId ? String(r.workLocationId) : "",
       fuelInvoiceId: r.fuelInvoiceId ? String(r.fuelInvoiceId) : "",
     });
-    setPhotoPreview(r.photoUrl || null);
-    setPhotoBase64(null);
+    // Carregar fotos existentes do registro
+    let existingPhotos: Array<{ preview: string; base64: string | null }> = [];
+    if (r.photosJson) {
+      try {
+        const urls: string[] = JSON.parse(r.photosJson);
+        existingPhotos = urls.map((url: string) => ({ preview: url, base64: null }));
+      } catch {}
+    } else if (r.photoUrl) {
+      existingPhotos = [{ preview: r.photoUrl, base64: null }];
+    }
+    setPhotos(existingPhotos);
     setIsOpen(true);
   };
 
-  const handlePhotoChange = (files: FileList) => {
+  const handlePhotoAdd = (files: FileList) => {
     const file = files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast.error("Foto muito grande. Máximo 5MB."); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("Foto muito grande. Máximo 10MB."); return; }
+    if (photos.length >= 5) { toast.error("Máximo de 5 fotos por registro."); return; }
     const reader = new FileReader();
     reader.onload = (e) => {
       const b64 = e.target?.result as string;
-      setPhotoPreview(b64);
-      setPhotoBase64(b64);
+      setPhotos(prev => [...prev, { preview: b64, base64: b64 }]);
     };
     reader.readAsDataURL(file);
   };
 
-  const openGallery = () => openFilePicker({ accept: "image/*" }, handlePhotoChange);
-  const openCamera = () => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoChange);
+  const removePhoto = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const openGallery = () => openFilePicker({ accept: "image/*" }, handlePhotoAdd);
+  const openCamera = () => openFilePicker({ accept: "image/*", capture: "environment" }, handlePhotoAdd);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,7 +234,7 @@ export default function VehicleControlPage() {
       serviceType: form.recordType === "manutencao" ? form.serviceType : undefined,
       mechanicName: form.mechanicName || undefined,
       notes: form.notes || undefined,
-      photoBase64: photoBase64 || undefined,
+      photosBase64: photos.length > 0 ? photos.map(p => p.base64 || p.preview) : undefined,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
       fuelInvoiceId: form.fuelInvoiceId ? parseInt(form.fuelInvoiceId) : undefined,
     };
@@ -688,20 +700,41 @@ export default function VehicleControlPage() {
             <Card key={r.id}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  {/* Foto clicável */}
-                  {r.photoUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => setViewPhoto(r.photoUrl)}
-                      className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 hover:opacity-80 transition-opacity"
-                    >
-                      <img src={r.photoUrl} alt="Foto" className="w-full h-full object-cover" />
-                    </button>
-                  ) : (
-                    <div className="w-16 h-16 rounded-lg flex-shrink-0 border border-gray-100 bg-gray-50 flex items-center justify-center">
-                      <ImageIcon className="h-6 w-6 text-gray-300" />
-                    </div>
-                  )}
+                  {/* Fotos clicáveis (múltiplas) */}
+                  {(() => {
+                    const photoUrls: string[] = [];
+                    if (r.photosJson) {
+                      try { photoUrls.push(...JSON.parse(r.photosJson)); } catch {}
+                    } else if (r.photoUrl) {
+                      photoUrls.push(r.photoUrl);
+                    }
+                    if (photoUrls.length === 0) {
+                      return (
+                        <div className="w-16 h-16 rounded-lg flex-shrink-0 border border-gray-100 bg-gray-50 flex items-center justify-center">
+                          <ImageIcon className="h-6 w-6 text-gray-300" />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="flex gap-1 flex-shrink-0">
+                        {photoUrls.slice(0, 3).map((url, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setViewPhotoIndex(url as any)}
+                            className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 hover:opacity-80 transition-opacity relative"
+                          >
+                            <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                            {idx === 2 && photoUrls.length > 3 && (
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-xs font-bold">
+                                +{photoUrls.length - 3}
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2">
@@ -766,11 +799,11 @@ export default function VehicleControlPage() {
         </div>
       )}
 
-      {/* Modal visualização de foto */}
-      <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
+      {/* Modal visualização de fotos */}
+      <Dialog open={viewPhotoIndex !== null} onOpenChange={() => setViewPhotoIndex(null)}>
         <DialogContent className="max-w-lg p-2">
-          {viewPhoto && (
-            <img src={viewPhoto} alt="Foto do registro" className="w-full rounded-lg object-contain max-h-[80vh]" />
+          {viewPhotoIndex !== null && (
+            <img src={String(viewPhotoIndex)} alt="Foto do registro" className="w-full rounded-lg object-contain max-h-[80vh]" />
           )}
         </DialogContent>
       </Dialog>
@@ -940,41 +973,45 @@ export default function VehicleControlPage() {
               </>
             )}
 
-            {/* Foto */}
+            {/* Fotos (múltiplas) */}
             <div>
-              <Label className="mb-2 block">Foto do Registro</Label>
-              {photoPreview ? (
-                <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-200">
-                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => { setPhotoPreview(null); setPhotoBase64(null); }}
-                    className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 hover:bg-black/80">
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="absolute bottom-2 right-2 flex gap-2">
-                    <button type="button" onClick={openCamera}
-                      className="bg-black/60 text-white rounded-lg px-3 py-1 text-xs flex items-center gap-1 hover:bg-black/80">
-                      <Camera className="h-3 w-3" /> Câmera
-                    </button>
-                    <button type="button" onClick={openGallery}
-                      className="bg-black/60 text-white rounded-lg px-3 py-1 text-xs flex items-center gap-1 hover:bg-black/80">
-                      <ImageIcon className="h-3 w-3" /> Galeria
-                    </button>
-                  </div>
+              <Label className="mb-2 block">Fotos do Registro <span className="text-xs text-gray-400 font-normal">({photos.length}/5)</span></Label>
+              
+              {/* Grid de fotos adicionadas */}
+              {photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {photos.map((p, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200">
+                      <img src={p.preview} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(idx)}
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs rounded px-1">{idx + 1}</span>
+                    </div>
+                  ))}
                 </div>
-              ) : (
+              )}
+
+              {/* Botões para adicionar fotos */}
+              {photos.length < 5 && (
                 <div className="flex gap-2">
                   <button type="button" onClick={openCamera}
-                    className="flex-1 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors">
-                    <Camera className="h-6 w-6" />
+                    className="flex-1 h-16 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors">
+                    <Camera className="h-5 w-5" />
                     <span className="text-xs font-medium">Câmera</span>
                   </button>
                   <button type="button" onClick={openGallery}
-                    className="flex-1 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors">
-                    <ImageIcon className="h-6 w-6" />
+                    className="flex-1 h-16 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors">
+                    <ImageIcon className="h-5 w-5" />
                     <span className="text-xs font-medium">Galeria</span>
                   </button>
                 </div>
               )}
+              <p className="text-xs text-gray-400 mt-1">Adicione até 5 fotos (painel, cupom fiscal, etc.)</p>
             </div>
 
             <WorkLocationSelect

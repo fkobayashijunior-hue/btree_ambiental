@@ -1871,3 +1871,13 @@
 - [x] Frontend ThirdPartyReport: totais separados — "Total Pago" (verde) e "Total Pendente" (âmbar) por grupo e geral
 - [x] Frontend ThirdPartyReport: filtro por status de pagamento (Todos / Pendentes / Pagos)
 - [x] Build e push para GitHub
+
+## 🆕 FEATURE: Múltiplas fotos no Controle de Abastecimento (12/06/2026)
+- [ ] Backend vehicleRecords: aceitar array de base64 (photosBase64[]) e salvar URLs em photosJson
+- [ ] Backend vehicleRecords: update também aceitar photosBase64[] e atualizar photosJson
+- [ ] Frontend VehicleControlPage: substituir campo de foto única por galeria de múltiplas fotos (até 5)
+- [ ] Frontend: botões Câmera e Galeria adicionam fotos à lista (não substituem)
+- [ ] Frontend: cada foto tem botão X para remover individualmente
+- [ ] Frontend: exibir todas as fotos no card do registro (galeria horizontal)
+- [ ] Frontend: modal de visualização navega entre as fotos
+- [ ] Build e push para GitHub

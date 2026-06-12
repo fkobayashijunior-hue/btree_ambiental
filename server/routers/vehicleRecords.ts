@@ -113,6 +113,7 @@ export const vehicleRecordsRouter = router({
       mechanicName: z.string().optional(),
       driverCollaboratorId: z.number().optional(),
       photoBase64: z.string().optional(),
+      photosBase64: z.array(z.string()).optional(), // múltiplas fotos
       notes: z.string().optional(),
       workLocationId: z.number().optional(),
       fuelInvoiceId: z.number().optional(),
@@ -121,16 +122,32 @@ export const vehicleRecordsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       let photoUrl: string | undefined;
-      if (input.photoBase64 && input.photoBase64.startsWith("data:")) {
+      let photosJson: string | undefined;
+
+      // Upload de múltiplas fotos (photosBase64 tem prioridade sobre photoBase64)
+      const photosToUpload = input.photosBase64?.filter(p => p.startsWith("data:")) || [];
+      if (photosToUpload.length > 0) {
+        const { cloudinaryUpload } = await import("../cloudinary");
+        const uploadedUrls: string[] = [];
+        for (const b64 of photosToUpload) {
+          const result = await cloudinaryUpload(b64, "btree/vehicle-records");
+          uploadedUrls.push(result.url);
+        }
+        photosJson = JSON.stringify(uploadedUrls);
+        photoUrl = uploadedUrls[0]; // manter compatibilidade com campo legado
+      } else if (input.photoBase64 && input.photoBase64.startsWith("data:")) {
         const { cloudinaryUpload } = await import("../cloudinary");
         const result = await cloudinaryUpload(input.photoBase64, "btree/vehicle-records");
         photoUrl = result.url;
+        photosJson = JSON.stringify([photoUrl]);
       }
-      const { photoBase64, workLocationId, fuelInvoiceId, ...rest } = input;
+
+      const { photoBase64, photosBase64, workLocationId, fuelInvoiceId, ...rest } = input;
       await db.insert(vehicleRecords).values({
         ...rest,
         date: new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         photoUrl,
+        photosJson,
         registeredBy: ctx.user.id,
         workLocationId: workLocationId || null,
         fuelInvoiceId: fuelInvoiceId || null,
@@ -192,6 +209,7 @@ export const vehicleRecordsRouter = router({
       mechanicName: z.string().optional().nullable(),
       driverCollaboratorId: z.number().optional().nullable(),
       photoBase64: z.string().optional().nullable(),
+      photosBase64: z.array(z.string()).optional().nullable(), // múltiplas fotos
       notes: z.string().optional().nullable(),
       workLocationId: z.number().optional().nullable(),
       fuelInvoiceId: z.number().optional().nullable(),
@@ -199,16 +217,39 @@ export const vehicleRecordsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      const { id, photoBase64, date, ...rest } = input;
+      const { id, photoBase64, photosBase64, date, ...rest } = input;
       let photoUrl: string | undefined;
-      if (photoBase64 && photoBase64.startsWith("data:")) {
+      let photosJson: string | undefined;
+
+      // Upload de múltiplas fotos
+      const photosToUpload = photosBase64?.filter((p): p is string => !!p && p.startsWith("data:")) || [];
+      if (photosToUpload.length > 0) {
+        const { cloudinaryUpload } = await import("../cloudinary");
+        const uploadedUrls: string[] = [];
+        for (const b64 of photosToUpload) {
+          const result = await cloudinaryUpload(b64, "btree/vehicle-records");
+          uploadedUrls.push(result.url);
+        }
+        photosJson = JSON.stringify(uploadedUrls);
+        photoUrl = uploadedUrls[0];
+      } else if (photosBase64 && photosBase64.length > 0) {
+        // URLs já existentes (não são base64)
+        const existingUrls = photosBase64.filter((p): p is string => !!p && !p.startsWith("data:"));
+        if (existingUrls.length > 0) {
+          photosJson = JSON.stringify(existingUrls);
+          photoUrl = existingUrls[0];
+        }
+      } else if (photoBase64 && photoBase64.startsWith("data:")) {
         const { cloudinaryUpload } = await import("../cloudinary");
         const result = await cloudinaryUpload(photoBase64, "btree/vehicle-records");
         photoUrl = result.url;
+        photosJson = JSON.stringify([photoUrl]);
       }
+
       const updateData: Record<string, unknown> = { ...rest };
       if (date) updateData.date = new Date(date);
-      if (photoUrl) updateData.photoUrl = photoUrl;
+      if (photoUrl !== undefined) updateData.photoUrl = photoUrl;
+      if (photosJson !== undefined) updateData.photosJson = photosJson;
       await db.update(vehicleRecords).set(updateData).where(eq(vehicleRecords.id, id));
       return { success: true };
     }),
