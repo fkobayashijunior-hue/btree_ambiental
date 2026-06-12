@@ -3562,14 +3562,17 @@ var cargoLoadsRouter = router({
       const [client2] = await db.select().from(clients).where(eq6(clients.id, input.clientId));
       pricePerTon = client2?.pricePerTon || "130";
     }
-    const allLoads = await db.select().from(cargoLoads).where(eq6(cargoLoads.clientId, input.clientId));
-    const weekStartDate = new Date(normalizeDate(input.weekStart));
-    const weekEndDate = new Date(normalizeDate(input.weekEnd));
-    weekEndDate.setHours(23, 59, 59, 999);
-    const loadsInPeriod = allLoads.filter((l) => {
-      const loadDate = new Date(normalizeDate(l.date));
-      return loadDate >= weekStartDate && loadDate <= weekEndDate;
-    });
+    const conn = await getDirectConnection();
+    let loadsInPeriod = [];
+    try {
+      const [rows] = await conn.execute(
+        `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
+        [input.clientId, weekStartStr, weekEndStr]
+      );
+      loadsInPeriod = rows;
+    } finally {
+      await conn.end();
+    }
     const totalLoads = loadsInPeriod.length;
     const totalWeightKg = loadsInPeriod.reduce((sum, l) => {
       const weight = parseFloat(l.weightNetKg || l.weightOutKg || "0");

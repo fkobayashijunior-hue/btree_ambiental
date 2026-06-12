@@ -1188,17 +1188,19 @@ export const cargoLoadsRouter = router({
       }
       
       // Calculate totals from cargo loads in this period
-      const allLoads = await db.select().from(cargoLoads)
-        .where(eq(cargoLoads.clientId, input.clientId));
-      
-      const weekStartDate = new Date(normalizeDate(input.weekStart));
-      const weekEndDate = new Date(normalizeDate(input.weekEnd));
-      weekEndDate.setHours(23, 59, 59, 999);
-      
-      const loadsInPeriod = allLoads.filter(l => {
-        const loadDate = new Date(normalizeDate(l.date));
-        return loadDate >= weekStartDate && loadDate <= weekEndDate;
-      });
+      // Use SQL-based date comparison to avoid JavaScript timezone issues
+      // DATE(date) extracts just the date part, ignoring time/timezone
+      const conn = await getDirectConnection();
+      let loadsInPeriod: Array<{ id: number; weightNetKg: string | null; weightOutKg: string | null }> = [];
+      try {
+        const [rows] = await conn.execute(
+          `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
+          [input.clientId, weekStartStr, weekEndStr]
+        ) as any;
+        loadsInPeriod = rows;
+      } finally {
+        await conn.end();
+      }
       
       const totalLoads = loadsInPeriod.length;
       const totalWeightKg = loadsInPeriod.reduce((sum, l) => {
