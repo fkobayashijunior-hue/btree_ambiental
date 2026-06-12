@@ -3557,10 +3557,11 @@ var cargoLoadsRouter = router({
     const normalizeDate = (d) => d.length === 10 ? d + "T12:00:00" : d;
     const weekStartStr = input.weekStart.slice(0, 10);
     const weekEndStr = input.weekEnd.slice(0, 10);
+    const [client] = await db.select().from(clients).where(eq6(clients.id, input.clientId));
     let pricePerTon = input.pricePerTon;
-    if (!pricePerTon) {
-      const [client2] = await db.select().from(clients).where(eq6(clients.id, input.clientId));
-      pricePerTon = client2?.pricePerTon || "130";
+    if (!pricePerTon || parseFloat(pricePerTon) === 0) {
+      const clientPrice = client?.pricePerTon;
+      pricePerTon = clientPrice && parseFloat(String(clientPrice)) > 0 ? String(clientPrice) : "130";
     }
     const conn = await getDirectConnection();
     let loadsInPeriod = [];
@@ -3580,7 +3581,6 @@ var cargoLoadsRouter = router({
     }, 0);
     const totalWeightTon = totalWeightKg / 1e3;
     const totalAmount = (totalWeightTon * parseFloat(pricePerTon)).toFixed(2);
-    const [client] = await db.select().from(clients).where(eq6(clients.id, input.clientId));
     const paymentTermDays = client?.paymentTermDays || 21;
     const dueDate = new Date(normalizeDate(input.weekEnd));
     dueDate.setDate(dueDate.getDate() + paymentTermDays);

@@ -1180,11 +1180,14 @@ export const cargoLoadsRouter = router({
       const weekStartStr = input.weekStart.slice(0, 10); // Keep as YYYY-MM-DD for storage
       const weekEndStr = input.weekEnd.slice(0, 10);
       
-      // Get client price if not provided
+      // Get client data (needed for price and payment terms)
+      const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId));
+      
+      // Get price per ton: prefer input > client config > default 130
       let pricePerTon = input.pricePerTon;
-      if (!pricePerTon) {
-        const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId));
-        pricePerTon = client?.pricePerTon || '130';
+      if (!pricePerTon || parseFloat(pricePerTon) === 0) {
+        const clientPrice = client?.pricePerTon;
+        pricePerTon = (clientPrice && parseFloat(String(clientPrice)) > 0) ? String(clientPrice) : '130';
       }
       
       // Calculate totals from cargo loads in this period
@@ -1212,7 +1215,6 @@ export const cargoLoadsRouter = router({
       const totalAmount = (totalWeightTon * parseFloat(pricePerTon)).toFixed(2);
       
       // Due date = weekEnd + paymentTermDays
-      const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId));
       const paymentTermDays = client?.paymentTermDays || 21;
       const dueDate = new Date(normalizeDate(input.weekEnd));
       dueDate.setDate(dueDate.getDate() + paymentTermDays);
