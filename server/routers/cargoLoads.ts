@@ -1194,7 +1194,7 @@ export const cargoLoadsRouter = router({
       // Use SQL-based date comparison to avoid JavaScript timezone issues
       // DATE(date) extracts just the date part, ignoring time/timezone
       const conn = await getDirectConnection();
-      let loadsInPeriod: Array<{ id: number; weightNetKg: string | null; weightOutKg: string | null }> = [];
+      let loadsInPeriod: Array<{ id: number; weight_net_kg: string | null; weight_out_kg: string | null }> = [];
       try {
         const [rows] = await conn.execute(
           `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
@@ -1207,7 +1207,8 @@ export const cargoLoadsRouter = router({
       
       const totalLoads = loadsInPeriod.length;
       const totalWeightKg = loadsInPeriod.reduce((sum, l) => {
-        const weight = parseFloat(l.weightNetKg || l.weightOutKg || '0');
+        // MySQL returns column names in snake_case (weight_net_kg, not weightNetKg)
+        const weight = parseFloat((l as any).weight_net_kg || (l as any).weight_out_kg || '0');
         return sum + weight;
       }, 0);
       

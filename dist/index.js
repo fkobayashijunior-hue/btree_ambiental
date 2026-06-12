@@ -3576,7 +3576,7 @@ var cargoLoadsRouter = router({
     }
     const totalLoads = loadsInPeriod.length;
     const totalWeightKg = loadsInPeriod.reduce((sum, l) => {
-      const weight = parseFloat(l.weightNetKg || l.weightOutKg || "0");
+      const weight = parseFloat(l.weight_net_kg || l.weight_out_kg || "0");
       return sum + weight;
     }, 0);
     const totalWeightTon = totalWeightKg / 1e3;
