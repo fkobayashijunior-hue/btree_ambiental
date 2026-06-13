@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -483,6 +483,22 @@ function DashboardLayoutContent({
             >
               <Fuel className="h-4 w-4 text-yellow-600" />
               <span className="text-xs font-medium hidden sm:inline">Abastec.</span>
+            </button>
+            <button
+              onClick={() => setLocation("/maquinas?tab=oleo")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Registrar Consumo de Óleo"
+            >
+              <Droplets className="h-4 w-4 text-cyan-600" />
+              <span className="text-xs font-medium hidden sm:inline">Óleo</span>
+            </button>
+            <button
+              onClick={() => setLocation("/maquinas?tab=manutencao")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Registrar Manutenção"
+            >
+              <Wrench className="h-4 w-4 text-orange-600" />
+              <span className="text-xs font-medium hidden sm:inline">Manut.</span>
             </button>
             <NotificationBell />
             <button

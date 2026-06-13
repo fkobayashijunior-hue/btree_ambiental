@@ -117,9 +117,19 @@ const emptyOilForm = {
 };
 
 export default function MachineHoursPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("resumo");
-  const [isOpen, setIsOpen] = useState(false);
-  const [sheetMode, setSheetMode] = useState<SheetMode>("horas");
+  // Ler parâmetro ?tab= da URL para abrir aba e sheet corretos via botão de acesso rápido
+  const urlTab = (() => {
+    try { return new URLSearchParams(window.location.search).get("tab") ?? ""; } catch { return ""; }
+  })();
+  const validTabs: ActiveTab[] = ["resumo", "horas", "manutencao", "abastecimento", "oleo"];
+  const validSheetModes: SheetMode[] = ["horas", "manutencao", "abastecimento", "oleo"];
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    validTabs.includes(urlTab as ActiveTab) ? (urlTab as ActiveTab) : "resumo"
+  );
+  const [isOpen, setIsOpen] = useState(validSheetModes.includes(urlTab as SheetMode));
+  const [sheetMode, setSheetMode] = useState<SheetMode>(
+    validSheetModes.includes(urlTab as SheetMode) ? (urlTab as SheetMode) : "horas"
+  );
   const [editingId, setEditingId] = useState<number | null>(null);
   const [filterEquipment, setFilterEquipment] = useState<string>("");
   const [expandedEquip, setExpandedEquip] = useState<Record<number, boolean>>({});
