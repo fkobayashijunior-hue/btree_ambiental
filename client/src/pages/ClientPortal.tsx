@@ -570,9 +570,9 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
 
 // ── DASHBOARD DO CLIENTE ──
 function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "pagamentos" | "fechamentos" | "documentos">("cargas");
+  const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "fechamentos" | "documentos">("cargas");
   const [showNotification, setShowNotification] = useState(false);
-  const [newItems, setNewItems] = useState({ cargas: 0, docs: 0, fechamentos: 0, pagamentos: 0, replantios: 0 });
+  const [newItems, setNewItems] = useState({ cargas: 0, docs: 0, fechamentos: 0, replantios: 0 });
 
   const { data, isLoading } = trpc.clientPortal.getPortalData.useQuery(
     { clientId: session.clientId, email: session.clientEmail ?? "" },
@@ -594,12 +594,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
       }).length;
       const newDocs = data.documents.filter((d: any) => d.createdAt && new Date(d.createdAt) > lastVisit).length;
       const newFechamentos = data.weeklyClosings.filter((f: any) => f.createdAt && new Date(f.createdAt) > lastVisit).length;
-      const newPagamentos = data.payments.filter((p: any) => p.createdAt && new Date(p.createdAt) > lastVisit).length;
       const newReplantios = data.replanting.filter((r: any) => r.createdAt && new Date(r.createdAt) > lastVisit).length;
 
-      const total = newCargas + newDocs + newFechamentos + newPagamentos + newReplantios;
+      const total = newCargas + newDocs + newFechamentos + newReplantios;
       if (total > 0) {
-        setNewItems({ cargas: newCargas, docs: newDocs, fechamentos: newFechamentos, pagamentos: newPagamentos, replantios: newReplantios });
+        setNewItems({ cargas: newCargas, docs: newDocs, fechamentos: newFechamentos, replantios: newReplantios });
         setShowNotification(true);
       }
     }
@@ -637,10 +636,6 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
     if (s === "cancelado") return "bg-gray-100 text-gray-500";
     return "bg-blue-100 text-blue-700";
   };
-
-  const totalPago = data?.payments
-    .filter((p) => p.status === "pago")
-    .reduce((acc, p) => acc + parseFloat(p.netAmount || "0"), 0) ?? 0;
 
   const totalPendente = data?.weeklyClosings
     ?.filter((c: any) => c.status === "pendente" || c.status === "atrasado" || c.status === "aberto" || c.status === "fechado")
@@ -717,11 +712,6 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       {newItems.fechamentos} novo{newItems.fechamentos > 1 ? 's' : ''} fechamento{newItems.fechamentos > 1 ? 's' : ''}
                     </button>
                   )}
-                  {newItems.pagamentos > 0 && (
-                    <button onClick={() => { setActiveTab('pagamentos'); setShowNotification(false); }} className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full hover:bg-blue-200 transition-colors">
-                      {newItems.pagamentos} novo{newItems.pagamentos > 1 ? 's' : ''} pagamento{newItems.pagamentos > 1 ? 's' : ''}
-                    </button>
-                  )}
                   {newItems.replantios > 0 && (
                     <button onClick={() => { setActiveTab('replantio'); setShowNotification(false); }} className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full hover:bg-blue-200 transition-colors">
                       {newItems.replantios} novo{newItems.replantios > 1 ? 's' : ''} replantio{newItems.replantios > 1 ? 's' : ''}
@@ -752,27 +742,10 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               <div className="text-xl font-black text-gray-900">{data?.replanting.length ?? 0}</div>
               <div className="text-gray-500 text-xs">Replantios</div>
             </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
-              <DollarSign className="h-5 w-5 text-amber-600 mx-auto mb-1" />
-              <div className="text-xl font-black text-gray-900">{data?.payments.length ?? 0}</div>
-              <div className="text-gray-500 text-xs">Pagamentos</div>
-            </div>
           </div>
         )}
 
-        {/* Resumo financeiro */}
-        {!isLoading && (data?.payments.length ?? 0) > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
-              <p className="text-green-700 text-xs font-semibold uppercase tracking-wide mb-1">Total Recebido</p>
-              <p className="text-green-800 text-lg font-black">{formatCurrency(totalPago.toString())}</p>
-            </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-              <p className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">A Receber</p>
-              <p className="text-amber-800 text-lg font-black">{formatCurrency(totalPendente.toString())}</p>
-            </div>
-          </div>
-        )}
+
 
         {/* Tabs */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -782,7 +755,6 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               { id: "fechamentos" as const, label: "Fechamentos", badge: newItems.fechamentos },
               { id: "documentos" as const, label: "Docs", badge: newItems.docs },
               { id: "replantio" as const, label: "Replantio", badge: newItems.replantios },
-              { id: "pagamentos" as const, label: "Pagamentos", badge: newItems.pagamentos },
             ].map(({ id, label, badge }) => (
               <button
                 key={id}
@@ -1158,61 +1130,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                   </div>
                 )}
 
-                {/* ── PAGAMENTOS ── */}
-                {activeTab === "pagamentos" && (
-                  <div className="space-y-3">
-                    {(data?.payments.length ?? 0) === 0 ? (
-                      <EmptyState icon={<DollarSign />} text="Nenhum pagamento registrado ainda." />
-                    ) : (
-                      <>
-                        {/* Resumo total pago */}
-                        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-green-800 font-semibold text-sm">Total recebido</span>
-                            <span className="text-green-700 font-black text-lg">{formatCurrency(String(totalPago))}</span>
-                          </div>
-                          <p className="text-green-600 text-xs mt-1">{data?.payments.length} pagamento{(data?.payments.length ?? 0) !== 1 ? 's' : ''} confirmado{(data?.payments.length ?? 0) !== 1 ? 's' : ''}</p>
-                        </div>
-                        {data?.payments.map((p: any) => (
-                          <div key={p.id} className="border border-gray-100 rounded-xl p-4 hover:border-green-200 transition-colors">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-semibold text-gray-900 text-sm">
-                                    {p.description || "Pagamento"}
-                                  </span>
-                                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">
-                                    ✅ Pago
-                                  </span>
-                                </div>
-                                <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
-                                  {p.paidAt && <span>Pago em: {formatDate(p.paidAt)}</span>}
-                                  {p.loadCount != null && <span>{p.loadCount} carga{p.loadCount !== 1 ? 's' : ''}</span>}
-                                  {p.totalWeightKg && <span>{(parseFloat(p.totalWeightKg) / 1000).toFixed(2)} ton</span>}
-                                  {p.pricePerTon && <span>R$ {parseFloat(p.pricePerTon).toFixed(2)}/ton</span>}
-                                </div>
-                                {p.paymentReceiptUrl && (
-                                  <a
-                                    href={p.paymentReceiptUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-green-700 font-medium mt-2 hover:underline"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                    Ver Comprovante
-                                  </a>
-                                )}
-                              </div>
-                              <div className="text-right shrink-0">
-                                <p className="font-black text-gray-900 text-base">{formatCurrency(p.netAmount)}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                )}
+
               </>
             )}
           </div>
