@@ -11,18 +11,27 @@ import { toast } from "sonner";
 import {
   Settings, Plus, Clock, Wrench, Fuel, Calendar, AlertTriangle,
   CheckCircle2, FileDown, Pencil, ChevronDown, ChevronUp,
-  Package, Search, Trash2, MapPin
+  Package, Search, Trash2, MapPin, Droplets
 } from "lucide-react";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 
-type ActiveTab = "resumo" | "horas" | "manutencao" | "abastecimento";
-type SheetMode = "horas" | "manutencao" | "abastecimento";
+type ActiveTab = "resumo" | "horas" | "manutencao" | "abastecimento" | "oleo";
+type SheetMode = "horas" | "manutencao" | "abastecimento" | "oleo";
 
 const TAB_LABELS: Record<ActiveTab, string> = {
   resumo: "Resumo",
   horas: "Horas Trabalhadas",
-  manutencao: "Manutenções",
+  manutencao: "Manuções",
   abastecimento: "Abastecimentos",
+  oleo: "Óleo / Lubrificantes",
+};
+
+const OIL_TYPE_LABELS: Record<string, string> = {
+  hidraulico: "Hidráulico",
+  motor: "Motor",
+  transmissao: "Transmissão",
+  diferencial: "Diferencial",
+  outros: "Outros",
 };
 
 const MAINTENANCE_TYPE_LABELS: Record<string, string> = {
@@ -94,6 +103,19 @@ const emptyFuelForm = {
   workLocationId: "",
 };
 
+const emptyOilForm = {
+  equipmentId: "",
+  date: new Date().toISOString().slice(0, 10),
+  hourMeter: "",
+  oilType: "hidraulico" as "hidraulico" | "motor" | "transmissao" | "diferencial" | "outros",
+  quantityLiters: "",
+  brand: "",
+  supplier: "",
+  pricePerLiter: "",
+  totalValue: "",
+  notes: "",
+};
+
 export default function MachineHoursPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("resumo");
   const [isOpen, setIsOpen] = useState(false);
@@ -105,6 +127,7 @@ export default function MachineHoursPage() {
   const [hoursForm, setHoursForm] = useState({ ...emptyHoursForm });
   const [maintForm, setMaintForm] = useState({ ...emptyMaintForm });
   const [fuelForm, setFuelForm] = useState({ ...emptyFuelForm });
+  const [oilForm, setOilForm] = useState({ ...emptyOilForm });
 
   // Peças da manutenção
   const [partLines, setPartLines] = useState<PartLine[]>([]);
@@ -117,6 +140,7 @@ export default function MachineHoursPage() {
   const { data: hours = [], isLoading: loadingHours } = trpc.machineHours.listHours.useQuery({});
   const { data: maintenance = [], isLoading: loadingMaint } = trpc.machineHours.listMaintenance.useQuery({});
   const { data: fuel = [], isLoading: loadingFuel } = trpc.machineHours.listFuel.useQuery({});
+  const { data: oilRecords = [], isLoading: loadingOil } = trpc.machineHours.listOil.useQuery({});
   const { data: alerts = [] } = trpc.machineHours.maintenanceAlerts.useQuery();
   const { data: summary = [] } = trpc.machineHours.equipmentSummary.useQuery();
 
@@ -192,6 +216,7 @@ export default function MachineHoursPage() {
   const filteredHours = useMemo(() => filterEquipment ? (hours as any[]).filter((h: any) => String(h.equipmentId) === filterEquipment) : hours as any[], [hours, filterEquipment]);
   const filteredMaint = useMemo(() => filterEquipment ? (maintenance as any[]).filter((m: any) => String(m.equipmentId) === filterEquipment) : maintenance as any[], [maintenance, filterEquipment]);
   const filteredFuel = useMemo(() => filterEquipment ? (fuel as any[]).filter((f: any) => String(f.equipmentId) === filterEquipment) : fuel as any[], [fuel, filterEquipment]);
+  const filteredOil = useMemo(() => filterEquipment ? (oilRecords as any[]).filter((o: any) => String(o.equipmentId) === filterEquipment) : oilRecords as any[], [oilRecords, filterEquipment]);
 
   const createHoursMutation = trpc.machineHours.createHours.useMutation({
     onSuccess: () => { toast.success("Horas registradas!"); utils.machineHours.listHours.invalidate(); utils.machineHours.equipmentSummary.invalidate(); setIsOpen(false); resetForms(); },
@@ -214,7 +239,17 @@ export default function MachineHoursPage() {
   });
 
   const createFuelMutation = trpc.machineHours.createFuel.useMutation({
-    onSuccess: () => { toast.success("Abastecimento registrado!"); utils.machineHours.listFuel.invalidate(); utils.machineHours.equipmentSummary.invalidate(); setIsOpen(false); resetForms(); },
+    onSuccess: () => { toast.success("Abastecimento registrado! Lançamento financeiro gerado automaticamente."); utils.machineHours.listFuel.invalidate(); utils.machineHours.equipmentSummary.invalidate(); setIsOpen(false); resetForms(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const createOilMutation = trpc.machineHours.createOil.useMutation({
+    onSuccess: () => { toast.success("Óleo registrado! Lançamento financeiro gerado automaticamente."); utils.machineHours.listOil.invalidate(); utils.machineHours.equipmentSummary.invalidate(); setIsOpen(false); resetForms(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteOilMutation = trpc.machineHours.deleteOil.useMutation({
+    onSuccess: () => { toast.success("Óleo excluído!"); utils.machineHours.listOil.invalidate(); utils.machineHours.equipmentSummary.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -222,6 +257,7 @@ export default function MachineHoursPage() {
     setHoursForm({ ...emptyHoursForm });
     setMaintForm({ ...emptyMaintForm });
     setFuelForm({ ...emptyFuelForm });
+    setOilForm({ ...emptyOilForm });
     setPartLines([]);
     setPartSearch("");
     setSelectedTemplateId("");
@@ -330,7 +366,7 @@ export default function MachineHoursPage() {
       } else {
         createMaintMutation.mutate(payloadWithParts);
       }
-    } else {
+    } else if (sheetMode === "abastecimento") {
       createFuelMutation.mutate({
         equipmentId: parseInt(fuelForm.equipmentId),
         date: fuelForm.date,
@@ -342,6 +378,20 @@ export default function MachineHoursPage() {
         supplier: fuelForm.supplier || undefined,
         notes: fuelForm.notes || undefined,
         workLocationId: fuelForm.workLocationId ? parseInt(fuelForm.workLocationId) : undefined,
+      });
+    } else {
+      // oleo
+      createOilMutation.mutate({
+        equipmentId: parseInt(oilForm.equipmentId),
+        date: oilForm.date,
+        hourMeter: oilForm.hourMeter || undefined,
+        oilType: oilForm.oilType,
+        quantityLiters: oilForm.quantityLiters,
+        brand: oilForm.brand || undefined,
+        supplier: oilForm.supplier || undefined,
+        pricePerLiter: oilForm.pricePerLiter || undefined,
+        totalValue: oilForm.totalValue || undefined,
+        notes: oilForm.notes || undefined,
       });
     }
   };
@@ -464,7 +514,7 @@ export default function MachineHoursPage() {
     await generatePDFFromHtml(html, `maquinas-${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
-  const isPending = createHoursMutation.isPending || createMaintMutation.isPending || createFuelMutation.isPending || updateHoursMutation.isPending || updateMaintMutation.isPending;
+  const isPending = createHoursMutation.isPending || createMaintMutation.isPending || createFuelMutation.isPending || createOilMutation.isPending || updateHoursMutation.isPending || updateMaintMutation.isPending;
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -474,7 +524,7 @@ export default function MachineHoursPage() {
           <h1 className="text-2xl font-bold text-emerald-800 flex items-center gap-2">
             <Settings className="h-7 w-7" /> Controle de Equipamentos
           </h1>
-          <p className="text-gray-500 text-sm mt-1">Horas trabalhadas, manutenções e abastecimentos</p>
+          <p className="text-gray-500 text-sm mt-1">Painel central de controle — horas, consumos, manutenções e custos</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={handleExportPDF} className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
@@ -529,7 +579,7 @@ export default function MachineHoursPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
-        {(["resumo", "horas", "manutencao", "abastecimento"] as ActiveTab[]).map(tab => (
+        {(["resumo", "horas", "manutencao", "abastecimento", "oleo"] as ActiveTab[]).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -541,6 +591,7 @@ export default function MachineHoursPage() {
             {tab === "horas" && <Clock className="h-4 w-4 inline mr-1" />}
             {tab === "manutencao" && <Wrench className="h-4 w-4 inline mr-1" />}
             {tab === "abastecimento" && <Fuel className="h-4 w-4 inline mr-1" />}
+            {tab === "oleo" && <Droplets className="h-4 w-4 inline mr-1" />}
             {TAB_LABELS[tab]}
           </button>
         ))}
@@ -569,22 +620,30 @@ export default function MachineHoursPage() {
                             {s.status === "ativo" ? "Ativo" : s.status === "manutencao" ? "Em Manutenção" : "Inativo"}
                           </Badge>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-3">
                           <div className="bg-emerald-50 rounded-lg p-2 text-center">
-                            <p className="text-lg font-bold text-emerald-700">{s.totalHoursWorked.toFixed(1)}h</p>
-                            <p className="text-xs text-gray-500">Horas trabalhadas</p>
+                            <p className="text-base font-bold text-emerald-700">{s.totalHoursWorked.toFixed(1)}h</p>
+                            <p className="text-xs text-gray-500">Horas</p>
                           </div>
                           <div className="bg-blue-50 rounded-lg p-2 text-center">
-                            <p className="text-lg font-bold text-blue-700">{s.lastHourMeter || "—"}</p>
-                            <p className="text-xs text-gray-500">Último horímetro</p>
+                            <p className="text-base font-bold text-blue-700">{s.lastHourMeter || "—"}</p>
+                            <p className="text-xs text-gray-500">Horímetro</p>
                           </div>
                           <div className="bg-yellow-50 rounded-lg p-2 text-center">
-                            <p className="text-lg font-bold text-yellow-700">{s.totalFuelLiters.toFixed(1)}L</p>
-                            <p className="text-xs text-gray-500">Combustível total</p>
+                            <p className="text-base font-bold text-yellow-700">{s.totalFuelLiters.toFixed(1)}L</p>
+                            <p className="text-xs text-gray-500">Combustível</p>
+                          </div>
+                          <div className="bg-purple-50 rounded-lg p-2 text-center">
+                            <p className="text-base font-bold text-purple-700">{(s.totalOilLiters ?? 0).toFixed(1)}L</p>
+                            <p className="text-xs text-gray-500">Óleo</p>
                           </div>
                           <div className="bg-orange-50 rounded-lg p-2 text-center">
-                            <p className="text-lg font-bold text-orange-700">{s.maintenanceCount}</p>
+                            <p className="text-base font-bold text-orange-700">{s.maintenanceCount}</p>
                             <p className="text-xs text-gray-500">Manutenções</p>
+                          </div>
+                          <div className="bg-red-50 rounded-lg p-2 text-center">
+                            <p className="text-base font-bold text-red-700">R$ {(s.totalCost ?? 0).toFixed(0)}</p>
+                            <p className="text-xs text-gray-500">Custo Total</p>
                           </div>
                         </div>
                         {s.nextMaintenanceHours && s.lastHourMeter && (
@@ -711,6 +770,49 @@ export default function MachineHoursPage() {
         </div>
       )}
 
+      {/* ===== ABA ÓLEO ===== */}
+      {activeTab === "oleo" && (
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => openNew("oleo")} className="bg-purple-600 hover:bg-purple-700 text-white gap-1">
+              <Plus className="h-3.5 w-3.5" /> Registrar Óleo
+            </Button>
+          </div>
+          {loadingOil ? (
+            <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}</div>
+          ) : filteredOil.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Droplets className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p>Nenhum consumo de óleo registrado</p>
+            </div>
+          ) : filteredOil.map((o: any) => (
+            <Card key={o.id}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-800">{equipMap[o.equipmentId] || `Equipamento #${o.equipmentId}`}</p>
+                    <p className="text-sm text-gray-500">{OIL_TYPE_LABELS[o.oilType] || o.oilType}{o.brand ? ` · ${o.brand}` : ""}{o.supplier ? ` · ${o.supplier}` : ""}</p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(o.date).toLocaleDateString("pt-BR")}
+                      {o.hourMeter && ` · Horímetro: ${o.hourMeter}`}
+                    </p>
+                  </div>
+                  <div className="text-right flex items-center gap-3">
+                    <div>
+                      <p className="text-xl font-bold text-purple-700">{o.quantityLiters}L</p>
+                      {o.totalValue && <p className="text-sm text-gray-500">R$ {o.totalValue}</p>}
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-600" onClick={() => deleteOilMutation.mutate({ id: o.id })}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       {/* ===== ABA ABASTECIMENTO ===== */}
       {activeTab === "abastecimento" && (
         <div className="space-y-3">
@@ -764,17 +866,17 @@ export default function MachineHoursPage() {
           </SheetHeader>
 
           {/* Sub-tabs */}
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg mb-4">
-            {(["horas", "manutencao", "abastecimento"] as SheetMode[]).map(tab => (
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg mb-4 flex-wrap">
+            {(["horas", "manutencao", "abastecimento", "oleo"] as SheetMode[]).map(tab => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => { setSheetMode(tab); setEditingId(null); }}
-                className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors min-w-[70px] ${
                   sheetMode === tab ? "bg-white text-emerald-700 shadow-sm" : "text-gray-500"
                 }`}
               >
-                {tab === "horas" ? "Horas" : tab === "manutencao" ? "Manutenção" : "Abastecimento"}
+                {tab === "horas" ? "Horas" : tab === "manutencao" ? "Manutenção" : tab === "abastecimento" ? "Abastecimento" : "Óleo"}
               </button>
             ))}
           </div>
@@ -784,12 +886,13 @@ export default function MachineHoursPage() {
             <div>
               <Label>Equipamento *</Label>
               <select
-                value={sheetMode === "horas" ? hoursForm.equipmentId : sheetMode === "manutencao" ? maintForm.equipmentId : fuelForm.equipmentId}
+                value={sheetMode === "horas" ? hoursForm.equipmentId : sheetMode === "manutencao" ? maintForm.equipmentId : sheetMode === "abastecimento" ? fuelForm.equipmentId : oilForm.equipmentId}
                 onChange={e => {
                   const v = e.target.value;
                   if (sheetMode === "horas") setHoursForm(f => ({ ...f, equipmentId: v }));
                   else if (sheetMode === "manutencao") setMaintForm(f => ({ ...f, equipmentId: v }));
-                  else setFuelForm(f => ({ ...f, equipmentId: v }));
+                  else if (sheetMode === "abastecimento") setFuelForm(f => ({ ...f, equipmentId: v }));
+                  else setOilForm(f => ({ ...f, equipmentId: v }));
                 }}
                 required
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -805,12 +908,13 @@ export default function MachineHoursPage() {
               <Label>Data *</Label>
               <Input
                 type="date"
-                value={sheetMode === "horas" ? hoursForm.date : sheetMode === "manutencao" ? maintForm.date : fuelForm.date}
+                value={sheetMode === "horas" ? hoursForm.date : sheetMode === "manutencao" ? maintForm.date : sheetMode === "abastecimento" ? fuelForm.date : oilForm.date}
                 onChange={e => {
                   const v = e.target.value;
                   if (sheetMode === "horas") setHoursForm(f => ({ ...f, date: v }));
                   else if (sheetMode === "manutencao") setMaintForm(f => ({ ...f, date: v }));
-                  else setFuelForm(f => ({ ...f, date: v }));
+                  else if (sheetMode === "abastecimento") setFuelForm(f => ({ ...f, date: v }));
+                  else setOilForm(f => ({ ...f, date: v }));
                 }}
                 required
               />
@@ -1022,6 +1126,57 @@ export default function MachineHoursPage() {
                   <Label>Próxima Manutenção (horímetro)</Label>
                   <Input value={maintForm.nextMaintenanceHours} onChange={e => setMaintForm(f => ({ ...f, nextMaintenanceHours: e.target.value }))} placeholder="ex: 1500" />
                   <p className="text-xs text-gray-400 mt-1">Defina o horímetro para o próximo alerta de manutenção preventiva</p>
+                </div>
+              </>
+            )}
+
+            {/* Campos de Óleo */}
+            {sheetMode === "oleo" && (
+              <>
+                <div>
+                  <Label>Horímetro</Label>
+                  <Input value={oilForm.hourMeter} onChange={e => setOilForm(f => ({ ...f, hourMeter: e.target.value }))} placeholder="ex: 1250" />
+                </div>
+                <div>
+                  <Label>Tipo de Óleo *</Label>
+                  <select value={oilForm.oilType} onChange={e => setOilForm(f => ({ ...f, oilType: e.target.value as any }))} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="hidraulico">Hidráulico</option>
+                    <option value="motor">Motor</option>
+                    <option value="transmissao">Transmissão</option>
+                    <option value="diferencial">Diferencial</option>
+                    <option value="outros">Outros</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Marca</Label>
+                    <Input value={oilForm.brand} onChange={e => setOilForm(f => ({ ...f, brand: e.target.value }))} placeholder="ex: Shell, Castrol..." />
+                  </div>
+                  <div>
+                    <Label>Fornecedor</Label>
+                    <Input value={oilForm.supplier} onChange={e => setOilForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do fornecedor" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label>Litros *</Label>
+                    <Input value={oilForm.quantityLiters} onChange={e => setOilForm(f => ({ ...f, quantityLiters: e.target.value }))} placeholder="0,0" required />
+                  </div>
+                  <div>
+                    <Label>Preço/L (R$)</Label>
+                    <Input value={oilForm.pricePerLiter} onChange={e => setOilForm(f => ({ ...f, pricePerLiter: e.target.value }))} placeholder="0,00" />
+                  </div>
+                  <div>
+                    <Label>Total (R$)</Label>
+                    <Input value={oilForm.totalValue} onChange={e => setOilForm(f => ({ ...f, totalValue: e.target.value }))} placeholder="0,00" />
+                  </div>
+                </div>
+                <div>
+                  <Label>Observações</Label>
+                  <textarea value={oilForm.notes} onChange={e => setOilForm(f => ({ ...f, notes: e.target.value }))} className="w-full min-h-[60px] px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" placeholder="Observações..." />
+                </div>
+                <div className="bg-purple-50 rounded-lg p-3 text-xs text-purple-700">
+                  ℹ️ O custo será lançado automaticamente no módulo Financeiro.
                 </div>
               </>
             )}

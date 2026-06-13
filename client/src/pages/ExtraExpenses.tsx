@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, X, Receipt, Filter, TrendingDown, MapPin } from "lucide-react";
+import { Plus, Trash2, Camera, X, Receipt, Filter, TrendingDown, MapPin, Settings } from "lucide-react";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { useFilePicker } from "@/hooks/useFilePicker";
 
@@ -62,7 +62,10 @@ export default function ExtraExpenses() {
     receiptImageUrl: "",
     notes: "",
     workLocationId: "",
+    equipmentId: "",
   });
+
+  const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
 
   const { openFilePicker } = useFilePicker();
 
@@ -97,6 +100,7 @@ export default function ExtraExpenses() {
       receiptImageUrl: "",
       notes: "",
       workLocationId: "",
+      equipmentId: "",
     });
   }
 
@@ -142,6 +146,7 @@ export default function ExtraExpenses() {
     createMutation.mutate({
       ...form,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
+      equipmentId: form.equipmentId ? parseInt(form.equipmentId) : undefined,
     });
   }
 
@@ -262,6 +267,11 @@ export default function ExtraExpenses() {
                             <MapPin className="h-3 w-3 shrink-0" /> <span className="truncate">{expense.locationName}</span>
                           </p>
                         )}
+                        {(expense as any).equipmentName && (
+                          <p className="text-xs text-emerald-600 flex items-center gap-1 mt-0.5">
+                            <Settings className="h-3 w-3 shrink-0" /> <span className="truncate">{(expense as any).equipmentName}</span>
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {expense.receiptImageUrl && (
@@ -357,6 +367,23 @@ export default function ExtraExpenses() {
               value={form.workLocationId}
               onChange={(id) => setForm(f => ({ ...f, workLocationId: id }))}
             />
+
+            <div>
+              <Label>Equipamento (se aplicável)</Label>
+              <select
+                value={form.equipmentId}
+                onChange={e => setForm(f => ({ ...f, equipmentId: e.target.value }))}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Nenhum equipamento</option>
+                {(equipmentList as any[]).map((eq: any) => (
+                  <option key={eq.id} value={eq.id}>{eq.name}{eq.brand ? ` (${eq.brand})` : ""}</option>
+                ))}
+              </select>
+              {form.equipmentId && (
+                <p className="text-xs text-emerald-600 mt-1">ℹ️ Este custo será vinculado ao equipamento e lançado automaticamente no Financeiro.</p>
+              )}
+            </div>
 
             <div>
               <Label>Observações</Label>

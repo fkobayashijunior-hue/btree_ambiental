@@ -15,6 +15,7 @@ import {
   preventiveMaintenancePlans,
   preventiveMaintenanceAlerts,
   equipment,
+  machineHours,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -345,6 +346,18 @@ export const traccarRouter = router({
                 date: from.toISOString(),
                 hoursWorked: String(hours),
                 source: "gps_auto",
+              });
+              // Mirror GPS hours into machine_hours for unified equipment control
+              const dateStr = from.toISOString().slice(0, 10);
+              await db.insert(machineHours).values({
+                equipmentId: link.equipmentId,
+                date: from.toISOString().slice(0, 19).replace('T', ' '),
+                startHourMeter: '0',
+                endHourMeter: String(hours),
+                hoursWorked: String(hours),
+                activity: 'GPS Automático',
+                notes: `Sincronizado automaticamente via GPS em ${dateStr}`,
+                source: 'gps',
               });
             }
 

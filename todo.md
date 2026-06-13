@@ -1881,3 +1881,43 @@
 - [ ] Frontend: exibir todas as fotos no card do registro (galeria horizontal)
 - [ ] Frontend: modal de visualização navega entre as fotos
 - [ ] Build e push para GitHub
+
+## 🔗 FEATURE: Integração Controle de Equipamentos (13/06/2026)
+
+### Banco de Dados
+- [x] Schema: adicionar coluna `equipment_id INT NULL` em `financial_entries`
+- [x] Schema: adicionar coluna `equipment_id INT NULL` em `extra_expenses`
+- [x] Schema: criar tabela `equipment_oil_records` (consumo de óleo hidráulico/motor/transmissão)
+- [x] Schema: adicionar coluna `source` em `machine_hours` para identificar origem (manual/gps)
+- [x] Migração: rodar `pnpm db:push`
+
+### Backend — Vínculos Automáticos
+- [x] Backend machineHours.createFuel: após inserir em machine_fuel, criar lançamento automático em financial_entries (despesa/combustivel/equipmentId)
+- [x] Backend machineHours.createMaintenance: após inserir em machine_maintenance, criar lançamento automático em financial_entries (despesa/manutencao/equipmentId)
+- [x] Backend traccar: ao salvar gps_hours_log, também inserir em machine_hours (source="gps")
+- [x] Backend extraExpenses.create: aceitar equipmentId opcional; se tiver custo, criar lançamento em financial_entries com equipmentId
+- [x] Backend vehicleRecords.create: após inserir abastecimento, criar lançamento em financial_entries (despesa/combustivel/equipmentId)
+- [x] Backend vehicleRecords.createMaintenance: após inserir manutenção, criar lançamento em financial_entries (despesa/manutencao/equipmentId)
+- [x] Backend: criar router equipmentOil (createOil, listOil, deleteOil, updateOil)
+- [x] Backend equipmentOil.createOil: após inserir, criar lançamento em financial_entries (despesa/lubrificantes/equipmentId)
+- [x] Backend machineHours.equipmentSummary: incluir totalMaintCost, totalOilLiters, totalOilCost, totalExtraExpenses, totalCost
+- [ ] Backend: query getEquipmentFullSummary (para painel central da ficha)
+
+### Frontend — Controle de Equipamentos (Painel Central)
+- [ ] Frontend MachineHoursPage: aba "Dashboard" com cards de todos os equipamentos (horas, combustível, óleo, manutenções, custo total)
+- [ ] Frontend MachineHoursPage: aba "Resumo" atualizada com totalMaintCost, totalOilCost, totalCost
+- [x] Frontend MachineHoursPage: aba "Óleo" com formulário de registro de consumo de óleo
+- [ ] Frontend MachineHoursPage: ao registrar abastecimento, mostrar confirmação "Lançamento financeiro criado automaticamente"
+- [ ] Frontend MachineHoursPage: ao registrar manutenção, mostrar confirmação "Lançamento financeiro criado automaticamente"
+
+### Frontend — Gastos Extras
+- [x] Frontend ExtraExpenses: adicionar campo "Equipamento" (select, opcional) no formulário de novo gasto
+- [x] Frontend ExtraExpenses: mostrar nome do equipamento no card do gasto quando vinculado
+- [ ] Frontend ExtraExpenses: ao registrar gasto com equipamento, mostrar confirmação "Lançamento financeiro criado automaticamente"
+
+### Frontend — Financeiro
+- [ ] Frontend FinancialModule: adicionar coluna/campo "Equipamento" nos lançamentos quando equipmentId preenchido
+- [ ] Frontend FinancialModule: filtro por equipamento na listagem
+
+### Build e Deploy
+- [ ] Build e push para GitHub

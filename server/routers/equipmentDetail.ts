@@ -237,13 +237,13 @@ export const equipmentDetailRouter = router({
       const totalCost = (totalParts + laborCostNum).toFixed(2);
 
       const [ins] = await db.insert(equipmentMaintenance).values({
-        equipmentId: input.equipmentId,
+        equipmentId: input.equipmentId as any,
         type: input.type,
         description: input.description,
         performedBy: input.performedBy,
         cost: totalCost,
-        nextMaintenanceDate: input.nextMaintenanceDate ? new Date(input.nextMaintenanceDate) : undefined,
-        performedAt: new Date(input.performedAt),
+        nextMaintenanceDate: input.nextMaintenanceDate ? new Date(input.nextMaintenanceDate).toISOString().slice(0,19).replace('T',' ') : undefined,
+        performedAt: new Date(input.performedAt).toISOString().slice(0,19).replace('T',' '),
         photosJson,
         registeredBy: ctx.user.id,
       });
