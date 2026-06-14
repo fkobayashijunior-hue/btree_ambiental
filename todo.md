@@ -1936,3 +1936,23 @@
 - [ ] Frontend GpsTrackingPage: aba "Fretes" com fretes detectados automaticamente
 - [ ] Frontend Controle de Equipamentos: horímetro acumulado real (GPS) na coluna "Horímetro"
 - [ ] Frontend SectorsEquipment: campo de categoria ao cadastrar/editar equipamento
+
+---
+
+## 🔗 UNIFICAÇÃO: DESTINOS + CLIENTES COMPRADORES
+
+- [x] Schema: adicionar campos `cnpj_cpf`, `phone`, `email`, `contact_person`, `is_buyer` em `cargo_destinations`
+- [x] Schema: adicionar campos `price_per_unit`, `unit` em `cargo_destinations` (já tem price_per_ton/m3, unificar)
+- [x] Backend: `buyerClients.listActive` retorna destinos com `is_buyer=1` em vez de tabela separada
+- [x] Backend: `buyerClients.list` retorna destinos com `is_buyer=1`
+- [x] Backend: `buyerClients.create` cria em `cargo_destinations` com `is_buyer=1`
+- [x] Backend: `buyerClients.update` atualiza em `cargo_destinations`
+- [x] Backend: `buyerClients.getById` busca em `cargo_destinations`
+- [x] Backend: `buyerClients.financialDashboard` usa `cargo_destinations` com `is_buyer=1`
+- [x] Backend: `buyer_payments` e `buyer_price_history` continuam referenciando `destination_id`
+- [x] Backend: banco de desenvolvimento estava vazio (sem dados a migrar)
+- [x] Frontend: formulário de destino ganha toggle "Este destino é um Cliente Comprador" com campos adicionais
+- [x] Frontend: lista de compradores mostra destinos com `is_buyer=1`
+- [x] Frontend: relatório de destino corrigido para usar preço correto (destino normal vs comprador)
+- [x] Frontend: PDF do relatório corrigido para mostrar valor para destinos normais (Sonoco)
+- [x] SQL para produção Hostinger: ALTER TABLE cargo_destinations ADD COLUMN... (executado via webdev_execute_sql)

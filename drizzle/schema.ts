@@ -48,6 +48,18 @@ export const cargoDestinations = mysqlTable("cargo_destinations", {
 	pricePerTon: varchar("price_per_ton", { length: 20 }),
 	pricePerM3: varchar("price_per_m3", { length: 20 }),
 	priceType: varchar("price_type", { length: 10 }).default("ton"),
+	// Campos de comprador (unificação)
+	isBuyer: tinyint("is_buyer").default(0),
+	cnpjCpf: varchar("cnpj_cpf", { length: 30 }),
+	inscricaoEstadual: varchar("inscricao_estadual", { length: 30 }),
+	phone: varchar({ length: 30 }),
+	email: varchar({ length: 255 }),
+	cep: varchar({ length: 10 }),
+	contactPerson: varchar("contact_person", { length: 255 }),
+	product: varchar({ length: 255 }),
+	paymentMethod: varchar("payment_method", { length: 100 }),
+	pricePerUnit: varchar("price_per_unit", { length: 20 }),
+	unit: varchar({ length: 20 }).default("ton"),
 });
 
 export const cargoLoads = mysqlTable("cargo_loads", {

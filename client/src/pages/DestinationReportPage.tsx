@@ -112,10 +112,22 @@ export default function DestinationReportPage() {
   const { data: buyersList = [] } = trpc.buyerClients.listActive.useQuery();
 
   // Combined list for the select
+  // Buyers are now in cargo_destinations with is_buyer=1, so we merge both lists
+  // buyersList already returns destinations with is_buyer=1 (same IDs, no offset)
   const allDestinations = useMemo(() => {
-    const dests = destinations.map((d: any) => ({ id: d.id, name: d.name, city: d.city, state: d.state, type: 'destination' as const, pricePerTon: d.pricePerTon, pricePerM3: d.pricePerM3, priceType: d.priceType }));
-    const buyers = (buyersList as any[]).map(b => ({ id: 10000 + b.id, name: b.name, city: b.city, state: b.state, type: 'buyer' as const, pricePerTon: null, pricePerM3: null, priceType: null }));
-    return [...dests, ...buyers];
+    const dests = destinations.map((d: any) => ({
+      id: d.id, name: d.name, city: d.city, state: d.state,
+      type: (d.isBuyer ? 'buyer' : 'destination') as 'buyer' | 'destination',
+      pricePerTon: d.pricePerTon, pricePerM3: d.pricePerM3, priceType: d.priceType,
+      isBuyer: !!d.isBuyer,
+    }));
+    // buyersList may include buyers not yet in destinations list (edge case)
+    const buyerIds = new Set(dests.filter(d => d.isBuyer).map(d => d.id));
+    const extraBuyers = (buyersList as any[]).filter(b => !buyerIds.has(b.id)).map(b => ({
+      id: b.id, name: b.name, city: b.city, state: b.state,
+      type: 'buyer' as const, pricePerTon: null, pricePerM3: null, priceType: null, isBuyer: true,
+    }));
+    return [...dests, ...extraBuyers];
   }, [destinations, buyersList]);
 
   // Fetch loads filtered by destination
@@ -156,7 +168,7 @@ export default function DestinationReportPage() {
       toast.error('Preencha o valor e a data do pagamento');
       return;
     }
-    const buyerId = selectedDestId - 10000;
+    const buyerId = selectedDestId; // No more 10000 offset — buyers use their real destination ID
     addPaymentMut.mutate({
       buyerId,
       amount: paymentForm.amount,
@@ -175,14 +187,21 @@ export default function DestinationReportPage() {
   const totalWeight = loads.reduce((sum: number, l: any) => sum + (parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.')) || 0), 0);
   const totalVolume = loads.reduce((sum: number, l: any) => sum + (parseFloat(String(l.volumeM3 || 0).replace(',', '.')) || 0), 0);
 
-  // Financial calculations (buyer receivables)
-  const pricePerUnit = buyerInfo?.pricePerUnit ? parseFloat(String(buyerInfo.pricePerUnit).replace(',', '.')) : 0;
-  const unit = buyerInfo?.unit || 'ton';
-  const isBuyer = selectedDestId >= 10000;
+  // Financial calculations
+  // isBuyer: check if selected destination has is_buyer flag (no more 10000 offset)
+  const isBuyer = !!(allDestinations.find(d => d.id === selectedDestId) as any)?.isBuyer || !!buyerInfo;
 
-  // Calculate total value based on unit (ton or m³)
+  // For buyers: use buyerInfo.pricePerUnit; for regular destinations: use destPricePerUnit
+  // These are computed below after destInfo is available
+  const buyerPricePerUnit = buyerInfo?.pricePerUnit ? parseFloat(String(buyerInfo.pricePerUnit).replace(',', '.')) : 0;
+  const unit = buyerInfo?.unit || 'ton';  // used for buyer calcs
+
+  // Calculate total value based on unit (ton or m³) — for buyers
   const totalQuantity = unit === 'ton' ? totalWeight / 1000 : totalVolume;
-  const totalValue = pricePerUnit * totalQuantity;
+  const totalValue = buyerPricePerUnit * totalQuantity;
+
+  // Alias for backward compat in buyer PDF sections
+  const pricePerUnit = buyerPricePerUnit;
 
   // Get selected destination info
   const selectedDest = allDestinations.find(d => d.id === selectedDestId);
@@ -237,6 +256,10 @@ export default function DestinationReportPage() {
         ? `${safeDate(startDate).toLocaleDateString('pt-BR')} a ${safeDate(endDate).toLocaleDateString('pt-BR')}`
         : "Todo período";
 
+      // Determine effective price for PDF rows (buyer or regular destination)
+      const effectivePdfPrice = isBuyer ? pricePerUnit : destPricePerUnit;
+      const effectivePdfUnit = isBuyer ? unit : destUnit;
+
       // loads already come ordered ASC from backend (oldest first = #1)
       const rows = loads.map((l: any, i: number) => {
         const loadDate = safeDate(l.date).toLocaleDateString('pt-BR');
@@ -244,7 +267,7 @@ export default function DestinationReportPage() {
         const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.'));
         const weightTon = weight / 1000;
         const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.'));
-        const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
+        const lineValue = effectivePdfPrice > 0 ? (effectivePdfUnit === 'ton' ? effectivePdfPrice * weightTon : effectivePdfPrice * vol) : 0;
         const obs = l.notes ? `<tr><td colspan="12" style="padding:3px 4px 6px;font-size:10px;color:#6b7280;font-style:italic;">Obs: ${l.notes}</td></tr>` : '';
         const receiverRow = l.receiverName ? `<tr><td colspan="12" style="padding:2px 4px 5px;font-size:10px;color:#166534;">✍ Recebido por: <strong>${l.receiverName}</strong></td></tr>` : '';
 
@@ -265,17 +288,22 @@ export default function DestinationReportPage() {
               ${getTrackingLabel(l.trackingStatus)}
             </span>
           </td>
-          ${pricePerUnit > 0 ? `<td style="padding:6px 4px;text-align:right;font-size:11px;font-weight:600;">R$ ${formatBR(lineValue)}</td>` : ''}
+          ${effectivePdfPrice > 0 ? `<td style="padding:6px 4px;text-align:right;font-size:11px;font-weight:600;">R$ ${formatBR(lineValue)}</td>` : ''}
         </tr>${obs}${receiverRow}`;
       }).join('');
 
-      const financialSection = pricePerUnit > 0 ? `
+      // Use buyer price for buyers, dest price for regular destinations
+      const pdfPrice = isBuyer ? pricePerUnit : destPricePerUnit;
+      const pdfUnit = isBuyer ? unit : destUnit;
+      const pdfQty = isBuyer ? totalQuantity : destTotalQuantity;
+      const pdfTotal = isBuyer ? totalValue : destTotalValue;
+      const financialSection = pdfPrice > 0 ? `
       <div style="margin-top:20px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
         <h3 style="margin:0 0 8px;color:#166534;font-size:14px;">💰 Resumo Financeiro</h3>
         <table style="width:100%;font-size:12px;">
-          <tr><td style="padding:4px 0;">Preço por ${unit}:</td><td style="text-align:right;font-weight:bold;">R$ ${formatBR(pricePerUnit)}</td></tr>
-          <tr><td style="padding:4px 0;">Quantidade total (${unit}):</td><td style="text-align:right;font-weight:bold;">${formatBR(totalQuantity, 3)}</td></tr>
-          <tr style="border-top:2px solid #166534;"><td style="padding:8px 0;font-size:14px;font-weight:bold;color:#166534;">VALOR TOTAL A RECEBER:</td><td style="text-align:right;font-size:16px;font-weight:bold;color:#166534;">R$ ${formatBR(totalValue)}</td></tr>
+          <tr><td style="padding:4px 0;">Preço por ${pdfUnit}:</td><td style="text-align:right;font-weight:bold;">R$ ${formatBR(pdfPrice)}</td></tr>
+          <tr><td style="padding:4px 0;">Quantidade total (${pdfUnit}):</td><td style="text-align:right;font-weight:bold;">${formatBR(pdfQty, 3)}</td></tr>
+          <tr style="border-top:2px solid #166534;"><td style="padding:8px 0;font-size:14px;font-weight:bold;color:#166534;">VALOR TOTAL A RECEBER:</td><td style="text-align:right;font-size:16px;font-weight:bold;color:#166534;">R$ ${formatBR(pdfTotal)}</td></tr>
         </table>
       </div>` : '';
 
@@ -302,7 +330,7 @@ export default function DestinationReportPage() {
       </div>
       <table>
         <thead><tr>
-          <th>#</th><th>DATA</th><th>DT.ENTREGA</th><th>NF</th><th>PLACA</th><th>MOTORISTA</th><th>MADEIRA</th><th>VOLUME</th><th>PESO LÍQ.</th><th>P.SAÍDA</th><th>P.CHEG.</th><th>SITUAÇÃO</th>${pricePerUnit > 0 ? '<th style="text-align:right;">VALOR</th>' : ''}
+          <th>#</th><th>DATA</th><th>DT.ENTREGA</th><th>NF</th><th>PLACA</th><th>MOTORISTA</th><th>MADEIRA</th><th>VOLUME</th><th>PESO LÍQ.</th><th>P.SAÍDA</th><th>P.CHEG.</th><th>SITUAÇÃO</th>${effectivePdfPrice > 0 ? '<th style="text-align:right;">VALOR</th>' : ''}
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>
@@ -311,7 +339,7 @@ export default function DestinationReportPage() {
             <td style="text-align:right;">${formatBR(totalVolume, 3)} m³</td>
             <td style="text-align:right;">${formatBR(totalWeight / 1000)} ton</td>
             <td colspan="3"></td>
-            ${pricePerUnit > 0 ? `<td style="text-align:right;">R$ ${formatBR(totalValue)}</td>` : ''}
+            ${effectivePdfPrice > 0 ? `<td style="text-align:right;">R$ ${formatBR(pdfTotal)}</td>` : ''}
           </tr>
         </tfoot>
       </table>
@@ -606,17 +634,19 @@ export default function DestinationReportPage() {
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
               >
                 <option value={0}>Selecionar...</option>
-                {destinations.length > 0 && (
+                {/* Destinos normais (is_buyer=0) */}
+                {allDestinations.filter(d => !d.isBuyer).length > 0 && (
                   <optgroup label="Destinos">
-                    {(destinations as any[]).map(d => (
+                    {allDestinations.filter(d => !d.isBuyer).map(d => (
                       <option key={`dest-${d.id}`} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ''}</option>
                     ))}
                   </optgroup>
                 )}
-                {buyersList.length > 0 && (
+                {/* Compradores (is_buyer=1) — mesmo ID, sem offset */}
+                {allDestinations.filter(d => d.isBuyer).length > 0 && (
                   <optgroup label="💰 Compradores">
-                    {(buyersList as any[]).map(b => (
-                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.name}{b.city ? ` — ${b.city}/${b.state}` : ''}</option>
+                    {allDestinations.filter(d => d.isBuyer).map(b => (
+                      <option key={`buyer-${b.id}`} value={b.id}>{b.name}{b.city ? ` — ${b.city}/${b.state}` : ''}</option>
                     ))}
                   </optgroup>
                 )}

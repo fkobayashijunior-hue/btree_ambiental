@@ -62,20 +62,37 @@ export const cargoLoadsRouter = router({
       city: z.string().optional(),
       state: z.string().optional(),
       notes: z.string().optional(),
-      clientId: z.number().optional(), // cliente vinculado ao destino
-      pricePerTon: z.string().optional(), // valor por tonelada
-      pricePerM3: z.string().optional(), // valor por m³
-      priceType: z.enum(['ton', 'm3']).optional().default('ton'), // tipo de preço
+      clientId: z.number().optional(),
+      pricePerTon: z.string().optional(),
+      pricePerM3: z.string().optional(),
+      priceType: z.enum(['ton', 'm3']).optional().default('ton'),
+      // Campos de comprador (unificação)
+      isBuyer: z.number().optional().default(0),
+      cnpjCpf: z.string().optional(),
+      inscricaoEstadual: z.string().optional(),
+      phone: z.string().optional(),
+      email: z.string().optional(),
+      cep: z.string().optional(),
+      contactPerson: z.string().optional(),
+      product: z.string().optional(),
+      paymentMethod: z.string().optional(),
+      pricePerUnit: z.string().optional(),
+      unit: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { name, address, city, state, notes, clientId, pricePerTon, pricePerM3, priceType } = input;
+      const { name, address, city, state, notes, clientId, pricePerTon, pricePerM3, priceType,
+        isBuyer, cnpjCpf, inscricaoEstadual, phone, email, cep, contactPerson, product, paymentMethod, pricePerUnit, unit } = input;
       let conn: any = null;
       try {
         conn = await getDirectConnection();
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
         const [result] = await conn.execute(
-          'INSERT INTO cargo_destinations (name, address, city, state, notes, client_id, price_per_ton, price_per_m3, price_type, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [name, address || null, city || null, state || null, notes || null, clientId || null, pricePerTon || null, pricePerM3 || null, priceType || 'ton', ctx.user.id, now]
+          'INSERT INTO cargo_destinations (name, address, city, state, notes, client_id, price_per_ton, price_per_m3, price_type, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [name, address || null, city || null, state || null, notes || null, clientId || null,
+           pricePerTon || null, pricePerM3 || null, priceType || 'ton',
+           isBuyer || 0, cnpjCpf || null, inscricaoEstadual || null, phone || null, email || null,
+           cep || null, contactPerson || null, product || null, paymentMethod || null,
+           pricePerUnit || null, unit || 'ton', ctx.user.id, now]
         );
         return { success: true, id: (result as any)?.insertId };
       } finally {
@@ -92,12 +109,25 @@ export const cargoLoadsRouter = router({
       state: z.string().optional(),
       notes: z.string().optional(),
       clientId: z.number().nullable().optional(),
-      pricePerTon: z.string().nullable().optional(), // valor por tonelada
-      pricePerM3: z.string().nullable().optional(), // valor por m³
-      priceType: z.enum(['ton', 'm3']).nullable().optional(), // tipo de preço
+      pricePerTon: z.string().nullable().optional(),
+      pricePerM3: z.string().nullable().optional(),
+      priceType: z.enum(['ton', 'm3']).nullable().optional(),
+      // Campos de comprador
+      isBuyer: z.number().nullable().optional(),
+      cnpjCpf: z.string().nullable().optional(),
+      inscricaoEstadual: z.string().nullable().optional(),
+      phone: z.string().nullable().optional(),
+      email: z.string().nullable().optional(),
+      cep: z.string().nullable().optional(),
+      contactPerson: z.string().nullable().optional(),
+      product: z.string().nullable().optional(),
+      paymentMethod: z.string().nullable().optional(),
+      pricePerUnit: z.string().nullable().optional(),
+      unit: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
-      const { id, name, address, city, state, notes, clientId, pricePerTon, pricePerM3, priceType } = input;
+      const { id, name, address, city, state, notes, clientId, pricePerTon, pricePerM3, priceType,
+        isBuyer, cnpjCpf, inscricaoEstadual, phone, email, cep, contactPerson, product, paymentMethod, pricePerUnit, unit } = input;
       let conn: any = null;
       try {
         conn = await getDirectConnection();
@@ -112,6 +142,17 @@ export const cargoLoadsRouter = router({
         if (pricePerTon !== undefined) { setClauses.push('price_per_ton = ?'); params.push(pricePerTon || null); }
         if (pricePerM3 !== undefined) { setClauses.push('price_per_m3 = ?'); params.push(pricePerM3 || null); }
         if (priceType !== undefined) { setClauses.push('price_type = ?'); params.push(priceType || 'ton'); }
+        if (isBuyer !== undefined) { setClauses.push('is_buyer = ?'); params.push(isBuyer ?? 0); }
+        if (cnpjCpf !== undefined) { setClauses.push('cnpj_cpf = ?'); params.push(cnpjCpf || null); }
+        if (inscricaoEstadual !== undefined) { setClauses.push('inscricao_estadual = ?'); params.push(inscricaoEstadual || null); }
+        if (phone !== undefined) { setClauses.push('phone = ?'); params.push(phone || null); }
+        if (email !== undefined) { setClauses.push('email = ?'); params.push(email || null); }
+        if (cep !== undefined) { setClauses.push('cep = ?'); params.push(cep || null); }
+        if (contactPerson !== undefined) { setClauses.push('contact_person = ?'); params.push(contactPerson || null); }
+        if (product !== undefined) { setClauses.push('product = ?'); params.push(product || null); }
+        if (paymentMethod !== undefined) { setClauses.push('payment_method = ?'); params.push(paymentMethod || null); }
+        if (pricePerUnit !== undefined) { setClauses.push('price_per_unit = ?'); params.push(pricePerUnit || null); }
+        if (unit !== undefined) { setClauses.push('unit = ?'); params.push(unit || 'ton'); }
         if (setClauses.length === 0) return { success: true };
         params.push(id);
         await conn.execute(`UPDATE cargo_destinations SET ${setClauses.join(', ')} WHERE id = ?`, params);
@@ -1486,50 +1527,26 @@ export const cargoLoadsRouter = router({
       if (input.statusFilter && input.statusFilter !== 'all') {
         conditions.push(eq(cargoLoads.status, input.statusFilter));
       }
-      // Destination filter - handle both regular destinations and buyers (offset 10000)
-      // Also match by destination text name for cargas saved before destinationId was implemented
+      // Destination filter - all destinations (including buyers) are now in cargo_destinations
+      // Match by destination_id OR by destination text name for legacy cargas
       if (input.destinationId) {
+        // Support legacy offset (10000+) for backwards compatibility with old bookmarks/links
+        const realDestId = input.destinationId >= 10000 ? input.destinationId - 10000 : input.destinationId;
+        const destResult = await db.select({ name: cargoDestinations.name, isBuyer: cargoDestinations.isBuyer })
+          .from(cargoDestinations)
+          .where(eq(cargoDestinations.id, realDestId))
+          .limit(1);
+        const destName = destResult.length > 0 ? destResult[0].name : null;
+        // Build OR conditions: match by real destination_id, legacy offset id, and by name
+        const orClauses: any[] = [
+          eq(cargoLoads.destinationId, realDestId),
+        ];
         if (input.destinationId >= 10000) {
-          // It's a buyer - fetch ALL destinations linked to this buyer via client_id
-          const realBuyerId = input.destinationId - 10000;
-          const linkedDests = await db.select({ id: cargoDestinations.id, name: cargoDestinations.name })
-            .from(cargoDestinations)
-            .where(eq(cargoDestinations.clientId, realBuyerId));
-          // Also get buyer name to match cargas saved by name
-          const buyerResult = await db.select({ name: buyerClients.name })
-            .from(buyerClients)
-            .where(eq(buyerClients.id, realBuyerId))
-            .limit(1);
-          const buyerName = buyerResult.length > 0 ? buyerResult[0].name : null;
-          // Build OR conditions: buyer destinationId, all linked dest IDs, buyer name, all linked dest names
-          const orClauses: any[] = [
-            eq(cargoLoads.destinationId, input.destinationId), // legacy buyer destinationId
-          ];
-          if (buyerName) orClauses.push(eq(cargoLoads.destination, buyerName));
-          for (const ld of linkedDests) {
-            orClauses.push(eq(cargoLoads.destinationId, ld.id));
-            orClauses.push(eq(cargoLoads.destination, ld.name));
-          }
-          conditions.push(or(...orClauses)!);
-        } else {
-          // It's a regular destination - get destination name
-          const destResult = await db.select({ name: cargoDestinations.name })
-            .from(cargoDestinations)
-            .where(eq(cargoDestinations.id, input.destinationId))
-            .limit(1);
-          const destName = destResult.length > 0 ? destResult[0].name : null;
-          // Match by destinationId OR by destination text name
-          if (destName) {
-            conditions.push(
-              or(
-                eq(cargoLoads.destinationId, input.destinationId),
-                eq(cargoLoads.destination, destName)
-              )!
-            );
-          } else {
-            conditions.push(eq(cargoLoads.destinationId, input.destinationId));
-          }
+          // Also match the old offset id for legacy data
+          orClauses.push(eq(cargoLoads.destinationId, input.destinationId));
         }
+        if (destName) orClauses.push(eq(cargoLoads.destination, destName));
+        conditions.push(or(...orClauses)!);
       }
       if (input.startDate) {
         conditions.push(sql`${cargoLoads.date} >= ${input.startDate}`);
@@ -1577,26 +1594,33 @@ export const cargoLoadsRouter = router({
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
 
-      // If it's a buyer (id >= 10000), also fetch buyer info for financial calculations
+      // Fetch destination/buyer info for financial calculations
       let buyerInfo: { pricePerUnit: string | null; unit: string | null; name: string } | null = null;
       let destInfo: { pricePerTon: string | null; pricePerM3: string | null; priceType: string | null; name: string } | null = null;
 
-      if (input.destinationId && input.destinationId >= 10000) {
-        const buyerRows = await db.select({
-          name: buyerClients.name,
-          pricePerUnit: buyerClients.pricePerUnit,
-          unit: buyerClients.unit,
-        }).from(buyerClients).where(eq(buyerClients.id, input.destinationId - 10000)).limit(1);
-        if (buyerRows.length > 0) buyerInfo = buyerRows[0];
-      } else if (input.destinationId && input.destinationId > 0) {
-        // Fetch destination price info for non-buyer destinations (e.g. Sonoco)
+      if (input.destinationId && input.destinationId > 0) {
+        const realDestId = input.destinationId >= 10000 ? input.destinationId - 10000 : input.destinationId;
         const destRows = await db.select({
           name: cargoDestinations.name,
+          isBuyer: cargoDestinations.isBuyer,
+          pricePerUnit: cargoDestinations.pricePerUnit,
+          unit: cargoDestinations.unit,
           pricePerTon: cargoDestinations.pricePerTon,
           pricePerM3: cargoDestinations.pricePerM3,
           priceType: cargoDestinations.priceType,
-        }).from(cargoDestinations).where(eq(cargoDestinations.id, input.destinationId)).limit(1);
-        if (destRows.length > 0) destInfo = destRows[0];
+        }).from(cargoDestinations).where(eq(cargoDestinations.id, realDestId)).limit(1);
+        if (destRows.length > 0) {
+          const d = destRows[0];
+          if (d.isBuyer) {
+            // It's a buyer: return buyerInfo with pricePerUnit
+            const effectivePrice = d.pricePerUnit ?? (d.priceType === 'm3' ? d.pricePerM3 : d.pricePerTon);
+            const effectiveUnit = d.unit ?? (d.priceType === 'm3' ? 'm3' : 'ton');
+            buyerInfo = { name: d.name, pricePerUnit: effectivePrice, unit: effectiveUnit };
+          } else {
+            // Regular destination: return destInfo with price_per_ton/m3
+            destInfo = { name: d.name, pricePerTon: d.pricePerTon, pricePerM3: d.pricePerM3, priceType: d.priceType };
+          }
+        }
       }
 
       return { loads: results, buyerInfo, destInfo };

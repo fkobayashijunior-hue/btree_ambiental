@@ -1191,6 +1191,11 @@ export default function CargoControl() {
   const [newDestPricePerTon, setNewDestPricePerTon] = useState("");
   const [newDestPricePerM3, setNewDestPricePerM3] = useState("");
   const [newDestPriceType, setNewDestPriceType] = useState<'ton' | 'm3'>('ton');
+  const [newDestIsBuyer, setNewDestIsBuyer] = useState(false);
+  const [newDestPhone, setNewDestPhone] = useState("");
+  const [newDestEmail, setNewDestEmail] = useState("");
+  const [newDestCnpj, setNewDestCnpj] = useState("");
+  const [newDestContact, setNewDestContact] = useState("");
   const [collapsedClients, setCollapsedClients] = useState<Set<string>>(new Set());
   const { openFilePicker } = useFilePicker();
 
@@ -2787,7 +2792,7 @@ export default function CargoControl() {
       </Dialog>
 
       {/* ===== DIALOG: CADASTRAR DESTINO ===== */}
-      <Dialog open={isDestinationOpen} onOpenChange={v => { setIsDestinationOpen(v); if (!v) { setNewDestName(""); setNewDestCity(""); setNewDestState(""); setNewDestClientId(0); setNewDestPricePerTon(""); setNewDestPricePerM3(""); setNewDestPriceType('ton'); } }}>
+      <Dialog open={isDestinationOpen} onOpenChange={v => { setIsDestinationOpen(v); if (!v) { setNewDestName(""); setNewDestCity(""); setNewDestState(""); setNewDestClientId(0); setNewDestPricePerTon(""); setNewDestPricePerM3(""); setNewDestPriceType('ton'); setNewDestIsBuyer(false); setNewDestPhone(""); setNewDestEmail(""); setNewDestCnpj(""); setNewDestContact(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Cadastrar Destino</DialogTitle>
@@ -2807,20 +2812,45 @@ export default function CargoControl() {
                 <Input value={newDestState} onChange={e => setNewDestState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} className="uppercase" />
               </div>
             </div>
-            <div>
-              <Label>Vincular ao Comprador de Lenha</Label>
-              <select
-                value={newDestClientId}
-                onChange={e => setNewDestClientId(parseInt(e.target.value))}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-              >
-                <option value={0}>Nenhum</option>
-                {(buyersList as { id: number; name: string }[]).map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">Vincule ao comprador de lenha para agrupar os destinos no relatório.</p>
+            {/* Toggle: É comprador? */}
+            <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <input
+                type="checkbox"
+                id="isBuyerToggle"
+                checked={newDestIsBuyer}
+                onChange={e => setNewDestIsBuyer(e.target.checked)}
+                className="h-4 w-4 accent-emerald-600"
+              />
+              <label htmlFor="isBuyerToggle" className="text-sm font-medium text-blue-800 cursor-pointer">
+                Este destino é um <strong>Cliente Comprador</strong> (compra lenha/madeira)
+              </label>
             </div>
+            {/* Campos extras para comprador */}
+            {newDestIsBuyer && (
+              <div className="space-y-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <p className="text-xs font-semibold text-emerald-700">Dados do Comprador</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>CNPJ / CPF</Label>
+                    <Input value={newDestCnpj} onChange={e => setNewDestCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                  </div>
+                  <div>
+                    <Label>Contato</Label>
+                    <Input value={newDestContact} onChange={e => setNewDestContact(e.target.value)} placeholder="Nome do responsável" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>Telefone</Label>
+                    <Input value={newDestPhone} onChange={e => setNewDestPhone(e.target.value)} placeholder="(00) 00000-0000" />
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <Input value={newDestEmail} onChange={e => setNewDestEmail(e.target.value)} placeholder="email@empresa.com" />
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Tipo de preço */}
             <div>
               <Label>Tipo de Preço</Label>
@@ -2862,10 +2892,16 @@ export default function CargoControl() {
                   name: newDestName,
                   city: newDestCity || undefined,
                   state: newDestState || undefined,
-                  clientId: newDestClientId || undefined,
+                  isBuyer: newDestIsBuyer ? 1 : 0,
+                  cnpjCpf: newDestCnpj || undefined,
+                  contactPerson: newDestContact || undefined,
+                  phone: newDestPhone || undefined,
+                  email: newDestEmail || undefined,
                   pricePerTon: newDestPriceType === 'ton' && newDestPricePerTon ? newDestPricePerTon : undefined,
                   pricePerM3: newDestPriceType === 'm3' && newDestPricePerM3 ? newDestPricePerM3 : undefined,
                   priceType: newDestPriceType,
+                  pricePerUnit: newDestIsBuyer ? (newDestPriceType === 'ton' ? newDestPricePerTon || undefined : newDestPricePerM3 || undefined) : undefined,
+                  unit: newDestIsBuyer ? newDestPriceType : undefined,
                 })}
               >
                 {createDestination.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar"}

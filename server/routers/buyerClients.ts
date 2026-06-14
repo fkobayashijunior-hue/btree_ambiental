@@ -2,22 +2,54 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { buyerClients, buyerPriceHistory, buyerPayments } from "../../drizzle/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { cargoDestinations, buyerPriceHistory, buyerPayments } from "../../drizzle/schema";
+import { eq, desc, sql, and } from "drizzle-orm";
+
+// ─── Helper: map cargo_destinations row to buyer-like shape ──────────────────
+function destToBuyer(d: typeof cargoDestinations.$inferSelect) {
+  return {
+    id: d.id,
+    name: d.name,
+    cnpjCpf: d.cnpjCpf,
+    inscricaoEstadual: d.inscricaoEstadual,
+    phone: d.phone,
+    email: d.email,
+    address: d.address,
+    city: d.city,
+    state: d.state,
+    cep: d.cep,
+    contactPerson: d.contactPerson,
+    product: d.product,
+    paymentMethod: d.paymentMethod,
+    // pricePerUnit: use price_per_unit if set, otherwise derive from price_per_ton/m3
+    pricePerUnit: d.pricePerUnit ?? (d.priceType === 'm3' ? d.pricePerM3 : d.pricePerTon),
+    unit: d.unit ?? (d.priceType === 'm3' ? 'm3' : 'ton'),
+    notes: d.notes,
+    active: d.active,
+    // Extra destination fields
+    pricePerTon: d.pricePerTon,
+    pricePerM3: d.pricePerM3,
+    priceType: d.priceType,
+  };
+}
 
 export const buyerClientsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(buyerClients).orderBy(desc(buyerClients.id));
-    return rows;
+    const rows = await db.select().from(cargoDestinations)
+      .where(eq(cargoDestinations.isBuyer, 1))
+      .orderBy(desc(cargoDestinations.id));
+    return rows.map(destToBuyer);
   }),
 
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(buyerClients).where(eq(buyerClients.active, 1)).orderBy(buyerClients.name);
-    return rows;
+    const rows = await db.select().from(cargoDestinations)
+      .where(and(eq(cargoDestinations.isBuyer, 1), eq(cargoDestinations.active, 1)))
+      .orderBy(cargoDestinations.name);
+    return rows.map(destToBuyer);
   }),
 
   getById: protectedProcedure
@@ -25,11 +57,16 @@ export const buyerClientsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [buyer] = await db.select().from(buyerClients).where(eq(buyerClients.id, input.id));
-      if (!buyer) throw new TRPCError({ code: "NOT_FOUND" });
-      const prices = await db.select().from(buyerPriceHistory).where(eq(buyerPriceHistory.buyerId, input.id)).orderBy(desc(buyerPriceHistory.id));
-      const payments = await db.select().from(buyerPayments).where(eq(buyerPayments.buyerId, input.id)).orderBy(desc(buyerPayments.id));
-      return { ...buyer, prices, payments };
+      const [dest] = await db.select().from(cargoDestinations)
+        .where(and(eq(cargoDestinations.id, input.id), eq(cargoDestinations.isBuyer, 1)));
+      if (!dest) throw new TRPCError({ code: "NOT_FOUND" });
+      const prices = await db.select().from(buyerPriceHistory)
+        .where(eq(buyerPriceHistory.buyerId, input.id))
+        .orderBy(desc(buyerPriceHistory.id));
+      const payments = await db.select().from(buyerPayments)
+        .where(eq(buyerPayments.buyerId, input.id))
+        .orderBy(desc(buyerPayments.id));
+      return { ...destToBuyer(dest), prices, payments };
     }),
 
   create: protectedProcedure
@@ -50,13 +87,23 @@ export const buyerClientsRouter = router({
       unit: z.string().optional(),
       notes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      // Determine price fields from unit
+      const unit = input.unit || 'ton';
+      const pricePerTon = unit === 'ton' ? (input.pricePerUnit || null) : null;
+      const pricePerM3 = unit === 'm3' ? (input.pricePerUnit || null) : null;
+      const priceType = unit === 'm3' ? 'm3' : 'ton';
       await db.execute(sql`
-        INSERT INTO buyer_clients (name, cnpj_cpf, inscricao_estadual, phone, email, address, city, state, cep, contact_person, product, payment_method, price_per_unit, unit, notes, created_at)
-        VALUES (${input.name}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null}, ${input.pricePerUnit || null}, ${input.unit || 'ton'}, ${input.notes || null}, ${now})
+        INSERT INTO cargo_destinations 
+          (name, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, created_by, created_at)
+        VALUES 
+          (${input.name}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.notes || null},
+           1, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null},
+           ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null},
+           ${input.pricePerUnit || null}, ${unit}, ${pricePerTon}, ${pricePerM3}, ${priceType}, ${ctx.user.id}, ${now})
       `);
       return { success: true };
     }),
@@ -84,25 +131,31 @@ export const buyerClientsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { id, ...data } = input;
-      await db.update(buyerClients).set({
-        name: data.name,
-        cnpjCpf: data.cnpjCpf || null,
-        inscricaoEstadual: data.inscricaoEstadual || null,
-        phone: data.phone || null,
-        email: data.email || null,
-        address: data.address || null,
-        city: data.city || null,
-        state: data.state || null,
-        cep: data.cep || null,
-        contactPerson: data.contactPerson || null,
-        product: data.product || null,
-        paymentMethod: data.paymentMethod || null,
-        pricePerUnit: data.pricePerUnit || null,
-        unit: data.unit || 'ton',
-        notes: data.notes || null,
-        active: data.active ?? 1,
-      }).where(eq(buyerClients.id, id));
+      const unit = input.unit || 'ton';
+      const pricePerTon = unit === 'ton' ? (input.pricePerUnit || null) : null;
+      const pricePerM3 = unit === 'm3' ? (input.pricePerUnit || null) : null;
+      const priceType = unit === 'm3' ? 'm3' : 'ton';
+      await db.update(cargoDestinations).set({
+        name: input.name,
+        cnpjCpf: input.cnpjCpf || null,
+        inscricaoEstadual: input.inscricaoEstadual || null,
+        phone: input.phone || null,
+        email: input.email || null,
+        address: input.address || null,
+        city: input.city || null,
+        state: input.state || null,
+        cep: input.cep || null,
+        contactPerson: input.contactPerson || null,
+        product: input.product || null,
+        paymentMethod: input.paymentMethod || null,
+        pricePerUnit: input.pricePerUnit || null,
+        unit,
+        pricePerTon,
+        pricePerM3,
+        priceType,
+        notes: input.notes || null,
+        active: input.active ?? 1,
+      }).where(eq(cargoDestinations.id, input.id));
       return { success: true };
     }),
 
@@ -111,7 +164,8 @@ export const buyerClientsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(buyerClients).where(eq(buyerClients.id, input.id));
+      // Soft delete: set active=0 and is_buyer=0 (keep as destination if needed)
+      await db.update(cargoDestinations).set({ active: 0, isBuyer: 0 }).where(eq(cargoDestinations.id, input.id));
       return { success: true };
     }),
 
@@ -190,7 +244,6 @@ export const buyerClientsRouter = router({
     }),
 
   // === DASHBOARD FINANCEIRO ===
-  // Returns financial summary per buyer: total receivables (from cargo loads), total paid, balance
   financialDashboard: protectedProcedure
     .input(z.object({
       startDate: z.string().optional(),
@@ -200,31 +253,22 @@ export const buyerClientsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Get all active buyers
-      const buyers = await db.select().from(buyerClients).where(eq(buyerClients.active, 1)).orderBy(buyerClients.name);
+      // Get all active buyers (destinations with is_buyer=1)
+      const buyers = await db.select().from(cargoDestinations)
+        .where(and(eq(cargoDestinations.isBuyer, 1), eq(cargoDestinations.active, 1)))
+        .orderBy(cargoDestinations.name);
 
-      // For each buyer, calculate receivables from cargo loads and payments received
       const results = await Promise.all(buyers.map(async (buyer) => {
-        // Build date conditions for cargo loads
-        let dateConditions = '';
-        const params: any[] = [buyer.id, buyer.name];
-        if (input.startDate) {
-          dateConditions += ` AND (cl.date >= ? OR cl.delivery_date >= ?)`;
-          params.push(input.startDate, input.startDate);
-        }
-        if (input.endDate) {
-          dateConditions += ` AND (cl.date <= ? OR cl.delivery_date <= ?)`;
-          params.push(input.endDate + ' 23:59:59', input.endDate + ' 23:59:59');
-        }
+        const buyerMapped = destToBuyer(buyer);
 
-        // Get cargo loads for this buyer
+        // Get cargo loads for this buyer (match by destination_id OR by name)
         const [loadsResult] = await db.execute(sql`
           SELECT 
             COUNT(*) as total_loads,
             SUM(CAST(REPLACE(COALESCE(cl.weight_net_kg, cl.weight_kg, '0'), ',', '.') AS DECIMAL(15,3))) as total_weight_kg,
             SUM(CAST(REPLACE(COALESCE(cl.volume_m3, '0'), ',', '.') AS DECIMAL(15,3))) as total_volume_m3
           FROM cargo_loads cl
-          WHERE (cl.destination_id = ${buyer.id + 10000} OR cl.destination = ${buyer.name})
+          WHERE (cl.destination_id = ${buyer.id} OR cl.destination = ${buyer.name})
           ${input.startDate ? sql`AND cl.date >= ${input.startDate}` : sql``}
           ${input.endDate ? sql`AND cl.date <= ${input.endDate + ' 23:59:59'}` : sql``}
         `);
@@ -234,13 +278,11 @@ export const buyerClientsRouter = router({
         const totalVolumeM3 = parseFloat(String(loads?.total_volume_m3 || 0)) || 0;
         const totalLoads = parseInt(String(loads?.total_loads || 0)) || 0;
 
-        // Calculate receivable based on buyer's price and unit
-        const pricePerUnit = parseFloat(String(buyer.pricePerUnit || 0).replace(',', '.')) || 0;
-        const unit = buyer.unit || 'ton';
+        const pricePerUnit = parseFloat(String(buyerMapped.pricePerUnit || 0).replace(',', '.')) || 0;
+        const unit = buyerMapped.unit || 'ton';
         const totalQuantity = unit === 'ton' ? totalWeightKg / 1000 : totalVolumeM3;
         const totalReceivable = pricePerUnit * totalQuantity;
 
-        // Get payments received for this buyer
         const paymentsResult = await db.execute(sql`
           SELECT 
             SUM(CAST(REPLACE(amount, ',', '.') AS DECIMAL(15,2))) as total_paid,
@@ -260,10 +302,10 @@ export const buyerClientsRouter = router({
           name: buyer.name,
           city: buyer.city,
           state: buyer.state,
-          phone: buyer.phone,
-          email: buyer.email,
-          pricePerUnit: buyer.pricePerUnit,
-          unit: buyer.unit || 'ton',
+          phone: buyerMapped.phone,
+          email: buyerMapped.email,
+          pricePerUnit: buyerMapped.pricePerUnit,
+          unit,
           totalLoads,
           totalWeightKg,
           totalVolumeM3,
@@ -275,7 +317,6 @@ export const buyerClientsRouter = router({
         };
       }));
 
-      // Calculate totals
       const grandTotalReceivable = results.reduce((s, r) => s + r.totalReceivable, 0);
       const grandTotalPaid = results.reduce((s, r) => s + r.totalPaid, 0);
       const grandBalance = grandTotalReceivable - grandTotalPaid;
@@ -286,7 +327,6 @@ export const buyerClientsRouter = router({
       };
     }),
 
-  // Get payment history for a specific buyer
   getPayments: protectedProcedure
     .input(z.object({ buyerId: z.number() }))
     .query(async ({ input }) => {
