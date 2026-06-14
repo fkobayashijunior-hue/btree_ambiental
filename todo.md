@@ -1921,3 +1921,18 @@
 
 ### Build e Deploy
 - [ ] Build e push para GitHub
+
+## 🛰️ FEATURE: GPS Melhorias (Horímetro, Hodômetro, Frete Automático) - 14/06/2026
+
+- [ ] Schema: adicionar coluna `category` enum('maquina','veiculo','caminhao') em `equipment`
+- [ ] Schema: adicionar coluna `accumulated_hours` varchar(20) em `equipment` para horímetro acumulado
+- [ ] Schema: adicionar coluna `accumulated_km` varchar(20) em `equipment` para hodômetro acumulado
+- [ ] Migração: rodar SQL no banco de produção
+- [ ] Backend traccar.syncDailyHours: acumular horímetro real e atualizar equipment.accumulated_hours
+- [ ] Backend: nova procedure syncDailyOdometer para veículos/caminhões
+- [ ] Backend: nova procedure detectFreightTrips — cria freightCalculation automático
+- [ ] Frontend GpsTrackingPage: filtro por categoria (Todos/Máquinas/Veículos/Caminhões)
+- [ ] Frontend GpsTrackingPage: mostrar horímetro acumulado para máquinas e hodômetro para veículos
+- [ ] Frontend GpsTrackingPage: aba "Fretes" com fretes detectados automaticamente
+- [ ] Frontend Controle de Equipamentos: horímetro acumulado real (GPS) na coluna "Horímetro"
+- [ ] Frontend SectorsEquipment: campo de categoria ao cadastrar/editar equipamento

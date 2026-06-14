@@ -510,6 +510,24 @@ export default function GpsTrackingPage() {
     onSuccess: (d: any) => toast.success(`Sincronizado: ${d.synced} equipamentos`),
     onError: (e: any) => toast.error(e.message),
   });
+  const syncOdometerMut = trpc.traccar.syncDailyOdometer.useMutation({
+    onSuccess: (d: any) => toast.success(`Hodômetro: ${d.synced} equipamentos atualizados`),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const detectFreightMut = trpc.traccar.detectFreightTrips.useMutation({
+    onSuccess: (d: any) => {
+      toast.success(`${d.detected} frete(s) detectado(s) automaticamente`);
+      refetchAutoFreights();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const updateFreightStatusMut = trpc.traccar.updateAutoFreightStatus.useMutation({
+    onSuccess: () => { toast.success('Status atualizado'); refetchAutoFreights(); },
+  });
+  const { data: autoFreights = [], refetch: refetchAutoFreights } = trpc.traccar.listAutoFreights.useQuery(
+    { status: undefined },
+    { enabled: tab === 'fretes' }
+  );
 
   // Atualizar timestamp de última atualização
   useEffect(() => {
@@ -748,6 +766,9 @@ export default function GpsTrackingPage() {
                 </TabsTrigger>
                 <TabsTrigger value="manutencao" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2">
                   <Wrench className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> <span className="hidden sm:inline">Manut.</span>
+                </TabsTrigger>
+                <TabsTrigger value="fretes" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2">
+                  <Truck className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Fretes
                 </TabsTrigger>
                 <TabsTrigger value="alertas" className="gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2.5 py-1.5 sm:py-2">
                   <Bell className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
@@ -1112,8 +1133,102 @@ export default function GpsTrackingPage() {
                   <Timer className="h-4 w-4" />
                   {syncHoursMut.isPending ? "Sincronizando..." : "Sincronizar Horas de Hoje"}
                 </Button>
-                <p className="text-xs text-muted-foreground">Busca as horas de ignição do dia anterior no Traccar e registra automaticamente.</p>
+                <Button variant="outline" className="gap-2" size="sm" onClick={() => syncOdometerMut.mutate({})} disabled={syncOdometerMut.isPending}>
+                  <Gauge className="h-4 w-4" />
+                  {syncOdometerMut.isPending ? "Atualizando..." : "Atualizar Hodômetro"}
+                </Button>
+                <p className="text-xs text-muted-foreground">Busca as horas de ignição e km percorrido do dia anterior no Traccar e registra automaticamente.</p>
               </div>
+            </TabsContent>
+
+            {/* Aba Fretes Automáticos */}
+            <TabsContent value="fretes" className="mt-2 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2"><Truck className="h-4 w-4 text-blue-600" /> Fretes Automáticos GPS</h3>
+                  <p className="text-sm text-muted-foreground">Viagens longas (&gt;50km) detectadas automaticamente pelo GPS. Custo calculado com combustível e manutenções do dia.</p>
+                </div>
+                <Button onClick={() => detectFreightMut.mutate({})} disabled={detectFreightMut.isPending} className="gap-2" size="sm">
+                  <Route className="h-4 w-4" />
+                  {detectFreightMut.isPending ? "Detectando..." : "Detectar Fretes de Hoje"}
+                </Button>
+              </div>
+
+              {autoFreights.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <Truck className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="font-medium">Nenhum frete detectado ainda</p>
+                    <p className="text-sm text-muted-foreground mt-1">Clique em "Detectar Fretes de Hoje" para analisar viagens longas do dia anterior.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {autoFreights.map((f: any) => (
+                    <Card key={f.id} className={`border-l-4 ${
+                      f.status === 'confirmado' ? 'border-l-green-500' :
+                      f.status === 'ignorado' ? 'border-l-gray-300' : 'border-l-blue-500'
+                    }`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <Truck className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                              <span className="font-semibold text-sm">{f.equipmentName}</span>
+                              <Badge className={`text-xs ${
+                                f.status === 'confirmado' ? 'bg-green-100 text-green-700' :
+                                f.status === 'ignorado' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700'
+                              }`}>{f.status}</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-sm">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Data</p>
+                                <p className="font-medium">{new Date(f.tripDate).toLocaleDateString('pt-BR')}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Distância</p>
+                                <p className="font-medium text-blue-600">{parseFloat(f.distanceKm || '0').toFixed(1)} km</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Duração</p>
+                                <p className="font-medium">{f.durationMinutes ? `${Math.floor(f.durationMinutes/60)}h ${f.durationMinutes%60}min` : '—'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Custo Total</p>
+                                <p className="font-medium text-red-600">R$ {parseFloat(f.totalCost || '0').toFixed(2)}</p>
+                              </div>
+                            </div>
+                            {(f.startAddress || f.endAddress) && (
+                              <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                                <MapPin className="h-3 w-3" />
+                                <span>{f.startAddress || '—'}</span>
+                                <ArrowRight className="h-3 w-3" />
+                                <span>{f.endAddress || '—'}</span>
+                              </div>
+                            )}
+                            <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                              {parseFloat(f.fuelCost || '0') > 0 && <span>Combustível: R$ {parseFloat(f.fuelCost).toFixed(2)}</span>}
+                              {parseFloat(f.maintenanceCost || '0') > 0 && <span>Manutenção: R$ {parseFloat(f.maintenanceCost).toFixed(2)}</span>}
+                            </div>
+                          </div>
+                          {f.status === 'detectado' && (
+                            <div className="flex gap-2 flex-shrink-0">
+                              <Button size="sm" variant="outline" className="gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                                onClick={() => updateFreightStatusMut.mutate({ id: f.id, status: 'confirmado' })}>
+                                <CheckCircle className="h-3.5 w-3.5" /> Confirmar
+                              </Button>
+                              <Button size="sm" variant="outline" className="gap-1 text-gray-500"
+                                onClick={() => updateFreightStatusMut.mutate({ id: f.id, status: 'ignorado' })}>
+                                <XCircle className="h-3.5 w-3.5" /> Ignorar
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
             {/* Aba Manutenção Preventiva */}

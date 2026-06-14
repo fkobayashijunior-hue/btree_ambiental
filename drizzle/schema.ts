@@ -386,6 +386,9 @@ export const equipment = mysqlTable("equipment", {
 	defaultHeightM: varchar("default_height_m", { length: 20 }),
 	defaultWidthM: varchar("default_width_m", { length: 20 }),
 	defaultLengthM: varchar("default_length_m", { length: 20 }),
+	category: mysqlEnum(['maquina','veiculo','caminhao']).default('maquina'),
+	accumulatedHours: varchar("accumulated_hours", { length: 20 }).default('0'),
+	accumulatedKm: varchar("accumulated_km", { length: 20 }).default('0'),
 });
 
 export const equipmentMaintenance = mysqlTable("equipment_maintenance", {
@@ -1151,6 +1154,30 @@ export const fuelInvoices = mysqlTable("fuel_invoices", {
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
+
+// ===== FRETES AUTOMÁTICOS GPS =====
+export const autoFreightTrips = mysqlTable("auto_freight_trips", {
+  id: int().primaryKey().autoincrement(),
+  equipmentId: int("equipment_id").notNull(),
+  equipmentName: varchar("equipment_name", { length: 255 }),
+  traccarDeviceId: int("traccar_device_id"),
+  tripDate: varchar("trip_date", { length: 10 }).notNull(),
+  startTime: varchar("start_time", { length: 30 }),
+  endTime: varchar("end_time", { length: 30 }),
+  distanceKm: varchar("distance_km", { length: 20 }),
+  durationMinutes: int("duration_minutes"),
+  startAddress: text("start_address"),
+  endAddress: text("end_address"),
+  fuelCost: varchar("fuel_cost", { length: 20 }).default('0'),
+  maintenanceCost: varchar("maintenance_cost", { length: 20 }).default('0'),
+  totalCost: varchar("total_cost", { length: 20 }).default('0'),
+  status: mysqlEnum(['detectado','confirmado','ignorado']).default('detectado').notNull(),
+  notes: text(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export type AutoFreightTrip = typeof autoFreightTrips.$inferSelect;
+export type InsertAutoFreightTrip = typeof autoFreightTrips.$inferInsert;
 
 export const thirdPartyContractors = mysqlTable("third_party_contractors", {
 	id: int().autoincrement().notNull(),

@@ -16,6 +16,10 @@ import {
   preventiveMaintenanceAlerts,
   equipment,
   machineHours,
+  autoFreightTrips,
+  financialEntries,
+  machineFuel,
+  machineMaintenance,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -340,25 +344,42 @@ export const traccarRouter = router({
               .limit(1);
 
             if (existing.length === 0) {
+              // Calcular horímetro acumulado total
+              const prevTotalResult = await db
+                .select({ total: sql<string>`SUM(CAST(hours_worked AS DECIMAL(10,2)))` })
+                .from(gpsHoursLog)
+                .where(eq(gpsHoursLog.equipmentId, link.equipmentId));
+              const prevTotal = parseFloat(prevTotalResult[0]?.total || "0");
+              const newTotal = prevTotal + hours;
+              const startMeter = String(Math.round(prevTotal * 10) / 10);
+              const endMeter = String(Math.round(newTotal * 10) / 10);
+
               await db.insert(gpsHoursLog).values({
                 equipmentId: link.equipmentId,
                 gpsDeviceLinkId: link.id,
                 date: from.toISOString(),
                 hoursWorked: String(hours),
+                hourMeterStart: startMeter,
+                hourMeterEnd: endMeter,
                 source: "gps_auto",
               });
-              // Mirror GPS hours into machine_hours for unified equipment control
+              // Mirror GPS hours into machine_hours with real horímetro
               const dateStr = from.toISOString().slice(0, 10);
               await db.insert(machineHours).values({
                 equipmentId: link.equipmentId,
                 date: from.toISOString().slice(0, 19).replace('T', ' '),
-                startHourMeter: '0',
-                endHourMeter: String(hours),
+                startHourMeter: startMeter,
+                endHourMeter: endMeter,
                 hoursWorked: String(hours),
                 activity: 'GPS Automático',
                 notes: `Sincronizado automaticamente via GPS em ${dateStr}`,
                 source: 'gps',
               });
+              // Update accumulated_hours on equipment
+              await db
+                .update(equipment)
+                .set({ accumulatedHours: endMeter })
+                .where(eq(equipment.id, link.equipmentId));
             }
 
             const totalResult = await db
@@ -566,6 +587,228 @@ export const traccarRouter = router({
         }
       }
 
+      return { ok: true };
+    }),
+
+  /**
+   * Sincroniza km percorrido do dia para veiculos/caminhoes com GPS.
+   * Atualiza accumulated_km no equipment e registra em gps_hours_log.
+   */
+  syncDailyOdometer: protectedProcedure
+    .input(z.object({ date: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+
+      const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 86400000);
+      const from = new Date(targetDate);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(targetDate);
+      to.setHours(23, 59, 59, 999);
+
+      const links = await db.select().from(gpsDeviceLinks).where(eq(gpsDeviceLinks.active, 1));
+      const results: { equipmentId: number; distanceKm: number }[] = [];
+
+      for (const link of links) {
+        try {
+          const params = new URLSearchParams({
+            deviceId: String(link.traccarDeviceId),
+            from: from.toISOString(),
+            to: to.toISOString(),
+          });
+          const summary = await traccarFetch(`/reports/summary?${params}`);
+          if (!Array.isArray(summary) || summary.length === 0) continue;
+
+          const rawDist = summary[0]?.distance || 0;
+          const distKm = rawDist > 1000 ? Math.round((rawDist / 1000) * 10) / 10 : Math.round(rawDist * 10) / 10;
+          if (distKm <= 0) continue;
+
+          // Calcular km acumulado anterior
+          const prevKmResult = await db
+            .select({ total: sql<string>`COALESCE(SUM(CAST(distance_km AS DECIMAL(10,1))), 0)` })
+            .from(gpsHoursLog)
+            .where(eq(gpsHoursLog.equipmentId, link.equipmentId));
+          const prevKm = parseFloat(prevKmResult[0]?.total || "0");
+          const newKm = Math.round((prevKm + distKm) * 10) / 10;
+
+          // Update accumulated_km on equipment
+          await db
+            .update(equipment)
+            .set({ accumulatedKm: String(newKm) })
+            .where(eq(equipment.id, link.equipmentId));
+
+          results.push({ equipmentId: link.equipmentId, distanceKm: distKm });
+        } catch {
+          // continua para o proximo
+        }
+      }
+      return { synced: results.length, results };
+    }),
+
+  /**
+   * Detecta viagens longas (>50km) do dia e cria auto_freight_trips automaticamente.
+   * Vincula combustivel e manutencoes do mesmo dia ao frete.
+   */
+  detectFreightTrips: protectedProcedure
+    .input(z.object({ date: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+
+      const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 86400000);
+      const from = new Date(targetDate);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(targetDate);
+      to.setHours(23, 59, 59, 999);
+      const dateStr = from.toISOString().slice(0, 10);
+
+      const links = await db.select().from(gpsDeviceLinks).where(eq(gpsDeviceLinks.active, 1));
+      const detected: number[] = [];
+
+      for (const link of links) {
+        try {
+          // Buscar viagens do dia
+          const params = new URLSearchParams({
+            deviceId: String(link.traccarDeviceId),
+            from: from.toISOString(),
+            to: to.toISOString(),
+          });
+          const trips = await traccarFetch(`/reports/trips?${params}`);
+          if (!Array.isArray(trips)) continue;
+
+          // Filtrar viagens longas (>50km)
+          const longTrips = trips.filter((t: any) => {
+            const raw = t.distance || 0;
+            const km = raw > 1000 ? raw / 1000 : raw;
+            return km >= 50;
+          });
+          if (longTrips.length === 0) continue;
+
+          // Buscar nome do equipamento
+          const eqRow = await db.select().from(equipment).where(eq(equipment.id, link.equipmentId)).limit(1);
+          const eqName = eqRow[0]?.name || `Equipamento #${link.equipmentId}`;
+
+          // Verificar se ja existe frete detectado para este equipamento neste dia
+          const existingFreight = await db
+            .select()
+            .from(autoFreightTrips)
+            .where(and(
+              eq(autoFreightTrips.equipmentId, link.equipmentId),
+              eq(autoFreightTrips.tripDate, dateStr)
+            ))
+            .limit(1);
+          if (existingFreight.length > 0) continue;
+
+          // Calcular totais do dia
+          const totalDistKm = longTrips.reduce((s: number, t: any) => {
+            const raw = t.distance || 0;
+            return s + (raw > 1000 ? raw / 1000 : raw);
+          }, 0);
+          const totalDurationMs = longTrips.reduce((s: number, t: any) => s + (t.duration || 0), 0);
+          const totalDurationMin = Math.round(totalDurationMs / 60000);
+
+          // Buscar combustivel do mesmo dia para este equipamento
+          const fuelRows = await db
+            .select()
+            .from(machineFuel)
+            .where(and(
+              eq(machineFuel.equipmentId, link.equipmentId),
+              gte(machineFuel.date, from.toISOString().slice(0, 19).replace('T', ' ')),
+              lte(machineFuel.date, to.toISOString().slice(0, 19).replace('T', ' '))
+            ));
+          const fuelCost = fuelRows.reduce((s, r) => s + parseFloat(r.totalValue || '0'), 0);
+
+          // Buscar manutencoes do mesmo dia
+          const maintRows = await db
+            .select()
+            .from(machineMaintenance)
+            .where(and(
+              eq(machineMaintenance.equipmentId, link.equipmentId),
+              gte(machineMaintenance.date, from.toISOString().slice(0, 19).replace('T', ' ')),
+              lte(machineMaintenance.date, to.toISOString().slice(0, 19).replace('T', ' '))
+            ));
+          const maintCost = maintRows.reduce((s, r) => s + parseFloat(r.totalCost || '0'), 0);
+
+          const totalCost = fuelCost + maintCost;
+
+          // Criar auto_freight_trip
+          await db.insert(autoFreightTrips).values({
+            equipmentId: link.equipmentId,
+            equipmentName: eqName,
+            traccarDeviceId: link.traccarDeviceId,
+            tripDate: dateStr,
+            startTime: longTrips[0]?.startTime || null,
+            endTime: longTrips[longTrips.length - 1]?.endTime || null,
+            distanceKm: String(Math.round(totalDistKm * 10) / 10),
+            durationMinutes: totalDurationMin,
+            startAddress: longTrips[0]?.startAddress || null,
+            endAddress: longTrips[longTrips.length - 1]?.endAddress || null,
+            fuelCost: String(fuelCost.toFixed(2)),
+            maintenanceCost: String(maintCost.toFixed(2)),
+            totalCost: String(totalCost.toFixed(2)),
+            status: 'detectado',
+          });
+
+          // Criar lancamento financeiro automatico se tiver custo
+          if (totalCost > 0) {
+            await db.insert(financialEntries).values({
+              date: new Date(dateStr).toISOString().slice(0, 19).replace('T', ' '),
+              type: 'despesa',
+              category: 'transporte',
+              description: `Frete GPS automático — ${eqName} — ${Math.round(totalDistKm)}km em ${dateStr}`,
+              amount: String(totalCost.toFixed(2)),
+              equipmentId: link.equipmentId,
+              equipmentName: eqName,
+              autoGenerated: 1,
+              registeredBy: 1,
+            });
+          }
+
+          detected.push(link.equipmentId);
+        } catch {
+          // continua
+        }
+      }
+      return { detected: detected.length, equipmentIds: detected };
+    }),
+
+  /** Lista fretes automaticos detectados pelo GPS */
+  listAutoFreights: protectedProcedure
+    .input(z.object({
+      equipmentId: z.number().optional(),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      status: z.enum(['detectado','confirmado','ignorado']).optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conditions = [];
+      if (input.equipmentId) conditions.push(eq(autoFreightTrips.equipmentId, input.equipmentId));
+      if (input.dateFrom) conditions.push(gte(autoFreightTrips.tripDate, input.dateFrom));
+      if (input.dateTo) conditions.push(lte(autoFreightTrips.tripDate, input.dateTo));
+      if (input.status) conditions.push(eq(autoFreightTrips.status, input.status));
+      return db
+        .select()
+        .from(autoFreightTrips)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(autoFreightTrips.tripDate));
+    }),
+
+  /** Confirma ou ignora um frete automatico */
+  updateAutoFreightStatus: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(['confirmado','ignorado']),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+      await db
+        .update(autoFreightTrips)
+        .set({ status: input.status, notes: input.notes })
+        .where(eq(autoFreightTrips.id, input.id));
       return { ok: true };
     }),
 

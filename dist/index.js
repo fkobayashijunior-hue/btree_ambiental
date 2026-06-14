@@ -184,6 +184,7 @@ var init_trpc = __esm({
 var schema_exports = {};
 __export(schema_exports, {
   attendanceRecords: () => attendanceRecords,
+  autoFreightTrips: () => autoFreightTrips,
   biometricAttendance: () => biometricAttendance,
   buyerClients: () => buyerClients,
   buyerPayments: () => buyerPayments,
@@ -251,7 +252,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, thirdPartyContractors;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -622,7 +623,10 @@ var init_schema = __esm({
       clientId: int("client_id"),
       defaultHeightM: varchar("default_height_m", { length: 20 }),
       defaultWidthM: varchar("default_width_m", { length: 20 }),
-      defaultLengthM: varchar("default_length_m", { length: 20 })
+      defaultLengthM: varchar("default_length_m", { length: 20 }),
+      category: mysqlEnum(["maquina", "veiculo", "caminhao"]).default("maquina"),
+      accumulatedHours: varchar("accumulated_hours", { length: 20 }).default("0"),
+      accumulatedKm: varchar("accumulated_km", { length: 20 }).default("0")
     });
     equipmentMaintenance = mysqlTable("equipment_maintenance", {
       id: int().autoincrement().notNull(),
@@ -1273,6 +1277,25 @@ var init_schema = __esm({
       registeredBy: int("registered_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    autoFreightTrips = mysqlTable("auto_freight_trips", {
+      id: int().primaryKey().autoincrement(),
+      equipmentId: int("equipment_id").notNull(),
+      equipmentName: varchar("equipment_name", { length: 255 }),
+      traccarDeviceId: int("traccar_device_id"),
+      tripDate: varchar("trip_date", { length: 10 }).notNull(),
+      startTime: varchar("start_time", { length: 30 }),
+      endTime: varchar("end_time", { length: 30 }),
+      distanceKm: varchar("distance_km", { length: 20 }),
+      durationMinutes: int("duration_minutes"),
+      startAddress: text("start_address"),
+      endAddress: text("end_address"),
+      fuelCost: varchar("fuel_cost", { length: 20 }).default("0"),
+      maintenanceCost: varchar("maintenance_cost", { length: 20 }).default("0"),
+      totalCost: varchar("total_cost", { length: 20 }).default("0"),
+      status: mysqlEnum(["detectado", "confirmado", "ignorado"]).default("detectado").notNull(),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
     });
     thirdPartyContractors = mysqlTable("third_party_contractors", {
       id: int().autoincrement().notNull(),
@@ -6330,24 +6353,32 @@ var traccarRouter = router({
             lte2(gpsHoursLog.date, to.toISOString())
           )).limit(1);
           if (existing.length === 0) {
+            const prevTotalResult = await db.select({ total: sql6`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq16(gpsHoursLog.equipmentId, link.equipmentId));
+            const prevTotal = parseFloat(prevTotalResult[0]?.total || "0");
+            const newTotal = prevTotal + hours;
+            const startMeter = String(Math.round(prevTotal * 10) / 10);
+            const endMeter = String(Math.round(newTotal * 10) / 10);
             await db.insert(gpsHoursLog).values({
               equipmentId: link.equipmentId,
               gpsDeviceLinkId: link.id,
               date: from.toISOString(),
               hoursWorked: String(hours),
+              hourMeterStart: startMeter,
+              hourMeterEnd: endMeter,
               source: "gps_auto"
             });
             const dateStr = from.toISOString().slice(0, 10);
             await db.insert(machineHours).values({
               equipmentId: link.equipmentId,
               date: from.toISOString().slice(0, 19).replace("T", " "),
-              startHourMeter: "0",
-              endHourMeter: String(hours),
+              startHourMeter: startMeter,
+              endHourMeter: endMeter,
               hoursWorked: String(hours),
               activity: "GPS Autom\xE1tico",
               notes: `Sincronizado automaticamente via GPS em ${dateStr}`,
               source: "gps"
             });
+            await db.update(equipment).set({ accumulatedHours: endMeter }).where(eq16(equipment.id, link.equipmentId));
           }
           const totalResult = await db.select({ total: sql6`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq16(gpsHoursLog.equipmentId, link.equipmentId));
           const totalHours = parseFloat(totalResult[0]?.total || "0");
@@ -6483,6 +6514,160 @@ var traccarRouter = router({
         }).where(eq16(preventiveMaintenancePlans.id, alert[0].planId));
       }
     }
+    return { ok: true };
+  }),
+  /**
+   * Sincroniza km percorrido do dia para veiculos/caminhoes com GPS.
+   * Atualiza accumulated_km no equipment e registra em gps_hours_log.
+   */
+  syncDailyOdometer: protectedProcedure.input(z16.object({ date: z16.string().optional() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
+    const from = new Date(targetDate);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(targetDate);
+    to.setHours(23, 59, 59, 999);
+    const links = await db.select().from(gpsDeviceLinks).where(eq16(gpsDeviceLinks.active, 1));
+    const results = [];
+    for (const link of links) {
+      try {
+        const params = new URLSearchParams({
+          deviceId: String(link.traccarDeviceId),
+          from: from.toISOString(),
+          to: to.toISOString()
+        });
+        const summary = await traccarFetch(`/reports/summary?${params}`);
+        if (!Array.isArray(summary) || summary.length === 0) continue;
+        const rawDist = summary[0]?.distance || 0;
+        const distKm = rawDist > 1e3 ? Math.round(rawDist / 1e3 * 10) / 10 : Math.round(rawDist * 10) / 10;
+        if (distKm <= 0) continue;
+        const prevKmResult = await db.select({ total: sql6`COALESCE(SUM(CAST(distance_km AS DECIMAL(10,1))), 0)` }).from(gpsHoursLog).where(eq16(gpsHoursLog.equipmentId, link.equipmentId));
+        const prevKm = parseFloat(prevKmResult[0]?.total || "0");
+        const newKm = Math.round((prevKm + distKm) * 10) / 10;
+        await db.update(equipment).set({ accumulatedKm: String(newKm) }).where(eq16(equipment.id, link.equipmentId));
+        results.push({ equipmentId: link.equipmentId, distanceKm: distKm });
+      } catch {
+      }
+    }
+    return { synced: results.length, results };
+  }),
+  /**
+   * Detecta viagens longas (>50km) do dia e cria auto_freight_trips automaticamente.
+   * Vincula combustivel e manutencoes do mesmo dia ao frete.
+   */
+  detectFreightTrips: protectedProcedure.input(z16.object({ date: z16.string().optional() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
+    const from = new Date(targetDate);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(targetDate);
+    to.setHours(23, 59, 59, 999);
+    const dateStr = from.toISOString().slice(0, 10);
+    const links = await db.select().from(gpsDeviceLinks).where(eq16(gpsDeviceLinks.active, 1));
+    const detected = [];
+    for (const link of links) {
+      try {
+        const params = new URLSearchParams({
+          deviceId: String(link.traccarDeviceId),
+          from: from.toISOString(),
+          to: to.toISOString()
+        });
+        const trips = await traccarFetch(`/reports/trips?${params}`);
+        if (!Array.isArray(trips)) continue;
+        const longTrips = trips.filter((t2) => {
+          const raw = t2.distance || 0;
+          const km = raw > 1e3 ? raw / 1e3 : raw;
+          return km >= 50;
+        });
+        if (longTrips.length === 0) continue;
+        const eqRow = await db.select().from(equipment).where(eq16(equipment.id, link.equipmentId)).limit(1);
+        const eqName = eqRow[0]?.name || `Equipamento #${link.equipmentId}`;
+        const existingFreight = await db.select().from(autoFreightTrips).where(and7(
+          eq16(autoFreightTrips.equipmentId, link.equipmentId),
+          eq16(autoFreightTrips.tripDate, dateStr)
+        )).limit(1);
+        if (existingFreight.length > 0) continue;
+        const totalDistKm = longTrips.reduce((s, t2) => {
+          const raw = t2.distance || 0;
+          return s + (raw > 1e3 ? raw / 1e3 : raw);
+        }, 0);
+        const totalDurationMs = longTrips.reduce((s, t2) => s + (t2.duration || 0), 0);
+        const totalDurationMin = Math.round(totalDurationMs / 6e4);
+        const fuelRows = await db.select().from(machineFuel).where(and7(
+          eq16(machineFuel.equipmentId, link.equipmentId),
+          gte2(machineFuel.date, from.toISOString().slice(0, 19).replace("T", " ")),
+          lte2(machineFuel.date, to.toISOString().slice(0, 19).replace("T", " "))
+        ));
+        const fuelCost = fuelRows.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
+        const maintRows = await db.select().from(machineMaintenance).where(and7(
+          eq16(machineMaintenance.equipmentId, link.equipmentId),
+          gte2(machineMaintenance.date, from.toISOString().slice(0, 19).replace("T", " ")),
+          lte2(machineMaintenance.date, to.toISOString().slice(0, 19).replace("T", " "))
+        ));
+        const maintCost = maintRows.reduce((s, r) => s + parseFloat(r.totalCost || "0"), 0);
+        const totalCost = fuelCost + maintCost;
+        await db.insert(autoFreightTrips).values({
+          equipmentId: link.equipmentId,
+          equipmentName: eqName,
+          traccarDeviceId: link.traccarDeviceId,
+          tripDate: dateStr,
+          startTime: longTrips[0]?.startTime || null,
+          endTime: longTrips[longTrips.length - 1]?.endTime || null,
+          distanceKm: String(Math.round(totalDistKm * 10) / 10),
+          durationMinutes: totalDurationMin,
+          startAddress: longTrips[0]?.startAddress || null,
+          endAddress: longTrips[longTrips.length - 1]?.endAddress || null,
+          fuelCost: String(fuelCost.toFixed(2)),
+          maintenanceCost: String(maintCost.toFixed(2)),
+          totalCost: String(totalCost.toFixed(2)),
+          status: "detectado"
+        });
+        if (totalCost > 0) {
+          await db.insert(financialEntries).values({
+            date: new Date(dateStr).toISOString().slice(0, 19).replace("T", " "),
+            type: "despesa",
+            category: "transporte",
+            description: `Frete GPS autom\xE1tico \u2014 ${eqName} \u2014 ${Math.round(totalDistKm)}km em ${dateStr}`,
+            amount: String(totalCost.toFixed(2)),
+            equipmentId: link.equipmentId,
+            equipmentName: eqName,
+            autoGenerated: 1,
+            registeredBy: 1
+          });
+        }
+        detected.push(link.equipmentId);
+      } catch {
+      }
+    }
+    return { detected: detected.length, equipmentIds: detected };
+  }),
+  /** Lista fretes automaticos detectados pelo GPS */
+  listAutoFreights: protectedProcedure.input(z16.object({
+    equipmentId: z16.number().optional(),
+    dateFrom: z16.string().optional(),
+    dateTo: z16.string().optional(),
+    status: z16.enum(["detectado", "confirmado", "ignorado"]).optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const conditions = [];
+    if (input.equipmentId) conditions.push(eq16(autoFreightTrips.equipmentId, input.equipmentId));
+    if (input.dateFrom) conditions.push(gte2(autoFreightTrips.tripDate, input.dateFrom));
+    if (input.dateTo) conditions.push(lte2(autoFreightTrips.tripDate, input.dateTo));
+    if (input.status) conditions.push(eq16(autoFreightTrips.status, input.status));
+    return db.select().from(autoFreightTrips).where(conditions.length > 0 ? and7(...conditions) : void 0).orderBy(desc13(autoFreightTrips.tripDate));
+  }),
+  /** Confirma ou ignora um frete automatico */
+  updateAutoFreightStatus: protectedProcedure.input(z16.object({
+    id: z16.number(),
+    status: z16.enum(["confirmado", "ignorado"]),
+    notes: z16.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    await db.update(autoFreightTrips).set({ status: input.status, notes: input.notes }).where(eq16(autoFreightTrips.id, input.id));
     return { ok: true };
   }),
   /** Contagem de alertas pendentes (para badge na sidebar) */
