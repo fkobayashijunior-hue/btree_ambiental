@@ -1561,7 +1561,6 @@ export const cargoLoadsRouter = router({
         weightInKg: cargoLoads.weightInKg,
         weightOutKg: cargoLoads.weightOutKg,
         woodType: cargoLoads.woodType,
-        photosJson: cargoLoads.photosJson,
         receivedByBuyer: cargoLoads.receivedByBuyer,
         receivedAt: cargoLoads.receivedAt,
         status: cargoLoads.status,
@@ -1580,6 +1579,8 @@ export const cargoLoadsRouter = router({
 
       // If it's a buyer (id >= 10000), also fetch buyer info for financial calculations
       let buyerInfo: { pricePerUnit: string | null; unit: string | null; name: string } | null = null;
+      let destInfo: { pricePerTon: string | null; pricePerM3: string | null; priceType: string | null; name: string } | null = null;
+
       if (input.destinationId && input.destinationId >= 10000) {
         const buyerRows = await db.select({
           name: buyerClients.name,
@@ -1587,9 +1588,18 @@ export const cargoLoadsRouter = router({
           unit: buyerClients.unit,
         }).from(buyerClients).where(eq(buyerClients.id, input.destinationId - 10000)).limit(1);
         if (buyerRows.length > 0) buyerInfo = buyerRows[0];
+      } else if (input.destinationId && input.destinationId > 0) {
+        // Fetch destination price info for non-buyer destinations (e.g. Sonoco)
+        const destRows = await db.select({
+          name: cargoDestinations.name,
+          pricePerTon: cargoDestinations.pricePerTon,
+          pricePerM3: cargoDestinations.pricePerM3,
+          priceType: cargoDestinations.priceType,
+        }).from(cargoDestinations).where(eq(cargoDestinations.id, input.destinationId)).limit(1);
+        if (destRows.length > 0) destInfo = destRows[0];
       }
 
-      return { loads: results, buyerInfo };
+      return { loads: results, buyerInfo, destInfo };
     }),
 
   listThirdParty: protectedProcedure

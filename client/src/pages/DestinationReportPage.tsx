@@ -131,9 +131,10 @@ export default function DestinationReportPage() {
     { enabled: selectedDestId > 0 }
   );
 
-  // Handle both old format (array) and new format ({ loads, buyerInfo })
+  // Handle both old format (array) and new format ({ loads, buyerInfo, destInfo })
   const loads: any[] = Array.isArray(responseData) ? responseData : (responseData?.loads ?? []);
   const buyerInfo = Array.isArray(responseData) ? null : (responseData?.buyerInfo ?? null);
+  const destInfoFromServer = Array.isArray(responseData) ? null : ((responseData as any)?.destInfo ?? null);
 
   const markReceivedMut = trpc.cargoLoads.markReceivedByBuyer.useMutation({
     onSuccess: () => { refetch(); toast.success("Status atualizado!"); },
@@ -187,9 +188,14 @@ export default function DestinationReportPage() {
   const selectedDest = allDestinations.find(d => d.id === selectedDestId);
 
   // Destination (non-buyer) price calculations
-  const destPriceType = (selectedDest as any)?.priceType || 'ton';
-  const destPricePerTon = (selectedDest as any)?.pricePerTon ? parseFloat(String((selectedDest as any).pricePerTon).replace(',', '.')) : 0;
-  const destPricePerM3 = (selectedDest as any)?.pricePerM3 ? parseFloat(String((selectedDest as any).pricePerM3).replace(',', '.')) : 0;
+  // Prefer server-side destInfo (authoritative) over client-side allDestinations cache
+  const destPriceType = destInfoFromServer?.priceType || (selectedDest as any)?.priceType || 'ton';
+  const destPricePerTon = destInfoFromServer?.pricePerTon
+    ? parseFloat(String(destInfoFromServer.pricePerTon).replace(',', '.'))
+    : ((selectedDest as any)?.pricePerTon ? parseFloat(String((selectedDest as any).pricePerTon).replace(',', '.')) : 0);
+  const destPricePerM3 = destInfoFromServer?.pricePerM3
+    ? parseFloat(String(destInfoFromServer.pricePerM3).replace(',', '.'))
+    : ((selectedDest as any)?.pricePerM3 ? parseFloat(String((selectedDest as any).pricePerM3).replace(',', '.')) : 0);
   const destPricePerUnit = destPriceType === 'm3' ? destPricePerM3 : destPricePerTon;
   const destUnit = destPriceType === 'm3' ? 'm³' : 'ton';
   const destTotalQuantity = destPriceType === 'm3' ? totalVolume : totalWeight / 1000;
