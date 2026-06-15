@@ -9044,6 +9044,8 @@ function destToBuyer(d) {
     unit: d.unit ?? (d.priceType === "m3" ? "m3" : "ton"),
     notes: d.notes,
     active: d.active,
+    isBuyer: d.isBuyer,
+    // 0 = destino normal, 1 = comprador
     // Extra destination fields
     pricePerTon: d.pricePerTon,
     pricePerM3: d.pricePerM3,
@@ -9051,22 +9053,24 @@ function destToBuyer(d) {
   };
 }
 var buyerClientsRouter = router({
+  // list: retorna TODOS os destinos (is_buyer ou não) — tela unificada
   list: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(cargoDestinations).where(eq24(cargoDestinations.isBuyer, 1)).orderBy(desc20(cargoDestinations.id));
+    const rows = await db.select().from(cargoDestinations).orderBy(desc20(cargoDestinations.id));
     return rows.map(destToBuyer);
   }),
+  // listActive: retorna todos os destinos ativos (para seleção em cargas, relatórios, etc.)
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(cargoDestinations).where(and15(eq24(cargoDestinations.isBuyer, 1), eq24(cargoDestinations.active, 1))).orderBy(cargoDestinations.name);
+    const rows = await db.select().from(cargoDestinations).where(eq24(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
     return rows.map(destToBuyer);
   }),
   getById: protectedProcedure.input(z25.object({ id: z25.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const [dest] = await db.select().from(cargoDestinations).where(and15(eq24(cargoDestinations.id, input.id), eq24(cargoDestinations.isBuyer, 1)));
+    const [dest] = await db.select().from(cargoDestinations).where(eq24(cargoDestinations.id, input.id));
     if (!dest) throw new TRPCError15({ code: "NOT_FOUND" });
     const prices = await db.select().from(buyerPriceHistory).where(eq24(buyerPriceHistory.buyerId, input.id)).orderBy(desc20(buyerPriceHistory.id));
     const payments = await db.select().from(buyerPayments).where(eq24(buyerPayments.buyerId, input.id)).orderBy(desc20(buyerPayments.id));
@@ -9087,7 +9091,9 @@ var buyerClientsRouter = router({
     paymentMethod: z25.string().optional(),
     pricePerUnit: z25.string().optional(),
     unit: z25.string().optional(),
-    notes: z25.string().optional()
+    notes: z25.string().optional(),
+    isBuyer: z25.number().optional()
+    // 0 = destino normal, 1 = comprador
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
@@ -9096,12 +9102,13 @@ var buyerClientsRouter = router({
     const pricePerTon = unit === "ton" ? input.pricePerUnit || null : null;
     const pricePerM3 = unit === "m3" ? input.pricePerUnit || null : null;
     const priceType = unit === "m3" ? "m3" : "ton";
+    const isBuyer = input.isBuyer ?? 0;
     await db.execute(sql14`
         INSERT INTO cargo_destinations 
           (name, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, created_by, created_at)
         VALUES 
           (${input.name}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.notes || null},
-           1, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null},
+           ${isBuyer}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null},
            ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null},
            ${input.pricePerUnit || null}, ${unit}, ${pricePerTon}, ${pricePerM3}, ${priceType}, ${ctx.user.id}, ${now})
       `);
@@ -9124,7 +9131,9 @@ var buyerClientsRouter = router({
     pricePerUnit: z25.string().optional(),
     unit: z25.string().optional(),
     notes: z25.string().optional(),
-    active: z25.number().optional()
+    active: z25.number().optional(),
+    isBuyer: z25.number().optional()
+    // 0 = destino normal, 1 = comprador
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
@@ -9151,7 +9160,8 @@ var buyerClientsRouter = router({
       pricePerM3,
       priceType,
       notes: input.notes || null,
-      active: input.active ?? 1
+      active: input.active ?? 1,
+      ...input.isBuyer !== void 0 ? { isBuyer: input.isBuyer } : {}
     }).where(eq24(cargoDestinations.id, input.id));
     return { success: true };
   }),

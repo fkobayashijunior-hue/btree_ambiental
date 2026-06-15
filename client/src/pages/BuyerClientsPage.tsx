@@ -22,6 +22,7 @@ export default function BuyerClientsPage() {
     address: "", city: "", state: "", cep: "", contactPerson: "",
     product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: ""
   });
+  const [isBuyerForm, setIsBuyerForm] = useState(false); // toggle comprador
   const [editId, setEditId] = useState<number | null>(null);
 
   const { data: buyers = [], refetch } = trpc.buyerClients.list.useQuery();
@@ -31,6 +32,7 @@ export default function BuyerClientsPage() {
 
   function resetForm() {
     setForm({ name: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "", address: "", city: "", state: "", cep: "", contactPerson: "", product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "" });
+    setIsBuyerForm(false);
     setEditId(null);
   }
 
@@ -42,16 +44,18 @@ export default function BuyerClientsPage() {
       contactPerson: b.contactPerson || "", product: b.product || "",
       paymentMethod: b.paymentMethod || "", pricePerUnit: b.pricePerUnit || "", unit: b.unit || "ton", notes: b.notes || ""
     });
+    setIsBuyerForm(b.isBuyer === 1);
     setEditId(b.id);
     setFormOpen(true);
   }
 
   function handleSave() {
     if (!form.name.trim()) { toast.error("Nome é obrigatório"); return; }
+    const isBuyerVal = isBuyerForm ? 1 : 0;
     if (editId) {
-      updateMut.mutate({ id: editId, ...form });
+      updateMut.mutate({ id: editId, ...form, isBuyer: isBuyerVal });
     } else {
-      createMut.mutate(form);
+      createMut.mutate({ ...form, isBuyer: isBuyerVal });
     }
   }
 
@@ -90,8 +94,9 @@ export default function BuyerClientsPage() {
             <CardContent className="p-4">
               <div className="flex items-start justify-between">
                 <div className="space-y-1 flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold text-gray-800 truncate">{b.name}</h3>
+                    {b.isBuyer === 1 && <Badge className="bg-emerald-100 text-emerald-800 text-xs">Comprador</Badge>}
                     {b.active === 0 && <Badge variant="secondary">Inativo</Badge>}
                   </div>
                   {b.cnpjCpf && <p className="text-xs text-gray-500">{b.cnpjCpf}</p>}
@@ -125,9 +130,22 @@ export default function BuyerClientsPage() {
       <Sheet open={formOpen} onOpenChange={setFormOpen}>
         <SheetContent className="overflow-y-auto w-full sm:max-w-lg">
           <SheetHeader>
-            <SheetTitle>{editId ? "Editar Comprador" : "Novo Comprador"}</SheetTitle>
+            <SheetTitle>{editId ? "Editar Destino" : "Novo Destino"}</SheetTitle>
           </SheetHeader>
           <div className="space-y-4 mt-4">
+            {/* Toggle: é comprador? */}
+            <div className="flex items-center gap-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50">
+              <input
+                type="checkbox"
+                id="isBuyerToggle"
+                checked={isBuyerForm}
+                onChange={e => setIsBuyerForm(e.target.checked)}
+                className="h-4 w-4 accent-emerald-600"
+              />
+              <label htmlFor="isBuyerToggle" className="text-sm font-medium text-emerald-800 cursor-pointer">
+                💰 Este destino é um Cliente Comprador (compra lenha/madeira)
+              </label>
+            </div>
             <div>
               <label className="text-sm font-medium">Nome / Razão Social *</label>
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />

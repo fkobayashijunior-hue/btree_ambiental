@@ -26,6 +26,7 @@ function destToBuyer(d: typeof cargoDestinations.$inferSelect) {
     unit: d.unit ?? (d.priceType === 'm3' ? 'm3' : 'ton'),
     notes: d.notes,
     active: d.active,
+    isBuyer: d.isBuyer, // 0 = destino normal, 1 = comprador
     // Extra destination fields
     pricePerTon: d.pricePerTon,
     pricePerM3: d.pricePerM3,
@@ -34,20 +35,21 @@ function destToBuyer(d: typeof cargoDestinations.$inferSelect) {
 }
 
 export const buyerClientsRouter = router({
+  // list: retorna TODOS os destinos (is_buyer ou não) — tela unificada
   list: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(cargoDestinations)
-      .where(eq(cargoDestinations.isBuyer, 1))
       .orderBy(desc(cargoDestinations.id));
     return rows.map(destToBuyer);
   }),
 
+  // listActive: retorna todos os destinos ativos (para seleção em cargas, relatórios, etc.)
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(cargoDestinations)
-      .where(and(eq(cargoDestinations.isBuyer, 1), eq(cargoDestinations.active, 1)))
+      .where(eq(cargoDestinations.active, 1))
       .orderBy(cargoDestinations.name);
     return rows.map(destToBuyer);
   }),
@@ -58,7 +60,7 @@ export const buyerClientsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [dest] = await db.select().from(cargoDestinations)
-        .where(and(eq(cargoDestinations.id, input.id), eq(cargoDestinations.isBuyer, 1)));
+        .where(eq(cargoDestinations.id, input.id));
       if (!dest) throw new TRPCError({ code: "NOT_FOUND" });
       const prices = await db.select().from(buyerPriceHistory)
         .where(eq(buyerPriceHistory.buyerId, input.id))
@@ -86,6 +88,7 @@ export const buyerClientsRouter = router({
       pricePerUnit: z.string().optional(),
       unit: z.string().optional(),
       notes: z.string().optional(),
+      isBuyer: z.number().optional(), // 0 = destino normal, 1 = comprador
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -96,12 +99,13 @@ export const buyerClientsRouter = router({
       const pricePerTon = unit === 'ton' ? (input.pricePerUnit || null) : null;
       const pricePerM3 = unit === 'm3' ? (input.pricePerUnit || null) : null;
       const priceType = unit === 'm3' ? 'm3' : 'ton';
+      const isBuyer = input.isBuyer ?? 0; // default: destino normal
       await db.execute(sql`
         INSERT INTO cargo_destinations 
           (name, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, created_by, created_at)
         VALUES 
           (${input.name}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.notes || null},
-           1, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null},
+           ${isBuyer}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null},
            ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null},
            ${input.pricePerUnit || null}, ${unit}, ${pricePerTon}, ${pricePerM3}, ${priceType}, ${ctx.user.id}, ${now})
       `);
@@ -127,6 +131,7 @@ export const buyerClientsRouter = router({
       unit: z.string().optional(),
       notes: z.string().optional(),
       active: z.number().optional(),
+      isBuyer: z.number().optional(), // 0 = destino normal, 1 = comprador
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -155,6 +160,7 @@ export const buyerClientsRouter = router({
         priceType,
         notes: input.notes || null,
         active: input.active ?? 1,
+        ...(input.isBuyer !== undefined ? { isBuyer: input.isBuyer } : {}),
       }).where(eq(cargoDestinations.id, input.id));
       return { success: true };
     }),
