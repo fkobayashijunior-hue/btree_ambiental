@@ -24,11 +24,26 @@ export default function BuyerClientsPage() {
   });
   const [isBuyerForm, setIsBuyerForm] = useState(false); // toggle comprador
   const [editId, setEditId] = useState<number | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const { data: buyers = [], refetch } = trpc.buyerClients.list.useQuery();
   const createMut = trpc.buyerClients.create.useMutation({ onSuccess: () => { refetch(); setFormOpen(false); resetForm(); toast.success("Comprador cadastrado!"); } });
   const updateMut = trpc.buyerClients.update.useMutation({ onSuccess: () => { refetch(); setFormOpen(false); resetForm(); toast.success("Comprador atualizado!"); } });
-  const deleteMut = trpc.buyerClients.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Comprador removido!"); } });
+  const deleteMut = trpc.buyerClients.delete.useMutation({
+    onSuccess: () => { refetch(); setPendingDeleteId(null); toast.success("Cadastro excluído com sucesso!"); },
+    onError: (err) => {
+      if (err.data?.code === "PRECONDITION_FAILED" && pendingDeleteId !== null) {
+        if (window.confirm(`${err.message}\n\nDeseja excluir mesmo assim? (As cargas e pagamentos NÃO serão apagados, apenas o cadastro)`)) {
+          deleteMut.mutate({ id: pendingDeleteId, force: true });
+        } else {
+          setPendingDeleteId(null);
+        }
+      } else {
+        setPendingDeleteId(null);
+        toast.error("Erro ao excluir: " + err.message);
+      }
+    }
+  });
 
   function resetForm() {
     setForm({ name: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "", address: "", city: "", state: "", cep: "", contactPerson: "", product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "" });
@@ -111,6 +126,20 @@ export default function BuyerClientsPage() {
                 <div className="flex items-center gap-1">
                   <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={e => { e.stopPropagation(); openEdit(b); }}>
                     <Edit className="h-4 w-4 text-gray-400" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 hover:bg-red-50"
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (window.confirm(`Excluir "${b.name}"?\n\nATENÇÃO: Isso remove apenas o cadastro. Cargas e pagamentos vinculados NÃO serão apagados.`)) {
+                        setPendingDeleteId(b.id);
+                        deleteMut.mutate({ id: b.id });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-400" />
                   </Button>
                   <ChevronRight className="h-4 w-4 text-gray-300" />
                 </div>

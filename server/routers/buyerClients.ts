@@ -166,13 +166,31 @@ export const buyerClientsRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), force: z.boolean().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Soft delete: set active=0 and is_buyer=0 (keep as destination if needed)
-      await db.update(cargoDestinations).set({ active: 0, isBuyer: 0 }).where(eq(cargoDestinations.id, input.id));
-      return { success: true };
+      // Check if there are cargo loads linked to this destination
+      const loads = await db.execute(sql`SELECT COUNT(*) as cnt FROM cargo_loads WHERE destination_id = ${input.id}`);
+      const loadCount = (loads.rows[0] as any)?.cnt ?? 0;
+      if (loadCount > 0 && !input.force) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Este destino possui ${loadCount} carga(s) vinculada(s). Use force=true para excluir mesmo assim (as cargas n\u00e3o ser\u00e3o apagadas).`,
+        });
+      }
+      // Check payments
+      const payments = await db.execute(sql`SELECT COUNT(*) as cnt FROM buyer_payments WHERE buyer_id = ${input.id}`);
+      const payCount = (payments.rows[0] as any)?.cnt ?? 0;
+      if (payCount > 0 && !input.force) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Este comprador possui ${payCount} pagamento(s) vinculado(s). Use force=true para excluir mesmo assim.`,
+        });
+      }
+      // Hard delete the destination record
+      await db.execute(sql`DELETE FROM cargo_destinations WHERE id = ${input.id}`);
+      return { success: true, loadCount, payCount };
     }),
 
   // === PREÇOS ===
