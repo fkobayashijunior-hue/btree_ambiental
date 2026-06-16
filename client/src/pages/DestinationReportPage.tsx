@@ -155,28 +155,56 @@ export default function DestinationReportPage() {
 
   // Payment registration for buyers
   const addPaymentMut = trpc.buyerClients.addPayment.useMutation({
-    onSuccess: () => {
-      toast.success('Pagamento registrado com sucesso!');
-      setShowPaymentModal(false);
-      setPaymentForm({ amount: '', paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'pix', invoiceNumber: '', notes: '' });
-    },
+    onSuccess: () => {},
     onError: (err) => toast.error(err.message),
   });
 
-  function handleRegisterPayment() {
+  // Financial entry creation
+  const createFinancialMut = trpc.financial.create.useMutation({
+    onSuccess: () => {},
+    onError: (err) => toast.error('Financeiro: ' + err.message),
+  });
+
+  async function handleRegisterReceipt() {
     if (!paymentForm.amount || !paymentForm.paymentDate) {
       toast.error('Preencha o valor e a data do pagamento');
       return;
     }
-    const buyerId = selectedDestId; // No more 10000 offset — buyers use their real destination ID
-    addPaymentMut.mutate({
-      buyerId,
-      amount: paymentForm.amount,
-      paymentDate: paymentForm.paymentDate,
-      paymentMethod: paymentForm.paymentMethod || undefined,
-      invoiceNumber: paymentForm.invoiceNumber || undefined,
-      notes: paymentForm.notes || undefined,
-      status: 'pago',
+    const destName = selectedDest?.name || 'Destino';
+    const amount = paymentForm.amount;
+    const dateStr = paymentForm.paymentDate;
+    const refMonth = dateStr.slice(0, 7);
+    const payMethod = paymentForm.paymentMethod as any;
+
+    // 1. Se for comprador, registrar em buyer_payments
+    if (isBuyer) {
+      addPaymentMut.mutate({
+        buyerId: selectedDestId,
+        amount,
+        paymentDate: dateStr,
+        paymentMethod: payMethod || undefined,
+        invoiceNumber: paymentForm.invoiceNumber || undefined,
+        notes: paymentForm.notes || undefined,
+        status: 'pago',
+      });
+    }
+
+    // 2. Criar receita no financeiro (para todos os destinos)
+    createFinancialMut.mutate({
+      type: 'receita',
+      category: 'venda_madeira',
+      description: `Recebimento ${destName}${paymentForm.invoiceNumber ? ' - NF: ' + paymentForm.invoiceNumber : ''}${paymentForm.notes ? ' - ' + paymentForm.notes : ''}`,
+      amount,
+      date: dateStr,
+      paymentMethod: payMethod,
+      status: 'confirmado',
+      clientName: destName,
+    }, {
+      onSuccess: () => {
+        toast.success('Recebimento registrado e lançado no financeiro!');
+        setShowPaymentModal(false);
+        setPaymentForm({ amount: '', paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'pix', invoiceNumber: '', notes: '' });
+      },
     });
   }
 
@@ -604,10 +632,10 @@ export default function DestinationReportPage() {
         </div>
         {loads.length > 0 && (
           <div className="flex gap-2 flex-wrap">
-            {isBuyer && (
+            {selectedDestId > 0 && (isBuyer ? pricePerUnit > 0 : destPricePerUnit > 0) && (
               <Button onClick={() => setShowPaymentModal(true)} className="gap-2 text-xs bg-green-700 hover:bg-green-800 text-white">
                 <CreditCard className="h-4 w-4" />
-                Registrar Pagamento
+                Registrar Recebimento
               </Button>
             )}
             <Button onClick={generatePDFResumido} variant="outline" className="gap-2 text-xs" disabled={isGeneratingPDF !== null}>
@@ -916,22 +944,24 @@ export default function DestinationReportPage() {
       )}
 
       {/* Payment Registration Modal */}
-      {showPaymentModal && isBuyer && (
+      {showPaymentModal && selectedDestId > 0 && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setShowPaymentModal(false)}>
           <div className="bg-white rounded-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-green-700" />
-                <h3 className="font-semibold text-lg">Registrar Pagamento</h3>
+                <h3 className="font-semibold text-lg">Registrar Recebimento</h3>
               </div>
               <button onClick={() => setShowPaymentModal(false)} className="p-1 hover:bg-gray-100 rounded">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="text-sm text-muted-foreground mb-4">
-              Comprador: <strong className="text-green-800">{selectedDest?.name}</strong>
-              {pricePerUnit > 0 && (
-                <div className="mt-1">Valor sugerido: <strong className="text-green-700">R$ {formatBR(totalValue)}</strong> ({formatBR(totalQuantity, 3)} {unit} × R$ {formatBR(pricePerUnit)}/{unit})</div>
+              Destino: <strong className="text-green-800">{selectedDest?.name}</strong>
+              {(isBuyer ? pricePerUnit : destPricePerUnit) > 0 && (
+                <div className="mt-1">Valor sugerido: <strong className="text-green-700">R$ {formatBR(isBuyer ? totalValue : destTotalValue)}</strong>
+                  {' '}({formatBR(isBuyer ? totalQuantity : destTotalQuantity, 3)} {isBuyer ? unit : destUnit} × R$ {formatBR(isBuyer ? pricePerUnit : destPricePerUnit)}/{isBuyer ? unit : destUnit})
+                </div>
               )}
             </div>
             <div className="space-y-3">
@@ -940,7 +970,7 @@ export default function DestinationReportPage() {
                 <Input
                   type="number"
                   step="0.01"
-                  placeholder={pricePerUnit > 0 ? formatBR(totalValue) : '0,00'}
+                  placeholder={isBuyer ? (pricePerUnit > 0 ? formatBR(totalValue) : '0,00') : (destPricePerUnit > 0 ? formatBR(destTotalValue) : '0,00')}
                   value={paymentForm.amount}
                   onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
                 />
@@ -989,11 +1019,11 @@ export default function DestinationReportPage() {
               <Button variant="outline" className="flex-1" onClick={() => setShowPaymentModal(false)}>Cancelar</Button>
               <Button
                 className="flex-1 bg-green-700 hover:bg-green-800 text-white"
-                onClick={handleRegisterPayment}
-                disabled={addPaymentMut.isPending}
+                onClick={handleRegisterReceipt}
+                disabled={addPaymentMut.isPending || createFinancialMut.isPending}
               >
-                {addPaymentMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
-                {addPaymentMut.isPending ? 'Salvando...' : 'Confirmar Pagamento'}
+                {(addPaymentMut.isPending || createFinancialMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                {(addPaymentMut.isPending || createFinancialMut.isPending) ? 'Salvando...' : 'Confirmar Recebimento'}
               </Button>
             </div>
           </div>
