@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -144,6 +144,16 @@ function NewGeofenceModal({ onCreated }: { onCreated: () => void }) {
   const [equipmentId, setEquipmentId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [pickingOnMap, setPickingOnMap] = useState(false);
+  const [mapKey, setMapKey] = useState(0);
+  const prevOpen = useRef(false);
+
+  // Reinicializa o mapa quando o modal abre (delay para o DOM estar visível)
+  useEffect(() => {
+    if (open && !prevOpen.current) {
+      setTimeout(() => setMapKey(k => k + 1), 250);
+    }
+    prevOpen.current = open;
+  }, [open]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: equipmentList } = trpc.traccar.devices.useQuery(undefined, { enabled: open });
@@ -211,13 +221,16 @@ function NewGeofenceModal({ onCreated }: { onCreated: () => void }) {
           </Button>
 
           {/* Mini mapa para seleção */}
-          <div className="h-48 rounded-lg overflow-hidden border">
+          <div className="rounded-lg overflow-hidden border" style={{ height: '220px' }}>
             <MapView
+              key={mapKey}
+              className="w-full h-full"
+              initialCenter={lat && lng
+                ? { lat: parseFloat(lat), lng: parseFloat(lng) }
+                : { lat: -23.5505, lng: -46.6333 }
+              }
+              initialZoom={lat && lng ? 15 : 10}
               onMapReady={(map) => {
-                if (lat && lng) {
-                  map.setCenter({ lat: parseFloat(lat), lng: parseFloat(lng) });
-                  map.setZoom(15);
-                }
                 map.addListener("click", handleMapClick);
               }}
             />
