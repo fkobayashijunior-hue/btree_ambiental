@@ -1,1 +1,177 @@
-if(!self.define){let e,s={};const n=(n,a)=>(n=new URL(n+".js",a).href,s[n]||new Promise(s=>{if("document"in self){const e=document.createElement("script");e.src=n,e.onload=s,document.head.appendChild(e)}else e=n,importScripts(n),s()}).then(()=>{let e=s[n];if(!e)throw new Error(`Module ${n} didn’t register its module`);return e}));self.define=(a,i)=>{const r=e||("document"in self?document.currentScript.src:"")||location.href;if(s[r])return;let c={};const l=e=>n(e,r),t={module:{uri:r},exports:c,require:l};s[r]=Promise.all(a.map(e=>t[e]||l(e))).then(e=>(i(...e),c))}}define(["./workbox-f4004fe4"],function(e){"use strict";self.skipWaiting(),e.clientsClaim(),e.precacheAndRoute([{url:"registerSW.js",revision:"1872c500de691dce40960bb85481de07"},{url:"pwa-512.png",revision:"3c4a952dce1bc2de66ce03c1ab0dba9d"},{url:"pwa-512-v3.png",revision:"3c4a952dce1bc2de66ce03c1ab0dba9d"},{url:"pwa-192.png",revision:"3f504e54ba9aa202f0bca871a50df851"},{url:"pwa-192-v3.png",revision:"3f504e54ba9aa202f0bca871a50df851"},{url:"index.html",revision:"85150afc245bb10fab86a79241f0141f"},{url:"icon-btree-512.png",revision:"3c4a952dce1bc2de66ce03c1ab0dba9d"},{url:"icon-btree-192.png",revision:"3f504e54ba9aa202f0bca871a50df851"},{url:"assets/purify.es-BgtpMKW3.js",revision:null},{url:"assets/jspdf.es.min-0UvEbTkt.js",revision:null},{url:"assets/index.es-CQauGoqi.js",revision:null},{url:"assets/index-CpIlLgn1.js",revision:null},{url:"assets/index-C9R3MOgm.css",revision:null},{url:"assets/html2canvas.esm-B0tyYwQk.js",revision:null},{url:"assets/exceljs.min-CCTPKTW-.js",revision:null},{url:"assets/FileSaver.min-CkcGRYIX.js",revision:null},{url:"__manus__/debug-collector.js",revision:"45b1e83bacf2dc3d3b20bb18b465abe0"},{url:"icon-btree-192.png",revision:"3f504e54ba9aa202f0bca871a50df851"},{url:"icon-btree-512.png",revision:"3c4a952dce1bc2de66ce03c1ab0dba9d"},{url:"pwa-192-v3.png",revision:"3f504e54ba9aa202f0bca871a50df851"},{url:"pwa-192.png",revision:"3f504e54ba9aa202f0bca871a50df851"},{url:"pwa-512-v3.png",revision:"3c4a952dce1bc2de66ce03c1ab0dba9d"},{url:"pwa-512.png",revision:"3c4a952dce1bc2de66ce03c1ab0dba9d"},{url:"manifest.webmanifest",revision:"a5856a06fc05d0095ac93ebd037d3ecb"}],{}),e.cleanupOutdatedCaches(),e.registerRoute(new e.NavigationRoute(e.createHandlerBoundToURL("/index.html"),{denylist:[/^\/api\//]})),e.registerRoute(/^\/api\/trpc\//,new e.NetworkFirst({cacheName:"trpc-cache",networkTimeoutSeconds:5,plugins:[new e.ExpirationPlugin({maxEntries:200,maxAgeSeconds:604800}),new e.CacheableResponsePlugin({statuses:[0,200]})]}),"GET"),e.registerRoute(/^https:\/\//,new e.StaleWhileRevalidate({cacheName:"external-cache",plugins:[new e.ExpirationPlugin({maxEntries:50,maxAgeSeconds:86400}),new e.CacheableResponsePlugin({statuses:[0,200]})]}),"GET")});
+/**
+ * Copyright 2018 Google Inc. All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// If the loader is already loaded, just stop.
+if (!self.define) {
+  let registry = {};
+
+  // Used for `eval` and `importScripts` where we can't get script URL by other means.
+  // In both cases, it's safe to use a global var because those functions are synchronous.
+  let nextDefineUri;
+
+  const singleRequire = (uri, parentUri) => {
+    uri = new URL(uri + ".js", parentUri).href;
+    return registry[uri] || (
+      
+        new Promise(resolve => {
+          if ("document" in self) {
+            const script = document.createElement("script");
+            script.src = uri;
+            script.onload = resolve;
+            document.head.appendChild(script);
+          } else {
+            nextDefineUri = uri;
+            importScripts(uri);
+            resolve();
+          }
+        })
+      
+      .then(() => {
+        let promise = registry[uri];
+        if (!promise) {
+          throw new Error(`Module ${uri} didn’t register its module`);
+        }
+        return promise;
+      })
+    );
+  };
+
+  self.define = (depsNames, factory) => {
+    const uri = nextDefineUri || ("document" in self ? document.currentScript.src : "") || location.href;
+    if (registry[uri]) {
+      // Module is already loading or loaded.
+      return;
+    }
+    let exports = {};
+    const require = depUri => singleRequire(depUri, uri);
+    const specialDeps = {
+      module: { uri },
+      exports,
+      require
+    };
+    registry[uri] = Promise.all(depsNames.map(
+      depName => specialDeps[depName] || require(depName)
+    )).then(deps => {
+      factory(...deps);
+      return exports;
+    });
+  };
+}
+define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
+
+  self.skipWaiting();
+  workbox.clientsClaim();
+
+  /**
+   * The precacheAndRoute() method efficiently caches and responds to
+   * requests for URLs in the manifest.
+   * See https://goo.gl/S9QRab
+   */
+  workbox.precacheAndRoute([{
+    "url": "registerSW.js",
+    "revision": "1872c500de691dce40960bb85481de07"
+  }, {
+    "url": "pwa-512.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "pwa-512-v3.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "pwa-192.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "pwa-192-v3.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "index.html",
+    "revision": "329e868da84a30c4316653c009946ece"
+  }, {
+    "url": "icon-btree-512.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "icon-btree-192.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "assets/purify.es-BgtpMKW3.js",
+    "revision": null
+  }, {
+    "url": "assets/jspdf.es.min-Bb4PAo-y.js",
+    "revision": null
+  }, {
+    "url": "assets/index.es-CAQtKBUG.js",
+    "revision": null
+  }, {
+    "url": "assets/index-CEh6z_Fx.css",
+    "revision": null
+  }, {
+    "url": "assets/index-BhVAENHx.js",
+    "revision": null
+  }, {
+    "url": "assets/html2canvas.esm-B0tyYwQk.js",
+    "revision": null
+  }, {
+    "url": "assets/exceljs.min-BNajf97e.js",
+    "revision": null
+  }, {
+    "url": "assets/FileSaver.min-CTQ2dPxy.js",
+    "revision": null
+  }, {
+    "url": "__manus__/debug-collector.js",
+    "revision": "45b1e83bacf2dc3d3b20bb18b465abe0"
+  }, {
+    "url": "icon-btree-192.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "icon-btree-512.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "pwa-192-v3.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "pwa-192.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "pwa-512-v3.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "pwa-512.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "manifest.webmanifest",
+    "revision": "a5856a06fc05d0095ac93ebd037d3ecb"
+  }], {});
+  workbox.cleanupOutdatedCaches();
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
+    denylist: [/^\/api\//]
+  }));
+  workbox.registerRoute(/^\/api\/trpc\//, new workbox.NetworkFirst({
+    "cacheName": "trpc-cache",
+    "networkTimeoutSeconds": 5,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 200,
+      maxAgeSeconds: 604800
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https:\/\//, new workbox.StaleWhileRevalidate({
+    "cacheName": "external-cache",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 50,
+      maxAgeSeconds: 86400
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
+  }), 'GET');
+
+}));
