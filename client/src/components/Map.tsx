@@ -92,21 +92,27 @@ const FORGE_BASE_URL =
   "https://forge.butterfly-effect.dev";
 const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
 
-function loadMapScript() {
-  return new Promise(resolve => {
+let mapsLoadPromise: Promise<void> | null = null;
+
+function loadMapScript(): Promise<void> {
+  // Se o Google Maps já está carregado na memória, retorna imediatamente
+  if (window.google?.maps) return Promise.resolve();
+  // Evita carregar o script múltiplas vezes em paralelo
+  if (mapsLoadPromise) return mapsLoadPromise;
+
+  mapsLoadPromise = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
     script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
     script.async = true;
     script.crossOrigin = "anonymous";
-    script.onload = () => {
-      resolve(null);
-      script.remove(); // Clean up immediately
-    };
+    script.onload = () => resolve();
     script.onerror = () => {
-      console.error("Failed to load Google Maps script");
+      mapsLoadPromise = null;
+      reject(new Error("Failed to load Google Maps script"));
     };
     document.head.appendChild(script);
   });
+  return mapsLoadPromise;
 }
 
 interface MapViewProps {
@@ -126,26 +132,39 @@ export function MapView({
   const map = useRef<google.maps.Map | null>(null);
 
   const init = usePersistFn(async () => {
-    await loadMapScript();
-    if (!mapContainer.current) {
-      console.error("Map container not found");
+    try {
+      await loadMapScript();
+    } catch (e) {
+      console.error("Google Maps load error:", e);
       return;
     }
-    map.current = new window.google.maps.Map(mapContainer.current, {
-      zoom: initialZoom,
-      center: initialCenter,
-      mapTypeControl: true,
-      fullscreenControl: true,
-      zoomControl: true,
-      streetViewControl: true,
-      mapId: "DEMO_MAP_ID",
-    });
-    if (onMapReady) {
-      onMapReady(map.current);
-    }
+
+    // Retry até 40x (4s) para o container estar disponível
+    // Necessário quando MapView está dentro de Dialog (portal/teleport)
+    let attempts = 0;
+    const tryInit = () => {
+      if (map.current) return; // já inicializado
+      if (!mapContainer.current) {
+        if (attempts++ < 40) setTimeout(tryInit, 100);
+        return;
+      }
+      map.current = new window.google!.maps.Map(mapContainer.current, {
+        zoom: initialZoom,
+        center: initialCenter,
+        mapTypeControl: true,
+        fullscreenControl: true,
+        zoomControl: true,
+        streetViewControl: true,
+        mapId: "DEMO_MAP_ID",
+      });
+      if (onMapReady) onMapReady(map.current);
+    };
+    tryInit();
   });
 
   useEffect(() => {
+    // Reseta referência ao remontar (quando key muda no modal)
+    map.current = null;
     init();
   }, [init]);
 
