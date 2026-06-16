@@ -30,6 +30,7 @@ import { notificationsRouter } from "./routers/notifications";
 import { fuelSuppliersRouter } from "./routers/fuelSuppliers";
 import { thirdPartyContractorsRouter } from "./routers/thirdPartyContractors";
 import { purchaseCategoriesRouter } from "./routers/purchaseCategories";
+import { freightCyclesRouter } from "./routers/freightCycles";
 import { suppliersRouter } from "./routers/suppliers";
 import { quotationsRouter } from "./routers/quotations";
 import { purchaseRequestsRouter } from "./routers/purchaseRequests";
@@ -308,6 +309,7 @@ export const appRouter = router({
   fuelSuppliers: fuelSuppliersRouter,
   thirdPartyContractors: thirdPartyContractorsRouter,
   purchaseCategories: purchaseCategoriesRouter,
+  freightCycles: freightCyclesRouter,
   suppliers: suppliersRouter,
   quotations: quotationsRouter,
   purchaseRequests: purchaseRequestsRouter,

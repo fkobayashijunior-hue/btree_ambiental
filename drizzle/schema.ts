@@ -1289,3 +1289,48 @@ export const quotations = mysqlTable("quotations", {
 });
 export type Quotation = typeof quotations.$inferSelect;
 export type InsertQuotation = typeof quotations.$inferInsert;
+
+// ===== CICLOS DE FRETE AUTOMÁTICO =====
+export const farmGeofences = mysqlTable("farm_geofences", {
+  id: int().autoincrement().primaryKey().notNull(),
+  name: varchar({ length: 255 }).notNull(),
+  latitude: varchar({ length: 30 }).notNull(),
+  longitude: varchar({ length: 30 }).notNull(),
+  radiusMeters: int("radius_meters").default(500).notNull(),
+  equipmentId: int("equipment_id").references(() => equipment.id),
+  active: tinyint().default(1).notNull(),
+  notes: text(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type FarmGeofence = typeof farmGeofences.$inferSelect;
+export type InsertFarmGeofence = typeof farmGeofences.$inferInsert;
+
+export const freightCycles = mysqlTable("freight_cycles", {
+  id: int().autoincrement().primaryKey().notNull(),
+  equipmentId: int("equipment_id").references(() => equipment.id),
+  geofenceId: int("geofence_id").references(() => farmGeofences.id),
+  driverCollaboratorId: int("driver_collaborator_id").references(() => collaborators.id),
+  driverName: varchar("driver_name", { length: 255 }),
+  status: mysqlEnum("status", ['em_fazenda','em_transito','concluido','cancelado']).default('em_fazenda').notNull(),
+  arrivedFarmAt: timestamp("arrived_farm_at", { mode: 'string' }),
+  leftFarmAt: timestamp("left_farm_at", { mode: 'string' }),
+  returnedFarmAt: timestamp("returned_farm_at", { mode: 'string' }),
+  startLat: varchar("start_lat", { length: 30 }),
+  startLng: varchar("start_lng", { length: 30 }),
+  endLat: varchar("end_lat", { length: 30 }),
+  endLng: varchar("end_lng", { length: 30 }),
+  distanceKm: varchar("distance_km", { length: 20 }),
+  cargoLoadId: int("cargo_load_id").references(() => cargoLoads.id),
+  destination: varchar({ length: 255 }),
+  totalFuelCost: varchar("total_fuel_cost", { length: 20 }).default('0'),
+  totalMaintenanceCost: varchar("total_maintenance_cost", { length: 20 }).default('0'),
+  totalCost: varchar("total_cost", { length: 20 }).default('0'),
+  trajectoryJson: text("trajectory_json"),
+  notes: text(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type FreightCycle = typeof freightCycles.$inferSelect;
+export type InsertFreightCycle = typeof freightCycles.$inferInsert;

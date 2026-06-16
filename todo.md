@@ -2034,3 +2034,25 @@
 - [x] Rotas registradas no App.tsx (/compras, /compras/:id, /fornecedores, /orcamentos)
 - [x] Menu lateral atualizado com novos itens
 - [x] Permissões registradas no SYSTEM_MODULES (compras, fornecedores, orcamentos)
+
+---
+
+## 🚛 MÓDULO: CICLOS DE FRETE AUTOMÁTICO POR GEOFENCE (16/06/2026)
+
+- [ ] Schema DB: tabela farm_geofences (lat, lng, radius, name, vehicleId, active)
+- [ ] Schema DB: tabela freight_cycles (vehicleId, driverId, startAt, endAt, status, distanceKm, startLat, startLng, cargoLoadId, totalFuelCost, totalMaintenanceCost, totalCost)
+- [ ] Schema DB: tabela freight_cycle_positions (cycleId, lat, lng, speed, timestamp) para armazenar trajeto
+- [ ] Backend: router farmGeofences (CRUD de geofences por veículo)
+- [ ] Backend: router freightCycles (listar, detalhe, fechar manualmente, vincular carga)
+- [ ] Backend: job de polling Traccar (a cada 2 min) detecta entrada/saída de geofence
+- [ ] Lógica: ao entrar na geofence → abre novo freight_cycle (status: em_fazenda)
+- [ ] Lógica: ao sair da geofence → muda status para em_transito, registra startAt
+- [ ] Lógica: ao retornar à geofence → fecha ciclo (endAt), calcula distância total, muda status para concluido
+- [ ] Lógica: vincular abastecimentos do período ao ciclo (por vehicleId + intervalo de datas)
+- [ ] Lógica: vincular manutenções do período ao ciclo (por vehicleId + intervalo de datas)
+- [ ] Cálculo automático de custo total (combustível + manutenção)
+- [ ] Frontend: FreightCyclesPage.tsx com lista de ciclos, mapa do trajeto, custos detalhados
+- [ ] Frontend: configuração de geofence por veículo (lat/lng + raio 500m padrão)
+- [ ] Frontend: indicador em tempo real do status do caminhão (na fazenda / em trânsito)
+- [ ] Rota /ciclos-frete registrada no App.tsx e menu lateral
+- [ ] Permissão 'ciclos-frete' no SYSTEM_MODULES
