@@ -59,6 +59,10 @@ export default function FinancialDashboard() {
       toast.error('Preencha o valor e a data do pagamento');
       return;
     }
+    // Buscar nome do comprador para a entrada financeira
+    const buyerName = buyers.find((b: any) => b.id === showPaymentModal)?.name || 'Comprador';
+    const dateObj = new Date(paymentForm.paymentDate + 'T12:00:00');
+    const periodDescription = dateObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
     addPaymentMut.mutate({
       buyerId: showPaymentModal,
       amount: paymentForm.amount,
@@ -67,6 +71,10 @@ export default function FinancialDashboard() {
       invoiceNumber: paymentForm.invoiceNumber || undefined,
       notes: paymentForm.notes || undefined,
       status: 'pago',
+      // Cria entrada no módulo financeiro automaticamente
+      createFinancialEntry: true,
+      destinationName: buyerName,
+      periodDescription,
     });
   }
 
