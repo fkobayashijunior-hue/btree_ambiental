@@ -44,6 +44,10 @@ import DestinationReportPage from "./pages/DestinationReportPage";
 import FinancialDashboard from "./pages/FinancialDashboard";
 import ThirdPartyReport from "./pages/ThirdPartyReport";
 import ThirdPartyContractorsPage from "./pages/ThirdPartyContractorsPage";
+import PurchaseRequestsPage from "./pages/PurchaseRequestsPage";
+import PurchaseRequestDetailPage from "./pages/PurchaseRequestDetailPage";
+import SuppliersPage from "./pages/SuppliersPage";
+import QuotationsPage from "./pages/QuotationsPage";
 
 // Wrapper que aplica DashboardLayout a páginas protegidas
 function WithLayout({ component: Component }: { component: React.ComponentType }) {
@@ -157,6 +161,18 @@ function Router() {
       </Route>
       <Route path={"/terceirizados"}>
         {() => <WithLayout component={ThirdPartyContractorsPage} />}
+      </Route>
+      <Route path={"/compras"}>
+        {() => <WithLayout component={PurchaseRequestsPage} />}
+      </Route>
+      <Route path={"/compras/:id"}>
+        {() => <WithLayout component={PurchaseRequestDetailPage} />}
+      </Route>
+      <Route path={"/fornecedores"}>
+        {() => <WithLayout component={SuppliersPage} />}
+      </Route>
+      <Route path={"/orcamentos"}>
+        {() => <WithLayout component={QuotationsPage} />}
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

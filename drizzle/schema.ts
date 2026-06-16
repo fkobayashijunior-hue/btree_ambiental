@@ -1202,3 +1202,90 @@ export const thirdPartyContractors = mysqlTable("third_party_contractors", {
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
+
+
+// ============================================================
+// MÓDULO: SOLICITAÇÕES DE COMPRAS / PEÇAS
+// ============================================================
+
+export const purchaseCategories = mysqlTable("purchase_categories", {
+  id: int().autoincrement().primaryKey().notNull(),
+  name: varchar({ length: 100 }).notNull(),
+  color: varchar({ length: 20 }).default('#6B7280').notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+export type PurchaseCategory = typeof purchaseCategories.$inferSelect;
+export type InsertPurchaseCategory = typeof purchaseCategories.$inferInsert;
+
+export const purchaseRequests = mysqlTable("purchase_requests", {
+  id: int().autoincrement().primaryKey().notNull(),
+  title: varchar({ length: 255 }).notNull(),
+  description: text(),
+  images: text(), // JSON array of S3 URLs
+  linkUrl: varchar("link_url", { length: 500 }),
+  categoryId: int("category_id").references(() => purchaseCategories.id),
+  status: mysqlEnum(['pendente','lida','aprovada','comprada','recebida','cancelada']).default('pendente').notNull(),
+  urgency: mysqlEnum(['baixa','media','alta','critica']).default('media').notNull(),
+  requestDate: timestamp("request_date", { mode: 'string' }).defaultNow().notNull(),
+  readDate: timestamp("read_date", { mode: 'string' }),
+  purchaseDate: timestamp("purchase_date", { mode: 'string' }),
+  expectedArrival: timestamp("expected_arrival", { mode: 'string' }),
+  receivedDate: timestamp("received_date", { mode: 'string' }),
+  itemsConfirmedDate: timestamp("items_confirmed_date", { mode: 'string' }),
+  requestedBy: int("requested_by").references(() => users.id),
+  approvedBy: int("approved_by").references(() => users.id),
+  notes: text(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type PurchaseRequest = typeof purchaseRequests.$inferSelect;
+export type InsertPurchaseRequest = typeof purchaseRequests.$inferInsert;
+
+export const purchaseRequestItems = mysqlTable("purchase_request_items", {
+  id: int().autoincrement().primaryKey().notNull(),
+  requestId: int("request_id").notNull().references(() => purchaseRequests.id),
+  name: varchar({ length: 255 }).notNull(),
+  quantity: varchar({ length: 50 }).notNull(),
+  unit: varchar({ length: 50 }),
+  notes: text(),
+  confirmed: tinyint().default(0).notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+export type PurchaseRequestItem = typeof purchaseRequestItems.$inferSelect;
+export type InsertPurchaseRequestItem = typeof purchaseRequestItems.$inferInsert;
+
+export const suppliers = mysqlTable("suppliers", {
+  id: int().autoincrement().primaryKey().notNull(),
+  name: varchar({ length: 255 }).notNull(),
+  address: varchar({ length: 500 }),
+  city: varchar({ length: 100 }),
+  state: varchar({ length: 2 }),
+  phone: varchar({ length: 30 }),
+  whatsapp: varchar({ length: 30 }),
+  email: varchar({ length: 255 }),
+  website: varchar({ length: 500 }),
+  notes: text(),
+  active: tinyint().default(1).notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type Supplier = typeof suppliers.$inferSelect;
+export type InsertSupplier = typeof suppliers.$inferInsert;
+
+export const quotations = mysqlTable("quotations", {
+  id: int().autoincrement().primaryKey().notNull(),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id),
+  categoryId: int("category_id").references(() => purchaseCategories.id),
+  requestId: int("request_id").references(() => purchaseRequests.id),
+  productName: varchar("product_name", { length: 255 }).notNull(),
+  unit: varchar({ length: 50 }),
+  price: varchar({ length: 30 }).notNull(), // stored as string to avoid float issues
+  quotationDate: timestamp("quotation_date", { mode: 'string' }).defaultNow().notNull(),
+  notes: text(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+export type Quotation = typeof quotations.$inferSelect;
+export type InsertQuotation = typeof quotations.$inferInsert;

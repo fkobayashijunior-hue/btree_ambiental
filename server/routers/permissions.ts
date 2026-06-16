@@ -43,6 +43,10 @@ export const SYSTEM_MODULES = [
   { slug: "fornecedores-combustivel", label: "Fornecedores Combustível",        group: "Administrativo" },
   { slug: "relatorios-combustivel",   label: "Relatórios Combustível",          group: "Administrativo" },
   { slug: "contas-pagar-combustivel", label: "Contas a Pagar (Combustível)",    group: "Administrativo" },
+  // Compras
+  { slug: "compras",      label: "Solicitações de Compras",  group: "Compras" },
+  { slug: "fornecedores", label: "Fornecedores",             group: "Compras" },
+  { slug: "orcamentos",   label: "Orçamentos",               group: "Compras" },
 ] as const;
 
 export type ModuleSlug = typeof SYSTEM_MODULES[number]["slug"];

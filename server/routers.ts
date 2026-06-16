@@ -29,6 +29,10 @@ import { freightRouter } from "./routers/freight";
 import { notificationsRouter } from "./routers/notifications";
 import { fuelSuppliersRouter } from "./routers/fuelSuppliers";
 import { thirdPartyContractorsRouter } from "./routers/thirdPartyContractors";
+import { purchaseCategoriesRouter } from "./routers/purchaseCategories";
+import { suppliersRouter } from "./routers/suppliers";
+import { quotationsRouter } from "./routers/quotations";
+import { purchaseRequestsRouter } from "./routers/purchaseRequests";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { SignJWT } from "jose";
@@ -303,6 +307,10 @@ export const appRouter = router({
   notifications: notificationsRouter,
   fuelSuppliers: fuelSuppliersRouter,
   thirdPartyContractors: thirdPartyContractorsRouter,
+  purchaseCategories: purchaseCategoriesRouter,
+  suppliers: suppliersRouter,
+  quotations: quotationsRouter,
+  purchaseRequests: purchaseRequestsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
     run: publicProcedure

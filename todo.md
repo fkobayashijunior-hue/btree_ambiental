@@ -1956,3 +1956,81 @@
 - [x] Frontend: relatório de destino corrigido para usar preço correto (destino normal vs comprador)
 - [x] Frontend: PDF do relatório corrigido para mostrar valor para destinos normais (Sonoco)
 - [x] SQL para produção Hostinger: ALTER TABLE cargo_destinations ADD COLUMN... (executado via webdev_execute_sql)
+
+## Módulo: Solicitações de Compras / Peças (Nova implementação completa)
+
+### Schema / Banco de Dados
+- [ ] Criar tabela `purchase_categories` (id, name, color, created_at)
+- [ ] Criar tabela `purchase_requests` (id, title, description, images JSON, link_url, category_id, status enum, urgency enum, request_date, read_date, purchase_date, expected_arrival, received_date, items_confirmed_date, requested_by, notes, created_at, updated_at)
+- [ ] Criar tabela `purchase_request_items` (id, request_id, name, quantity, unit, notes)
+- [ ] Criar tabela `suppliers` (id, name, address, city, state, phone, whatsapp, email, website, notes, active, created_at)
+- [ ] Criar tabela `quotations` (id, supplier_id, category_id, product_name, unit, price, date, notes, request_id nullable, created_at)
+- [ ] Rodar `pnpm db:push` para migrar tabelas
+
+### Backend Routers
+- [ ] Criar `server/routers/purchaseRequests.ts` com CRUD completo
+- [ ] Mutation `create` com upload de imagens para S3
+- [ ] Mutation `updateStatus` para mudar status da solicitação
+- [ ] Mutation `markRead` para registrar data de leitura pelo responsável
+- [ ] Mutation `markPurchased` para registrar data de compra
+- [ ] Mutation `markReceived` para registrar data de recebimento
+- [ ] Mutation `confirmItems` para registrar confirmação dos itens separadamente
+- [ ] Criar `server/routers/suppliers.ts` com CRUD completo
+- [ ] Criar `server/routers/quotations.ts` com CRUD + histórico por produto
+- [ ] Query `listByProduct` retorna histórico de preços por produto/fornecedor, ordenado por menor preço
+- [ ] Query `listByCategory` retorna orçamentos agrupados por categoria
+- [ ] Criar `server/routers/purchaseCategories.ts` com CRUD para categorias definidas pelo usuário
+- [ ] Registrar todos os routers em `server/routers.ts`
+
+### Frontend - Solicitações de Compras
+- [ ] Criar `client/src/pages/PurchaseRequestsPage.tsx` com lista de solicitações
+- [ ] Filtros por status, urgência e categoria
+- [ ] Badge de urgência colorido (baixa=cinza, média=amarelo, alta=laranja, crítica=vermelho)
+- [ ] Badge de status (pendente, lida, aprovada, comprada, recebida)
+- [ ] Formulário de nova solicitação com: título, descrição, categoria, urgência, link URL, itens (nome+qtd+unidade)
+- [ ] Upload de múltiplas imagens na solicitação
+- [ ] Criar `client/src/pages/PurchaseRequestDetailPage.tsx` com timeline de datas
+- [ ] Timeline visual mostrando: solicitação → leitura → compra → previsão chegada → recebimento → confirmação itens
+- [ ] Botões de ação para marcar cada etapa da timeline
+- [ ] Visualização de imagens em modal
+- [ ] Lista de itens solicitados com checkbox de confirmação
+
+### Frontend - Fornecedores
+- [ ] Criar `client/src/pages/SuppliersPage.tsx` com cadastro completo
+- [ ] Campos: nome empresa, endereço, cidade, estado, telefone, whatsapp, email, site, observações
+- [ ] Botões de ação rápida: ligar, WhatsApp, email
+- [ ] Histórico de orçamentos por fornecedor
+
+### Frontend - Orçamentos
+- [ ] Criar `client/src/pages/QuotationsPage.tsx` com visão por categoria
+- [ ] Agrupamento por categoria (óleos, ferramentas, peças, etc.)
+- [ ] Dentro de cada categoria: produtos com histórico de preços por fornecedor
+- [ ] Menor preço sempre aparece primeiro (destaque visual)
+- [ ] Último preço registrado com destaque (badge "Último")
+- [ ] Formulário para adicionar novo orçamento: produto, fornecedor, preço, unidade, data, observações
+- [ ] Gerenciamento de categorias: criar, editar, excluir categorias personalizadas
+
+### Navegação
+- [ ] Adicionar rota `/compras` para PurchaseRequestsPage no App.tsx
+- [ ] Adicionar rota `/compras/:id` para PurchaseRequestDetailPage no App.tsx
+- [ ] Adicionar rota `/fornecedores` para SuppliersPage no App.tsx
+- [ ] Adicionar rota `/orcamentos` para QuotationsPage no App.tsx
+- [ ] Adicionar grupo "Compras" no sidebar do DashboardLayout com 3 sub-itens
+- [ ] Build e deploy para Hostinger (git push github main)
+
+---
+
+## 🛒 MÓDULO: SOLICITAÇÕES DE COMPRAS E ORÇAMENTOS (16/06/2026)
+
+- [x] Schema DB: tabelas purchase_categories, purchase_requests, purchase_request_items, purchase_request_images, suppliers, quotations
+- [x] Backend: router purchaseCategories (CRUD de categorias)
+- [x] Backend: router purchaseRequests (criar, listar, detalhe, atualizar status, upload de imagens)
+- [x] Backend: router suppliers (CRUD completo de fornecedores)
+- [x] Backend: router quotations (criar, listar por categoria, excluir)
+- [x] Frontend: PurchaseRequestsPage.tsx (lista, filtros, nova solicitação com imagens)
+- [x] Frontend: PurchaseRequestDetailPage.tsx (timeline de datas, itens, atualização de status)
+- [x] Frontend: SuppliersPage.tsx (cadastro completo: nome, endereço, telefone, WhatsApp, e-mail, categorias)
+- [x] Frontend: QuotationsPage.tsx (histórico de preços por categoria, menor valor em destaque)
+- [x] Rotas registradas no App.tsx (/compras, /compras/:id, /fornecedores, /orcamentos)
+- [x] Menu lateral atualizado com novos itens
+- [x] Permissões registradas no SYSTEM_MODULES (compras, fornecedores, orcamentos)
