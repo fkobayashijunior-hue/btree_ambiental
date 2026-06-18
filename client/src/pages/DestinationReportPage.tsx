@@ -214,6 +214,9 @@ export default function DestinationReportPage() {
   const totalPending = totalLoads - totalReceived;
   const totalWeight = loads.reduce((sum: number, l: any) => sum + (parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.')) || 0), 0);
   const totalVolume = loads.reduce((sum: number, l: any) => sum + (parseFloat(String(l.volumeM3 || 0).replace(',', '.')) || 0), 0);
+  // Weight/volume split: received vs pending (for financial breakdown)
+  const receivedWeight = loads.filter((l: any) => l.receivedByBuyer === 1).reduce((sum: number, l: any) => sum + (parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.')) || 0), 0);
+  const receivedVolume = loads.filter((l: any) => l.receivedByBuyer === 1).reduce((sum: number, l: any) => sum + (parseFloat(String(l.volumeM3 || 0).replace(',', '.')) || 0), 0);
 
   // Financial calculations
   // isBuyer: check if selected destination has is_buyer flag (no more 10000 offset)
@@ -227,6 +230,11 @@ export default function DestinationReportPage() {
   // Calculate total value based on unit (ton or m³) — for buyers
   const totalQuantity = unit === 'ton' ? totalWeight / 1000 : totalVolume;
   const totalValue = buyerPricePerUnit * totalQuantity;
+
+  // Value breakdown: received (cargas confirmadas) vs pending
+  const receivedQuantity = unit === 'ton' ? receivedWeight / 1000 : receivedVolume;
+  const valorRecebido = buyerPricePerUnit * receivedQuantity;
+  const valorPendente = totalValue - valorRecebido;
 
   // Alias for backward compat in buyer PDF sections
   const pricePerUnit = buyerPricePerUnit;
@@ -751,13 +759,22 @@ export default function DestinationReportPage() {
             </CardContent>
           </Card>
           {isBuyer && pricePerUnit > 0 && (
-            <Card className="border-green-300 bg-green-100 col-span-2 sm:col-span-1">
-              <CardContent className="p-3 text-center">
-                <DollarSign className="h-5 w-5 mx-auto text-green-800 mb-1" />
-                <div className="text-lg font-bold text-green-900">R$ {formatBR(totalValue)}</div>
-                <div className="text-xs text-green-700">Valor a Receber</div>
-              </CardContent>
-            </Card>
+            <>
+              <Card className="border-emerald-300 bg-emerald-100 col-span-2 sm:col-span-1">
+                <CardContent className="p-3 text-center">
+                  <CheckCircle2 className="h-5 w-5 mx-auto text-emerald-700 mb-1" />
+                  <div className="text-lg font-bold text-emerald-900">R$ {formatBR(valorRecebido)}</div>
+                  <div className="text-xs text-emerald-700">Já Recebido ({totalReceived} cargas)</div>
+                </CardContent>
+              </Card>
+              <Card className="border-amber-300 bg-amber-100 col-span-2 sm:col-span-1">
+                <CardContent className="p-3 text-center">
+                  <Clock className="h-5 w-5 mx-auto text-amber-700 mb-1" />
+                  <div className="text-lg font-bold text-amber-900">R$ {formatBR(valorPendente)}</div>
+                  <div className="text-xs text-amber-700">A Receber ({totalPending} cargas)</div>
+                </CardContent>
+              </Card>
+            </>
           )}
         </div>
       )}
@@ -766,11 +783,11 @@ export default function DestinationReportPage() {
       {isBuyer && buyerInfo && pricePerUnit > 0 && loads.length > 0 && (
         <Card className="border-green-300 bg-green-50">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-3">
               <DollarSign className="h-5 w-5 text-green-700" />
               <h3 className="font-semibold text-green-800">Resumo Financeiro — {buyerInfo.name}</h3>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
               <div>
                 <span className="text-green-600 text-xs">Preço por {unit}</span>
                 <div className="font-bold text-green-900">R$ {formatBR(pricePerUnit)}</div>
@@ -783,9 +800,15 @@ export default function DestinationReportPage() {
                 <span className="text-green-600 text-xs">Total Cargas</span>
                 <div className="font-bold text-green-900">{totalLoads}</div>
               </div>
-              <div>
-                <span className="text-green-600 text-xs">Valor Total a Receber</span>
-                <div className="font-bold text-green-900 text-lg">R$ {formatBR(totalValue)}</div>
+              <div className="bg-emerald-100 rounded-lg p-2 border border-emerald-200">
+                <span className="text-emerald-600 text-xs flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Já Recebido</span>
+                <div className="font-bold text-emerald-900 text-base">R$ {formatBR(valorRecebido)}</div>
+                <div className="text-xs text-emerald-600">{totalReceived} cargas confirmadas</div>
+              </div>
+              <div className="bg-amber-100 rounded-lg p-2 border border-amber-200">
+                <span className="text-amber-600 text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> A Receber</span>
+                <div className="font-bold text-amber-900 text-base">R$ {formatBR(valorPendente)}</div>
+                <div className="text-xs text-amber-600">{totalPending} cargas pendentes</div>
               </div>
             </div>
           </CardContent>
@@ -868,14 +891,20 @@ export default function DestinationReportPage() {
                       const lineValue = pricePerUnit > 0 ? (unit === 'ton' ? pricePerUnit * weightTon : pricePerUnit * vol) : 0;
 
                       return (
-                        <tr key={l.id} className={`border-b hover:bg-gray-50 ${l.receivedByBuyer ? 'bg-green-50/50' : ''}`}>
+                        <tr key={l.id} className={`border-b hover:bg-gray-50 transition-colors ${l.receivedByBuyer ? 'bg-emerald-50 border-emerald-200' : ''}`}>
                           <td className="p-2 text-center">
-                            <Checkbox
-                              checked={l.receivedByBuyer === 1}
-                              onCheckedChange={(checked) => {
-                                markReceivedMut.mutate({ id: l.id, received: !!checked });
-                              }}
-                            />
+                            <button
+                              onClick={() => markReceivedMut.mutate({ id: l.id, received: !l.receivedByBuyer })}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
+                                l.receivedByBuyer
+                                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700 border border-gray-200'
+                              }`}
+                              title={l.receivedByBuyer ? 'Clique para desmarcar' : 'Confirmar recebimento desta carga'}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>{l.receivedByBuyer ? 'Recebido' : 'Confirmar'}</span>
+                            </button>
                           </td>
                           <td className="p-2 text-center text-xs text-muted-foreground">{idx + 1}</td>
                           <td className="p-2 whitespace-nowrap">{date}</td>
@@ -923,7 +952,10 @@ export default function DestinationReportPage() {
                       <td className="p-2 text-right">{formatBR(totalWeight / 1000)} ton</td>
                       <td className="p-2" colSpan={2}></td>
                       {isBuyer && pricePerUnit > 0 && (
-                        <td className="p-2 text-right text-green-700 font-bold">R$ {formatBR(totalValue)}</td>
+                        <td className="p-2 text-right">
+                          <div className="text-emerald-700 font-bold">R$ {formatBR(valorRecebido)} ✔</div>
+                          <div className="text-amber-600 text-xs">R$ {formatBR(valorPendente)} pend.</div>
+                        </td>
                       )}
                     </tr>
                   </tfoot>
