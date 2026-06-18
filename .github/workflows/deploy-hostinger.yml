@@ -1,0 +1,89 @@
+name: Deploy para Hostinger
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Build e Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout do código
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      # 2. Configurar Node.js
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 3. Instalar pnpm
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # 4. Instalar dependências
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      # 5. Compilar frontend (Vite)
+      - name: Compilar frontend
+        run: pnpm vite build
+
+      # 6. Compilar backend (esbuild)
+      - name: Compilar backend
+        run: |
+          npx esbuild server/_core/index.ts \
+            --platform=node \
+            --packages=external \
+            --bundle \
+            --format=esm \
+            --outfile=dist/index.js
+
+      # 7. Enviar arquivos para a Hostinger via SSH (rsync)
+      - name: Deploy via SSH para Hostinger
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          password: ${{ secrets.HOSTINGER_PASSWORD }}
+          port: 22
+          script: |
+            set -e
+            echo "=== Iniciando deploy BTREE Ambiental ==="
+            cd ~/domains/btreeambiental.com/nodejs
+
+            # Fazer pull do repositório
+            git pull origin main
+
+            # Instalar dependências de runtime (sem devDependencies)
+            if [ -f "package.hostinger.json" ]; then
+              cp package.json package.json.bak
+              cp package.hostinger.json package.json
+              npm install --legacy-peer-deps --omit=dev
+              cp package.json.bak package.json
+              rm -f package.json.bak
+            else
+              npm install --legacy-peer-deps --omit=dev
+            fi
+
+            # Copiar arquivos estáticos para public_html
+            PUBLIC_HTML="$HOME/domains/btreeambiental.com/public_html"
+            echo "Copiando assets para public_html..."
+            rm -rf "$PUBLIC_HTML/assets" 2>/dev/null || true
+            rm -f "$PUBLIC_HTML/index.html" "$PUBLIC_HTML/registerSW.js" \
+                  "$PUBLIC_HTML/manifest.json" "$PUBLIC_HTML/manifest.webmanifest" \
+                  "$PUBLIC_HTML/sw.js" "$PUBLIC_HTML/workbox-*.js" 2>/dev/null || true
+            cp -r dist/public/* "$PUBLIC_HTML/"
+            cp dist/public/.htaccess "$PUBLIC_HTML/.htaccess" 2>/dev/null || true
+            echo "Assets copiados com sucesso."
+
+            # Reiniciar o app Node.js via Passenger
+            mkdir -p tmp
+            touch tmp/restart.txt
+            echo "=== Deploy concluído! ==="
