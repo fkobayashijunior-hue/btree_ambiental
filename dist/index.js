@@ -247,6 +247,8 @@ __export(schema_exports, {
   purchaseOrders: () => purchaseOrders,
   purchaseRequestItems: () => purchaseRequestItems,
   purchaseRequests: () => purchaseRequests,
+  quotationRequests: () => quotationRequests,
+  quotationResponses: () => quotationResponses,
   quotations: () => quotations,
   replantingRecords: () => replantingRecords,
   rolePermissions: () => rolePermissions,
@@ -259,7 +261,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, bigint, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, quotations, farmGeofences, freightCycles;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -1437,6 +1439,37 @@ var init_schema = __esm({
       notes: text(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    quotationRequests = mysqlTable("quotation_requests", {
+      id: int().autoincrement().primaryKey().notNull(),
+      title: varchar({ length: 255 }).notNull(),
+      requesterId: int("requester_id").references(() => collaborators.id),
+      requesterName: varchar("requester_name", { length: 255 }),
+      requesterPhone: varchar("requester_phone", { length: 30 }),
+      requesterEmail: varchar("requester_email", { length: 255 }),
+      itemsJson: text("items_json").notNull(),
+      // JSON array: [{name, quantity, unit}]
+      token: varchar({ length: 64 }).notNull(),
+      expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+      status: mysqlEnum(["ativa", "respondida", "expirada", "cancelada"]).default("ativa").notNull(),
+      notes: text(),
+      createdBy: int("created_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    quotationResponses = mysqlTable("quotation_responses", {
+      id: int().autoincrement().primaryKey().notNull(),
+      quotationRequestId: int("quotation_request_id").notNull().references(() => quotationRequests.id),
+      supplierName: varchar("supplier_name", { length: 255 }).notNull(),
+      cnpj: varchar({ length: 30 }),
+      address: text(),
+      sellerName: varchar("seller_name", { length: 255 }),
+      sellerPhone: varchar("seller_phone", { length: 30 }),
+      sellerEmail: varchar("seller_email", { length: 255 }),
+      itemsJson: text("items_json").notNull(),
+      // JSON array: [{name, quantity, unit, price, brand, notes}]
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
     });
   }
 });
@@ -4702,11 +4735,11 @@ var machineHoursRouter = router({
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
     const oilRecords = await db.select().from(equipmentOilRecords).orderBy(desc4(equipmentOilRecords.createdAt));
-    return equipmentList.map((eq34) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq34.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq34.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq34.id);
-      const eqOil = oilRecords.filter((o) => o.equipmentId === eq34.id);
+    return equipmentList.map((eq35) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq35.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq35.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq35.id);
+      const eqOil = oilRecords.filter((o) => o.equipmentId === eq35.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
@@ -4717,11 +4750,11 @@ var machineHoursRouter = router({
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq34.id,
-        equipmentName: eq34.name,
-        brand: eq34.brand,
-        model: eq34.model,
-        status: eq34.status,
+        equipmentId: eq35.id,
+        equipmentName: eq35.name,
+        brand: eq35.brand,
+        model: eq35.model,
+        status: eq35.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -5066,11 +5099,11 @@ var vehicleRecordsRouter = router({
         const dateObj = new Date(input.date);
         const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
         const fuelLabels = { diesel: "Diesel", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV" };
-        const desc29 = input.recordType === "abastecimento" ? `Abastecimento ${fuelLabels[input.fuelType] || input.fuelType} - ${eqName} - ${input.liters}L${input.supplier ? " (" + input.supplier + ")" : ""}` : `Manuten\xE7\xE3o ${input.maintenanceType || ""} - ${eqName}${input.notes ? ": " + input.notes.slice(0, 60) : ""}`;
+        const desc30 = input.recordType === "abastecimento" ? `Abastecimento ${fuelLabels[input.fuelType] || input.fuelType} - ${eqName} - ${input.liters}L${input.supplier ? " (" + input.supplier + ")" : ""}` : `Manuten\xE7\xE3o ${input.maintenanceType || ""} - ${eqName}${input.notes ? ": " + input.notes.slice(0, 60) : ""}`;
         await db.insert(financialEntries).values({
           type: "despesa",
           category: input.recordType === "abastecimento" ? "combustivel" : "manutencao",
-          description: desc29,
+          description: desc30,
           amount: costValue.replace(",", "."),
           date: dateObj.toISOString().slice(0, 10),
           referenceMonth: refMonth,
@@ -11586,8 +11619,171 @@ var invoiceControlRouter = router({
   })
 });
 
-// server/routers.ts
+// server/routers/quotationRequests.ts
+init_trpc();
+init_db();
+init_schema();
+init_notification();
 import { z as z35 } from "zod";
+import { eq as eq34, desc as desc29 } from "drizzle-orm";
+import { TRPCError as TRPCError25 } from "@trpc/server";
+import crypto from "crypto";
+var quotationRequestsRouter = router({
+  // Listar todas as solicitações (protegido)
+  list: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    const rows = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
+    return rows.map((r) => ({
+      ...r,
+      items: JSON.parse(r.itemsJson || "[]"),
+      isExpired: Date.now() > r.expiresAt
+    }));
+  }),
+  // Buscar por ID com respostas (protegido)
+  getById: protectedProcedure.input(z35.object({ id: z35.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq34(quotationRequests.id, input.id));
+    if (!req) throw new TRPCError25({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    const responses = await db.select().from(quotationResponses).where(eq34(quotationResponses.quotationRequestId, input.id)).orderBy(desc29(quotationResponses.createdAt));
+    return {
+      ...req,
+      items: JSON.parse(req.itemsJson || "[]"),
+      isExpired: Date.now() > req.expiresAt,
+      responses: responses.map((r) => ({
+        ...r,
+        items: JSON.parse(r.itemsJson || "[]")
+      }))
+    };
+  }),
+  // Criar nova solicitação (protegido)
+  create: protectedProcedure.input(
+    z35.object({
+      title: z35.string().min(1),
+      requesterId: z35.number().optional(),
+      requesterName: z35.string().optional(),
+      requesterPhone: z35.string().optional(),
+      requesterEmail: z35.string().optional(),
+      items: z35.array(z35.object({
+        name: z35.string().min(1),
+        quantity: z35.string().min(1),
+        unit: z35.string().optional().default("un")
+      })).min(1),
+      notes: z35.string().optional()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1e3;
+    const [result] = await db.insert(quotationRequests).values({
+      title: input.title,
+      requesterId: input.requesterId,
+      requesterName: input.requesterName,
+      requesterPhone: input.requesterPhone,
+      requesterEmail: input.requesterEmail,
+      itemsJson: JSON.stringify(input.items),
+      token,
+      expiresAt,
+      status: "ativa",
+      notes: input.notes,
+      createdBy: ctx.user.id
+    });
+    const id = result.insertId;
+    return { id, token };
+  }),
+  // Cancelar solicitação (protegido)
+  cancel: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(quotationRequests).set({ status: "cancelada" }).where(eq34(quotationRequests.id, input.id));
+    return { success: true };
+  }),
+  // ===== ROTAS PÚBLICAS (sem auth) =====
+  // Buscar solicitação por token (fornecedor acessa)
+  getByToken: publicProcedure.input(z35.object({ token: z35.string() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { found: false };
+    const [req] = await db.select().from(quotationRequests).where(eq34(quotationRequests.token, input.token));
+    if (!req) return { found: false };
+    const isExpired = Date.now() > req.expiresAt;
+    const isCancelled = req.status === "cancelada";
+    return {
+      found: true,
+      isExpired,
+      isCancelled,
+      request: isExpired || isCancelled ? null : {
+        id: req.id,
+        title: req.title,
+        requesterName: req.requesterName,
+        requesterPhone: req.requesterPhone,
+        requesterEmail: req.requesterEmail,
+        items: JSON.parse(req.itemsJson || "[]"),
+        notes: req.notes,
+        expiresAt: req.expiresAt
+      }
+    };
+  }),
+  // Fornecedor envia resposta (público)
+  submitResponse: publicProcedure.input(
+    z35.object({
+      token: z35.string(),
+      supplierName: z35.string().min(1),
+      cnpj: z35.string().optional(),
+      address: z35.string().optional(),
+      sellerName: z35.string().optional(),
+      sellerPhone: z35.string().optional(),
+      sellerEmail: z35.string().optional(),
+      items: z35.array(
+        z35.object({
+          name: z35.string(),
+          quantity: z35.string(),
+          unit: z35.string().optional(),
+          price: z35.string(),
+          brand: z35.string().optional(),
+          notes: z35.string().optional()
+        })
+      ).min(1),
+      notes: z35.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq34(quotationRequests.token, input.token));
+    if (!req) throw new TRPCError25({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (Date.now() > req.expiresAt) throw new TRPCError25({ code: "BAD_REQUEST", message: "Link expirado" });
+    if (req.status === "cancelada") throw new TRPCError25({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    await db.insert(quotationResponses).values({
+      quotationRequestId: req.id,
+      supplierName: input.supplierName,
+      cnpj: input.cnpj,
+      address: input.address,
+      sellerName: input.sellerName,
+      sellerPhone: input.sellerPhone,
+      sellerEmail: input.sellerEmail,
+      itemsJson: JSON.stringify(input.items),
+      notes: input.notes
+    });
+    await db.update(quotationRequests).set({ status: "respondida" }).where(eq34(quotationRequests.id, req.id));
+    try {
+      await notifyOwner({
+        title: `\u{1F4CB} Novo or\xE7amento recebido: ${req.title}`,
+        content: `Fornecedor "${input.supplierName}" respondeu a solicita\xE7\xE3o de or\xE7amento "${req.title}".
+
+Vendedor: ${input.sellerName || "\u2014"}
+Telefone: ${input.sellerPhone || "\u2014"}
+
+Acesse o sistema para visualizar os valores.`
+      });
+    } catch (_) {
+    }
+    return { success: true };
+  })
+});
+
+// server/routers.ts
+import { z as z36 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -11684,7 +11880,7 @@ Se n\xE3o solicitou, ignore este email.`
 }
 
 // server/routers.ts
-import crypto from "crypto";
+import crypto2 from "crypto";
 async function createSessionToken(userId, email, name) {
   const secret = new TextEncoder().encode(process.env.JWT_SECRET || "btree-secret-key");
   const expiresAt = Math.floor((Date.now() + 365 * 24 * 60 * 60 * 1e3) / 1e3);
@@ -11709,12 +11905,12 @@ var appRouter = router({
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-          const { eq: eq34 } = await import("drizzle-orm");
-          const permResult = await db.select().from(upTable).where(eq34(upTable.userId, ctx.user.id));
+          const { eq: eq35 } = await import("drizzle-orm");
+          const permResult = await db.select().from(upTable).where(eq35(upTable.userId, ctx.user.id));
           const collabResult = await db.select({
             clientId: collabTable.clientId,
             role: collabTable.role
-          }).from(collabTable).where(eq34(collabTable.userId, ctx.user.id));
+          }).from(collabTable).where(eq35(collabTable.userId, ctx.user.id));
           myPermsResult = {
             permResultLength: permResult.length,
             permResult: permResult[0] || null,
@@ -11749,7 +11945,7 @@ var appRouter = router({
         const [cols] = await db.execute(__require("drizzle-orm/sql").sql`SHOW COLUMNS FROM collaborator_attendance`);
         const [countResult] = await db.execute(__require("drizzle-orm/sql").sql`SELECT COUNT(*) as cnt FROM collaborator_attendance`);
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq34, desc: desc29 } = await import("drizzle-orm");
+        const { eq: eq35, desc: desc30 } = await import("drizzle-orm");
         try {
           const records = await db.select({
             id: collaboratorAttendance2.id,
@@ -11769,10 +11965,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z35.object({
-      name: z35.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z35.string().email("Email inv\xE1lido"),
-      password: z35.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z36.object({
+      name: z36.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z36.string().email("Email inv\xE1lido"),
+      password: z36.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -11787,9 +11983,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z35.object({
-      email: z35.string().email("Email inv\xE1lido"),
-      password: z35.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z36.object({
+      email: z36.string().email("Email inv\xE1lido"),
+      password: z36.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -11808,11 +12004,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z35.object({
-      seedKey: z35.string(),
-      email: z35.string().email(),
-      name: z35.string(),
-      password: z35.string().min(4)
+    seedAdmin: publicProcedure.input(z36.object({
+      seedKey: z36.string(),
+      email: z36.string().email(),
+      name: z36.string(),
+      password: z36.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -11822,15 +12018,15 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z35.object({
-      email: z35.string().email("Email inv\xE1lido"),
-      origin: z35.string().url().optional()
+    forgotPassword: publicProcedure.input(z36.object({
+      email: z36.string().email("Email inv\xE1lido"),
+      origin: z36.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
         return { success: true };
       }
-      const token = crypto.randomBytes(48).toString("hex");
+      const token = crypto2.randomBytes(48).toString("hex");
       await createPasswordResetToken(user.id, token);
       const baseUrl = input.origin || "https://btreeambiental.com";
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;
@@ -11838,9 +12034,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z35.object({
-      token: z35.string().min(1),
-      password: z35.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z36.object({
+      token: z36.string().min(1),
+      password: z36.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -11849,10 +12045,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users4 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq34 } = await import("drizzle-orm");
+      const { eq: eq35 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users4).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq34(users4.id, resetToken.userId));
+      await dbInstance.update(users4).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq35(users4.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -11896,9 +12092,10 @@ var appRouter = router({
   quotations: quotationsRouter,
   purchaseRequests: purchaseRequestsRouter,
   invoiceControl: invoiceControlRouter,
+  quotationRequests: quotationRequestsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z35.object({ key: z35.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z36.object({ key: z36.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -12772,7 +12969,7 @@ function schedulePendingPaymentsCheck() {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq34, and: and22, lt: lt2 } = await import("drizzle-orm");
+        const { eq: eq35, and: and22, lt: lt2 } = await import("drizzle-orm");
         const db = await getDb2();
         if (!db) return;
         const sevenDaysAgo = /* @__PURE__ */ new Date();
@@ -12782,8 +12979,8 @@ function schedulePendingPaymentsCheck() {
           collaboratorName: collaborators3.name,
           date: collaboratorAttendance2.date,
           dailyValue: collaboratorAttendance2.dailyValue
-        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq34(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and22(
-          eq34(collaboratorAttendance2.paymentStatusCa, "pendente"),
+        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq35(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and22(
+          eq35(collaboratorAttendance2.paymentStatusCa, "pendente"),
           lt2(collaboratorAttendance2.date, sevenDaysAgo)
         ));
         if (pendingRecords.length > 0) {
