@@ -2056,3 +2056,24 @@
 - [ ] Frontend: indicador em tempo real do status do caminhão (na fazenda / em trânsito)
 - [ ] Rota /ciclos-frete registrada no App.tsx e menu lateral
 - [ ] Permissão 'ciclos-frete' no SYSTEM_MODULES
+
+---
+
+## 🔄 CONFIRMAÇÃO DE CARGA → RECEITA AUTOMÁTICA (18/06/2026)
+- [ ] Backend: markReceivedByBuyer verifica se já existe financial_entry com cargo_load_id antes de criar (anti-duplicata)
+- [ ] Backend: ao confirmar carga, criar receita no financeiro com valor proporcional (peso × preço/ton) e cargo_load_id como referência
+- [ ] Backend: ao desmarcar carga como recebida, remover a receita financeira vinculada (reversão)
+- [ ] Frontend: DestinationReportPage - toast informando que receita foi criada ao confirmar carga
+- [ ] Frontend: DestinationReportPage - toast informando que receita foi removida ao desmarcar carga
+
+## 📋 CONTROLE DE NOTAS FISCAIS (18/06/2026)
+- [ ] Schema: adicionar campo invoice_checked (boolean) e invoice_checked_at (bigint) na tabela cargo_loads
+- [ ] Backend: router para listar notas com filtros (cliente, data, status, conferido)
+- [ ] Backend: router para marcar/desmarcar nota como conferida
+- [ ] Frontend: criar página NotesControlPage com listagem de notas
+- [ ] Frontend: filtros por cliente, data, status de pagamento, conferido/não conferido
+- [ ] Frontend: botão "Conferir" por nota com toggle e registro de data/hora
+- [ ] Frontend: colunas: nº nota, data entrega, destino/cliente, volume, peso, valor, status pagamento, conferido
+- [ ] Frontend: registrar rota /notas-fiscais no App.tsx
+- [ ] Frontend: adicionar item no menu DashboardLayout
+- [ ] Permissão: adicionar slug notas-fiscais no SYSTEM_MODULES
