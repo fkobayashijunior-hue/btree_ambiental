@@ -48,7 +48,9 @@ export const SYSTEM_MODULES = [
   { slug: "fornecedores", label: "Fornecedores",             group: "Compras" },
   { slug: "orcamentos",   label: "Orçamentos",               group: "Compras" },
   // Transporte
-  { slug: "ciclos-frete", label: "Ciclos de Frete (Geofence)", group: "Transporte" },
+  { slug: "ciclos-frete",    label: "Ciclos de Frete (Geofence)",   group: "Transporte" },
+  // Notas
+  { slug: "controle-notas", label: "Controle de Notas Fiscais",    group: "Notas" },
 ] as const;
 
 export type ModuleSlug = typeof SYSTEM_MODULES[number]["slug"];

@@ -34,6 +34,7 @@ import { freightCyclesRouter } from "./routers/freightCycles";
 import { suppliersRouter } from "./routers/suppliers";
 import { quotationsRouter } from "./routers/quotations";
 import { purchaseRequestsRouter } from "./routers/purchaseRequests";
+import { invoiceControlRouter } from "./routers/invoiceControl";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { SignJWT } from "jose";
@@ -313,6 +314,7 @@ export const appRouter = router({
   suppliers: suppliersRouter,
   quotations: quotationsRouter,
   purchaseRequests: purchaseRequestsRouter,
+  invoiceControl: invoiceControlRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
     run: publicProcedure
