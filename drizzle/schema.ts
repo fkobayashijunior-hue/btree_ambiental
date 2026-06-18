@@ -1357,7 +1357,6 @@ export const quotationRequests = mysqlTable("quotation_requests", {
   notes: text(),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 export type QuotationRequest = typeof quotationRequests.$inferSelect;
 export type InsertQuotationRequest = typeof quotationRequests.$inferInsert;
