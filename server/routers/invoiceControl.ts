@@ -3,10 +3,10 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { cargoLoads, cargoDestinations, clients } from "../../drizzle/schema";
-import { eq, desc, and, gte, lte, like, or } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 
 export const invoiceControlRouter = router({
-  // Listar notas com filtros
+  // Listar notas com filtros — mostra todas as cargas (sem filtro de status)
   list: protectedProcedure
     .input(z.object({
       search: z.string().optional(),
@@ -15,7 +15,7 @@ export const invoiceControlRouter = router({
       checked: z.boolean().optional(), // undefined = todos, true = conferidos, false = não conferidos
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
-      limit: z.number().optional().default(100),
+      limit: z.number().optional().default(200),
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
@@ -41,8 +41,6 @@ export const invoiceControlRouter = router({
           receivedByBuyer: cargoLoads.receivedByBuyer,
           invoiceChecked: cargoLoads.invoiceChecked,
           invoiceCheckedAt: cargoLoads.invoiceCheckedAt,
-          invoiceCheckedBy: cargoLoads.invoiceCheckedBy,
-          invoiceCheckedByName: cargoLoads.invoiceCheckedByName,
           // Joins
           destinationName: cargoDestinations.name,
           clientNameJoined: clients.name,
@@ -50,9 +48,8 @@ export const invoiceControlRouter = router({
         .from(cargoLoads)
         .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
-        .where(eq(cargoLoads.status, 'entregue'))
         .orderBy(desc(cargoLoads.date))
-        .limit(input?.limit ?? 100);
+        .limit(input?.limit ?? 200);
 
       let filtered = results.map(r => ({
         ...r,
@@ -81,24 +78,22 @@ export const invoiceControlRouter = router({
       return filtered;
     }),
 
-  // Marcar/desmarcar nota como conferida
+  // Marcar/desmarcar nota como conferida (sem colunas extras que podem não existir)
   toggleChecked: protectedProcedure
     .input(z.object({ id: z.number(), checked: z.boolean() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
       await db.update(cargoLoads).set({
         invoiceChecked: input.checked ? 1 : 0,
         invoiceCheckedAt: input.checked ? Date.now() : 0,
-        invoiceCheckedBy: input.checked ? ctx.user.id : null,
-        invoiceCheckedByName: input.checked ? ctx.user.name : null,
       }).where(eq(cargoLoads.id, input.id));
 
       return { success: true };
     }),
 
-  // Estatísticas resumidas
+  // Estatísticas resumidas — todas as cargas
   stats: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
@@ -108,8 +103,7 @@ export const invoiceControlRouter = router({
         invoiceChecked: cargoLoads.invoiceChecked,
         invoiceNumber: cargoLoads.invoiceNumber,
       })
-      .from(cargoLoads)
-      .where(eq(cargoLoads.status, 'entregue'));
+      .from(cargoLoads);
 
     const total = all.length;
     const checked = all.filter(r => r.invoiceChecked === 1).length;

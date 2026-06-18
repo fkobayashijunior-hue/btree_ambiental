@@ -1520,9 +1520,25 @@ export const cargoLoadsRouter = router({
 
         if (existing.length === 0) {
           // Busca dados da carga para calcular o valor
-          const [cargo] = await db.select().from(cargoLoads).where(eq(cargoLoads.id, input.id)).limit(1);
+          const [cargo] = await db.select({
+              id: cargoLoads.id,
+              date: cargoLoads.date,
+              destinationId: cargoLoads.destinationId,
+              weightNetKg: cargoLoads.weightNetKg,
+              weightKg: cargoLoads.weightKg,
+              volumeM3: cargoLoads.volumeM3,
+              invoiceNumber: cargoLoads.invoiceNumber,
+            }).from(cargoLoads).where(eq(cargoLoads.id, input.id)).limit(1);
           if (cargo && cargo.destinationId) {
-            const [dest] = await db.select().from(cargoDestinations)
+            const [dest] = await db.select({
+              id: cargoDestinations.id,
+              name: cargoDestinations.name,
+              pricePerTon: cargoDestinations.pricePerTon,
+              pricePerM3: cargoDestinations.pricePerM3,
+              priceType: cargoDestinations.priceType,
+              pricePerUnit: cargoDestinations.pricePerUnit,
+              unit: cargoDestinations.unit,
+            }).from(cargoDestinations)
               .where(eq(cargoDestinations.id, cargo.destinationId)).limit(1);
             if (dest) {
               const weightNetKg = parseFloat(cargo.weightNetKg || cargo.weightKg || '0');
