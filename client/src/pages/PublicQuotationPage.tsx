@@ -1,0 +1,461 @@
+import { useState } from "react";
+import { useParams } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
+import {
+  Building2, Phone, Mail, Globe, Instagram, Package, Plus, X,
+  CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Send
+} from "lucide-react";
+
+// Dados fixos da empresa
+const COMPANY = {
+  name: 'BTREE Ambiental',
+  commercial: 'Fábio Jundy Kobayashi',
+  phone: '(44) 98833-4679',
+  whatsapp: '5544988334679',
+  instagram: '@btree_ambiental',
+  site: 'btreeambiental.com',
+  logoText: '🌿',
+};
+
+type RequestItem = { name: string; quantity: string; unit: string };
+type ResponseItem = {
+  name: string;
+  quantity: string;
+  unit: string;
+  price: string;
+  brand: string;
+  notes: string;
+};
+
+export default function PublicQuotationPage() {
+  const { token } = useParams<{ token: string }>();
+
+  const { data, isLoading } = trpc.quotationRequests.getByToken.useQuery(
+    { token: token || '' },
+    { enabled: !!token }
+  );
+
+  // Dados da empresa fornecedora
+  const [supplierName, setSupplierName] = useState('');
+  const [cnpj, setCnpj] = useState('');
+  const [address, setAddress] = useState('');
+  const [sellerName, setSellerName] = useState('');
+  const [sellerPhone, setSellerPhone] = useState('');
+  const [sellerEmail, setSellerEmail] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [showItems, setShowItems] = useState(true);
+
+  // Itens de resposta (inicializados quando os dados chegam)
+  const [responseItems, setResponseItems] = useState<ResponseItem[]>([]);
+  const [initialized, setInitialized] = useState(false);
+
+  // Inicializar itens quando os dados chegarem
+  if (data?.found && data.request && !initialized) {
+    setResponseItems(
+      data.request.items.map((item: RequestItem) => ({
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit || 'un',
+        price: '',
+        brand: '',
+        notes: '',
+      }))
+    );
+    setInitialized(true);
+  }
+
+  const submitMutation = trpc.quotationRequests.submitResponse.useMutation({
+    onSuccess: () => {
+      setSubmitted(true);
+    },
+    onError: (err) => toast.error("Erro ao enviar: " + err.message),
+  });
+
+  function addExtraItem() {
+    setResponseItems([...responseItems, { name: '', quantity: '1', unit: 'un', price: '', brand: '', notes: '' }]);
+  }
+
+  function removeItem(idx: number) {
+    setResponseItems(responseItems.filter((_, i) => i !== idx));
+  }
+
+  function updateItem(idx: number, field: keyof ResponseItem, value: string) {
+    setResponseItems(responseItems.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }
+
+  function handleSubmit() {
+    if (!supplierName.trim()) { toast.error("Informe o nome da sua empresa"); return; }
+    const validItems = responseItems.filter(i => i.name.trim() && i.price.trim());
+    if (validItems.length === 0) { toast.error("Informe o preço de pelo menos um item"); return; }
+
+    submitMutation.mutate({
+      token: token || '',
+      supplierName,
+      cnpj: cnpj || undefined,
+      address: address || undefined,
+      sellerName: sellerName || undefined,
+      sellerPhone: sellerPhone || undefined,
+      sellerEmail: sellerEmail || undefined,
+      items: validItems.map(i => ({
+        name: i.name,
+        quantity: i.quantity,
+        unit: i.unit,
+        price: i.price,
+        brand: i.brand || undefined,
+        notes: i.notes || undefined,
+      })),
+      notes: notes || undefined,
+    });
+  }
+
+  // ===== LOADING =====
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-gray-500">Carregando solicitação...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== NÃO ENCONTRADO =====
+  if (!data || !data.found) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-gray-800 mb-2">Solicitação não encontrada</h1>
+          <p className="text-gray-500 mb-6">Este link não existe ou foi removido.</p>
+          <a href="https://btreeambiental.com" className="inline-flex items-center gap-2 text-green-600 hover:underline font-medium">
+            <Globe className="w-4 h-4" /> Conheça a BTREE Ambiental
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== EXPIRADO OU CANCELADO =====
+  if (data.isExpired || data.isCancelled) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          {/* Header empresa */}
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3">🌿</div>
+            <h1 className="text-2xl font-bold text-green-800">{COMPANY.name}</h1>
+            <p className="text-sm text-gray-500">Biomassa · Tratamento · Reflorestamento · Eucalipto</p>
+          </div>
+
+          <Card className="text-center">
+            <CardContent className="p-8">
+              <Clock className="w-14 h-14 text-amber-400 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                {data.isCancelled ? 'Solicitação Cancelada' : 'Link Expirado'}
+              </h2>
+              <p className="text-gray-500 mb-6">
+                {data.isCancelled
+                  ? 'Esta solicitação de orçamento foi cancelada.'
+                  : 'Este link de orçamento expirou após 7 dias.'}
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                Quer se tornar um fornecedor parceiro da BTREE Ambiental?
+              </p>
+              <a
+                href="https://btreeambiental.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
+              >
+                <Globe className="w-4 h-4" /> Seja um Parceiro
+              </a>
+              <div className="mt-6 pt-6 border-t text-sm text-gray-400">
+                <p>Dúvidas? Entre em contato:</p>
+                <a href={`tel:${COMPANY.phone}`} className="text-green-600 font-medium">{COMPANY.phone}</a>
+                <p className="mt-1">{COMPANY.commercial}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  const request = data.request!;
+
+  // ===== ENVIADO COM SUCESSO =====
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3">🌿</div>
+            <h1 className="text-2xl font-bold text-green-800">{COMPANY.name}</h1>
+          </div>
+          <Card className="text-center">
+            <CardContent className="p-8">
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-800 mb-2">Orçamento Enviado!</h2>
+              <p className="text-gray-500 mb-2">
+                Obrigado, <strong>{supplierName}</strong>!
+              </p>
+              <p className="text-sm text-gray-400 mb-6">
+                Seu orçamento foi recebido com sucesso. Nossa equipe entrará em contato em breve.
+              </p>
+              <div className="bg-green-50 rounded-lg p-4 text-sm text-green-700">
+                <p className="font-medium">📞 Contato Comercial</p>
+                <p className="mt-1">{COMPANY.commercial}</p>
+                <a href={`tel:${COMPANY.phone}`} className="font-bold text-green-800">{COMPANY.phone}</a>
+              </div>
+              <div className="mt-4 flex justify-center gap-4 text-sm text-gray-400">
+                <a href={`https://wa.me/${COMPANY.whatsapp}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">WhatsApp</a>
+                <span>·</span>
+                <a href={`https://instagram.com/btree_ambiental`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">Instagram</a>
+                <span>·</span>
+                <a href={`https://${COMPANY.site}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">Site</a>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== FORMULÁRIO PRINCIPAL =====
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header da empresa */}
+      <div className="bg-green-700 text-white">
+        <div className="max-w-2xl mx-auto px-4 py-6">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl flex-shrink-0">🌿</div>
+            <div>
+              <h1 className="text-xl font-bold">{COMPANY.name}</h1>
+              <p className="text-green-200 text-sm">Biomassa · Tratamento · Reflorestamento · Eucalipto</p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 text-sm text-green-100">
+            <a href={`tel:${COMPANY.phone}`} className="flex items-center gap-1 hover:text-white">
+              <Phone className="w-3 h-3" /> {COMPANY.phone}
+            </a>
+            <a href={`https://${COMPANY.site}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-white">
+              <Globe className="w-3 h-3" /> {COMPANY.site}
+            </a>
+            <a href="https://instagram.com/btree_ambiental" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-white">
+              <Instagram className="w-3 h-3" /> {COMPANY.instagram}
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+        {/* Título da solicitação */}
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <Package className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-1">Solicitação de Orçamento</p>
+                <h2 className="text-lg font-bold text-green-900">{request.title}</h2>
+                {request.requesterName && (
+                  <p className="text-sm text-green-700 mt-1">
+                    Solicitado por: <strong>{request.requesterName}</strong>
+                    {request.requesterPhone && <span className="ml-2">· {request.requesterPhone}</span>}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Itens solicitados (colapsável) */}
+        <Card>
+          <button
+            className="w-full text-left"
+            onClick={() => setShowItems(!showItems)}
+          >
+            <CardHeader className="p-4 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Package className="w-4 h-4 text-gray-500" />
+                  Itens Solicitados ({request.items.length})
+                </CardTitle>
+                {showItems ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+              </div>
+            </CardHeader>
+          </button>
+          {showItems && (
+            <CardContent className="p-4 pt-0">
+              <div className="space-y-2">
+                {request.items.map((item: RequestItem, i: number) => (
+                  <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 text-sm">
+                    <span className="w-6 h-6 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
+                    <span className="font-medium text-gray-800 flex-1">{item.name}</span>
+                    <span className="text-gray-500 text-xs">{item.quantity} {item.unit}</span>
+                  </div>
+                ))}
+              </div>
+              {request.notes && (
+                <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+                  <strong>Observações:</strong> {request.notes}
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Dados da empresa fornecedora */}
+        <Card>
+          <CardHeader className="p-4 pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-gray-500" />
+              Dados da Sua Empresa
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <div>
+              <Label>Nome da Empresa *</Label>
+              <Input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Razão Social ou Nome Fantasia" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>CNPJ / CPF</Label>
+                <Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+              </div>
+              <div>
+                <Label>Cidade / Estado</Label>
+                <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Ex: Maringá - PR" />
+              </div>
+            </div>
+            <div className="border-t pt-3">
+              <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Contato do Vendedor</p>
+              <div className="space-y-2">
+                <Input value={sellerName} onChange={e => setSellerName(e.target.value)} placeholder="Nome do vendedor responsável" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} placeholder="Telefone / WhatsApp" />
+                  <Input value={sellerEmail} onChange={e => setSellerEmail(e.target.value)} placeholder="E-mail" type="email" />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Preços por item */}
+        <Card>
+          <CardHeader className="p-4 pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Preços dos Itens</CardTitle>
+              <Button type="button" variant="outline" size="sm" onClick={addExtraItem}>
+                <Plus className="w-3 h-3 mr-1" /> Adicionar Item
+              </Button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Você pode adicionar produtos alternativos ou complementares</p>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            {responseItems.map((item, idx) => {
+              const isOriginal = idx < (request.items.length);
+              return (
+                <div key={idx} className={`border rounded-lg p-3 space-y-2 ${isOriginal ? 'border-green-200 bg-green-50/30' : 'border-blue-200 bg-blue-50/30'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500">
+                      {isOriginal ? `Item ${idx + 1} (solicitado)` : `Item extra ${idx - request.items.length + 1}`}
+                    </span>
+                    {!isOriginal && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600 p-1 h-auto">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2">
+                      <Input
+                        value={item.name}
+                        onChange={e => updateItem(idx, 'name', e.target.value)}
+                        placeholder="Nome do produto"
+                        className={isOriginal ? 'bg-white' : ''}
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        value={item.price}
+                        onChange={e => updateItem(idx, 'price', e.target.value)}
+                        placeholder="Preço unitário (R$)"
+                        type="number"
+                        step="0.01"
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        value={item.brand}
+                        onChange={e => updateItem(idx, 'brand', e.target.value)}
+                        placeholder="Marca (opcional)"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Input
+                        value={item.notes}
+                        onChange={e => updateItem(idx, 'notes', e.target.value)}
+                        placeholder="Observações (prazo, condições...)"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        {/* Observações gerais */}
+        <Card>
+          <CardContent className="p-4">
+            <Label>Observações Gerais</Label>
+            <Textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Condições de pagamento, prazo de entrega, validade do orçamento..."
+              rows={3}
+              className="mt-1"
+            />
+          </CardContent>
+        </Card>
+
+        {/* Botão enviar */}
+        <Button
+          onClick={handleSubmit}
+          disabled={submitMutation.isPending}
+          className="w-full bg-green-600 hover:bg-green-700 h-12 text-base font-semibold"
+        >
+          {submitMutation.isPending ? (
+            <span className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Enviando...
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              <Send className="w-5 h-5" />
+              Enviar Orçamento
+            </span>
+          )}
+        </Button>
+
+        {/* Rodapé */}
+        <div className="text-center text-xs text-gray-400 pb-4">
+          <p>Este formulário é destinado exclusivamente à solicitação de orçamento da <strong>BTREE Ambiental</strong></p>
+          <p className="mt-1">
+            <a href={`https://${COMPANY.site}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">{COMPANY.site}</a>
+            {' · '}
+            <a href={`tel:${COMPANY.phone}`} className="text-green-600 hover:underline">{COMPANY.phone}</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

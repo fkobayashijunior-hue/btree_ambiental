@@ -1338,3 +1338,42 @@ export const freightCycles = mysqlTable("freight_cycles", {
 });
 export type FreightCycle = typeof freightCycles.$inferSelect;
 export type InsertFreightCycle = typeof freightCycles.$inferInsert;
+
+// ============================================================
+// MÓDULO: SOLICITAÇÃO DE ORÇAMENTO
+// ============================================================
+
+export const quotationRequests = mysqlTable("quotation_requests", {
+  id: int().autoincrement().primaryKey().notNull(),
+  title: varchar({ length: 255 }).notNull(),
+  requesterId: int("requester_id").references(() => collaborators.id),
+  requesterName: varchar("requester_name", { length: 255 }),
+  requesterPhone: varchar("requester_phone", { length: 30 }),
+  requesterEmail: varchar("requester_email", { length: 255 }),
+  itemsJson: text("items_json").notNull(), // JSON array: [{name, quantity, unit}]
+  token: varchar({ length: 64 }).notNull(),
+  expiresAt: bigint("expires_at", { mode: 'number' }).notNull(),
+  status: mysqlEnum(['ativa','respondida','expirada','cancelada']).default('ativa').notNull(),
+  notes: text(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type QuotationRequest = typeof quotationRequests.$inferSelect;
+export type InsertQuotationRequest = typeof quotationRequests.$inferInsert;
+
+export const quotationResponses = mysqlTable("quotation_responses", {
+  id: int().autoincrement().primaryKey().notNull(),
+  quotationRequestId: int("quotation_request_id").notNull().references(() => quotationRequests.id),
+  supplierName: varchar("supplier_name", { length: 255 }).notNull(),
+  cnpj: varchar({ length: 30 }),
+  address: text(),
+  sellerName: varchar("seller_name", { length: 255 }),
+  sellerPhone: varchar("seller_phone", { length: 30 }),
+  sellerEmail: varchar("seller_email", { length: 255 }),
+  itemsJson: text("items_json").notNull(), // JSON array: [{name, quantity, unit, price, brand, notes}]
+  notes: text(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+export type QuotationResponse = typeof quotationResponses.$inferSelect;
+export type InsertQuotationResponse = typeof quotationResponses.$inferInsert;

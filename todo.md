@@ -2077,3 +2077,41 @@
 - [ ] Frontend: registrar rota /notas-fiscais no App.tsx
 - [ ] Frontend: adicionar item no menu DashboardLayout
 - [ ] Permissão: adicionar slug notas-fiscais no SYSTEM_MODULES
+
+---
+
+## 📋 MÓDULO: SOLICITAÇÃO DE ORÇAMENTO (18/06/2026)
+
+### Backend / Banco de Dados
+- [x] Schema: tabela quotation_requests (id, title, requesterId, itemsJson, token, expiresAt, status, createdAt)
+- [x] Schema: tabela quotation_responses (id, quotationRequestId, supplierName, cnpj, address, sellerName, sellerPhone, sellerEmail, itemsJson, createdAt)
+- [x] Router quotationRequests: create, list, getById, cancel
+- [x] Router quotationRequests: getByToken (publicProcedure — sem auth)
+- [x] Router quotationRequests: submitResponse (publicProcedure — fornecedor preenche)
+- [x] Registrar quotationRequestsRouter no routers.ts
+- [x] notifyOwner ao receber resposta do fornecedor
+
+### Frontend — Página Interna
+- [x] Nova aba "Solicitar Orçamento" na QuotationsPage
+- [x] Formulário: título da solicitação + seletor de colaborador solicitante
+- [x] Adição dinâmica de itens (nome, quantidade, unidade)
+- [x] Preview da mensagem WhatsApp formatada com cabeçalho BTREE + itens + rodapé solicitante
+- [x] Botão "Copiar Mensagem" para WhatsApp
+- [x] Botão "Gerar Link" para criar link público do fornecedor
+- [x] Exibição do link gerado com botão copiar
+- [x] Listagem de solicitações criadas com status e respostas recebidas
+- [x] Modal para visualizar respostas dos fornecedores
+
+### Frontend — Página Pública do Fornecedor
+- [x] Rota pública /orcamento/:token (sem DashboardLayout, sem auth)
+- [x] Cabeçalho BTREE Ambiental com logo, contato Fábio (44) 98833-4679, site btreeambiental.com
+- [x] Exibição dos itens solicitados
+- [x] Formulário: dados da empresa (nome, CNPJ, endereço, contato do vendedor)
+- [x] Campos de valor por produto + marca + opção de adicionar produtos alternativos
+- [x] Validação de link expirado → mensagem de link expirado com link para btreeambiental.com
+- [x] Confirmação de envio com mensagem de agradecimento
+- [x] Registrar rota em App.tsx fora do DashboardLayout
+
+### Deploy
+- [ ] Script SQL de migração para Hostinger (CREATE TABLE quotation_requests, quotation_responses)
+- [ ] pnpm build + git push github main

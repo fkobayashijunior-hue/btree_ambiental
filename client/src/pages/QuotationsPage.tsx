@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Plus, Tag, TrendingDown, Clock, Building2, ChevronDown, ChevronUp,
-  Pencil, Trash2, Star, History, Settings, X
+  Pencil, Trash2, MessageCircle, Link2, Copy, Check, Send, User,
+  Package, X, Eye, FileText, Phone, Mail, ExternalLink, Ban
 } from "lucide-react";
 
 function fmt(dateStr: string | null | undefined) {
@@ -26,13 +27,41 @@ function fmtPrice(price: string) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function fmtExpiry(expiresAt: number) {
+  const diff = expiresAt - Date.now();
+  if (diff <= 0) return 'Expirado';
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  if (days > 0) return `Expira em ${days}d ${hours}h`;
+  return `Expira em ${hours}h`;
+}
+
 const PRESET_COLORS = [
   '#F59E0B', '#3B82F6', '#EF4444', '#8B5CF6', '#10B981',
   '#F97316', '#EC4899', '#6B7280', '#14B8A6', '#84CC16',
 ];
 
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  ativa: { label: 'Ativa', color: 'bg-green-100 text-green-700 border-green-200' },
+  respondida: { label: 'Respondida', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  expirada: { label: 'Expirada', color: 'bg-gray-100 text-gray-500 border-gray-200' },
+  cancelada: { label: 'Cancelada', color: 'bg-red-100 text-red-500 border-red-200' },
+};
+
+// Dados da empresa
+const COMPANY = {
+  name: 'BTREE Ambiental',
+  commercial: 'Fábio Jundy Kobayashi',
+  phone: '(44) 98833-4679',
+  whatsapp: '5544988334679',
+  instagram: '@btree_ambiental',
+  site: 'btreeambiental.com',
+};
+
+type QuotItem = { name: string; quantity: string; unit: string };
+type ResponseItem = { name: string; quantity: string; unit?: string; price: string; brand?: string; notes?: string };
+
 export default function QuotationsPage() {
-  
   const utils = trpc.useUtils();
 
   const [activeTab, setActiveTab] = useState('catalog');
@@ -55,9 +84,27 @@ export default function QuotationsPage() {
   const [catColor, setCatColor] = useState('#6B7280');
   const [editCatId, setEditCatId] = useState<number | null>(null);
 
+  // ===== SOLICITAÇÃO DE ORÇAMENTO =====
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [reqTitle, setReqTitle] = useState('');
+  const [reqRequesterId, setReqRequesterId] = useState('');
+  const [reqItems, setReqItems] = useState<QuotItem[]>([{ name: '', quantity: '1', unit: 'un' }]);
+  const [reqNotes, setReqNotes] = useState('');
+  const [generatedToken, setGeneratedToken] = useState<string | null>(null);
+  const [generatedId, setGeneratedId] = useState<number | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedMsg, setCopiedMsg] = useState(false);
+  const [viewResponsesId, setViewResponsesId] = useState<number | null>(null);
+
   const { data: grouped, isLoading } = trpc.quotations.listByCategory.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery({ activeOnly: true });
   const { data: categories } = trpc.purchaseCategories.list.useQuery();
+  const { data: collaborators } = trpc.collaborators.list.useQuery({});
+  const { data: quotRequests, refetch: refetchRequests } = trpc.quotationRequests.list.useQuery();
+  const { data: requestDetail } = trpc.quotationRequests.getById.useQuery(
+    { id: viewResponsesId! },
+    { enabled: viewResponsesId !== null }
+  );
 
   const createQuoteMutation = trpc.quotations.create.useMutation({
     onSuccess: () => {
@@ -101,6 +148,23 @@ export default function QuotationsPage() {
     },
   });
 
+  const createRequestMutation = trpc.quotationRequests.create.useMutation({
+    onSuccess: (data) => {
+      setGeneratedToken(data.token);
+      setGeneratedId(data.id);
+      refetchRequests();
+      toast.success("Solicitação criada! Link gerado com sucesso.");
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+
+  const cancelRequestMutation = trpc.quotationRequests.cancel.useMutation({
+    onSuccess: () => {
+      refetchRequests();
+      toast.success("Solicitação cancelada");
+    },
+  });
+
   function resetQuoteForm() {
     setQSupplierId(''); setQCategoryId(''); setQProductName('');
     setQUnit('un'); setQPrice(''); setQNotes('');
@@ -110,6 +174,13 @@ export default function QuotationsPage() {
 
   function resetCatForm() {
     setCatName(''); setCatColor('#6B7280'); setEditCatId(null); setShowCatForm(false);
+  }
+
+  function resetRequestForm() {
+    setReqTitle(''); setReqRequesterId('');
+    setReqItems([{ name: '', quantity: '1', unit: 'un' }]);
+    setReqNotes(''); setGeneratedToken(null); setGeneratedId(null);
+    setShowRequestForm(false);
   }
 
   function handleSubmitQuote() {
@@ -140,6 +211,85 @@ export default function QuotationsPage() {
     }
   }
 
+  function addItem() {
+    setReqItems([...reqItems, { name: '', quantity: '1', unit: 'un' }]);
+  }
+
+  function removeItem(idx: number) {
+    setReqItems(reqItems.filter((_, i) => i !== idx));
+  }
+
+  function updateItem(idx: number, field: keyof QuotItem, value: string) {
+    setReqItems(reqItems.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }
+
+  function handleCreateRequest() {
+    if (!reqTitle.trim()) { toast.error("Informe o título da solicitação"); return; }
+    const validItems = reqItems.filter(i => i.name.trim());
+    if (validItems.length === 0) { toast.error("Adicione ao menos um item"); return; }
+
+    const requester = (collaborators || []).find(c => String(c.id) === reqRequesterId);
+    createRequestMutation.mutate({
+      title: reqTitle,
+      requesterId: requester?.id,
+      requesterName: requester?.name,
+      requesterPhone: requester?.phone || undefined,
+      requesterEmail: requester?.email || undefined,
+      items: validItems,
+      notes: reqNotes || undefined,
+    });
+  }
+
+  function getPublicLink(token: string) {
+    return `${window.location.origin}/orcamento/${token}`;
+  }
+
+  function buildWhatsAppMessage(token: string) {
+    const requester = (collaborators || []).find(c => String(c.id) === reqRequesterId);
+    const validItems = reqItems.filter(i => i.name.trim());
+    const link = getPublicLink(token);
+
+    let msg = `🌿 *${COMPANY.name}*\n`;
+    msg += `📞 ${COMPANY.phone} | ${COMPANY.site}\n`;
+    msg += `📸 Instagram: ${COMPANY.instagram}\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Olá! Aqui é *${requester?.name || 'a equipe BTREE Ambiental'}* e gostaria de solicitar um orçamento! Segue abaixo:\n\n`;
+    msg += `📋 *${reqTitle}*\n\n`;
+    msg += `*Itens solicitados:*\n`;
+    validItems.forEach((item, i) => {
+      msg += `${i + 1}. ${item.name} — ${item.quantity} ${item.unit}\n`;
+    });
+    if (reqNotes) msg += `\n📝 *Obs:* ${reqNotes}\n`;
+    msg += `\n🔗 *Preencha seu orçamento pelo link:*\n${link}\n`;
+    msg += `\n_(Válido por 7 dias)_\n\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    if (requester) {
+      msg += `*Solicitante:* ${requester.name}\n`;
+      if (requester.phone) msg += `📱 ${requester.phone}\n`;
+      if (requester.email) msg += `✉️ ${requester.email}\n`;
+    }
+    return msg;
+  }
+
+  async function copyLink(token: string) {
+    await navigator.clipboard.writeText(getPublicLink(token));
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+    toast.success("Link copiado!");
+  }
+
+  async function copyMessage(token: string) {
+    await navigator.clipboard.writeText(buildWhatsAppMessage(token));
+    setCopiedMsg(true);
+    setTimeout(() => setCopiedMsg(false), 2000);
+    toast.success("Mensagem copiada!");
+  }
+
+  function openWhatsApp(token: string) {
+    const msg = encodeURIComponent(buildWhatsAppMessage(token));
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  }
+
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-4">
       {/* Header */}
@@ -149,7 +299,7 @@ export default function QuotationsPage() {
             <TrendingDown className="w-6 h-6 text-purple-600" />
             Orçamentos
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Histórico de preços por produto e fornecedor</p>
+          <p className="text-sm text-gray-500 mt-1">Histórico de preços e solicitações para fornecedores</p>
         </div>
         <Button onClick={() => setShowQuoteForm(true)} className="bg-purple-600 hover:bg-purple-700">
           <Plus className="w-4 h-4 mr-2" /> Novo Orçamento
@@ -157,8 +307,11 @@ export default function QuotationsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-2">
+        <TabsList className="grid grid-cols-3">
           <TabsTrigger value="catalog">Catálogo de Preços</TabsTrigger>
+          <TabsTrigger value="requests" className="flex items-center gap-1">
+            <Send className="w-3 h-3" /> Solicitar
+          </TabsTrigger>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
         </TabsList>
 
@@ -180,10 +333,7 @@ export default function QuotationsPage() {
               const isExpanded = expandedCat === catKey;
               return (
                 <Card key={catKey} className="overflow-hidden">
-                  <button
-                    className="w-full text-left"
-                    onClick={() => setExpandedCat(isExpanded ? null : catKey)}
-                  >
+                  <button className="w-full text-left" onClick={() => setExpandedCat(isExpanded ? null : catKey)}>
                     <CardHeader className="p-4 pb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -195,7 +345,6 @@ export default function QuotationsPage() {
                       </div>
                     </CardHeader>
                   </button>
-
                   {isExpanded && (
                     <CardContent className="p-4 pt-0 space-y-3">
                       {cat.products.map(prod => {
@@ -203,7 +352,6 @@ export default function QuotationsPage() {
                         const isProdExpanded = expandedProd === prodKey;
                         const latestQuote = prod.quotes.reduce((latest, q) =>
                           q.quotationDate > latest.quotationDate ? q : latest, prod.quotes[0]);
-
                         return (
                           <div key={prod.productName} className="border rounded-lg overflow-hidden">
                             <button
@@ -227,10 +375,9 @@ export default function QuotationsPage() {
                                 </div>
                               </div>
                             </button>
-
                             {isProdExpanded && (
                               <div className="divide-y">
-                                {prod.quotes.map((q, idx) => {
+                                {prod.quotes.map((q) => {
                                   const isLowest = q.price === prod.lowestPrice;
                                   const isLatest = q.id === latestQuote?.id;
                                   return (
@@ -239,46 +386,20 @@ export default function QuotationsPage() {
                                         <div className="flex items-center gap-2">
                                           <Building2 className="w-3 h-3 text-gray-400" />
                                           <span className="text-sm font-medium text-gray-700">{q.supplierName}</span>
-                                          {isLowest && (
-                                            <Badge className="text-xs bg-green-100 text-green-700 border-green-200">
-                                              <TrendingDown className="w-2 h-2 mr-1" /> Menor
-                                            </Badge>
-                                          )}
-                                          {isLatest && (
-                                            <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200">
-                                              <Clock className="w-2 h-2 mr-1" /> Último
-                                            </Badge>
-                                          )}
+                                          {isLowest && <Badge className="text-xs bg-green-100 text-green-700 border-green-200"><TrendingDown className="w-2 h-2 mr-1" /> Menor</Badge>}
+                                          {isLatest && <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200"><Clock className="w-2 h-2 mr-1" /> Último</Badge>}
                                         </div>
                                         <div className="flex items-center gap-3 mt-1">
-                                          <span className={`text-sm font-bold ${isLowest ? 'text-green-700' : 'text-gray-700'}`}>
-                                            {fmtPrice(q.price)}
-                                          </span>
+                                          <span className={`text-sm font-bold ${isLowest ? 'text-green-700' : 'text-gray-700'}`}>{fmtPrice(q.price)}</span>
                                           <span className="text-xs text-gray-400">{fmt(q.quotationDate)}</span>
-                                          {q.supplierPhone && (
-                                            <a href={`tel:${q.supplierPhone}`} className="text-xs text-blue-500 hover:underline">
-                                              {q.supplierPhone}
-                                            </a>
-                                          )}
+                                          {q.supplierPhone && <a href={`tel:${q.supplierPhone}`} className="text-xs text-blue-500 hover:underline">{q.supplierPhone}</a>}
                                           {q.supplierWhatsapp && (
-                                            <a
-                                              href={`https://wa.me/55${q.supplierWhatsapp.replace(/\D/g, '')}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="text-xs text-green-500 hover:underline"
-                                            >
-                                              WhatsApp
-                                            </a>
+                                            <a href={`https://wa.me/55${q.supplierWhatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-xs text-green-500 hover:underline">WhatsApp</a>
                                           )}
                                         </div>
                                         {q.notes && <p className="text-xs text-gray-400 mt-0.5">{q.notes}</p>}
                                       </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => deleteQuoteMutation.mutate({ id: q.id })}
-                                        className="text-red-300 hover:text-red-500 p-1"
-                                      >
+                                      <Button variant="ghost" size="sm" onClick={() => deleteQuoteMutation.mutate({ id: q.id })} className="text-red-300 hover:text-red-500 p-1">
                                         <Trash2 className="w-3 h-3" />
                                       </Button>
                                     </div>
@@ -294,6 +415,114 @@ export default function QuotationsPage() {
                 </Card>
               );
             })
+          )}
+        </TabsContent>
+
+        {/* SOLICITAR ORÇAMENTO TAB */}
+        <TabsContent value="requests" className="space-y-3 mt-3">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-500">Crie solicitações para enviar a fornecedores via WhatsApp ou link</p>
+            <Button size="sm" onClick={() => setShowRequestForm(true)} className="bg-green-600 hover:bg-green-700">
+              <Plus className="w-3 h-3 mr-1" /> Nova Solicitação
+            </Button>
+          </div>
+
+          {/* Lista de solicitações */}
+          {!quotRequests || quotRequests.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Send className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>Nenhuma solicitação criada</p>
+              <p className="text-xs mt-1">Crie uma solicitação para gerar mensagem WhatsApp ou link para fornecedores</p>
+              <Button variant="outline" className="mt-3" onClick={() => setShowRequestForm(true)}>
+                <Plus className="w-4 h-4 mr-2" /> Criar primeira solicitação
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {quotRequests.map(req => {
+                const statusInfo = STATUS_LABELS[req.status] || STATUS_LABELS.ativa;
+                const expired = req.isExpired;
+                return (
+                  <Card key={req.id} className={expired && req.status === 'ativa' ? 'opacity-60' : ''}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-gray-900 truncate">{req.title}</span>
+                            <Badge className={`text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
+                            {expired && req.status === 'ativa' && (
+                              <Badge className="text-xs bg-orange-100 text-orange-600 border-orange-200">Expirado</Badge>
+                            )}
+                          </div>
+                          {req.requesterName && (
+                            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                              <User className="w-3 h-3" />
+                              <span>{req.requesterName}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-400">
+                            <Package className="w-3 h-3" />
+                            <span>{req.items.length} item(s)</span>
+                            <span className="mx-1">·</span>
+                            <span>{fmt(req.createdAt)}</span>
+                            {!expired && req.status === 'ativa' && (
+                              <>
+                                <span className="mx-1">·</span>
+                                <span className="text-amber-600">{fmtExpiry(req.expiresAt)}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setViewResponsesId(req.id)}
+                            className="text-blue-500 hover:text-blue-700 p-1"
+                            title="Ver respostas"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {req.status === 'ativa' && !expired && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyLink(req.token)}
+                                className="text-gray-500 hover:text-gray-700 p-1"
+                                title="Copiar link"
+                              >
+                                <Link2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openWhatsApp(req.token)}
+                                className="text-green-500 hover:text-green-700 p-1"
+                                title="Enviar WhatsApp"
+                              >
+                                <MessageCircle className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                          {req.status === 'ativa' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => cancelRequestMutation.mutate({ id: req.id })}
+                              className="text-red-300 hover:text-red-500 p-1"
+                              title="Cancelar"
+                            >
+                              <Ban className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </TabsContent>
 
@@ -314,20 +543,10 @@ export default function QuotationsPage() {
                     <span className="font-medium text-gray-800">{cat.name}</span>
                   </div>
                   <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => { setCatName(cat.name); setCatColor(cat.color); setEditCatId(cat.id); setShowCatForm(true); }}
-                      className="text-blue-400 hover:text-blue-600 p-1"
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => { setCatName(cat.name); setCatColor(cat.color); setEditCatId(cat.id); setShowCatForm(true); }} className="text-blue-400 hover:text-blue-600 p-1">
                       <Pencil className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteCatMutation.mutate({ id: cat.id })}
-                      className="text-red-300 hover:text-red-500 p-1"
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => deleteCatMutation.mutate({ id: cat.id })} className="text-red-300 hover:text-red-500 p-1">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -338,6 +557,277 @@ export default function QuotationsPage() {
         </TabsContent>
       </Tabs>
 
+      {/* ===== DIALOG: NOVA SOLICITAÇÃO DE ORÇAMENTO ===== */}
+      <Dialog open={showRequestForm} onOpenChange={(open) => { if (!open) resetRequestForm(); else setShowRequestForm(true); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5 text-green-600" />
+              {generatedToken ? 'Solicitação Criada!' : 'Nova Solicitação de Orçamento'}
+            </DialogTitle>
+          </DialogHeader>
+
+          {!generatedToken ? (
+            <div className="space-y-4">
+              {/* Título */}
+              <div>
+                <Label>Título da Solicitação *</Label>
+                <Input value={reqTitle} onChange={e => setReqTitle(e.target.value)} placeholder="Ex: Orçamento de Óleos e Filtros — Junho/2026" />
+              </div>
+
+              {/* Solicitante */}
+              <div>
+                <Label>Solicitante (Colaborador)</Label>
+                <Select value={reqRequesterId} onValueChange={setReqRequesterId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar colaborador..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(collaborators || []).filter(c => c.active !== 0).map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {reqRequesterId && (() => {
+                  const c = (collaborators || []).find(x => String(x.id) === reqRequesterId);
+                  return c ? (
+                    <div className="mt-1 text-xs text-gray-500 flex gap-3">
+                      {c.phone && <span>📱 {c.phone}</span>}
+                      {c.email && <span>✉️ {c.email}</span>}
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+
+              {/* Itens */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Itens Solicitados *</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                    <Plus className="w-3 h-3 mr-1" /> Adicionar Item
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {reqItems.map((item, idx) => (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <div className="flex-1">
+                        <Input
+                          value={item.name}
+                          onChange={e => updateItem(idx, 'name', e.target.value)}
+                          placeholder={`Item ${idx + 1} — Ex: Óleo Motor 15W40`}
+                        />
+                      </div>
+                      <div className="w-20">
+                        <Input
+                          value={item.quantity}
+                          onChange={e => updateItem(idx, 'quantity', e.target.value)}
+                          placeholder="Qtd"
+                        />
+                      </div>
+                      <div className="w-16">
+                        <Input
+                          value={item.unit}
+                          onChange={e => updateItem(idx, 'unit', e.target.value)}
+                          placeholder="un"
+                        />
+                      </div>
+                      {reqItems.length > 1 && (
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600 p-1 mt-0.5">
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Observações */}
+              <div>
+                <Label>Observações</Label>
+                <Textarea value={reqNotes} onChange={e => setReqNotes(e.target.value)} placeholder="Condições especiais, prazo de entrega, etc." rows={2} />
+              </div>
+
+              {/* Preview da mensagem */}
+              {reqTitle && reqItems.some(i => i.name.trim()) && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
+                    <MessageCircle className="w-3 h-3" /> Preview da Mensagem WhatsApp
+                  </p>
+                  <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">
+                    {`🌿 *${COMPANY.name}*\n📞 ${COMPANY.phone} | ${COMPANY.site}\n📸 Instagram: ${COMPANY.instagram}\n━━━━━━━━━━━━━━━━━━━━\n\nOlá! Aqui é *${(collaborators || []).find(c => String(c.id) === reqRequesterId)?.name || 'a equipe BTREE Ambiental'}* e gostaria de solicitar um orçamento! Segue abaixo:\n\n📋 *${reqTitle}*\n\n*Itens solicitados:*\n${reqItems.filter(i => i.name.trim()).map((item, i) => `${i + 1}. ${item.name} — ${item.quantity} ${item.unit}`).join('\n')}\n\n🔗 *Preencha seu orçamento pelo link:*\n[link será gerado ao criar]`}
+                  </pre>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ===== RESULTADO APÓS CRIAÇÃO ===== */
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                <Check className="w-10 h-10 text-green-600 mx-auto mb-2" />
+                <p className="font-semibold text-green-800">Solicitação criada com sucesso!</p>
+                <p className="text-sm text-green-600 mt-1">Link válido por 7 dias</p>
+              </div>
+
+              {/* Link público */}
+              <div>
+                <Label className="text-sm font-semibold flex items-center gap-1 mb-2">
+                  <Link2 className="w-4 h-4 text-blue-500" /> Link para o Fornecedor
+                </Label>
+                <div className="flex gap-2">
+                  <Input value={getPublicLink(generatedToken)} readOnly className="text-xs bg-gray-50" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyLink(generatedToken)}
+                    className="flex-shrink-0"
+                  >
+                    {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">O fornecedor acessa este link, vê os itens e preenche o orçamento sem precisar de login</p>
+              </div>
+
+              {/* Mensagem WhatsApp */}
+              <div>
+                <Label className="text-sm font-semibold flex items-center gap-1 mb-2">
+                  <MessageCircle className="w-4 h-4 text-green-500" /> Mensagem WhatsApp
+                </Label>
+                <div className="bg-gray-50 border rounded-lg p-3 max-h-48 overflow-y-auto">
+                  <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">
+                    {buildWhatsAppMessage(generatedToken)}
+                  </pre>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyMessage(generatedToken)}
+                    className="flex-1"
+                  >
+                    {copiedMsg ? <Check className="w-4 h-4 mr-1 text-green-500" /> : <Copy className="w-4 h-4 mr-1" />}
+                    Copiar Mensagem
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => openWhatsApp(generatedToken)}
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-1" />
+                    Abrir WhatsApp
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            {!generatedToken ? (
+              <>
+                <Button variant="outline" onClick={resetRequestForm}>Cancelar</Button>
+                <Button
+                  onClick={handleCreateRequest}
+                  disabled={createRequestMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {createRequestMutation.isPending ? 'Criando...' : 'Criar Solicitação'}
+                </Button>
+              </>
+            ) : (
+              <Button onClick={resetRequestForm} variant="outline" className="w-full">
+                Fechar
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: VER RESPOSTAS ===== */}
+      <Dialog open={viewResponsesId !== null} onOpenChange={(open) => { if (!open) setViewResponsesId(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              Respostas dos Fornecedores
+            </DialogTitle>
+          </DialogHeader>
+
+          {requestDetail && (
+            <div className="space-y-4">
+              {/* Info da solicitação */}
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="font-semibold text-gray-800">{requestDetail.title}</p>
+                <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
+                  {requestDetail.requesterName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {requestDetail.requesterName}</span>}
+                  <span className="flex items-center gap-1"><Package className="w-3 h-3" /> {requestDetail.items.length} item(s)</span>
+                  <Badge className={`text-xs ${STATUS_LABELS[requestDetail.status]?.color}`}>{STATUS_LABELS[requestDetail.status]?.label}</Badge>
+                </div>
+                <div className="mt-2 space-y-1">
+                  {requestDetail.items.map((item: QuotItem, i: number) => (
+                    <div key={i} className="text-xs text-gray-600 flex items-center gap-1">
+                      <span className="w-4 text-gray-400">{i + 1}.</span>
+                      <span className="font-medium">{item.name}</span>
+                      <span className="text-gray-400">— {item.quantity} {item.unit}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Respostas */}
+              {requestDetail.responses.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <Building2 className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p>Nenhuma resposta recebida ainda</p>
+                  <p className="text-xs mt-1">Compartilhe o link com os fornecedores</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-gray-700">{requestDetail.responses.length} resposta(s) recebida(s)</p>
+                  {requestDetail.responses.map((resp: any) => (
+                    <Card key={resp.id} className="border-blue-100">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-semibold text-gray-800">{resp.supplierName}</p>
+                            {resp.cnpj && <p className="text-xs text-gray-500">CNPJ: {resp.cnpj}</p>}
+                            {resp.address && <p className="text-xs text-gray-500">{resp.address}</p>}
+                          </div>
+                          <span className="text-xs text-gray-400">{fmt(resp.createdAt)}</span>
+                        </div>
+                        {(resp.sellerName || resp.sellerPhone || resp.sellerEmail) && (
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                            {resp.sellerName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {resp.sellerName}</span>}
+                            {resp.sellerPhone && <a href={`tel:${resp.sellerPhone}`} className="flex items-center gap-1 text-blue-500 hover:underline"><Phone className="w-3 h-3" /> {resp.sellerPhone}</a>}
+                            {resp.sellerEmail && <a href={`mailto:${resp.sellerEmail}`} className="flex items-center gap-1 text-blue-500 hover:underline"><Mail className="w-3 h-3" /> {resp.sellerEmail}</a>}
+                          </div>
+                        )}
+                        <div className="mt-3 space-y-2">
+                          {resp.items.map((item: ResponseItem, i: number) => (
+                            <div key={i} className="flex items-center justify-between bg-gray-50 rounded p-2 text-sm">
+                              <div>
+                                <span className="font-medium text-gray-800">{item.name}</span>
+                                {item.brand && <span className="text-xs text-gray-400 ml-1">({item.brand})</span>}
+                                <span className="text-xs text-gray-400 ml-1">— {item.quantity} {item.unit || 'un'}</span>
+                                {item.notes && <p className="text-xs text-gray-400 mt-0.5">{item.notes}</p>}
+                              </div>
+                              <span className="font-bold text-green-700 ml-2">{fmtPrice(item.price)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {resp.notes && <p className="text-xs text-gray-500 mt-2 italic">{resp.notes}</p>}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewResponsesId(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* New Quotation Dialog */}
       <Dialog open={showQuoteForm} onOpenChange={setShowQuoteForm}>
         <DialogContent className="max-w-lg">
@@ -347,41 +837,29 @@ export default function QuotationsPage() {
               Registrar Orçamento
             </DialogTitle>
           </DialogHeader>
-
           <div className="space-y-3">
             <div>
               <Label>Fornecedor *</Label>
               <Select value={qSupplierId} onValueChange={setQSupplierId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecionar fornecedor..." />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecionar fornecedor..." /></SelectTrigger>
                 <SelectContent>
-                  {(suppliers || []).map(s => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                  ))}
+                  {(suppliers || []).map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div>
               <Label>Categoria</Label>
               <Select value={qCategoryId} onValueChange={setQCategoryId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecionar categoria..." />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecionar categoria..." /></SelectTrigger>
                 <SelectContent>
-                  {(categories || []).map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                  ))}
+                  {(categories || []).map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div>
               <Label>Produto / Item *</Label>
               <Input value={qProductName} onChange={e => setQProductName(e.target.value)} placeholder="Ex: Óleo Motor 15W40" />
             </div>
-
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label>Preço (R$) *</Label>
@@ -392,25 +870,18 @@ export default function QuotationsPage() {
                 <Input value={qUnit} onChange={e => setQUnit(e.target.value)} placeholder="un, L, kg..." />
               </div>
             </div>
-
             <div>
               <Label>Data do orçamento</Label>
               <Input type="date" value={qDate} onChange={e => setQDate(e.target.value)} />
             </div>
-
             <div>
               <Label>Observações</Label>
               <Textarea value={qNotes} onChange={e => setQNotes(e.target.value)} placeholder="Condições, validade, frete..." rows={2} />
             </div>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={resetQuoteForm}>Cancelar</Button>
-            <Button
-              onClick={handleSubmitQuote}
-              disabled={createQuoteMutation.isPending}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
+            <Button onClick={handleSubmitQuote} disabled={createQuoteMutation.isPending} className="bg-purple-600 hover:bg-purple-700">
               {createQuoteMutation.isPending ? 'Salvando...' : 'Registrar'}
             </Button>
           </DialogFooter>
@@ -445,10 +916,7 @@ export default function QuotationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={resetCatForm}>Cancelar</Button>
-            <Button
-              onClick={handleSubmitCat}
-              disabled={createCatMutation.isPending || updateCatMutation.isPending}
-            >
+            <Button onClick={handleSubmitCat} disabled={createCatMutation.isPending || updateCatMutation.isPending}>
               {(createCatMutation.isPending || updateCatMutation.isPending) ? 'Salvando...' : editCatId ? 'Salvar' : 'Criar'}
             </Button>
           </DialogFooter>
