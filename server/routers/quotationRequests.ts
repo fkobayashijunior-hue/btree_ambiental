@@ -113,14 +113,13 @@ export const quotationRequestsRouter = router({
 
       if (!req) return { found: false as const };
 
-      const isExpired = Date.now() > req.expiresAt;
       const isCancelled = req.status === "cancelada";
 
       return {
         found: true as const,
-        isExpired,
+        isExpired: false,
         isCancelled,
-        request: isExpired || isCancelled ? null : {
+        request: isCancelled ? null : {
           id: req.id,
           title: req.title,
           requesterName: req.requesterName,
@@ -166,7 +165,6 @@ export const quotationRequestsRouter = router({
         .where(eq(quotationRequests.token, input.token));
 
       if (!req) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
-      if (Date.now() > req.expiresAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Link expirado" });
       if (req.status === "cancelada") throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação cancelada" });
 
       await db.insert(quotationResponses).values({

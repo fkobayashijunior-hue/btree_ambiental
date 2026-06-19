@@ -11706,13 +11706,12 @@ var quotationRequestsRouter = router({
     if (!db) return { found: false };
     const [req] = await db.select().from(quotationRequests).where(eq34(quotationRequests.token, input.token));
     if (!req) return { found: false };
-    const isExpired = Date.now() > req.expiresAt;
     const isCancelled = req.status === "cancelada";
     return {
       found: true,
-      isExpired,
+      isExpired: false,
       isCancelled,
-      request: isExpired || isCancelled ? null : {
+      request: isCancelled ? null : {
         id: req.id,
         title: req.title,
         requesterName: req.requesterName,
@@ -11751,7 +11750,6 @@ var quotationRequestsRouter = router({
     if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq34(quotationRequests.token, input.token));
     if (!req) throw new TRPCError25({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (Date.now() > req.expiresAt) throw new TRPCError25({ code: "BAD_REQUEST", message: "Link expirado" });
     if (req.status === "cancelada") throw new TRPCError25({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
     await db.insert(quotationResponses).values({
       quotationRequestId: req.id,

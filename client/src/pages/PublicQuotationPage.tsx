@@ -20,7 +20,7 @@ const COMPANY = {
   whatsapp: '5544988334679',
   instagram: '@btree_ambiental',
   site: 'btreeambiental.com',
-  logoText: '🌿',
+  logoUrl: 'https://storage.manus.space/webdev-static-assets/logo-btree-final_5d1c1c12.png',
 };
 
 type RequestItem = { name: string; quantity: string; unit: string };
@@ -143,44 +143,29 @@ export default function PublicQuotationPage() {
     );
   }
 
-  // ===== EXPIRADO OU CANCELADO =====
-  if (data.isExpired || data.isCancelled) {
+  // ===== CANCELADO =====
+  if (data.isCancelled) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          {/* Header empresa */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3">🌿</div>
+            <img src={COMPANY.logoUrl} alt="BTREE Ambiental" className="h-14 mx-auto mb-3" />
             <h1 className="text-2xl font-bold text-green-800">{COMPANY.name}</h1>
-            <p className="text-sm text-gray-500">Biomassa · Tratamento · Reflorestamento · Eucalipto</p>
           </div>
-
           <Card className="text-center">
             <CardContent className="p-8">
-              <Clock className="w-14 h-14 text-amber-400 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-800 mb-2">
-                {data.isCancelled ? 'Solicitação Cancelada' : 'Link Expirado'}
-              </h2>
-              <p className="text-gray-500 mb-6">
-                {data.isCancelled
-                  ? 'Esta solicitação de orçamento foi cancelada.'
-                  : 'Este link de orçamento expirou após 7 dias.'}
-              </p>
-              <p className="text-sm text-gray-500 mb-4">
-                Quer se tornar um fornecedor parceiro da BTREE Ambiental?
-              </p>
-              <a
-                href="https://btreeambiental.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
-              >
+              <AlertCircle className="w-14 h-14 text-red-400 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-800 mb-2">Solicitação Cancelada</h2>
+              <p className="text-gray-500 mb-6">Esta solicitação de orçamento foi cancelada.</p>
+              <p className="text-sm text-gray-500 mb-4">Quer se tornar um fornecedor parceiro da BTREE Ambiental?</p>
+              <a href="https://btreeambiental.com" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
                 <Globe className="w-4 h-4" /> Seja um Parceiro
               </a>
               <div className="mt-6 pt-6 border-t text-sm text-gray-400">
                 <p>Dúvidas? Entre em contato:</p>
-                <a href={`tel:${COMPANY.phone}`} className="text-green-600 font-medium">{COMPANY.phone}</a>
-                <p className="mt-1">{COMPANY.commercial}</p>
+                <p className="font-medium text-green-700">📞 Contato Comercial: {COMPANY.phone}</p>
+                <p className="text-green-600">{COMPANY.commercial}</p>
               </div>
             </CardContent>
           </Card>
@@ -197,7 +182,7 @@ export default function PublicQuotationPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3">🌿</div>
+            <img src={COMPANY.logoUrl} alt="BTREE Ambiental" className="h-14 mx-auto mb-3" />
             <h1 className="text-2xl font-bold text-green-800">{COMPANY.name}</h1>
           </div>
           <Card className="text-center">
@@ -232,20 +217,27 @@ export default function PublicQuotationPage() {
   // ===== FORMULÁRIO PRINCIPAL =====
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header da empresa */}
-      <div className="bg-green-700 text-white">
-        <div className="max-w-2xl mx-auto px-4 py-6">
+      {/* Header da empresa — cores e logo oficiais BTREE */}
+      <div style={{ background: 'linear-gradient(135deg, #0d4f2e 0%, #1a6b3c 60%, #1a8a4a 100%)' }} className="text-white">
+        <div className="max-w-2xl mx-auto px-4 py-5">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl flex-shrink-0">🌿</div>
+            <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center flex-shrink-0 p-1.5 shadow-md">
+              <img src={COMPANY.logoUrl} alt="BTREE Ambiental" className="w-full h-full object-contain" />
+            </div>
             <div>
-              <h1 className="text-xl font-bold">{COMPANY.name}</h1>
-              <p className="text-green-200 text-sm">Biomassa · Tratamento · Reflorestamento · Eucalipto</p>
+              <h1 className="text-xl font-bold tracking-tight">{COMPANY.name}</h1>
+              <p className="text-green-200 text-xs mt-0.5">Biomassa · Tratamento · Reflorestamento · Eucalipto</p>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-green-100">
-            <a href={`tel:${COMPANY.phone}`} className="flex items-center gap-1 hover:text-white">
-              <Phone className="w-3 h-3" /> {COMPANY.phone}
-            </a>
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <div className="flex items-center gap-1.5 text-green-100">
+              <Phone className="w-3.5 h-3.5 text-green-300" />
+              <span className="text-green-200 text-xs">Contato Comercial:</span>
+              <a href={`tel:${COMPANY.phone}`} className="font-semibold text-white hover:text-green-200">{COMPANY.phone}</a>
+              <span className="text-green-300 text-xs">· {COMPANY.commercial}</span>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-green-300">
             <a href={`https://${COMPANY.site}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-white">
               <Globe className="w-3 h-3" /> {COMPANY.site}
             </a>

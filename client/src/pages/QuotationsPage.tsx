@@ -248,21 +248,23 @@ export default function QuotationsPage() {
     const requester = (collaborators || []).find(c => String(c.id) === reqRequesterId);
     const validItems = reqItems.filter(i => i.name.trim());
     const link = getPublicLink(token);
+    const firstName = requester?.name ? requester.name.split(' ')[0] : 'a equipe BTREE Ambiental';
 
     let msg = `🌿 *${COMPANY.name}*\n`;
-    msg += `📞 ${COMPANY.phone} | ${COMPANY.site}\n`;
+    msg += `📞 Contato Comercial: ${COMPANY.phone} · ${COMPANY.commercial}\n`;
+    msg += `🌐 ${COMPANY.site}\n`;
     msg += `📸 Instagram: ${COMPANY.instagram}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    msg += `Olá! Aqui é *${requester?.name || 'a equipe BTREE Ambiental'}* e gostaria de solicitar um orçamento! Segue abaixo:\n\n`;
+    msg += `Olá! Tudo bem? Aqui é o ${firstName} da BTREE Ambiental!!\n`;
+    msg += `Eu gostaria de solicitar um orçamento! Segue abaixo:\n\n`;
     msg += `📋 *${reqTitle}*\n\n`;
     msg += `*Itens solicitados:*\n`;
     validItems.forEach((item, i) => {
       msg += `${i + 1}. ${item.name} — ${item.quantity} ${item.unit}\n`;
     });
     if (reqNotes) msg += `\n📝 *Obs:* ${reqNotes}\n`;
-    msg += `\n🔗 *Preencha seu orçamento pelo link:*\n${link}\n`;
-    msg += `\n_(Válido por 7 dias)_\n\n`;
-    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `\nFavor mandar formulário de orçamento, ou se preferir preencha nosso formulário pelo link:\n${link}\n`;
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n`;
     if (requester) {
       msg += `*Solicitante:* ${requester.name}\n`;
       if (requester.phone) msg += `📱 ${requester.phone}\n`;
@@ -654,7 +656,11 @@ export default function QuotationsPage() {
                     <MessageCircle className="w-3 h-3" /> Preview da Mensagem WhatsApp
                   </p>
                   <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">
-                    {`🌿 *${COMPANY.name}*\n📞 ${COMPANY.phone} | ${COMPANY.site}\n📸 Instagram: ${COMPANY.instagram}\n━━━━━━━━━━━━━━━━━━━━\n\nOlá! Aqui é *${(collaborators || []).find(c => String(c.id) === reqRequesterId)?.name || 'a equipe BTREE Ambiental'}* e gostaria de solicitar um orçamento! Segue abaixo:\n\n📋 *${reqTitle}*\n\n*Itens solicitados:*\n${reqItems.filter(i => i.name.trim()).map((item, i) => `${i + 1}. ${item.name} — ${item.quantity} ${item.unit}`).join('\n')}\n\n🔗 *Preencha seu orçamento pelo link:*\n[link será gerado ao criar]`}
+                    {(() => {
+                      const r = (collaborators || []).find(c => String(c.id) === reqRequesterId);
+                      const fn = r?.name ? r.name.split(' ')[0] : 'a equipe BTREE Ambiental';
+                      return `🌿 *${COMPANY.name}*\n📞 Contato Comercial: ${COMPANY.phone} · ${COMPANY.commercial}\n🌐 ${COMPANY.site}\n📸 Instagram: ${COMPANY.instagram}\n━━━━━━━━━━━━━━━━━━━━\n\nOlá! Tudo bem? Aqui é o ${fn} da BTREE Ambiental!!\nEu gostaria de solicitar um orçamento! Segue abaixo:\n\n📋 *${reqTitle}*\n\n*Itens solicitados:*\n${reqItems.filter(i => i.name.trim()).map((item, idx) => `${idx + 1}. ${item.name} — ${item.quantity} ${item.unit}`).join('\n')}\n\nFavor mandar formulário de orçamento, ou se preferir preencha nosso formulário pelo link:\n[link será gerado ao criar]`;
+                    })()}
                   </pre>
                 </div>
               )}
@@ -665,7 +671,7 @@ export default function QuotationsPage() {
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                 <Check className="w-10 h-10 text-green-600 mx-auto mb-2" />
                 <p className="font-semibold text-green-800">Solicitação criada com sucesso!</p>
-                <p className="text-sm text-green-600 mt-1">Link válido por 7 dias</p>
+                <p className="text-sm text-green-600 mt-1">Compartilhe o link com o fornecedor</p>
               </div>
 
               {/* Link público */}
