@@ -405,6 +405,8 @@ export const equipment = mysqlTable("equipment", {
 	category: mysqlEnum(['maquina','veiculo','caminhao']).default('maquina'),
 	accumulatedHours: varchar("accumulated_hours", { length: 20 }).default('0'),
 	accumulatedKm: varchar("accumulated_km", { length: 20 }).default('0'),
+	isThirdParty: tinyint("is_third_party").default(0).notNull(),
+	thirdPartyOwner: varchar("third_party_owner", { length: 255 }),
 });
 
 export const equipmentMaintenance = mysqlTable("equipment_maintenance", {
@@ -1376,3 +1378,38 @@ export const quotationResponses = mysqlTable("quotation_responses", {
 });
 export type QuotationResponse = typeof quotationResponses.$inferSelect;
 export type InsertQuotationResponse = typeof quotationResponses.$inferInsert;
+
+// ============================================================
+// MÓDULO: TARIFAS DE FRETE TERCEIRIZADO
+// ============================================================
+
+export const freightRates = mysqlTable("freight_rates", {
+  id: int().autoincrement().primaryKey().notNull(),
+  worksite: varchar({ length: 255 }).notNull(),   // ex: SIMFLOR, Fazenda GW
+  destination: varchar({ length: 255 }).notNull(), // ex: Líder Lobato, Sonoco Lda.
+  ratePerTon: varchar("rate_per_ton", { length: 20 }).notNull(), // R$/ton
+  notes: text(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type FreightRate = typeof freightRates.$inferSelect;
+export type InsertFreightRate = typeof freightRates.$inferInsert;
+
+// ============================================================
+// MÓDULO: ABASTECIMENTOS DE TERCEIRIZADOS
+// ============================================================
+
+export const thirdPartyFuel = mysqlTable("third_party_fuel", {
+  id: int().autoincrement().primaryKey().notNull(),
+  equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+  date: timestamp({ mode: 'string' }).notNull(),
+  liters: varchar({ length: 20 }).notNull(),
+  pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
+  total: varchar({ length: 20 }).notNull(),
+  location: varchar({ length: 255 }),
+  notes: text(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+export type ThirdPartyFuel = typeof thirdPartyFuel.$inferSelect;
+export type InsertThirdPartyFuel = typeof thirdPartyFuel.$inferInsert;

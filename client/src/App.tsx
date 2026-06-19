@@ -51,6 +51,7 @@ import QuotationsPage from "./pages/QuotationsPage";
 import FreightCyclesPage from "./pages/FreightCyclesPage";
 import InvoiceControlPage from "./pages/InvoiceControlPage";
 import PublicQuotationPage from "./pages/PublicQuotationPage";
+import ThirdPartyPage from "./pages/ThirdPartyPage";
 
 // Wrapper que aplica DashboardLayout a páginas protegidas
 function WithLayout({ component: Component }: { component: React.ComponentType }) {
@@ -182,6 +183,10 @@ function Router() {
       </Route>
       <Route path={"/controle-notas"}>
         {() => <WithLayout component={InvoiceControlPage} />}
+      </Route>
+
+      <Route path={"/caminhoes-terceirizados"}>
+        {() => <WithLayout component={ThirdPartyPage} />}
       </Route>
       {/* Rota pública para fornecedores preencherem orçamento */}
       <Route path={"/orcamento/:token"} component={PublicQuotationPage} />

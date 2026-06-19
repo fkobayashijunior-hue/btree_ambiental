@@ -95,6 +95,7 @@ const menuItems = [
   { icon: TrendingUp, label: "Dashboard Financeiro", path: "/dashboard-financeiro", slug: "dashboard-financeiro" },
   { icon: Wrench, label: "Corte Terceirizado", path: "/corte-terceirizado", slug: "corte-terceirizado" },
   { icon: UserCheck, label: "Terceirizados", path: "/terceirizados", slug: "terceirizados" },
+  { icon: Truck, label: "Caminhões Terceirizados", path: "/caminhoes-terceirizados", slug: "caminhoes-terceirizados" },
   { icon: Route, label: "Cálculo de Fretes", path: "/fretes", slug: "fretes" },
   { icon: BarChart3, label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec" },
   { icon: ShoppingCart, label: "Solicitações de Compras", path: "/compras", slug: "compras" },

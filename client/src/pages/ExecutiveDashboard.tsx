@@ -219,6 +219,51 @@ export default function ExecutiveDashboard() {
               />
             </div>
 
+            {/* ── Gráficos Pizza ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Pizza: Distribuição de Custos */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-green-600" />
+                    Distribuição de Custos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {totals && (
+                    <PieChart
+                      slices={[
+                        { label: "Mão de Obra", value: totals.totalMaoDeObra, color: "#3b82f6" },
+                        { label: "Combustível", value: totals.totalCombustivel, color: "#f59e0b" },
+                        { label: "Despesas", value: totals.totalDespesas, color: "#a855f7" },
+                      ]}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Pizza: Custo por Local de Trabalho */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-green-600" />
+                    Custo por Local
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <PieChart
+                    slices={locations
+                      .filter(l => l.custoTotal > 0)
+                      .map((loc, i) => ({
+                        label: loc.locationName,
+                        value: loc.custoTotal,
+                        color: LOCATION_COLORS[i % LOCATION_COLORS.length],
+                      }))}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+
             {/* Gráfico de barras por local */}
             <Card className="shadow-sm">
               <CardHeader className="pb-2">
@@ -682,6 +727,70 @@ export default function ExecutiveDashboard() {
           .shadow-sm { box-shadow: none !important; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// ── Paleta de cores para locais ─────────────────────────────────────────────
+const LOCATION_COLORS = [
+  "#16a34a", "#2563eb", "#d97706", "#9333ea", "#dc2626",
+  "#0891b2", "#65a30d", "#db2777", "#ea580c", "#7c3aed",
+];
+
+// ── Gráfico Pizza SVG ─────────────────────────────────────────────────────────
+function PieChart({ slices }: { slices: { label: string; value: number; color: string }[] }) {
+  const total = slices.reduce((s, sl) => s + sl.value, 0);
+  if (total === 0) {
+    return <p className="text-sm text-gray-400 text-center py-6">Sem dados no período</p>;
+  }
+
+  const radius = 70;
+  const cx = 90;
+  const cy = 90;
+  let startAngle = -Math.PI / 2;
+
+  const paths = slices
+    .filter(sl => sl.value > 0)
+    .map((sl) => {
+      const angle = (sl.value / total) * 2 * Math.PI;
+      const endAngle = startAngle + angle;
+      const x1 = cx + radius * Math.cos(startAngle);
+      const y1 = cy + radius * Math.sin(startAngle);
+      const x2 = cx + radius * Math.cos(endAngle);
+      const y2 = cy + radius * Math.sin(endAngle);
+      const largeArc = angle > Math.PI ? 1 : 0;
+      const d = `M${cx},${cy} L${x1},${y1} A${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z`;
+      const midAngle = startAngle + angle / 2;
+      startAngle = endAngle;
+      return { ...sl, d, midAngle };
+    });
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-4">
+      <svg viewBox="0 0 180 180" className="w-36 h-36 flex-shrink-0">
+        {paths.map((p, i) => (
+          <path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth="1.5">
+            <title>{p.label}: {formatCurrency(p.value)} ({((p.value / total) * 100).toFixed(1)}%)</title>
+          </path>
+        ))}
+      </svg>
+      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+        {slices.filter(sl => sl.value > 0).map((sl, i) => (
+          <div key={i} className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: sl.color }} />
+              <span className="text-gray-700 truncate">{sl.label}</span>
+            </div>
+            <span className="font-semibold text-gray-800 flex-shrink-0">
+              {((sl.value / total) * 100).toFixed(1)}%
+            </span>
+          </div>
+        ))}
+        <div className="border-t pt-1 mt-1 flex justify-between text-xs font-bold">
+          <span className="text-gray-600">Total</span>
+          <span className="text-gray-900">{formatCurrency(total)}</span>
+        </div>
+      </div>
     </div>
   );
 }

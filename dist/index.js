@@ -220,6 +220,7 @@ __export(schema_exports, {
   financialEntries: () => financialEntries,
   freightCalculations: () => freightCalculations,
   freightCycles: () => freightCycles,
+  freightRates: () => freightRates,
   fuelContainerEvents: () => fuelContainerEvents,
   fuelContainers: () => fuelContainers,
   fuelInvoices: () => fuelInvoices,
@@ -255,13 +256,14 @@ __export(schema_exports, {
   sectors: () => sectors,
   suppliers: () => suppliers,
   thirdPartyContractors: () => thirdPartyContractors,
+  thirdPartyFuel: () => thirdPartyFuel,
   userPermissions: () => userPermissions,
   userProfiles: () => userProfiles,
   users: () => users,
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, bigint, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -651,7 +653,9 @@ var init_schema = __esm({
       defaultLengthM: varchar("default_length_m", { length: 20 }),
       category: mysqlEnum(["maquina", "veiculo", "caminhao"]).default("maquina"),
       accumulatedHours: varchar("accumulated_hours", { length: 20 }).default("0"),
-      accumulatedKm: varchar("accumulated_km", { length: 20 }).default("0")
+      accumulatedKm: varchar("accumulated_km", { length: 20 }).default("0"),
+      isThirdParty: tinyint("is_third_party").default(0).notNull(),
+      thirdPartyOwner: varchar("third_party_owner", { length: 255 })
     });
     equipmentMaintenance = mysqlTable("equipment_maintenance", {
       id: int().autoincrement().notNull(),
@@ -1468,6 +1472,30 @@ var init_schema = __esm({
       itemsJson: text("items_json").notNull(),
       // JSON array: [{name, quantity, unit, price, brand, notes}]
       notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
+    });
+    freightRates = mysqlTable("freight_rates", {
+      id: int().autoincrement().primaryKey().notNull(),
+      worksite: varchar({ length: 255 }).notNull(),
+      // ex: SIMFLOR, Fazenda GW
+      destination: varchar({ length: 255 }).notNull(),
+      // ex: Líder Lobato, Sonoco Lda.
+      ratePerTon: varchar("rate_per_ton", { length: 20 }).notNull(),
+      // R$/ton
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    thirdPartyFuel = mysqlTable("third_party_fuel", {
+      id: int().autoincrement().primaryKey().notNull(),
+      equipmentId: int("equipment_id").notNull().references(() => equipment.id),
+      date: timestamp({ mode: "string" }).notNull(),
+      liters: varchar({ length: 20 }).notNull(),
+      pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
+      total: varchar({ length: 20 }).notNull(),
+      location: varchar({ length: 255 }),
+      notes: text(),
+      createdBy: int("created_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
     });
   }
@@ -2520,7 +2548,10 @@ var sectorsRouter = router({
       createdAt: equipment.createdAt,
       defaultHeightM: equipment.defaultHeightM,
       defaultWidthM: equipment.defaultWidthM,
-      defaultLengthM: equipment.defaultLengthM
+      defaultLengthM: equipment.defaultLengthM,
+      category: equipment.category,
+      isThirdParty: equipment.isThirdParty,
+      thirdPartyOwner: equipment.thirdPartyOwner
     }).from(equipment).leftJoin(equipmentTypes, eq3(equipment.typeId, equipmentTypes.id)).leftJoin(clients, eq3(equipment.clientId, clients.id)).orderBy(equipment.name);
     return rows.filter((r) => {
       if (userAllowedClientIds && userAllowedClientIds.length > 0) {
@@ -4734,11 +4765,11 @@ var machineHoursRouter = router({
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
     const oilRecords = await db.select().from(equipmentOilRecords).orderBy(desc4(equipmentOilRecords.createdAt));
-    return equipmentList.map((eq35) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq35.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq35.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq35.id);
-      const eqOil = oilRecords.filter((o) => o.equipmentId === eq35.id);
+    return equipmentList.map((eq36) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq36.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq36.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq36.id);
+      const eqOil = oilRecords.filter((o) => o.equipmentId === eq36.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
@@ -4749,11 +4780,11 @@ var machineHoursRouter = router({
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq35.id,
-        equipmentName: eq35.name,
-        brand: eq35.brand,
-        model: eq35.model,
-        status: eq35.status,
+        equipmentId: eq36.id,
+        equipmentName: eq36.name,
+        brand: eq36.brand,
+        model: eq36.model,
+        status: eq36.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -5098,11 +5129,11 @@ var vehicleRecordsRouter = router({
         const dateObj = new Date(input.date);
         const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
         const fuelLabels = { diesel: "Diesel", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV" };
-        const desc30 = input.recordType === "abastecimento" ? `Abastecimento ${fuelLabels[input.fuelType] || input.fuelType} - ${eqName} - ${input.liters}L${input.supplier ? " (" + input.supplier + ")" : ""}` : `Manuten\xE7\xE3o ${input.maintenanceType || ""} - ${eqName}${input.notes ? ": " + input.notes.slice(0, 60) : ""}`;
+        const desc31 = input.recordType === "abastecimento" ? `Abastecimento ${fuelLabels[input.fuelType] || input.fuelType} - ${eqName} - ${input.liters}L${input.supplier ? " (" + input.supplier + ")" : ""}` : `Manuten\xE7\xE3o ${input.maintenanceType || ""} - ${eqName}${input.notes ? ": " + input.notes.slice(0, 60) : ""}`;
         await db.insert(financialEntries).values({
           type: "despesa",
           category: input.recordType === "abastecimento" ? "combustivel" : "manutencao",
-          description: desc30,
+          description: desc31,
           amount: costValue.replace(",", "."),
           date: dateObj.toISOString().slice(0, 10),
           referenceMonth: refMonth,
@@ -11779,8 +11810,214 @@ Acesse o sistema para visualizar os valores.`
   })
 });
 
-// server/routers.ts
+// server/routers/thirdParty.ts
+init_trpc();
+init_db();
+init_schema();
 import { z as z36 } from "zod";
+import { eq as eq35, desc as desc30, and as and22 } from "drizzle-orm";
+import { TRPCError as TRPCError26 } from "@trpc/server";
+var thirdPartyRouter = router({
+  // ===== TARIFAS DE FRETE =====
+  listRates: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(freightRates).orderBy(freightRates.worksite, freightRates.destination);
+  }),
+  createRate: protectedProcedure.input(z36.object({
+    worksite: z36.string().min(1),
+    destination: z36.string().min(1),
+    ratePerTon: z36.string().min(1),
+    notes: z36.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [result] = await db.insert(freightRates).values({
+      worksite: input.worksite,
+      destination: input.destination,
+      ratePerTon: input.ratePerTon,
+      notes: input.notes
+    });
+    return { id: result.insertId };
+  }),
+  updateRate: protectedProcedure.input(z36.object({
+    id: z36.number(),
+    worksite: z36.string().min(1),
+    destination: z36.string().min(1),
+    ratePerTon: z36.string().min(1),
+    notes: z36.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(freightRates).set({
+      worksite: input.worksite,
+      destination: input.destination,
+      ratePerTon: input.ratePerTon,
+      notes: input.notes ?? null
+    }).where(eq35(freightRates.id, input.id));
+    return { success: true };
+  }),
+  deleteRate: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(freightRates).where(eq35(freightRates.id, input.id));
+    return { success: true };
+  }),
+  // Buscar tarifa por worksite + destination (para cálculo automático)
+  getRate: protectedProcedure.input(z36.object({ worksite: z36.string(), destination: z36.string() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [rate] = await db.select().from(freightRates).where(
+      and22(eq35(freightRates.worksite, input.worksite), eq35(freightRates.destination, input.destination))
+    );
+    return rate ?? null;
+  }),
+  // ===== ABASTECIMENTOS DE TERCEIRIZADOS =====
+  listFuel: protectedProcedure.input(z36.object({
+    equipmentId: z36.number().optional(),
+    startDate: z36.string().optional(),
+    endDate: z36.string().optional()
+  }).optional()).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const rows = await db.select({
+      id: thirdPartyFuel.id,
+      equipmentId: thirdPartyFuel.equipmentId,
+      equipmentName: equipment.name,
+      date: thirdPartyFuel.date,
+      liters: thirdPartyFuel.liters,
+      pricePerLiter: thirdPartyFuel.pricePerLiter,
+      total: thirdPartyFuel.total,
+      location: thirdPartyFuel.location,
+      notes: thirdPartyFuel.notes,
+      createdAt: thirdPartyFuel.createdAt
+    }).from(thirdPartyFuel).leftJoin(equipment, eq35(thirdPartyFuel.equipmentId, equipment.id)).orderBy(desc30(thirdPartyFuel.date));
+    return rows;
+  }),
+  createFuel: protectedProcedure.input(z36.object({
+    equipmentId: z36.number(),
+    date: z36.string(),
+    liters: z36.string(),
+    pricePerLiter: z36.string(),
+    total: z36.string(),
+    location: z36.string().optional(),
+    notes: z36.string().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [result] = await db.insert(thirdPartyFuel).values({
+      equipmentId: input.equipmentId,
+      date: input.date,
+      liters: input.liters,
+      pricePerLiter: input.pricePerLiter,
+      total: input.total,
+      location: input.location,
+      notes: input.notes,
+      createdBy: ctx.user.id
+    });
+    const id = result.insertId;
+    try {
+      const eq210 = await db.select({ name: equipment.name }).from(equipment).where(eq35(equipment.id, input.equipmentId));
+      const equipName = eq210[0]?.name ?? `Equipamento #${input.equipmentId}`;
+      await db.insert(financialEntries).values({
+        type: "despesa",
+        category: "combustivel",
+        description: `Combust\xEDvel terceirizado \u2014 ${equipName} (${input.liters}L @ R$${input.pricePerLiter}/L)`,
+        amount: input.total,
+        date: input.date.slice(0, 10),
+        status: "confirmado",
+        paymentMethod: "dinheiro",
+        notes: input.notes ?? null,
+        registeredBy: ctx.user.id
+      });
+    } catch (_) {
+    }
+    return { id };
+  }),
+  updateFuel: protectedProcedure.input(z36.object({
+    id: z36.number(),
+    equipmentId: z36.number(),
+    date: z36.string(),
+    liters: z36.string(),
+    pricePerLiter: z36.string(),
+    total: z36.string(),
+    location: z36.string().optional(),
+    notes: z36.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(thirdPartyFuel).set({
+      equipmentId: input.equipmentId,
+      date: input.date,
+      liters: input.liters,
+      pricePerLiter: input.pricePerLiter,
+      total: input.total,
+      location: input.location ?? null,
+      notes: input.notes ?? null
+    }).where(eq35(thirdPartyFuel.id, input.id));
+    return { success: true };
+  }),
+  deleteFuel: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(thirdPartyFuel).where(eq35(thirdPartyFuel.id, input.id));
+    return { success: true };
+  }),
+  // ===== CAMINHÕES TERCEIRIZADOS =====
+  listThirdPartyTrucks: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(equipment).where(eq35(equipment.isThirdParty, 1));
+  }),
+  setThirdParty: protectedProcedure.input(z36.object({
+    id: z36.number(),
+    isThirdParty: z36.boolean(),
+    thirdPartyOwner: z36.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(equipment).set({
+      isThirdParty: input.isThirdParty ? 1 : 0,
+      thirdPartyOwner: input.thirdPartyOwner ?? null
+    }).where(eq35(equipment.id, input.id));
+    return { success: true };
+  }),
+  // ===== CÁLCULO DE FRETE TERCEIRIZADO =====
+  // Calcula frete bruto = tarifa × toneladas, desconta combustível do período
+  calculateFreight: protectedProcedure.input(z36.object({
+    worksite: z36.string(),
+    destination: z36.string(),
+    weightNetTons: z36.number(),
+    equipmentId: z36.number(),
+    date: z36.string()
+    // YYYY-MM-DD — para buscar combustível do dia
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [rate] = await db.select().from(freightRates).where(
+      and22(eq35(freightRates.worksite, input.worksite), eq35(freightRates.destination, input.destination))
+    );
+    if (!rate) return { found: false };
+    const rateVal = parseFloat(rate.ratePerTon);
+    const grossFreight = rateVal * input.weightNetTons;
+    const fuelRows = await db.select().from(thirdPartyFuel).where(
+      and22(eq35(thirdPartyFuel.equipmentId, input.equipmentId))
+    );
+    const dayFuel = fuelRows.filter((f) => f.date?.startsWith(input.date));
+    const fuelCost = dayFuel.reduce((acc, f) => acc + parseFloat(f.total || "0"), 0);
+    const netFreight = grossFreight - fuelCost;
+    return {
+      found: true,
+      ratePerTon: rateVal,
+      grossFreight,
+      fuelCost,
+      netFreight
+    };
+  })
+});
+
+// server/routers.ts
+import { z as z37 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -11902,12 +12139,12 @@ var appRouter = router({
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-          const { eq: eq35 } = await import("drizzle-orm");
-          const permResult = await db.select().from(upTable).where(eq35(upTable.userId, ctx.user.id));
+          const { eq: eq36 } = await import("drizzle-orm");
+          const permResult = await db.select().from(upTable).where(eq36(upTable.userId, ctx.user.id));
           const collabResult = await db.select({
             clientId: collabTable.clientId,
             role: collabTable.role
-          }).from(collabTable).where(eq35(collabTable.userId, ctx.user.id));
+          }).from(collabTable).where(eq36(collabTable.userId, ctx.user.id));
           myPermsResult = {
             permResultLength: permResult.length,
             permResult: permResult[0] || null,
@@ -11942,7 +12179,7 @@ var appRouter = router({
         const [cols] = await db.execute(__require("drizzle-orm/sql").sql`SHOW COLUMNS FROM collaborator_attendance`);
         const [countResult] = await db.execute(__require("drizzle-orm/sql").sql`SELECT COUNT(*) as cnt FROM collaborator_attendance`);
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq35, desc: desc30 } = await import("drizzle-orm");
+        const { eq: eq36, desc: desc31 } = await import("drizzle-orm");
         try {
           const records = await db.select({
             id: collaboratorAttendance2.id,
@@ -11962,10 +12199,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z36.object({
-      name: z36.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z36.string().email("Email inv\xE1lido"),
-      password: z36.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z37.object({
+      name: z37.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z37.string().email("Email inv\xE1lido"),
+      password: z37.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -11980,9 +12217,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z36.object({
-      email: z36.string().email("Email inv\xE1lido"),
-      password: z36.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z37.object({
+      email: z37.string().email("Email inv\xE1lido"),
+      password: z37.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -12001,11 +12238,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z36.object({
-      seedKey: z36.string(),
-      email: z36.string().email(),
-      name: z36.string(),
-      password: z36.string().min(4)
+    seedAdmin: publicProcedure.input(z37.object({
+      seedKey: z37.string(),
+      email: z37.string().email(),
+      name: z37.string(),
+      password: z37.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -12015,9 +12252,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z36.object({
-      email: z36.string().email("Email inv\xE1lido"),
-      origin: z36.string().url().optional()
+    forgotPassword: publicProcedure.input(z37.object({
+      email: z37.string().email("Email inv\xE1lido"),
+      origin: z37.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -12031,9 +12268,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z36.object({
-      token: z36.string().min(1),
-      password: z36.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z37.object({
+      token: z37.string().min(1),
+      password: z37.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -12042,10 +12279,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users4 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq35 } = await import("drizzle-orm");
+      const { eq: eq36 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users4).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq35(users4.id, resetToken.userId));
+      await dbInstance.update(users4).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq36(users4.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -12090,9 +12327,10 @@ var appRouter = router({
   purchaseRequests: purchaseRequestsRouter,
   invoiceControl: invoiceControlRouter,
   quotationRequests: quotationRequestsRouter,
+  thirdParty: thirdPartyRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z36.object({ key: z36.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z37.object({ key: z37.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -12966,7 +13204,7 @@ function schedulePendingPaymentsCheck() {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq35, and: and22, lt: lt2 } = await import("drizzle-orm");
+        const { eq: eq36, and: and23, lt: lt2 } = await import("drizzle-orm");
         const db = await getDb2();
         if (!db) return;
         const sevenDaysAgo = /* @__PURE__ */ new Date();
@@ -12976,8 +13214,8 @@ function schedulePendingPaymentsCheck() {
           collaboratorName: collaborators3.name,
           date: collaboratorAttendance2.date,
           dailyValue: collaboratorAttendance2.dailyValue
-        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq35(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and22(
-          eq35(collaboratorAttendance2.paymentStatusCa, "pendente"),
+        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq36(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and23(
+          eq36(collaboratorAttendance2.paymentStatusCa, "pendente"),
           lt2(collaboratorAttendance2.date, sevenDaysAgo)
         ));
         if (pendingRecords.length > 0) {

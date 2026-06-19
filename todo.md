@@ -2115,3 +2115,35 @@
 ### Deploy
 - [ ] Script SQL de migração para Hostinger (CREATE TABLE quotation_requests, quotation_responses)
 - [ ] pnpm build + git push github main
+
+---
+
+## 🚛 MÓDULO: CAMINHÕES TERCEIRIZADOS + FRETE + DASHBOARD (19/06/2026)
+
+### Schema / Banco
+- [ ] Campo `is_third_party` (tinyint, default 0) na tabela `equipment`
+- [ ] Tabela `freight_rates`: id, worksite, destination, rate_per_ton, created_at
+- [ ] Tabela `third_party_fuel`: id, equipment_id, date, liters, price_per_liter, total, location, notes, created_at
+
+### Backend
+- [ ] Router `equipment.setThirdParty` — marcar/desmarcar terceirizado
+- [ ] Router `freightRates.list/create/update/delete` — CRUD de tarifas por local×destino
+- [ ] Router `thirdPartyFuel.list/create/update/delete` — abastecimentos terceirizados
+- [ ] Cálculo automático de frete ao registrar carga (tarifa × peso líquido)
+- [ ] Custo de frete terceirizado lançado automaticamente como despesa no financeiro
+- [ ] Desconto do combustível do terceirizado no valor do frete
+
+### Frontend
+- [ ] Cadastro de caminhão: toggle "Terceirizado" com nome do proprietário
+- [ ] Tela de Tarifas de Frete (CRUD): local de trabalho × destino × R$/ton
+- [ ] Listagem de abastecimentos terceirizados com data, local, litros, valor, botão editar
+- [ ] Relatório/listagem de fretes terceirizados por período
+
+### Financeiro
+- [ ] Frete terceirizado aparece como despesa no módulo financeiro
+- [ ] Combustível terceirizado descontado do frete
+
+### Dashboard
+- [ ] Gráfico pizza: custos por local de trabalho
+- [ ] Gráfico pizza: todos os custos (combustível, manutenção, frete, extras)
+- [ ] Gráfico barras/linha: custo × receita por período
