@@ -43,8 +43,12 @@ function TrucksTab() {
   // Listar TODOS os equipamentos categoria caminhão
   const { data: allEquip = [], isLoading } = trpc.sectors.listEquipment.useQuery({});
 
+  // Filtrar caminhões: typeName contém "Caminhão" OU tipo de equipamento é caminhão
   const trucks = (allEquip as any[]).filter(
-    (e: any) => e.category === "caminhao"
+    (e: any) =>
+      (e.typeName && e.typeName.toLowerCase().includes("caminhão")) ||
+      (e.typeName && e.typeName.toLowerCase().includes("caminhao")) ||
+      (e.category && e.category.toLowerCase().includes("caminhao"))
   );
 
   const setThirdParty = trpc.thirdParty.setThirdParty.useMutation({
@@ -558,14 +562,17 @@ export default function ThirdPartyPage() {
 
       <Tabs defaultValue="trucks">
         <TabsList className="grid grid-cols-3 w-full">
-          <TabsTrigger value="trucks" className="flex items-center gap-1">
-            <Truck className="h-4 w-4" /> Caminhões
+          <TabsTrigger value="trucks" className="flex flex-col items-center gap-0.5 py-2 text-xs">
+            <Truck className="h-4 w-4 shrink-0" />
+            <span>Caminhões</span>
           </TabsTrigger>
-          <TabsTrigger value="rates" className="flex items-center gap-1">
-            <DollarSign className="h-4 w-4" /> Tarifas de Frete
+          <TabsTrigger value="rates" className="flex flex-col items-center gap-0.5 py-2 text-xs">
+            <DollarSign className="h-4 w-4 shrink-0" />
+            <span>Tarifas</span>
           </TabsTrigger>
-          <TabsTrigger value="fuel" className="flex items-center gap-1">
-            <Fuel className="h-4 w-4" /> Abastecimentos
+          <TabsTrigger value="fuel" className="flex flex-col items-center gap-0.5 py-2 text-xs">
+            <Fuel className="h-4 w-4 shrink-0" />
+            <span>Abastecimentos</span>
           </TabsTrigger>
         </TabsList>
 
