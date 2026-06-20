@@ -30,12 +30,231 @@ import {
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Truck, Fuel, DollarSign, Plus, Pencil, Trash2, MapPin } from "lucide-react";
+import { Truck, Fuel, DollarSign, Plus, Pencil, Trash2, MapPin, CheckCircle, Clock, AlertTriangle, Package } from "lucide-react";
 import { toast } from "sonner";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const fmt = (v: string | number | null | undefined) =>
   v == null ? "—" : `R$ ${parseFloat(String(v)).toFixed(2).replace(".", ",")}`;
+
+const fmtDate = (d: string | null | undefined) =>
+  d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+
+// ─── ABA FRETES ──────────────────────────────────────────────────────────────
+function FreightsTab() {
+  const utils = trpc.useUtils();
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [payDialog, setPayDialog] = useState<{
+    id: number; truckName: string; grossFreight: number; fuelCost: number; netFreight: number;
+  } | null>(null);
+  const [payNotes, setPayNotes] = useState("");
+
+  const { data: freights = [], isLoading } = trpc.thirdParty.listFreights.useQuery({
+    startDate: dateFrom,
+    endDate: dateTo,
+  });
+
+  const markPaid = trpc.thirdParty.markFreightPaid.useMutation({
+    onSuccess: () => {
+      utils.thirdParty.listFreights.invalidate();
+      toast.success("Frete marcado como pago e lançado no financeiro!");
+      setPayDialog(null);
+      setPayNotes("");
+    },
+    onError: () => toast.error("Erro ao registrar pagamento."),
+  });
+
+  const list = freights as any[];
+  const totalBruto = list.reduce((s, f) => s + (f.grossFreight || 0), 0);
+  const totalComb = list.reduce((s, f) => s + (f.fuelCost || 0), 0);
+  const totalLiq = list.reduce((s, f) => s + (f.netFreight || 0), 0);
+  const pendentes = list.filter(f => !f.thirdPartyPaid);
+  const pagos = list.filter(f => f.thirdPartyPaid);
+
+  return (
+    <div className="space-y-4">
+      {/* Filtros de data */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <Label className="text-xs">De</Label>
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 text-sm" />
+        </div>
+        <div>
+          <Label className="text-xs">Até</Label>
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 text-sm" />
+        </div>
+      </div>
+
+      {/* Cards de resumo */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="bg-orange-50 border-orange-200">
+          <CardContent className="p-3">
+            <p className="text-xs text-orange-600 font-medium">Frete Bruto</p>
+            <p className="text-lg font-bold text-orange-700">R$ {totalBruto.toFixed(2).replace('.', ',')}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-red-50 border-red-200">
+          <CardContent className="p-3">
+            <p className="text-xs text-red-600 font-medium">Combustível</p>
+            <p className="text-lg font-bold text-red-700">R$ {totalComb.toFixed(2).replace('.', ',')}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-green-50 border-green-200">
+          <CardContent className="p-3">
+            <p className="text-xs text-green-600 font-medium">Frete Líquido</p>
+            <p className="text-lg font-bold text-green-700">R$ {totalLiq.toFixed(2).replace('.', ',')}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {isLoading && <p className="text-muted-foreground text-sm">Carregando fretes...</p>}
+
+      {/* Pendentes */}
+      {pendentes.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm flex items-center gap-2 text-orange-700">
+            <Clock className="h-4 w-4" /> Pendentes de pagamento ({pendentes.length})
+          </h3>
+          {pendentes.map((f: any) => (
+            <Card key={f.id} className="border-orange-200">
+              <CardContent className="p-3 space-y-1">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-sm">{f.truckName}</p>
+                    {f.truckOwner && <p className="text-xs text-muted-foreground">Proprietário: {f.truckOwner}</p>}
+                    <p className="text-xs text-muted-foreground">{fmtDate(f.date)} · {f.destination || "—"}</p>
+                    <p className="text-xs text-muted-foreground">{f.weightTons?.toFixed(3)} ton</p>
+                  </div>
+                  <div className="text-right">
+                    {f.hasRate ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">R$ {f.ratePerTon}/ton</p>
+                        <p className="text-sm">Bruto: <span className="font-semibold">R$ {f.grossFreight?.toFixed(2).replace('.', ',')}</span></p>
+                        <p className="text-xs text-red-500">Comb: -R$ {f.fuelCost?.toFixed(2).replace('.', ',')}</p>
+                        <p className="text-sm font-bold text-green-700">Líq: R$ {f.netFreight?.toFixed(2).replace('.', ',')}</p>
+                      </>
+                    ) : (
+                      <span className="text-xs text-amber-600 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" /> Sem tarifa cadastrada
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {f.hasRate && (
+                  <Button
+                    size="sm"
+                    className="w-full mt-2 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => setPayDialog({ id: f.id, truckName: f.truckName, grossFreight: f.grossFreight, fuelCost: f.fuelCost, netFreight: f.netFreight })}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" /> Marcar como Pago
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Pagos */}
+      {pagos.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm flex items-center gap-2 text-green-700">
+            <CheckCircle className="h-4 w-4" /> Pagos ({pagos.length})
+          </h3>
+          {pagos.map((f: any) => (
+            <Card key={f.id} className="border-green-200 bg-green-50/30">
+              <CardContent className="p-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-sm">{f.truckName}</p>
+                    <p className="text-xs text-muted-foreground">{fmtDate(f.date)} · {f.destination || "—"}</p>
+                    <p className="text-xs text-muted-foreground">{f.weightTons?.toFixed(3)} ton</p>
+                    {f.thirdPartyPaymentNotes && <p className="text-xs text-muted-foreground italic">{f.thirdPartyPaymentNotes}</p>}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-green-700">R$ {f.netFreight?.toFixed(2).replace('.', ',')}</p>
+                    <Badge variant="outline" className="text-green-700 border-green-300 text-xs">Pago</Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {list.length === 0 && !isLoading && (
+        <div className="text-center py-10 text-muted-foreground">
+          <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
+          <p>Nenhuma carga de terceirizado no período.</p>
+          <p className="text-xs mt-1">Certifique-se de que os caminhões estão marcados como terceirizados e que há tarifas cadastradas.</p>
+        </div>
+      )}
+
+      {/* Dialog de pagamento */}
+      <Dialog open={!!payDialog} onOpenChange={o => !o && setPayDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Pagamento de Frete</DialogTitle>
+          </DialogHeader>
+          {payDialog && (
+            <div className="space-y-3">
+              <p className="text-sm">Caminhão: <span className="font-semibold">{payDialog.truckName}</span></p>
+              <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Frete Bruto:</span>
+                  <span className="font-medium">R$ {payDialog.grossFreight.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">(-) Combustível:</span>
+                  <span className="text-red-600">-R$ {payDialog.fuelCost.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <div className="flex justify-between border-t pt-1 font-bold">
+                  <span>Frete Líquido:</span>
+                  <span className="text-green-700">R$ {payDialog.netFreight.toFixed(2).replace('.', ',')}</span>
+                </div>
+              </div>
+              <div>
+                <Label>Observações (opcional)</Label>
+                <Textarea
+                  value={payNotes}
+                  onChange={e => setPayNotes(e.target.value)}
+                  placeholder="Ex: Pago via PIX para João..."
+                  rows={2}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">O valor líquido será lançado automaticamente como despesa no financeiro.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDialog(null)}>Cancelar</Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              disabled={markPaid.isPending}
+              onClick={() => {
+                if (!payDialog) return;
+                markPaid.mutate({
+                  cargoLoadId: payDialog.id,
+                  notes: payNotes || undefined,
+                  grossAmount: payDialog.grossFreight.toFixed(2),
+                  fuelCost: payDialog.fuelCost.toFixed(2),
+                  netAmount: payDialog.netFreight.toFixed(2),
+                  truckName: payDialog.truckName,
+                });
+              }}
+            >
+              {markPaid.isPending ? "Registrando..." : "Confirmar Pagamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
 // ─── CAMINHÕES TERCEIRIZADOS ──────────────────────────────────────────────────
 function TrucksTab() {
@@ -560,8 +779,12 @@ export default function ThirdPartyPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="trucks">
-        <TabsList className="grid grid-cols-3 w-full">
+      <Tabs defaultValue="freights">
+        <TabsList className="grid grid-cols-4 w-full">
+          <TabsTrigger value="freights" className="flex flex-col items-center gap-0.5 py-2 text-xs">
+            <Package className="h-4 w-4 shrink-0" />
+            <span>Fretes</span>
+          </TabsTrigger>
           <TabsTrigger value="trucks" className="flex flex-col items-center gap-0.5 py-2 text-xs">
             <Truck className="h-4 w-4 shrink-0" />
             <span>Caminhões</span>
@@ -576,6 +799,9 @@ export default function ThirdPartyPage() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="freights" className="mt-4">
+          <FreightsTab />
+        </TabsContent>
         <TabsContent value="trucks" className="mt-4">
           <TrucksTab />
         </TabsContent>

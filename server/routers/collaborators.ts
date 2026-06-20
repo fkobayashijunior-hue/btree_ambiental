@@ -313,10 +313,15 @@ export const collaboratorsRouter = router({
       const checkInTime = input.checkInOverride ? new Date(input.checkInOverride) : new Date();
       const checkOutTime = input.checkOutOverride ? new Date(input.checkOutOverride) : undefined;
 
+      const checkInStr = checkInTime instanceof Date ? checkInTime.toISOString().replace('T', ' ').slice(0, 19) : (checkInTime as string);
+      const checkOutStr = checkOutTime instanceof Date ? checkOutTime.toISOString().replace('T', ' ').slice(0, 19) : (checkOutTime as string | undefined);
+      const dateStr = checkInStr.slice(0, 10) + ' 00:00:00';
+
       const [inserted] = await db.insert(biometricAttendance).values({
         collaboratorId: input.collaboratorId,
-        checkInTime: checkInTime instanceof Date ? checkInTime.toISOString().replace('T', ' ').slice(0, 19) : checkInTime,
-        checkOutTime: checkOutTime instanceof Date ? checkOutTime.toISOString().replace('T', ' ').slice(0, 19) : checkOutTime,
+        date: dateStr,
+        checkInTime: checkInStr,
+        checkOutTime: checkOutStr,
         location: input.location,
         latitude: input.latitude,
         longitude: input.longitude,

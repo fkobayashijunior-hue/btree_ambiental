@@ -13,6 +13,11 @@ import {
   equipment,
   gpsLocations,
   vehicleRecords,
+  machineMaintenance,
+  equipmentMaintenance,
+  thirdPartyFuel,
+  financialEntries,
+  cargoDestinations,
 } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte, sql, inArray, isNull } from "drizzle-orm";
 
@@ -278,6 +283,12 @@ export const reportsRouter = router({
         .where(eq(gpsLocations.isActive, 1))
         .orderBy(gpsLocations.name);
 
+      // Buscar IDs de caminhões terceirizados
+      const thirdPartyTrucks = await db.select({ id: equipment.id })
+        .from(equipment)
+        .where(eq(equipment.isThirdParty, 1));
+      const thirdPartyIds = thirdPartyTrucks.map(t => t.id);
+
       // Para cada local, buscar totais
       const locationData = await Promise.all(locations.map(async (loc) => {
         // Mão de obra
@@ -291,7 +302,7 @@ export const reportsRouter = router({
           ));
         const totalMaoDeObra = attendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
 
-        // Combustível veículos
+        // Combustível veículos (próprios)
         const fuel = await db
           .select({ totalValue: fuelRecords.totalValue, liters: fuelRecords.liters })
           .from(fuelRecords)
@@ -326,9 +337,31 @@ export const reportsRouter = router({
           ));
         const totalExtras = extras.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
 
+        // Manutenções de equipamentos (equipmentMaintenance)
+        const equipMaints = await db
+          .select({ cost: equipmentMaintenance.cost })
+          .from(equipmentMaintenance)
+          .innerJoin(equipment, eq(equipmentMaintenance.equipmentId, equipment.id))
+          .where(and(
+            gte(equipmentMaintenance.performedAt, dateFrom),
+            lte(equipmentMaintenance.performedAt, dateTo),
+          ));
+        const totalEquipMaint = equipMaints.reduce((s, r) => s + parseFloat(r.cost || "0"), 0);
+
+        // Manutenções de máquinas (machineMaintenance)
+        const machMaints = await db
+          .select({ totalCost: machineMaintenance.totalCost })
+          .from(machineMaintenance)
+          .where(and(
+            gte(machineMaintenance.date, dateFrom),
+            lte(machineMaintenance.date, dateTo),
+          ));
+        const totalMachMaint = machMaints.reduce((s, r) => s + parseFloat(r.totalCost || "0"), 0);
+        const totalManutencao = totalEquipMaint + totalMachMaint;
+
         // Cargas
         const cargos = await db
-          .select({ volumeM3: cargoLoads.volumeM3 })
+          .select({ volumeM3: cargoLoads.volumeM3, weightNetKg: cargoLoads.weightNetKg, vehicleId: cargoLoads.vehicleId, thirdPartyPaid: cargoLoads.thirdPartyPaid, thirdPartyCost: cargoLoads.thirdPartyCost, date: cargoLoads.date })
           .from(cargoLoads)
           .where(and(
             eq(cargoLoads.workLocationId, loc.id),
@@ -337,14 +370,62 @@ export const reportsRouter = router({
           ));
         const totalVolume = cargos.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0);
 
+        // Fretes terceirizados pagos (custo) — soma thirdPartyCost das cargas de terceirizados
+        const thirdPartyCargos = thirdPartyIds.length > 0
+          ? cargos.filter(c => c.vehicleId && thirdPartyIds.includes(c.vehicleId))
+          : [];
+        const totalFreteTerceirizado = thirdPartyCargos.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
+
+        // Combustível de terceirizados (thirdPartyFuel) no período
+        const tpFuel = thirdPartyIds.length > 0
+          ? await db.select({ total: thirdPartyFuel.total })
+            .from(thirdPartyFuel)
+            .where(and(
+              gte(thirdPartyFuel.date, dateFrom),
+              lte(thirdPartyFuel.date, dateTo),
+            ))
+          : [];
+        const totalTPFuel = tpFuel.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
+
+        // Receita: buscar pagamentos de compradores (financialEntries tipo receita) no período
+        const receitas = await db
+          .select({ amount: financialEntries.amount })
+          .from(financialEntries)
+          .where(and(
+            eq(financialEntries.type, "receita"),
+            gte(financialEntries.date, dateFrom),
+            lte(financialEntries.date, dateTo),
+          ));
+        const totalReceita = receitas.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+
+        const custoTotal = totalMaoDeObra + totalFuel + totalMFuel + totalExtras + totalManutencao + totalFreteTerceirizado + totalTPFuel;
+        const lucro = totalReceita - custoTotal;
+
+        // Análise diária: agrupar cargas por dia
+        const dailyMap = new Map<string, { cargas: number; volumeM3: number }>();
+        for (const c of cargos) {
+          const day = (c.date || '').slice(0, 10);
+          if (!day) continue;
+          const prev = dailyMap.get(day) || { cargas: 0, volumeM3: 0 };
+          dailyMap.set(day, { cargas: prev.cargas + 1, volumeM3: prev.volumeM3 + parseFloat(c.volumeM3 || '0') });
+        }
+        const dailyBreakdown = Array.from(dailyMap.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([date, v]) => ({ date, ...v }));
+
         return {
           locationId: loc.id,
           locationName: loc.name,
           maoDeObra: { total: totalMaoDeObra, dias: attendance.length },
           combustivel: { total: totalFuel + totalMFuel, litros: totalFuelLiters + totalMFuelLiters },
           despesasExtras: { total: totalExtras, qtd: extras.length },
+          manutencao: { total: totalManutencao, qtd: equipMaints.length + machMaints.length },
+          freteTerceirizado: { total: totalFreteTerceirizado, combustivel: totalTPFuel, qtd: thirdPartyCargos.length },
           cargas: { total: cargos.length, volumeM3: totalVolume },
-          custoTotal: totalMaoDeObra + totalFuel + totalMFuel + totalExtras,
+          receita: totalReceita,
+          custoTotal,
+          lucro,
+          dailyBreakdown,
         };
       }));
 
@@ -360,18 +441,35 @@ export const reportsRouter = router({
 
       const unassignedTotal = unassignedAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
 
+      // Totais globais de receita (independente de local)
+      const globalReceitas = await db
+        .select({ amount: financialEntries.amount })
+        .from(financialEntries)
+        .where(and(
+          eq(financialEntries.type, "receita"),
+          gte(financialEntries.date, dateFrom),
+          lte(financialEntries.date, dateTo),
+        ));
+      const totalReceitaGlobal = globalReceitas.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+
+      const totalCustoGlobal = locationData.reduce((s, l) => s + l.custoTotal, 0) + unassignedTotal;
+
       return {
         locations: locationData,
         unassigned: {
           maoDeObra: { total: unassignedTotal, dias: unassignedAttendance.length },
         },
         totals: {
-          custoTotal: locationData.reduce((s, l) => s + l.custoTotal, 0) + unassignedTotal,
+          custoTotal: totalCustoGlobal,
           totalMaoDeObra: locationData.reduce((s, l) => s + l.maoDeObra.total, 0) + unassignedTotal,
           totalCombustivel: locationData.reduce((s, l) => s + l.combustivel.total, 0),
           totalDespesas: locationData.reduce((s, l) => s + l.despesasExtras.total, 0),
+          totalManutencao: locationData.reduce((s, l) => s + l.manutencao.total, 0),
+          totalFreteTerceirizado: locationData.reduce((s, l) => s + l.freteTerceirizado.total, 0),
           totalCargas: locationData.reduce((s, l) => s + l.cargas.total, 0),
           totalVolumeM3: locationData.reduce((s, l) => s + l.cargas.volumeM3, 0),
+          totalReceita: totalReceitaGlobal,
+          lucroTotal: totalReceitaGlobal - totalCustoGlobal,
         },
       };
     }),

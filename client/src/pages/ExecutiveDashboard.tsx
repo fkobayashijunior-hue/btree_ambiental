@@ -21,6 +21,8 @@ import {
   Droplets,
   Wrench,
   AlertCircle,
+  TrendingDown,
+  Package,
 } from "lucide-react";
 
 // ── Helpers de data ──────────────────────────────────────────────────────────
@@ -186,13 +188,35 @@ export default function ExecutiveDashboard() {
         {totals && (
           <>
             {/* Cards de resumo geral */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <SummaryCard
+                icon={<TrendingUp className="w-5 h-5" />}
+                label="Receita Total"
+                value={formatCurrency(totals.totalReceita ?? 0)}
+                color="green"
+              />
+              <SummaryCard
+                icon={(totals.lucroTotal ?? 0) >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                label={(totals.lucroTotal ?? 0) >= 0 ? "Lucro" : "Prejuízo"}
+                value={formatCurrency(Math.abs(totals.lucroTotal ?? 0))}
+                color={(totals.lucroTotal ?? 0) >= 0 ? "green" : "red"}
+              />
               <SummaryCard
                 icon={<DollarSign className="w-5 h-5" />}
                 label="Custo Total"
                 value={formatCurrency(totals.custoTotal)}
                 color="red"
               />
+              <SummaryCard
+                icon={<Truck className="w-5 h-5" />}
+                label="Cargas"
+                value={`${totals.totalCargas} (${totals.totalVolumeM3.toFixed(1)} m³)`}
+                color="amber"
+              />
+            </div>
+
+            {/* Cards de custo detalhado */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <SummaryCard
                 icon={<Users className="w-5 h-5" />}
                 label="Mão de Obra"
@@ -207,15 +231,21 @@ export default function ExecutiveDashboard() {
               />
               <SummaryCard
                 icon={<Wrench className="w-5 h-5" />}
-                label="Despesas"
-                value={formatCurrency(totals.totalDespesas)}
+                label="Manutenção"
+                value={formatCurrency(totals.totalManutencao ?? 0)}
                 color="purple"
               />
               <SummaryCard
-                icon={<Truck className="w-5 h-5" />}
-                label="Cargas"
-                value={`${totals.totalCargas} (${totals.totalVolumeM3.toFixed(1)} m³)`}
-                color="green"
+                icon={<Package className="w-5 h-5" />}
+                label="Frete Terc."
+                value={formatCurrency(totals.totalFreteTerceirizado ?? 0)}
+                color="red"
+              />
+              <SummaryCard
+                icon={<DollarSign className="w-5 h-5" />}
+                label="Despesas Extras"
+                value={formatCurrency(totals.totalDespesas)}
+                color="purple"
               />
             </div>
 
@@ -235,7 +265,9 @@ export default function ExecutiveDashboard() {
                       slices={[
                         { label: "Mão de Obra", value: totals.totalMaoDeObra, color: "#3b82f6" },
                         { label: "Combustível", value: totals.totalCombustivel, color: "#f59e0b" },
-                        { label: "Despesas", value: totals.totalDespesas, color: "#a855f7" },
+                        { label: "Manutenção", value: totals.totalManutencao ?? 0, color: "#a855f7" },
+                        { label: "Frete Terc.", value: totals.totalFreteTerceirizado ?? 0, color: "#ef4444" },
+                        { label: "Despesas Extras", value: totals.totalDespesas, color: "#6366f1" },
                       ]}
                     />
                   )}
@@ -311,19 +343,36 @@ export default function ExecutiveDashboard() {
                               title={`Despesas: ${formatCurrency(loc.despesasExtras.total)}`}
                             />
                           </div>
-                          <div className="flex gap-4 text-xs text-gray-500">
+                          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
                             <span className="flex items-center gap-1">
                               <span className="w-2 h-2 rounded-full bg-blue-500" />
-                              MO: {formatCurrency(loc.maoDeObra.total)} ({loc.maoDeObra.dias}d)
+                              MO: {formatCurrency(loc.maoDeObra.total)}
                             </span>
                             <span className="flex items-center gap-1">
                               <span className="w-2 h-2 rounded-full bg-amber-500" />
-                              Comb: {formatCurrency(loc.combustivel.total)} ({loc.combustivel.litros.toFixed(0)}L)
+                              Comb: {formatCurrency(loc.combustivel.total)}
                             </span>
+                            {(loc as any).manutencao?.total > 0 && (
+                              <span className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-purple-500" />
+                                Manut: {formatCurrency((loc as any).manutencao.total)}
+                              </span>
+                            )}
+                            {(loc as any).freteTerceirizado?.total > 0 && (
+                              <span className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-red-500" />
+                                Frete: {formatCurrency((loc as any).freteTerceirizado.total)}
+                              </span>
+                            )}
                             {loc.cargas.total > 0 && (
                               <span className="flex items-center gap-1">
                                 <span className="w-2 h-2 rounded-full bg-green-500" />
-                                {loc.cargas.total} cargas ({loc.cargas.volumeM3.toFixed(1)}m³)
+                                {loc.cargas.total} cargas
+                              </span>
+                            )}
+                            {(loc as any).receita > 0 && (
+                              <span className="flex items-center gap-1 font-semibold text-green-600">
+                                Rec: {formatCurrency((loc as any).receita)}
                               </span>
                             )}
                           </div>
@@ -349,15 +398,11 @@ export default function ExecutiveDashboard() {
 
                 {/* Legenda */}
                 <div className="flex flex-wrap gap-4 mt-4 pt-3 border-t text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded bg-blue-500" /> Mão de Obra
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded bg-amber-500" /> Combustível
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded bg-purple-500" /> Despesas Extras
-                  </span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500" /> Mão de Obra</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-500" /> Combustível</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-500" /> Manutenção</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500" /> Frete Terc.</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-indigo-500" /> Despesas Extras</span>
                 </div>
               </CardContent>
             </Card>
@@ -377,66 +422,85 @@ export default function ExecutiveDashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="text-left px-4 py-2 font-medium text-gray-600">Local</th>
-                        <th className="text-right px-4 py-2 font-medium text-gray-600">MO (dias)</th>
-                        <th className="text-right px-4 py-2 font-medium text-gray-600">MO (R$)</th>
-                        <th className="text-right px-4 py-2 font-medium text-gray-600">Comb. (L)</th>
-                        <th className="text-right px-4 py-2 font-medium text-gray-600">Comb. (R$)</th>
-                        <th className="text-right px-4 py-2 font-medium text-gray-600">Despesas</th>
-                        <th className="text-right px-4 py-2 font-medium text-gray-600">Cargas</th>
-                        <th className="text-right px-4 py-2 font-medium text-green-700 font-bold">Total</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-600">Local</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">MO</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Comb.</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Manut.</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Frete T.</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Extras</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Cargas</th>
+                        <th className="text-right px-3 py-2 font-medium text-red-700">Custo</th>
+                        <th className="text-right px-3 py-2 font-medium text-green-700">Receita</th>
+                        <th className="text-right px-3 py-2 font-medium text-blue-700">Lucro</th>
                       </tr>
                     </thead>
                     <tbody>
                       {locations
                         .sort((a, b) => b.custoTotal - a.custoTotal)
-                        .map((loc) => (
+                        .map((loc) => {
+                          const locAny = loc as any;
+                          const lucro = (locAny.lucro ?? 0);
+                          return (
                           <tr key={loc.locationId} className="border-b hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-2.5 font-medium text-gray-800">{loc.locationName}</td>
-                            <td className="px-4 py-2.5 text-right text-gray-600">{loc.maoDeObra.dias}</td>
-                            <td className="px-4 py-2.5 text-right text-blue-600 font-medium">
+                            <td className="px-3 py-2 font-medium text-gray-800">{loc.locationName}</td>
+                            <td className="px-3 py-2 text-right text-blue-600 font-medium text-xs">
                               {formatCurrency(loc.maoDeObra.total)}
                             </td>
-                            <td className="px-4 py-2.5 text-right text-gray-600">
-                              {loc.combustivel.litros.toFixed(1)}
-                            </td>
-                            <td className="px-4 py-2.5 text-right text-amber-600 font-medium">
+                            <td className="px-3 py-2 text-right text-amber-600 font-medium text-xs">
                               {formatCurrency(loc.combustivel.total)}
                             </td>
-                            <td className="px-4 py-2.5 text-right text-purple-600 font-medium">
+                            <td className="px-3 py-2 text-right text-purple-600 font-medium text-xs">
+                              {formatCurrency(locAny.manutencao?.total ?? 0)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-red-500 font-medium text-xs">
+                              {formatCurrency(locAny.freteTerceirizado?.total ?? 0)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-indigo-600 font-medium text-xs">
                               {formatCurrency(loc.despesasExtras.total)}
                             </td>
-                            <td className="px-4 py-2.5 text-right text-gray-600">
-                              {loc.cargas.total > 0 ? `${loc.cargas.total} (${loc.cargas.volumeM3.toFixed(1)}m³)` : "—"}
+                            <td className="px-3 py-2 text-right text-gray-600 text-xs">
+                              {loc.cargas.total > 0 ? `${loc.cargas.total}` : "—"}
                             </td>
-                            <td className="px-4 py-2.5 text-right font-bold text-green-700">
+                            <td className="px-3 py-2 text-right font-bold text-red-700 text-xs">
                               {formatCurrency(loc.custoTotal)}
                             </td>
+                            <td className="px-3 py-2 text-right font-bold text-green-700 text-xs">
+                              {formatCurrency(locAny.receita ?? 0)}
+                            </td>
+                            <td className={`px-3 py-2 text-right font-bold text-xs ${lucro >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                              {lucro >= 0 ? '+' : ''}{formatCurrency(lucro)}
+                            </td>
                           </tr>
-                        ))}
+                        )})}
                       {/* Totais */}
-                      <tr className="bg-green-50 font-bold">
-                        <td className="px-4 py-2.5 text-green-800">TOTAL</td>
-                        <td className="px-4 py-2.5 text-right text-green-800">
-                          {locations.reduce((s, l) => s + l.maoDeObra.dias, 0)}
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-blue-700">
+                      <tr className="bg-gray-100 font-bold">
+                        <td className="px-3 py-2 text-gray-800">TOTAL</td>
+                        <td className="px-3 py-2 text-right text-blue-700 text-xs">
                           {formatCurrency(totals.totalMaoDeObra)}
                         </td>
-                        <td className="px-4 py-2.5 text-right text-green-800">
-                          {locations.reduce((s, l) => s + l.combustivel.litros, 0).toFixed(1)}
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-amber-700">
+                        <td className="px-3 py-2 text-right text-amber-700 text-xs">
                           {formatCurrency(totals.totalCombustivel)}
                         </td>
-                        <td className="px-4 py-2.5 text-right text-purple-700">
+                        <td className="px-3 py-2 text-right text-purple-700 text-xs">
+                          {formatCurrency(totals.totalManutencao ?? 0)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-red-600 text-xs">
+                          {formatCurrency(totals.totalFreteTerceirizado ?? 0)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-indigo-700 text-xs">
                           {formatCurrency(totals.totalDespesas)}
                         </td>
-                        <td className="px-4 py-2.5 text-right text-green-800">
-                          {totals.totalCargas > 0 ? `${totals.totalCargas} (${totals.totalVolumeM3.toFixed(1)}m³)` : "—"}
+                        <td className="px-3 py-2 text-right text-gray-800 text-xs">
+                          {totals.totalCargas > 0 ? `${totals.totalCargas}` : "—"}
                         </td>
-                        <td className="px-4 py-2.5 text-right text-green-800 text-base">
+                        <td className="px-3 py-2 text-right text-red-800 text-sm">
                           {formatCurrency(totals.custoTotal)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-green-800 text-sm">
+                          {formatCurrency(totals.totalReceita ?? 0)}
+                        </td>
+                        <td className={`px-3 py-2 text-right text-sm ${(totals.lucroTotal ?? 0) >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                          {(totals.lucroTotal ?? 0) >= 0 ? '+' : ''}{formatCurrency(totals.lucroTotal ?? 0)}
                         </td>
                       </tr>
                     </tbody>
@@ -674,6 +738,69 @@ export default function ExecutiveDashboard() {
                         </div>
                       </div>
                     )}
+
+                    {/* Análise Diária de Cargas */}
+                    {(() => {
+                      // Agregar dailyBreakdown de todos os locais
+                      const dailyMap = new Map<string, { cargas: number; volumeM3: number }>();
+                      const locData = (data?.locations ?? []) as any[];
+                      for (const loc of locData) {
+                        for (const d of (loc.dailyBreakdown ?? [])) {
+                          const prev = dailyMap.get(d.date) || { cargas: 0, volumeM3: 0 };
+                          dailyMap.set(d.date, { cargas: prev.cargas + d.cargas, volumeM3: prev.volumeM3 + d.volumeM3 });
+                        }
+                      }
+                      const days = Array.from(dailyMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                      if (days.length === 0) return null;
+                      return (
+                        <div>
+                          <h4 className="font-semibold text-gray-800 flex items-center gap-2 mb-3">
+                            <Calendar className="w-4 h-4 text-indigo-500" />
+                            Análise Diária de Cargas
+                          </h4>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b bg-indigo-50">
+                                  <th className="text-left px-3 py-2 text-indigo-700">Data</th>
+                                  <th className="text-right px-3 py-2 text-indigo-700">Qtd Cargas</th>
+                                  <th className="text-right px-3 py-2 text-indigo-700">Volume (m³)</th>
+                                  <th className="text-center px-3 py-2 text-indigo-700">Produtividade</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {days.map(([date, v]) => (
+                                  <tr key={date} className="border-b hover:bg-gray-50">
+                                    <td className="px-3 py-2">{new Date(date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                    <td className="px-3 py-2 text-right font-bold">{v.cargas}</td>
+                                    <td className="px-3 py-2 text-right">{v.volumeM3.toFixed(2)}</td>
+                                    <td className="px-3 py-2 text-center">
+                                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        v.cargas >= 2 ? 'bg-green-100 text-green-700' :
+                                        v.cargas === 1 ? 'bg-amber-100 text-amber-700' :
+                                        'bg-gray-100 text-gray-500'
+                                      }`}>
+                                        {v.cargas >= 2 ? `${v.cargas} cargas` : v.cargas === 1 ? '1 carga' : 'sem carga'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr className="bg-indigo-50 font-bold">
+                                  <td className="px-3 py-2 text-indigo-800">Total</td>
+                                  <td className="px-3 py-2 text-right text-indigo-800">{days.reduce((s, [, v]) => s + v.cargas, 0)}</td>
+                                  <td className="px-3 py-2 text-right text-indigo-800">{days.reduce((s, [, v]) => s + v.volumeM3, 0).toFixed(2)}</td>
+                                  <td className="px-3 py-2 text-center text-xs text-indigo-600">
+                                    {days.filter(([, v]) => v.cargas >= 2).length} dias c/ 2+ cargas
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Cargas */}
                     {reportQuery.data.cargas.registros.length > 0 && (

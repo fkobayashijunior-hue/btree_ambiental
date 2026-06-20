@@ -2147,3 +2147,28 @@
 - [ ] Gráfico pizza: custos por local de trabalho
 - [ ] Gráfico pizza: todos os custos (combustível, manutenção, frete, extras)
 - [ ] Gráfico barras/linha: custo × receita por período
+
+---
+
+## 🔄 INTEGRAÇÃO TERCEIRIZADOS + DASHBOARD EXECUTIVO (Sprint 2026-06-20)
+
+### Abastecimentos Terceirizados
+- [ ] Sincronizar abastecimentos do controle geral para terceirizados (puxar automaticamente quando caminhão for terceirizado)
+
+### Fretes Terceirizados
+- [ ] Schema: tabela third_party_freights (id, equipmentId, cargoLoadId, workLocation, destination, weightTon, ratePerTon, totalFreight, fuelCost, netFreight, status, paidAt, createdAt)
+- [x] Router thirdParty: calcular e listar fretes por caminhão terceirizado baseado nas cargas registradas
+- [x] Router thirdParty: marcar frete como pago + lançar no financeiro automaticamente
+- [x] Frontend ThirdPartyPage: nova aba "Fretes" com listagem por caminhão/destino/peso/valor + botão marcar pagamento
+
+### Dashboard Executivo — Melhorias
+- [x] Incluir combustível real (tabela fuel_records) nos custos totais
+- [x] Incluir manutenções nos custos totais
+- [x] Incluir gastos extras nos custos totais
+- [x] Incluir frete terceirizado nos custos totais
+- [x] Card de Receita (valor das cargas) vs Despesa total = Lucro/Prejuízo
+- [x] Tabela/lista por dia mostrando receita, custo e resultado (lucro/prejuízo) do dia
+- [x] Adicionar aba Fretes em Caminhões Terceirizados com listagem de cargas, cálculo de frete por tarifa, desconto de combustível e ação de marcar como pago
+- [x] Sincronizar abastecimentos de caminhões terceirizados para considerar registros do fuel_records no módulo de terceirizados
+- [x] Expandir dashboardByLocation com todos os custos (manutenções, terceirizados, frete terceirizado), receita, lucro/prejuízo e análise diária
+- [x] Atualizar ExecutiveDashboard com novos cards de receita/lucro, breakdown completo de custos e tabela/gráfico de rentabilidade diária
