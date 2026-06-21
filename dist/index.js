@@ -8783,7 +8783,8 @@ var reportsRouter = router({
     const thirdPartyTrucks = await db.select({ id: equipment.id }).from(equipment).where(eq22(equipment.isThirdParty, 1));
     const thirdPartyIds = thirdPartyTrucks.map((t2) => t2.id);
     const allAttendance = await db.select({ dailyValue: collaboratorAttendance.dailyValue, workLocationId: collaboratorAttendance.workLocationId }).from(collaboratorAttendance).where(and13(gte6(collaboratorAttendance.date, dateFrom), lte6(collaboratorAttendance.date, dateTo)));
-    const allFuel = await db.select({ totalValue: fuelRecords.totalValue, liters: fuelRecords.liters, workLocationId: fuelRecords.workLocationId }).from(fuelRecords).where(and13(gte6(fuelRecords.date, dateFrom), lte6(fuelRecords.date, dateTo)));
+    const allVehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost, liters: vehicleRecords.liters, workLocationId: vehicleRecords.workLocationId }).from(vehicleRecords).where(and13(eq22(vehicleRecords.recordType, "abastecimento"), gte6(vehicleRecords.date, dateFrom), lte6(vehicleRecords.date, dateTo)));
+    const allVehicleMaints = await db.select({ maintenanceCost: vehicleRecords.maintenanceCost, workLocationId: vehicleRecords.workLocationId }).from(vehicleRecords).where(and13(eq22(vehicleRecords.recordType, "manutencao"), gte6(vehicleRecords.date, dateFrom), lte6(vehicleRecords.date, dateTo)));
     const allMFuel = await db.select({ totalValue: machineFuel.totalValue, liters: machineFuel.liters, workLocationId: machineFuel.workLocationId }).from(machineFuel).where(and13(gte6(machineFuel.date, dateFrom), lte6(machineFuel.date, dateTo)));
     const allExtras = await db.select({ amount: extraExpenses.amount, workLocationId: extraExpenses.workLocationId }).from(extraExpenses).where(and13(gte6(extraExpenses.date, dateFrom), lte6(extraExpenses.date, dateTo)));
     const allEquipMaints = await db.select({ cost: equipmentMaintenance.cost }).from(equipmentMaintenance).where(and13(gte6(equipmentMaintenance.performedAt, dateFrom), lte6(equipmentMaintenance.performedAt, dateTo)));
@@ -8817,14 +8818,15 @@ var reportsRouter = router({
       lte6(financialEntries.date, dateTo)
     ));
     const totalMaoDeObraGlobal = allAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
-    const totalFuelGlobal = allFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
+    const totalVehicleFuelGlobal = allVehicleFuel.reduce((s, r) => s + parseFloat(r.fuelCost || "0"), 0);
     const totalMFuelGlobal = allMFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
     const totalExtrasGlobal = allExtras.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
     const totalEquipMaintCost = allEquipMaints.reduce((s, r) => s + parseFloat(r.cost || "0"), 0);
     const totalPartsCost = allParts.reduce((s, r) => s + parseFloat(r.totalCost || "0"), 0);
     const totalMachMaintGlobal = allMachMaints.reduce((s, r) => s + parseFloat(r.totalCost || "0"), 0);
     const totalOilGlobal = allOilRecords.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
-    const totalManutencaoGlobal = totalEquipMaintCost + totalPartsCost + totalMachMaintGlobal + totalOilGlobal;
+    const totalVehicleMaintGlobal = allVehicleMaints.reduce((s, r) => s + parseFloat(r.maintenanceCost || "0"), 0);
+    const totalManutencaoGlobal = totalEquipMaintCost + totalPartsCost + totalMachMaintGlobal + totalOilGlobal + totalVehicleMaintGlobal;
     const totalTPFuelGlobal = allTPFuel.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
     const corteTerceirizadoCargos = allCargos.filter(
       (c) => c.thirdPartyContractor && c.thirdPartyContractor.trim() !== ""
@@ -8835,7 +8837,7 @@ var reportsRouter = router({
     const buyerPaymentsTotal = allBuyerPayments.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
     const finReceitasManualTotal = allFinReceitas.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
     const totalReceitaFinal = buyerPaymentsTotal + finReceitasManualTotal;
-    const totalCustoGlobal = totalMaoDeObraGlobal + totalFuelGlobal + totalMFuelGlobal + totalExtrasGlobal + totalManutencaoGlobal + totalCorteTerceirizadoGlobal + totalFreteTerceirizadoGlobal + totalTPFuelGlobal;
+    const totalCustoGlobal = totalMaoDeObraGlobal + totalVehicleFuelGlobal + totalMFuelGlobal + totalExtrasGlobal + totalManutencaoGlobal + totalCorteTerceirizadoGlobal + totalFreteTerceirizadoGlobal + totalTPFuelGlobal;
     const lucroGlobal = totalReceitaFinal - totalCustoGlobal;
     const dailyMapGlobal = /* @__PURE__ */ new Map();
     for (const c of allCargos) {
@@ -8857,19 +8859,21 @@ var reportsRouter = router({
     const dailyBreakdownGlobal = Array.from(dailyMapGlobal.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
     const locationData = locations.map((loc) => {
       const locAttendance = allAttendance.filter((r) => r.workLocationId === loc.id);
-      const locFuel = allFuel.filter((r) => r.workLocationId === loc.id);
+      const locVehicleFuel = allVehicleFuel.filter((r) => r.workLocationId === loc.id);
+      const locVehicleMaints = allVehicleMaints.filter((r) => r.workLocationId === loc.id);
       const locMFuel = allMFuel.filter((r) => r.workLocationId === loc.id);
       const locExtras = allExtras.filter((r) => r.workLocationId === loc.id);
       const locCargos = allCargos.filter((r) => r.workLocationId === loc.id);
       const totalMO = locAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
-      const totalComb = locFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0) + locMFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
+      const totalVehicleMaintLoc = locVehicleMaints.reduce((s, r) => s + parseFloat(r.maintenanceCost || "0"), 0);
+      const totalComb = locVehicleFuel.reduce((s, r) => s + parseFloat(r.fuelCost || "0"), 0) + locMFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
       const totalExt = locExtras.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
       const totalVol = locCargos.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0);
       const locCorte = locCargos.filter((c) => c.thirdPartyContractor && c.thirdPartyContractor.trim() !== "");
       const totalLocCorte = locCorte.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
       const locFreteTer = thirdPartyIds.length > 0 ? locCargos.filter((c) => c.vehicleId && thirdPartyIds.includes(c.vehicleId)) : [];
       const totalLocFrete = locFreteTer.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
-      const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete;
+      const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete + totalVehicleMaintLoc;
       const dailyMap = /* @__PURE__ */ new Map();
       for (const c of locCargos) {
         const day = (c.date || "").slice(0, 10);
@@ -8884,11 +8888,10 @@ var reportsRouter = router({
         maoDeObra: { total: totalMO, dias: locAttendance.length },
         combustivel: {
           total: totalComb,
-          litros: locFuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0) + locMFuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0)
+          litros: locVehicleFuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0) + locMFuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0)
         },
         despesasExtras: { total: totalExt, qtd: locExtras.length },
-        manutencao: { total: 0, qtd: 0 },
-        // manutenção não tem workLocationId, vai no total global
+        manutencao: { total: totalVehicleMaintLoc, qtd: locVehicleMaints.length },
         freteTerceirizado: { total: totalLocFrete, qtd: locFreteTer.length },
         corteTerceirizado: { total: totalLocCorte, qtd: locCorte.length },
         cargas: { total: locCargos.length, volumeM3: totalVol },
@@ -8911,7 +8914,7 @@ var reportsRouter = router({
       totals: {
         custoTotal: totalCustoGlobal,
         totalMaoDeObra: totalMaoDeObraGlobal,
-        totalCombustivel: totalFuelGlobal + totalMFuelGlobal,
+        totalCombustivel: totalVehicleFuelGlobal + totalMFuelGlobal,
         totalDespesas: totalExtrasGlobal,
         totalManutencao: totalManutencaoGlobal,
         totalCorteTerceirizado: totalCorteTerceirizadoGlobal,
@@ -10216,16 +10219,16 @@ var fuelSuppliersRouter = router({
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
-    const { vehicleRecords: vehicleRecords3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+    const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
     const { gte: gte10, lte: lte10 } = await import("drizzle-orm");
-    let conditions = [eq26(vehicleRecords3.recordType, "abastecimento")];
+    let conditions = [eq26(vehicleRecords2.recordType, "abastecimento")];
     if (input.startDate) {
-      conditions.push(gte10(vehicleRecords3.date, input.startDate));
+      conditions.push(gte10(vehicleRecords2.date, input.startDate));
     }
     if (input.endDate) {
-      conditions.push(lte10(vehicleRecords3.date, input.endDate));
+      conditions.push(lte10(vehicleRecords2.date, input.endDate));
     }
-    const records = await db.select().from(vehicleRecords3).where(and16(...conditions)).orderBy(desc22(vehicleRecords3.date));
+    const records = await db.select().from(vehicleRecords2).where(and16(...conditions)).orderBy(desc22(vehicleRecords2.date));
     return records;
   }),
   delete: protectedProcedure.input(z27.object({ id: z27.number() })).mutation(async ({ ctx, input }) => {
@@ -10523,7 +10526,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
   tankStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
-    const { vehicleRecords: vehicleRecords3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+    const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
     const suppliers2 = await db.select().from(fuelSuppliers).where(and16(eq26(fuelSuppliers.isActive, 1)));
     const tanksWithCapacity = suppliers2.filter((s) => s.tankCapacity && parseFloat(s.tankCapacity) > 0);
     const results = [];
@@ -10535,9 +10538,9 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
       if (invoiceIds.length > 0) {
         totalUsed = latestInvoices.reduce((sum, inv) => sum + parseFloat(inv.litersUsed || "0"), 0);
       }
-      const unlinkedRecords = await db.select().from(vehicleRecords3).where(and16(
-        eq26(vehicleRecords3.recordType, "abastecimento"),
-        eq26(vehicleRecords3.supplier, supplier.name)
+      const unlinkedRecords = await db.select().from(vehicleRecords2).where(and16(
+        eq26(vehicleRecords2.recordType, "abastecimento"),
+        eq26(vehicleRecords2.supplier, supplier.name)
       ));
       const unlinkedLiters = unlinkedRecords.filter((r) => !r.fuelInvoiceId).reduce((sum, r) => sum + parseFloat(r.liters || "0"), 0);
       const capacity = parseFloat(supplier.tankCapacity);
@@ -10602,10 +10605,10 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
       litersUsed: newUsed.toFixed(1)
     }).where(eq26(fuelInvoices.id, input.invoiceId));
     if (input.vehicleRecordId) {
-      const { vehicleRecords: vehicleRecords3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      await db.update(vehicleRecords3).set({
+      const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+      await db.update(vehicleRecords2).set({
         fuelInvoiceId: input.invoiceId
-      }).where(eq26(vehicleRecords3.id, input.vehicleRecordId));
+      }).where(eq26(vehicleRecords2.id, input.vehicleRecordId));
     }
     const [supplier] = await db.select().from(fuelSuppliers).where(eq26(fuelSuppliers.id, invoice.supplierId));
     if (supplier?.tankCapacity) {

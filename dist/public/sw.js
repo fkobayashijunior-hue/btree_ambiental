@@ -94,7 +94,7 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "index.html",
-    "revision": "f31135a3c50dbaeb593dd723eed52330"
+    "revision": "17ea3d55b53ef2ac7595f71a52e66cb2"
   }, {
     "url": "icon-btree-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
@@ -105,13 +105,13 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "url": "assets/purify.es-BgtpMKW3.js",
     "revision": null
   }, {
-    "url": "assets/jspdf.es.min-CkXEfGxv.js",
+    "url": "assets/jspdf.es.min-BeW16SpV.js",
     "revision": null
   }, {
-    "url": "assets/index.es-BIOGl_Wr.js",
+    "url": "assets/index.es-0QKMy1Lc.js",
     "revision": null
   }, {
-    "url": "assets/index-D36-vUeX.js",
+    "url": "assets/index-Cr-7emS3.js",
     "revision": null
   }, {
     "url": "assets/index-BN0-6j4e.css",
@@ -120,10 +120,10 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "url": "assets/html2canvas.esm-B0tyYwQk.js",
     "revision": null
   }, {
-    "url": "assets/exceljs.min-DBeR3rA9.js",
+    "url": "assets/exceljs.min-CL74hwWZ.js",
     "revision": null
   }, {
-    "url": "assets/FileSaver.min-embO78AZ.js",
+    "url": "assets/FileSaver.min-DJYjbuHK.js",
     "revision": null
   }, {
     "url": "__manus__/debug-collector.js",

@@ -296,11 +296,16 @@ export const reportsRouter = router({
         .from(collaboratorAttendance)
         .where(and(gte(collaboratorAttendance.date, dateFrom), lte(collaboratorAttendance.date, dateTo)));
 
-      // Combustível veículos global (todos os registros do período)
-      const allFuel = await db
-        .select({ totalValue: fuelRecords.totalValue, liters: fuelRecords.liters, workLocationId: fuelRecords.workLocationId })
-        .from(fuelRecords)
-        .where(and(gte(fuelRecords.date, dateFrom), lte(fuelRecords.date, dateTo)));
+      // Combustível veículos global (vehicle_records com recordType='abastecimento')
+      const allVehicleFuel = await db
+        .select({ fuelCost: vehicleRecords.fuelCost, liters: vehicleRecords.liters, workLocationId: vehicleRecords.workLocationId })
+        .from(vehicleRecords)
+        .where(and(eq(vehicleRecords.recordType, 'abastecimento'), gte(vehicleRecords.date, dateFrom), lte(vehicleRecords.date, dateTo)));
+      // Manutenções de veículos global (vehicle_records com recordType='manutencao')
+      const allVehicleMaints = await db
+        .select({ maintenanceCost: vehicleRecords.maintenanceCost, workLocationId: vehicleRecords.workLocationId })
+        .from(vehicleRecords)
+        .where(and(eq(vehicleRecords.recordType, 'manutencao'), gte(vehicleRecords.date, dateFrom), lte(vehicleRecords.date, dateTo)));
 
       // Combustível máquinas global
       const allMFuel = await db
@@ -392,14 +397,15 @@ export const reportsRouter = router({
 
       // Calcular totais globais
       const totalMaoDeObraGlobal = allAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
-      const totalFuelGlobal = allFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
+      const totalVehicleFuelGlobal = allVehicleFuel.reduce((s, r) => s + parseFloat(r.fuelCost || "0"), 0);
       const totalMFuelGlobal = allMFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
       const totalExtrasGlobal = allExtras.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
       const totalEquipMaintCost = allEquipMaints.reduce((s, r) => s + parseFloat(r.cost || "0"), 0);
       const totalPartsCost = allParts.reduce((s, r) => s + parseFloat(r.totalCost || "0"), 0);
       const totalMachMaintGlobal = allMachMaints.reduce((s, r) => s + parseFloat(r.totalCost || "0"), 0);
       const totalOilGlobal = allOilRecords.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
-      const totalManutencaoGlobal = totalEquipMaintCost + totalPartsCost + totalMachMaintGlobal + totalOilGlobal;
+      const totalVehicleMaintGlobal = allVehicleMaints.reduce((s, r) => s + parseFloat(r.maintenanceCost || "0"), 0);
+      const totalManutencaoGlobal = totalEquipMaintCost + totalPartsCost + totalMachMaintGlobal + totalOilGlobal + totalVehicleMaintGlobal;
       const totalTPFuelGlobal = allTPFuel.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
 
       // Corte terceirizado: cargas com thirdPartyContractor preenchido
@@ -423,7 +429,7 @@ export const reportsRouter = router({
       // Soma: todos os buyerPayments pagos + receitas manuais do financeiro
       const totalReceitaFinal = buyerPaymentsTotal + finReceitasManualTotal;
 
-      const totalCustoGlobal = totalMaoDeObraGlobal + totalFuelGlobal + totalMFuelGlobal + totalExtrasGlobal + totalManutencaoGlobal + totalCorteTerceirizadoGlobal + totalFreteTerceirizadoGlobal + totalTPFuelGlobal;
+      const totalCustoGlobal = totalMaoDeObraGlobal + totalVehicleFuelGlobal + totalMFuelGlobal + totalExtrasGlobal + totalManutencaoGlobal + totalCorteTerceirizadoGlobal + totalFreteTerceirizadoGlobal + totalTPFuelGlobal;
       const lucroGlobal = totalReceitaFinal - totalCustoGlobal;
 
       // ── ANÁLISE DIÁRIA GLOBAL ──
@@ -452,13 +458,15 @@ export const reportsRouter = router({
       // ── DADOS POR LOCAL (para tabela detalhada) ──
       const locationData = locations.map(loc => {
         const locAttendance = allAttendance.filter(r => r.workLocationId === loc.id);
-        const locFuel = allFuel.filter(r => r.workLocationId === loc.id);
+        const locVehicleFuel = allVehicleFuel.filter(r => r.workLocationId === loc.id);
+        const locVehicleMaints = allVehicleMaints.filter(r => r.workLocationId === loc.id);
         const locMFuel = allMFuel.filter(r => r.workLocationId === loc.id);
         const locExtras = allExtras.filter(r => r.workLocationId === loc.id);
         const locCargos = allCargos.filter(r => r.workLocationId === loc.id);
 
         const totalMO = locAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
-        const totalComb = locFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0)
+        const totalVehicleMaintLoc = locVehicleMaints.reduce((s, r) => s + parseFloat(r.maintenanceCost || "0"), 0);
+        const totalComb = locVehicleFuel.reduce((s, r) => s + parseFloat(r.fuelCost || "0"), 0)
           + locMFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
         const totalExt = locExtras.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
         const totalVol = locCargos.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0);
@@ -473,7 +481,7 @@ export const reportsRouter = router({
           : [];
         const totalLocFrete = locFreteTer.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
 
-        const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete;
+        const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete + totalVehicleMaintLoc;
 
         // Análise diária por local
         const dailyMap = new Map<string, { cargas: number; volumeM3: number }>();
@@ -493,11 +501,11 @@ export const reportsRouter = router({
           maoDeObra: { total: totalMO, dias: locAttendance.length },
           combustivel: {
             total: totalComb,
-            litros: locFuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0)
+            litros: locVehicleFuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0)
               + locMFuel.reduce((s, r) => s + parseFloat(r.liters || "0"), 0),
           },
           despesasExtras: { total: totalExt, qtd: locExtras.length },
-          manutencao: { total: 0, qtd: 0 }, // manutenção não tem workLocationId, vai no total global
+          manutencao: { total: totalVehicleMaintLoc, qtd: locVehicleMaints.length },
           freteTerceirizado: { total: totalLocFrete, qtd: locFreteTer.length },
           corteTerceirizado: { total: totalLocCorte, qtd: locCorte.length },
           cargas: { total: locCargos.length, volumeM3: totalVol },
@@ -519,7 +527,7 @@ export const reportsRouter = router({
         totals: {
           custoTotal: totalCustoGlobal,
           totalMaoDeObra: totalMaoDeObraGlobal,
-          totalCombustivel: totalFuelGlobal + totalMFuelGlobal,
+          totalCombustivel: totalVehicleFuelGlobal + totalMFuelGlobal,
           totalDespesas: totalExtrasGlobal,
           totalManutencao: totalManutencaoGlobal,
           totalCorteTerceirizado: totalCorteTerceirizadoGlobal,
