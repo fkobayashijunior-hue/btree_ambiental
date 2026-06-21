@@ -10,6 +10,7 @@ import {
   financialEntries,
   cargoLoads,
   fuelRecords,
+  vehicleRecords,
   gpsLocations,
 } from "../../drizzle/schema";
 
@@ -108,38 +109,41 @@ export const thirdPartyRouter = router({
         .leftJoin(equipment, eq(thirdPartyFuel.equipmentId, equipment.id))
         .orderBy(desc(thirdPartyFuel.date));
 
-      // 2) Abastecimentos de fuel_records para caminhões terceirizados
-      let fuelRecordsRows: any[] = [];
+      // 2) Abastecimentos de vehicle_records (recordType='abastecimento') para caminhões terceirizados
+      let vehicleRecordsRows: any[] = [];
       if (thirdPartyIds.length > 0) {
-        const frRows = await db
+        const vrRows = await db
           .select({
-            id: fuelRecords.id,
-            equipmentId: fuelRecords.equipmentId,
+            id: vehicleRecords.id,
+            equipmentId: vehicleRecords.equipmentId,
             equipmentName: equipment.name,
-            date: fuelRecords.date,
-            liters: fuelRecords.liters,
-            pricePerLiter: fuelRecords.pricePerLiter,
-            total: fuelRecords.totalValue,
-            location: fuelRecords.station,
-            notes: fuelRecords.odometer,
-            createdAt: fuelRecords.createdAt,
+            date: vehicleRecords.date,
+            liters: vehicleRecords.liters,
+            pricePerLiter: vehicleRecords.pricePerLiter,
+            total: vehicleRecords.fuelCost,
+            location: vehicleRecords.supplier,
+            notes: vehicleRecords.odometer,
+            createdAt: vehicleRecords.createdAt,
           })
-          .from(fuelRecords)
-          .leftJoin(equipment, eq(fuelRecords.equipmentId, equipment.id))
-          .where(inArray(fuelRecords.equipmentId, thirdPartyIds))
-          .orderBy(desc(fuelRecords.date));
+          .from(vehicleRecords)
+          .leftJoin(equipment, eq(vehicleRecords.equipmentId, equipment.id))
+          .where(and(
+            eq(vehicleRecords.recordType, 'abastecimento'),
+            inArray(vehicleRecords.equipmentId, thirdPartyIds)
+          ))
+          .orderBy(desc(vehicleRecords.date));
 
-        fuelRecordsRows = frRows.map(r => ({
+        vehicleRecordsRows = vrRows.map(r => ({
           ...r,
-          fromFuelRecords: true,
+          fromVehicleRecords: true,
           notes: r.notes ? `Hodômetro: ${r.notes}` : null,
         }));
       }
 
       // Combinar e ordenar por data
       const combined = [
-        ...tpFuelRows.map(r => ({ ...r, fromFuelRecords: false })),
-        ...fuelRecordsRows,
+        ...tpFuelRows.map(r => ({ ...r, fromVehicleRecords: false })),
+        ...vehicleRecordsRows,
       ].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
       return combined;

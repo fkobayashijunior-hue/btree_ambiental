@@ -516,6 +516,86 @@ export default function ExecutiveDashboard() {
               </CardContent>
             </Card>
 
+            {/* Detalhamento de Receita por Comprador */}
+            {totals && (totals as any).receitaBreakdown && (
+              <Card className="shadow-sm border-green-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2 text-green-800">
+                    <TrendingUp className="w-4 h-4 text-green-600" />
+                    Detalhamento de Receita
+                    <span className="ml-auto text-sm font-normal text-green-700">
+                      Total: {formatCurrency(totals.totalReceita ?? 0)}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* Pagamentos de compradores (Líder, Sonoco, etc.) */}
+                  {(totals as any).receitaBreakdown.byBuyer.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-green-600" />
+                        Pagamentos de Compradores
+                        <span className="ml-auto text-green-700 font-bold">
+                          {formatCurrency((totals as any).receitaBreakdown.totalBuyerPayments)}
+                        </span>
+                      </h4>
+                      <div className="space-y-2">
+                        {(totals as any).receitaBreakdown.byBuyer.map((buyer: any) => (
+                          <div key={buyer.buyerId} className="bg-green-50 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-semibold text-green-900 text-sm">{buyer.buyerName}</span>
+                              <span className="font-bold text-green-700">{formatCurrency(buyer.total)}</span>
+                            </div>
+                            <div className="space-y-1">
+                              {buyer.payments.map((p: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between text-xs text-gray-600 pl-2">
+                                  <span>
+                                    {new Date(p.paymentDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                    {p.invoiceNumber && <span className="ml-2 text-gray-400">NF: {p.invoiceNumber}</span>}
+                                    {p.notes && <span className="ml-2 text-gray-400 italic">{p.notes}</span>}
+                                  </span>
+                                  <span className="font-medium text-green-700">{formatCurrency(p.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Receitas manuais do financeiro */}
+                  {(totals as any).receitaBreakdown.manualEntries.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        Outras Receitas (Financeiro)
+                        <span className="ml-auto text-blue-700 font-bold">
+                          {formatCurrency((totals as any).receitaBreakdown.totalManual)}
+                        </span>
+                      </h4>
+                      <div className="space-y-1">
+                        {(totals as any).receitaBreakdown.manualEntries.map((e: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between text-sm bg-blue-50 rounded px-3 py-2">
+                            <div>
+                              <span className="font-medium text-gray-800">{e.description}</span>
+                              {e.clientName && <span className="ml-2 text-xs text-gray-500">{e.clientName}</span>}
+                              <span className="ml-2 text-xs text-gray-400">
+                                {new Date(e.date).toLocaleDateString('pt-BR')}
+                              </span>
+                            </div>
+                            <span className="font-bold text-blue-700">{formatCurrency(e.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(totals as any).receitaBreakdown.byBuyer.length === 0 && (totals as any).receitaBreakdown.manualEntries.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-4">Nenhuma receita registrada no período.</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Seção de Relatório Detalhado por Local */}
             <Card className="shadow-sm">
               <CardHeader className="pb-2">
