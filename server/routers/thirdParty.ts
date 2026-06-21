@@ -85,13 +85,24 @@ export const thirdPartyRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Buscar IDs dos caminhões terceirizados
-      const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name })
+      // Buscar caminhões terceirizados com proprietário
+      const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name, thirdPartyOwner: equipment.thirdPartyOwner })
         .from(equipment)
         .where(eq(equipment.isThirdParty, 1));
       const thirdPartyIds = thirdPartyTrucks.map(t => t.id);
+      const ownerMap = new Map(thirdPartyTrucks.map(t => [t.id, t.thirdPartyOwner ?? null]));
+
+      // Filtros de data
+      const startDate = input?.startDate;
+      const endDate = input?.endDate;
+      const filterEquipId = input?.equipmentId;
 
       // 1) Abastecimentos da tabela third_party_fuel (lançados manualmente)
+      const tpConditions: ReturnType<typeof and>[] = [];
+      if (startDate) tpConditions.push(gte(thirdPartyFuel.date, startDate + ' 00:00:00'));
+      if (endDate) tpConditions.push(lte(thirdPartyFuel.date, endDate + ' 23:59:59'));
+      if (filterEquipId) tpConditions.push(eq(thirdPartyFuel.equipmentId, filterEquipId));
+
       const tpFuelRows = await db
         .select({
           id: thirdPartyFuel.id,
@@ -107,11 +118,20 @@ export const thirdPartyRouter = router({
         })
         .from(thirdPartyFuel)
         .leftJoin(equipment, eq(thirdPartyFuel.equipmentId, equipment.id))
+        .where(tpConditions.length > 0 ? and(...tpConditions) : undefined)
         .orderBy(desc(thirdPartyFuel.date));
 
       // 2) Abastecimentos de vehicle_records (recordType='abastecimento') para caminhões terceirizados
       let vehicleRecordsRows: any[] = [];
       if (thirdPartyIds.length > 0) {
+        const vrConditions: ReturnType<typeof and>[] = [
+          eq(vehicleRecords.recordType, 'abastecimento'),
+          inArray(vehicleRecords.equipmentId, thirdPartyIds),
+        ];
+        if (startDate) vrConditions.push(gte(vehicleRecords.date, startDate + ' 00:00:00'));
+        if (endDate) vrConditions.push(lte(vehicleRecords.date, endDate + ' 23:59:59'));
+        if (filterEquipId) vrConditions.push(eq(vehicleRecords.equipmentId, filterEquipId));
+
         const vrRows = await db
           .select({
             id: vehicleRecords.id,
@@ -127,10 +147,7 @@ export const thirdPartyRouter = router({
           })
           .from(vehicleRecords)
           .leftJoin(equipment, eq(vehicleRecords.equipmentId, equipment.id))
-          .where(and(
-            eq(vehicleRecords.recordType, 'abastecimento'),
-            inArray(vehicleRecords.equipmentId, thirdPartyIds)
-          ))
+          .where(and(...vrConditions))
           .orderBy(desc(vehicleRecords.date));
 
         vehicleRecordsRows = vrRows.map(r => ({
@@ -140,11 +157,13 @@ export const thirdPartyRouter = router({
         }));
       }
 
-      // Combinar e ordenar por data
+      // Combinar, adicionar proprietário e ordenar por data
       const combined = [
         ...tpFuelRows.map(r => ({ ...r, fromVehicleRecords: false })),
         ...vehicleRecordsRows,
-      ].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+      ]
+        .map(r => ({ ...r, ownerName: ownerMap.get(r.equipmentId) ?? null }))
+        .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
       return combined;
     }),

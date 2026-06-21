@@ -12459,8 +12459,16 @@ var thirdPartyRouter = router({
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
-    const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name }).from(equipment).where(eq36(equipment.isThirdParty, 1));
+    const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name, thirdPartyOwner: equipment.thirdPartyOwner }).from(equipment).where(eq36(equipment.isThirdParty, 1));
     const thirdPartyIds = thirdPartyTrucks.map((t2) => t2.id);
+    const ownerMap = new Map(thirdPartyTrucks.map((t2) => [t2.id, t2.thirdPartyOwner ?? null]));
+    const startDate = input?.startDate;
+    const endDate = input?.endDate;
+    const filterEquipId = input?.equipmentId;
+    const tpConditions = [];
+    if (startDate) tpConditions.push(gte10(thirdPartyFuel.date, startDate + " 00:00:00"));
+    if (endDate) tpConditions.push(lte10(thirdPartyFuel.date, endDate + " 23:59:59"));
+    if (filterEquipId) tpConditions.push(eq36(thirdPartyFuel.equipmentId, filterEquipId));
     const tpFuelRows = await db.select({
       id: thirdPartyFuel.id,
       equipmentId: thirdPartyFuel.equipmentId,
@@ -12472,9 +12480,16 @@ var thirdPartyRouter = router({
       location: thirdPartyFuel.location,
       notes: thirdPartyFuel.notes,
       createdAt: thirdPartyFuel.createdAt
-    }).from(thirdPartyFuel).leftJoin(equipment, eq36(thirdPartyFuel.equipmentId, equipment.id)).orderBy(desc30(thirdPartyFuel.date));
+    }).from(thirdPartyFuel).leftJoin(equipment, eq36(thirdPartyFuel.equipmentId, equipment.id)).where(tpConditions.length > 0 ? and23(...tpConditions) : void 0).orderBy(desc30(thirdPartyFuel.date));
     let vehicleRecordsRows = [];
     if (thirdPartyIds.length > 0) {
+      const vrConditions = [
+        eq36(vehicleRecords.recordType, "abastecimento"),
+        inArray8(vehicleRecords.equipmentId, thirdPartyIds)
+      ];
+      if (startDate) vrConditions.push(gte10(vehicleRecords.date, startDate + " 00:00:00"));
+      if (endDate) vrConditions.push(lte10(vehicleRecords.date, endDate + " 23:59:59"));
+      if (filterEquipId) vrConditions.push(eq36(vehicleRecords.equipmentId, filterEquipId));
       const vrRows = await db.select({
         id: vehicleRecords.id,
         equipmentId: vehicleRecords.equipmentId,
@@ -12486,10 +12501,7 @@ var thirdPartyRouter = router({
         location: vehicleRecords.supplier,
         notes: vehicleRecords.odometer,
         createdAt: vehicleRecords.createdAt
-      }).from(vehicleRecords).leftJoin(equipment, eq36(vehicleRecords.equipmentId, equipment.id)).where(and23(
-        eq36(vehicleRecords.recordType, "abastecimento"),
-        inArray8(vehicleRecords.equipmentId, thirdPartyIds)
-      )).orderBy(desc30(vehicleRecords.date));
+      }).from(vehicleRecords).leftJoin(equipment, eq36(vehicleRecords.equipmentId, equipment.id)).where(and23(...vrConditions)).orderBy(desc30(vehicleRecords.date));
       vehicleRecordsRows = vrRows.map((r) => ({
         ...r,
         fromVehicleRecords: true,
@@ -12499,7 +12511,7 @@ var thirdPartyRouter = router({
     const combined = [
       ...tpFuelRows.map((r) => ({ ...r, fromVehicleRecords: false })),
       ...vehicleRecordsRows
-    ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+    ].map((r) => ({ ...r, ownerName: ownerMap.get(r.equipmentId) ?? null })).sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
     return combined;
   }),
   createFuel: protectedProcedure.input(z37.object({
