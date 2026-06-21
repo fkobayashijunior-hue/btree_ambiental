@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ const firstOfMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padS
 const todayStr = today.toISOString().slice(0, 10);
 
 export default function AuditDataPage() {
-  const { user } = useAuth();
+  const { isAdmin } = usePermissions();
   const [dateFrom, setDateFrom] = useState(firstOfMonth);
   const [dateTo, setDateTo] = useState(todayStr);
   const [tipo, setTipo] = useState<"todos" | "custo" | "receita">("todos");
@@ -34,7 +34,7 @@ export default function AuditDataPage() {
       tipo,
       localId: localId !== "todos" ? parseInt(localId) : undefined,
     },
-    { enabled: !!user && user.role === "admin" }
+    { enabled: isAdmin }
   );
 
   const data = auditQuery.data;
@@ -84,7 +84,7 @@ export default function AuditDataPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (!user || user.role !== "admin") {
+  if (!isAdmin) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
         <div className="text-center">

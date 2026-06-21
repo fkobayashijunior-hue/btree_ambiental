@@ -358,26 +358,20 @@ export const thirdPartyRouter = router({
 
         const grossFreight = matchingRate ? parseFloat(matchingRate.ratePerTon) * weightTons : 0;
 
-        // Buscar combustível do terceirizado no mesmo dia (third_party_fuel + fuel_records)
-        const dateStr = cargo.date?.slice(0, 10) ?? '';
+        // Buscar combustível do terceirizado no período filtrado (vehicleRecords com recordType='abastecimento')
+        // O custo de combustível abate do valor a pagar: Frete Líquido = Frete Bruto - Combustível
         let fuelCost = 0;
-        if (cargo.vehicleId && dateStr) {
-          const tpFuel = await db.select({ total: thirdPartyFuel.total })
-            .from(thirdPartyFuel)
-            .where(and(
-              eq(thirdPartyFuel.equipmentId, cargo.vehicleId),
-              gte(thirdPartyFuel.date, dateStr + " 00:00:00"),
-              lte(thirdPartyFuel.date, dateStr + " 23:59:59"),
-            ));
-          const frFuel = await db.select({ totalValue: fuelRecords.totalValue })
-            .from(fuelRecords)
-            .where(and(
-              eq(fuelRecords.equipmentId, cargo.vehicleId),
-              gte(fuelRecords.date, dateStr + " 00:00:00"),
-              lte(fuelRecords.date, dateStr + " 23:59:59"),
-            ));
-          fuelCost = tpFuel.reduce((acc, f) => acc + parseFloat(f.total || '0'), 0)
-            + frFuel.reduce((acc, f) => acc + parseFloat(f.totalValue || '0'), 0);
+        if (cargo.vehicleId) {
+          const fuelConditions: ReturnType<typeof and>[] = [
+            eq(vehicleRecords.equipmentId, cargo.vehicleId),
+            eq(vehicleRecords.recordType, 'abastecimento'),
+          ];
+          if (input?.startDate) fuelConditions.push(gte(vehicleRecords.date, input.startDate + " 00:00:00"));
+          if (input?.endDate) fuelConditions.push(lte(vehicleRecords.date, input.endDate + " 23:59:59"));
+          const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost })
+            .from(vehicleRecords)
+            .where(and(...fuelConditions));
+          fuelCost = vehicleFuel.reduce((acc, f) => acc + parseFloat(f.fuelCost || '0'), 0);
         }
 
         const netFreight = grossFreight - fuelCost;

@@ -4767,12 +4767,12 @@ var machineHoursRouter = router({
     const equipmentList = await db.select().from(equipment);
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
-    const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
+    const fuelRecords3 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
     const oilRecords = await db.select().from(equipmentOilRecords).orderBy(desc4(equipmentOilRecords.createdAt));
     return equipmentList.map((eq37) => {
       const eqHours = hoursRecords.filter((h) => h.equipmentId === eq37.id);
       const eqMaint = maintenances.filter((m) => m.equipmentId === eq37.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq37.id);
+      const eqFuel = fuelRecords3.filter((f) => f.equipmentId === eq37.id);
       const eqOil = oilRecords.filter((o) => o.equipmentId === eq37.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
@@ -12654,20 +12654,16 @@ var thirdPartyRouter = router({
         matchingRate = rates.find((r) => fuzzyMatch(worksiteName, r.worksite));
       }
       const grossFreight = matchingRate ? parseFloat(matchingRate.ratePerTon) * weightTons : 0;
-      const dateStr = cargo.date?.slice(0, 10) ?? "";
       let fuelCost = 0;
-      if (cargo.vehicleId && dateStr) {
-        const tpFuel = await db.select({ total: thirdPartyFuel.total }).from(thirdPartyFuel).where(and23(
-          eq36(thirdPartyFuel.equipmentId, cargo.vehicleId),
-          gte10(thirdPartyFuel.date, dateStr + " 00:00:00"),
-          lte10(thirdPartyFuel.date, dateStr + " 23:59:59")
-        ));
-        const frFuel = await db.select({ totalValue: fuelRecords.totalValue }).from(fuelRecords).where(and23(
-          eq36(fuelRecords.equipmentId, cargo.vehicleId),
-          gte10(fuelRecords.date, dateStr + " 00:00:00"),
-          lte10(fuelRecords.date, dateStr + " 23:59:59")
-        ));
-        fuelCost = tpFuel.reduce((acc, f) => acc + parseFloat(f.total || "0"), 0) + frFuel.reduce((acc, f) => acc + parseFloat(f.totalValue || "0"), 0);
+      if (cargo.vehicleId) {
+        const fuelConditions = [
+          eq36(vehicleRecords.equipmentId, cargo.vehicleId),
+          eq36(vehicleRecords.recordType, "abastecimento")
+        ];
+        if (input?.startDate) fuelConditions.push(gte10(vehicleRecords.date, input.startDate + " 00:00:00"));
+        if (input?.endDate) fuelConditions.push(lte10(vehicleRecords.date, input.endDate + " 23:59:59"));
+        const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost }).from(vehicleRecords).where(and23(...fuelConditions));
+        fuelCost = vehicleFuel.reduce((acc, f) => acc + parseFloat(f.fuelCost || "0"), 0);
       }
       const netFreight = grossFreight - fuelCost;
       return {

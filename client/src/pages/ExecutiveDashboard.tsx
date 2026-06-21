@@ -239,7 +239,7 @@ export default function ExecutiveDashboard() {
                 icon={<TreePine className="w-5 h-5" />}
                 label="Corte Terc."
                 value={formatCurrency((totals as any).totalCorteTerceirizado ?? 0)}
-                color="green"
+                color="amber"
               />
               <SummaryCard
                 icon={<Package className="w-5 h-5" />}
@@ -272,7 +272,7 @@ export default function ExecutiveDashboard() {
                         { label: "Mão de Obra", value: totals.totalMaoDeObra, color: "#3b82f6" },
                         { label: "Combustível", value: totals.totalCombustivel, color: "#f59e0b" },
                         { label: "Manutenção", value: totals.totalManutencao ?? 0, color: "#a855f7" },
-                        { label: "Corte Terc.", value: (totals as any).totalCorteTerceirizado ?? 0, color: "#22c55e" },
+                        { label: "Corte Terc.", value: (totals as any).totalCorteTerceirizado ?? 0, color: "#92400e" },
                         { label: "Frete Terc.", value: totals.totalFreteTerceirizado ?? 0, color: "#ef4444" },
                         { label: "Despesas Extras", value: totals.totalDespesas, color: "#6366f1" },
                       ]}
