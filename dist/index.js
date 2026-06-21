@@ -4769,11 +4769,11 @@ var machineHoursRouter = router({
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const fuelRecords2 = await db.select().from(machineFuel).orderBy(desc4(machineFuel.createdAt));
     const oilRecords = await db.select().from(equipmentOilRecords).orderBy(desc4(equipmentOilRecords.createdAt));
-    return equipmentList.map((eq36) => {
-      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq36.id);
-      const eqMaint = maintenances.filter((m) => m.equipmentId === eq36.id);
-      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq36.id);
-      const eqOil = oilRecords.filter((o) => o.equipmentId === eq36.id);
+    return equipmentList.map((eq37) => {
+      const eqHours = hoursRecords.filter((h) => h.equipmentId === eq37.id);
+      const eqMaint = maintenances.filter((m) => m.equipmentId === eq37.id);
+      const eqFuel = fuelRecords2.filter((f) => f.equipmentId === eq37.id);
+      const eqOil = oilRecords.filter((o) => o.equipmentId === eq37.id);
       const totalHours = eqHours.reduce((sum, h) => sum + (parseFloat(h.hoursWorked) || 0), 0);
       const totalFuelLiters = eqFuel.reduce((sum, f) => sum + (parseFloat(f.liters) || 0), 0);
       const totalFuelCost = eqFuel.reduce((sum, f) => sum + (parseFloat(f.totalValue || "0") || 0), 0);
@@ -4784,11 +4784,11 @@ var machineHoursRouter = router({
       const lastHourMeter = eqHours.length > 0 ? eqHours[0].endHourMeter : null;
       const lastMaintenance = eqMaint.length > 0 ? eqMaint[0] : null;
       return {
-        equipmentId: eq36.id,
-        equipmentName: eq36.name,
-        brand: eq36.brand,
-        model: eq36.model,
-        status: eq36.status,
+        equipmentId: eq37.id,
+        equipmentName: eq37.name,
+        brand: eq37.brand,
+        model: eq37.model,
+        status: eq37.status,
         totalHoursWorked: totalHours,
         lastHourMeter,
         totalFuelLiters,
@@ -8963,13 +8963,483 @@ var reportsRouter = router({
   })
 });
 
-// server/routers/reportPdf.ts
+// server/routers/auditData.ts
 init_trpc();
 init_db();
 init_schema();
 import { z as z24 } from "zod";
 import { TRPCError as TRPCError14 } from "@trpc/server";
-import { eq as eq23, desc as desc19, and as and14, gte as gte7, lte as lte7 } from "drizzle-orm";
+import { eq as eq23, and as and14, gte as gte7, lte as lte7, isNotNull as isNotNull2 } from "drizzle-orm";
+var auditDataRouter = router({
+  list: protectedProcedure.input(z24.object({
+    dateFrom: z24.string(),
+    // YYYY-MM-DD
+    dateTo: z24.string(),
+    tipo: z24.enum(["todos", "custo", "receita"]).default("todos"),
+    categoria: z24.string().optional(),
+    localId: z24.number().optional()
+  })).query(async ({ input, ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError14({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+    }
+    const db = await getDb();
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR" });
+    const dateFrom = input.dateFrom + " 00:00:00";
+    const dateTo = input.dateTo + " 23:59:59";
+    const rows = [];
+    const allLocations = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
+    const locMap = {};
+    for (const l of allLocations) locMap[l.id] = l.name;
+    const locName = (id) => id ? locMap[id] ?? `Local #${id}` : null;
+    const matchLocal = (locId) => !input.localId || locId === input.localId;
+    const matchCat = (cat) => !input.categoria || input.categoria === cat;
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const att = await db.select({
+        id: collaboratorAttendance.id,
+        date: collaboratorAttendance.date,
+        dailyValue: collaboratorAttendance.dailyValue,
+        workLocationId: collaboratorAttendance.workLocationId,
+        employmentTypeCa: collaboratorAttendance.employmentTypeCa,
+        observations: collaboratorAttendance.observations,
+        activity: collaboratorAttendance.activity,
+        collaboratorName: collaborators.name
+      }).from(collaboratorAttendance).leftJoin(collaborators, eq23(collaboratorAttendance.collaboratorId, collaborators.id)).where(and14(gte7(collaboratorAttendance.date, dateFrom), lte7(collaboratorAttendance.date, dateTo)));
+      for (const r of att) {
+        const locId = r.workLocationId ?? null;
+        if (!matchLocal(locId)) continue;
+        const cat = "M\xE3o de Obra";
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `att-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: r.employmentTypeCa === "terceirizado" ? "Terceirizado" : r.employmentTypeCa === "diarista" ? "Diarista" : "CLT",
+          descricao: `Di\xE1ria \u2014 ${r.collaboratorName ?? "Colaborador"}${r.activity ? ` | ${r.activity}` : ""}`,
+          valor: parseFloat(r.dailyValue || "0"),
+          localId: locId,
+          localNome: locName(locId),
+          origem_tabela: "collaborator_attendance",
+          origem_campo: "daily_value",
+          origem_id: r.id,
+          registradoPor: null,
+          observacoes: r.observations ?? null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const vf = await db.select({
+        id: vehicleRecords.id,
+        date: vehicleRecords.date,
+        fuelCost: vehicleRecords.fuelCost,
+        liters: vehicleRecords.liters,
+        supplier: vehicleRecords.supplier,
+        workLocationId: vehicleRecords.workLocationId,
+        serviceType: vehicleRecords.serviceType,
+        equipName: equipment.name,
+        notes: vehicleRecords.notes
+      }).from(vehicleRecords).leftJoin(equipment, eq23(vehicleRecords.equipmentId, equipment.id)).where(and14(
+        eq23(vehicleRecords.recordType, "abastecimento"),
+        gte7(vehicleRecords.date, dateFrom),
+        lte7(vehicleRecords.date, dateTo)
+      ));
+      for (const r of vf) {
+        const locId = r.workLocationId ?? null;
+        if (!matchLocal(locId)) continue;
+        const cat = "Combust\xEDvel";
+        if (!matchCat(cat)) continue;
+        const sub = r.serviceType === "terceirizado" ? "Ve\xEDculo Terceirizado" : "Ve\xEDculo Pr\xF3prio";
+        rows.push({
+          id: `vf-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: sub,
+          descricao: `Abastecimento \u2014 ${r.equipName ?? "Ve\xEDculo"} | ${r.liters ?? "?"}L${r.supplier ? ` @ ${r.supplier}` : ""}`,
+          valor: parseFloat(r.fuelCost || "0"),
+          localId: locId,
+          localNome: locName(locId),
+          origem_tabela: "vehicle_records",
+          origem_campo: "fuel_cost [recordType=abastecimento]",
+          origem_id: r.id,
+          registradoPor: null,
+          observacoes: r.notes ?? null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const vm = await db.select({
+        id: vehicleRecords.id,
+        date: vehicleRecords.date,
+        maintenanceCost: vehicleRecords.maintenanceCost,
+        maintenanceType: vehicleRecords.maintenanceType,
+        workLocationId: vehicleRecords.workLocationId,
+        equipName: equipment.name,
+        notes: vehicleRecords.notes
+      }).from(vehicleRecords).leftJoin(equipment, eq23(vehicleRecords.equipmentId, equipment.id)).where(and14(
+        eq23(vehicleRecords.recordType, "manutencao"),
+        gte7(vehicleRecords.date, dateFrom),
+        lte7(vehicleRecords.date, dateTo)
+      ));
+      for (const r of vm) {
+        const locId = r.workLocationId ?? null;
+        if (!matchLocal(locId)) continue;
+        const cat = "Manuten\xE7\xE3o";
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `vm-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: "Ve\xEDculo",
+          descricao: `Manuten\xE7\xE3o \u2014 ${r.equipName ?? "Ve\xEDculo"} | ${r.maintenanceType ?? "Tipo n\xE3o informado"}`,
+          valor: parseFloat(r.maintenanceCost || "0"),
+          localId: locId,
+          localNome: locName(locId),
+          origem_tabela: "vehicle_records",
+          origem_campo: "maintenance_cost [recordType=manutencao]",
+          origem_id: r.id,
+          registradoPor: null,
+          observacoes: r.notes ?? null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const mf = await db.select({
+        id: fuelRecords.id,
+        date: fuelRecords.date,
+        totalValue: fuelRecords.totalValue,
+        liters: fuelRecords.liters,
+        station: fuelRecords.station,
+        workLocationId: fuelRecords.workLocationId,
+        equipName: equipment.name
+      }).from(fuelRecords).leftJoin(equipment, eq23(fuelRecords.equipmentId, equipment.id)).where(and14(gte7(fuelRecords.date, dateFrom), lte7(fuelRecords.date, dateTo)));
+      for (const r of mf) {
+        const locId = r.workLocationId ?? null;
+        if (!matchLocal(locId)) continue;
+        const cat = "Combust\xEDvel";
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `mf-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: "M\xE1quina/Motosserra",
+          descricao: `Abastecimento \u2014 ${r.equipName ?? "M\xE1quina"} | ${r.liters ?? "?"}L${r.station ? ` @ ${r.station}` : ""}`,
+          valor: parseFloat(r.totalValue || "0"),
+          localId: locId,
+          localNome: locName(locId),
+          origem_tabela: "fuel_records",
+          origem_campo: "total_value",
+          origem_id: r.id,
+          registradoPor: null,
+          observacoes: null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const mm = await db.select({
+        id: machineMaintenance.id,
+        date: machineMaintenance.date,
+        totalCost: machineMaintenance.totalCost,
+        type: machineMaintenance.type,
+        serviceType: machineMaintenance.serviceType,
+        description: machineMaintenance.description,
+        equipName: equipment.name
+      }).from(machineMaintenance).leftJoin(equipment, eq23(machineMaintenance.equipmentId, equipment.id)).where(and14(gte7(machineMaintenance.date, dateFrom), lte7(machineMaintenance.date, dateTo)));
+      for (const r of mm) {
+        const cat = "Manuten\xE7\xE3o";
+        if (!matchLocal(null)) continue;
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `mm-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: `M\xE1quina (${r.serviceType === "terceirizado" ? "Terceirizado" : "Pr\xF3prio"})`,
+          descricao: `Manuten\xE7\xE3o ${r.type ?? ""} \u2014 ${r.equipName ?? "M\xE1quina"}${r.description ? ` | ${r.description}` : ""}`,
+          valor: parseFloat(r.totalCost || "0"),
+          localId: null,
+          localNome: null,
+          origem_tabela: "machine_maintenance",
+          origem_campo: "total_cost",
+          origem_id: r.id,
+          registradoPor: null,
+          observacoes: null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const ee = await db.select({
+        id: extraExpenses.id,
+        date: extraExpenses.date,
+        amount: extraExpenses.amount,
+        category: extraExpenses.category,
+        description: extraExpenses.description,
+        workLocationId: extraExpenses.workLocationId,
+        registeredByName: extraExpenses.registeredByName,
+        notes: extraExpenses.notes
+      }).from(extraExpenses).where(and14(gte7(extraExpenses.date, dateFrom), lte7(extraExpenses.date, dateTo)));
+      const catLabels = {
+        abastecimento: "Combust\xEDvel",
+        refeicao: "Alimenta\xE7\xE3o",
+        compra_material: "Material",
+        servico_terceiro: "Servi\xE7o Terceiro",
+        pedagio: "Ped\xE1gio/Transporte",
+        outro: "Outro"
+      };
+      for (const r of ee) {
+        const locId = r.workLocationId ?? null;
+        if (!matchLocal(locId)) continue;
+        const cat = "Despesa Extra";
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `ee-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: catLabels[r.category ?? "outro"] ?? r.category ?? "Outro",
+          descricao: r.description ?? "Despesa extra",
+          valor: parseFloat(r.amount || "0"),
+          localId: locId,
+          localNome: locName(locId),
+          origem_tabela: "extra_expenses",
+          origem_campo: "amount",
+          origem_id: r.id,
+          registradoPor: r.registeredByName ?? null,
+          observacoes: r.notes ?? null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const tpf = await db.select({
+        id: thirdPartyFuel.id,
+        date: thirdPartyFuel.date,
+        total: thirdPartyFuel.total,
+        liters: thirdPartyFuel.liters,
+        location: thirdPartyFuel.location,
+        notes: thirdPartyFuel.notes,
+        equipName: equipment.name
+      }).from(thirdPartyFuel).leftJoin(equipment, eq23(thirdPartyFuel.equipmentId, equipment.id)).where(and14(gte7(thirdPartyFuel.date, dateFrom), lte7(thirdPartyFuel.date, dateTo)));
+      for (const r of tpf) {
+        if (input.localId) continue;
+        const cat = "Combust\xEDvel";
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `tpf-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: "Caminh\xE3o Terceirizado",
+          descricao: `Abastecimento terceirizado \u2014 ${r.equipName ?? "Caminh\xE3o"} | ${r.liters ?? "?"}L${r.location ? ` @ ${r.location}` : ""}`,
+          valor: parseFloat(r.total || "0"),
+          localId: null,
+          localNome: null,
+          origem_tabela: "third_party_fuel",
+          origem_campo: "total",
+          origem_id: r.id,
+          registradoPor: null,
+          observacoes: r.notes ?? null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const ct = await db.select({
+        id: cargoLoads.id,
+        date: cargoLoads.date,
+        thirdPartyCost: cargoLoads.thirdPartyCost,
+        thirdPartyContractor: cargoLoads.thirdPartyContractor,
+        workLocationId: cargoLoads.workLocationId,
+        destination: cargoLoads.destination
+      }).from(cargoLoads).where(and14(
+        gte7(cargoLoads.date, dateFrom),
+        lte7(cargoLoads.date, dateTo),
+        isNotNull2(cargoLoads.thirdPartyContractor)
+      ));
+      for (const r of ct) {
+        if (!r.thirdPartyContractor || r.thirdPartyContractor.trim() === "") continue;
+        const locId = r.workLocationId ?? null;
+        if (!matchLocal(locId)) continue;
+        const cat = "Corte Terceirizado";
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `ct-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: r.thirdPartyContractor,
+          descricao: `Corte terceirizado \u2014 Carga #${r.id} | Destino: ${r.destination ?? "N/A"}`,
+          valor: parseFloat(r.thirdPartyCost || "0"),
+          localId: locId,
+          localNome: locName(locId),
+          origem_tabela: "cargo_loads",
+          origem_campo: "third_party_cost",
+          origem_id: r.id,
+          registradoPor: null,
+          observacoes: null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "custo") {
+      const ft = await db.select({
+        id: financialEntries.id,
+        date: financialEntries.date,
+        amount: financialEntries.amount,
+        description: financialEntries.description,
+        category: financialEntries.category,
+        registeredByName: financialEntries.registeredByName,
+        notes: financialEntries.notes
+      }).from(financialEntries).where(and14(
+        eq23(financialEntries.type, "despesa"),
+        gte7(financialEntries.date, dateFrom),
+        lte7(financialEntries.date, dateTo)
+      ));
+      const catMap = {
+        folha_pagamento: "M\xE3o de Obra",
+        combustivel: "Combust\xEDvel",
+        manutencao: "Manuten\xE7\xE3o",
+        material: "Material",
+        alimentacao: "Alimenta\xE7\xE3o",
+        transporte: "Transporte",
+        impostos: "Impostos",
+        aluguel: "Aluguel",
+        servico_terceiro: "Servi\xE7o Terceiro",
+        outro_despesa: "Outro",
+        frete_terceirizado: "Frete Terceirizado",
+        servico_corte: "Corte Terceirizado"
+      };
+      for (const r of ft) {
+        if (input.localId) continue;
+        const cat = catMap[r.category] ?? r.category ?? "Despesa";
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `fe-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "custo",
+          categoria: cat,
+          subcategoria: `financial_entries.category = '${r.category}'`,
+          descricao: r.description ?? "Despesa financeira",
+          valor: parseFloat(r.amount || "0"),
+          localId: null,
+          localNome: null,
+          origem_tabela: "financial_entries",
+          origem_campo: "amount [type=despesa]",
+          origem_id: r.id,
+          registradoPor: r.registeredByName ?? null,
+          observacoes: r.notes ?? null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "receita") {
+      const bp = await db.select({
+        id: buyerPayments.id,
+        paymentDate: buyerPayments.paymentDate,
+        amount: buyerPayments.amount,
+        buyerName: buyerClients.name,
+        invoiceNumber: buyerPayments.invoiceNumber,
+        notes: buyerPayments.notes
+      }).from(buyerPayments).leftJoin(buyerClients, eq23(buyerPayments.buyerId, buyerClients.id)).where(and14(
+        eq23(buyerPayments.status, "pago"),
+        gte7(buyerPayments.paymentDate, input.dateFrom),
+        lte7(buyerPayments.paymentDate, input.dateTo)
+      ));
+      for (const r of bp) {
+        if (input.localId) continue;
+        const cat = "Receita \u2014 Venda de Madeira";
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `bp-${r.id}`,
+          date: r.paymentDate?.slice(0, 10) ?? "",
+          tipo: "receita",
+          categoria: cat,
+          subcategoria: r.buyerName ?? "Comprador",
+          descricao: `Pagamento \u2014 ${r.buyerName ?? "Comprador"}${r.invoiceNumber ? ` | NF: ${r.invoiceNumber}` : ""}`,
+          valor: parseFloat(r.amount || "0"),
+          localId: null,
+          localNome: null,
+          origem_tabela: "buyer_payments",
+          origem_campo: "amount [status=pago]",
+          origem_id: r.id,
+          registradoPor: null,
+          observacoes: r.notes ?? null
+        });
+      }
+    }
+    if (input.tipo === "todos" || input.tipo === "receita") {
+      const fr = await db.select({
+        id: financialEntries.id,
+        date: financialEntries.date,
+        amount: financialEntries.amount,
+        description: financialEntries.description,
+        category: financialEntries.category,
+        clientName: financialEntries.clientName,
+        autoGenerated: financialEntries.autoGenerated,
+        registeredByName: financialEntries.registeredByName,
+        notes: financialEntries.notes
+      }).from(financialEntries).where(and14(
+        eq23(financialEntries.type, "receita"),
+        gte7(financialEntries.date, dateFrom),
+        lte7(financialEntries.date, dateTo)
+      ));
+      const catMap = {
+        venda_madeira: "Receita \u2014 Venda de Madeira",
+        servico_corte: "Receita \u2014 Servi\xE7o de Corte",
+        servico_plantio: "Receita \u2014 Servi\xE7o de Plantio",
+        servico_transporte: "Receita \u2014 Servi\xE7o de Transporte",
+        servico_consultoria: "Receita \u2014 Consultoria",
+        outro_receita: "Receita \u2014 Outro"
+      };
+      for (const r of fr) {
+        if (input.localId) continue;
+        const cat = catMap[r.category] ?? `Receita \u2014 ${r.category ?? "Outro"}`;
+        if (!matchCat(cat)) continue;
+        rows.push({
+          id: `fr-${r.id}`,
+          date: r.date.slice(0, 10),
+          tipo: "receita",
+          categoria: cat,
+          subcategoria: r.autoGenerated ? `Auto-gerado | ${r.clientName ?? ""}` : `Manual | ${r.clientName ?? ""}`,
+          descricao: r.description ?? "Receita financeira",
+          valor: parseFloat(r.amount || "0"),
+          localId: null,
+          localNome: null,
+          origem_tabela: "financial_entries",
+          origem_campo: `amount [type=receita, auto_generated=${r.autoGenerated ?? 0}]`,
+          origem_id: r.id,
+          registradoPor: r.registeredByName ?? null,
+          observacoes: r.notes ?? null
+        });
+      }
+    }
+    rows.sort((a, b) => b.date.localeCompare(a.date));
+    const totalCusto = rows.filter((r) => r.tipo === "custo").reduce((s, r) => s + r.valor, 0);
+    const totalReceita = rows.filter((r) => r.tipo === "receita").reduce((s, r) => s + r.valor, 0);
+    const byCat = {};
+    for (const r of rows) {
+      if (!byCat[r.categoria]) byCat[r.categoria] = { tipo: r.tipo, total: 0, qtd: 0 };
+      byCat[r.categoria].total += r.valor;
+      byCat[r.categoria].qtd += 1;
+    }
+    return {
+      rows,
+      summary: {
+        totalCusto,
+        totalReceita,
+        lucro: totalReceita - totalCusto,
+        totalRegistros: rows.length,
+        byCat: Object.entries(byCat).map(([cat, v]) => ({ categoria: cat, ...v })).sort((a, b) => b.total - a.total)
+      }
+    };
+  })
+});
+
+// server/routers/reportPdf.ts
+init_trpc();
+init_db();
+init_schema();
+import { z as z25 } from "zod";
+import { TRPCError as TRPCError15 } from "@trpc/server";
+import { eq as eq24, desc as desc19, and as and15, gte as gte8, lte as lte8 } from "drizzle-orm";
 function formatCurrency(value) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -9244,21 +9714,21 @@ function generatePdfHtml(data, locationName, periodo, sections) {
   return html;
 }
 var reportPdfRouter = router({
-  generatePdfHtml: protectedProcedure.input(z24.object({
-    locationId: z24.number().optional(),
-    dateFrom: z24.string(),
-    dateTo: z24.string(),
-    includeMaoDeObra: z24.boolean().default(true),
-    includeConsumo: z24.boolean().default(true),
-    includeCargas: z24.boolean().default(true)
+  generatePdfHtml: protectedProcedure.input(z25.object({
+    locationId: z25.number().optional(),
+    dateFrom: z25.string(),
+    dateTo: z25.string(),
+    includeMaoDeObra: z25.boolean().default(true),
+    includeConsumo: z25.boolean().default(true),
+    includeCargas: z25.boolean().default(true)
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
     const dateFrom = input.dateFrom + " 00:00:00";
     const dateTo = input.dateTo + " 23:59:59";
     let locationName = "Todos os Locais";
     if (input.locationId) {
-      const loc = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq23(gpsLocations.id, input.locationId));
+      const loc = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq24(gpsLocations.id, input.locationId));
       if (loc.length > 0) locationName = loc[0].name;
     }
     let maoDeObra = [];
@@ -9271,10 +9741,10 @@ var reportPdfRouter = router({
         dailyValue: collaboratorAttendance.dailyValue,
         activity: collaboratorAttendance.activity,
         paymentStatus: collaboratorAttendance.paymentStatusCa
-      }).from(collaboratorAttendance).innerJoin(collaborators, eq23(collaboratorAttendance.collaboratorId, collaborators.id)).where(and14(
-        gte7(collaboratorAttendance.date, dateFrom),
-        lte7(collaboratorAttendance.date, dateTo),
-        ...input.locationId ? [eq23(collaboratorAttendance.workLocationId, input.locationId)] : []
+      }).from(collaboratorAttendance).innerJoin(collaborators, eq24(collaboratorAttendance.collaboratorId, collaborators.id)).where(and15(
+        gte8(collaboratorAttendance.date, dateFrom),
+        lte8(collaboratorAttendance.date, dateTo),
+        ...input.locationId ? [eq24(collaboratorAttendance.workLocationId, input.locationId)] : []
       )).orderBy(desc19(collaboratorAttendance.date));
     }
     let consumoVeiculos = [];
@@ -9288,10 +9758,10 @@ var reportPdfRouter = router({
         liters: fuelRecords.liters,
         totalValue: fuelRecords.totalValue,
         pricePerLiter: fuelRecords.pricePerLiter
-      }).from(fuelRecords).innerJoin(equipment, eq23(fuelRecords.equipmentId, equipment.id)).where(and14(
-        gte7(fuelRecords.date, dateFrom),
-        lte7(fuelRecords.date, dateTo),
-        ...input.locationId ? [eq23(fuelRecords.workLocationId, input.locationId)] : []
+      }).from(fuelRecords).innerJoin(equipment, eq24(fuelRecords.equipmentId, equipment.id)).where(and15(
+        gte8(fuelRecords.date, dateFrom),
+        lte8(fuelRecords.date, dateTo),
+        ...input.locationId ? [eq24(fuelRecords.workLocationId, input.locationId)] : []
       )).orderBy(desc19(fuelRecords.date));
     }
     let consumoMaquinas = [];
@@ -9304,10 +9774,10 @@ var reportPdfRouter = router({
         liters: machineFuel.liters,
         totalValue: machineFuel.totalValue,
         pricePerLiter: machineFuel.pricePerLiter
-      }).from(machineFuel).innerJoin(equipment, eq23(machineFuel.equipmentId, equipment.id)).where(and14(
-        gte7(machineFuel.date, dateFrom),
-        lte7(machineFuel.date, dateTo),
-        ...input.locationId ? [eq23(machineFuel.workLocationId, input.locationId)] : []
+      }).from(machineFuel).innerJoin(equipment, eq24(machineFuel.equipmentId, equipment.id)).where(and15(
+        gte8(machineFuel.date, dateFrom),
+        lte8(machineFuel.date, dateTo),
+        ...input.locationId ? [eq24(machineFuel.workLocationId, input.locationId)] : []
       )).orderBy(desc19(machineFuel.date));
     }
     let despesasExtras = [];
@@ -9319,10 +9789,10 @@ var reportPdfRouter = router({
         description: extraExpenses.description,
         amount: extraExpenses.amount,
         paymentMethod: extraExpenses.paymentMethod
-      }).from(extraExpenses).where(and14(
-        gte7(extraExpenses.date, dateFrom),
-        lte7(extraExpenses.date, dateTo),
-        ...input.locationId ? [eq23(extraExpenses.workLocationId, input.locationId)] : []
+      }).from(extraExpenses).where(and15(
+        gte8(extraExpenses.date, dateFrom),
+        lte8(extraExpenses.date, dateTo),
+        ...input.locationId ? [eq24(extraExpenses.workLocationId, input.locationId)] : []
       )).orderBy(desc19(extraExpenses.date));
     }
     let cargas = [];
@@ -9335,10 +9805,10 @@ var reportPdfRouter = router({
         volumeM3: cargoLoads.volumeM3,
         woodType: cargoLoads.woodType,
         destination: cargoLoads.destination
-      }).from(cargoLoads).where(and14(
-        gte7(cargoLoads.date, dateFrom),
-        lte7(cargoLoads.date, dateTo),
-        ...input.locationId ? [eq23(cargoLoads.workLocationId, input.locationId)] : []
+      }).from(cargoLoads).where(and15(
+        gte8(cargoLoads.date, dateFrom),
+        lte8(cargoLoads.date, dateTo),
+        ...input.locationId ? [eq24(cargoLoads.workLocationId, input.locationId)] : []
       )).orderBy(desc19(cargoLoads.date));
     }
     const totalMaoDeObra = maoDeObra.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
@@ -9387,9 +9857,9 @@ var reportPdfRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z25 } from "zod";
-import { TRPCError as TRPCError15 } from "@trpc/server";
-import { eq as eq24, desc as desc20, sql as sql14, and as and15 } from "drizzle-orm";
+import { z as z26 } from "zod";
+import { TRPCError as TRPCError16 } from "@trpc/server";
+import { eq as eq25, desc as desc20, sql as sql14, and as and16 } from "drizzle-orm";
 function destToBuyer(d) {
   return {
     id: d.id,
@@ -9422,47 +9892,47 @@ var buyerClientsRouter = router({
   // list: retorna TODOS os destinos (is_buyer ou não) — tela unificada
   list: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(cargoDestinations).orderBy(desc20(cargoDestinations.id));
     return rows.map(destToBuyer);
   }),
   // listActive: retorna todos os destinos ativos (para seleção em cargas, relatórios, etc.)
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(cargoDestinations).where(eq24(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    const rows = await db.select().from(cargoDestinations).where(eq25(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
     return rows.map(destToBuyer);
   }),
-  getById: protectedProcedure.input(z25.object({ id: z25.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z26.object({ id: z26.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const [dest] = await db.select().from(cargoDestinations).where(eq24(cargoDestinations.id, input.id));
-    if (!dest) throw new TRPCError15({ code: "NOT_FOUND" });
-    const prices = await db.select().from(buyerPriceHistory).where(eq24(buyerPriceHistory.buyerId, input.id)).orderBy(desc20(buyerPriceHistory.id));
-    const payments = await db.select().from(buyerPayments).where(eq24(buyerPayments.buyerId, input.id)).orderBy(desc20(buyerPayments.id));
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    const [dest] = await db.select().from(cargoDestinations).where(eq25(cargoDestinations.id, input.id));
+    if (!dest) throw new TRPCError16({ code: "NOT_FOUND" });
+    const prices = await db.select().from(buyerPriceHistory).where(eq25(buyerPriceHistory.buyerId, input.id)).orderBy(desc20(buyerPriceHistory.id));
+    const payments = await db.select().from(buyerPayments).where(eq25(buyerPayments.buyerId, input.id)).orderBy(desc20(buyerPayments.id));
     return { ...destToBuyer(dest), prices, payments };
   }),
-  create: protectedProcedure.input(z25.object({
-    name: z25.string().min(1),
-    cnpjCpf: z25.string().optional(),
-    inscricaoEstadual: z25.string().optional(),
-    phone: z25.string().optional(),
-    email: z25.string().optional(),
-    address: z25.string().optional(),
-    city: z25.string().optional(),
-    state: z25.string().optional(),
-    cep: z25.string().optional(),
-    contactPerson: z25.string().optional(),
-    product: z25.string().optional(),
-    paymentMethod: z25.string().optional(),
-    pricePerUnit: z25.string().optional(),
-    unit: z25.string().optional(),
-    notes: z25.string().optional(),
-    isBuyer: z25.number().optional()
+  create: protectedProcedure.input(z26.object({
+    name: z26.string().min(1),
+    cnpjCpf: z26.string().optional(),
+    inscricaoEstadual: z26.string().optional(),
+    phone: z26.string().optional(),
+    email: z26.string().optional(),
+    address: z26.string().optional(),
+    city: z26.string().optional(),
+    state: z26.string().optional(),
+    cep: z26.string().optional(),
+    contactPerson: z26.string().optional(),
+    product: z26.string().optional(),
+    paymentMethod: z26.string().optional(),
+    pricePerUnit: z26.string().optional(),
+    unit: z26.string().optional(),
+    notes: z26.string().optional(),
+    isBuyer: z26.number().optional()
     // 0 = destino normal, 1 = comprador
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const unit = input.unit || "ton";
     const pricePerTon = unit === "ton" ? input.pricePerUnit || null : null;
@@ -9480,29 +9950,29 @@ var buyerClientsRouter = router({
       `);
     return { success: true };
   }),
-  update: protectedProcedure.input(z25.object({
-    id: z25.number(),
-    name: z25.string().min(1),
-    cnpjCpf: z25.string().optional(),
-    inscricaoEstadual: z25.string().optional(),
-    phone: z25.string().optional(),
-    email: z25.string().optional(),
-    address: z25.string().optional(),
-    city: z25.string().optional(),
-    state: z25.string().optional(),
-    cep: z25.string().optional(),
-    contactPerson: z25.string().optional(),
-    product: z25.string().optional(),
-    paymentMethod: z25.string().optional(),
-    pricePerUnit: z25.string().optional(),
-    unit: z25.string().optional(),
-    notes: z25.string().optional(),
-    active: z25.number().optional(),
-    isBuyer: z25.number().optional()
+  update: protectedProcedure.input(z26.object({
+    id: z26.number(),
+    name: z26.string().min(1),
+    cnpjCpf: z26.string().optional(),
+    inscricaoEstadual: z26.string().optional(),
+    phone: z26.string().optional(),
+    email: z26.string().optional(),
+    address: z26.string().optional(),
+    city: z26.string().optional(),
+    state: z26.string().optional(),
+    cep: z26.string().optional(),
+    contactPerson: z26.string().optional(),
+    product: z26.string().optional(),
+    paymentMethod: z26.string().optional(),
+    pricePerUnit: z26.string().optional(),
+    unit: z26.string().optional(),
+    notes: z26.string().optional(),
+    active: z26.number().optional(),
+    isBuyer: z26.number().optional()
     // 0 = destino normal, 1 = comprador
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
     const unit = input.unit || "ton";
     const pricePerTon = unit === "ton" ? input.pricePerUnit || null : null;
     const pricePerM3 = unit === "m3" ? input.pricePerUnit || null : null;
@@ -9528,16 +9998,16 @@ var buyerClientsRouter = router({
       notes: input.notes || null,
       active: input.active ?? 1,
       ...input.isBuyer !== void 0 ? { isBuyer: input.isBuyer } : {}
-    }).where(eq24(cargoDestinations.id, input.id));
+    }).where(eq25(cargoDestinations.id, input.id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z25.object({ id: z25.number(), force: z25.boolean().optional() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z26.object({ id: z26.number(), force: z26.boolean().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
     const loads = await db.execute(sql14`SELECT COUNT(*) as cnt FROM cargo_loads WHERE destination_id = ${input.id}`);
     const loadCount = loads[0]?.[0]?.cnt ?? 0;
     if (loadCount > 0 && !input.force) {
-      throw new TRPCError15({
+      throw new TRPCError16({
         code: "PRECONDITION_FAILED",
         message: `Este destino possui ${loadCount} carga(s) vinculada(s). Use force=true para excluir mesmo assim (as cargas n\xE3o ser\xE3o apagadas).`
       });
@@ -9545,7 +10015,7 @@ var buyerClientsRouter = router({
     const payments = await db.execute(sql14`SELECT COUNT(*) as cnt FROM buyer_payments WHERE buyer_id = ${input.id}`);
     const payCount = payments[0]?.[0]?.cnt ?? 0;
     if (payCount > 0 && !input.force) {
-      throw new TRPCError15({
+      throw new TRPCError16({
         code: "PRECONDITION_FAILED",
         message: `Este comprador possui ${payCount} pagamento(s) vinculado(s). Use force=true para excluir mesmo assim.`
       });
@@ -9554,17 +10024,17 @@ var buyerClientsRouter = router({
     return { success: true, loadCount, payCount };
   }),
   // === PREÇOS ===
-  addPrice: protectedProcedure.input(z25.object({
-    buyerId: z25.number(),
-    product: z25.string().min(1),
-    pricePerUnit: z25.string().min(1),
-    unit: z25.string().optional(),
-    validFrom: z25.string().optional(),
-    validUntil: z25.string().optional(),
-    notes: z25.string().optional()
+  addPrice: protectedProcedure.input(z26.object({
+    buyerId: z26.number(),
+    product: z26.string().min(1),
+    pricePerUnit: z26.string().min(1),
+    unit: z26.string().optional(),
+    validFrom: z26.string().optional(),
+    validUntil: z26.string().optional(),
+    notes: z26.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.execute(sql14`
         INSERT INTO buyer_price_history (buyer_id, product, price_per_unit, unit, valid_from, valid_until, notes, created_at)
@@ -9572,30 +10042,30 @@ var buyerClientsRouter = router({
       `);
     return { success: true };
   }),
-  deletePrice: protectedProcedure.input(z25.object({ id: z25.number() })).mutation(async ({ input }) => {
+  deletePrice: protectedProcedure.input(z26.object({ id: z26.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(buyerPriceHistory).where(eq24(buyerPriceHistory.id, input.id));
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(buyerPriceHistory).where(eq25(buyerPriceHistory.id, input.id));
     return { success: true };
   }),
   // === PAGAMENTOS ===
-  addPayment: protectedProcedure.input(z25.object({
-    buyerId: z25.number(),
-    amount: z25.string().min(1),
-    paymentDate: z25.string().min(1),
-    paymentMethod: z25.string().optional(),
-    invoiceNumber: z25.string().optional(),
-    notes: z25.string().optional(),
-    status: z25.enum(["pendente", "pago", "atrasado"]).optional(),
+  addPayment: protectedProcedure.input(z26.object({
+    buyerId: z26.number(),
+    amount: z26.string().min(1),
+    paymentDate: z26.string().min(1),
+    paymentMethod: z26.string().optional(),
+    invoiceNumber: z26.string().optional(),
+    notes: z26.string().optional(),
+    status: z26.enum(["pendente", "pago", "atrasado"]).optional(),
     // Campos extras para integração com financeiro
-    destinationName: z25.string().optional(),
-    createFinancialEntry: z25.boolean().optional(),
+    destinationName: z26.string().optional(),
+    createFinancialEntry: z26.boolean().optional(),
     // se true, cria receita no financeiro
-    periodDescription: z25.string().optional()
+    periodDescription: z26.string().optional()
     // ex: "Mai/2026"
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.execute(sql14`
         INSERT INTO buyer_payments (buyer_id, amount, payment_date, payment_method, invoice_number, notes, status, created_at)
@@ -9634,29 +10104,29 @@ var buyerClientsRouter = router({
     }
     return { success: true };
   }),
-  updatePaymentStatus: protectedProcedure.input(z25.object({
-    id: z25.number(),
-    status: z25.enum(["pendente", "pago", "atrasado"])
+  updatePaymentStatus: protectedProcedure.input(z26.object({
+    id: z26.number(),
+    status: z26.enum(["pendente", "pago", "atrasado"])
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(buyerPayments).set({ status: input.status }).where(eq24(buyerPayments.id, input.id));
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(buyerPayments).set({ status: input.status }).where(eq25(buyerPayments.id, input.id));
     return { success: true };
   }),
-  deletePayment: protectedProcedure.input(z25.object({ id: z25.number() })).mutation(async ({ input }) => {
+  deletePayment: protectedProcedure.input(z26.object({ id: z26.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(buyerPayments).where(eq24(buyerPayments.id, input.id));
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(buyerPayments).where(eq25(buyerPayments.id, input.id));
     return { success: true };
   }),
   // === DASHBOARD FINANCEIRO ===
-  financialDashboard: protectedProcedure.input(z25.object({
-    startDate: z25.string().optional(),
-    endDate: z25.string().optional()
+  financialDashboard: protectedProcedure.input(z26.object({
+    startDate: z26.string().optional(),
+    endDate: z26.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const buyers = await db.select().from(cargoDestinations).where(and15(eq24(cargoDestinations.isBuyer, 1), eq24(cargoDestinations.active, 1))).orderBy(cargoDestinations.name);
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    const buyers = await db.select().from(cargoDestinations).where(and16(eq25(cargoDestinations.isBuyer, 1), eq25(cargoDestinations.active, 1))).orderBy(cargoDestinations.name);
     const results = await Promise.all(buyers.map(async (buyer) => {
       const buyerMapped = destToBuyer(buyer);
       const [loadsResult] = await db.execute(sql14`
@@ -9716,10 +10186,10 @@ var buyerClientsRouter = router({
       totals: { grandTotalReceivable, grandTotalPaid, grandBalance }
     };
   }),
-  getPayments: protectedProcedure.input(z25.object({ buyerId: z25.number() })).query(async ({ input }) => {
+  getPayments: protectedProcedure.input(z26.object({ buyerId: z26.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const payments = await db.select().from(buyerPayments).where(eq24(buyerPayments.buyerId, input.buyerId)).orderBy(desc20(buyerPayments.id));
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    const payments = await db.select().from(buyerPayments).where(eq25(buyerPayments.buyerId, input.buyerId)).orderBy(desc20(buyerPayments.id));
     return payments;
   })
 });
@@ -9728,16 +10198,16 @@ var buyerClientsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z26 } from "zod";
-import { TRPCError as TRPCError16 } from "@trpc/server";
-import { eq as eq25, sql as sql15 } from "drizzle-orm";
+import { z as z27 } from "zod";
+import { TRPCError as TRPCError17 } from "@trpc/server";
+import { eq as eq26, sql as sql15 } from "drizzle-orm";
 var freightRouter = router({
-  list: protectedProcedure.input(z26.object({
-    startDate: z26.string().optional(),
-    endDate: z26.string().optional()
+  list: protectedProcedure.input(z27.object({
+    startDate: z27.string().optional(),
+    endDate: z27.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     let query = `SELECT * FROM freight_calculations ORDER BY id DESC`;
     if (input?.startDate && input?.endDate) {
       query = `SELECT * FROM freight_calculations WHERE date >= '${input.startDate}' AND date <= '${input.endDate}' ORDER BY id DESC`;
@@ -9745,41 +10215,41 @@ var freightRouter = router({
     const [rows] = await db.execute(sql15.raw(query));
     return rows || [];
   }),
-  getById: protectedProcedure.input(z26.object({ id: z26.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z27.object({ id: z27.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.execute(sql15`SELECT * FROM freight_calculations WHERE id = ${input.id}`);
-    if (!rows || rows.length === 0) throw new TRPCError16({ code: "NOT_FOUND" });
+    if (!rows || rows.length === 0) throw new TRPCError17({ code: "NOT_FOUND" });
     return rows[0];
   }),
-  create: protectedProcedure.input(z26.object({
-    cargoLoadId: z26.number().optional(),
-    date: z26.string().min(1),
-    vehiclePlate: z26.string().optional(),
-    driverName: z26.string().optional(),
-    driverType: z26.enum(["proprio", "terceirizado"]).optional(),
-    origin: z26.string().optional(),
-    destination: z26.string().optional(),
-    distanceKm: z26.string().optional(),
-    fuelLiters: z26.string().optional(),
-    fuelCostPerLiter: z26.string().optional(),
-    fuelTotalCost: z26.string().optional(),
-    driverCost: z26.string().optional(),
-    tollCost: z26.string().optional(),
-    maintenanceCost: z26.string().optional(),
-    otherCosts: z26.string().optional(),
-    otherCostsDescription: z26.string().optional(),
-    totalCost: z26.string().optional(),
-    costPerKm: z26.string().optional(),
-    costPerTon: z26.string().optional(),
-    weightTon: z26.string().optional(),
-    revenuePerTon: z26.string().optional(),
-    totalRevenue: z26.string().optional(),
-    profit: z26.string().optional(),
-    notes: z26.string().optional()
+  create: protectedProcedure.input(z27.object({
+    cargoLoadId: z27.number().optional(),
+    date: z27.string().min(1),
+    vehiclePlate: z27.string().optional(),
+    driverName: z27.string().optional(),
+    driverType: z27.enum(["proprio", "terceirizado"]).optional(),
+    origin: z27.string().optional(),
+    destination: z27.string().optional(),
+    distanceKm: z27.string().optional(),
+    fuelLiters: z27.string().optional(),
+    fuelCostPerLiter: z27.string().optional(),
+    fuelTotalCost: z27.string().optional(),
+    driverCost: z27.string().optional(),
+    tollCost: z27.string().optional(),
+    maintenanceCost: z27.string().optional(),
+    otherCosts: z27.string().optional(),
+    otherCostsDescription: z27.string().optional(),
+    totalCost: z27.string().optional(),
+    costPerKm: z27.string().optional(),
+    costPerTon: z27.string().optional(),
+    weightTon: z27.string().optional(),
+    revenuePerTon: z27.string().optional(),
+    totalRevenue: z27.string().optional(),
+    profit: z27.string().optional(),
+    notes: z27.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.execute(sql15`
         INSERT INTO freight_calculations (cargo_load_id, date, vehicle_plate, driver_name, driver_type, origin, destination, distance_km, fuel_liters, fuel_cost_per_liter, fuel_total_cost, driver_cost, toll_cost, maintenance_cost, other_costs, other_costs_description, total_cost, cost_per_km, cost_per_ton, weight_ton, revenue_per_ton, total_revenue, profit, notes, created_by, created_at)
@@ -9805,35 +10275,35 @@ var freightRouter = router({
     }
     return { success: true };
   }),
-  update: protectedProcedure.input(z26.object({
-    id: z26.number(),
-    cargoLoadId: z26.number().optional(),
-    date: z26.string().optional(),
-    vehiclePlate: z26.string().optional(),
-    driverName: z26.string().optional(),
-    driverType: z26.enum(["proprio", "terceirizado"]).optional(),
-    origin: z26.string().optional(),
-    destination: z26.string().optional(),
-    distanceKm: z26.string().optional(),
-    fuelLiters: z26.string().optional(),
-    fuelCostPerLiter: z26.string().optional(),
-    fuelTotalCost: z26.string().optional(),
-    driverCost: z26.string().optional(),
-    tollCost: z26.string().optional(),
-    maintenanceCost: z26.string().optional(),
-    otherCosts: z26.string().optional(),
-    otherCostsDescription: z26.string().optional(),
-    totalCost: z26.string().optional(),
-    costPerKm: z26.string().optional(),
-    costPerTon: z26.string().optional(),
-    weightTon: z26.string().optional(),
-    revenuePerTon: z26.string().optional(),
-    totalRevenue: z26.string().optional(),
-    profit: z26.string().optional(),
-    notes: z26.string().optional()
+  update: protectedProcedure.input(z27.object({
+    id: z27.number(),
+    cargoLoadId: z27.number().optional(),
+    date: z27.string().optional(),
+    vehiclePlate: z27.string().optional(),
+    driverName: z27.string().optional(),
+    driverType: z27.enum(["proprio", "terceirizado"]).optional(),
+    origin: z27.string().optional(),
+    destination: z27.string().optional(),
+    distanceKm: z27.string().optional(),
+    fuelLiters: z27.string().optional(),
+    fuelCostPerLiter: z27.string().optional(),
+    fuelTotalCost: z27.string().optional(),
+    driverCost: z27.string().optional(),
+    tollCost: z27.string().optional(),
+    maintenanceCost: z27.string().optional(),
+    otherCosts: z27.string().optional(),
+    otherCostsDescription: z27.string().optional(),
+    totalCost: z27.string().optional(),
+    costPerKm: z27.string().optional(),
+    costPerTon: z27.string().optional(),
+    weightTon: z27.string().optional(),
+    revenuePerTon: z27.string().optional(),
+    totalRevenue: z27.string().optional(),
+    profit: z27.string().optional(),
+    notes: z27.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
     await db.update(freightCalculations).set({
       cargoLoadId: data.cargoLoadId || null,
@@ -9860,22 +10330,22 @@ var freightRouter = router({
       totalRevenue: data.totalRevenue || null,
       profit: data.profit || null,
       notes: data.notes || null
-    }).where(eq25(freightCalculations.id, id));
+    }).where(eq26(freightCalculations.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z26.object({ id: z26.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z27.object({ id: z27.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(freightCalculations).where(eq25(freightCalculations.id, input.id));
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(freightCalculations).where(eq26(freightCalculations.id, input.id));
     return { success: true };
   }),
   // Resumo de fretes por período
-  summary: protectedProcedure.input(z26.object({
-    startDate: z26.string().optional(),
-    endDate: z26.string().optional()
+  summary: protectedProcedure.input(z27.object({
+    startDate: z27.string().optional(),
+    endDate: z27.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     let whereClause = "";
     if (input?.startDate && input?.endDate) {
       whereClause = `WHERE date >= '${input.startDate}' AND date <= '${input.endDate}'`;
@@ -9901,9 +10371,9 @@ init_notifications();
 init_trpc();
 init_db();
 init_schema();
-import { z as z27 } from "zod";
-import { TRPCError as TRPCError17 } from "@trpc/server";
-import { eq as eq26, desc as desc22, and as and16 } from "drizzle-orm";
+import { z as z28 } from "zod";
+import { TRPCError as TRPCError18 } from "@trpc/server";
+import { eq as eq27, desc as desc22, and as and17 } from "drizzle-orm";
 
 // server/_core/llm.ts
 init_env();
@@ -10124,43 +10594,43 @@ async function storagePut(relKey, data, contentType = "application/octet-stream"
 var fuelSuppliersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).orderBy(desc22(fuelSuppliers.id));
   }),
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(fuelSuppliers).where(eq26(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(fuelSuppliers).where(eq27(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
   }),
-  listActiveByLocation: protectedProcedure.input(z27.object({ locationType: z27.enum(["simflor", "astorga", "postos"]) })).query(async ({ ctx, input }) => {
+  listActiveByLocation: protectedProcedure.input(z28.object({ locationType: z28.enum(["simflor", "astorga", "postos"]) })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(fuelSuppliers).where(and16(
-      eq26(fuelSuppliers.isActive, 1),
-      eq26(fuelSuppliers.locationType, input.locationType)
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(fuelSuppliers).where(and17(
+      eq27(fuelSuppliers.isActive, 1),
+      eq27(fuelSuppliers.locationType, input.locationType)
     )).orderBy(fuelSuppliers.name);
   }),
-  create: protectedProcedure.input(z27.object({
-    name: z27.string().min(1),
-    tradeName: z27.string().optional(),
-    cnpj: z27.string().optional(),
-    phone: z27.string().optional(),
-    email: z27.string().optional(),
-    contactName: z27.string().optional(),
-    address: z27.string().optional(),
-    city: z27.string().optional(),
-    state: z27.string().optional(),
-    fuelType: z27.enum(["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
-    pricePerLiter: z27.string().min(1),
-    locationType: z27.enum(["simflor", "astorga", "postos"]).default("simflor"),
-    location: z27.string().optional(),
-    workLocationId: z27.number().optional(),
-    notes: z27.string().optional(),
-    tankCapacity: z27.string().optional(),
-    tankAlertThreshold: z27.string().optional()
+  create: protectedProcedure.input(z28.object({
+    name: z28.string().min(1),
+    tradeName: z28.string().optional(),
+    cnpj: z28.string().optional(),
+    phone: z28.string().optional(),
+    email: z28.string().optional(),
+    contactName: z28.string().optional(),
+    address: z28.string().optional(),
+    city: z28.string().optional(),
+    state: z28.string().optional(),
+    fuelType: z28.enum(["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
+    pricePerLiter: z28.string().min(1),
+    locationType: z28.enum(["simflor", "astorga", "postos"]).default("simflor"),
+    location: z28.string().optional(),
+    workLocationId: z28.number().optional(),
+    notes: z28.string().optional(),
+    tankCapacity: z28.string().optional(),
+    tankAlertThreshold: z28.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(fuelSuppliers).values({
       name: input.name,
       tradeName: input.tradeName || null,
@@ -10182,29 +10652,29 @@ var fuelSuppliersRouter = router({
     });
     return { success: true };
   }),
-  update: protectedProcedure.input(z27.object({
-    id: z27.number(),
-    name: z27.string().min(1).optional(),
-    tradeName: z27.string().nullable().optional(),
-    cnpj: z27.string().nullable().optional(),
-    phone: z27.string().nullable().optional(),
-    email: z27.string().nullable().optional(),
-    contactName: z27.string().nullable().optional(),
-    address: z27.string().nullable().optional(),
-    city: z27.string().nullable().optional(),
-    state: z27.string().nullable().optional(),
-    fuelType: z27.enum(["diesel", "gasolina", "etanol", "gnv"]).optional(),
-    pricePerLiter: z27.string().optional(),
-    locationType: z27.enum(["simflor", "astorga", "postos"]).optional(),
-    location: z27.string().nullable().optional(),
-    workLocationId: z27.number().nullable().optional(),
-    isActive: z27.number().optional(),
-    notes: z27.string().nullable().optional(),
-    tankCapacity: z27.string().nullable().optional(),
-    tankAlertThreshold: z27.string().nullable().optional()
+  update: protectedProcedure.input(z28.object({
+    id: z28.number(),
+    name: z28.string().min(1).optional(),
+    tradeName: z28.string().nullable().optional(),
+    cnpj: z28.string().nullable().optional(),
+    phone: z28.string().nullable().optional(),
+    email: z28.string().nullable().optional(),
+    contactName: z28.string().nullable().optional(),
+    address: z28.string().nullable().optional(),
+    city: z28.string().nullable().optional(),
+    state: z28.string().nullable().optional(),
+    fuelType: z28.enum(["diesel", "gasolina", "etanol", "gnv"]).optional(),
+    pricePerLiter: z28.string().optional(),
+    locationType: z28.enum(["simflor", "astorga", "postos"]).optional(),
+    location: z28.string().nullable().optional(),
+    workLocationId: z28.number().nullable().optional(),
+    isActive: z28.number().optional(),
+    notes: z28.string().nullable().optional(),
+    tankCapacity: z28.string().nullable().optional(),
+    tankAlertThreshold: z28.string().nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
     const updateData = {};
     if (data.name !== void 0) updateData.name = data.name;
@@ -10226,7 +10696,7 @@ var fuelSuppliersRouter = router({
     if (data.tankCapacity !== void 0) updateData.tankCapacity = data.tankCapacity;
     if (data.tankAlertThreshold !== void 0) updateData.tankAlertThreshold = data.tankAlertThreshold;
     if (data.pricePerLiter !== void 0) {
-      const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq26(fuelSuppliers.id, id));
+      const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq27(fuelSuppliers.id, id));
       if (existing && existing.pricePerLiter !== data.pricePerLiter) {
         await db.insert(fuelPriceHistory).values({
           supplierId: id,
@@ -10236,52 +10706,52 @@ var fuelSuppliersRouter = router({
         });
       }
     }
-    await db.update(fuelSuppliers).set(updateData).where(eq26(fuelSuppliers.id, id));
+    await db.update(fuelSuppliers).set(updateData).where(eq27(fuelSuppliers.id, id));
     return { success: true };
   }),
-  priceHistory: protectedProcedure.input(z27.object({ supplierId: z27.number().optional() })).query(async ({ ctx, input }) => {
+  priceHistory: protectedProcedure.input(z28.object({ supplierId: z28.number().optional() })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     if (input.supplierId) {
-      return db.select().from(fuelPriceHistory).where(eq26(fuelPriceHistory.supplierId, input.supplierId)).orderBy(desc22(fuelPriceHistory.changedAt));
+      return db.select().from(fuelPriceHistory).where(eq27(fuelPriceHistory.supplierId, input.supplierId)).orderBy(desc22(fuelPriceHistory.changedAt));
     }
     return db.select().from(fuelPriceHistory).orderBy(desc22(fuelPriceHistory.changedAt));
   }),
-  fuelReport: protectedProcedure.input(z27.object({
-    startDate: z27.string().optional(),
-    endDate: z27.string().optional()
+  fuelReport: protectedProcedure.input(z28.object({
+    startDate: z28.string().optional(),
+    endDate: z28.string().optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-    const { gte: gte10, lte: lte10 } = await import("drizzle-orm");
-    let conditions = [eq26(vehicleRecords2.recordType, "abastecimento")];
+    const { gte: gte11, lte: lte11 } = await import("drizzle-orm");
+    let conditions = [eq27(vehicleRecords2.recordType, "abastecimento")];
     if (input.startDate) {
-      conditions.push(gte10(vehicleRecords2.date, input.startDate));
+      conditions.push(gte11(vehicleRecords2.date, input.startDate));
     }
     if (input.endDate) {
-      conditions.push(lte10(vehicleRecords2.date, input.endDate));
+      conditions.push(lte11(vehicleRecords2.date, input.endDate));
     }
-    const records = await db.select().from(vehicleRecords2).where(and16(...conditions)).orderBy(desc22(vehicleRecords2.date));
+    const records = await db.select().from(vehicleRecords2).where(and17(...conditions)).orderBy(desc22(vehicleRecords2.date));
     return records;
   }),
-  delete: protectedProcedure.input(z27.object({ id: z27.number() })).mutation(async ({ ctx, input }) => {
+  delete: protectedProcedure.input(z28.object({ id: z28.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(fuelSuppliers).where(eq26(fuelSuppliers.id, input.id));
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(fuelSuppliers).where(eq27(fuelSuppliers.id, input.id));
     return { success: true };
   }),
   // ===== OCR - LEITURA AUTOMÁTICA DE NF POR FOTO =====
-  extractInvoiceFromPhoto: protectedProcedure.input(z27.object({
-    photos: z27.array(z27.object({
-      base64: z27.string().min(1),
-      mimeType: z27.string().default("image/jpeg"),
-      label: z27.string().default("nf")
+  extractInvoiceFromPhoto: protectedProcedure.input(z28.object({
+    photos: z28.array(z28.object({
+      base64: z28.string().min(1),
+      mimeType: z28.string().default("image/jpeg"),
+      label: z28.string().default("nf")
       // "nf" or "boleto"
     })).max(3).default([]),
-    photoUrls: z27.array(z27.object({
-      url: z27.string().url(),
-      label: z27.string().default("nf")
+    photoUrls: z28.array(z28.object({
+      url: z28.string().url(),
+      label: z28.string().default("nf")
     })).max(3).optional()
   })).mutation(async ({ ctx, input }) => {
     const uploadedPhotos = [];
@@ -10340,7 +10810,7 @@ var fuelSuppliersRouter = router({
       }
     }
     if (uploadedPhotos.length === 0) {
-      throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "N\xE3o foi poss\xEDvel fazer upload das fotos. Tente novamente." });
+      throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "N\xE3o foi poss\xEDvel fazer upload das fotos. Tente novamente." });
     }
     const imageContents = uploadedPhotos.map((p) => ({
       type: "image_url",
@@ -10431,16 +10901,16 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     };
   }),
   // ===== CONTAS A PAGAR (NOTAS FISCAIS / BOLETOS) =====
-  listInvoices: protectedProcedure.input(z27.object({
-    supplierId: z27.number().optional(),
-    status: z27.enum(["pendente", "pago", "vencido", "cancelado"]).optional()
+  listInvoices: protectedProcedure.input(z28.object({
+    supplierId: z28.number().optional(),
+    status: z28.enum(["pendente", "pago", "vencido", "cancelado"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     let conditions = [];
-    if (input?.supplierId) conditions.push(eq26(fuelInvoices.supplierId, input.supplierId));
-    if (input?.status) conditions.push(eq26(fuelInvoices.status, input.status));
-    const invoices = conditions.length > 0 ? await db.select().from(fuelInvoices).where(and16(...conditions)).orderBy(desc22(fuelInvoices.id)) : await db.select().from(fuelInvoices).orderBy(desc22(fuelInvoices.id));
+    if (input?.supplierId) conditions.push(eq27(fuelInvoices.supplierId, input.supplierId));
+    if (input?.status) conditions.push(eq27(fuelInvoices.status, input.status));
+    const invoices = conditions.length > 0 ? await db.select().from(fuelInvoices).where(and17(...conditions)).orderBy(desc22(fuelInvoices.id)) : await db.select().from(fuelInvoices).orderBy(desc22(fuelInvoices.id));
     const suppliers2 = await db.select().from(fuelSuppliers);
     const supplierMap = Object.fromEntries(suppliers2.map((s) => [s.id, s]));
     return invoices.map((inv) => ({
@@ -10449,27 +10919,27 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
       supplierTradeName: supplierMap[inv.supplierId]?.tradeName || null
     }));
   }),
-  createInvoice: protectedProcedure.input(z27.object({
-    supplierId: z27.number(),
-    invoiceNumber: z27.string().min(1),
-    invoiceDate: z27.string().min(1),
-    dueDate: z27.string().min(1),
-    totalAmount: z27.string().min(1),
-    liters: z27.string().optional(),
-    pricePerLiter: z27.string().optional(),
-    fuelType: z27.enum(["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
-    paymentMethod: z27.string().optional(),
-    bankName: z27.string().optional(),
-    barcodeNumber: z27.string().optional(),
-    transporterName: z27.string().optional(),
-    transporterPlate: z27.string().optional(),
-    deliveryLocation: z27.string().optional(),
-    notes: z27.string().optional(),
-    invoicePhotoUrl: z27.string().optional(),
-    boletoPhotoUrl: z27.string().optional()
+  createInvoice: protectedProcedure.input(z28.object({
+    supplierId: z28.number(),
+    invoiceNumber: z28.string().min(1),
+    invoiceDate: z28.string().min(1),
+    dueDate: z28.string().min(1),
+    totalAmount: z28.string().min(1),
+    liters: z28.string().optional(),
+    pricePerLiter: z28.string().optional(),
+    fuelType: z28.enum(["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
+    paymentMethod: z28.string().optional(),
+    bankName: z28.string().optional(),
+    barcodeNumber: z28.string().optional(),
+    transporterName: z28.string().optional(),
+    transporterPlate: z28.string().optional(),
+    deliveryLocation: z28.string().optional(),
+    notes: z28.string().optional(),
+    invoicePhotoUrl: z28.string().optional(),
+    boletoPhotoUrl: z28.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(fuelInvoices).values({
       supplierId: input.supplierId,
       invoiceNumber: input.invoiceNumber,
@@ -10492,7 +10962,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     });
     try {
       const { notifyFinanceiro: notifyFinanceiro2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
-      const supplier = await db.select().from(fuelSuppliers).where(eq26(fuelSuppliers.id, input.supplierId));
+      const supplier = await db.select().from(fuelSuppliers).where(eq27(fuelSuppliers.id, input.supplierId));
       const supplierName = supplier[0]?.name || `Fornecedor #${input.supplierId}`;
       const dueDateFmt = input.dueDate.split("-").reverse().join("/");
       await notifyFinanceiro2({
@@ -10505,76 +10975,76 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     }
     return { success: true };
   }),
-  updateInvoice: protectedProcedure.input(z27.object({
-    id: z27.number(),
-    supplierId: z27.number().optional(),
-    invoiceNumber: z27.string().optional(),
-    invoiceDate: z27.string().optional(),
-    dueDate: z27.string().optional(),
-    totalAmount: z27.string().optional(),
-    liters: z27.string().nullable().optional(),
-    pricePerLiter: z27.string().nullable().optional(),
-    fuelType: z27.enum(["diesel", "gasolina", "etanol", "gnv"]).optional(),
-    paymentMethod: z27.string().nullable().optional(),
-    bankName: z27.string().nullable().optional(),
-    barcodeNumber: z27.string().nullable().optional(),
-    status: z27.enum(["pendente", "pago", "vencido", "cancelado"]).optional(),
-    paidAt: z27.string().nullable().optional(),
-    paidAmount: z27.string().nullable().optional(),
-    transporterName: z27.string().nullable().optional(),
-    transporterPlate: z27.string().nullable().optional(),
-    deliveryLocation: z27.string().nullable().optional(),
-    notes: z27.string().nullable().optional()
+  updateInvoice: protectedProcedure.input(z28.object({
+    id: z28.number(),
+    supplierId: z28.number().optional(),
+    invoiceNumber: z28.string().optional(),
+    invoiceDate: z28.string().optional(),
+    dueDate: z28.string().optional(),
+    totalAmount: z28.string().optional(),
+    liters: z28.string().nullable().optional(),
+    pricePerLiter: z28.string().nullable().optional(),
+    fuelType: z28.enum(["diesel", "gasolina", "etanol", "gnv"]).optional(),
+    paymentMethod: z28.string().nullable().optional(),
+    bankName: z28.string().nullable().optional(),
+    barcodeNumber: z28.string().nullable().optional(),
+    status: z28.enum(["pendente", "pago", "vencido", "cancelado"]).optional(),
+    paidAt: z28.string().nullable().optional(),
+    paidAmount: z28.string().nullable().optional(),
+    transporterName: z28.string().nullable().optional(),
+    transporterPlate: z28.string().nullable().optional(),
+    deliveryLocation: z28.string().nullable().optional(),
+    notes: z28.string().nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
     const updateData = {};
     for (const [key, val] of Object.entries(data)) {
       if (val !== void 0) updateData[key] = val;
     }
-    await db.update(fuelInvoices).set(updateData).where(eq26(fuelInvoices.id, id));
+    await db.update(fuelInvoices).set(updateData).where(eq27(fuelInvoices.id, id));
     return { success: true };
   }),
-  markInvoicePaid: protectedProcedure.input(z27.object({
-    id: z27.number(),
-    paidAt: z27.string().min(1),
-    paidAmount: z27.string().optional()
+  markInvoicePaid: protectedProcedure.input(z28.object({
+    id: z28.number(),
+    paidAt: z28.string().min(1),
+    paidAmount: z28.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(fuelInvoices).set({
       status: "pago",
       paidAt: input.paidAt,
       paidAmount: input.paidAmount || null
-    }).where(eq26(fuelInvoices.id, input.id));
+    }).where(eq27(fuelInvoices.id, input.id));
     return { success: true };
   }),
-  deleteInvoice: protectedProcedure.input(z27.object({ id: z27.number() })).mutation(async ({ ctx, input }) => {
+  deleteInvoice: protectedProcedure.input(z28.object({ id: z28.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(fuelInvoices).where(eq26(fuelInvoices.id, input.id));
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(fuelInvoices).where(eq27(fuelInvoices.id, input.id));
     return { success: true };
   }),
   // ===== SALDO DO TANQUE POR LOCAL =====
   tankStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-    const suppliers2 = await db.select().from(fuelSuppliers).where(and16(eq26(fuelSuppliers.isActive, 1)));
+    const suppliers2 = await db.select().from(fuelSuppliers).where(and17(eq27(fuelSuppliers.isActive, 1)));
     const tanksWithCapacity = suppliers2.filter((s) => s.tankCapacity && parseFloat(s.tankCapacity) > 0);
     const results = [];
     for (const supplier of tanksWithCapacity) {
-      const latestInvoices = await db.select().from(fuelInvoices).where(eq26(fuelInvoices.supplierId, supplier.id)).orderBy(desc22(fuelInvoices.id));
+      const latestInvoices = await db.select().from(fuelInvoices).where(eq27(fuelInvoices.supplierId, supplier.id)).orderBy(desc22(fuelInvoices.id));
       const totalDelivered = latestInvoices.reduce((sum, inv) => sum + parseFloat(inv.liters || "0"), 0);
       const invoiceIds = latestInvoices.map((inv) => inv.id);
       let totalUsed = 0;
       if (invoiceIds.length > 0) {
         totalUsed = latestInvoices.reduce((sum, inv) => sum + parseFloat(inv.litersUsed || "0"), 0);
       }
-      const unlinkedRecords = await db.select().from(vehicleRecords2).where(and16(
-        eq26(vehicleRecords2.recordType, "abastecimento"),
-        eq26(vehicleRecords2.supplier, supplier.name)
+      const unlinkedRecords = await db.select().from(vehicleRecords2).where(and17(
+        eq27(vehicleRecords2.recordType, "abastecimento"),
+        eq27(vehicleRecords2.supplier, supplier.name)
       ));
       const unlinkedLiters = unlinkedRecords.filter((r) => !r.fuelInvoiceId).reduce((sum, r) => sum + parseFloat(r.liters || "0"), 0);
       const capacity = parseFloat(supplier.tankCapacity);
@@ -10599,12 +11069,12 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     return results;
   }),
   // ===== LISTAR NFs ATIVAS (com saldo) PARA VINCULAR NO ABASTECIMENTO =====
-  activeInvoices: protectedProcedure.input(z27.object({ supplierId: z27.number().optional() }).optional()).query(async ({ ctx, input }) => {
+  activeInvoices: protectedProcedure.input(z28.object({ supplierId: z28.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
-    let conditions = [eq26(fuelInvoices.status, "pendente")];
-    if (input?.supplierId) conditions.push(eq26(fuelInvoices.supplierId, input.supplierId));
-    const invoices = await db.select().from(fuelInvoices).where(and16(...conditions)).orderBy(desc22(fuelInvoices.id));
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    let conditions = [eq27(fuelInvoices.status, "pendente")];
+    if (input?.supplierId) conditions.push(eq27(fuelInvoices.supplierId, input.supplierId));
+    const invoices = await db.select().from(fuelInvoices).where(and17(...conditions)).orderBy(desc22(fuelInvoices.id));
     const suppliers2 = await db.select().from(fuelSuppliers);
     const supplierMap = Object.fromEntries(suppliers2.map((s) => [s.id, s]));
     return invoices.map((inv) => {
@@ -10624,31 +11094,31 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     });
   }),
   // ===== VINCULAR ABASTECIMENTO A UMA NF (atualizar liters_used) =====
-  linkFuelingToInvoice: protectedProcedure.input(z27.object({
-    invoiceId: z27.number(),
-    liters: z27.number(),
-    vehicleRecordId: z27.number().optional()
+  linkFuelingToInvoice: protectedProcedure.input(z28.object({
+    invoiceId: z28.number(),
+    liters: z28.number(),
+    vehicleRecordId: z28.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
-    const [invoice] = await db.select().from(fuelInvoices).where(eq26(fuelInvoices.id, input.invoiceId));
-    if (!invoice) throw new TRPCError17({ code: "NOT_FOUND", message: "NF n\xE3o encontrada" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    const [invoice] = await db.select().from(fuelInvoices).where(eq27(fuelInvoices.id, input.invoiceId));
+    if (!invoice) throw new TRPCError18({ code: "NOT_FOUND", message: "NF n\xE3o encontrada" });
     const currentUsed = parseFloat(invoice.litersUsed || "0");
     const newUsed = currentUsed + input.liters;
     await db.update(fuelInvoices).set({
       litersUsed: newUsed.toFixed(1)
-    }).where(eq26(fuelInvoices.id, input.invoiceId));
+    }).where(eq27(fuelInvoices.id, input.invoiceId));
     if (input.vehicleRecordId) {
       const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
       await db.update(vehicleRecords2).set({
         fuelInvoiceId: input.invoiceId
-      }).where(eq26(vehicleRecords2.id, input.vehicleRecordId));
+      }).where(eq27(vehicleRecords2.id, input.vehicleRecordId));
     }
-    const [supplier] = await db.select().from(fuelSuppliers).where(eq26(fuelSuppliers.id, invoice.supplierId));
+    const [supplier] = await db.select().from(fuelSuppliers).where(eq27(fuelSuppliers.id, invoice.supplierId));
     if (supplier?.tankCapacity) {
       const capacity = parseFloat(supplier.tankCapacity);
       const threshold = parseInt(supplier.tankAlertThreshold || "20");
-      const allInvoices = await db.select().from(fuelInvoices).where(eq26(fuelInvoices.supplierId, supplier.id));
+      const allInvoices = await db.select().from(fuelInvoices).where(eq27(fuelInvoices.supplierId, supplier.id));
       const totalDelivered = allInvoices.reduce((s, i) => s + parseFloat(i.liters || "0"), 0);
       const totalUsedAll = allInvoices.reduce((s, i) => s + parseFloat(i.litersUsed || "0"), 0) - currentUsed + newUsed;
       const currentLevel = Math.max(0, totalDelivered - totalUsedAll);
@@ -10687,30 +11157,30 @@ Solicite nova entrega de combust\xEDvel.`
 init_trpc();
 init_db();
 init_schema();
-import { z as z28 } from "zod";
-import { TRPCError as TRPCError18 } from "@trpc/server";
-import { eq as eq27, asc as asc2 } from "drizzle-orm";
+import { z as z29 } from "zod";
+import { TRPCError as TRPCError19 } from "@trpc/server";
+import { eq as eq28, asc as asc2 } from "drizzle-orm";
 var thirdPartyContractorsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const rows = await db.select().from(thirdPartyContractors).orderBy(asc2(thirdPartyContractors.name));
     return rows;
   }),
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const rows = await db.select().from(thirdPartyContractors).where(eq27(thirdPartyContractors.isActive, 1)).orderBy(asc2(thirdPartyContractors.name));
+    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const rows = await db.select().from(thirdPartyContractors).where(eq28(thirdPartyContractors.isActive, 1)).orderBy(asc2(thirdPartyContractors.name));
     return rows;
   }),
-  create: protectedProcedure.input(z28.object({
-    name: z28.string().min(1, "Nome obrigat\xF3rio"),
-    ratePerM3: z28.string().default("0"),
-    phone: z28.string().optional(),
-    notes: z28.string().optional()
+  create: protectedProcedure.input(z29.object({
+    name: z29.string().min(1, "Nome obrigat\xF3rio"),
+    ratePerM3: z29.string().default("0"),
+    phone: z29.string().optional(),
+    notes: z29.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(thirdPartyContractors).values({
       name: input.name.trim(),
       ratePerM3: input.ratePerM3.replace(",", "."),
@@ -10721,16 +11191,16 @@ var thirdPartyContractorsRouter = router({
     });
     return { success: true };
   }),
-  update: protectedProcedure.input(z28.object({
-    id: z28.number(),
-    name: z28.string().min(1).optional(),
-    ratePerM3: z28.string().optional(),
-    phone: z28.string().optional(),
-    notes: z28.string().optional(),
-    isActive: z28.number().optional()
+  update: protectedProcedure.input(z29.object({
+    id: z29.number(),
+    name: z29.string().min(1).optional(),
+    ratePerM3: z29.string().optional(),
+    phone: z29.string().optional(),
+    notes: z29.string().optional(),
+    isActive: z29.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, ...rest } = input;
     const updateData = {};
     if (rest.name !== void 0) updateData.name = rest.name.trim();
@@ -10738,13 +11208,13 @@ var thirdPartyContractorsRouter = router({
     if (rest.phone !== void 0) updateData.phone = rest.phone || null;
     if (rest.notes !== void 0) updateData.notes = rest.notes || null;
     if (rest.isActive !== void 0) updateData.isActive = rest.isActive;
-    await db.update(thirdPartyContractors).set(updateData).where(eq27(thirdPartyContractors.id, id));
+    await db.update(thirdPartyContractors).set(updateData).where(eq28(thirdPartyContractors.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z28.object({ id: z28.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z29.object({ id: z29.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    await db.delete(thirdPartyContractors).where(eq27(thirdPartyContractors.id, input.id));
+    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.delete(thirdPartyContractors).where(eq28(thirdPartyContractors.id, input.id));
     return { success: true };
   })
 });
@@ -10753,21 +11223,21 @@ var thirdPartyContractorsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z29 } from "zod";
-import { TRPCError as TRPCError19 } from "@trpc/server";
-import { eq as eq28 } from "drizzle-orm";
+import { z as z30 } from "zod";
+import { TRPCError as TRPCError20 } from "@trpc/server";
+import { eq as eq29 } from "drizzle-orm";
 var purchaseCategoriesRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     return await db.select().from(purchaseCategories).orderBy(purchaseCategories.name);
   }),
-  create: protectedProcedure.input(z29.object({
-    name: z29.string().min(1).max(100),
-    color: z29.string().optional().default("#6B7280")
+  create: protectedProcedure.input(z30.object({
+    name: z30.string().min(1).max(100),
+    color: z30.string().optional().default("#6B7280")
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(purchaseCategories).values({
       name: input.name,
       color: input.color,
@@ -10775,20 +11245,20 @@ var purchaseCategoriesRouter = router({
     });
     return { id: result.insertId, name: input.name, color: input.color };
   }),
-  update: protectedProcedure.input(z29.object({
-    id: z29.number(),
-    name: z29.string().min(1).max(100),
-    color: z29.string().optional()
+  update: protectedProcedure.input(z30.object({
+    id: z30.number(),
+    name: z30.string().min(1).max(100),
+    color: z30.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(purchaseCategories).set({ name: input.name, color: input.color }).where(eq28(purchaseCategories.id, input.id));
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(purchaseCategories).set({ name: input.name, color: input.color }).where(eq29(purchaseCategories.id, input.id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z29.object({ id: z29.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(purchaseCategories).where(eq28(purchaseCategories.id, input.id));
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(purchaseCategories).where(eq29(purchaseCategories.id, input.id));
     return { success: true };
   })
 });
@@ -10797,9 +11267,9 @@ var purchaseCategoriesRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z30 } from "zod";
-import { TRPCError as TRPCError20 } from "@trpc/server";
-import { eq as eq29, and as and17, desc as desc24, gte as gte8, lte as lte8, sql as sql17 } from "drizzle-orm";
+import { z as z31 } from "zod";
+import { TRPCError as TRPCError21 } from "@trpc/server";
+import { eq as eq30, and as and18, desc as desc24, gte as gte9, lte as lte9, sql as sql17 } from "drizzle-orm";
 var TRACCAR_URL2 = process.env.TRACCAR_URL || "";
 var TRACCAR_TOKEN2 = process.env.TRACCAR_TOKEN || "";
 function traccarHeaders() {
@@ -10855,19 +11325,19 @@ async function getDevicePosition(traccarDeviceId) {
 async function calcCyclesCosts(db, equipmentId, fromStr, toStr) {
   if (!db) return { fuelCost: 0, maintenanceCost: 0 };
   const fuelRows = await db.select({ totalValue: fuelRecords.totalValue }).from(fuelRecords).where(
-    and17(
-      eq29(fuelRecords.equipmentId, equipmentId),
-      gte8(fuelRecords.date, fromStr),
-      lte8(fuelRecords.date, toStr)
+    and18(
+      eq30(fuelRecords.equipmentId, equipmentId),
+      gte9(fuelRecords.date, fromStr),
+      lte9(fuelRecords.date, toStr)
     )
   );
   const fuelCost = fuelRows.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
   const maintRows = await db.select({ maintenanceCost: vehicleRecords.maintenanceCost }).from(vehicleRecords).where(
-    and17(
-      eq29(vehicleRecords.equipmentId, equipmentId),
-      eq29(vehicleRecords.recordType, "manutencao"),
-      gte8(vehicleRecords.date, fromStr),
-      lte8(vehicleRecords.date, toStr)
+    and18(
+      eq30(vehicleRecords.equipmentId, equipmentId),
+      eq30(vehicleRecords.recordType, "manutencao"),
+      gte9(vehicleRecords.date, fromStr),
+      lte9(vehicleRecords.date, toStr)
     )
   );
   const maintenanceCost = maintRows.reduce((s, r) => s + parseFloat(r.maintenanceCost || "0"), 0);
@@ -10883,17 +11353,17 @@ var freightCyclesRouter = router({
   }),
   /** Cria nova geofence */
   createGeofence: protectedProcedure.input(
-    z30.object({
-      name: z30.string().min(1),
-      latitude: z30.string(),
-      longitude: z30.string(),
-      radiusMeters: z30.number().default(500),
-      equipmentId: z30.number().optional(),
-      notes: z30.string().optional()
+    z31.object({
+      name: z31.string().min(1),
+      latitude: z31.string(),
+      longitude: z31.string(),
+      radiusMeters: z31.number().default(500),
+      equipmentId: z31.number().optional(),
+      notes: z31.string().optional()
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(farmGeofences).values({
       name: input.name,
       latitude: input.latitude,
@@ -10907,56 +11377,56 @@ var freightCyclesRouter = router({
   }),
   /** Atualiza geofence */
   updateGeofence: protectedProcedure.input(
-    z30.object({
-      id: z30.number(),
-      name: z30.string().min(1).optional(),
-      latitude: z30.string().optional(),
-      longitude: z30.string().optional(),
-      radiusMeters: z30.number().optional(),
-      equipmentId: z30.number().nullable().optional(),
-      active: z30.number().optional(),
-      notes: z30.string().optional()
+    z31.object({
+      id: z31.number(),
+      name: z31.string().min(1).optional(),
+      latitude: z31.string().optional(),
+      longitude: z31.string().optional(),
+      radiusMeters: z31.number().optional(),
+      equipmentId: z31.number().nullable().optional(),
+      active: z31.number().optional(),
+      notes: z31.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...rest } = input;
-    await db.update(farmGeofences).set(rest).where(eq29(farmGeofences.id, id));
+    await db.update(farmGeofences).set(rest).where(eq30(farmGeofences.id, id));
     return { ok: true };
   }),
   /** Remove geofence */
-  deleteGeofence: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
+  deleteGeofence: protectedProcedure.input(z31.object({ id: z31.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(farmGeofences).where(eq29(farmGeofences.id, input.id));
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(farmGeofences).where(eq30(farmGeofences.id, input.id));
     return { ok: true };
   }),
   // ─── CICLOS DE FRETE ────────────────────────────────────────────────────────
   /** Lista ciclos de frete com filtros */
   listCycles: protectedProcedure.input(
-    z30.object({
-      equipmentId: z30.number().optional(),
-      status: z30.enum(["em_fazenda", "em_transito", "concluido", "cancelado"]).optional(),
-      dateFrom: z30.string().optional(),
-      dateTo: z30.string().optional(),
-      limit: z30.number().default(50)
+    z31.object({
+      equipmentId: z31.number().optional(),
+      status: z31.enum(["em_fazenda", "em_transito", "concluido", "cancelado"]).optional(),
+      dateFrom: z31.string().optional(),
+      dateTo: z31.string().optional(),
+      limit: z31.number().default(50)
     })
   ).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const conditions = [];
-    if (input.equipmentId) conditions.push(eq29(freightCycles.equipmentId, input.equipmentId));
-    if (input.status) conditions.push(eq29(freightCycles.status, input.status));
-    if (input.dateFrom) conditions.push(gte8(freightCycles.arrivedFarmAt, input.dateFrom));
-    if (input.dateTo) conditions.push(lte8(freightCycles.arrivedFarmAt, input.dateTo));
-    return db.select().from(freightCycles).where(conditions.length > 0 ? and17(...conditions) : void 0).orderBy(desc24(freightCycles.createdAt)).limit(input.limit);
+    if (input.equipmentId) conditions.push(eq30(freightCycles.equipmentId, input.equipmentId));
+    if (input.status) conditions.push(eq30(freightCycles.status, input.status));
+    if (input.dateFrom) conditions.push(gte9(freightCycles.arrivedFarmAt, input.dateFrom));
+    if (input.dateTo) conditions.push(lte9(freightCycles.arrivedFarmAt, input.dateTo));
+    return db.select().from(freightCycles).where(conditions.length > 0 ? and18(...conditions) : void 0).orderBy(desc24(freightCycles.createdAt)).limit(input.limit);
   }),
   /** Detalhe de um ciclo */
-  getCycle: protectedProcedure.input(z30.object({ id: z30.number() })).query(async ({ input }) => {
+  getCycle: protectedProcedure.input(z31.object({ id: z31.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    const [cycle] = await db.select().from(freightCycles).where(eq29(freightCycles.id, input.id));
-    if (!cycle) throw new TRPCError20({ code: "NOT_FOUND" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    const [cycle] = await db.select().from(freightCycles).where(eq30(freightCycles.id, input.id));
+    if (!cycle) throw new TRPCError21({ code: "NOT_FOUND" });
     return cycle;
   }),
   /** Ciclos ativos (em_fazenda ou em_transito) */
@@ -10968,43 +11438,43 @@ var freightCyclesRouter = router({
     ).orderBy(desc24(freightCycles.createdAt));
   }),
   /** Vincula uma carga ao ciclo */
-  linkCargoLoad: protectedProcedure.input(z30.object({ cycleId: z30.number(), cargoLoadId: z30.number() })).mutation(async ({ input }) => {
+  linkCargoLoad: protectedProcedure.input(z31.object({ cycleId: z31.number(), cargoLoadId: z31.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    const [cargo] = await db.select({ destination: cargoLoads.destination }).from(cargoLoads).where(eq29(cargoLoads.id, input.cargoLoadId));
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    const [cargo] = await db.select({ destination: cargoLoads.destination }).from(cargoLoads).where(eq30(cargoLoads.id, input.cargoLoadId));
     await db.update(freightCycles).set({
       cargoLoadId: input.cargoLoadId,
       destination: cargo?.destination ?? null
-    }).where(eq29(freightCycles.id, input.cycleId));
+    }).where(eq30(freightCycles.id, input.cycleId));
     return { ok: true };
   }),
   /** Atualiza motorista do ciclo */
   updateDriver: protectedProcedure.input(
-    z30.object({
-      cycleId: z30.number(),
-      driverCollaboratorId: z30.number().optional(),
-      driverName: z30.string().optional()
+    z31.object({
+      cycleId: z31.number(),
+      driverCollaboratorId: z31.number().optional(),
+      driverName: z31.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(freightCycles).set({
       driverCollaboratorId: input.driverCollaboratorId ?? null,
       driverName: input.driverName ?? null
-    }).where(eq29(freightCycles.id, input.cycleId));
+    }).where(eq30(freightCycles.id, input.cycleId));
     return { ok: true };
   }),
   /** Fecha manualmente um ciclo em andamento */
   closeCycleManually: protectedProcedure.input(
-    z30.object({
-      cycleId: z30.number(),
-      notes: z30.string().optional()
+    z31.object({
+      cycleId: z31.number(),
+      notes: z31.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    const [cycle] = await db.select().from(freightCycles).where(eq29(freightCycles.id, input.cycleId));
-    if (!cycle) throw new TRPCError20({ code: "NOT_FOUND" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    const [cycle] = await db.select().from(freightCycles).where(eq30(freightCycles.id, input.cycleId));
+    if (!cycle) throw new TRPCError21({ code: "NOT_FOUND" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const fromStr = cycle.leftFarmAt || cycle.arrivedFarmAt || now;
     let fuelCost = 0;
@@ -11022,14 +11492,14 @@ var freightCyclesRouter = router({
       totalMaintenanceCost: String(maintenanceCost.toFixed(2)),
       totalCost: String(totalCost.toFixed(2)),
       notes: input.notes ?? cycle.notes
-    }).where(eq29(freightCycles.id, input.cycleId));
+    }).where(eq30(freightCycles.id, input.cycleId));
     return { ok: true };
   }),
   /** Cancela um ciclo */
-  cancelCycle: protectedProcedure.input(z30.object({ cycleId: z30.number(), notes: z30.string().optional() })).mutation(async ({ input }) => {
+  cancelCycle: protectedProcedure.input(z31.object({ cycleId: z31.number(), notes: z31.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(freightCycles).set({ status: "cancelado", notes: input.notes ?? null }).where(eq29(freightCycles.id, input.cycleId));
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(freightCycles).set({ status: "cancelado", notes: input.notes ?? null }).where(eq30(freightCycles.id, input.cycleId));
     return { ok: true };
   }),
   // ─── POLLING TRACCAR ────────────────────────────────────────────────────────
@@ -11040,18 +11510,18 @@ var freightCyclesRouter = router({
    */
   pollGeofences: protectedProcedure.mutation(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     if (!TRACCAR_URL2) return { processed: 0, message: "Traccar n\xE3o configurado" };
-    const geofences = await db.select().from(farmGeofences).where(eq29(farmGeofences.active, 1));
+    const geofences = await db.select().from(farmGeofences).where(eq30(farmGeofences.active, 1));
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     let processed = 0;
     const log = [];
     for (const geo of geofences) {
       if (!geo.equipmentId) continue;
       const [link] = await db.select().from(gpsDeviceLinks).where(
-        and17(
-          eq29(gpsDeviceLinks.equipmentId, geo.equipmentId),
-          eq29(gpsDeviceLinks.active, 1)
+        and18(
+          eq30(gpsDeviceLinks.equipmentId, geo.equipmentId),
+          eq30(gpsDeviceLinks.active, 1)
         )
       );
       if (!link) continue;
@@ -11065,8 +11535,8 @@ var freightCyclesRouter = router({
         geo.radiusMeters
       );
       const [activeCycle] = await db.select().from(freightCycles).where(
-        and17(
-          eq29(freightCycles.equipmentId, geo.equipmentId),
+        and18(
+          eq30(freightCycles.equipmentId, geo.equipmentId),
           sql17`${freightCycles.status} IN ('em_fazenda', 'em_transito')`
         )
       );
@@ -11107,7 +11577,7 @@ var freightCyclesRouter = router({
             totalFuelCost: String(costs.fuelCost.toFixed(2)),
             totalMaintenanceCost: String(costs.maintenanceCost.toFixed(2)),
             totalCost: String(totalCost.toFixed(2))
-          }).where(eq29(freightCycles.id, activeCycle.id));
+          }).where(eq30(freightCycles.id, activeCycle.id));
           await db.insert(freightCycles).values({
             equipmentId: geo.equipmentId,
             geofenceId: geo.id,
@@ -11123,7 +11593,7 @@ var freightCyclesRouter = router({
           await db.update(freightCycles).set({
             status: "em_transito",
             leftFarmAt: now
-          }).where(eq29(freightCycles.id, activeCycle.id));
+          }).where(eq30(freightCycles.id, activeCycle.id));
           log.push(`[Geofence] Ciclo ${activeCycle.id} \u2192 em_transito (saiu da fazenda)`);
         } else if (activeCycle?.status === "em_transito") {
           const newPoint = { lat: pos.lat, lng: pos.lng, ts: now };
@@ -11137,7 +11607,7 @@ var freightCyclesRouter = router({
           }
           traj.push(newPoint);
           if (traj.length > 500) traj = traj.slice(-500);
-          await db.update(freightCycles).set({ trajectoryJson: JSON.stringify(traj) }).where(eq29(freightCycles.id, activeCycle.id));
+          await db.update(freightCycles).set({ trajectoryJson: JSON.stringify(traj) }).where(eq30(freightCycles.id, activeCycle.id));
         }
       }
       processed++;
@@ -11151,20 +11621,20 @@ var freightCyclesRouter = router({
   realtimeStatus: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    const geofences = await db.select().from(farmGeofences).where(eq29(farmGeofences.active, 1));
+    const geofences = await db.select().from(farmGeofences).where(eq30(farmGeofences.active, 1));
     const result = [];
     for (const geo of geofences) {
       if (!geo.equipmentId) continue;
-      const [eq_row] = await db.select({ name: equipment.name, licensePlate: equipment.licensePlate }).from(equipment).where(eq29(equipment.id, geo.equipmentId));
+      const [eq_row] = await db.select({ name: equipment.name, licensePlate: equipment.licensePlate }).from(equipment).where(eq30(equipment.id, geo.equipmentId));
       const [link] = await db.select().from(gpsDeviceLinks).where(
-        and17(
-          eq29(gpsDeviceLinks.equipmentId, geo.equipmentId),
-          eq29(gpsDeviceLinks.active, 1)
+        and18(
+          eq30(gpsDeviceLinks.equipmentId, geo.equipmentId),
+          eq30(gpsDeviceLinks.active, 1)
         )
       );
       const [activeCycle] = await db.select().from(freightCycles).where(
-        and17(
-          eq29(freightCycles.equipmentId, geo.equipmentId),
+        and18(
+          eq30(freightCycles.equipmentId, geo.equipmentId),
           sql17`${freightCycles.status} IN ('em_fazenda', 'em_transito')`
         )
       );
@@ -11199,24 +11669,24 @@ var freightCyclesRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z31 } from "zod";
-import { TRPCError as TRPCError21 } from "@trpc/server";
-import { eq as eq30, desc as desc25 } from "drizzle-orm";
+import { z as z32 } from "zod";
+import { TRPCError as TRPCError22 } from "@trpc/server";
+import { eq as eq31, desc as desc25 } from "drizzle-orm";
 var suppliersRouter = router({
-  list: protectedProcedure.input(z31.object({ activeOnly: z31.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
+  list: protectedProcedure.input(z32.object({ activeOnly: z32.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const query = db.select().from(suppliers);
     if (input?.activeOnly !== false) {
-      return await query.where(eq30(suppliers.active, 1)).orderBy(suppliers.name);
+      return await query.where(eq31(suppliers.active, 1)).orderBy(suppliers.name);
     }
     return await query.orderBy(suppliers.name);
   }),
-  getById: protectedProcedure.input(z31.object({ id: z31.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z32.object({ id: z32.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
-    const [supplier] = await db.select().from(suppliers).where(eq30(suppliers.id, input.id));
-    if (!supplier) throw new TRPCError21({ code: "NOT_FOUND" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    const [supplier] = await db.select().from(suppliers).where(eq31(suppliers.id, input.id));
+    if (!supplier) throw new TRPCError22({ code: "NOT_FOUND" });
     const recentQuotations = await db.select({
       id: quotations.id,
       productName: quotations.productName,
@@ -11225,22 +11695,22 @@ var suppliersRouter = router({
       quotationDate: quotations.quotationDate,
       categoryId: quotations.categoryId,
       notes: quotations.notes
-    }).from(quotations).where(eq30(quotations.supplierId, input.id)).orderBy(desc25(quotations.quotationDate)).limit(20);
+    }).from(quotations).where(eq31(quotations.supplierId, input.id)).orderBy(desc25(quotations.quotationDate)).limit(20);
     return { ...supplier, recentQuotations };
   }),
-  create: protectedProcedure.input(z31.object({
-    name: z31.string().min(1).max(255),
-    address: z31.string().optional(),
-    city: z31.string().optional(),
-    state: z31.string().max(2).optional(),
-    phone: z31.string().optional(),
-    whatsapp: z31.string().optional(),
-    email: z31.string().email().optional().or(z31.literal("")),
-    website: z31.string().optional(),
-    notes: z31.string().optional()
+  create: protectedProcedure.input(z32.object({
+    name: z32.string().min(1).max(255),
+    address: z32.string().optional(),
+    city: z32.string().optional(),
+    state: z32.string().max(2).optional(),
+    phone: z32.string().optional(),
+    whatsapp: z32.string().optional(),
+    email: z32.string().email().optional().or(z32.literal("")),
+    website: z32.string().optional(),
+    notes: z32.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(suppliers).values({
       name: input.name,
       address: input.address,
@@ -11256,32 +11726,32 @@ var suppliersRouter = router({
     });
     return { id: result.insertId, ...input };
   }),
-  update: protectedProcedure.input(z31.object({
-    id: z31.number(),
-    name: z31.string().min(1).max(255),
-    address: z31.string().optional(),
-    city: z31.string().optional(),
-    state: z31.string().max(2).optional(),
-    phone: z31.string().optional(),
-    whatsapp: z31.string().optional(),
-    email: z31.string().email().optional().or(z31.literal("")),
-    website: z31.string().optional(),
-    notes: z31.string().optional(),
-    active: z31.number().optional()
+  update: protectedProcedure.input(z32.object({
+    id: z32.number(),
+    name: z32.string().min(1).max(255),
+    address: z32.string().optional(),
+    city: z32.string().optional(),
+    state: z32.string().max(2).optional(),
+    phone: z32.string().optional(),
+    whatsapp: z32.string().optional(),
+    email: z32.string().email().optional().or(z32.literal("")),
+    website: z32.string().optional(),
+    notes: z32.string().optional(),
+    active: z32.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
     await db.update(suppliers).set({
       ...data,
       email: data.email || void 0
-    }).where(eq30(suppliers.id, id));
+    }).where(eq31(suppliers.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z31.object({ id: z31.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(suppliers).set({ active: 0 }).where(eq30(suppliers.id, input.id));
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(suppliers).set({ active: 0 }).where(eq31(suppliers.id, input.id));
     return { success: true };
   })
 });
@@ -11290,18 +11760,18 @@ var suppliersRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z32 } from "zod";
-import { TRPCError as TRPCError22 } from "@trpc/server";
-import { eq as eq31, desc as desc26, asc as asc3, sql as sql18 } from "drizzle-orm";
+import { z as z33 } from "zod";
+import { TRPCError as TRPCError23 } from "@trpc/server";
+import { eq as eq32, desc as desc26, asc as asc3, sql as sql18 } from "drizzle-orm";
 var quotationsRouter = router({
   // List all quotations, optionally filtered by category or supplier
-  list: protectedProcedure.input(z32.object({
-    categoryId: z32.number().optional(),
-    supplierId: z32.number().optional(),
-    requestId: z32.number().optional()
+  list: protectedProcedure.input(z33.object({
+    categoryId: z33.number().optional(),
+    supplierId: z33.number().optional(),
+    requestId: z33.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -11318,13 +11788,13 @@ var quotationsRouter = router({
       quotationDate: quotations.quotationDate,
       notes: quotations.notes,
       createdAt: quotations.createdAt
-    }).from(quotations).leftJoin(suppliers, eq31(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq31(quotations.categoryId, purchaseCategories.id)).orderBy(desc26(quotations.quotationDate));
+    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq32(quotations.categoryId, purchaseCategories.id)).orderBy(desc26(quotations.quotationDate));
     return rows;
   }),
   // List by product name — price history across suppliers, lowest price first
-  listByProduct: protectedProcedure.input(z32.object({ productName: z32.string() })).query(async ({ input }) => {
+  listByProduct: protectedProcedure.input(z33.object({ productName: z33.string() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -11337,13 +11807,13 @@ var quotationsRouter = router({
       price: quotations.price,
       quotationDate: quotations.quotationDate,
       notes: quotations.notes
-    }).from(quotations).leftJoin(suppliers, eq31(quotations.supplierId, suppliers.id)).where(eq31(quotations.productName, input.productName)).orderBy(asc3(sql18`CAST(${quotations.price} AS DECIMAL(10,2))`), desc26(quotations.quotationDate));
+    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).where(eq32(quotations.productName, input.productName)).orderBy(asc3(sql18`CAST(${quotations.price} AS DECIMAL(10,2))`), desc26(quotations.quotationDate));
     return rows;
   }),
   // List grouped by category — returns categories with their products and price history
   listByCategory: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -11358,7 +11828,7 @@ var quotationsRouter = router({
       price: quotations.price,
       quotationDate: quotations.quotationDate,
       notes: quotations.notes
-    }).from(quotations).leftJoin(suppliers, eq31(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq31(quotations.categoryId, purchaseCategories.id)).orderBy(
+    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq32(quotations.categoryId, purchaseCategories.id)).orderBy(
       purchaseCategories.name,
       quotations.productName,
       asc3(sql18`CAST(${quotations.price} AS DECIMAL(10,2))`)
@@ -11404,18 +11874,18 @@ var quotationsRouter = router({
       )
     }));
   }),
-  create: protectedProcedure.input(z32.object({
-    supplierId: z32.number(),
-    categoryId: z32.number().optional(),
-    requestId: z32.number().optional(),
-    productName: z32.string().min(1).max(255),
-    unit: z32.string().optional(),
-    price: z32.string().min(1),
-    quotationDate: z32.string().optional(),
-    notes: z32.string().optional()
+  create: protectedProcedure.input(z33.object({
+    supplierId: z33.number(),
+    categoryId: z33.number().optional(),
+    requestId: z33.number().optional(),
+    productName: z33.string().min(1).max(255),
+    unit: z33.string().optional(),
+    price: z33.string().min(1),
+    quotationDate: z33.string().optional(),
+    notes: z33.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(quotations).values({
       supplierId: input.supplierId,
       categoryId: input.categoryId,
@@ -11429,26 +11899,26 @@ var quotationsRouter = router({
     });
     return { id: result.insertId, ...input };
   }),
-  update: protectedProcedure.input(z32.object({
-    id: z32.number(),
-    supplierId: z32.number().optional(),
-    categoryId: z32.number().optional(),
-    productName: z32.string().optional(),
-    unit: z32.string().optional(),
-    price: z32.string().optional(),
-    quotationDate: z32.string().optional(),
-    notes: z32.string().optional()
+  update: protectedProcedure.input(z33.object({
+    id: z33.number(),
+    supplierId: z33.number().optional(),
+    categoryId: z33.number().optional(),
+    productName: z33.string().optional(),
+    unit: z33.string().optional(),
+    price: z33.string().optional(),
+    quotationDate: z33.string().optional(),
+    notes: z33.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
-    await db.update(quotations).set(data).where(eq31(quotations.id, id));
+    await db.update(quotations).set(data).where(eq32(quotations.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(quotations).where(eq31(quotations.id, input.id));
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(quotations).where(eq32(quotations.id, input.id));
     return { success: true };
   })
 });
@@ -11457,19 +11927,19 @@ var quotationsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z33 } from "zod";
-import { TRPCError as TRPCError23 } from "@trpc/server";
-import { eq as eq32, desc as desc27 } from "drizzle-orm";
-var statusEnum = z33.enum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada"]);
-var urgencyEnum = z33.enum(["baixa", "media", "alta", "critica"]);
+import { z as z34 } from "zod";
+import { TRPCError as TRPCError24 } from "@trpc/server";
+import { eq as eq33, desc as desc27 } from "drizzle-orm";
+var statusEnum = z34.enum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada"]);
+var urgencyEnum = z34.enum(["baixa", "media", "alta", "critica"]);
 var purchaseRequestsRouter = router({
-  list: protectedProcedure.input(z33.object({
+  list: protectedProcedure.input(z34.object({
     status: statusEnum.optional(),
     urgency: urgencyEnum.optional(),
-    categoryId: z33.number().optional()
+    categoryId: z34.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
       id: purchaseRequests.id,
       title: purchaseRequests.title,
@@ -11491,16 +11961,16 @@ var purchaseRequestsRouter = router({
       notes: purchaseRequests.notes,
       createdAt: purchaseRequests.createdAt,
       updatedAt: purchaseRequests.updatedAt
-    }).from(purchaseRequests).leftJoin(purchaseCategories, eq32(purchaseRequests.categoryId, purchaseCategories.id)).orderBy(desc27(purchaseRequests.createdAt));
+    }).from(purchaseRequests).leftJoin(purchaseCategories, eq33(purchaseRequests.categoryId, purchaseCategories.id)).orderBy(desc27(purchaseRequests.createdAt));
     let filtered = rows;
     if (input?.status) filtered = filtered.filter((r) => r.status === input.status);
     if (input?.urgency) filtered = filtered.filter((r) => r.urgency === input.urgency);
     if (input?.categoryId) filtered = filtered.filter((r) => r.categoryId === input.categoryId);
     return filtered;
   }),
-  getById: protectedProcedure.input(z33.object({ id: z33.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z34.object({ id: z34.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select({
       id: purchaseRequests.id,
       title: purchaseRequests.title,
@@ -11523,27 +11993,27 @@ var purchaseRequestsRouter = router({
       notes: purchaseRequests.notes,
       createdAt: purchaseRequests.createdAt,
       updatedAt: purchaseRequests.updatedAt
-    }).from(purchaseRequests).leftJoin(purchaseCategories, eq32(purchaseRequests.categoryId, purchaseCategories.id)).where(eq32(purchaseRequests.id, input.id));
-    if (!req) throw new TRPCError23({ code: "NOT_FOUND" });
-    const items = await db.select().from(purchaseRequestItems).where(eq32(purchaseRequestItems.requestId, input.id)).orderBy(purchaseRequestItems.id);
+    }).from(purchaseRequests).leftJoin(purchaseCategories, eq33(purchaseRequests.categoryId, purchaseCategories.id)).where(eq33(purchaseRequests.id, input.id));
+    if (!req) throw new TRPCError24({ code: "NOT_FOUND" });
+    const items = await db.select().from(purchaseRequestItems).where(eq33(purchaseRequestItems.requestId, input.id)).orderBy(purchaseRequestItems.id);
     return { ...req, items };
   }),
-  create: protectedProcedure.input(z33.object({
-    title: z33.string().min(1).max(255),
-    description: z33.string().optional(),
-    linkUrl: z33.string().optional(),
-    categoryId: z33.number().optional(),
+  create: protectedProcedure.input(z34.object({
+    title: z34.string().min(1).max(255),
+    description: z34.string().optional(),
+    linkUrl: z34.string().optional(),
+    categoryId: z34.number().optional(),
     urgency: urgencyEnum.optional().default("media"),
-    notes: z33.string().optional(),
-    items: z33.array(z33.object({
-      name: z33.string().min(1),
-      quantity: z33.string(),
-      unit: z33.string().optional(),
-      notes: z33.string().optional()
+    notes: z34.string().optional(),
+    items: z34.array(z34.object({
+      name: z34.string().min(1),
+      quantity: z34.string(),
+      unit: z34.string().optional(),
+      notes: z34.string().optional()
     })).optional().default([])
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const [result] = await db.insert(purchaseRequests).values({
       title: input.title,
@@ -11570,103 +12040,103 @@ var purchaseRequestsRouter = router({
     }
     return { id: requestId };
   }),
-  update: protectedProcedure.input(z33.object({
-    id: z33.number(),
-    title: z33.string().optional(),
-    description: z33.string().optional(),
-    linkUrl: z33.string().optional(),
-    categoryId: z33.number().optional(),
+  update: protectedProcedure.input(z34.object({
+    id: z34.number(),
+    title: z34.string().optional(),
+    description: z34.string().optional(),
+    linkUrl: z34.string().optional(),
+    categoryId: z34.number().optional(),
     urgency: urgencyEnum.optional(),
-    notes: z33.string().optional(),
-    expectedArrival: z33.string().optional()
+    notes: z34.string().optional(),
+    expectedArrival: z34.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
-    await db.update(purchaseRequests).set(data).where(eq32(purchaseRequests.id, id));
+    await db.update(purchaseRequests).set(data).where(eq33(purchaseRequests.id, id));
     return { success: true };
   }),
   // Mark as read by responsible
-  markRead: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
+  markRead: protectedProcedure.input(z34.object({ id: z34.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    await db.update(purchaseRequests).set({ readDate: now, status: "lida" }).where(eq32(purchaseRequests.id, input.id));
+    await db.update(purchaseRequests).set({ readDate: now, status: "lida" }).where(eq33(purchaseRequests.id, input.id));
     return { success: true };
   }),
   // Mark as purchased
-  markPurchased: protectedProcedure.input(z33.object({
-    id: z33.number(),
-    purchaseDate: z33.string().optional(),
-    expectedArrival: z33.string().optional()
+  markPurchased: protectedProcedure.input(z34.object({
+    id: z34.number(),
+    purchaseDate: z34.string().optional(),
+    expectedArrival: z34.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.update(purchaseRequests).set({
       purchaseDate: input.purchaseDate || now,
       expectedArrival: input.expectedArrival,
       status: "comprada"
-    }).where(eq32(purchaseRequests.id, input.id));
+    }).where(eq33(purchaseRequests.id, input.id));
     return { success: true };
   }),
   // Mark as received
-  markReceived: protectedProcedure.input(z33.object({ id: z33.number(), receivedDate: z33.string().optional() })).mutation(async ({ input }) => {
+  markReceived: protectedProcedure.input(z34.object({ id: z34.number(), receivedDate: z34.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    await db.update(purchaseRequests).set({ receivedDate: input.receivedDate || now, status: "recebida" }).where(eq32(purchaseRequests.id, input.id));
+    await db.update(purchaseRequests).set({ receivedDate: input.receivedDate || now, status: "recebida" }).where(eq33(purchaseRequests.id, input.id));
     return { success: true };
   }),
   // Confirm items separately (after received)
-  confirmItems: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
+  confirmItems: protectedProcedure.input(z34.object({ id: z34.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    await db.update(purchaseRequests).set({ itemsConfirmedDate: now }).where(eq32(purchaseRequests.id, input.id));
-    await db.update(purchaseRequestItems).set({ confirmed: 1 }).where(eq32(purchaseRequestItems.requestId, input.id));
+    await db.update(purchaseRequests).set({ itemsConfirmedDate: now }).where(eq33(purchaseRequests.id, input.id));
+    await db.update(purchaseRequestItems).set({ confirmed: 1 }).where(eq33(purchaseRequestItems.requestId, input.id));
     return { success: true };
   }),
   // Toggle single item confirmation
-  toggleItemConfirm: protectedProcedure.input(z33.object({ itemId: z33.number(), confirmed: z33.boolean() })).mutation(async ({ input }) => {
+  toggleItemConfirm: protectedProcedure.input(z34.object({ itemId: z34.number(), confirmed: z34.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(purchaseRequestItems).set({ confirmed: input.confirmed ? 1 : 0 }).where(eq32(purchaseRequestItems.id, input.itemId));
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(purchaseRequestItems).set({ confirmed: input.confirmed ? 1 : 0 }).where(eq33(purchaseRequestItems.id, input.itemId));
     return { success: true };
   }),
   // Upload image for a request
-  uploadImage: protectedProcedure.input(z33.object({
-    id: z33.number(),
-    imageBase64: z33.string(),
-    mimeType: z33.string().default("image/jpeg")
+  uploadImage: protectedProcedure.input(z34.object({
+    id: z34.number(),
+    imageBase64: z34.string(),
+    mimeType: z34.string().default("image/jpeg")
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const buffer = Buffer.from(input.imageBase64, "base64");
     const ext = input.mimeType.split("/")[1] || "jpg";
     const key = `purchase-requests/${input.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { url } = await storagePut(key, buffer, input.mimeType);
-    const [req] = await db.select({ images: purchaseRequests.images }).from(purchaseRequests).where(eq32(purchaseRequests.id, input.id));
+    const [req] = await db.select({ images: purchaseRequests.images }).from(purchaseRequests).where(eq33(purchaseRequests.id, input.id));
     const currentImages = req?.images ? JSON.parse(req.images) : [];
     currentImages.push(url);
-    await db.update(purchaseRequests).set({ images: JSON.stringify(currentImages) }).where(eq32(purchaseRequests.id, input.id));
+    await db.update(purchaseRequests).set({ images: JSON.stringify(currentImages) }).where(eq33(purchaseRequests.id, input.id));
     return { url, images: currentImages };
   }),
   // Remove image from a request
-  removeImage: protectedProcedure.input(z33.object({ id: z33.number(), imageUrl: z33.string() })).mutation(async ({ input }) => {
+  removeImage: protectedProcedure.input(z34.object({ id: z34.number(), imageUrl: z34.string() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
-    const [req] = await db.select({ images: purchaseRequests.images }).from(purchaseRequests).where(eq32(purchaseRequests.id, input.id));
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select({ images: purchaseRequests.images }).from(purchaseRequests).where(eq33(purchaseRequests.id, input.id));
     const currentImages = req?.images ? JSON.parse(req.images) : [];
     const newImages = currentImages.filter((img) => img !== input.imageUrl);
-    await db.update(purchaseRequests).set({ images: JSON.stringify(newImages) }).where(eq32(purchaseRequests.id, input.id));
+    await db.update(purchaseRequests).set({ images: JSON.stringify(newImages) }).where(eq33(purchaseRequests.id, input.id));
     return { images: newImages };
   }),
-  delete: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z34.object({ id: z34.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(purchaseRequestItems).where(eq32(purchaseRequestItems.requestId, input.id));
-    await db.delete(purchaseRequests).where(eq32(purchaseRequests.id, input.id));
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(purchaseRequestItems).where(eq33(purchaseRequestItems.requestId, input.id));
+    await db.delete(purchaseRequests).where(eq33(purchaseRequests.id, input.id));
     return { success: true };
   })
 });
@@ -11675,23 +12145,23 @@ var purchaseRequestsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z34 } from "zod";
-import { TRPCError as TRPCError24 } from "@trpc/server";
-import { eq as eq33, desc as desc28 } from "drizzle-orm";
+import { z as z35 } from "zod";
+import { TRPCError as TRPCError25 } from "@trpc/server";
+import { eq as eq34, desc as desc28 } from "drizzle-orm";
 var invoiceControlRouter = router({
   // Listar notas com filtros — mostra todas as cargas (sem filtro de status)
-  list: protectedProcedure.input(z34.object({
-    search: z34.string().optional(),
-    destinationId: z34.number().optional(),
-    clientId: z34.number().optional(),
-    checked: z34.boolean().optional(),
+  list: protectedProcedure.input(z35.object({
+    search: z35.string().optional(),
+    destinationId: z35.number().optional(),
+    clientId: z35.number().optional(),
+    checked: z35.boolean().optional(),
     // undefined = todos, true = conferidos, false = não conferidos
-    dateFrom: z34.string().optional(),
-    dateTo: z34.string().optional(),
-    limit: z34.number().optional().default(200)
+    dateFrom: z35.string().optional(),
+    dateTo: z35.string().optional(),
+    limit: z35.number().optional().default(200)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
@@ -11714,7 +12184,7 @@ var invoiceControlRouter = router({
       // Joins
       destinationName: cargoDestinations.name,
       clientNameJoined: clients.name
-    }).from(cargoLoads).leftJoin(cargoDestinations, eq33(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(clients, eq33(cargoLoads.clientId, clients.id)).orderBy(desc28(cargoLoads.date)).limit(input?.limit ?? 200);
+    }).from(cargoLoads).leftJoin(cargoDestinations, eq34(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(clients, eq34(cargoLoads.clientId, clients.id)).orderBy(desc28(cargoLoads.date)).limit(input?.limit ?? 200);
     let filtered = results.map((r) => ({
       ...r,
       clientName: r.clientNameJoined || r.clientName,
@@ -11736,19 +12206,19 @@ var invoiceControlRouter = router({
     return filtered;
   }),
   // Marcar/desmarcar nota como conferida (sem colunas extras que podem não existir)
-  toggleChecked: protectedProcedure.input(z34.object({ id: z34.number(), checked: z34.boolean() })).mutation(async ({ input }) => {
+  toggleChecked: protectedProcedure.input(z35.object({ id: z35.number(), checked: z35.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(cargoLoads).set({
       invoiceChecked: input.checked ? 1 : 0,
       invoiceCheckedAt: input.checked ? Date.now() : 0
-    }).where(eq33(cargoLoads.id, input.id));
+    }).where(eq34(cargoLoads.id, input.id));
     return { success: true };
   }),
   // Estatísticas resumidas — todas as cargas
   stats: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const all = await db.select({
       invoiceChecked: cargoLoads.invoiceChecked,
       invoiceNumber: cargoLoads.invoiceNumber
@@ -11771,15 +12241,15 @@ init_trpc();
 init_db();
 init_schema();
 init_notification();
-import { z as z35 } from "zod";
-import { eq as eq34, desc as desc29 } from "drizzle-orm";
-import { TRPCError as TRPCError25 } from "@trpc/server";
+import { z as z36 } from "zod";
+import { eq as eq35, desc as desc29 } from "drizzle-orm";
+import { TRPCError as TRPCError26 } from "@trpc/server";
 import crypto from "crypto";
 var quotationRequestsRouter = router({
   // Listar todas as solicitações (protegido)
   list: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
     return rows.map((r) => ({
       ...r,
@@ -11788,12 +12258,12 @@ var quotationRequestsRouter = router({
     }));
   }),
   // Buscar por ID com respostas (protegido)
-  getById: protectedProcedure.input(z35.object({ id: z35.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z36.object({ id: z36.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    const [req] = await db.select().from(quotationRequests).where(eq34(quotationRequests.id, input.id));
-    if (!req) throw new TRPCError25({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    const responses = await db.select().from(quotationResponses).where(eq34(quotationResponses.quotationRequestId, input.id)).orderBy(desc29(quotationResponses.createdAt));
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.id, input.id));
+    if (!req) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    const responses = await db.select().from(quotationResponses).where(eq35(quotationResponses.quotationRequestId, input.id)).orderBy(desc29(quotationResponses.createdAt));
     return {
       ...req,
       items: JSON.parse(req.itemsJson || "[]"),
@@ -11806,22 +12276,22 @@ var quotationRequestsRouter = router({
   }),
   // Criar nova solicitação (protegido)
   create: protectedProcedure.input(
-    z35.object({
-      title: z35.string().min(1),
-      requesterId: z35.number().optional(),
-      requesterName: z35.string().optional(),
-      requesterPhone: z35.string().optional(),
-      requesterEmail: z35.string().optional(),
-      items: z35.array(z35.object({
-        name: z35.string().min(1),
-        quantity: z35.string().min(1),
-        unit: z35.string().optional().default("un")
+    z36.object({
+      title: z36.string().min(1),
+      requesterId: z36.number().optional(),
+      requesterName: z36.string().optional(),
+      requesterPhone: z36.string().optional(),
+      requesterEmail: z36.string().optional(),
+      items: z36.array(z36.object({
+        name: z36.string().min(1),
+        quantity: z36.string().min(1),
+        unit: z36.string().optional().default("un")
       })).min(1),
-      notes: z35.string().optional()
+      notes: z36.string().optional()
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1e3;
     const [result] = await db.insert(quotationRequests).values({
@@ -11841,18 +12311,18 @@ var quotationRequestsRouter = router({
     return { id, token };
   }),
   // Cancelar solicitação (protegido)
-  cancel: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
+  cancel: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(quotationRequests).set({ status: "cancelada" }).where(eq34(quotationRequests.id, input.id));
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(quotationRequests).set({ status: "cancelada" }).where(eq35(quotationRequests.id, input.id));
     return { success: true };
   }),
   // ===== ROTAS PÚBLICAS (sem auth) =====
   // Buscar solicitação por token (fornecedor acessa)
-  getByToken: publicProcedure.input(z35.object({ token: z35.string() })).query(async ({ input }) => {
+  getByToken: publicProcedure.input(z36.object({ token: z36.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
-    const [req] = await db.select().from(quotationRequests).where(eq34(quotationRequests.token, input.token));
+    const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.token, input.token));
     if (!req) return { found: false };
     const isCancelled = req.status === "cancelada";
     return {
@@ -11873,32 +12343,32 @@ var quotationRequestsRouter = router({
   }),
   // Fornecedor envia resposta (público)
   submitResponse: publicProcedure.input(
-    z35.object({
-      token: z35.string(),
-      supplierName: z35.string().min(1),
-      cnpj: z35.string().optional(),
-      address: z35.string().optional(),
-      sellerName: z35.string().optional(),
-      sellerPhone: z35.string().optional(),
-      sellerEmail: z35.string().optional(),
-      items: z35.array(
-        z35.object({
-          name: z35.string(),
-          quantity: z35.string(),
-          unit: z35.string().optional(),
-          price: z35.string(),
-          brand: z35.string().optional(),
-          notes: z35.string().optional()
+    z36.object({
+      token: z36.string(),
+      supplierName: z36.string().min(1),
+      cnpj: z36.string().optional(),
+      address: z36.string().optional(),
+      sellerName: z36.string().optional(),
+      sellerPhone: z36.string().optional(),
+      sellerEmail: z36.string().optional(),
+      items: z36.array(
+        z36.object({
+          name: z36.string(),
+          quantity: z36.string(),
+          unit: z36.string().optional(),
+          price: z36.string(),
+          brand: z36.string().optional(),
+          notes: z36.string().optional()
         })
       ).min(1),
-      notes: z35.string().optional()
+      notes: z36.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    const [req] = await db.select().from(quotationRequests).where(eq34(quotationRequests.token, input.token));
-    if (!req) throw new TRPCError25({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (req.status === "cancelada") throw new TRPCError25({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.token, input.token));
+    if (!req) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError26({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
     await db.insert(quotationResponses).values({
       quotationRequestId: req.id,
       supplierName: input.supplierName,
@@ -11910,7 +12380,7 @@ var quotationRequestsRouter = router({
       itemsJson: JSON.stringify(input.items),
       notes: input.notes
     });
-    await db.update(quotationRequests).set({ status: "respondida" }).where(eq34(quotationRequests.id, req.id));
+    await db.update(quotationRequests).set({ status: "respondida" }).where(eq35(quotationRequests.id, req.id));
     try {
       await notifyOwner({
         title: `\u{1F4CB} Novo or\xE7amento recebido: ${req.title}`,
@@ -11931,24 +12401,24 @@ Acesse o sistema para visualizar os valores.`
 init_trpc();
 init_db();
 init_schema();
-import { z as z36 } from "zod";
-import { eq as eq35, desc as desc30, and as and22, gte as gte9, lte as lte9, inArray as inArray8 } from "drizzle-orm";
-import { TRPCError as TRPCError26 } from "@trpc/server";
+import { z as z37 } from "zod";
+import { eq as eq36, desc as desc30, and as and23, gte as gte10, lte as lte10, inArray as inArray8 } from "drizzle-orm";
+import { TRPCError as TRPCError27 } from "@trpc/server";
 var thirdPartyRouter = router({
   // ===== TARIFAS DE FRETE =====
   listRates: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(freightRates).orderBy(freightRates.worksite, freightRates.destination);
   }),
-  createRate: protectedProcedure.input(z36.object({
-    worksite: z36.string().min(1),
-    destination: z36.string().min(1),
-    ratePerTon: z36.string().min(1),
-    notes: z36.string().optional()
+  createRate: protectedProcedure.input(z37.object({
+    worksite: z37.string().min(1),
+    destination: z37.string().min(1),
+    ratePerTon: z37.string().min(1),
+    notes: z37.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(freightRates).values({
       worksite: input.worksite,
       destination: input.destination,
@@ -11957,39 +12427,39 @@ var thirdPartyRouter = router({
     });
     return { id: result.insertId };
   }),
-  updateRate: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    worksite: z36.string().min(1),
-    destination: z36.string().min(1),
-    ratePerTon: z36.string().min(1),
-    notes: z36.string().optional()
+  updateRate: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    worksite: z37.string().min(1),
+    destination: z37.string().min(1),
+    ratePerTon: z37.string().min(1),
+    notes: z37.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(freightRates).set({
       worksite: input.worksite,
       destination: input.destination,
       ratePerTon: input.ratePerTon,
       notes: input.notes ?? null
-    }).where(eq35(freightRates.id, input.id));
+    }).where(eq36(freightRates.id, input.id));
     return { success: true };
   }),
-  deleteRate: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
+  deleteRate: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(freightRates).where(eq35(freightRates.id, input.id));
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(freightRates).where(eq36(freightRates.id, input.id));
     return { success: true };
   }),
   // ===== ABASTECIMENTOS DE TERCEIRIZADOS =====
   // Retorna TANTO os registros de third_party_fuel QUANTO os fuel_records de caminhões terceirizados
-  listFuel: protectedProcedure.input(z36.object({
-    equipmentId: z36.number().optional(),
-    startDate: z36.string().optional(),
-    endDate: z36.string().optional()
+  listFuel: protectedProcedure.input(z37.object({
+    equipmentId: z37.number().optional(),
+    startDate: z37.string().optional(),
+    endDate: z37.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
-    const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name }).from(equipment).where(eq35(equipment.isThirdParty, 1));
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name }).from(equipment).where(eq36(equipment.isThirdParty, 1));
     const thirdPartyIds = thirdPartyTrucks.map((t2) => t2.id);
     const tpFuelRows = await db.select({
       id: thirdPartyFuel.id,
@@ -12002,7 +12472,7 @@ var thirdPartyRouter = router({
       location: thirdPartyFuel.location,
       notes: thirdPartyFuel.notes,
       createdAt: thirdPartyFuel.createdAt
-    }).from(thirdPartyFuel).leftJoin(equipment, eq35(thirdPartyFuel.equipmentId, equipment.id)).orderBy(desc30(thirdPartyFuel.date));
+    }).from(thirdPartyFuel).leftJoin(equipment, eq36(thirdPartyFuel.equipmentId, equipment.id)).orderBy(desc30(thirdPartyFuel.date));
     let vehicleRecordsRows = [];
     if (thirdPartyIds.length > 0) {
       const vrRows = await db.select({
@@ -12016,8 +12486,8 @@ var thirdPartyRouter = router({
         location: vehicleRecords.supplier,
         notes: vehicleRecords.odometer,
         createdAt: vehicleRecords.createdAt
-      }).from(vehicleRecords).leftJoin(equipment, eq35(vehicleRecords.equipmentId, equipment.id)).where(and22(
-        eq35(vehicleRecords.recordType, "abastecimento"),
+      }).from(vehicleRecords).leftJoin(equipment, eq36(vehicleRecords.equipmentId, equipment.id)).where(and23(
+        eq36(vehicleRecords.recordType, "abastecimento"),
         inArray8(vehicleRecords.equipmentId, thirdPartyIds)
       )).orderBy(desc30(vehicleRecords.date));
       vehicleRecordsRows = vrRows.map((r) => ({
@@ -12032,17 +12502,17 @@ var thirdPartyRouter = router({
     ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
     return combined;
   }),
-  createFuel: protectedProcedure.input(z36.object({
-    equipmentId: z36.number(),
-    date: z36.string(),
-    liters: z36.string(),
-    pricePerLiter: z36.string(),
-    total: z36.string(),
-    location: z36.string().optional(),
-    notes: z36.string().optional()
+  createFuel: protectedProcedure.input(z37.object({
+    equipmentId: z37.number(),
+    date: z37.string(),
+    liters: z37.string(),
+    pricePerLiter: z37.string(),
+    total: z37.string(),
+    location: z37.string().optional(),
+    notes: z37.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(thirdPartyFuel).values({
       equipmentId: input.equipmentId,
       date: input.date,
@@ -12055,7 +12525,7 @@ var thirdPartyRouter = router({
     });
     const id = result.insertId;
     try {
-      const eq210 = await db.select({ name: equipment.name }).from(equipment).where(eq35(equipment.id, input.equipmentId));
+      const eq210 = await db.select({ name: equipment.name }).from(equipment).where(eq36(equipment.id, input.equipmentId));
       const equipName = eq210[0]?.name ?? `Equipamento #${input.equipmentId}`;
       await db.insert(financialEntries).values({
         type: "despesa",
@@ -12072,18 +12542,18 @@ var thirdPartyRouter = router({
     }
     return { id };
   }),
-  updateFuel: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    equipmentId: z36.number(),
-    date: z36.string(),
-    liters: z36.string(),
-    pricePerLiter: z36.string(),
-    total: z36.string(),
-    location: z36.string().optional(),
-    notes: z36.string().optional()
+  updateFuel: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    equipmentId: z37.number(),
+    date: z37.string(),
+    liters: z37.string(),
+    pricePerLiter: z37.string(),
+    total: z37.string(),
+    location: z37.string().optional(),
+    notes: z37.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(thirdPartyFuel).set({
       equipmentId: input.equipmentId,
       date: input.date,
@@ -12092,52 +12562,52 @@ var thirdPartyRouter = router({
       total: input.total,
       location: input.location ?? null,
       notes: input.notes ?? null
-    }).where(eq35(thirdPartyFuel.id, input.id));
+    }).where(eq36(thirdPartyFuel.id, input.id));
     return { success: true };
   }),
-  deleteFuel: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
+  deleteFuel: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(thirdPartyFuel).where(eq35(thirdPartyFuel.id, input.id));
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(thirdPartyFuel).where(eq36(thirdPartyFuel.id, input.id));
     return { success: true };
   }),
   // ===== CAMINHÕES TERCEIRIZADOS =====
   listThirdPartyTrucks: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(equipment).where(eq35(equipment.isThirdParty, 1));
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(equipment).where(eq36(equipment.isThirdParty, 1));
   }),
-  setThirdParty: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    isThirdParty: z36.boolean(),
-    thirdPartyOwner: z36.string().optional()
+  setThirdParty: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    isThirdParty: z37.boolean(),
+    thirdPartyOwner: z37.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(equipment).set({
       isThirdParty: input.isThirdParty ? 1 : 0,
       thirdPartyOwner: input.thirdPartyOwner ?? null
-    }).where(eq35(equipment.id, input.id));
+    }).where(eq36(equipment.id, input.id));
     return { success: true };
   }),
   // ===== LISTAGEM DE FRETES DE TERCEIRIZADOS =====
   // Lista cargas onde o veículo é terceirizado, com cálculo de valor de frete
   // Busca tarifa por: (1) worksite+destination exato, (2) worksite parcial + destination parcial
-  listFreights: protectedProcedure.input(z36.object({
-    startDate: z36.string().optional(),
-    endDate: z36.string().optional(),
-    equipmentId: z36.number().optional()
+  listFreights: protectedProcedure.input(z37.object({
+    startDate: z37.string().optional(),
+    endDate: z37.string().optional(),
+    equipmentId: z37.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
-    const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name, thirdPartyOwner: equipment.thirdPartyOwner }).from(equipment).where(eq35(equipment.isThirdParty, 1));
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name, thirdPartyOwner: equipment.thirdPartyOwner }).from(equipment).where(eq36(equipment.isThirdParty, 1));
     if (thirdPartyTrucks.length === 0) return [];
     const truckIds = thirdPartyTrucks.map((t2) => t2.id);
     const truckMap = new Map(thirdPartyTrucks.map((t2) => [t2.id, t2]));
     const conditions = [];
-    if (input?.startDate) conditions.push(gte9(cargoLoads.date, input.startDate + " 00:00:00"));
-    if (input?.endDate) conditions.push(lte9(cargoLoads.date, input.endDate + " 23:59:59"));
-    if (input?.equipmentId) conditions.push(eq35(cargoLoads.vehicleId, input.equipmentId));
+    if (input?.startDate) conditions.push(gte10(cargoLoads.date, input.startDate + " 00:00:00"));
+    if (input?.endDate) conditions.push(lte10(cargoLoads.date, input.endDate + " 23:59:59"));
+    if (input?.equipmentId) conditions.push(eq36(cargoLoads.vehicleId, input.equipmentId));
     const allCargos = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
@@ -12151,7 +12621,7 @@ var thirdPartyRouter = router({
       thirdPartyPaidAt: cargoLoads.thirdPartyPaidAt,
       thirdPartyPaymentNotes: cargoLoads.thirdPartyPaymentNotes,
       status: cargoLoads.status
-    }).from(cargoLoads).where(conditions.length > 0 ? and22(...conditions) : void 0).orderBy(desc30(cargoLoads.date));
+    }).from(cargoLoads).where(conditions.length > 0 ? and23(...conditions) : void 0).orderBy(desc30(cargoLoads.date));
     const thirdPartyCargos = allCargos.filter((c) => c.vehicleId && truckIds.includes(c.vehicleId));
     const rates = await db.select().from(freightRates);
     const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
@@ -12187,15 +12657,15 @@ var thirdPartyRouter = router({
       const dateStr = cargo.date?.slice(0, 10) ?? "";
       let fuelCost = 0;
       if (cargo.vehicleId && dateStr) {
-        const tpFuel = await db.select({ total: thirdPartyFuel.total }).from(thirdPartyFuel).where(and22(
-          eq35(thirdPartyFuel.equipmentId, cargo.vehicleId),
-          gte9(thirdPartyFuel.date, dateStr + " 00:00:00"),
-          lte9(thirdPartyFuel.date, dateStr + " 23:59:59")
+        const tpFuel = await db.select({ total: thirdPartyFuel.total }).from(thirdPartyFuel).where(and23(
+          eq36(thirdPartyFuel.equipmentId, cargo.vehicleId),
+          gte10(thirdPartyFuel.date, dateStr + " 00:00:00"),
+          lte10(thirdPartyFuel.date, dateStr + " 23:59:59")
         ));
-        const frFuel = await db.select({ totalValue: fuelRecords.totalValue }).from(fuelRecords).where(and22(
-          eq35(fuelRecords.equipmentId, cargo.vehicleId),
-          gte9(fuelRecords.date, dateStr + " 00:00:00"),
-          lte9(fuelRecords.date, dateStr + " 23:59:59")
+        const frFuel = await db.select({ totalValue: fuelRecords.totalValue }).from(fuelRecords).where(and23(
+          eq36(fuelRecords.equipmentId, cargo.vehicleId),
+          gte10(fuelRecords.date, dateStr + " 00:00:00"),
+          lte10(fuelRecords.date, dateStr + " 23:59:59")
         ));
         fuelCost = tpFuel.reduce((acc, f) => acc + parseFloat(f.total || "0"), 0) + frFuel.reduce((acc, f) => acc + parseFloat(f.totalValue || "0"), 0);
       }
@@ -12218,18 +12688,18 @@ var thirdPartyRouter = router({
     return result;
   }),
   // ===== MARCAR FRETE COMO PAGO =====
-  markFreightPaid: protectedProcedure.input(z36.object({
-    cargoLoadId: z36.number(),
-    notes: z36.string().optional(),
-    netAmount: z36.string(),
-    grossAmount: z36.string(),
-    fuelCost: z36.string(),
-    truckName: z36.string().optional(),
+  markFreightPaid: protectedProcedure.input(z37.object({
+    cargoLoadId: z37.number(),
+    notes: z37.string().optional(),
+    netAmount: z37.string(),
+    grossAmount: z37.string(),
+    fuelCost: z37.string(),
+    truckName: z37.string().optional(),
     // Valor manual (quando não há tarifa cadastrada)
-    manualAmount: z36.string().optional()
+    manualAmount: z37.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const now = /* @__PURE__ */ new Date();
     const nowStr = now.toISOString().slice(0, 10);
     const finalAmount = input.manualAmount && parseFloat(input.manualAmount) > 0 ? input.manualAmount : input.netAmount;
@@ -12237,7 +12707,7 @@ var thirdPartyRouter = router({
       thirdPartyPaid: 1,
       thirdPartyPaidAt: now,
       thirdPartyPaymentNotes: input.notes ?? null
-    }).where(eq35(cargoLoads.id, input.cargoLoadId));
+    }).where(eq36(cargoLoads.id, input.cargoLoadId));
     try {
       const truckLabel = input.truckName ? ` \u2014 ${input.truckName}` : "";
       const isManual = input.manualAmount && parseFloat(input.manualAmount) > 0;
@@ -12261,7 +12731,7 @@ var thirdPartyRouter = router({
 });
 
 // server/routers.ts
-import { z as z37 } from "zod";
+import { z as z38 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -12383,12 +12853,12 @@ var appRouter = router({
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-          const { eq: eq36 } = await import("drizzle-orm");
-          const permResult = await db.select().from(upTable).where(eq36(upTable.userId, ctx.user.id));
+          const { eq: eq37 } = await import("drizzle-orm");
+          const permResult = await db.select().from(upTable).where(eq37(upTable.userId, ctx.user.id));
           const collabResult = await db.select({
             clientId: collabTable.clientId,
             role: collabTable.role
-          }).from(collabTable).where(eq36(collabTable.userId, ctx.user.id));
+          }).from(collabTable).where(eq37(collabTable.userId, ctx.user.id));
           myPermsResult = {
             permResultLength: permResult.length,
             permResult: permResult[0] || null,
@@ -12423,7 +12893,7 @@ var appRouter = router({
         const [cols] = await db.execute(__require("drizzle-orm/sql").sql`SHOW COLUMNS FROM collaborator_attendance`);
         const [countResult] = await db.execute(__require("drizzle-orm/sql").sql`SELECT COUNT(*) as cnt FROM collaborator_attendance`);
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq36, desc: desc31 } = await import("drizzle-orm");
+        const { eq: eq37, desc: desc31 } = await import("drizzle-orm");
         try {
           const records = await db.select({
             id: collaboratorAttendance2.id,
@@ -12443,10 +12913,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z37.object({
-      name: z37.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z37.string().email("Email inv\xE1lido"),
-      password: z37.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z38.object({
+      name: z38.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z38.string().email("Email inv\xE1lido"),
+      password: z38.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -12461,9 +12931,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z37.object({
-      email: z37.string().email("Email inv\xE1lido"),
-      password: z37.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z38.object({
+      email: z38.string().email("Email inv\xE1lido"),
+      password: z38.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -12482,11 +12952,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z37.object({
-      seedKey: z37.string(),
-      email: z37.string().email(),
-      name: z37.string(),
-      password: z37.string().min(4)
+    seedAdmin: publicProcedure.input(z38.object({
+      seedKey: z38.string(),
+      email: z38.string().email(),
+      name: z38.string(),
+      password: z38.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -12496,9 +12966,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z37.object({
-      email: z37.string().email("Email inv\xE1lido"),
-      origin: z37.string().url().optional()
+    forgotPassword: publicProcedure.input(z38.object({
+      email: z38.string().email("Email inv\xE1lido"),
+      origin: z38.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -12512,9 +12982,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z37.object({
-      token: z37.string().min(1),
-      password: z37.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z38.object({
+      token: z38.string().min(1),
+      password: z38.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -12523,10 +12993,10 @@ var appRouter = router({
       const passwordHash = await hashPassword(input.password);
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { users: users4 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq36 } = await import("drizzle-orm");
+      const { eq: eq37 } = await import("drizzle-orm");
       const dbInstance = await getDb2();
       if (!dbInstance) throw new Error("Database not available");
-      await dbInstance.update(users4).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq36(users4.id, resetToken.userId));
+      await dbInstance.update(users4).set({ passwordHash, loginMethod: "email", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq37(users4.id, resetToken.userId));
       await markTokenAsUsed(resetToken.id);
       return { success: true };
     }),
@@ -12558,6 +13028,7 @@ var appRouter = router({
   financial: financialRouter,
   gpsLocations: gpsLocationsRouter,
   reports: reportsRouter,
+  auditData: auditDataRouter,
   reportPdf: reportPdfRouter,
   buyerClients: buyerClientsRouter,
   freight: freightRouter,
@@ -12574,7 +13045,7 @@ var appRouter = router({
   thirdParty: thirdPartyRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z37.object({ key: z37.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z38.object({ key: z38.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -13448,7 +13919,7 @@ function schedulePendingPaymentsCheck() {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq36, and: and23, lt: lt2 } = await import("drizzle-orm");
+        const { eq: eq37, and: and24, lt: lt2 } = await import("drizzle-orm");
         const db = await getDb2();
         if (!db) return;
         const sevenDaysAgo = /* @__PURE__ */ new Date();
@@ -13458,8 +13929,8 @@ function schedulePendingPaymentsCheck() {
           collaboratorName: collaborators3.name,
           date: collaboratorAttendance2.date,
           dailyValue: collaboratorAttendance2.dailyValue
-        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq36(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and23(
-          eq36(collaboratorAttendance2.paymentStatusCa, "pendente"),
+        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq37(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and24(
+          eq37(collaboratorAttendance2.paymentStatusCa, "pendente"),
           lt2(collaboratorAttendance2.date, sevenDaysAgo)
         ));
         if (pendingRecords.length > 0) {

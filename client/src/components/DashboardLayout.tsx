@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, Database } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -103,6 +103,7 @@ const menuItems = [
   { icon: TrendingDown, label: "Orçamentos", path: "/orcamentos", slug: "orcamentos" },
   { icon: RefreshCw, label: "Ciclos de Frete", path: "/ciclos-frete", slug: "ciclos-frete" },
   { icon: FileText, label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas" },
+  { icon: Database, label: "Auditoria de Dados", path: "/auditoria-dados", slug: null }, // admin only
 ];
 
 // Rotas que são subpáginas (não estão no menu principal)
@@ -297,8 +298,8 @@ function DashboardLayoutContent({
               {menuItems.filter(item => {
                 // Painel sempre visível
                 if (item.slug === null) {
-                  // Usuários: apenas admin
-                  if (item.path === "/usuarios") return isAdmin;
+                  // Usuários e Auditoria: apenas admin
+                  if (item.path === "/usuarios" || item.path === "/auditoria-dados") return isAdmin;
                   return true;
                 }
                 return hasAccess(item.slug);

@@ -2192,3 +2192,11 @@
 - [x] Bug: Terceirizados - Aba Abastecimentos mostra fuel_records + vehicle_records de caminhões terceirizados
 - [x] Bug: Terceirizados - Aba Fretes: matching de tarifa melhorado por palavras-chave
 - [x] Feature: Terceirizados - Aba Fretes: campo de valor manual quando não há tarifa cadastrada
+
+## 🔍 PÁGINA DE AUDITORIA DE DADOS (Admin) — 21/06/2026
+
+- [ ] Backend: procedure reports.auditData — query unificada de todos os registros financeiros com metadados técnicos (tabela, campo, categoria, local)
+- [ ] Frontend: página /admin/auditoria — tabela com filtros por tipo/categoria/local/período, exportação CSV
+- [ ] Rota protegida por role=admin
+- [ ] Navegação: adicionar link "Auditoria de Dados" no menu admin
+- [ ] Mostrar: data, tipo (custo/receita), categoria, valor, local de trabalho, origem (tabela do banco), descrição técnica

@@ -23,6 +23,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { financialRouter } from "./routers/financial";
 import { gpsLocationsRouter } from "./routers/gpsLocations";
 import { reportsRouter } from "./routers/reports";
+import { auditDataRouter } from "./routers/auditData";
 import { reportPdfRouter } from "./routers/reportPdf";
 import { buyerClientsRouter } from "./routers/buyerClients";
 import { freightRouter } from "./routers/freight";
@@ -305,6 +306,7 @@ export const appRouter = router({
   financial: financialRouter,
   gpsLocations: gpsLocationsRouter,
   reports: reportsRouter,
+  auditData: auditDataRouter,
   reportPdf: reportPdfRouter,
   buyerClients: buyerClientsRouter,
   freight: freightRouter,
