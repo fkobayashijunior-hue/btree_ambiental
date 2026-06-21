@@ -2182,3 +2182,13 @@
 - [ ] Bug: Terceirizados - Aba Abastecimentos não mostra registros do fuel_records para caminhões terceirizados
 - [ ] Bug: Terceirizados - Aba Fretes diz "sem tarifa" mesmo com tarifa cadastrada (problema de comparação de destino)
 - [ ] Feature: Terceirizados - Aba Fretes - botão/campo para informar valor manual do frete quando não há tarifa
+
+## ✅ BUGS CORRIGIDOS — SPRINT 21/06/2026
+
+- [x] Bug: Dashboard Executivo - Combustível zerado: reports.ts agora usa `vehicleRecords` (recordType='abastecimento') em vez de `fuelRecords` para veículos
+- [x] Bug: Dashboard Executivo - Manutenções de veículos zeradas: adicionado `vehicleRecords` (recordType='manutencao') ao cálculo global e por local
+- [x] Bug: Dashboard Executivo - Falta custo de corte terceirizado: card adicionado, cargas com thirdPartyContractor somadas
+- [x] Bug: Dashboard Executivo - Falta pagamentos de clientes como receita: buyerPayments pagos + financialEntries manuais
+- [x] Bug: Terceirizados - Aba Abastecimentos mostra fuel_records + vehicle_records de caminhões terceirizados
+- [x] Bug: Terceirizados - Aba Fretes: matching de tarifa melhorado por palavras-chave
+- [x] Feature: Terceirizados - Aba Fretes: campo de valor manual quando não há tarifa cadastrada
