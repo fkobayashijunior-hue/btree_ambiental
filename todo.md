@@ -2172,3 +2172,13 @@
 - [x] Sincronizar abastecimentos de caminhões terceirizados para considerar registros do fuel_records no módulo de terceirizados
 - [x] Expandir dashboardByLocation com todos os custos (manutenções, terceirizados, frete terceirizado), receita, lucro/prejuízo e análise diária
 - [x] Atualizar ExecutiveDashboard com novos cards de receita/lucro, breakdown completo de custos e tabela/gráfico de rentabilidade diária
+
+## 🐛 BUGS — SPRINT 21/06/2026
+
+- [ ] Bug: Dashboard Executivo - Combustível zerado (fuel_records não está sendo somado corretamente por local)
+- [ ] Bug: Dashboard Executivo - Manutenções zeradas (machineMaintenance/equipmentMaintenance/óleos não puxando)
+- [ ] Bug: Dashboard Executivo - Falta custo de corte terceirizado (thirdPartyContractors payments)
+- [ ] Bug: Dashboard Executivo - Falta pagamentos de clientes como receita (buyerPayments)
+- [ ] Bug: Terceirizados - Aba Abastecimentos não mostra registros do fuel_records para caminhões terceirizados
+- [ ] Bug: Terceirizados - Aba Fretes diz "sem tarifa" mesmo com tarifa cadastrada (problema de comparação de destino)
+- [ ] Feature: Terceirizados - Aba Fretes - botão/campo para informar valor manual do frete quando não há tarifa

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
@@ -9,6 +9,8 @@ import {
   equipment,
   financialEntries,
   cargoLoads,
+  fuelRecords,
+  gpsLocations,
 } from "../../drizzle/schema";
 
 export const thirdPartyRouter = router({
@@ -69,19 +71,8 @@ export const thirdPartyRouter = router({
       return { success: true };
     }),
 
-  // Buscar tarifa por worksite + destination (para cálculo automático)
-  getRate: protectedProcedure
-    .input(z.object({ worksite: z.string(), destination: z.string() }))
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [rate] = await db.select().from(freightRates).where(
-        and(eq(freightRates.worksite, input.worksite), eq(freightRates.destination, input.destination))
-      );
-      return rate ?? null;
-    }),
-
   // ===== ABASTECIMENTOS DE TERCEIRIZADOS =====
+  // Retorna TANTO os registros de third_party_fuel QUANTO os fuel_records de caminhões terceirizados
 
   listFuel: protectedProcedure
     .input(z.object({
@@ -93,8 +84,14 @@ export const thirdPartyRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Buscar abastecimentos com nome do equipamento
-      const rows = await db
+      // Buscar IDs dos caminhões terceirizados
+      const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name })
+        .from(equipment)
+        .where(eq(equipment.isThirdParty, 1));
+      const thirdPartyIds = thirdPartyTrucks.map(t => t.id);
+
+      // 1) Abastecimentos da tabela third_party_fuel (lançados manualmente)
+      const tpFuelRows = await db
         .select({
           id: thirdPartyFuel.id,
           equipmentId: thirdPartyFuel.equipmentId,
@@ -111,7 +108,41 @@ export const thirdPartyRouter = router({
         .leftJoin(equipment, eq(thirdPartyFuel.equipmentId, equipment.id))
         .orderBy(desc(thirdPartyFuel.date));
 
-      return rows;
+      // 2) Abastecimentos de fuel_records para caminhões terceirizados
+      let fuelRecordsRows: any[] = [];
+      if (thirdPartyIds.length > 0) {
+        const frRows = await db
+          .select({
+            id: fuelRecords.id,
+            equipmentId: fuelRecords.equipmentId,
+            equipmentName: equipment.name,
+            date: fuelRecords.date,
+            liters: fuelRecords.liters,
+            pricePerLiter: fuelRecords.pricePerLiter,
+            total: fuelRecords.totalValue,
+            location: fuelRecords.station,
+            notes: fuelRecords.odometer,
+            createdAt: fuelRecords.createdAt,
+          })
+          .from(fuelRecords)
+          .leftJoin(equipment, eq(fuelRecords.equipmentId, equipment.id))
+          .where(inArray(fuelRecords.equipmentId, thirdPartyIds))
+          .orderBy(desc(fuelRecords.date));
+
+        fuelRecordsRows = frRows.map(r => ({
+          ...r,
+          fromFuelRecords: true,
+          notes: r.notes ? `Hodômetro: ${r.notes}` : null,
+        }));
+      }
+
+      // Combinar e ordenar por data
+      const combined = [
+        ...tpFuelRows.map(r => ({ ...r, fromFuelRecords: false })),
+        ...fuelRecordsRows,
+      ].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+
+      return combined;
     }),
 
   createFuel: protectedProcedure
@@ -222,49 +253,9 @@ export const thirdPartyRouter = router({
       return { success: true };
     }),
 
-  // ===== CÁLCULO DE FRETE TERCEIRIZADO =====
-  // Calcula frete bruto = tarifa × toneladas, desconta combustível do período
-  calculateFreight: protectedProcedure
-    .input(z.object({
-      worksite: z.string(),
-      destination: z.string(),
-      weightNetTons: z.number(),
-      equipmentId: z.number(),
-      date: z.string(), // YYYY-MM-DD — para buscar combustível do dia
-    }))
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-      // Buscar tarifa
-      const [rate] = await db.select().from(freightRates).where(
-        and(eq(freightRates.worksite, input.worksite), eq(freightRates.destination, input.destination))
-      );
-      if (!rate) return { found: false as const };
-
-      const rateVal = parseFloat(rate.ratePerTon);
-      const grossFreight = rateVal * input.weightNetTons;
-
-      // Buscar combustível do terceirizado no mesmo dia
-      const fuelRows = await db.select().from(thirdPartyFuel).where(
-        and(eq(thirdPartyFuel.equipmentId, input.equipmentId))
-      );
-      const dayFuel = fuelRows.filter(f => f.date?.startsWith(input.date));
-      const fuelCost = dayFuel.reduce((acc, f) => acc + parseFloat(f.total || '0'), 0);
-
-      const netFreight = grossFreight - fuelCost;
-
-      return {
-        found: true as const,
-        ratePerTon: rateVal,
-        grossFreight,
-        fuelCost,
-        netFreight,
-      };
-    }),
-
   // ===== LISTAGEM DE FRETES DE TERCEIRIZADOS =====
   // Lista cargas onde o veículo é terceirizado, com cálculo de valor de frete
+  // Busca tarifa por: (1) worksite+destination exato, (2) worksite parcial + destination parcial
   listFreights: protectedProcedure
     .input(z.object({
       startDate: z.string().optional(),
@@ -291,7 +282,6 @@ export const thirdPartyRouter = router({
       if (input?.endDate) conditions.push(lte(cargoLoads.date, input.endDate + " 23:59:59"));
       if (input?.equipmentId) conditions.push(eq(cargoLoads.vehicleId, input.equipmentId));
 
-      // Filtrar por IDs dos terceirizados usando IN manual
       const allCargos = await db.select({
         id: cargoLoads.id,
         date: cargoLoads.date,
@@ -316,41 +306,91 @@ export const thirdPartyRouter = router({
       // Buscar todas as tarifas de frete
       const rates = await db.select().from(freightRates);
 
+      // Buscar nomes dos locais de trabalho para matching de tarifa
+      const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
+      const locationMap = new Map(locationRows.map(l => [l.id, l.name]));
+
       // Para cada carga, calcular o frete
       const result = await Promise.all(thirdPartyCargos.map(async (cargo) => {
         const truck = cargo.vehicleId ? truckMap.get(cargo.vehicleId) : null;
         const weightTons = parseFloat(cargo.weightNetKg || '0') / 1000;
 
-        // Tentar encontrar tarifa por destino
-        const matchingRate = rates.find(r =>
-          cargo.destination && cargo.destination.toLowerCase().includes(r.destination.toLowerCase())
+        // Nome do local de trabalho da carga
+        const worksiteName = cargo.workLocationId ? (locationMap.get(cargo.workLocationId) ?? '') : '';
+        const destName = cargo.destination ?? '';
+
+        // Busca de tarifa com múltiplas estratégias:
+        // Helper: verifica se texto A contém todas as palavras-chave de texto B (ou vice-versa)
+        const fuzzyMatch = (a: string, b: string) => {
+          const aL = a.toLowerCase().trim();
+          const bL = b.toLowerCase().trim();
+          if (aL === bL) return true;
+          if (aL.includes(bL) || bL.includes(aL)) return true;
+          // Verifica se todas as palavras de b estão em a
+          const bWords = bL.split(/\s+/).filter(w => w.length > 2);
+          return bWords.length > 0 && bWords.every(w => aL.includes(w));
+        };
+
+        // 1. Exata: worksite == worksiteName E destination == destName
+        let matchingRate = rates.find(r =>
+          r.worksite.toLowerCase() === worksiteName.toLowerCase() &&
+          r.destination.toLowerCase() === destName.toLowerCase()
         );
+        // 2. Fuzzy: worksite E destination
+        if (!matchingRate) {
+          matchingRate = rates.find(r =>
+            fuzzyMatch(worksiteName, r.worksite) &&
+            fuzzyMatch(destName, r.destination)
+          );
+        }
+        // 3. Só destination (fuzzy)
+        if (!matchingRate) {
+          matchingRate = rates.find(r => fuzzyMatch(destName, r.destination));
+        }
+        // 4. Só worksite (fuzzy)
+        if (!matchingRate && worksiteName) {
+          matchingRate = rates.find(r => fuzzyMatch(worksiteName, r.worksite));
+        }
 
         const grossFreight = matchingRate ? parseFloat(matchingRate.ratePerTon) * weightTons : 0;
 
-        // Buscar combustível do terceirizado no mesmo dia
+        // Buscar combustível do terceirizado no mesmo dia (third_party_fuel + fuel_records)
         const dateStr = cargo.date?.slice(0, 10) ?? '';
-        const fuelRows = cargo.vehicleId ? await db.select({ total: thirdPartyFuel.total })
-          .from(thirdPartyFuel)
-          .where(and(
-            eq(thirdPartyFuel.equipmentId, cargo.vehicleId),
-            gte(thirdPartyFuel.date, dateStr + " 00:00:00"),
-            lte(thirdPartyFuel.date, dateStr + " 23:59:59"),
-          )) : [];
+        let fuelCost = 0;
+        if (cargo.vehicleId && dateStr) {
+          const tpFuel = await db.select({ total: thirdPartyFuel.total })
+            .from(thirdPartyFuel)
+            .where(and(
+              eq(thirdPartyFuel.equipmentId, cargo.vehicleId),
+              gte(thirdPartyFuel.date, dateStr + " 00:00:00"),
+              lte(thirdPartyFuel.date, dateStr + " 23:59:59"),
+            ));
+          const frFuel = await db.select({ totalValue: fuelRecords.totalValue })
+            .from(fuelRecords)
+            .where(and(
+              eq(fuelRecords.equipmentId, cargo.vehicleId),
+              gte(fuelRecords.date, dateStr + " 00:00:00"),
+              lte(fuelRecords.date, dateStr + " 23:59:59"),
+            ));
+          fuelCost = tpFuel.reduce((acc, f) => acc + parseFloat(f.total || '0'), 0)
+            + frFuel.reduce((acc, f) => acc + parseFloat(f.totalValue || '0'), 0);
+        }
 
-        const fuelCost = fuelRows.reduce((acc, f) => acc + parseFloat(f.total || '0'), 0);
         const netFreight = grossFreight - fuelCost;
 
         return {
           ...cargo,
           truckName: truck?.name ?? cargo.vehiclePlate ?? 'Desconhecido',
           truckOwner: truck?.thirdPartyOwner ?? null,
+          worksiteName,
           weightTons,
           ratePerTon: matchingRate ? parseFloat(matchingRate.ratePerTon) : null,
           grossFreight,
           fuelCost,
           netFreight,
           hasRate: !!matchingRate,
+          matchedRateWorksite: matchingRate?.worksite ?? null,
+          matchedRateDestination: matchingRate?.destination ?? null,
         };
       }));
 
@@ -362,11 +402,12 @@ export const thirdPartyRouter = router({
     .input(z.object({
       cargoLoadId: z.number(),
       notes: z.string().optional(),
-      // Valor pago (líquido = bruto - combustível)
       netAmount: z.string(),
       grossAmount: z.string(),
       fuelCost: z.string(),
       truckName: z.string().optional(),
+      // Valor manual (quando não há tarifa cadastrada)
+      manualAmount: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -374,6 +415,11 @@ export const thirdPartyRouter = router({
 
       const now = new Date();
       const nowStr = now.toISOString().slice(0, 10);
+
+      // Usar valor manual se fornecido, senão usar netAmount calculado
+      const finalAmount = input.manualAmount && parseFloat(input.manualAmount) > 0
+        ? input.manualAmount
+        : input.netAmount;
 
       // Marcar carga como paga
       await db.update(cargoLoads).set({
@@ -385,11 +431,15 @@ export const thirdPartyRouter = router({
       // Criar lançamento financeiro como despesa
       try {
         const truckLabel = input.truckName ? ` — ${input.truckName}` : '';
+        const isManual = input.manualAmount && parseFloat(input.manualAmount) > 0;
+        const desc = isManual
+          ? `Frete terceirizado${truckLabel} (Carga #${input.cargoLoadId}) | Valor manual: R$${finalAmount}`
+          : `Frete terceirizado${truckLabel} (Carga #${input.cargoLoadId}) | Bruto: R$${input.grossAmount} - Comb: R$${input.fuelCost} = Líq: R$${finalAmount}`;
         await db.insert(financialEntries).values({
           type: "despesa",
           category: "frete",
-          description: `Frete terceirizado${truckLabel} (Carga #${input.cargoLoadId}) | Bruto: R$${input.grossAmount} - Comb: R$${input.fuelCost} = Líq: R$${input.netAmount}`,
-          amount: input.netAmount,
+          description: desc,
+          amount: finalAmount,
           date: nowStr,
           status: "confirmado",
           paymentMethod: "pix",

@@ -216,7 +216,7 @@ export default function ExecutiveDashboard() {
             </div>
 
             {/* Cards de custo detalhado */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <SummaryCard
                 icon={<Users className="w-5 h-5" />}
                 label="Mão de Obra"
@@ -234,6 +234,12 @@ export default function ExecutiveDashboard() {
                 label="Manutenção"
                 value={formatCurrency(totals.totalManutencao ?? 0)}
                 color="purple"
+              />
+              <SummaryCard
+                icon={<TreePine className="w-5 h-5" />}
+                label="Corte Terc."
+                value={formatCurrency((totals as any).totalCorteTerceirizado ?? 0)}
+                color="green"
               />
               <SummaryCard
                 icon={<Package className="w-5 h-5" />}
@@ -266,6 +272,7 @@ export default function ExecutiveDashboard() {
                         { label: "Mão de Obra", value: totals.totalMaoDeObra, color: "#3b82f6" },
                         { label: "Combustível", value: totals.totalCombustivel, color: "#f59e0b" },
                         { label: "Manutenção", value: totals.totalManutencao ?? 0, color: "#a855f7" },
+                        { label: "Corte Terc.", value: (totals as any).totalCorteTerceirizado ?? 0, color: "#22c55e" },
                         { label: "Frete Terc.", value: totals.totalFreteTerceirizado ?? 0, color: "#ef4444" },
                         { label: "Despesas Extras", value: totals.totalDespesas, color: "#6366f1" },
                       ]}
@@ -741,46 +748,42 @@ export default function ExecutiveDashboard() {
 
                     {/* Análise Diária de Cargas */}
                     {(() => {
-                      // Agregar dailyBreakdown de todos os locais
-                      const dailyMap = new Map<string, { cargas: number; volumeM3: number }>();
-                      const locData = (data?.locations ?? []) as any[];
-                      for (const loc of locData) {
-                        for (const d of (loc.dailyBreakdown ?? [])) {
-                          const prev = dailyMap.get(d.date) || { cargas: 0, volumeM3: 0 };
-                          dailyMap.set(d.date, { cargas: prev.cargas + d.cargas, volumeM3: prev.volumeM3 + d.volumeM3 });
-                        }
-                      }
-                      const days = Array.from(dailyMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                      // Usar dailyBreakdown global do totals (já inclui receita por dia)
+                      const days = (totals as any)?.dailyBreakdown ?? [];
                       if (days.length === 0) return null;
                       return (
                         <div>
                           <h4 className="font-semibold text-gray-800 flex items-center gap-2 mb-3">
                             <Calendar className="w-4 h-4 text-indigo-500" />
-                            Análise Diária de Cargas
+                            Análise Diária de Cargas e Receita
                           </h4>
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b bg-indigo-50">
                                   <th className="text-left px-3 py-2 text-indigo-700">Data</th>
-                                  <th className="text-right px-3 py-2 text-indigo-700">Qtd Cargas</th>
+                                  <th className="text-right px-3 py-2 text-indigo-700">Cargas</th>
                                   <th className="text-right px-3 py-2 text-indigo-700">Volume (m³)</th>
-                                  <th className="text-center px-3 py-2 text-indigo-700">Produtividade</th>
+                                  <th className="text-right px-3 py-2 text-indigo-700">Receita do Dia</th>
+                                  <th className="text-center px-3 py-2 text-indigo-700">Status</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {days.map(([date, v]) => (
-                                  <tr key={date} className="border-b hover:bg-gray-50">
-                                    <td className="px-3 py-2">{new Date(date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                                    <td className="px-3 py-2 text-right font-bold">{v.cargas}</td>
-                                    <td className="px-3 py-2 text-right">{v.volumeM3.toFixed(2)}</td>
+                                {days.map((d: any) => (
+                                  <tr key={d.date} className="border-b hover:bg-gray-50">
+                                    <td className="px-3 py-2">{new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                    <td className="px-3 py-2 text-right font-bold">{d.cargas}</td>
+                                    <td className="px-3 py-2 text-right">{(d.volumeM3 ?? 0).toFixed(2)}</td>
+                                    <td className="px-3 py-2 text-right font-semibold text-green-700">
+                                      {d.receita > 0 ? formatCurrency(d.receita) : <span className="text-gray-400">—</span>}
+                                    </td>
                                     <td className="px-3 py-2 text-center">
                                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                        v.cargas >= 2 ? 'bg-green-100 text-green-700' :
-                                        v.cargas === 1 ? 'bg-amber-100 text-amber-700' :
+                                        d.cargas >= 2 ? 'bg-green-100 text-green-700' :
+                                        d.cargas === 1 ? 'bg-amber-100 text-amber-700' :
                                         'bg-gray-100 text-gray-500'
                                       }`}>
-                                        {v.cargas >= 2 ? `${v.cargas} cargas` : v.cargas === 1 ? '1 carga' : 'sem carga'}
+                                        {d.cargas >= 2 ? `${d.cargas} cargas` : d.cargas === 1 ? '1 carga' : 'sem carga'}
                                       </span>
                                     </td>
                                   </tr>
@@ -789,10 +792,11 @@ export default function ExecutiveDashboard() {
                               <tfoot>
                                 <tr className="bg-indigo-50 font-bold">
                                   <td className="px-3 py-2 text-indigo-800">Total</td>
-                                  <td className="px-3 py-2 text-right text-indigo-800">{days.reduce((s, [, v]) => s + v.cargas, 0)}</td>
-                                  <td className="px-3 py-2 text-right text-indigo-800">{days.reduce((s, [, v]) => s + v.volumeM3, 0).toFixed(2)}</td>
+                                  <td className="px-3 py-2 text-right text-indigo-800">{days.reduce((s: number, d: any) => s + d.cargas, 0)}</td>
+                                  <td className="px-3 py-2 text-right text-indigo-800">{days.reduce((s: number, d: any) => s + (d.volumeM3 ?? 0), 0).toFixed(2)}</td>
+                                  <td className="px-3 py-2 text-right text-green-800">{formatCurrency(days.reduce((s: number, d: any) => s + (d.receita ?? 0), 0))}</td>
                                   <td className="px-3 py-2 text-center text-xs text-indigo-600">
-                                    {days.filter(([, v]) => v.cargas >= 2).length} dias c/ 2+ cargas
+                                    {days.filter((d: any) => d.cargas >= 2).length} dias c/ 2+ cargas
                                   </td>
                                 </tr>
                               </tfoot>

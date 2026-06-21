@@ -50,9 +50,10 @@ function FreightsTab() {
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [payDialog, setPayDialog] = useState<{
-    id: number; truckName: string; grossFreight: number; fuelCost: number; netFreight: number;
+    id: number; truckName: string; grossFreight: number; fuelCost: number; netFreight: number; hasRate: boolean;
   } | null>(null);
   const [payNotes, setPayNotes] = useState("");
+  const [manualAmount, setManualAmount] = useState("");
 
   const { data: freights = [], isLoading } = trpc.thirdParty.listFreights.useQuery({
     startDate: dateFrom,
@@ -133,27 +134,28 @@ function FreightsTab() {
                   <div className="text-right">
                     {f.hasRate ? (
                       <>
-                        <p className="text-xs text-muted-foreground">R$ {f.ratePerTon}/ton</p>
+                        <p className="text-xs text-muted-foreground">R$ {f.ratePerTon}/ton · {f.matchedRateWorksite} → {f.matchedRateDestination}</p>
                         <p className="text-sm">Bruto: <span className="font-semibold">R$ {f.grossFreight?.toFixed(2).replace('.', ',')}</span></p>
                         <p className="text-xs text-red-500">Comb: -R$ {f.fuelCost?.toFixed(2).replace('.', ',')}</p>
                         <p className="text-sm font-bold text-green-700">Líq: R$ {f.netFreight?.toFixed(2).replace('.', ',')}</p>
                       </>
                     ) : (
-                      <span className="text-xs text-amber-600 flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" /> Sem tarifa cadastrada
-                      </span>
+                      <div className="text-right">
+                        <span className="text-xs text-amber-600 flex items-center gap-1 justify-end">
+                          <AlertTriangle className="h-3 w-3" /> Sem tarifa automática
+                        </span>
+                        <p className="text-xs text-muted-foreground">Use valor manual ao pagar</p>
+                      </div>
                     )}
                   </div>
                 </div>
-                {f.hasRate && (
-                  <Button
+                <Button
                     size="sm"
                     className="w-full mt-2 bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => setPayDialog({ id: f.id, truckName: f.truckName, grossFreight: f.grossFreight, fuelCost: f.fuelCost, netFreight: f.netFreight })}
+                    onClick={() => { setManualAmount(""); setPayNotes(""); setPayDialog({ id: f.id, truckName: f.truckName, grossFreight: f.grossFreight || 0, fuelCost: f.fuelCost || 0, netFreight: f.netFreight || 0, hasRate: f.hasRate }); }}
                   >
                     <CheckCircle className="h-4 w-4 mr-1" /> Marcar como Pago
                   </Button>
-                )}
               </CardContent>
             </Card>
           ))}
@@ -204,20 +206,37 @@ function FreightsTab() {
           {payDialog && (
             <div className="space-y-3">
               <p className="text-sm">Caminhão: <span className="font-semibold">{payDialog.truckName}</span></p>
-              <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Frete Bruto:</span>
-                  <span className="font-medium">R$ {payDialog.grossFreight.toFixed(2).replace('.', ',')}</span>
+              {payDialog.hasRate ? (
+                <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Frete Bruto:</span>
+                    <span className="font-medium">R$ {payDialog.grossFreight.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">(-) Combustível:</span>
+                    <span className="text-red-600">-R$ {payDialog.fuelCost.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-1 font-bold">
+                    <span>Frete Líquido:</span>
+                    <span className="text-green-700">R$ {payDialog.netFreight.toFixed(2).replace('.', ',')}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">(-) Combustível:</span>
-                  <span className="text-red-600">-R$ {payDialog.fuelCost.toFixed(2).replace('.', ',')}</span>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                  <p className="text-amber-700 text-xs mb-2">Sem tarifa automática para este destino. Informe o valor manualmente:</p>
+                  <div>
+                    <Label>Valor do Frete (R$) *</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={manualAmount}
+                      onChange={e => setManualAmount(e.target.value)}
+                      placeholder="Ex: 1500.00"
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between border-t pt-1 font-bold">
-                  <span>Frete Líquido:</span>
-                  <span className="text-green-700">R$ {payDialog.netFreight.toFixed(2).replace('.', ',')}</span>
-                </div>
-              </div>
+              )}
               <div>
                 <Label>Observações (opcional)</Label>
                 <Textarea
@@ -227,16 +246,20 @@ function FreightsTab() {
                   rows={2}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">O valor líquido será lançado automaticamente como despesa no financeiro.</p>
+              <p className="text-xs text-muted-foreground">O valor será lançado automaticamente como despesa no financeiro.</p>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayDialog(null)}>Cancelar</Button>
             <Button
               className="bg-green-600 hover:bg-green-700"
-              disabled={markPaid.isPending}
+              disabled={markPaid.isPending || (!payDialog?.hasRate && !manualAmount)}
               onClick={() => {
                 if (!payDialog) return;
+                if (!payDialog.hasRate && !manualAmount) {
+                  toast.error("Informe o valor do frete.");
+                  return;
+                }
                 markPaid.mutate({
                   cargoLoadId: payDialog.id,
                   notes: payNotes || undefined,
@@ -244,6 +267,7 @@ function FreightsTab() {
                   fuelCost: payDialog.fuelCost.toFixed(2),
                   netAmount: payDialog.netFreight.toFixed(2),
                   truckName: payDialog.truckName,
+                  manualAmount: manualAmount || undefined,
                 });
               }}
             >
@@ -620,49 +644,62 @@ function FuelTab() {
 
       <div className="grid gap-3">
         {(fuelList as any[]).map((f) => (
-          <Card key={f.id}>
+          <Card key={`${f.fromFuelRecords ? 'fr' : 'tp'}-${f.id}`}>
             <CardContent className="flex items-start justify-between p-4">
               <div className="space-y-1">
-                <p className="font-semibold">{f.equipmentName ?? `Equip. #${f.equipmentId}`}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold">{f.equipmentName ?? `Equip. #${f.equipmentId}`}</p>
+                  {f.fromFuelRecords ? (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                      Controle de Abastecimento
+                    </span>
+                  ) : (
+                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                      Manual
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground">
                   {f.date ? new Date(f.date).toLocaleDateString("pt-BR") : "—"}
                   {f.location ? ` · ${f.location}` : ""}
                 </p>
                 <div className="flex gap-3 text-sm">
                   <span>{f.liters}L</span>
-                  <span className="text-muted-foreground">@ {fmt(f.pricePerLiter)}/L</span>
+                  {f.pricePerLiter && <span className="text-muted-foreground">@ {fmt(f.pricePerLiter)}/L</span>}
                   <span className="font-semibold text-orange-600">{fmt(f.total)}</span>
                 </div>
                 {f.notes && <p className="text-xs text-muted-foreground">{f.notes}</p>}
               </div>
-              <div className="flex gap-1">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() =>
-                    setForm({
-                      id: f.id,
-                      equipmentId: String(f.equipmentId),
-                      date: f.date?.slice(0, 16) ?? "",
-                      liters: f.liters,
-                      pricePerLiter: f.pricePerLiter,
-                      total: f.total,
-                      location: f.location ?? "",
-                      notes: f.notes ?? "",
-                    })
-                  }
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="text-red-500"
-                  onClick={() => deleteFuel.mutate({ id: f.id })}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+              {!f.fromFuelRecords && (
+                <div className="flex gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() =>
+                      setForm({
+                        id: f.id,
+                        equipmentId: String(f.equipmentId),
+                        date: f.date?.slice(0, 16) ?? "",
+                        liters: f.liters,
+                        pricePerLiter: f.pricePerLiter,
+                        total: f.total,
+                        location: f.location ?? "",
+                        notes: f.notes ?? "",
+                      })
+                    }
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-red-500"
+                    onClick={() => deleteFuel.mutate({ id: f.id })}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}

@@ -5,7 +5,6 @@ PassengerAppType node
 PassengerNodejs /opt/alt/alt-nodejs22/root/bin/node
 PassengerRestartDir /home/u629128033/domains/btreeambiental.com/nodejs/tmp
 
-SetEnv NODE_OPTIONS "--experimental-vm-modules"
 SetEnv LSNODE_CONSOLE_LOG /home/u629128033/domains/btreeambiental.com/logs/node_console.log
 
 <IfModule mod_rewrite.c>
