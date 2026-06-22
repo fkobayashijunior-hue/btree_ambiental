@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import {
   Plus, Building2, Phone, MessageCircle, Mail, Globe, MapPin,
-  Edit2, Trash2, Search, ChevronDown, ChevronUp, History
+  Edit2, Trash2, Search, ChevronDown, ChevronUp, History, RefreshCw
 } from "lucide-react";
 
 interface SupplierForm {
@@ -57,6 +57,14 @@ export default function SuppliersPage() {
       toast.success("Fornecedor atualizado!");
       resetForm();
     },
+  });
+
+  const syncMutation = trpc.quotationRequests.syncSuppliersFromResponses.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Sincronização concluída: ${data.created} fornecedor(es) criado(s), ${data.updated} atualizado(s).`);
+      utils.suppliers.list.invalidate();
+    },
+    onError: () => toast.error("Erro ao sincronizar fornecedores"),
   });
 
   const deleteMutation = trpc.suppliers.delete.useMutation({
@@ -116,9 +124,20 @@ export default function SuppliersPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Cadastro de empresas e contatos</p>
         </div>
-        <Button onClick={() => { setForm(emptyForm); setEditId(null); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-2" /> Novo Fornecedor
-        </Button>
+        <div className="flex gap-2 flex-wrap justify-end">
+          <Button
+            variant="outline"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            title="Importar fornecedores das respostas de orçamentos"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+            {syncMutation.isPending ? 'Importando...' : 'Importar dos Orçamentos'}
+          </Button>
+          <Button onClick={() => { setForm(emptyForm); setEditId(null); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="w-4 h-4 mr-2" /> Novo Fornecedor
+          </Button>
+        </div>
       </div>
 
       {/* Search */}

@@ -218,4 +218,45 @@ export const quotationRequestsRouter = router({
 
       return { success: true };
     }),
+
+  // Sincronizar fornecedores retroativamente a partir das respostas existentes
+  syncSuppliersFromResponses: protectedProcedure.mutation(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const allResponses = await db.select().from(quotationResponses);
+    let created = 0;
+    let updated = 0;
+    for (const resp of allResponses) {
+      if (!resp.supplierName?.trim()) continue;
+      const existing = await db
+        .select()
+        .from(suppliers)
+        .where(like(suppliers.name, `%${resp.supplierName.trim()}%`))
+        .limit(1);
+      if (existing.length === 0) {
+        await db.insert(suppliers).values({
+          name: resp.supplierName.trim(),
+          address: resp.address || null,
+          phone: resp.sellerPhone || null,
+          whatsapp: resp.sellerPhone || null,
+          email: resp.sellerEmail || null,
+          notes: resp.sellerName ? `Vendedor: ${resp.sellerName}` : null,
+          active: 1,
+        });
+        created++;
+      } else {
+        // Atualizar dados de contato se estiverem vazios
+        const s = existing[0]!;
+        const updates: Record<string, string | null> = {};
+        if (!s.phone && resp.sellerPhone) updates.phone = resp.sellerPhone;
+        if (!s.whatsapp && resp.sellerPhone) updates.whatsapp = resp.sellerPhone;
+        if (!s.email && resp.sellerEmail) updates.email = resp.sellerEmail;
+        if (Object.keys(updates).length > 0) {
+          await db.update(suppliers).set(updates).where(eq(suppliers.id, s.id));
+          updated++;
+        }
+      }
+    }
+    return { created, updated, total: allResponses.length };
+  }),
 });
