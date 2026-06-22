@@ -13,7 +13,8 @@ import { toast } from "sonner";
 import {
   Plus, Tag, TrendingDown, Clock, Building2, ChevronDown, ChevronUp,
   Pencil, Trash2, MessageCircle, Link2, Copy, Check, Send, User,
-  Package, X, Eye, FileText, Phone, Mail, ExternalLink, Ban
+  Package, X, Eye, FileText, Phone, Mail, ExternalLink, Ban,
+  Trophy, Star, AlertCircle
 } from "lucide-react";
 
 function fmt(dateStr: string | null | undefined) {
@@ -785,46 +786,131 @@ export default function QuotationsPage() {
                   <p>Nenhuma resposta recebida ainda</p>
                   <p className="text-xs mt-1">Compartilhe o link com os fornecedores</p>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-gray-700">{requestDetail.responses.length} resposta(s) recebida(s)</p>
-                  {requestDetail.responses.map((resp: any) => (
-                    <Card key={resp.id} className="border-blue-100">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="font-semibold text-gray-800">{resp.supplierName}</p>
-                            {resp.cnpj && <p className="text-xs text-gray-500">CNPJ: {resp.cnpj}</p>}
-                            {resp.address && <p className="text-xs text-gray-500">{resp.address}</p>}
-                          </div>
-                          <span className="text-xs text-gray-400">{fmt(resp.createdAt)}</span>
-                        </div>
-                        {(resp.sellerName || resp.sellerPhone || resp.sellerEmail) && (
-                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
-                            {resp.sellerName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {resp.sellerName}</span>}
-                            {resp.sellerPhone && <a href={`tel:${resp.sellerPhone}`} className="flex items-center gap-1 text-blue-500 hover:underline"><Phone className="w-3 h-3" /> {resp.sellerPhone}</a>}
-                            {resp.sellerEmail && <a href={`mailto:${resp.sellerEmail}`} className="flex items-center gap-1 text-blue-500 hover:underline"><Mail className="w-3 h-3" /> {resp.sellerEmail}</a>}
-                          </div>
-                        )}
-                        <div className="mt-3 space-y-2">
-                          {resp.items.map((item: ResponseItem, i: number) => (
-                            <div key={i} className="flex items-center justify-between bg-gray-50 rounded p-2 text-sm">
-                              <div>
-                                <span className="font-medium text-gray-800">{item.name}</span>
-                                {item.brand && <span className="text-xs text-gray-400 ml-1">({item.brand})</span>}
-                                <span className="text-xs text-gray-400 ml-1">— {item.quantity} {item.unit || 'un'}</span>
-                                {item.notes && <p className="text-xs text-gray-400 mt-0.5">{item.notes}</p>}
+              ) : (() => {
+                // Calcular melhor preço por item (nome normalizado)
+                const bestPriceByItem: Record<string, { price: number; supplierId: number }> = {};
+                requestDetail.responses.forEach((resp: any, rIdx: number) => {
+                  resp.items.forEach((item: ResponseItem) => {
+                    const key = item.name.toLowerCase().trim();
+                    const price = parseFloat(item.price);
+                    if (!isNaN(price)) {
+                      if (!(key in bestPriceByItem) || price < bestPriceByItem[key].price) {
+                        bestPriceByItem[key] = { price, supplierId: rIdx };
+                      }
+                    }
+                  });
+                });
+                // Calcular total por fornecedor
+                const totals = requestDetail.responses.map((resp: any) => ({
+                  id: resp.id,
+                  total: resp.items.reduce((sum: number, item: ResponseItem) => sum + (parseFloat(item.price) || 0), 0),
+                }));
+                const minTotal = Math.min(...totals.map((t: any) => t.total));
+                return (
+                  <div className="space-y-4">
+                    {/* Comparativo de melhor preço por item */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Trophy className="w-4 h-4 text-amber-600" />
+                        <span className="text-sm font-semibold text-amber-800">Comparativo — Melhor Preço por Item</span>
+                      </div>
+                      <div className="space-y-1">
+                        {requestDetail.items.map((reqItem: QuotItem, i: number) => {
+                          const key = reqItem.name.toLowerCase().trim();
+                          const best = bestPriceByItem[key];
+                          // Coletar todos os preços para este item
+                          const allPrices = requestDetail.responses
+                            .map((resp: any, rIdx: number) => {
+                              const found = resp.items.find((it: ResponseItem) => it.name.toLowerCase().trim() === key);
+                              if (!found) return null;
+                              return { supplier: resp.supplierName, price: parseFloat(found.price), rIdx };
+                            })
+                            .filter(Boolean)
+                            .sort((a: any, b: any) => a.price - b.price);
+                          if (allPrices.length === 0) return null;
+                          const bestSupplier = allPrices[0]!;
+                          const worstPrice = allPrices[allPrices.length - 1]?.price || 0;
+                          const saving = worstPrice - bestSupplier.price;
+                          return (
+                            <div key={i} className="bg-white rounded p-2 border border-amber-100">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-700">{reqItem.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-green-700">{fmtPrice(String(bestSupplier.price))}</span>
+                                  <span className="text-xs text-green-600 font-medium">{bestSupplier.supplier}</span>
+                                  <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                                </div>
                               </div>
-                              <span className="font-bold text-green-700 ml-2">{fmtPrice(item.price)}</span>
+                              {saving > 0.01 && (
+                                <p className="text-xs text-gray-400 mt-0.5">Economia de {fmtPrice(String(saving))} vs. maior preço</p>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                        {resp.notes && <p className="text-xs text-gray-500 mt-2 italic">{resp.notes}</p>}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <p className="text-sm font-medium text-gray-700">{requestDetail.responses.length} resposta(s) recebida(s)</p>
+                    {requestDetail.responses.map((resp: any, rIdx: number) => {
+                      const total = totals.find((t: any) => t.id === resp.id)?.total || 0;
+                      const isBestTotal = Math.abs(total - minTotal) < 0.01;
+                      return (
+                        <Card key={resp.id} className={`border-2 ${isBestTotal ? 'border-green-400 bg-green-50/30' : 'border-blue-100'}`}>
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-gray-800">{resp.supplierName}</p>
+                                  {isBestTotal && (
+                                    <Badge className="bg-green-100 text-green-700 border-green-200 text-xs flex items-center gap-1">
+                                      <Trophy className="w-3 h-3" /> Menor Total
+                                    </Badge>
+                                  )}
+                                </div>
+                                {resp.cnpj && <p className="text-xs text-gray-500">CNPJ: {resp.cnpj}</p>}
+                                {resp.address && <p className="text-xs text-gray-500">{resp.address}</p>}
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs text-gray-400">{fmt(resp.createdAt)}</span>
+                                <p className="text-sm font-bold text-gray-700 mt-1">Total: {fmtPrice(String(total))}</p>
+                              </div>
+                            </div>
+                            {(resp.sellerName || resp.sellerPhone || resp.sellerEmail) && (
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                                {resp.sellerName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {resp.sellerName}</span>}
+                                {resp.sellerPhone && <a href={`tel:${resp.sellerPhone}`} className="flex items-center gap-1 text-blue-500 hover:underline"><Phone className="w-3 h-3" /> {resp.sellerPhone}</a>}
+                                {resp.sellerEmail && <a href={`mailto:${resp.sellerEmail}`} className="flex items-center gap-1 text-blue-500 hover:underline"><Mail className="w-3 h-3" /> {resp.sellerEmail}</a>}
+                              </div>
+                            )}
+                            <div className="mt-3 space-y-2">
+                              {resp.items.map((item: ResponseItem, i: number) => {
+                                const key = item.name.toLowerCase().trim();
+                                const isBest = bestPriceByItem[key]?.supplierId === rIdx;
+                                const itemPrice = parseFloat(item.price);
+                                return (
+                                  <div key={i} className={`flex items-center justify-between rounded p-2 text-sm ${isBest ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}>
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-medium text-gray-800">{item.name}</span>
+                                        {item.brand && <span className="text-xs text-gray-400">({item.brand})</span>}
+                                        {isBest && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
+                                      </div>
+                                      <span className="text-xs text-gray-400">{item.quantity} {item.unit || 'un'}</span>
+                                      {item.notes && <p className="text-xs text-gray-400 mt-0.5 italic">{item.notes}</p>}
+                                    </div>
+                                    <span className={`font-bold ml-2 ${isBest ? 'text-green-700' : 'text-gray-700'}`}>{fmtPrice(item.price)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {resp.notes && <p className="text-xs text-gray-500 mt-2 italic border-t pt-2">{resp.notes}</p>}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
 

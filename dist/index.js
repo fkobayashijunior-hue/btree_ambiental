@@ -12242,7 +12242,7 @@ init_db();
 init_schema();
 init_notification();
 import { z as z36 } from "zod";
-import { eq as eq35, desc as desc29 } from "drizzle-orm";
+import { eq as eq35, desc as desc29, like as like4 } from "drizzle-orm";
 import { TRPCError as TRPCError26 } from "@trpc/server";
 import crypto from "crypto";
 var quotationRequestsRouter = router({
@@ -12381,6 +12381,21 @@ var quotationRequestsRouter = router({
       notes: input.notes
     });
     await db.update(quotationRequests).set({ status: "respondida" }).where(eq35(quotationRequests.id, req.id));
+    try {
+      const existingSuppliers = await db.select({ id: suppliers.id }).from(suppliers).where(like4(suppliers.name, `%${input.supplierName.trim()}%`)).limit(1);
+      if (existingSuppliers.length === 0) {
+        await db.insert(suppliers).values({
+          name: input.supplierName.trim(),
+          address: input.address ?? null,
+          phone: input.sellerPhone ?? null,
+          whatsapp: input.sellerPhone ?? null,
+          email: input.sellerEmail ?? null,
+          notes: input.cnpj ? `CNPJ: ${input.cnpj}${input.sellerName ? ` | Vendedor: ${input.sellerName}` : ""}` : input.sellerName ? `Vendedor: ${input.sellerName}` : null,
+          active: 1
+        });
+      }
+    } catch (_) {
+    }
     try {
       await notifyOwner({
         title: `\u{1F4CB} Novo or\xE7amento recebido: ${req.title}`,

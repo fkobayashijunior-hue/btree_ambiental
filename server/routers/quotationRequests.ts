@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { quotationRequests, quotationResponses } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { quotationRequests, quotationResponses, suppliers } from "../../drizzle/schema";
+import { eq, desc, like } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 import { notifyOwner } from "../_core/notification";
@@ -184,6 +184,27 @@ export const quotationRequestsRouter = router({
         .update(quotationRequests)
         .set({ status: "respondida" })
         .where(eq(quotationRequests.id, req.id));
+      // Cadastrar fornecedor automaticamente se não existir
+      try {
+        const existingSuppliers = await db
+          .select({ id: suppliers.id })
+          .from(suppliers)
+          .where(like(suppliers.name, `%${input.supplierName.trim()}%`))
+          .limit(1);
+        if (existingSuppliers.length === 0) {
+          await db.insert(suppliers).values({
+            name: input.supplierName.trim(),
+            address: input.address ?? null,
+            phone: input.sellerPhone ?? null,
+            whatsapp: input.sellerPhone ?? null,
+            email: input.sellerEmail ?? null,
+            notes: input.cnpj ? `CNPJ: ${input.cnpj}${input.sellerName ? ` | Vendedor: ${input.sellerName}` : ''}` : (input.sellerName ? `Vendedor: ${input.sellerName}` : null),
+            active: 1,
+          });
+        }
+      } catch (_) {
+        // Não bloquear se cadastro de fornecedor falhar
+      }
 
       // Notificar owner
       try {
