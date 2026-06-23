@@ -142,11 +142,11 @@ export const quotationRequestsRouter = router({
       for (const resp of responses) {
         if (!resp.supplierName?.trim()) continue;
         const trimmedName = resp.supplierName.trim();
-        const existing = await db
-          .select()
-          .from(suppliers)
-          .where(eq(suppliers.name, trimmedName))
-          .limit(1);
+        // Usar SQL raw para evitar LIMIT parametrizado (incompatível com MySQL Hostinger)
+        const existingRows = await db.execute(
+          sql`SELECT id, name, phone, whatsapp, email FROM suppliers WHERE name = ${trimmedName} LIMIT 1`
+        );
+        const existing = (existingRows as any)[0] as Array<{ id: number; name: string; phone: string | null; whatsapp: string | null; email: string | null }>;
 
         if (existing.length === 0) {
           const [ins] = await db.insert(suppliers).values({
@@ -178,11 +178,11 @@ export const quotationRequestsRouter = router({
       }
 
       // 3. Criar/encontrar categoria com o título do orçamento
-      const existingCat = await db
-        .select()
-        .from(purchaseCategories)
-        .where(eq(purchaseCategories.name, req.title.trim()))
-        .limit(1);
+      const catTitle = req.title.trim();
+      const existingCatRows = await db.execute(
+        sql`SELECT id, name FROM purchase_categories WHERE name = ${catTitle} LIMIT 1`
+      );
+      const existingCat = (existingCatRows as any)[0] as Array<{ id: number; name: string }>;
 
       let categoryId: number;
       if (existingCat.length > 0) {

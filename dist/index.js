@@ -12242,7 +12242,7 @@ init_db();
 init_schema();
 init_notification();
 import { z as z36 } from "zod";
-import { eq as eq35, desc as desc29, like as like4 } from "drizzle-orm";
+import { eq as eq35, desc as desc29, like as like4, sql as sql20 } from "drizzle-orm";
 import { TRPCError as TRPCError26 } from "@trpc/server";
 import crypto from "crypto";
 var quotationRequestsRouter = router({
@@ -12349,7 +12349,10 @@ var quotationRequestsRouter = router({
     for (const resp of responses) {
       if (!resp.supplierName?.trim()) continue;
       const trimmedName = resp.supplierName.trim();
-      const existing = await db.select().from(suppliers).where(eq35(suppliers.name, trimmedName)).limit(1);
+      const existingRows = await db.execute(
+        sql20`SELECT id, name, phone, whatsapp, email FROM suppliers WHERE name = ${trimmedName} LIMIT 1`
+      );
+      const existing = existingRows[0];
       if (existing.length === 0) {
         const [ins] = await db.insert(suppliers).values({
           name: resp.supplierName.trim(),
@@ -12376,7 +12379,11 @@ var quotationRequestsRouter = router({
         supplierIdByResponse.set(resp.id, s.id);
       }
     }
-    const existingCat = await db.select().from(purchaseCategories).where(eq35(purchaseCategories.name, req.title.trim())).limit(1);
+    const catTitle = req.title.trim();
+    const existingCatRows = await db.execute(
+      sql20`SELECT id, name FROM purchase_categories WHERE name = ${catTitle} LIMIT 1`
+    );
+    const existingCat = existingCatRows[0];
     let categoryId;
     if (existingCat.length > 0) {
       categoryId = existingCat[0].id;
