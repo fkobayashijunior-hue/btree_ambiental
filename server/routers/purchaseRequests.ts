@@ -45,8 +45,28 @@ export const purchaseRequestsRouter = router({
         .leftJoin(purchaseCategories, eq(purchaseRequests.categoryId, purchaseCategories.id))
         .orderBy(desc(purchaseRequests.createdAt));
 
+      // Mapeamento de valores legados (inglês) para o padrão atual (português)
+      // A tabela na Hostinger foi criada com ENUMs em inglês antes da migração
+      const statusMap: Record<string, string> = {
+        pending: 'pendente', read: 'lida', approved: 'aprovada',
+        purchased: 'comprada', received: 'recebida', cancelled: 'cancelada', canceled: 'cancelada',
+        // já no padrão novo — passthrough
+        pendente: 'pendente', lida: 'lida', aprovada: 'aprovada',
+        comprada: 'comprada', recebida: 'recebida', cancelada: 'cancelada',
+      };
+      const urgencyMap: Record<string, string> = {
+        low: 'baixa', medium: 'media', high: 'alta', critical: 'critica',
+        // já no padrão novo — passthrough
+        baixa: 'baixa', media: 'media', alta: 'alta', critica: 'critica',
+      };
+      const normalized = rows.map(r => ({
+        ...r,
+        status: (statusMap[r.status as string] || r.status) as any,
+        urgency: (urgencyMap[r.urgency as string] || r.urgency) as any,
+      }));
+
       // Filter in JS (simpler than complex SQL conditions)
-      let filtered = rows;
+      let filtered = normalized;
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);
       if (input?.urgency) filtered = filtered.filter(r => r.urgency === input.urgency);
       if (input?.categoryId) filtered = filtered.filter(r => r.categoryId === input.categoryId);

@@ -12028,7 +12028,39 @@ var purchaseRequestsRouter = router({
       createdAt: purchaseRequests.createdAt,
       updatedAt: purchaseRequests.updatedAt
     }).from(purchaseRequests).leftJoin(purchaseCategories, eq33(purchaseRequests.categoryId, purchaseCategories.id)).orderBy(desc27(purchaseRequests.createdAt));
-    let filtered = rows;
+    const statusMap = {
+      pending: "pendente",
+      read: "lida",
+      approved: "aprovada",
+      purchased: "comprada",
+      received: "recebida",
+      cancelled: "cancelada",
+      canceled: "cancelada",
+      // já no padrão novo — passthrough
+      pendente: "pendente",
+      lida: "lida",
+      aprovada: "aprovada",
+      comprada: "comprada",
+      recebida: "recebida",
+      cancelada: "cancelada"
+    };
+    const urgencyMap = {
+      low: "baixa",
+      medium: "media",
+      high: "alta",
+      critical: "critica",
+      // já no padrão novo — passthrough
+      baixa: "baixa",
+      media: "media",
+      alta: "alta",
+      critica: "critica"
+    };
+    const normalized = rows.map((r) => ({
+      ...r,
+      status: statusMap[r.status] || r.status,
+      urgency: urgencyMap[r.urgency] || r.urgency
+    }));
+    let filtered = normalized;
     if (input?.status) filtered = filtered.filter((r) => r.status === input.status);
     if (input?.urgency) filtered = filtered.filter((r) => r.urgency === input.urgency);
     if (input?.categoryId) filtered = filtered.filter((r) => r.categoryId === input.categoryId);
