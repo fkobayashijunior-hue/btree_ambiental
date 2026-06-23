@@ -196,7 +196,7 @@ export const quotationRequestsRouter = router({
         const createdById = ctx.user.id;
         // Usar SQL raw para evitar 'default' parametrizado (incompatível com MySQL Hostinger)
         const catInsResult = await db.execute(
-          sql`INSERT INTO purchase_categories (name, color, created_by) VALUES (${catName}, ${catColor}, ${createdById})`
+          sql`INSERT INTO purchase_categories (name, color, created_by, created_at) VALUES (${catName}, ${catColor}, ${createdById}, NOW())`
         );
         categoryId = (catInsResult as any)[0]?.insertId as number;
       }
@@ -222,7 +222,7 @@ export const quotationRequestsRouter = router({
           const qTotalPrice = (parseFloat(item.price) * parseFloat(item.quantity || '1')).toFixed(2);
           const qQuotedAt = Date.now();
           await db.execute(
-            sql`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || '1'}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy})`
+            sql`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by, created_at) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || '1'}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy}, NOW())`
           );
           result.catalogEntriesCreated++;
         }
