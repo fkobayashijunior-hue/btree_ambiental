@@ -12465,8 +12465,11 @@ var quotationRequestsRouter = router({
         const qDate = now;
         const qCreatedBy = ctx.user.id;
         const qReqId = input.quotationRequestId;
+        const qUnitPrice = item.price;
+        const qTotalPrice = (parseFloat(item.price) * parseFloat(item.quantity || "1")).toFixed(2);
+        const qQuotedAt = Date.now();
         await db.execute(
-          sql21`INSERT INTO quotations (supplier_id, category_id, request_id, product_name, unit, price, quotation_date, notes, created_by) VALUES (${supplierId}, ${categoryId}, ${qReqId}, ${item.name}, ${qUnit}, ${item.price}, ${qDate}, ${qNotes}, ${qCreatedBy})`
+          sql21`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || "1"}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy})`
         );
         result.catalogEntriesCreated++;
       }
@@ -12507,8 +12510,9 @@ ${supplierSummary}`;
     const prUrgency = input.urgency;
     const prRequestedBy = ctx.user.id;
     const prRequestDate = now;
+    const prRequestedAt = Date.now();
     const prInsResult = await db.execute(
-      sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pendente', ${prRequestDate}, ${prRequestedBy}, ${prNotes})`
+      sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, requested_at, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pending', ${prRequestedAt}, ${prRequestedBy}, ${prNotes})`
     );
     const purchaseRequestId = prInsResult[0]?.insertId;
     result.purchaseRequestId = purchaseRequestId;
