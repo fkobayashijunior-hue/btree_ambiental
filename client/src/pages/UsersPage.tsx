@@ -61,6 +61,7 @@ export default function UsersPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteName, setDeleteName] = useState("");
+  const [roleChangeTarget, setRoleChangeTarget] = useState<{ id: number; name: string; currentRole: string; newRole: "user" | "admin" } | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -130,8 +131,14 @@ export default function UsersPage() {
     setDeleteName(u.name);
   };
 
-  const handleChangeRole = (userId: number, newRole: "user" | "admin") => {
-    updateMutation.mutate({ id: userId, role: newRole });
+  const handleChangeRole = (userId: number, userName: string, currentRole: string, newRole: "user" | "admin") => {
+    setRoleChangeTarget({ id: userId, name: userName, currentRole, newRole });
+  };
+
+  const confirmRoleChange = () => {
+    if (!roleChangeTarget) return;
+    updateMutation.mutate({ id: roleChangeTarget.id, role: roleChangeTarget.newRole });
+    setRoleChangeTarget(null);
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -247,7 +254,7 @@ export default function UsersPage() {
                               <DropdownMenuLabel className="text-xs text-gray-500">Alterar perfil de acesso</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => handleChangeRole(u.id, "admin")}
+                                onClick={() => handleChangeRole(u.id, u.name, u.role, "admin")}
                                 disabled={u.role === "admin" || updateMutation.isPending}
                                 className="gap-2"
                               >
@@ -258,7 +265,7 @@ export default function UsersPage() {
                                 </div>
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => handleChangeRole(u.id, "user")}
+                                onClick={() => handleChangeRole(u.id, u.name, u.role, "user")}
                                 disabled={u.role === "user" || updateMutation.isPending}
                                 className="gap-2"
                               >
@@ -394,6 +401,53 @@ export default function UsersPage() {
           </form>
         </SheetContent>
       </Sheet>
+
+      {/* Confirmação de troca de perfil */}
+      <AlertDialog open={roleChangeTarget !== null} onOpenChange={(v) => { if (!v) setRoleChangeTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <UserCog className="h-5 w-5 text-amber-600" />
+              Alterar perfil de acesso?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Você está prestes a alterar o perfil de <strong>{roleChangeTarget?.name}</strong>:
+                </p>
+                <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${roleChangeTarget?.currentRole === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                    {roleChangeTarget?.currentRole === 'admin' ? '🛡️ Admin Sistema' : '👤 Usuário'}
+                  </div>
+                  <span className="text-gray-400">→</span>
+                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${roleChangeTarget?.newRole === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                    {roleChangeTarget?.newRole === 'admin' ? '🛡️ Admin Sistema' : '👤 Usuário'}
+                  </div>
+                </div>
+                {roleChangeTarget?.newRole === 'admin' && (
+                  <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs">
+                    ⚠️ <strong>Atenção:</strong> Admin Sistema tem acesso total ao sistema, incluindo gerenciamento de usuários, configurações e todos os dados.
+                  </p>
+                )}
+                {roleChangeTarget?.newRole === 'user' && (
+                  <p className="text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs">
+                    ℹ️ O usuário perderá acesso às funcionalidades administrativas imediatamente.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRoleChange}
+              className={roleChangeTarget?.newRole === 'admin' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-600 hover:bg-blue-700'}
+            >
+              {updateMutation.isPending ? "Alterando..." : "Confirmar alteração"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmação de exclusão */}
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => { if (!v) setDeleteId(null); }}>
