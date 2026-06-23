@@ -274,29 +274,36 @@ export const quotationRequestsRouter = router({
         .map(r => `• ${r.supplierName}`)
         .join('\n');
 
-      // 6. Criar solicitação de compra via SQL raw cirúrgico (apenas colunas necessárias, sem 'default')
+      // 6. Criar solicitação de compra via SQL raw
+      // NOTA: A tabela purchase_requests na Hostinger usa schema legado (colunas e ENUMs em inglês)
       const prTitle = `Compra: ${req.title}`;
       const prDesc = `Gerado automaticamente a partir do orçamento "${req.title}".\n\nFornecedores consultados:\n${supplierSummary}`;
       const prNotes = `Orçamento origem: #${req.id} — ${responses.length} resposta(s) recebida(s)`;
-      const prUrgency = input.urgency;
+      // Mapear urgency do português para o ENUM real da tabela (inglês)
+      const urgencyMap: Record<string, string> = { baixa: 'low', media: 'medium', alta: 'high', critica: 'critical' };
+      const prUrgency = urgencyMap[input.urgency] || 'medium';
       const prRequestedBy = ctx.user.id;
+      const prRequestedAt = Date.now(); // bigint timestamp (coluna requested_at)
       // Se categoryId for 0 ou inválido, usar NULL para evitar FK constraint
       const prCategoryId = categoryId && categoryId > 0 ? categoryId : null;
-      console.log('[autoProcess] Criando purchase_request com categoryId:', prCategoryId, 'urgency:', prUrgency, 'requestedBy:', prRequestedBy);
+      console.log('[autoProcess] Criando purchase_request com categoryId:', prCategoryId, 'urgency:', prUrgency, 'requestedBy:', prRequestedBy, 'requestedAt:', prRequestedAt);
       let purchaseRequestId: number;
       try {
         const prInsResult = await db.execute(
-          sql`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pendente', NOW(), ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
+          sql`INSERT INTO purchase_requests (title, description, category_id, urgency, status, requested_at, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pending', ${prRequestedAt}, ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
         );
         purchaseRequestId = (prInsResult as any)[0]?.insertId as number;
         result.purchaseRequestId = purchaseRequestId;
       } catch (prErr: any) {
-        const mysqlMsg = prErr?.sqlMessage || prErr?.message || String(prErr);
-        const mysqlCode = prErr?.code || prErr?.errno || 'unknown';
-        console.error('[autoProcess] ERRO INSERT purchase_requests:', mysqlCode, mysqlMsg, '| categoryId:', prCategoryId, '| urgency:', prUrgency, '| requestedBy:', prRequestedBy);
+        // Drizzle wraps MySQL2 errors in error.cause
+        const realErr = prErr?.cause || prErr;
+        const mysqlMsg = realErr?.sqlMessage || realErr?.message || String(prErr);
+        const mysqlCode = realErr?.code || realErr?.errno || 'unknown';
+        const mysqlState = realErr?.sqlState || '';
+        console.error('[autoProcess] ERRO INSERT purchase_requests:', mysqlCode, mysqlState, mysqlMsg, '| categoryId:', prCategoryId, '| urgency:', prUrgency, '| requestedBy:', prRequestedBy);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: `Erro ao criar solicitação de compra [${mysqlCode}]: ${mysqlMsg}`,
+          message: `Erro ao criar solicitação de compra [${mysqlCode}/${mysqlState}]: ${mysqlMsg}`,
         });
       }
 

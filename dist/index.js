@@ -12528,24 +12528,28 @@ var quotationRequestsRouter = router({
 Fornecedores consultados:
 ${supplierSummary}`;
     const prNotes = `Or\xE7amento origem: #${req.id} \u2014 ${responses.length} resposta(s) recebida(s)`;
-    const prUrgency = input.urgency;
+    const urgencyMap = { baixa: "low", media: "medium", alta: "high", critica: "critical" };
+    const prUrgency = urgencyMap[input.urgency] || "medium";
     const prRequestedBy = ctx.user.id;
+    const prRequestedAt = Date.now();
     const prCategoryId = categoryId && categoryId > 0 ? categoryId : null;
-    console.log("[autoProcess] Criando purchase_request com categoryId:", prCategoryId, "urgency:", prUrgency, "requestedBy:", prRequestedBy);
+    console.log("[autoProcess] Criando purchase_request com categoryId:", prCategoryId, "urgency:", prUrgency, "requestedBy:", prRequestedBy, "requestedAt:", prRequestedAt);
     let purchaseRequestId;
     try {
       const prInsResult = await db.execute(
-        sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pendente', NOW(), ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
+        sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, requested_at, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pending', ${prRequestedAt}, ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
       );
       purchaseRequestId = prInsResult[0]?.insertId;
       result.purchaseRequestId = purchaseRequestId;
     } catch (prErr) {
-      const mysqlMsg = prErr?.sqlMessage || prErr?.message || String(prErr);
-      const mysqlCode = prErr?.code || prErr?.errno || "unknown";
-      console.error("[autoProcess] ERRO INSERT purchase_requests:", mysqlCode, mysqlMsg, "| categoryId:", prCategoryId, "| urgency:", prUrgency, "| requestedBy:", prRequestedBy);
+      const realErr = prErr?.cause || prErr;
+      const mysqlMsg = realErr?.sqlMessage || realErr?.message || String(prErr);
+      const mysqlCode = realErr?.code || realErr?.errno || "unknown";
+      const mysqlState = realErr?.sqlState || "";
+      console.error("[autoProcess] ERRO INSERT purchase_requests:", mysqlCode, mysqlState, mysqlMsg, "| categoryId:", prCategoryId, "| urgency:", prUrgency, "| requestedBy:", prRequestedBy);
       throw new TRPCError26({
         code: "INTERNAL_SERVER_ERROR",
-        message: `Erro ao criar solicita\xE7\xE3o de compra [${mysqlCode}]: ${mysqlMsg}`
+        message: `Erro ao criar solicita\xE7\xE3o de compra [${mysqlCode}/${mysqlState}]: ${mysqlMsg}`
       });
     }
     if (purchaseItems.length > 0) {
