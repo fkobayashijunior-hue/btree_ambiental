@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { quotationRequests, quotationResponses, suppliers, purchaseCategories, quotations, purchaseRequests, purchaseRequestItems } from "../../drizzle/schema";
-import { eq, desc, like } from "drizzle-orm";
+import { eq, desc, like, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 import { notifyOwner } from "../_core/notification";
@@ -141,10 +141,11 @@ export const quotationRequestsRouter = router({
       const supplierIdByResponse: Map<number, number> = new Map();
       for (const resp of responses) {
         if (!resp.supplierName?.trim()) continue;
+        const trimmedName = resp.supplierName.trim();
         const existing = await db
           .select()
           .from(suppliers)
-          .where(like(suppliers.name, `%${resp.supplierName.trim()}%`))
+          .where(eq(suppliers.name, trimmedName))
           .limit(1);
 
         if (existing.length === 0) {
@@ -180,7 +181,7 @@ export const quotationRequestsRouter = router({
       const existingCat = await db
         .select()
         .from(purchaseCategories)
-        .where(like(purchaseCategories.name, `%${req.title.trim()}%`))
+        .where(eq(purchaseCategories.name, req.title.trim()))
         .limit(1);
 
       let categoryId: number;

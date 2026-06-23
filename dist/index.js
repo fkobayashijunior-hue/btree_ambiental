@@ -12348,7 +12348,8 @@ var quotationRequestsRouter = router({
     const supplierIdByResponse = /* @__PURE__ */ new Map();
     for (const resp of responses) {
       if (!resp.supplierName?.trim()) continue;
-      const existing = await db.select().from(suppliers).where(like4(suppliers.name, `%${resp.supplierName.trim()}%`)).limit(1);
+      const trimmedName = resp.supplierName.trim();
+      const existing = await db.select().from(suppliers).where(eq35(suppliers.name, trimmedName)).limit(1);
       if (existing.length === 0) {
         const [ins] = await db.insert(suppliers).values({
           name: resp.supplierName.trim(),
@@ -12375,7 +12376,7 @@ var quotationRequestsRouter = router({
         supplierIdByResponse.set(resp.id, s.id);
       }
     }
-    const existingCat = await db.select().from(purchaseCategories).where(like4(purchaseCategories.name, `%${req.title.trim()}%`)).limit(1);
+    const existingCat = await db.select().from(purchaseCategories).where(eq35(purchaseCategories.name, req.title.trim())).limit(1);
     let categoryId;
     if (existingCat.length > 0) {
       categoryId = existingCat[0].id;
@@ -13062,12 +13063,12 @@ var appRouter = router({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { error: "DB null" };
-        const { sql: sql20 } = await import("drizzle-orm");
-        const [permsRows] = await db.execute(sql20`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
-        const [collabRows] = await db.execute(sql20`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
-        const [countRows] = await db.execute(sql20`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
-        const [colsRows] = await db.execute(sql20`SHOW COLUMNS FROM collaborators`);
-        const [sampleRows] = await db.execute(sql20`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        const { sql: sql21 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql21`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql21`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql21`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql21`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql21`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
