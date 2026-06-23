@@ -12464,7 +12464,14 @@ var quotationRequestsRouter = router({
       const catInsResult = await db.execute(
         sql21`INSERT INTO purchase_categories (name, color, created_by, created_at) VALUES (${catName}, ${catColor}, ${createdById}, NOW())`
       );
-      categoryId = catInsResult[0]?.insertId;
+      categoryId = catInsResult[0]?.insertId ?? catInsResult?.insertId ?? 0;
+      if (!categoryId) {
+        const fallbackRows = await db.execute(
+          sql21`SELECT id FROM purchase_categories WHERE name = ${catName} LIMIT 1`
+        );
+        categoryId = fallbackRows[0][0]?.id ?? 0;
+      }
+      console.log("[autoProcess] Categoria criada/encontrada:", categoryId, catName);
     }
     result.categoryId = categoryId;
     result.categoryName = req.title;
@@ -12523,7 +12530,8 @@ ${supplierSummary}`;
     const prNotes = `Or\xE7amento origem: #${req.id} \u2014 ${responses.length} resposta(s) recebida(s)`;
     const prUrgency = input.urgency;
     const prRequestedBy = ctx.user.id;
-    const prCategoryId = categoryId;
+    const prCategoryId = categoryId && categoryId > 0 ? categoryId : null;
+    console.log("[autoProcess] Criando purchase_request com categoryId:", prCategoryId, "urgency:", prUrgency, "requestedBy:", prRequestedBy);
     let purchaseRequestId;
     try {
       const prInsResult = await db.execute(

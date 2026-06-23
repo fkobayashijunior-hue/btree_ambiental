@@ -198,7 +198,16 @@ export const quotationRequestsRouter = router({
         const catInsResult = await db.execute(
           sql`INSERT INTO purchase_categories (name, color, created_by, created_at) VALUES (${catName}, ${catColor}, ${createdById}, NOW())`
         );
-        categoryId = (catInsResult as any)[0]?.insertId as number;
+        // MySQL2 pode retornar insertId em posições diferentes dependendo da versão
+        categoryId = (catInsResult as any)[0]?.insertId ?? (catInsResult as any)?.insertId ?? 0;
+        // Se insertId não veio, buscar pelo nome
+        if (!categoryId) {
+          const fallbackRows = await db.execute(
+            sql`SELECT id FROM purchase_categories WHERE name = ${catName} LIMIT 1`
+          );
+          categoryId = ((fallbackRows as any)[0] as Array<{ id: number }>)[0]?.id ?? 0;
+        }
+        console.log('[autoProcess] Categoria criada/encontrada:', categoryId, catName);
       }
       result.categoryId = categoryId;
       result.categoryName = req.title;
@@ -271,7 +280,9 @@ export const quotationRequestsRouter = router({
       const prNotes = `Orçamento origem: #${req.id} — ${responses.length} resposta(s) recebida(s)`;
       const prUrgency = input.urgency;
       const prRequestedBy = ctx.user.id;
-      const prCategoryId = categoryId;
+      // Se categoryId for 0 ou inválido, usar NULL para evitar FK constraint
+      const prCategoryId = categoryId && categoryId > 0 ? categoryId : null;
+      console.log('[autoProcess] Criando purchase_request com categoryId:', prCategoryId, 'urgency:', prUrgency, 'requestedBy:', prRequestedBy);
       let purchaseRequestId: number;
       try {
         const prInsResult = await db.execute(
