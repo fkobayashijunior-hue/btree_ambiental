@@ -12524,11 +12524,22 @@ ${supplierSummary}`;
     const prUrgency = input.urgency;
     const prRequestedBy = ctx.user.id;
     const prCategoryId = categoryId;
-    const prInsResult = await db.execute(
-      sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pendente', NOW(), ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
-    );
-    const purchaseRequestId = prInsResult[0]?.insertId;
-    result.purchaseRequestId = purchaseRequestId;
+    let purchaseRequestId;
+    try {
+      const prInsResult = await db.execute(
+        sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pendente', NOW(), ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
+      );
+      purchaseRequestId = prInsResult[0]?.insertId;
+      result.purchaseRequestId = purchaseRequestId;
+    } catch (prErr) {
+      const mysqlMsg = prErr?.sqlMessage || prErr?.message || String(prErr);
+      const mysqlCode = prErr?.code || prErr?.errno || "unknown";
+      console.error("[autoProcess] ERRO INSERT purchase_requests:", mysqlCode, mysqlMsg, "| categoryId:", prCategoryId, "| urgency:", prUrgency, "| requestedBy:", prRequestedBy);
+      throw new TRPCError26({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Erro ao criar solicita\xE7\xE3o de compra [${mysqlCode}]: ${mysqlMsg}`
+      });
+    }
     if (purchaseItems.length > 0) {
       for (const item of purchaseItems) {
         const piNotes = item.notes || null;
