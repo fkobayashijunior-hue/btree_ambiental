@@ -265,25 +265,34 @@ export const quotationRequestsRouter = router({
         .map(r => `• ${r.supplierName}`)
         .join('\n');
 
-      // 6. Criar solicitação de compra (SQL raw para evitar 'default' parametrizado)
+      // 6. Criar solicitação de compra via Drizzle ORM (igual ao purchaseRequests.create)
       const prTitle = `Compra: ${req.title}`;
       const prDesc = `Gerado automaticamente a partir do orçamento "${req.title}".\n\nFornecedores consultados:\n${supplierSummary}`;
       const prNotes = `Orçamento origem: #${req.id} — ${responses.length} resposta(s) recebida(s)`;
-      const prUrgency = input.urgency;
-      const prRequestedBy = ctx.user.id;
-      const prInsResult = await db.execute(
-        sql`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pendente', NOW(), ${prRequestedBy}, ${prNotes})`
-      );
-      const purchaseRequestId = (prInsResult as any)[0]?.insertId as number;
+      const prNow = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const [prInsResult] = await db.insert(purchaseRequests).values({
+        title: prTitle,
+        description: prDesc,
+        categoryId,
+        urgency: input.urgency,
+        status: 'pendente',
+        requestDate: prNow,
+        requestedBy: ctx.user.id,
+        notes: prNotes,
+      });
+      const purchaseRequestId = (prInsResult as any).insertId as number;
       result.purchaseRequestId = purchaseRequestId;
 
       if (purchaseItems.length > 0) {
-        for (const item of purchaseItems) {
-          const piNotes = item.notes || null;
-          await db.execute(
-            sql`INSERT INTO purchase_request_items (request_id, name, quantity, unit, notes) VALUES (${purchaseRequestId}, ${item.name}, ${item.quantity}, ${item.unit}, ${piNotes})`
-          );
-        }
+        await db.insert(purchaseRequestItems).values(
+          purchaseItems.map(item => ({
+            requestId: purchaseRequestId,
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            notes: item.notes || null,
+          }))
+        );
       }
 
       // Notificar owner
