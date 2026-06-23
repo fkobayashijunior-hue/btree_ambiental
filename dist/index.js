@@ -1402,15 +1402,20 @@ var init_schema = __esm({
       id: int().autoincrement().primaryKey().notNull(),
       supplierId: int("supplier_id").notNull().references(() => suppliers.id),
       categoryId: int("category_id").references(() => purchaseCategories.id),
-      requestId: int("request_id").references(() => purchaseRequests.id),
       productName: varchar("product_name", { length: 255 }).notNull(),
       unit: varchar({ length: 50 }),
-      price: varchar({ length: 30 }).notNull(),
-      // stored as string to avoid float issues
-      quotationDate: timestamp("quotation_date", { mode: "string" }).defaultNow().notNull(),
+      quantity: varchar({ length: 50 }),
+      unitPrice: varchar("unit_price", { length: 30 }).notNull(),
+      // colunas reais do banco Hostinger
+      totalPrice: varchar("total_price", { length: 30 }),
+      currency: varchar({ length: 10 }).default("BRL"),
+      quotedAt: bigint("quoted_at", { mode: "number" }).notNull(),
+      validUntil: bigint("valid_until", { mode: "number" }),
       notes: text(),
+      purchaseRequestId: int("purchase_request_id"),
       createdBy: int("created_by").references(() => users.id),
-      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow()
     });
     farmGeofences = mysqlTable("farm_geofences", {
       id: int().autoincrement().primaryKey().notNull(),
@@ -11696,12 +11701,12 @@ var suppliersRouter = router({
     const recentQuotations = await db.select({
       id: quotations.id,
       productName: quotations.productName,
-      price: quotations.price,
+      unitPrice: quotations.unitPrice,
       unit: quotations.unit,
-      quotationDate: quotations.quotationDate,
+      quotedAt: quotations.quotedAt,
       categoryId: quotations.categoryId,
       notes: quotations.notes
-    }).from(quotations).where(eq31(quotations.supplierId, input.id)).orderBy(desc25(quotations.quotationDate)).limit(20);
+    }).from(quotations).where(eq31(quotations.supplierId, input.id)).orderBy(desc25(quotations.quotedAt)).limit(20);
     return { ...supplier, recentQuotations };
   }),
   create: protectedProcedure.input(z32.object({
@@ -11819,8 +11824,7 @@ var quotationsRouter = router({
   // List all quotations, optionally filtered by category or supplier
   list: protectedProcedure.input(z33.object({
     categoryId: z33.number().optional(),
-    supplierId: z33.number().optional(),
-    requestId: z33.number().optional()
+    supplierId: z33.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
@@ -11833,14 +11837,16 @@ var quotationsRouter = router({
       categoryId: quotations.categoryId,
       categoryName: purchaseCategories.name,
       categoryColor: purchaseCategories.color,
-      requestId: quotations.requestId,
       productName: quotations.productName,
       unit: quotations.unit,
-      price: quotations.price,
-      quotationDate: quotations.quotationDate,
+      quantity: quotations.quantity,
+      unitPrice: quotations.unitPrice,
+      totalPrice: quotations.totalPrice,
+      currency: quotations.currency,
+      quotedAt: quotations.quotedAt,
       notes: quotations.notes,
       createdAt: quotations.createdAt
-    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq32(quotations.categoryId, purchaseCategories.id)).orderBy(desc26(quotations.quotationDate));
+    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq32(quotations.categoryId, purchaseCategories.id)).orderBy(desc26(quotations.quotedAt));
     return rows;
   }),
   // List by product name — price history across suppliers, lowest price first
@@ -11856,10 +11862,12 @@ var quotationsRouter = router({
       categoryId: quotations.categoryId,
       productName: quotations.productName,
       unit: quotations.unit,
-      price: quotations.price,
-      quotationDate: quotations.quotationDate,
+      quantity: quotations.quantity,
+      unitPrice: quotations.unitPrice,
+      totalPrice: quotations.totalPrice,
+      quotedAt: quotations.quotedAt,
       notes: quotations.notes
-    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).where(eq32(quotations.productName, input.productName)).orderBy(asc3(sql19`CAST(${quotations.price} AS DECIMAL(10,2))`), desc26(quotations.quotationDate));
+    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).where(eq32(quotations.productName, input.productName)).orderBy(asc3(sql19`CAST(${quotations.unitPrice} AS DECIMAL(10,2))`), desc26(quotations.quotedAt));
     return rows;
   }),
   // List grouped by category — returns categories with their products and price history
@@ -11877,13 +11885,15 @@ var quotationsRouter = router({
       categoryColor: purchaseCategories.color,
       productName: quotations.productName,
       unit: quotations.unit,
-      price: quotations.price,
-      quotationDate: quotations.quotationDate,
+      quantity: quotations.quantity,
+      unitPrice: quotations.unitPrice,
+      totalPrice: quotations.totalPrice,
+      quotedAt: quotations.quotedAt,
       notes: quotations.notes
     }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq32(quotations.categoryId, purchaseCategories.id)).orderBy(
       purchaseCategories.name,
       quotations.productName,
-      asc3(sql19`CAST(${quotations.price} AS DECIMAL(10,2))`)
+      asc3(sql19`CAST(${quotations.unitPrice} AS DECIMAL(10,2))`)
     );
     const grouped = {};
     for (const row of rows) {
@@ -11903,20 +11913,20 @@ var quotationsRouter = router({
         grouped[catKey].products[prodKey] = {
           productName: row.productName,
           unit: row.unit,
-          lowestPrice: row.price,
-          latestDate: row.quotationDate,
+          lowestPrice: row.unitPrice,
+          latestDate: row.quotedAt,
           quotes: []
         };
       }
       const prod = grouped[catKey].products[prodKey];
       prod.quotes.push(row);
-      const currentPrice = parseFloat(row.price);
+      const currentPrice = parseFloat(row.unitPrice);
       const lowestPrice = parseFloat(prod.lowestPrice);
       if (currentPrice < lowestPrice) {
-        prod.lowestPrice = row.price;
+        prod.lowestPrice = row.unitPrice;
       }
-      if (row.quotationDate > prod.latestDate) {
-        prod.latestDate = row.quotationDate;
+      if (row.quotedAt > prod.latestDate) {
+        prod.latestDate = row.quotedAt;
       }
     }
     return Object.values(grouped).map((cat) => ({
@@ -11929,23 +11939,26 @@ var quotationsRouter = router({
   create: protectedProcedure.input(z33.object({
     supplierId: z33.number(),
     categoryId: z33.number().optional(),
-    requestId: z33.number().optional(),
     productName: z33.string().min(1).max(255),
     unit: z33.string().optional(),
-    price: z33.string().min(1),
-    quotationDate: z33.string().optional(),
+    quantity: z33.string().optional(),
+    unitPrice: z33.string().min(1),
+    totalPrice: z33.string().optional(),
     notes: z33.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    const now = Date.now();
     const [result] = await db.insert(quotations).values({
       supplierId: input.supplierId,
       categoryId: input.categoryId,
-      requestId: input.requestId,
       productName: input.productName,
       unit: input.unit,
-      price: input.price,
-      quotationDate: input.quotationDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "),
+      quantity: input.quantity,
+      unitPrice: input.unitPrice,
+      totalPrice: input.totalPrice,
+      currency: "BRL",
+      quotedAt: now,
       notes: input.notes,
       createdBy: ctx.user.id
     });
@@ -11957,8 +11970,9 @@ var quotationsRouter = router({
     categoryId: z33.number().optional(),
     productName: z33.string().optional(),
     unit: z33.string().optional(),
-    price: z33.string().optional(),
-    quotationDate: z33.string().optional(),
+    quantity: z33.string().optional(),
+    unitPrice: z33.string().optional(),
+    totalPrice: z33.string().optional(),
     notes: z33.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -12679,7 +12693,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z37 } from "zod";
-import { eq as eq36, desc as desc30, and as and22, gte as gte10, lte as lte10, inArray as inArray8 } from "drizzle-orm";
+import { eq as eq36, desc as desc30, and as and21, gte as gte10, lte as lte10, inArray as inArray8 } from "drizzle-orm";
 import { TRPCError as TRPCError27 } from "@trpc/server";
 var thirdPartyRouter = router({
   // ===== TARIFAS DE FRETE =====
@@ -12757,7 +12771,7 @@ var thirdPartyRouter = router({
       location: thirdPartyFuel.location,
       notes: thirdPartyFuel.notes,
       createdAt: thirdPartyFuel.createdAt
-    }).from(thirdPartyFuel).leftJoin(equipment, eq36(thirdPartyFuel.equipmentId, equipment.id)).where(tpConditions.length > 0 ? and22(...tpConditions) : void 0).orderBy(desc30(thirdPartyFuel.date));
+    }).from(thirdPartyFuel).leftJoin(equipment, eq36(thirdPartyFuel.equipmentId, equipment.id)).where(tpConditions.length > 0 ? and21(...tpConditions) : void 0).orderBy(desc30(thirdPartyFuel.date));
     let vehicleRecordsRows = [];
     if (thirdPartyIds.length > 0) {
       const vrConditions = [
@@ -12778,7 +12792,7 @@ var thirdPartyRouter = router({
         location: vehicleRecords.supplier,
         notes: vehicleRecords.odometer,
         createdAt: vehicleRecords.createdAt
-      }).from(vehicleRecords).leftJoin(equipment, eq36(vehicleRecords.equipmentId, equipment.id)).where(and22(...vrConditions)).orderBy(desc30(vehicleRecords.date));
+      }).from(vehicleRecords).leftJoin(equipment, eq36(vehicleRecords.equipmentId, equipment.id)).where(and21(...vrConditions)).orderBy(desc30(vehicleRecords.date));
       vehicleRecordsRows = vrRows.map((r) => ({
         ...r,
         fromVehicleRecords: true,
@@ -12910,7 +12924,7 @@ var thirdPartyRouter = router({
       thirdPartyPaidAt: cargoLoads.thirdPartyPaidAt,
       thirdPartyPaymentNotes: cargoLoads.thirdPartyPaymentNotes,
       status: cargoLoads.status
-    }).from(cargoLoads).where(conditions.length > 0 ? and22(...conditions) : void 0).orderBy(desc30(cargoLoads.date));
+    }).from(cargoLoads).where(conditions.length > 0 ? and21(...conditions) : void 0).orderBy(desc30(cargoLoads.date));
     const thirdPartyCargos = allCargos.filter((c) => c.vehicleId && truckIds.includes(c.vehicleId));
     const rates = await db.select().from(freightRates);
     const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
@@ -12951,7 +12965,7 @@ var thirdPartyRouter = router({
         ];
         if (input?.startDate) fuelConditions.push(gte10(vehicleRecords.date, input.startDate + " 00:00:00"));
         if (input?.endDate) fuelConditions.push(lte10(vehicleRecords.date, input.endDate + " 23:59:59"));
-        const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost }).from(vehicleRecords).where(and22(...fuelConditions));
+        const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost }).from(vehicleRecords).where(and21(...fuelConditions));
         fuelCost = vehicleFuel.reduce((acc, f) => acc + parseFloat(f.fuelCost || "0"), 0);
       }
       const netFreight = grossFreight - fuelCost;
@@ -14204,7 +14218,7 @@ function schedulePendingPaymentsCheck() {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq37, and: and23, lt: lt2 } = await import("drizzle-orm");
+        const { eq: eq37, and: and22, lt: lt2 } = await import("drizzle-orm");
         const db = await getDb2();
         if (!db) return;
         const sevenDaysAgo = /* @__PURE__ */ new Date();
@@ -14214,7 +14228,7 @@ function schedulePendingPaymentsCheck() {
           collaboratorName: collaborators3.name,
           date: collaboratorAttendance2.date,
           dailyValue: collaboratorAttendance2.dailyValue
-        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq37(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and23(
+        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq37(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and22(
           eq37(collaboratorAttendance2.paymentStatusCa, "pendente"),
           lt2(collaboratorAttendance2.date, sevenDaysAgo)
         ));

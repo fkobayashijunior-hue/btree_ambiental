@@ -213,8 +213,7 @@ export default function QuotationsPage() {
       categoryId: qCategoryId ? parseInt(qCategoryId) : undefined,
       productName: qProductName,
       unit: qUnit,
-      price: qPrice,
-      quotationDate: qDate + ' 00:00:00',
+      unitPrice: qPrice,
       notes: qNotes || undefined,
     });
   }
@@ -373,7 +372,7 @@ export default function QuotationsPage() {
                         const prodKey = `${catKey}-${prod.productName}`;
                         const isProdExpanded = expandedProd === prodKey;
                         const latestQuote = prod.quotes.reduce((latest, q) =>
-                          q.quotationDate > latest.quotationDate ? q : latest, prod.quotes[0]);
+                          (q.quotedAt || 0) > (latest.quotedAt || 0) ? q : latest, prod.quotes[0]);
                         return (
                           <div key={prod.productName} className="border rounded-lg overflow-hidden">
                             <button
@@ -400,7 +399,7 @@ export default function QuotationsPage() {
                             {isProdExpanded && (
                               <div className="divide-y">
                                 {prod.quotes.map((q) => {
-                                  const isLowest = q.price === prod.lowestPrice;
+                                  const isLowest = q.unitPrice === prod.lowestPrice;
                                   const isLatest = q.id === latestQuote?.id;
                                   return (
                                     <div key={q.id} className={`p-3 flex items-center justify-between ${isLowest ? 'bg-green-50' : ''}`}>
@@ -412,8 +411,8 @@ export default function QuotationsPage() {
                                           {isLatest && <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200"><Clock className="w-2 h-2 mr-1" /> Último</Badge>}
                                         </div>
                                         <div className="flex items-center gap-3 mt-1">
-                                          <span className={`text-sm font-bold ${isLowest ? 'text-green-700' : 'text-gray-700'}`}>{fmtPrice(q.price)}</span>
-                                          <span className="text-xs text-gray-400">{fmt(q.quotationDate)}</span>
+                                          <span className={`text-sm font-bold ${isLowest ? 'text-green-700' : 'text-gray-700'}`}>{fmtPrice(q.unitPrice)}</span>
+                                          <span className="text-xs text-gray-400">{q.quotedAt ? new Date(q.quotedAt).toLocaleDateString('pt-BR') : ''}</span>
                                           {q.supplierPhone && <a href={`tel:${q.supplierPhone}`} className="text-xs text-blue-500 hover:underline">{q.supplierPhone}</a>}
                                           {q.supplierWhatsapp && (
                                             <a href={`https://wa.me/55${q.supplierWhatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-xs text-green-500 hover:underline">WhatsApp</a>

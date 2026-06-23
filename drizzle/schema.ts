@@ -1290,14 +1290,19 @@ export const quotations = mysqlTable("quotations", {
   id: int().autoincrement().primaryKey().notNull(),
   supplierId: int("supplier_id").notNull().references(() => suppliers.id),
   categoryId: int("category_id").references(() => purchaseCategories.id),
-  requestId: int("request_id").references(() => purchaseRequests.id),
   productName: varchar("product_name", { length: 255 }).notNull(),
   unit: varchar({ length: 50 }),
-  price: varchar({ length: 30 }).notNull(), // stored as string to avoid float issues
-  quotationDate: timestamp("quotation_date", { mode: 'string' }).defaultNow().notNull(),
+  quantity: varchar({ length: 50 }),
+  unitPrice: varchar("unit_price", { length: 30 }).notNull(), // colunas reais do banco Hostinger
+  totalPrice: varchar("total_price", { length: 30 }),
+  currency: varchar({ length: 10 }).default("BRL"),
+  quotedAt: bigint("quoted_at", { mode: 'number' }).notNull(),
+  validUntil: bigint("valid_until", { mode: 'number' }),
   notes: text(),
+  purchaseRequestId: int("purchase_request_id"),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow(),
 });
 export type Quotation = typeof quotations.$inferSelect;
 export type InsertQuotation = typeof quotations.$inferInsert;

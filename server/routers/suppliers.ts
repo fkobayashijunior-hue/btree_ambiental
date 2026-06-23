@@ -28,15 +28,15 @@ export const suppliersRouter = router({
       const recentQuotations = await db.select({
         id: quotations.id,
         productName: quotations.productName,
-        price: quotations.price,
+        unitPrice: quotations.unitPrice,
         unit: quotations.unit,
-        quotationDate: quotations.quotationDate,
+        quotedAt: quotations.quotedAt,
         categoryId: quotations.categoryId,
         notes: quotations.notes,
       })
         .from(quotations)
         .where(eq(quotations.supplierId, input.id))
-        .orderBy(desc(quotations.quotationDate))
+        .orderBy(desc(quotations.quotedAt))
         .limit(20);
       return { ...supplier, recentQuotations };
     }),
