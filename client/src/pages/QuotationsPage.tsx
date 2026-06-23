@@ -1031,7 +1031,7 @@ export default function QuotationsPage() {
               <Select value={qSupplierId} onValueChange={setQSupplierId}>
                 <SelectTrigger><SelectValue placeholder="Selecionar fornecedor..." /></SelectTrigger>
                 <SelectContent>
-                  {(suppliers || []).map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  {(suppliers || []).map(s => <SelectItem key={s.id} value={String(s.id)}>{s.companyName}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

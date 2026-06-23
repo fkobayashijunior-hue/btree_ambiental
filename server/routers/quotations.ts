@@ -19,7 +19,7 @@ export const quotationsRouter = router({
       const rows = await db.select({
         id: quotations.id,
         supplierId: quotations.supplierId,
-        supplierName: suppliers.name,
+        supplierName: suppliers.companyName,
         supplierPhone: suppliers.phone,
         supplierWhatsapp: suppliers.whatsapp,
         categoryId: quotations.categoryId,
@@ -49,7 +49,7 @@ export const quotationsRouter = router({
       const rows = await db.select({
         id: quotations.id,
         supplierId: quotations.supplierId,
-        supplierName: suppliers.name,
+        supplierName: suppliers.companyName,
         supplierPhone: suppliers.phone,
         supplierWhatsapp: suppliers.whatsapp,
         categoryId: quotations.categoryId,
@@ -74,7 +74,7 @@ export const quotationsRouter = router({
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
-      supplierName: suppliers.name,
+      supplierName: suppliers.companyName,
       supplierPhone: suppliers.phone,
       supplierWhatsapp: suppliers.whatsapp,
       categoryId: quotations.categoryId,

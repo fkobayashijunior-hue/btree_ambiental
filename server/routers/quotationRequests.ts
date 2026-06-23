@@ -144,21 +144,21 @@ export const quotationRequestsRouter = router({
         const trimmedName = resp.supplierName.trim();
         // Usar SQL raw para evitar LIMIT parametrizado (incompatível com MySQL Hostinger)
         const existingRows = await db.execute(
-          sql`SELECT id, name, phone, whatsapp, email FROM suppliers WHERE name = ${trimmedName} LIMIT 1`
+          sql`SELECT id, company_name, phone, whatsapp, email FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
         );
-        const existing = (existingRows as any)[0] as Array<{ id: number; name: string; phone: string | null; whatsapp: string | null; email: string | null }>;
+        const existing = (existingRows as any)[0] as Array<{ id: number; company_name: string; phone: string | null; whatsapp: string | null; email: string | null }>;
 
         if (existing.length === 0) {
           const [ins] = await db.insert(suppliers).values({
-            name: resp.supplierName.trim(),
+            companyName: resp.supplierName.trim(),
+            cnpj: resp.cnpj ?? null,
             address: resp.address ?? null,
             phone: resp.sellerPhone ?? null,
             whatsapp: resp.sellerPhone ?? null,
             email: resp.sellerEmail ?? null,
-            notes: resp.cnpj
-              ? `CNPJ: ${resp.cnpj}${resp.sellerName ? ` | Vendedor: ${resp.sellerName}` : ''}`
-              : resp.sellerName ? `Vendedor: ${resp.sellerName}` : null,
-            active: 1,
+            contactName: resp.sellerName ?? null,
+            notes: resp.notes ?? null,
+            isActive: 1,
           });
           const newId = (ins as any).insertId as number;
           supplierIdByResponse.set(resp.id, newId);
@@ -388,20 +388,20 @@ export const quotationRequestsRouter = router({
 
       // Cadastrar fornecedor automaticamente se não existir
       try {
-        const existingSuppliers = await db
-          .select({ id: suppliers.id })
-          .from(suppliers)
-          .where(like(suppliers.name, `%${input.supplierName.trim()}%`))
-          .limit(1);
-        if (existingSuppliers.length === 0) {
+        const existingSuppliers = await db.execute(
+          sql`SELECT id FROM suppliers WHERE company_name = ${input.supplierName.trim()} LIMIT 1`
+        );
+        const existingArr = (existingSuppliers as any)[0] as Array<{ id: number }>;
+        if (existingArr.length === 0) {
           await db.insert(suppliers).values({
-            name: input.supplierName.trim(),
+            companyName: input.supplierName.trim(),
+            cnpj: input.cnpj ?? null,
             address: input.address ?? null,
             phone: input.sellerPhone ?? null,
             whatsapp: input.sellerPhone ?? null,
             email: input.sellerEmail ?? null,
-            notes: input.cnpj ? `CNPJ: ${input.cnpj}${input.sellerName ? ` | Vendedor: ${input.sellerName}` : ''}` : (input.sellerName ? `Vendedor: ${input.sellerName}` : null),
-            active: 1,
+            contactName: input.sellerName ?? null,
+            isActive: 1,
           });
         }
       } catch (_) {
@@ -430,20 +430,19 @@ export const quotationRequestsRouter = router({
     let updated = 0;
     for (const resp of allResponses) {
       if (!resp.supplierName?.trim()) continue;
-      const existing = await db
-        .select()
-        .from(suppliers)
-        .where(like(suppliers.name, `%${resp.supplierName.trim()}%`))
-        .limit(1);
+      const existingRows = await db.execute(
+        sql`SELECT id, phone, whatsapp, email FROM suppliers WHERE company_name = ${resp.supplierName.trim()} LIMIT 1`
+      );
+      const existing = (existingRows as any)[0] as Array<{ id: number; phone: string | null; whatsapp: string | null; email: string | null }>;
       if (existing.length === 0) {
         await db.insert(suppliers).values({
-          name: resp.supplierName.trim(),
+          companyName: resp.supplierName.trim(),
           address: resp.address || null,
           phone: resp.sellerPhone || null,
           whatsapp: resp.sellerPhone || null,
           email: resp.sellerEmail || null,
-          notes: resp.sellerName ? `Vendedor: ${resp.sellerName}` : null,
-          active: 1,
+          contactName: resp.sellerName || null,
+          isActive: 1,
         });
         created++;
       } else {

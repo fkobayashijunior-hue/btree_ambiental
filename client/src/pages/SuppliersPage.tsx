@@ -82,7 +82,7 @@ export default function SuppliersPage() {
 
   function openEdit(s: any) {
     setForm({
-      name: s.name || '',
+      name: s.companyName || '',
       address: s.address || '',
       city: s.city || '',
       state: s.state || '',
@@ -109,7 +109,7 @@ export default function SuppliersPage() {
   }
 
   const filtered = (suppliers || []).filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
+    s.companyName.toLowerCase().includes(search.toLowerCase()) ||
     (s.city || '').toLowerCase().includes(search.toLowerCase())
   );
 
@@ -171,7 +171,7 @@ export default function SuppliersPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">{s.name}</span>
+                      <span className="font-semibold text-gray-900">{s.companyName}</span>
                       {s.active === 0 && <Badge variant="outline" className="text-xs text-gray-400">Inativo</Badge>}
                     </div>
                     {(s.city || s.state) && (

@@ -1263,19 +1263,25 @@ export type InsertPurchaseRequestItem = typeof purchaseRequestItems.$inferInsert
 
 export const suppliers = mysqlTable("suppliers", {
   id: int().autoincrement().primaryKey().notNull(),
-  name: varchar({ length: 255 }).notNull(),
-  address: varchar({ length: 500 }),
+  companyName: varchar("company_name", { length: 255 }).notNull(),
+  tradeName: varchar("trade_name", { length: 255 }),
+  cnpj: varchar({ length: 20 }),
+  address: text(),
   city: varchar({ length: 100 }),
   state: varchar({ length: 2 }),
+  zipCode: varchar("zip_code", { length: 10 }),
   phone: varchar({ length: 30 }),
   whatsapp: varchar({ length: 30 }),
   email: varchar({ length: 255 }),
-  website: varchar({ length: 500 }),
+  contactName: varchar("contact_name", { length: 255 }),
+  productCategories: text("product_categories"),
   notes: text(),
-  active: tinyint().default(1).notNull(),
+  isActive: tinyint("is_active").default(1).notNull(),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+  website: varchar({ length: 500 }),
+  active: tinyint().default(1).notNull(),
 });
 export type Supplier = typeof suppliers.$inferSelect;
 export type InsertSupplier = typeof suppliers.$inferInsert;
