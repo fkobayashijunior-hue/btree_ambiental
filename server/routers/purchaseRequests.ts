@@ -45,6 +45,7 @@ export const purchaseRequestsRouter = router({
         .leftJoin(purchaseCategories, eq(purchaseRequests.categoryId, purchaseCategories.id))
         .orderBy(desc(purchaseRequests.createdAt));
 
+      console.log('[purchaseRequests.list] rows retornados:', rows.length, rows.map(r => ({ id: r.id, status: r.status, urgency: r.urgency })));
       // Mapeamento de valores legados (inglês) para o padrão atual (português)
       // A tabela na Hostinger foi criada com ENUMs em inglês antes da migração
       const statusMap: Record<string, string> = {

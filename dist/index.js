@@ -12028,6 +12028,7 @@ var purchaseRequestsRouter = router({
       createdAt: purchaseRequests.createdAt,
       updatedAt: purchaseRequests.updatedAt
     }).from(purchaseRequests).leftJoin(purchaseCategories, eq33(purchaseRequests.categoryId, purchaseCategories.id)).orderBy(desc27(purchaseRequests.createdAt));
+    console.log("[purchaseRequests.list] rows retornados:", rows.length, rows.map((r) => ({ id: r.id, status: r.status, urgency: r.urgency })));
     const statusMap = {
       pending: "pendente",
       read: "lida",
