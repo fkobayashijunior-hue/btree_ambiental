@@ -14,8 +14,9 @@ import {
   Plus, Tag, TrendingDown, Clock, Building2, ChevronDown, ChevronUp,
   Pencil, Trash2, MessageCircle, Link2, Copy, Check, Send, User,
   Package, X, Eye, FileText, Phone, Mail, ExternalLink, Ban,
-  Trophy, Star, AlertCircle
+  Trophy, Star, AlertCircle, Zap, ShoppingCart, CheckCircle2
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 function fmt(dateStr: string | null | undefined) {
   if (!dateStr) return '-';
@@ -96,6 +97,9 @@ export default function QuotationsPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedMsg, setCopiedMsg] = useState(false);
   const [viewResponsesId, setViewResponsesId] = useState<number | null>(null);
+  const [showAutoProcessConfirm, setShowAutoProcessConfirm] = useState(false);
+  const [autoProcessUrgency, setAutoProcessUrgency] = useState<'baixa'|'media'|'alta'|'critica'>('media');
+  const [autoProcessResult, setAutoProcessResult] = useState<null | { suppliersCreated: number; suppliersUpdated: number; categoryName: string; catalogEntriesCreated: number; purchaseRequestId: number }>(null);
 
   const { data: grouped, isLoading } = trpc.quotations.listByCategory.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery({ activeOnly: true });
@@ -163,6 +167,21 @@ export default function QuotationsPage() {
     onSuccess: () => {
       refetchRequests();
       toast.success("Solicitação cancelada");
+    },
+  });
+
+  const autoProcessMutation = trpc.quotationRequests.autoProcess.useMutation({
+    onSuccess: (data) => {
+      setShowAutoProcessConfirm(false);
+      setAutoProcessResult(data);
+      utils.suppliers.list.invalidate();
+      utils.purchaseCategories.list.invalidate();
+      utils.quotations.listByCategory.invalidate();
+      refetchRequests();
+    },
+    onError: (err) => {
+      setShowAutoProcessConfirm(false);
+      toast.error("Erro ao processar: " + err.message);
     },
   });
 
@@ -914,11 +933,88 @@ export default function QuotationsPage() {
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewResponsesId(null)}>Fechar</Button>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {requestDetail && requestDetail.responses.length > 0 && !autoProcessResult && (
+              <Button
+                onClick={() => setShowAutoProcessConfirm(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white w-full sm:w-auto"
+                disabled={autoProcessMutation.isPending}
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                {autoProcessMutation.isPending ? "Processando..." : "Processar Automaticamente"}
+              </Button>
+            )}
+            {autoProcessResult && (
+              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 w-full">
+                <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                <span>Processado! {autoProcessResult.suppliersCreated} fornecedor(es) criado(s), {autoProcessResult.catalogEntriesCreated} entradas no catálogo, solicitação de compra #{autoProcessResult.purchaseRequestId} gerada.</span>
+              </div>
+            )}
+            <Button variant="outline" onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de confirmação: Processar Automaticamente */}
+      <AlertDialog open={showAutoProcessConfirm} onOpenChange={setShowAutoProcessConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-purple-600" />
+              Processar orçamento automaticamente?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Esta ação irá executar automaticamente:</p>
+                <div className="space-y-2 bg-gray-50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Building2 className="w-4 h-4 text-blue-500" />
+                    <span><strong>Criar fornecedores</strong> de todas as respostas recebidas</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Tag className="w-4 h-4 text-purple-500" />
+                    <span><strong>Criar categoria</strong> com o título do orçamento</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <TrendingDown className="w-4 h-4 text-amber-500" />
+                    <span><strong>Registrar catálogo de preços</strong> com todos os itens e valores</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <ShoppingCart className="w-4 h-4 text-green-500" />
+                    <span><strong>Criar solicitação de compra</strong> com os menores preços</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-700">Urgência da solicitação de compra</label>
+                  <select
+                    value={autoProcessUrgency}
+                    onChange={(e) => setAutoProcessUrgency(e.target.value as any)}
+                    className="w-full border rounded-md px-3 py-1.5 text-sm bg-white"
+                  >
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                    <option value="critica">Crítica</option>
+                  </select>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (viewResponsesId) {
+                  autoProcessMutation.mutate({ quotationRequestId: viewResponsesId, urgency: autoProcessUrgency });
+                }
+              }}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              <Zap className="w-4 h-4 mr-2" /> Processar agora
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* New Quotation Dialog */}
       <Dialog open={showQuoteForm} onOpenChange={setShowQuoteForm}>

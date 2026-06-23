@@ -116,7 +116,7 @@ export default function SuppliersPage() {
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Building2 className="w-6 h-6 text-blue-600" />
@@ -124,17 +124,18 @@ export default function SuppliersPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Cadastro de empresas e contatos</p>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={() => syncMutation.mutate()}
             disabled={syncMutation.isPending}
             title="Importar fornecedores das respostas de orçamentos"
+            className="w-full sm:w-auto"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
             {syncMutation.isPending ? 'Importando...' : 'Importar dos Orçamentos'}
           </Button>
-          <Button onClick={() => { setForm(emptyForm); setEditId(null); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={() => { setForm(emptyForm); setEditId(null); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" /> Novo Fornecedor
           </Button>
         </div>

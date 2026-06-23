@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { quotationRequests, quotationResponses, suppliers } from "../../drizzle/schema";
+import { quotationRequests, quotationResponses, suppliers, purchaseCategories, quotations, purchaseRequests, purchaseRequestItems } from "../../drizzle/schema";
 import { eq, desc, like } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
@@ -98,6 +98,206 @@ export const quotationRequestsRouter = router({
       return { success: true };
     }),
 
+  // ===== AUTOMAÇÃO COMPLETA =====
+  // Processa uma solicitação respondida:
+  // 1. Cria/atualiza fornecedores de todas as respostas
+  // 2. Cria/encontra categoria com o título do orçamento
+  // 3. Popula catálogo de preços com todos os itens de todas as respostas
+  // 4. Cria solicitação de compra com os itens de menor preço
+  autoProcess: protectedProcedure
+    .input(z.object({
+      quotationRequestId: z.number(),
+      urgency: z.enum(['baixa', 'media', 'alta', 'critica']).optional().default('media'),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // 1. Buscar solicitação e respostas
+      const [req] = await db.select().from(quotationRequests).where(eq(quotationRequests.id, input.quotationRequestId));
+      if (!req) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+      const responses = await db
+        .select()
+        .from(quotationResponses)
+        .where(eq(quotationResponses.quotationRequestId, input.quotationRequestId));
+
+      if (responses.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicitação" });
+      }
+
+      const requestItems = JSON.parse(req.itemsJson || "[]") as Array<{ name: string; quantity: string; unit: string }>;
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const result = {
+        suppliersCreated: 0,
+        suppliersUpdated: 0,
+        categoryId: 0,
+        categoryName: req.title,
+        catalogEntriesCreated: 0,
+        purchaseRequestId: 0,
+      };
+
+      // 2. Criar/atualizar fornecedores de todas as respostas
+      const supplierIdByResponse: Map<number, number> = new Map();
+      for (const resp of responses) {
+        if (!resp.supplierName?.trim()) continue;
+        const existing = await db
+          .select()
+          .from(suppliers)
+          .where(like(suppliers.name, `%${resp.supplierName.trim()}%`))
+          .limit(1);
+
+        if (existing.length === 0) {
+          const [ins] = await db.insert(suppliers).values({
+            name: resp.supplierName.trim(),
+            address: resp.address ?? null,
+            phone: resp.sellerPhone ?? null,
+            whatsapp: resp.sellerPhone ?? null,
+            email: resp.sellerEmail ?? null,
+            notes: resp.cnpj
+              ? `CNPJ: ${resp.cnpj}${resp.sellerName ? ` | Vendedor: ${resp.sellerName}` : ''}`
+              : resp.sellerName ? `Vendedor: ${resp.sellerName}` : null,
+            active: 1,
+          });
+          const newId = (ins as any).insertId as number;
+          supplierIdByResponse.set(resp.id, newId);
+          result.suppliersCreated++;
+        } else {
+          const s = existing[0]!;
+          const updates: Record<string, string | null> = {};
+          if (!s.phone && resp.sellerPhone) updates.phone = resp.sellerPhone;
+          if (!s.whatsapp && resp.sellerPhone) updates.whatsapp = resp.sellerPhone;
+          if (!s.email && resp.sellerEmail) updates.email = resp.sellerEmail;
+          if (Object.keys(updates).length > 0) {
+            await db.update(suppliers).set(updates).where(eq(suppliers.id, s.id));
+            result.suppliersUpdated++;
+          }
+          supplierIdByResponse.set(resp.id, s.id);
+        }
+      }
+
+      // 3. Criar/encontrar categoria com o título do orçamento
+      const existingCat = await db
+        .select()
+        .from(purchaseCategories)
+        .where(like(purchaseCategories.name, `%${req.title.trim()}%`))
+        .limit(1);
+
+      let categoryId: number;
+      if (existingCat.length > 0) {
+        categoryId = existingCat[0]!.id;
+      } else {
+        // Escolher cor baseada no título (hash simples)
+        const colors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#84CC16'];
+        const colorIndex = req.title.charCodeAt(0) % colors.length;
+        const [catIns] = await db.insert(purchaseCategories).values({
+          name: req.title.trim(),
+          color: colors[colorIndex],
+          createdBy: ctx.user.id,
+        });
+        categoryId = (catIns as any).insertId as number;
+      }
+      result.categoryId = categoryId;
+      result.categoryName = req.title;
+
+      // 4. Popular catálogo de preços com todos os itens de todas as respostas
+      for (const resp of responses) {
+        const supplierId = supplierIdByResponse.get(resp.id);
+        if (!supplierId) continue;
+        const respItems = JSON.parse(resp.itemsJson || "[]") as Array<{
+          name: string; quantity: string; unit?: string; price: string; brand?: string; notes?: string
+        }>;
+        for (const item of respItems) {
+          if (!item.price || parseFloat(item.price) <= 0) continue;
+          await db.insert(quotations).values({
+            supplierId,
+            categoryId,
+            requestId: input.quotationRequestId,
+            productName: item.name,
+            unit: item.unit || 'un',
+            price: item.price,
+            quotationDate: now,
+            notes: item.brand ? `Marca: ${item.brand}${item.notes ? ` | ${item.notes}` : ''}` : (item.notes || null),
+            createdBy: ctx.user.id,
+          });
+          result.catalogEntriesCreated++;
+        }
+      }
+
+      // 5. Calcular melhor preço por item (menor preço entre todas as respostas)
+      const bestPriceByItem: Map<string, { price: number; supplierName: string; unit: string; quantity: string }> = new Map();
+      for (const resp of responses) {
+        const respItems = JSON.parse(resp.itemsJson || "[]") as Array<{
+          name: string; quantity: string; unit?: string; price: string;
+        }>;
+        for (const item of respItems) {
+          const price = parseFloat(item.price);
+          if (isNaN(price) || price <= 0) continue;
+          const existing = bestPriceByItem.get(item.name);
+          if (!existing || price < existing.price) {
+            bestPriceByItem.set(item.name, {
+              price,
+              supplierName: resp.supplierName || '',
+              unit: item.unit || 'un',
+              quantity: item.quantity,
+            });
+          }
+        }
+      }
+
+      // Usar quantidades originais da solicitação para a solicitação de compra
+      const purchaseItems = requestItems.map(reqItem => {
+        const best = bestPriceByItem.get(reqItem.name);
+        return {
+          name: reqItem.name,
+          quantity: reqItem.quantity,
+          unit: reqItem.unit || best?.unit || 'un',
+          notes: best ? `Menor preço: R$ ${parseFloat(best.price.toString()).toFixed(2).replace('.', ',')} — ${best.supplierName}` : undefined,
+        };
+      });
+
+      // Montar descrição com resumo dos fornecedores
+      const supplierSummary = responses
+        .map(r => `• ${r.supplierName}`)
+        .join('\n');
+
+      // 6. Criar solicitação de compra
+      const [prIns] = await db.insert(purchaseRequests).values({
+        title: `Compra: ${req.title}`,
+        description: `Gerado automaticamente a partir do orçamento "${req.title}".\n\nFornecedores consultados:\n${supplierSummary}`,
+        categoryId,
+        urgency: input.urgency,
+        status: 'pendente',
+        requestDate: now,
+        requestedBy: ctx.user.id,
+        notes: `Orçamento origem: #${req.id} — ${responses.length} resposta(s) recebida(s)`,
+      });
+      const purchaseRequestId = (prIns as any).insertId as number;
+      result.purchaseRequestId = purchaseRequestId;
+
+      if (purchaseItems.length > 0) {
+        await db.insert(purchaseRequestItems).values(
+          purchaseItems.map(item => ({
+            requestId: purchaseRequestId,
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            notes: item.notes,
+          }))
+        );
+      }
+
+      // Notificar owner
+      try {
+        await notifyOwner({
+          title: `✅ Orçamento processado automaticamente: ${req.title}`,
+          content: `O orçamento "${req.title}" foi processado.\n\n• ${result.suppliersCreated} fornecedor(es) criado(s)\n• ${result.catalogEntriesCreated} entradas no catálogo\n• Solicitação de compra #${purchaseRequestId} criada com ${purchaseItems.length} item(s)`,
+        });
+      } catch (_) { /* não bloquear */ }
+
+      return result;
+    }),
+
   // ===== ROTAS PÚBLICAS (sem auth) =====
 
   // Buscar solicitação por token (fornecedor acessa)
@@ -184,6 +384,7 @@ export const quotationRequestsRouter = router({
         .update(quotationRequests)
         .set({ status: "respondida" })
         .where(eq(quotationRequests.id, req.id));
+
       // Cadastrar fornecedor automaticamente se não existir
       try {
         const existingSuppliers = await db

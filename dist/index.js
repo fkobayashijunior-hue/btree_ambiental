@@ -12317,6 +12317,166 @@ var quotationRequestsRouter = router({
     await db.update(quotationRequests).set({ status: "cancelada" }).where(eq35(quotationRequests.id, input.id));
     return { success: true };
   }),
+  // ===== AUTOMAÇÃO COMPLETA =====
+  // Processa uma solicitação respondida:
+  // 1. Cria/atualiza fornecedores de todas as respostas
+  // 2. Cria/encontra categoria com o título do orçamento
+  // 3. Popula catálogo de preços com todos os itens de todas as respostas
+  // 4. Cria solicitação de compra com os itens de menor preço
+  autoProcess: protectedProcedure.input(z36.object({
+    quotationRequestId: z36.number(),
+    urgency: z36.enum(["baixa", "media", "alta", "critica"]).optional().default("media")
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.id, input.quotationRequestId));
+    if (!req) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    const responses = await db.select().from(quotationResponses).where(eq35(quotationResponses.quotationRequestId, input.quotationRequestId));
+    if (responses.length === 0) {
+      throw new TRPCError26({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o" });
+    }
+    const requestItems = JSON.parse(req.itemsJson || "[]");
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    const result = {
+      suppliersCreated: 0,
+      suppliersUpdated: 0,
+      categoryId: 0,
+      categoryName: req.title,
+      catalogEntriesCreated: 0,
+      purchaseRequestId: 0
+    };
+    const supplierIdByResponse = /* @__PURE__ */ new Map();
+    for (const resp of responses) {
+      if (!resp.supplierName?.trim()) continue;
+      const existing = await db.select().from(suppliers).where(like4(suppliers.name, `%${resp.supplierName.trim()}%`)).limit(1);
+      if (existing.length === 0) {
+        const [ins] = await db.insert(suppliers).values({
+          name: resp.supplierName.trim(),
+          address: resp.address ?? null,
+          phone: resp.sellerPhone ?? null,
+          whatsapp: resp.sellerPhone ?? null,
+          email: resp.sellerEmail ?? null,
+          notes: resp.cnpj ? `CNPJ: ${resp.cnpj}${resp.sellerName ? ` | Vendedor: ${resp.sellerName}` : ""}` : resp.sellerName ? `Vendedor: ${resp.sellerName}` : null,
+          active: 1
+        });
+        const newId = ins.insertId;
+        supplierIdByResponse.set(resp.id, newId);
+        result.suppliersCreated++;
+      } else {
+        const s = existing[0];
+        const updates = {};
+        if (!s.phone && resp.sellerPhone) updates.phone = resp.sellerPhone;
+        if (!s.whatsapp && resp.sellerPhone) updates.whatsapp = resp.sellerPhone;
+        if (!s.email && resp.sellerEmail) updates.email = resp.sellerEmail;
+        if (Object.keys(updates).length > 0) {
+          await db.update(suppliers).set(updates).where(eq35(suppliers.id, s.id));
+          result.suppliersUpdated++;
+        }
+        supplierIdByResponse.set(resp.id, s.id);
+      }
+    }
+    const existingCat = await db.select().from(purchaseCategories).where(like4(purchaseCategories.name, `%${req.title.trim()}%`)).limit(1);
+    let categoryId;
+    if (existingCat.length > 0) {
+      categoryId = existingCat[0].id;
+    } else {
+      const colors = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#06B6D4", "#84CC16"];
+      const colorIndex = req.title.charCodeAt(0) % colors.length;
+      const [catIns] = await db.insert(purchaseCategories).values({
+        name: req.title.trim(),
+        color: colors[colorIndex],
+        createdBy: ctx.user.id
+      });
+      categoryId = catIns.insertId;
+    }
+    result.categoryId = categoryId;
+    result.categoryName = req.title;
+    for (const resp of responses) {
+      const supplierId = supplierIdByResponse.get(resp.id);
+      if (!supplierId) continue;
+      const respItems = JSON.parse(resp.itemsJson || "[]");
+      for (const item of respItems) {
+        if (!item.price || parseFloat(item.price) <= 0) continue;
+        await db.insert(quotations).values({
+          supplierId,
+          categoryId,
+          requestId: input.quotationRequestId,
+          productName: item.name,
+          unit: item.unit || "un",
+          price: item.price,
+          quotationDate: now,
+          notes: item.brand ? `Marca: ${item.brand}${item.notes ? ` | ${item.notes}` : ""}` : item.notes || null,
+          createdBy: ctx.user.id
+        });
+        result.catalogEntriesCreated++;
+      }
+    }
+    const bestPriceByItem = /* @__PURE__ */ new Map();
+    for (const resp of responses) {
+      const respItems = JSON.parse(resp.itemsJson || "[]");
+      for (const item of respItems) {
+        const price = parseFloat(item.price);
+        if (isNaN(price) || price <= 0) continue;
+        const existing = bestPriceByItem.get(item.name);
+        if (!existing || price < existing.price) {
+          bestPriceByItem.set(item.name, {
+            price,
+            supplierName: resp.supplierName || "",
+            unit: item.unit || "un",
+            quantity: item.quantity
+          });
+        }
+      }
+    }
+    const purchaseItems = requestItems.map((reqItem) => {
+      const best = bestPriceByItem.get(reqItem.name);
+      return {
+        name: reqItem.name,
+        quantity: reqItem.quantity,
+        unit: reqItem.unit || best?.unit || "un",
+        notes: best ? `Menor pre\xE7o: R$ ${parseFloat(best.price.toString()).toFixed(2).replace(".", ",")} \u2014 ${best.supplierName}` : void 0
+      };
+    });
+    const supplierSummary = responses.map((r) => `\u2022 ${r.supplierName}`).join("\n");
+    const [prIns] = await db.insert(purchaseRequests).values({
+      title: `Compra: ${req.title}`,
+      description: `Gerado automaticamente a partir do or\xE7amento "${req.title}".
+
+Fornecedores consultados:
+${supplierSummary}`,
+      categoryId,
+      urgency: input.urgency,
+      status: "pendente",
+      requestDate: now,
+      requestedBy: ctx.user.id,
+      notes: `Or\xE7amento origem: #${req.id} \u2014 ${responses.length} resposta(s) recebida(s)`
+    });
+    const purchaseRequestId = prIns.insertId;
+    result.purchaseRequestId = purchaseRequestId;
+    if (purchaseItems.length > 0) {
+      await db.insert(purchaseRequestItems).values(
+        purchaseItems.map((item) => ({
+          requestId: purchaseRequestId,
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+          notes: item.notes
+        }))
+      );
+    }
+    try {
+      await notifyOwner({
+        title: `\u2705 Or\xE7amento processado automaticamente: ${req.title}`,
+        content: `O or\xE7amento "${req.title}" foi processado.
+
+\u2022 ${result.suppliersCreated} fornecedor(es) criado(s)
+\u2022 ${result.catalogEntriesCreated} entradas no cat\xE1logo
+\u2022 Solicita\xE7\xE3o de compra #${purchaseRequestId} criada com ${purchaseItems.length} item(s)`
+      });
+    } catch (_) {
+    }
+    return result;
+  }),
   // ===== ROTAS PÚBLICAS (sem auth) =====
   // Buscar solicitação por token (fornecedor acessa)
   getByToken: publicProcedure.input(z36.object({ token: z36.string() })).query(async ({ input }) => {
