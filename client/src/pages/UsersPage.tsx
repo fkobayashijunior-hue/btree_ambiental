@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Search, Users, Shield, Eye, EyeOff, Trash2, Pencil } from "lucide-react";
+import { Plus, Search, Users, Shield, Eye, EyeOff, Trash2, Pencil, UserCog } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type FormData = {
   name: string;
@@ -34,7 +43,7 @@ const emptyForm: FormData = {
 };
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: "Administrador",
+  admin: "Admin Sistema",
   user: "Usuário",
 };
 
@@ -44,6 +53,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export default function UsersPage() {
+  const { isAdmin } = usePermissions();
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -120,6 +130,10 @@ export default function UsersPage() {
     setDeleteName(u.name);
   };
 
+  const handleChangeRole = (userId: number, newRole: "user" | "admin") => {
+    updateMutation.mutate({ id: userId, role: newRole });
+  };
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -137,6 +151,24 @@ export default function UsersPage() {
         <Button onClick={openNew} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
           <Plus className="h-4 w-4" /> Novo Usuário
         </Button>
+      </div>
+
+      {/* Legenda de perfis */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+          <Shield className="h-4 w-4 text-purple-700" />
+          <div>
+            <p className="text-xs font-semibold text-purple-800">Admin Sistema</p>
+            <p className="text-xs text-purple-600">Acesso total — gerencia usuários, configurações e todos os módulos</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+          <Users className="h-4 w-4 text-blue-700" />
+          <div>
+            <p className="text-xs font-semibold text-blue-800">Usuário</p>
+            <p className="text-xs text-blue-600">Acesso operacional — registros do dia a dia conforme permissões</p>
+          </div>
+        </div>
       </div>
 
       {/* Search */}
@@ -187,17 +219,63 @@ export default function UsersPage() {
                     <tr key={u.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-sm font-bold text-emerald-700">{u.name?.[0]?.toUpperCase()}</span>
+                          <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${u.role === 'admin' ? 'bg-purple-100' : 'bg-emerald-100'}`}>
+                            <span className={`text-sm font-bold ${u.role === 'admin' ? 'text-purple-700' : 'text-emerald-700'}`}>{u.name?.[0]?.toUpperCase()}</span>
                           </div>
-                          <span className="font-medium text-gray-800">{u.name}</span>
+                          <div>
+                            <span className="font-medium text-gray-800">{u.name}</span>
+                            {u.role === 'admin' && (
+                              <p className="text-xs text-purple-600 flex items-center gap-1">
+                                <Shield className="h-3 w-3" /> Admin Sistema
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 px-4">
-                        <Badge className={`text-xs ${ROLE_COLORS[u.role] || "bg-gray-100 text-gray-800"}`}>
-                          {u.role === "admin" && <Shield className="h-3 w-3 mr-1 inline" />}
-                          {ROLE_LABELS[u.role] || u.role}
-                        </Badge>
+                        {/* Botão rápido de troca de perfil */}
+                        {isAdmin ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium border transition-colors cursor-pointer hover:opacity-80 ${u.role === 'admin' ? 'bg-purple-100 text-purple-800 border-purple-200' : 'bg-blue-100 text-blue-800 border-blue-200'}`}>
+                                {u.role === "admin" && <Shield className="h-3 w-3" />}
+                                {ROLE_LABELS[u.role] || u.role}
+                                <UserCog className="h-3 w-3 ml-1 opacity-60" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuLabel className="text-xs text-gray-500">Alterar perfil de acesso</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleChangeRole(u.id, "admin")}
+                                disabled={u.role === "admin" || updateMutation.isPending}
+                                className="gap-2"
+                              >
+                                <Shield className="h-4 w-4 text-purple-600" />
+                                <div>
+                                  <p className="font-medium">Admin Sistema</p>
+                                  <p className="text-xs text-gray-400">Acesso total ao sistema</p>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleChangeRole(u.id, "user")}
+                                disabled={u.role === "user" || updateMutation.isPending}
+                                className="gap-2"
+                              >
+                                <Users className="h-4 w-4 text-blue-600" />
+                                <div>
+                                  <p className="font-medium">Usuário</p>
+                                  <p className="text-xs text-gray-400">Acesso operacional</p>
+                                </div>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <Badge className={`text-xs ${ROLE_COLORS[u.role] || "bg-gray-100 text-gray-800"}`}>
+                            {u.role === "admin" && <Shield className="h-3 w-3 mr-1 inline" />}
+                            {ROLE_LABELS[u.role] || u.role}
+                          </Badge>
+                        )}
                       </td>
                       <td className="py-4 px-4 text-gray-500 text-sm hidden md:table-cell">{u.email}</td>
                       <td className="py-4 px-4 text-gray-400 text-xs hidden lg:table-cell">
@@ -293,11 +371,11 @@ export default function UsersPage() {
                 onChange={e => setForm(f => ({ ...f, role: e.target.value as "user" | "admin" }))}
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="user">Usuário</option>
-                <option value="admin">Administrador</option>
+                <option value="user">Usuário — acesso operacional</option>
+                <option value="admin">Admin Sistema — acesso total</option>
               </select>
               <p className="text-xs text-gray-400 mt-1">
-                Administradores têm acesso total ao sistema, incluindo gestão de usuários.
+                Admin Sistema tem acesso total, incluindo gestão de usuários e configurações.
               </p>
             </div>
 
