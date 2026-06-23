@@ -12521,29 +12521,21 @@ var quotationRequestsRouter = router({
 Fornecedores consultados:
 ${supplierSummary}`;
     const prNotes = `Or\xE7amento origem: #${req.id} \u2014 ${responses.length} resposta(s) recebida(s)`;
-    const prNow = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    const [prInsResult] = await db.insert(purchaseRequests).values({
-      title: prTitle,
-      description: prDesc,
-      categoryId,
-      urgency: input.urgency,
-      status: "pendente",
-      requestDate: prNow,
-      requestedBy: ctx.user.id,
-      notes: prNotes
-    });
-    const purchaseRequestId = prInsResult.insertId;
+    const prUrgency = input.urgency;
+    const prRequestedBy = ctx.user.id;
+    const prCategoryId = categoryId;
+    const prInsResult = await db.execute(
+      sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pendente', NOW(), ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
+    );
+    const purchaseRequestId = prInsResult[0]?.insertId;
     result.purchaseRequestId = purchaseRequestId;
     if (purchaseItems.length > 0) {
-      await db.insert(purchaseRequestItems).values(
-        purchaseItems.map((item) => ({
-          requestId: purchaseRequestId,
-          name: item.name,
-          quantity: item.quantity,
-          unit: item.unit,
-          notes: item.notes || null
-        }))
-      );
+      for (const item of purchaseItems) {
+        const piNotes = item.notes || null;
+        await db.execute(
+          sql21`INSERT INTO purchase_request_items (request_id, name, quantity, unit, notes, created_at) VALUES (${purchaseRequestId}, ${item.name}, ${item.quantity}, ${item.unit}, ${piNotes}, NOW())`
+        );
+      }
     }
     try {
       await notifyOwner({
