@@ -12444,12 +12444,13 @@ var quotationRequestsRouter = router({
     } else {
       const colors = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#06B6D4", "#84CC16"];
       const colorIndex = req.title.charCodeAt(0) % colors.length;
-      const [catIns] = await db.insert(purchaseCategories).values({
-        name: req.title.trim(),
-        color: colors[colorIndex],
-        createdBy: ctx.user.id
-      });
-      categoryId = catIns.insertId;
+      const catColor = colors[colorIndex];
+      const catName = req.title.trim();
+      const createdById = ctx.user.id;
+      const catInsResult = await db.execute(
+        sql21`INSERT INTO purchase_categories (name, color, created_by) VALUES (${catName}, ${catColor}, ${createdById})`
+      );
+      categoryId = catInsResult[0]?.insertId;
     }
     result.categoryId = categoryId;
     result.categoryName = req.title;
@@ -12459,17 +12460,14 @@ var quotationRequestsRouter = router({
       const respItems = JSON.parse(resp.itemsJson || "[]");
       for (const item of respItems) {
         if (!item.price || parseFloat(item.price) <= 0) continue;
-        await db.insert(quotations).values({
-          supplierId,
-          categoryId,
-          requestId: input.quotationRequestId,
-          productName: item.name,
-          unit: item.unit || "un",
-          price: item.price,
-          quotationDate: now,
-          notes: item.brand ? `Marca: ${item.brand}${item.notes ? ` | ${item.notes}` : ""}` : item.notes || null,
-          createdBy: ctx.user.id
-        });
+        const qNotes = item.brand ? `Marca: ${item.brand}${item.notes ? ` | ${item.notes}` : ""}` : item.notes || null;
+        const qUnit = item.unit || "un";
+        const qDate = now;
+        const qCreatedBy = ctx.user.id;
+        const qReqId = input.quotationRequestId;
+        await db.execute(
+          sql21`INSERT INTO quotations (supplier_id, category_id, request_id, product_name, unit, price, quotation_date, notes, created_by) VALUES (${supplierId}, ${categoryId}, ${qReqId}, ${item.name}, ${qUnit}, ${item.price}, ${qDate}, ${qNotes}, ${qCreatedBy})`
+        );
         result.catalogEntriesCreated++;
       }
     }
@@ -12500,31 +12498,27 @@ var quotationRequestsRouter = router({
       };
     });
     const supplierSummary = responses.map((r) => `\u2022 ${r.supplierName}`).join("\n");
-    const [prIns] = await db.insert(purchaseRequests).values({
-      title: `Compra: ${req.title}`,
-      description: `Gerado automaticamente a partir do or\xE7amento "${req.title}".
+    const prTitle = `Compra: ${req.title}`;
+    const prDesc = `Gerado automaticamente a partir do or\xE7amento "${req.title}".
 
 Fornecedores consultados:
-${supplierSummary}`,
-      categoryId,
-      urgency: input.urgency,
-      status: "pendente",
-      requestDate: now,
-      requestedBy: ctx.user.id,
-      notes: `Or\xE7amento origem: #${req.id} \u2014 ${responses.length} resposta(s) recebida(s)`
-    });
-    const purchaseRequestId = prIns.insertId;
+${supplierSummary}`;
+    const prNotes = `Or\xE7amento origem: #${req.id} \u2014 ${responses.length} resposta(s) recebida(s)`;
+    const prUrgency = input.urgency;
+    const prRequestedBy = ctx.user.id;
+    const prRequestDate = now;
+    const prInsResult = await db.execute(
+      sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pendente', ${prRequestDate}, ${prRequestedBy}, ${prNotes})`
+    );
+    const purchaseRequestId = prInsResult[0]?.insertId;
     result.purchaseRequestId = purchaseRequestId;
     if (purchaseItems.length > 0) {
-      await db.insert(purchaseRequestItems).values(
-        purchaseItems.map((item) => ({
-          requestId: purchaseRequestId,
-          name: item.name,
-          quantity: item.quantity,
-          unit: item.unit,
-          notes: item.notes
-        }))
-      );
+      for (const item of purchaseItems) {
+        const piNotes = item.notes || null;
+        await db.execute(
+          sql21`INSERT INTO purchase_request_items (request_id, name, quantity, unit, notes) VALUES (${purchaseRequestId}, ${item.name}, ${item.quantity}, ${item.unit}, ${piNotes})`
+        );
+      }
     }
     try {
       await notifyOwner({

@@ -191,12 +191,14 @@ export const quotationRequestsRouter = router({
         // Escolher cor baseada no título (hash simples)
         const colors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#84CC16'];
         const colorIndex = req.title.charCodeAt(0) % colors.length;
-        const [catIns] = await db.insert(purchaseCategories).values({
-          name: req.title.trim(),
-          color: colors[colorIndex],
-          createdBy: ctx.user.id,
-        });
-        categoryId = (catIns as any).insertId as number;
+        const catColor = colors[colorIndex]!;
+        const catName = req.title.trim();
+        const createdById = ctx.user.id;
+        // Usar SQL raw para evitar 'default' parametrizado (incompatível com MySQL Hostinger)
+        const catInsResult = await db.execute(
+          sql`INSERT INTO purchase_categories (name, color, created_by) VALUES (${catName}, ${catColor}, ${createdById})`
+        );
+        categoryId = (catInsResult as any)[0]?.insertId as number;
       }
       result.categoryId = categoryId;
       result.categoryName = req.title;
@@ -210,17 +212,15 @@ export const quotationRequestsRouter = router({
         }>;
         for (const item of respItems) {
           if (!item.price || parseFloat(item.price) <= 0) continue;
-          await db.insert(quotations).values({
-            supplierId,
-            categoryId,
-            requestId: input.quotationRequestId,
-            productName: item.name,
-            unit: item.unit || 'un',
-            price: item.price,
-            quotationDate: now,
-            notes: item.brand ? `Marca: ${item.brand}${item.notes ? ` | ${item.notes}` : ''}` : (item.notes || null),
-            createdBy: ctx.user.id,
-          });
+          const qNotes = item.brand ? `Marca: ${item.brand}${item.notes ? ` | ${item.notes}` : ''}` : (item.notes || null);
+          const qUnit = item.unit || 'un';
+          const qDate = now;
+          const qCreatedBy = ctx.user.id;
+          const qReqId = input.quotationRequestId;
+          // SQL raw para evitar 'default' parametrizado (MySQL Hostinger)
+          await db.execute(
+            sql`INSERT INTO quotations (supplier_id, category_id, request_id, product_name, unit, price, quotation_date, notes, created_by) VALUES (${supplierId}, ${categoryId}, ${qReqId}, ${item.name}, ${qUnit}, ${item.price}, ${qDate}, ${qNotes}, ${qCreatedBy})`
+          );
           result.catalogEntriesCreated++;
         }
       }
@@ -262,30 +262,26 @@ export const quotationRequestsRouter = router({
         .map(r => `• ${r.supplierName}`)
         .join('\n');
 
-      // 6. Criar solicitação de compra
-      const [prIns] = await db.insert(purchaseRequests).values({
-        title: `Compra: ${req.title}`,
-        description: `Gerado automaticamente a partir do orçamento "${req.title}".\n\nFornecedores consultados:\n${supplierSummary}`,
-        categoryId,
-        urgency: input.urgency,
-        status: 'pendente',
-        requestDate: now,
-        requestedBy: ctx.user.id,
-        notes: `Orçamento origem: #${req.id} — ${responses.length} resposta(s) recebida(s)`,
-      });
-      const purchaseRequestId = (prIns as any).insertId as number;
+      // 6. Criar solicitação de compra (SQL raw para evitar 'default' parametrizado)
+      const prTitle = `Compra: ${req.title}`;
+      const prDesc = `Gerado automaticamente a partir do orçamento "${req.title}".\n\nFornecedores consultados:\n${supplierSummary}`;
+      const prNotes = `Orçamento origem: #${req.id} — ${responses.length} resposta(s) recebida(s)`;
+      const prUrgency = input.urgency;
+      const prRequestedBy = ctx.user.id;
+      const prRequestDate = now;
+      const prInsResult = await db.execute(
+        sql`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pendente', ${prRequestDate}, ${prRequestedBy}, ${prNotes})`
+      );
+      const purchaseRequestId = (prInsResult as any)[0]?.insertId as number;
       result.purchaseRequestId = purchaseRequestId;
 
       if (purchaseItems.length > 0) {
-        await db.insert(purchaseRequestItems).values(
-          purchaseItems.map(item => ({
-            requestId: purchaseRequestId,
-            name: item.name,
-            quantity: item.quantity,
-            unit: item.unit,
-            notes: item.notes,
-          }))
-        );
+        for (const item of purchaseItems) {
+          const piNotes = item.notes || null;
+          await db.execute(
+            sql`INSERT INTO purchase_request_items (request_id, name, quantity, unit, notes) VALUES (${purchaseRequestId}, ${item.name}, ${item.quantity}, ${item.unit}, ${piNotes})`
+          );
+        }
       }
 
       // Notificar owner
