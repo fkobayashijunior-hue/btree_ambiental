@@ -11995,7 +11995,7 @@ init_db();
 init_schema();
 import { z as z34 } from "zod";
 import { TRPCError as TRPCError24 } from "@trpc/server";
-import { eq as eq33, desc as desc27 } from "drizzle-orm";
+import { eq as eq33 } from "drizzle-orm";
 var statusEnum = z34.enum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada"]);
 var urgencyEnum = z34.enum(["baixa", "media", "alta", "critica"]);
 var purchaseRequestsRouter = router({
@@ -12006,29 +12006,28 @@ var purchaseRequestsRouter = router({
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select({
-      id: purchaseRequests.id,
-      title: purchaseRequests.title,
-      description: purchaseRequests.description,
-      images: purchaseRequests.images,
-      linkUrl: purchaseRequests.linkUrl,
-      categoryId: purchaseRequests.categoryId,
-      categoryName: purchaseCategories.name,
-      categoryColor: purchaseCategories.color,
-      status: purchaseRequests.status,
-      urgency: purchaseRequests.urgency,
-      requestDate: purchaseRequests.requestDate,
-      readDate: purchaseRequests.readDate,
-      purchaseDate: purchaseRequests.purchaseDate,
-      expectedArrival: purchaseRequests.expectedArrival,
-      receivedDate: purchaseRequests.receivedDate,
-      itemsConfirmedDate: purchaseRequests.itemsConfirmedDate,
-      requestedBy: purchaseRequests.requestedBy,
-      notes: purchaseRequests.notes,
-      createdAt: purchaseRequests.createdAt,
-      updatedAt: purchaseRequests.updatedAt
-    }).from(purchaseRequests).leftJoin(purchaseCategories, eq33(purchaseRequests.categoryId, purchaseCategories.id)).orderBy(desc27(purchaseRequests.createdAt));
-    console.log("[purchaseRequests.list] rows retornados:", rows.length, rows.map((r) => ({ id: r.id, status: r.status, urgency: r.urgency })));
+    const [rows] = await db.execute(`
+        SELECT
+          pr.id, pr.title, pr.description, pr.images,
+          COALESCE(pr.link_url, pr.link) AS linkUrl,
+          pr.category_id AS categoryId,
+          pc.name AS categoryName, pc.color AS categoryColor,
+          pr.status, pr.urgency,
+          COALESCE(pr.request_date, FROM_UNIXTIME(pr.requested_at / 1000)) AS requestDate,
+          pr.read_date AS readDate,
+          pr.purchase_date AS purchaseDate,
+          pr.expected_arrival AS expectedArrival,
+          pr.received_date AS receivedDate,
+          pr.items_confirmed_date AS itemsConfirmedDate,
+          pr.requested_by AS requestedBy,
+          pr.notes,
+          pr.created_at AS createdAt,
+          pr.updated_at AS updatedAt
+        FROM purchase_requests pr
+        LEFT JOIN purchase_categories pc ON pr.category_id = pc.id
+        ORDER BY pr.created_at DESC
+      `);
+    console.log("[purchaseRequests.list] rows retornados:", rows.length);
     const statusMap = {
       pending: "pendente",
       read: "lida",
@@ -12037,7 +12036,6 @@ var purchaseRequestsRouter = router({
       received: "recebida",
       cancelled: "cancelada",
       canceled: "cancelada",
-      // já no padrão novo — passthrough
       pendente: "pendente",
       lida: "lida",
       aprovada: "aprovada",
@@ -12050,7 +12048,6 @@ var purchaseRequestsRouter = router({
       medium: "media",
       high: "alta",
       critical: "critica",
-      // já no padrão novo — passthrough
       baixa: "baixa",
       media: "media",
       alta: "alta",

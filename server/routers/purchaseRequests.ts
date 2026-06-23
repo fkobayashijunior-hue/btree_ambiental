@@ -19,58 +19,55 @@ export const purchaseRequestsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const rows = await db.select({
-        id: purchaseRequests.id,
-        title: purchaseRequests.title,
-        description: purchaseRequests.description,
-        images: purchaseRequests.images,
-        linkUrl: purchaseRequests.linkUrl,
-        categoryId: purchaseRequests.categoryId,
-        categoryName: purchaseCategories.name,
-        categoryColor: purchaseCategories.color,
-        status: purchaseRequests.status,
-        urgency: purchaseRequests.urgency,
-        requestDate: purchaseRequests.requestDate,
-        readDate: purchaseRequests.readDate,
-        purchaseDate: purchaseRequests.purchaseDate,
-        expectedArrival: purchaseRequests.expectedArrival,
-        receivedDate: purchaseRequests.receivedDate,
-        itemsConfirmedDate: purchaseRequests.itemsConfirmedDate,
-        requestedBy: purchaseRequests.requestedBy,
-        notes: purchaseRequests.notes,
-        createdAt: purchaseRequests.createdAt,
-        updatedAt: purchaseRequests.updatedAt,
-      })
-        .from(purchaseRequests)
-        .leftJoin(purchaseCategories, eq(purchaseRequests.categoryId, purchaseCategories.id))
-        .orderBy(desc(purchaseRequests.createdAt));
 
-      console.log('[purchaseRequests.list] rows retornados:', rows.length, rows.map(r => ({ id: r.id, status: r.status, urgency: r.urgency })));
+      // Usa SQL raw para compatibilidade com schema legado da Hostinger
+      // (colunas requested_at/link em vez de request_date/link_url, ENUMs em inglês)
+      const [rows] = await db.execute<any[]>(`
+        SELECT
+          pr.id, pr.title, pr.description, pr.images,
+          COALESCE(pr.link_url, pr.link) AS linkUrl,
+          pr.category_id AS categoryId,
+          pc.name AS categoryName, pc.color AS categoryColor,
+          pr.status, pr.urgency,
+          COALESCE(pr.request_date, FROM_UNIXTIME(pr.requested_at / 1000)) AS requestDate,
+          pr.read_date AS readDate,
+          pr.purchase_date AS purchaseDate,
+          pr.expected_arrival AS expectedArrival,
+          pr.received_date AS receivedDate,
+          pr.items_confirmed_date AS itemsConfirmedDate,
+          pr.requested_by AS requestedBy,
+          pr.notes,
+          pr.created_at AS createdAt,
+          pr.updated_at AS updatedAt
+        FROM purchase_requests pr
+        LEFT JOIN purchase_categories pc ON pr.category_id = pc.id
+        ORDER BY pr.created_at DESC
+      `);
+
+      console.log('[purchaseRequests.list] rows retornados:', (rows as any[]).length);
+
       // Mapeamento de valores legados (inglês) para o padrão atual (português)
-      // A tabela na Hostinger foi criada com ENUMs em inglês antes da migração
       const statusMap: Record<string, string> = {
         pending: 'pendente', read: 'lida', approved: 'aprovada',
         purchased: 'comprada', received: 'recebida', cancelled: 'cancelada', canceled: 'cancelada',
-        // já no padrão novo — passthrough
         pendente: 'pendente', lida: 'lida', aprovada: 'aprovada',
         comprada: 'comprada', recebida: 'recebida', cancelada: 'cancelada',
       };
       const urgencyMap: Record<string, string> = {
         low: 'baixa', medium: 'media', high: 'alta', critical: 'critica',
-        // já no padrão novo — passthrough
         baixa: 'baixa', media: 'media', alta: 'alta', critica: 'critica',
       };
-      const normalized = rows.map(r => ({
+      const normalized = (rows as any[]).map((r: any) => ({
         ...r,
-        status: (statusMap[r.status as string] || r.status) as any,
-        urgency: (urgencyMap[r.urgency as string] || r.urgency) as any,
+        status: statusMap[r.status] || r.status,
+        urgency: urgencyMap[r.urgency] || r.urgency,
       }));
 
-      // Filter in JS (simpler than complex SQL conditions)
+      // Filter in JS
       let filtered = normalized;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
-      if (input?.urgency) filtered = filtered.filter(r => r.urgency === input.urgency);
-      if (input?.categoryId) filtered = filtered.filter(r => r.categoryId === input.categoryId);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
+      if (input?.urgency) filtered = filtered.filter((r: any) => r.urgency === input.urgency);
+      if (input?.categoryId) filtered = filtered.filter((r: any) => r.categoryId === input.categoryId);
 
       return filtered;
     }),
