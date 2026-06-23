@@ -1378,19 +1378,25 @@ var init_schema = __esm({
     });
     suppliers = mysqlTable("suppliers", {
       id: int().autoincrement().primaryKey().notNull(),
-      name: varchar({ length: 255 }).notNull(),
-      address: varchar({ length: 500 }),
+      companyName: varchar("company_name", { length: 255 }).notNull(),
+      tradeName: varchar("trade_name", { length: 255 }),
+      cnpj: varchar({ length: 20 }),
+      address: text(),
       city: varchar({ length: 100 }),
       state: varchar({ length: 2 }),
+      zipCode: varchar("zip_code", { length: 10 }),
       phone: varchar({ length: 30 }),
       whatsapp: varchar({ length: 30 }),
       email: varchar({ length: 255 }),
-      website: varchar({ length: 500 }),
+      contactName: varchar("contact_name", { length: 255 }),
+      productCategories: text("product_categories"),
       notes: text(),
-      active: tinyint().default(1).notNull(),
+      isActive: tinyint("is_active").default(1).notNull(),
       createdBy: int("created_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
-      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      website: varchar({ length: 500 }),
+      active: tinyint().default(1).notNull()
     });
     quotations = mysqlTable("quotations", {
       id: int().autoincrement().primaryKey().notNull(),
@@ -11671,16 +11677,16 @@ init_db();
 init_schema();
 import { z as z32 } from "zod";
 import { TRPCError as TRPCError22 } from "@trpc/server";
-import { eq as eq31, desc as desc25 } from "drizzle-orm";
+import { eq as eq31, desc as desc25, sql as sql18 } from "drizzle-orm";
 var suppliersRouter = router({
   list: protectedProcedure.input(z32.object({ activeOnly: z32.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const query = db.select().from(suppliers);
     if (input?.activeOnly !== false) {
-      return await query.where(eq31(suppliers.active, 1)).orderBy(suppliers.name);
+      return await query.where(eq31(suppliers.isActive, 1)).orderBy(suppliers.companyName);
     }
-    return await query.orderBy(suppliers.name);
+    return await query.orderBy(suppliers.companyName);
   }),
   getById: protectedProcedure.input(z32.object({ id: z32.number() })).query(async ({ input }) => {
     const db = await getDb();
@@ -11700,28 +11706,36 @@ var suppliersRouter = router({
   }),
   create: protectedProcedure.input(z32.object({
     name: z32.string().min(1).max(255),
+    tradeName: z32.string().optional(),
+    cnpj: z32.string().optional(),
     address: z32.string().optional(),
     city: z32.string().optional(),
     state: z32.string().max(2).optional(),
+    zipCode: z32.string().optional(),
     phone: z32.string().optional(),
     whatsapp: z32.string().optional(),
     email: z32.string().email().optional().or(z32.literal("")),
+    contactName: z32.string().optional(),
     website: z32.string().optional(),
     notes: z32.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(suppliers).values({
-      name: input.name,
+      companyName: input.name,
+      tradeName: input.tradeName,
+      cnpj: input.cnpj,
       address: input.address,
       city: input.city,
       state: input.state,
+      zipCode: input.zipCode,
       phone: input.phone,
       whatsapp: input.whatsapp,
       email: input.email || void 0,
+      contactName: input.contactName,
       website: input.website,
       notes: input.notes,
-      active: 1,
+      isActive: 1,
       createdBy: ctx.user.id
     });
     return { id: result.insertId, ...input };
@@ -11729,30 +11743,68 @@ var suppliersRouter = router({
   update: protectedProcedure.input(z32.object({
     id: z32.number(),
     name: z32.string().min(1).max(255),
+    tradeName: z32.string().optional(),
+    cnpj: z32.string().optional(),
     address: z32.string().optional(),
     city: z32.string().optional(),
     state: z32.string().max(2).optional(),
+    zipCode: z32.string().optional(),
     phone: z32.string().optional(),
     whatsapp: z32.string().optional(),
     email: z32.string().email().optional().or(z32.literal("")),
+    contactName: z32.string().optional(),
     website: z32.string().optional(),
     notes: z32.string().optional(),
     active: z32.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data } = input;
+    const { id, name, active, ...rest } = input;
     await db.update(suppliers).set({
-      ...data,
-      email: data.email || void 0
+      companyName: name,
+      ...rest,
+      email: rest.email || void 0,
+      isActive: active !== void 0 ? active : void 0
     }).where(eq31(suppliers.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(suppliers).set({ active: 0 }).where(eq31(suppliers.id, input.id));
+    await db.update(suppliers).set({ isActive: 0 }).where(eq31(suppliers.id, input.id));
     return { success: true };
+  }),
+  syncFromQuotationResponses: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    const responses = await db.select().from(quotationResponses);
+    let created = 0;
+    let skipped = 0;
+    for (const resp of responses) {
+      if (!resp.supplierName?.trim()) continue;
+      const trimmedName = resp.supplierName.trim();
+      const rows = await db.execute(
+        sql18`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
+      );
+      const existing = rows[0];
+      if (existing.length > 0) {
+        skipped++;
+        continue;
+      }
+      await db.insert(suppliers).values({
+        companyName: trimmedName,
+        cnpj: resp.cnpj ?? null,
+        address: resp.address ?? null,
+        phone: resp.sellerPhone ?? null,
+        whatsapp: resp.sellerPhone ?? null,
+        email: resp.sellerEmail ?? null,
+        contactName: resp.sellerName ?? null,
+        isActive: 1,
+        createdBy: ctx.user.id
+      });
+      created++;
+    }
+    return { created, skipped };
   })
 });
 
@@ -11762,7 +11814,7 @@ init_db();
 init_schema();
 import { z as z33 } from "zod";
 import { TRPCError as TRPCError23 } from "@trpc/server";
-import { eq as eq32, desc as desc26, asc as asc3, sql as sql18 } from "drizzle-orm";
+import { eq as eq32, desc as desc26, asc as asc3, sql as sql19 } from "drizzle-orm";
 var quotationsRouter = router({
   // List all quotations, optionally filtered by category or supplier
   list: protectedProcedure.input(z33.object({
@@ -11775,7 +11827,7 @@ var quotationsRouter = router({
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
-      supplierName: suppliers.name,
+      supplierName: suppliers.companyName,
       supplierPhone: suppliers.phone,
       supplierWhatsapp: suppliers.whatsapp,
       categoryId: quotations.categoryId,
@@ -11798,7 +11850,7 @@ var quotationsRouter = router({
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
-      supplierName: suppliers.name,
+      supplierName: suppliers.companyName,
       supplierPhone: suppliers.phone,
       supplierWhatsapp: suppliers.whatsapp,
       categoryId: quotations.categoryId,
@@ -11807,7 +11859,7 @@ var quotationsRouter = router({
       price: quotations.price,
       quotationDate: quotations.quotationDate,
       notes: quotations.notes
-    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).where(eq32(quotations.productName, input.productName)).orderBy(asc3(sql18`CAST(${quotations.price} AS DECIMAL(10,2))`), desc26(quotations.quotationDate));
+    }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).where(eq32(quotations.productName, input.productName)).orderBy(asc3(sql19`CAST(${quotations.price} AS DECIMAL(10,2))`), desc26(quotations.quotationDate));
     return rows;
   }),
   // List grouped by category — returns categories with their products and price history
@@ -11817,7 +11869,7 @@ var quotationsRouter = router({
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
-      supplierName: suppliers.name,
+      supplierName: suppliers.companyName,
       supplierPhone: suppliers.phone,
       supplierWhatsapp: suppliers.whatsapp,
       categoryId: quotations.categoryId,
@@ -11831,7 +11883,7 @@ var quotationsRouter = router({
     }).from(quotations).leftJoin(suppliers, eq32(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq32(quotations.categoryId, purchaseCategories.id)).orderBy(
       purchaseCategories.name,
       quotations.productName,
-      asc3(sql18`CAST(${quotations.price} AS DECIMAL(10,2))`)
+      asc3(sql19`CAST(${quotations.price} AS DECIMAL(10,2))`)
     );
     const grouped = {};
     for (const row of rows) {
@@ -12242,7 +12294,7 @@ init_db();
 init_schema();
 init_notification();
 import { z as z36 } from "zod";
-import { eq as eq35, desc as desc29, like as like4, sql as sql20 } from "drizzle-orm";
+import { eq as eq35, desc as desc29, sql as sql21 } from "drizzle-orm";
 import { TRPCError as TRPCError26 } from "@trpc/server";
 import crypto from "crypto";
 var quotationRequestsRouter = router({
@@ -12350,18 +12402,20 @@ var quotationRequestsRouter = router({
       if (!resp.supplierName?.trim()) continue;
       const trimmedName = resp.supplierName.trim();
       const existingRows = await db.execute(
-        sql20`SELECT id, name, phone, whatsapp, email FROM suppliers WHERE name = ${trimmedName} LIMIT 1`
+        sql21`SELECT id, company_name, phone, whatsapp, email FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
       );
       const existing = existingRows[0];
       if (existing.length === 0) {
         const [ins] = await db.insert(suppliers).values({
-          name: resp.supplierName.trim(),
+          companyName: resp.supplierName.trim(),
+          cnpj: resp.cnpj ?? null,
           address: resp.address ?? null,
           phone: resp.sellerPhone ?? null,
           whatsapp: resp.sellerPhone ?? null,
           email: resp.sellerEmail ?? null,
-          notes: resp.cnpj ? `CNPJ: ${resp.cnpj}${resp.sellerName ? ` | Vendedor: ${resp.sellerName}` : ""}` : resp.sellerName ? `Vendedor: ${resp.sellerName}` : null,
-          active: 1
+          contactName: resp.sellerName ?? null,
+          notes: resp.notes ?? null,
+          isActive: 1
         });
         const newId = ins.insertId;
         supplierIdByResponse.set(resp.id, newId);
@@ -12381,7 +12435,7 @@ var quotationRequestsRouter = router({
     }
     const catTitle = req.title.trim();
     const existingCatRows = await db.execute(
-      sql20`SELECT id, name FROM purchase_categories WHERE name = ${catTitle} LIMIT 1`
+      sql21`SELECT id, name FROM purchase_categories WHERE name = ${catTitle} LIMIT 1`
     );
     const existingCat = existingCatRows[0];
     let categoryId;
@@ -12550,16 +12604,20 @@ ${supplierSummary}`,
     });
     await db.update(quotationRequests).set({ status: "respondida" }).where(eq35(quotationRequests.id, req.id));
     try {
-      const existingSuppliers = await db.select({ id: suppliers.id }).from(suppliers).where(like4(suppliers.name, `%${input.supplierName.trim()}%`)).limit(1);
-      if (existingSuppliers.length === 0) {
+      const existingSuppliers = await db.execute(
+        sql21`SELECT id FROM suppliers WHERE company_name = ${input.supplierName.trim()} LIMIT 1`
+      );
+      const existingArr = existingSuppliers[0];
+      if (existingArr.length === 0) {
         await db.insert(suppliers).values({
-          name: input.supplierName.trim(),
+          companyName: input.supplierName.trim(),
+          cnpj: input.cnpj ?? null,
           address: input.address ?? null,
           phone: input.sellerPhone ?? null,
           whatsapp: input.sellerPhone ?? null,
           email: input.sellerEmail ?? null,
-          notes: input.cnpj ? `CNPJ: ${input.cnpj}${input.sellerName ? ` | Vendedor: ${input.sellerName}` : ""}` : input.sellerName ? `Vendedor: ${input.sellerName}` : null,
-          active: 1
+          contactName: input.sellerName ?? null,
+          isActive: 1
         });
       }
     } catch (_) {
@@ -12587,16 +12645,19 @@ Acesse o sistema para visualizar os valores.`
     let updated = 0;
     for (const resp of allResponses) {
       if (!resp.supplierName?.trim()) continue;
-      const existing = await db.select().from(suppliers).where(like4(suppliers.name, `%${resp.supplierName.trim()}%`)).limit(1);
+      const existingRows = await db.execute(
+        sql21`SELECT id, phone, whatsapp, email FROM suppliers WHERE company_name = ${resp.supplierName.trim()} LIMIT 1`
+      );
+      const existing = existingRows[0];
       if (existing.length === 0) {
         await db.insert(suppliers).values({
-          name: resp.supplierName.trim(),
+          companyName: resp.supplierName.trim(),
           address: resp.address || null,
           phone: resp.sellerPhone || null,
           whatsapp: resp.sellerPhone || null,
           email: resp.sellerEmail || null,
-          notes: resp.sellerName ? `Vendedor: ${resp.sellerName}` : null,
-          active: 1
+          contactName: resp.sellerName || null,
+          isActive: 1
         });
         created++;
       } else {
@@ -12620,7 +12681,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z37 } from "zod";
-import { eq as eq36, desc as desc30, and as and23, gte as gte10, lte as lte10, inArray as inArray8 } from "drizzle-orm";
+import { eq as eq36, desc as desc30, and as and22, gte as gte10, lte as lte10, inArray as inArray8 } from "drizzle-orm";
 import { TRPCError as TRPCError27 } from "@trpc/server";
 var thirdPartyRouter = router({
   // ===== TARIFAS DE FRETE =====
@@ -12698,7 +12759,7 @@ var thirdPartyRouter = router({
       location: thirdPartyFuel.location,
       notes: thirdPartyFuel.notes,
       createdAt: thirdPartyFuel.createdAt
-    }).from(thirdPartyFuel).leftJoin(equipment, eq36(thirdPartyFuel.equipmentId, equipment.id)).where(tpConditions.length > 0 ? and23(...tpConditions) : void 0).orderBy(desc30(thirdPartyFuel.date));
+    }).from(thirdPartyFuel).leftJoin(equipment, eq36(thirdPartyFuel.equipmentId, equipment.id)).where(tpConditions.length > 0 ? and22(...tpConditions) : void 0).orderBy(desc30(thirdPartyFuel.date));
     let vehicleRecordsRows = [];
     if (thirdPartyIds.length > 0) {
       const vrConditions = [
@@ -12719,7 +12780,7 @@ var thirdPartyRouter = router({
         location: vehicleRecords.supplier,
         notes: vehicleRecords.odometer,
         createdAt: vehicleRecords.createdAt
-      }).from(vehicleRecords).leftJoin(equipment, eq36(vehicleRecords.equipmentId, equipment.id)).where(and23(...vrConditions)).orderBy(desc30(vehicleRecords.date));
+      }).from(vehicleRecords).leftJoin(equipment, eq36(vehicleRecords.equipmentId, equipment.id)).where(and22(...vrConditions)).orderBy(desc30(vehicleRecords.date));
       vehicleRecordsRows = vrRows.map((r) => ({
         ...r,
         fromVehicleRecords: true,
@@ -12851,7 +12912,7 @@ var thirdPartyRouter = router({
       thirdPartyPaidAt: cargoLoads.thirdPartyPaidAt,
       thirdPartyPaymentNotes: cargoLoads.thirdPartyPaymentNotes,
       status: cargoLoads.status
-    }).from(cargoLoads).where(conditions.length > 0 ? and23(...conditions) : void 0).orderBy(desc30(cargoLoads.date));
+    }).from(cargoLoads).where(conditions.length > 0 ? and22(...conditions) : void 0).orderBy(desc30(cargoLoads.date));
     const thirdPartyCargos = allCargos.filter((c) => c.vehicleId && truckIds.includes(c.vehicleId));
     const rates = await db.select().from(freightRates);
     const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
@@ -12892,7 +12953,7 @@ var thirdPartyRouter = router({
         ];
         if (input?.startDate) fuelConditions.push(gte10(vehicleRecords.date, input.startDate + " 00:00:00"));
         if (input?.endDate) fuelConditions.push(lte10(vehicleRecords.date, input.endDate + " 23:59:59"));
-        const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost }).from(vehicleRecords).where(and23(...fuelConditions));
+        const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost }).from(vehicleRecords).where(and22(...fuelConditions));
         fuelCost = vehicleFuel.reduce((acc, f) => acc + parseFloat(f.fuelCost || "0"), 0);
       }
       const netFreight = grossFreight - fuelCost;
@@ -13070,12 +13131,12 @@ var appRouter = router({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { error: "DB null" };
-        const { sql: sql21 } = await import("drizzle-orm");
-        const [permsRows] = await db.execute(sql21`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
-        const [collabRows] = await db.execute(sql21`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
-        const [countRows] = await db.execute(sql21`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
-        const [colsRows] = await db.execute(sql21`SHOW COLUMNS FROM collaborators`);
-        const [sampleRows] = await db.execute(sql21`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        const { sql: sql22 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql22`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql22`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql22`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql22`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql22`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -14145,7 +14206,7 @@ function schedulePendingPaymentsCheck() {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { notifyOwner: notifyOwner2 } = await Promise.resolve().then(() => (init_notification(), notification_exports));
         const { collaboratorAttendance: collaboratorAttendance2, collaborators: collaborators3 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq37, and: and24, lt: lt2 } = await import("drizzle-orm");
+        const { eq: eq37, and: and23, lt: lt2 } = await import("drizzle-orm");
         const db = await getDb2();
         if (!db) return;
         const sevenDaysAgo = /* @__PURE__ */ new Date();
@@ -14155,7 +14216,7 @@ function schedulePendingPaymentsCheck() {
           collaboratorName: collaborators3.name,
           date: collaboratorAttendance2.date,
           dailyValue: collaboratorAttendance2.dailyValue
-        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq37(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and24(
+        }).from(collaboratorAttendance2).innerJoin(collaborators3, eq37(collaboratorAttendance2.collaboratorId, collaborators3.id)).where(and23(
           eq37(collaboratorAttendance2.paymentStatusCa, "pendente"),
           lt2(collaboratorAttendance2.date, sevenDaysAgo)
         ));
