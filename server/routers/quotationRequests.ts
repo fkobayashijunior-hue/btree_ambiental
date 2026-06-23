@@ -271,10 +271,8 @@ export const quotationRequestsRouter = router({
       const prNotes = `Orçamento origem: #${req.id} — ${responses.length} resposta(s) recebida(s)`;
       const prUrgency = input.urgency;
       const prRequestedBy = ctx.user.id;
-      const prRequestDate = now;
-      const prRequestedAt = Date.now();
       const prInsResult = await db.execute(
-        sql`INSERT INTO purchase_requests (title, description, category_id, urgency, status, requested_at, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pending', ${prRequestedAt}, ${prRequestedBy}, ${prNotes})`
+        sql`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pendente', NOW(), ${prRequestedBy}, ${prNotes})`
       );
       const purchaseRequestId = (prInsResult as any)[0]?.insertId as number;
       result.purchaseRequestId = purchaseRequestId;

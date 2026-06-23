@@ -12523,10 +12523,8 @@ ${supplierSummary}`;
     const prNotes = `Or\xE7amento origem: #${req.id} \u2014 ${responses.length} resposta(s) recebida(s)`;
     const prUrgency = input.urgency;
     const prRequestedBy = ctx.user.id;
-    const prRequestDate = now;
-    const prRequestedAt = Date.now();
     const prInsResult = await db.execute(
-      sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, requested_at, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pending', ${prRequestedAt}, ${prRequestedBy}, ${prNotes})`
+      sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, request_date, requested_by, notes) VALUES (${prTitle}, ${prDesc}, ${categoryId}, ${prUrgency}, 'pendente', NOW(), ${prRequestedBy}, ${prNotes})`
     );
     const purchaseRequestId = prInsResult[0]?.insertId;
     result.purchaseRequestId = purchaseRequestId;
