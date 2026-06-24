@@ -417,7 +417,21 @@ function RatesTab() {
 
   const [form, setForm] = useState<{
     id?: number; worksite: string; destination: string; ratePerTon: string; notes: string;
+    worksiteCustom?: boolean; destinationCustom?: boolean;
   } | null>(null);
+
+  // Extrair locais e destinos únicos já cadastrados
+  const existingWorksites = useMemo(() => {
+    const set = new Set<string>();
+    (rates as any[]).forEach(r => { if (r.worksite) set.add(r.worksite); });
+    return Array.from(set).sort();
+  }, [rates]);
+
+  const existingDestinations = useMemo(() => {
+    const set = new Set<string>();
+    (rates as any[]).forEach(r => { if (r.destination) set.add(r.destination); });
+    return Array.from(set).sort();
+  }, [rates]);
 
   const handleSubmit = () => {
     if (!form) return;
@@ -437,12 +451,13 @@ function RatesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-start gap-2">
         <p className="text-sm text-muted-foreground">
           Configure o valor (R$/ton) por combinação de local de trabalho e destino.
         </p>
         <Button
           size="sm"
+          className="shrink-0"
           onClick={() => setForm({ worksite: "", destination: "", ratePerTon: "", notes: "" })}
         >
           <Plus className="h-4 w-4 mr-1" /> Nova Tarifa
@@ -460,46 +475,77 @@ function RatesTab() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Destino</TableHead>
-                  <TableHead>R$/ton</TableHead>
-                  <TableHead>Obs.</TableHead>
-                  <TableHead className="w-20"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(items as any[]).map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.destination}</TableCell>
-                    <TableCell className="text-green-700 font-semibold">{fmt(r.ratePerTon)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{r.notes ?? "—"}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() =>
-                            setForm({ id: r.id, worksite: r.worksite, destination: r.destination, ratePerTon: r.ratePerTon, notes: r.notes ?? "" })
-                          }
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-red-500"
-                          onClick={() => deleteRate.mutate({ id: r.id })}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            {/* Layout mobile: cards ao invés de tabela */}
+            <div className="block sm:hidden">
+              {(items as any[]).map((r) => (
+                <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b last:border-b-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{r.destination}</p>
+                    <p className="text-green-700 font-semibold text-sm">{fmt(r.ratePerTon)}</p>
+                    {r.notes && <p className="text-muted-foreground text-xs truncate">{r.notes}</p>}
+                  </div>
+                  <div className="flex gap-1 shrink-0 ml-2">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => setForm({ id: r.id, worksite: r.worksite, destination: r.destination, ratePerTon: r.ratePerTon, notes: r.notes ?? "" })}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-red-500"
+                      onClick={() => deleteRate.mutate({ id: r.id })}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Layout desktop: tabela */}
+            <div className="hidden sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Destino</TableHead>
+                    <TableHead>R$/ton</TableHead>
+                    <TableHead>Obs.</TableHead>
+                    <TableHead className="w-20"></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {(items as any[]).map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-medium">{r.destination}</TableCell>
+                      <TableCell className="text-green-700 font-semibold">{fmt(r.ratePerTon)}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{r.notes ?? "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setForm({ id: r.id, worksite: r.worksite, destination: r.destination, ratePerTon: r.ratePerTon, notes: r.notes ?? "" })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-red-500"
+                            onClick={() => deleteRate.mutate({ id: r.id })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -517,19 +563,85 @@ function RatesTab() {
           <div className="space-y-3">
             <div>
               <Label>Local de Trabalho</Label>
-              <Input
-                value={form?.worksite ?? ""}
-                onChange={(e) => setForm((p) => p ? { ...p, worksite: e.target.value } : null)}
-                placeholder="Ex: SIMFLOR, Fazenda GW"
-              />
+              {existingWorksites.length > 0 && !form?.worksiteCustom ? (
+                <div className="space-y-1">
+                  <Select
+                    value={form?.worksite ?? ""}
+                    onValueChange={(v) => {
+                      if (v === "__novo__") {
+                        setForm((p) => p ? { ...p, worksite: "", worksiteCustom: true } : null);
+                      } else {
+                        setForm((p) => p ? { ...p, worksite: v, worksiteCustom: false } : null);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione ou crie novo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {existingWorksites.map(w => (
+                        <SelectItem key={w} value={w}>{w}</SelectItem>
+                      ))}
+                      <SelectItem value="__novo__">+ Novo local...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={form?.worksite ?? ""}
+                    onChange={(e) => setForm((p) => p ? { ...p, worksite: e.target.value } : null)}
+                    placeholder="Ex: SIMFLOR, Fazenda GW"
+                    className="flex-1"
+                  />
+                  {existingWorksites.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setForm((p) => p ? { ...p, worksiteCustom: false } : null)}>
+                      Lista
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <Label>Destino</Label>
-              <Input
-                value={form?.destination ?? ""}
-                onChange={(e) => setForm((p) => p ? { ...p, destination: e.target.value } : null)}
-                placeholder="Ex: Líder Lobato, Sonoco Lda."
-              />
+              {existingDestinations.length > 0 && !form?.destinationCustom ? (
+                <div className="space-y-1">
+                  <Select
+                    value={form?.destination ?? ""}
+                    onValueChange={(v) => {
+                      if (v === "__novo__") {
+                        setForm((p) => p ? { ...p, destination: "", destinationCustom: true } : null);
+                      } else {
+                        setForm((p) => p ? { ...p, destination: v, destinationCustom: false } : null);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione ou crie novo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {existingDestinations.map(d => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                      <SelectItem value="__novo__">+ Novo destino...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={form?.destination ?? ""}
+                    onChange={(e) => setForm((p) => p ? { ...p, destination: e.target.value } : null)}
+                    placeholder="Ex: Líder Lobato, Sonoco Lda."
+                    className="flex-1"
+                  />
+                  {existingDestinations.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setForm((p) => p ? { ...p, destinationCustom: false } : null)}>
+                      Lista
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <Label>Valor (R$/ton)</Label>
