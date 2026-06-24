@@ -2205,14 +2205,14 @@
 
 ## 📱 FASE X: RESUMO WHATSAPP PARA GESTORES (NOVA FUNCIONALIDADE)
 
-- [ ] Backend: Remover criação de purchase_request do autoProcess
-- [ ] Backend: autoProcess retorna resumo estruturado (melhor preço por item, fornecedor, totais, link)
-- [ ] Frontend: Substituir modal "Processar Automaticamente" por modal de resumo WhatsApp
-- [ ] Frontend: Modal mostra tabela de itens (item | fornecedor | preço un | qtd | subtotal)
-- [ ] Frontend: Modal mostra total geral do orçamento
-- [ ] Frontend: Modal tem mensagem formatada pronta para copiar (estilo profissional)
-- [ ] Frontend: Botão "Copiar para WhatsApp" copia mensagem formatada
-- [ ] Frontend: Link direto para o orçamento completo no sistema
-- [ ] Fix TypeScript: purchaseRequests.ts linhas 47/60 (as any[] → as unknown as any[])
-- [ ] Recompilar backend (esbuild) e frontend (vite build)
-- [ ] Push para GitHub e informar usuário para redeploy na Hostinger
+- [x] Backend: Remover criação de purchase_request do autoProcess
+- [x] Backend: autoProcess retorna resumo estruturado (melhor preço por item, fornecedor, totais, link)
+- [x] Frontend: Substituir modal "Processar Automaticamente" por modal de resumo WhatsApp
+- [x] Frontend: Modal mostra tabela de itens (item | fornecedor | preço un | qtd | subtotal)
+- [x] Frontend: Modal mostra total geral do orçamento
+- [x] Frontend: Modal tem mensagem formatada pronta para copiar (estilo profissional)
+- [x] Frontend: Botão "Copiar para WhatsApp" copia mensagem formatada
+- [x] Frontend: Link direto para o orçamento completo no sistema
+- [x] Fix TypeScript: purchaseRequests.ts linhas 47/60 (as any[] → as unknown as any[])
+- [x] Recompilar backend (esbuild) e frontend (vite build)
+- [x] Push para GitHub e informar usuário para redeploy na Hostinger
