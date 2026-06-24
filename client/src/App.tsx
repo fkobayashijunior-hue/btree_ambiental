@@ -193,10 +193,10 @@ function Router() {
       <Route path={"/auditoria-dados"}>
         {() => <WithLayout component={AuditDataPage} />}
       </Route>
+      {/* Rota pública para fornecedores revisarem/editarem sua resposta (DEVE vir antes de /orcamento/:token) */}
+      <Route path={"/orcamento/resposta/:responseToken"} component={PublicResponseReviewPage} />
       {/* Rota pública para fornecedores preencherem orçamento */}
       <Route path={"/orcamento/:token"} component={PublicQuotationPage} />
-      {/* Rota pública para fornecedores revisarem/editarem sua resposta */}
-      <Route path={"/orcamento/resposta/:responseToken"} component={PublicResponseReviewPage} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
