@@ -2216,3 +2216,9 @@
 - [x] Fix TypeScript: purchaseRequests.ts linhas 47/60 (as any[] → as unknown as any[])
 - [x] Recompilar backend (esbuild) e frontend (vite build)
 - [x] Push para GitHub e informar usuário para redeploy na Hostinger
+
+## 📱 CORREÇÕES MOBILE E REVISÃO DE ORÇAMENTO (24/06/2026)
+
+- [ ] Fix layout mobile: botões do modal de respostas de fornecedores cortados (flex-col em mobile)
+- [ ] Revisão de orçamento pelo fornecedor: backend aceita atualizar resposta existente via token
+- [ ] Revisão de orçamento pelo fornecedor: página de resposta mostra opção de editar quando já respondeu

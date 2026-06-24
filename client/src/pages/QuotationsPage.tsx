@@ -983,39 +983,41 @@ export default function QuotationsPage() {
             </div>
           )}
 
-          <DialogFooter className="flex-col sm:flex-row gap-2 flex-wrap">
-            {requestDetail && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (requestDetail) openWhatsApp(requestDetail.token, requestDetail);
-                }}
-                className="w-full sm:w-auto border-green-300 text-green-700 hover:bg-green-50"
-              >
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Enviar para mais fornecedores
-              </Button>
-            )}
-            {requestDetail && requestDetail.responses.length > 0 && !autoProcessResult && (
-              <Button
-                onClick={() => setShowAutoProcessConfirm(true)}
-                className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
-                disabled={autoProcessMutation.isPending}
-              >
-                <MessageCircle className="w-4 h-4 mr-2" />
-                {autoProcessMutation.isPending ? "Gerando resumo..." : "Gerar Resumo para Gestores"}
-              </Button>
-            )}
-            {autoProcessResult && (
-              <Button
-                onClick={() => setShowWhatsAppSummary(true)}
-                className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
-              >
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Ver Resumo WhatsApp
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); }}>Fechar</Button>
+          <DialogFooter className="flex flex-col gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full">
+              {requestDetail && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (requestDetail) openWhatsApp(requestDetail.token, requestDetail);
+                  }}
+                  className="flex-1 border-green-300 text-green-700 hover:bg-green-50"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Enviar para mais fornecedores
+                </Button>
+              )}
+              {requestDetail && requestDetail.responses.length > 0 && !autoProcessResult && (
+                <Button
+                  onClick={() => setShowAutoProcessConfirm(true)}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  disabled={autoProcessMutation.isPending}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  {autoProcessMutation.isPending ? "Gerando..." : "Resumo Gestores"}
+                </Button>
+              )}
+              {autoProcessResult && (
+                <Button
+                  onClick={() => setShowWhatsAppSummary(true)}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Ver Resumo
+                </Button>
+              )}
+            </div>
+            <Button variant="outline" className="w-full" onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

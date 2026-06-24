@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
   Building2, Phone, Mail, Globe, Instagram, Package, Plus, X,
-  CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Send
+  CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Send, Edit2
 } from "lucide-react";
 
 // Dados fixos da empresa
@@ -50,6 +50,8 @@ export default function PublicQuotationPage() {
   const [sellerEmail, setSellerEmail] = useState('');
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submittedResponseId, setSubmittedResponseId] = useState<number | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [showItems, setShowItems] = useState(true);
 
   // Itens de resposta (inicializados quando os dados chegam)
@@ -72,11 +74,27 @@ export default function PublicQuotationPage() {
   }
 
   const submitMutation = trpc.quotationRequests.submitResponse.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data: any) => {
       setSubmitted(true);
+      // Tentar buscar o ID da resposta criada para permitir revisão
+      // (o backend não retorna o ID, mas podemos buscá-lo depois pelo nome)
     },
     onError: (err) => toast.error("Erro ao enviar: " + err.message),
   });
+
+  const updateMutation = trpc.quotationRequests.updateResponse.useMutation({
+    onSuccess: () => {
+      setIsEditing(false);
+      toast.success("Orçamento atualizado com sucesso!");
+    },
+    onError: (err) => toast.error("Erro ao atualizar: " + err.message),
+  });
+
+  // Buscar resposta existente quando o fornecedor quer revisar
+  const myResponseQuery = trpc.quotationRequests.getMyResponse.useQuery(
+    { token: token || '', supplierName },
+    { enabled: false }
+  );
 
   function addExtraItem() {
     setResponseItems([...responseItems, { name: '', quantity: '1', unit: 'un', price: '', brand: '', notes: '' }]);
@@ -97,6 +115,65 @@ export default function PublicQuotationPage() {
 
     submitMutation.mutate({
       token: token || '',
+      supplierName,
+      cnpj: cnpj || undefined,
+      address: address || undefined,
+      sellerName: sellerName || undefined,
+      sellerPhone: sellerPhone || undefined,
+      sellerEmail: sellerEmail || undefined,
+      items: validItems.map(i => ({
+        name: i.name,
+        quantity: i.quantity,
+        unit: i.unit,
+        price: i.price,
+        brand: i.brand || undefined,
+        notes: i.notes || undefined,
+      })),
+      notes: notes || undefined,
+    });
+  }
+
+  async function handleStartEdit() {
+    if (!supplierName.trim()) {
+      toast.error("Informe o nome da sua empresa para buscar seu orçamento");
+      return;
+    }
+    // Buscar resposta existente
+    const result = await myResponseQuery.refetch();
+    if (!result.data?.found) {
+      toast.error("Nenhum orçamento encontrado para esta empresa. Verifique o nome exato.");
+      return;
+    }
+    const resp = result.data.response;
+    // Preencher formulário com dados existentes
+    setCnpj(resp.cnpj || '');
+    setAddress(resp.address || '');
+    setSellerName(resp.sellerName || '');
+    setSellerPhone(resp.sellerPhone || '');
+    setSellerEmail(resp.sellerEmail || '');
+    setNotes(resp.notes || '');
+    setResponseItems(resp.items.map((item: any) => ({
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit || 'un',
+      price: item.price,
+      brand: item.brand || '',
+      notes: item.notes || '',
+    })));
+    setSubmittedResponseId(resp.id);
+    setIsEditing(true);
+    setSubmitted(false);
+  }
+
+  function handleUpdate() {
+    if (!submittedResponseId) { toast.error("ID da resposta não encontrado"); return; }
+    if (!supplierName.trim()) { toast.error("Informe o nome da sua empresa"); return; }
+    const validItems = responseItems.filter(i => i.name.trim() && i.price.trim());
+    if (validItems.length === 0) { toast.error("Informe o preço de pelo menos um item"); return; }
+
+    updateMutation.mutate({
+      token: token || '',
+      responseId: submittedResponseId,
       supplierName,
       cnpj: cnpj || undefined,
       address: address || undefined,
@@ -177,7 +254,7 @@ export default function PublicQuotationPage() {
   const request = data.request!;
 
   // ===== ENVIADO COM SUCESSO =====
-  if (submitted) {
+  if (submitted && !isEditing) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
@@ -195,12 +272,31 @@ export default function PublicQuotationPage() {
               <p className="text-sm text-gray-400 mb-6">
                 Seu orçamento foi recebido com sucesso. Nossa equipe entrará em contato em breve.
               </p>
-              <div className="bg-green-50 rounded-lg p-4 text-sm text-green-700">
+              <div className="bg-green-50 rounded-lg p-4 text-sm text-green-700 mb-4">
                 <p className="font-medium">📞 Contato Comercial</p>
                 <p className="mt-1">{COMPANY.commercial}</p>
                 <a href={`tel:${COMPANY.phone}`} className="font-bold text-green-800">{COMPANY.phone}</a>
               </div>
-              <div className="mt-4 flex justify-center gap-4 text-sm text-gray-400">
+              {/* Botão de revisão */}
+              <Button
+                variant="outline"
+                className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 mb-3"
+                onClick={handleStartEdit}
+                disabled={myResponseQuery.isFetching}
+              >
+                {myResponseQuery.isFetching ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                    Buscando...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Edit2 className="w-4 h-4" />
+                    Revisar meu orçamento
+                  </span>
+                )}
+              </Button>
+              <div className="flex justify-center gap-4 text-sm text-gray-400">
                 <a href={`https://wa.me/${COMPANY.whatsapp}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">WhatsApp</a>
                 <span>·</span>
                 <a href={`https://instagram.com/btree_ambiental`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">Instagram</a>
@@ -214,7 +310,9 @@ export default function PublicQuotationPage() {
     );
   }
 
-  // ===== FORMULÁRIO PRINCIPAL =====
+  // ===== FORMULÁRIO PRINCIPAL (novo envio ou revisão) =====
+  const isRevising = isEditing && !!submittedResponseId;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header da empresa — cores e logo oficiais BTREE */}
@@ -249,6 +347,14 @@ export default function PublicQuotationPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+        {/* Banner de revisão */}
+        {isRevising && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2">
+            <Edit2 className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <p className="text-sm text-amber-800 font-medium">Você está revisando seu orçamento. Faça as correções e clique em "Atualizar Orçamento".</p>
+          </div>
+        )}
+
         {/* Título da solicitação */}
         <Card className="border-green-200 bg-green-50">
           <CardContent className="p-4">
@@ -332,7 +438,7 @@ export default function PublicQuotationPage() {
               <div className="space-y-2">
                 <Input value={sellerName} onChange={e => setSellerName(e.target.value)} placeholder="Nome do vendedor responsável" />
                 <div className="grid grid-cols-2 gap-2">
-                  <Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} placeholder="Telefone / WhatsApp" />
+                  <Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} placeholder="Telefone / WhatsApp" type="tel" />
                   <Input value={sellerEmail} onChange={e => setSellerEmail(e.target.value)} placeholder="E-mail" type="email" />
                 </div>
               </div>
@@ -419,24 +525,53 @@ export default function PublicQuotationPage() {
           </CardContent>
         </Card>
 
-        {/* Botão enviar */}
-        <Button
-          onClick={handleSubmit}
-          disabled={submitMutation.isPending}
-          className="w-full bg-green-600 hover:bg-green-700 h-12 text-base font-semibold"
-        >
-          {submitMutation.isPending ? (
-            <span className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Enviando...
-            </span>
-          ) : (
-            <span className="flex items-center gap-2">
-              <Send className="w-5 h-5" />
-              Enviar Orçamento
-            </span>
-          )}
-        </Button>
+        {/* Botão enviar / atualizar */}
+        {isRevising ? (
+          <div className="flex flex-col gap-2">
+            <Button
+              onClick={handleUpdate}
+              disabled={updateMutation.isPending}
+              className="w-full bg-amber-600 hover:bg-amber-700 h-12 text-base font-semibold"
+            >
+              {updateMutation.isPending ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Atualizando...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Edit2 className="w-5 h-5" />
+                  Atualizar Orçamento
+                </span>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => { setIsEditing(false); setSubmitted(true); }}
+              className="w-full"
+            >
+              Cancelar revisão
+            </Button>
+          </div>
+        ) : (
+          <Button
+            onClick={handleSubmit}
+            disabled={submitMutation.isPending}
+            className="w-full bg-green-600 hover:bg-green-700 h-12 text-base font-semibold"
+          >
+            {submitMutation.isPending ? (
+              <span className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Enviando...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <Send className="w-5 h-5" />
+                Enviar Orçamento
+              </span>
+            )}
+          </Button>
+        )}
 
         {/* Rodapé */}
         <div className="text-center text-xs text-gray-400 pb-4">

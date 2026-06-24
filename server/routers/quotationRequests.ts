@@ -297,6 +297,88 @@ export const quotationRequestsRouter = router({
 
   // ===== ROTAS PÚBLICAS (sem auth) =====
 
+  // Fornecedor busca sua resposta existente pelo token + nome da empresa
+  getMyResponse: publicProcedure
+    .input(z.object({ token: z.string(), supplierName: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { found: false as const };
+      const [req] = await db.select().from(quotationRequests).where(eq(quotationRequests.token, input.token));
+      if (!req) return { found: false as const };
+      const responses = await db.select().from(quotationResponses)
+        .where(eq(quotationResponses.quotationRequestId, req.id));
+      const match = responses.find((r: typeof quotationResponses.$inferSelect) =>
+        r.supplierName?.toLowerCase().trim() === input.supplierName.toLowerCase().trim()
+      );
+      if (!match) return { found: false as const };
+      return {
+        found: true as const,
+        response: {
+          id: match.id,
+          supplierName: match.supplierName,
+          cnpj: match.cnpj,
+          address: match.address,
+          sellerName: match.sellerName,
+          sellerPhone: match.sellerPhone,
+          sellerEmail: match.sellerEmail,
+          notes: match.notes,
+          items: JSON.parse(match.itemsJson || "[]") as Array<{ name: string; quantity: string; unit: string; price: string; brand?: string; notes?: string }>,
+        },
+      };
+    }),
+
+  // Fornecedor atualiza sua resposta existente (público)
+  updateResponse: publicProcedure
+    .input(z.object({
+      token: z.string(),
+      responseId: z.number(),
+      supplierName: z.string().min(1),
+      cnpj: z.string().optional(),
+      address: z.string().optional(),
+      sellerName: z.string().optional(),
+      sellerPhone: z.string().optional(),
+      sellerEmail: z.string().optional(),
+      items: z.array(z.object({
+        name: z.string(),
+        quantity: z.string(),
+        unit: z.string().optional(),
+        price: z.string(),
+        brand: z.string().optional(),
+        notes: z.string().optional(),
+      })).min(1),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [req] = await db.select().from(quotationRequests).where(eq(quotationRequests.token, input.token));
+      if (!req) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+      if (req.status === "cancelada") throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação cancelada" });
+      // Verificar que a resposta pertence a esta solicitação
+      const [existing] = await db.select().from(quotationResponses)
+        .where(eq(quotationResponses.id, input.responseId));
+      if (!existing || existing.quotationRequestId !== req.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Resposta não encontrada" });
+      }
+      await db.update(quotationResponses).set({
+        supplierName: input.supplierName,
+        cnpj: input.cnpj ?? null,
+        address: input.address ?? null,
+        sellerName: input.sellerName ?? null,
+        sellerPhone: input.sellerPhone ?? null,
+        sellerEmail: input.sellerEmail ?? null,
+        itemsJson: JSON.stringify(input.items),
+        notes: input.notes ?? null,
+      }).where(eq(quotationResponses.id, input.responseId));
+      try {
+        await notifyOwner({
+          title: `✏️ Orçamento revisado: ${req.title}`,
+          content: `O fornecedor "${input.supplierName}" atualizou sua resposta ao orçamento "${req.title}".`,
+        });
+      } catch (_) { /* não bloquear */ }
+      return { success: true };
+    }),
+
   // Buscar solicitação por token (fornecedor acessa)
   getByToken: publicProcedure
     .input(z.object({ token: z.string() }))
