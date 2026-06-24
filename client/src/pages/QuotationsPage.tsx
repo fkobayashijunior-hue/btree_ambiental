@@ -452,7 +452,7 @@ export default function QuotationsPage() {
                       {cat.products.map(prod => {
                         const prodKey = prod.productName;
                         const isProdExpanded = expandedProd === `${catKey}-${prodKey}`;
-                        const bestEntry = prod.entries.reduce((best: any, e: any) => {
+                        const bestEntry = (prod.entries || []).reduce((best: any, e: any) => {
                           const p = parseFloat(e.unitPrice);
                           return (!best || p < parseFloat(best.unitPrice)) ? e : best;
                         }, null);
@@ -472,14 +472,14 @@ export default function QuotationsPage() {
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-xs">{prod.entries.length} cot.</Badge>
+                                  <Badge variant="outline" className="text-xs">{(prod.entries || []).length} cot.</Badge>
                                   {isProdExpanded ? <ChevronUp className="w-3 h-3 text-gray-400" /> : <ChevronDown className="w-3 h-3 text-gray-400" />}
                                 </div>
                               </div>
                             </button>
                             {isProdExpanded && (
                               <div className="border-t bg-gray-50 p-3 space-y-2">
-                                {prod.entries
+                                {(prod.entries || [])
                                   .slice()
                                   .sort((a: any, b: any) => parseFloat(a.unitPrice) - parseFloat(b.unitPrice))
                                   .map((entry: any, i: number) => (
@@ -858,7 +858,7 @@ export default function QuotationsPage() {
                 // Calcular total por fornecedor
                 const totals = requestDetail.responses.map((resp: any) => ({
                   id: resp.id,
-                  total: resp.items.reduce((sum: number, item: ResponseItem) => sum + (parseFloat(item.price) || 0), 0),
+                   total: (resp.items || []).reduce((sum: number, item: ResponseItem) => sum + (parseFloat(item.price) || 0), 0),
                 }));
                 const minTotal = Math.min(...totals.map((t: any) => t.total));
                 return (
