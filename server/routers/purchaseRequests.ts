@@ -44,7 +44,7 @@ export const purchaseRequestsRouter = router({
         ORDER BY pr.created_at DESC
       `);
 
-      console.log('[purchaseRequests.list] rows retornados:', (rows as any[]).length);
+      console.log('[purchaseRequests.list] rows retornados:', (rows as unknown as any[]).length);
 
       // Mapeamento de valores legados (inglês) para o padrão atual (português)
       const statusMap: Record<string, string> = {
@@ -57,7 +57,7 @@ export const purchaseRequestsRouter = router({
         low: 'baixa', medium: 'media', high: 'alta', critical: 'critica',
         baixa: 'baixa', media: 'media', alta: 'alta', critica: 'critica',
       };
-      const normalized = (rows as any[]).map((r: any) => ({
+      const normalized = (rows as unknown as any[]).map((r: any) => ({
         ...r,
         status: statusMap[r.status] || r.status,
         urgency: urgencyMap[r.urgency] || r.urgency,

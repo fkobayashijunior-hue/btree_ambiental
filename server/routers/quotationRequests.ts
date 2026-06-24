@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { quotationRequests, quotationResponses, suppliers, purchaseCategories, quotations, purchaseRequests, purchaseRequestItems } from "../../drizzle/schema";
-import { eq, desc, like, sql } from "drizzle-orm";
+import { quotationRequests, quotationResponses, suppliers, purchaseCategories, quotations } from "../../drizzle/schema";
+import { eq, desc, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 import { notifyOwner } from "../_core/notification";
@@ -103,11 +103,10 @@ export const quotationRequestsRouter = router({
   // 1. Cria/atualiza fornecedores de todas as respostas
   // 2. Cria/encontra categoria com o título do orçamento
   // 3. Popula catálogo de preços com todos os itens de todas as respostas
-  // 4. Cria solicitação de compra com os itens de menor preço
+  // 4. Retorna resumo estruturado para mensagem WhatsApp (NÃO cria solicitação de compra)
   autoProcess: protectedProcedure
     .input(z.object({
       quotationRequestId: z.number(),
-      urgency: z.enum(['baixa', 'media', 'alta', 'critica']).optional().default('media'),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -134,7 +133,6 @@ export const quotationRequestsRouter = router({
         categoryId: 0,
         categoryName: req.title,
         catalogEntriesCreated: 0,
-        purchaseRequestId: 0,
       };
 
       // 2. Criar/atualizar fornecedores de todas as respostas
@@ -142,7 +140,6 @@ export const quotationRequestsRouter = router({
       for (const resp of responses) {
         if (!resp.supplierName?.trim()) continue;
         const trimmedName = resp.supplierName.trim();
-        // Usar SQL raw para evitar LIMIT parametrizado (incompatível com MySQL Hostinger)
         const existingRows = await db.execute(
           sql`SELECT id, company_name, phone, whatsapp, email FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
         );
@@ -188,29 +185,23 @@ export const quotationRequestsRouter = router({
       if (existingCat.length > 0) {
         categoryId = existingCat[0]!.id;
       } else {
-        // Escolher cor baseada no título (hash simples)
         const colors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#84CC16'];
         const colorIndex = req.title.charCodeAt(0) % colors.length;
         const catColor = colors[colorIndex]!;
         const catName = req.title.trim();
         const createdById = ctx.user.id;
-        // Usar SQL raw para evitar 'default' parametrizado (incompatível com MySQL Hostinger)
         const catInsResult = await db.execute(
           sql`INSERT INTO purchase_categories (name, color, created_by, created_at) VALUES (${catName}, ${catColor}, ${createdById}, NOW())`
         );
-        // MySQL2 pode retornar insertId em posições diferentes dependendo da versão
         categoryId = (catInsResult as any)[0]?.insertId ?? (catInsResult as any)?.insertId ?? 0;
-        // Se insertId não veio, buscar pelo nome
         if (!categoryId) {
           const fallbackRows = await db.execute(
             sql`SELECT id FROM purchase_categories WHERE name = ${catName} LIMIT 1`
           );
           categoryId = ((fallbackRows as any)[0] as Array<{ id: number }>)[0]?.id ?? 0;
         }
-        console.log('[autoProcess] Categoria criada/encontrada:', categoryId, catName);
       }
       result.categoryId = categoryId;
-      result.categoryName = req.title;
 
       // 4. Popular catálogo de preços com todos os itens de todas as respostas
       for (const resp of responses) {
@@ -223,13 +214,10 @@ export const quotationRequestsRouter = router({
           if (!item.price || parseFloat(item.price) <= 0) continue;
           const qNotes = item.brand ? `Marca: ${item.brand}${item.notes ? ` | ${item.notes}` : ''}` : (item.notes || null);
           const qUnit = item.unit || 'un';
-          const qDate = now;
-          const qCreatedBy = ctx.user.id;
-          const qReqId = input.quotationRequestId;
-          // SQL raw com colunas reais do banco Hostinger
           const qUnitPrice = item.price;
           const qTotalPrice = (parseFloat(item.price) * parseFloat(item.quantity || '1')).toFixed(2);
           const qQuotedAt = Date.now();
+          const qCreatedBy = ctx.user.id;
           await db.execute(
             sql`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by, created_at) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || '1'}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy}, NOW())`
           );
@@ -238,93 +226,72 @@ export const quotationRequestsRouter = router({
       }
 
       // 5. Calcular melhor preço por item (menor preço entre todas as respostas)
-      const bestPriceByItem: Map<string, { price: number; supplierName: string; unit: string; quantity: string }> = new Map();
-      for (const resp of responses) {
-        const respItems = JSON.parse(resp.itemsJson || "[]") as Array<{
-          name: string; quantity: string; unit?: string; price: string;
-        }>;
-        for (const item of respItems) {
-          const price = parseFloat(item.price);
-          if (isNaN(price) || price <= 0) continue;
-          const existing = bestPriceByItem.get(item.name);
-          if (!existing || price < existing.price) {
-            bestPriceByItem.set(item.name, {
-              price,
-              supplierName: resp.supplierName || '',
-              unit: item.unit || 'un',
-              quantity: item.quantity,
-            });
+      // Usa as quantidades originais da solicitação
+      const summaryItems: Array<{
+        name: string;
+        quantity: string;
+        unit: string;
+        bestPrice: number;
+        bestSupplierName: string;
+        bestSupplierPhone: string | null;
+        subtotal: number;
+        found: boolean;
+      }> = [];
+
+      for (const reqItem of requestItems) {
+        const key = reqItem.name.toLowerCase().trim();
+        let bestPrice = Infinity;
+        let bestSupplierName = '';
+        let bestSupplierPhone: string | null = null;
+        let found = false;
+
+        for (const resp of responses) {
+          const respItems = JSON.parse(resp.itemsJson || "[]") as Array<{
+            name: string; quantity: string; unit?: string; price: string;
+          }>;
+          const match = respItems.find(it => it.name.toLowerCase().trim() === key);
+          if (match) {
+            const price = parseFloat(match.price);
+            if (!isNaN(price) && price > 0 && price < bestPrice) {
+              bestPrice = price;
+              bestSupplierName = resp.supplierName || '';
+              bestSupplierPhone = resp.sellerPhone || null;
+              found = true;
+            }
           }
         }
-      }
 
-      // Usar quantidades originais da solicitação para a solicitação de compra
-      const purchaseItems = requestItems.map(reqItem => {
-        const best = bestPriceByItem.get(reqItem.name);
-        return {
+        const qty = parseFloat(reqItem.quantity) || 1;
+        summaryItems.push({
           name: reqItem.name,
           quantity: reqItem.quantity,
-          unit: reqItem.unit || best?.unit || 'un',
-          notes: best ? `Menor preço: R$ ${parseFloat(best.price.toString()).toFixed(2).replace('.', ',')} — ${best.supplierName}` : undefined,
-        };
-      });
-
-      // Montar descrição com resumo dos fornecedores
-      const supplierSummary = responses
-        .map(r => `• ${r.supplierName}`)
-        .join('\n');
-
-      // 6. Criar solicitação de compra via SQL raw
-      // NOTA: A tabela purchase_requests na Hostinger usa schema legado (colunas e ENUMs em inglês)
-      const prTitle = `Compra: ${req.title}`;
-      const prDesc = `Gerado automaticamente a partir do orçamento "${req.title}".\n\nFornecedores consultados:\n${supplierSummary}`;
-      const prNotes = `Orçamento origem: #${req.id} — ${responses.length} resposta(s) recebida(s)`;
-      // Mapear urgency do português para o ENUM real da tabela (inglês)
-      const urgencyMap: Record<string, string> = { baixa: 'low', media: 'medium', alta: 'high', critica: 'critical' };
-      const prUrgency = urgencyMap[input.urgency] || 'medium';
-      const prRequestedBy = ctx.user.id;
-      const prRequestedAt = Date.now(); // bigint timestamp (coluna requested_at)
-      // Se categoryId for 0 ou inválido, usar NULL para evitar FK constraint
-      const prCategoryId = categoryId && categoryId > 0 ? categoryId : null;
-      console.log('[autoProcess] Criando purchase_request com categoryId:', prCategoryId, 'urgency:', prUrgency, 'requestedBy:', prRequestedBy, 'requestedAt:', prRequestedAt);
-      let purchaseRequestId: number;
-      try {
-        const prInsResult = await db.execute(
-          sql`INSERT INTO purchase_requests (title, description, category_id, urgency, status, requested_at, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pending', ${prRequestedAt}, ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
-        );
-        purchaseRequestId = (prInsResult as any)[0]?.insertId as number;
-        result.purchaseRequestId = purchaseRequestId;
-      } catch (prErr: any) {
-        // Drizzle wraps MySQL2 errors in error.cause
-        const realErr = prErr?.cause || prErr;
-        const mysqlMsg = realErr?.sqlMessage || realErr?.message || String(prErr);
-        const mysqlCode = realErr?.code || realErr?.errno || 'unknown';
-        const mysqlState = realErr?.sqlState || '';
-        console.error('[autoProcess] ERRO INSERT purchase_requests:', mysqlCode, mysqlState, mysqlMsg, '| categoryId:', prCategoryId, '| urgency:', prUrgency, '| requestedBy:', prRequestedBy);
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: `Erro ao criar solicitação de compra [${mysqlCode}/${mysqlState}]: ${mysqlMsg}`,
+          unit: reqItem.unit || 'un',
+          bestPrice: found ? bestPrice : 0,
+          bestSupplierName,
+          bestSupplierPhone,
+          subtotal: found ? bestPrice * qty : 0,
+          found,
         });
       }
 
-      if (purchaseItems.length > 0) {
-        for (const item of purchaseItems) {
-          const piNotes = item.notes || null;
-          await db.execute(
-            sql`INSERT INTO purchase_request_items (request_id, name, quantity, unit, notes, created_at) VALUES (${purchaseRequestId}, ${item.name}, ${item.quantity}, ${item.unit}, ${piNotes}, NOW())`
-          );
-        }
-      }
+      const grandTotal = summaryItems.reduce((sum, item) => sum + item.subtotal, 0);
 
       // Notificar owner
       try {
         await notifyOwner({
-          title: `✅ Orçamento processado automaticamente: ${req.title}`,
-          content: `O orçamento "${req.title}" foi processado.\n\n• ${result.suppliersCreated} fornecedor(es) criado(s)\n• ${result.catalogEntriesCreated} entradas no catálogo\n• Solicitação de compra #${purchaseRequestId} criada com ${purchaseItems.length} item(s)`,
+          title: `✅ Orçamento processado: ${req.title}`,
+          content: `O orçamento "${req.title}" foi processado.\n\n• ${result.suppliersCreated} fornecedor(es) criado(s)\n• ${result.catalogEntriesCreated} entradas no catálogo\n• Total estimado: R$ ${grandTotal.toFixed(2).replace('.', ',')}`,
         });
       } catch (_) { /* não bloquear */ }
 
-      return result;
+      return {
+        ...result,
+        quotationRequestId: input.quotationRequestId,
+        quotationTitle: req.title,
+        summaryItems,
+        grandTotal,
+        responseCount: responses.length,
+      };
     }),
 
   // ===== ROTAS PÚBLICAS (sem auth) =====
@@ -408,84 +375,20 @@ export const quotationRequestsRouter = router({
         notes: input.notes,
       });
 
-      // Atualizar status para respondida
+      // Atualizar status da solicitação para "respondida"
       await db
         .update(quotationRequests)
         .set({ status: "respondida" })
         .where(eq(quotationRequests.id, req.id));
 
-      // Cadastrar fornecedor automaticamente se não existir
-      try {
-        const existingSuppliers = await db.execute(
-          sql`SELECT id FROM suppliers WHERE company_name = ${input.supplierName.trim()} LIMIT 1`
-        );
-        const existingArr = (existingSuppliers as any)[0] as Array<{ id: number }>;
-        if (existingArr.length === 0) {
-          await db.insert(suppliers).values({
-            companyName: input.supplierName.trim(),
-            cnpj: input.cnpj ?? null,
-            address: input.address ?? null,
-            phone: input.sellerPhone ?? null,
-            whatsapp: input.sellerPhone ?? null,
-            email: input.sellerEmail ?? null,
-            contactName: input.sellerName ?? null,
-            isActive: 1,
-          });
-        }
-      } catch (_) {
-        // Não bloquear se cadastro de fornecedor falhar
-      }
-
       // Notificar owner
       try {
         await notifyOwner({
-          title: `📋 Novo orçamento recebido: ${req.title}`,
-          content: `Fornecedor "${input.supplierName}" respondeu a solicitação de orçamento "${req.title}".\n\nVendedor: ${input.sellerName || "—"}\nTelefone: ${input.sellerPhone || "—"}\n\nAcesse o sistema para visualizar os valores.`,
+          title: `📬 Nova resposta de orçamento: ${req.title}`,
+          content: `O fornecedor "${input.supplierName}" respondeu ao orçamento "${req.title}" com ${input.items.length} item(s).`,
         });
-      } catch (_) {
-        // Não bloquear se notificação falhar
-      }
+      } catch (_) { /* não bloquear */ }
 
       return { success: true };
     }),
-
-  // Sincronizar fornecedores retroativamente a partir das respostas existentes
-  syncSuppliersFromResponses: protectedProcedure.mutation(async () => {
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const allResponses = await db.select().from(quotationResponses);
-    let created = 0;
-    let updated = 0;
-    for (const resp of allResponses) {
-      if (!resp.supplierName?.trim()) continue;
-      const existingRows = await db.execute(
-        sql`SELECT id, phone, whatsapp, email FROM suppliers WHERE company_name = ${resp.supplierName.trim()} LIMIT 1`
-      );
-      const existing = (existingRows as any)[0] as Array<{ id: number; phone: string | null; whatsapp: string | null; email: string | null }>;
-      if (existing.length === 0) {
-        await db.insert(suppliers).values({
-          companyName: resp.supplierName.trim(),
-          address: resp.address || null,
-          phone: resp.sellerPhone || null,
-          whatsapp: resp.sellerPhone || null,
-          email: resp.sellerEmail || null,
-          contactName: resp.sellerName || null,
-          isActive: 1,
-        });
-        created++;
-      } else {
-        // Atualizar dados de contato se estiverem vazios
-        const s = existing[0]!;
-        const updates: Record<string, string | null> = {};
-        if (!s.phone && resp.sellerPhone) updates.phone = resp.sellerPhone;
-        if (!s.whatsapp && resp.sellerPhone) updates.whatsapp = resp.sellerPhone;
-        if (!s.email && resp.sellerEmail) updates.email = resp.sellerEmail;
-        if (Object.keys(updates).length > 0) {
-          await db.update(suppliers).set(updates).where(eq(suppliers.id, s.id));
-          updated++;
-        }
-      }
-    }
-    return { created, updated, total: allResponses.length };
-  }),
 });

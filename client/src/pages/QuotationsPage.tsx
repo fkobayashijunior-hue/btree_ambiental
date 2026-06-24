@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,8 @@ import {
   Plus, Tag, TrendingDown, Clock, Building2, ChevronDown, ChevronUp,
   Pencil, Trash2, MessageCircle, Link2, Copy, Check, Send, User,
   Package, X, Eye, FileText, Phone, Mail, ExternalLink, Ban,
-  Trophy, Star, AlertCircle, Zap, ShoppingCart, CheckCircle2
+  Trophy, Star, AlertCircle, Zap, ShoppingCart, CheckCircle2,
+  Sparkles, ExternalLink as ExternalLinkIcon
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -23,9 +24,9 @@ function fmt(dateStr: string | null | undefined) {
   return new Date(dateStr).toLocaleDateString('pt-BR');
 }
 
-function fmtPrice(price: string) {
-  const n = parseFloat(price);
-  if (isNaN(n)) return price;
+function fmtPrice(price: string | number) {
+  const n = typeof price === 'number' ? price : parseFloat(price);
+  if (isNaN(n)) return String(price);
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
@@ -63,6 +64,30 @@ const COMPANY = {
 type QuotItem = { name: string; quantity: string; unit: string };
 type ResponseItem = { name: string; quantity: string; unit?: string; price: string; brand?: string; notes?: string };
 
+type SummaryItem = {
+  name: string;
+  quantity: string;
+  unit: string;
+  bestPrice: number;
+  bestSupplierName: string;
+  bestSupplierPhone: string | null;
+  subtotal: number;
+  found: boolean;
+};
+
+type AutoProcessResult = {
+  suppliersCreated: number;
+  suppliersUpdated: number;
+  categoryId: number;
+  categoryName: string;
+  catalogEntriesCreated: number;
+  quotationRequestId: number;
+  quotationTitle: string;
+  summaryItems: SummaryItem[];
+  grandTotal: number;
+  responseCount: number;
+};
+
 export default function QuotationsPage() {
   const utils = trpc.useUtils();
 
@@ -98,8 +123,9 @@ export default function QuotationsPage() {
   const [copiedMsg, setCopiedMsg] = useState(false);
   const [viewResponsesId, setViewResponsesId] = useState<number | null>(null);
   const [showAutoProcessConfirm, setShowAutoProcessConfirm] = useState(false);
-  const [autoProcessUrgency, setAutoProcessUrgency] = useState<'baixa'|'media'|'alta'|'critica'>('media');
-  const [autoProcessResult, setAutoProcessResult] = useState<null | { suppliersCreated: number; suppliersUpdated: number; categoryName: string; catalogEntriesCreated: number; purchaseRequestId: number }>(null);
+  const [autoProcessResult, setAutoProcessResult] = useState<AutoProcessResult | null>(null);
+  const [showWhatsAppSummary, setShowWhatsAppSummary] = useState(false);
+  const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
 
   const { data: grouped, isLoading } = trpc.quotations.listByCategory.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery({ activeOnly: true });
@@ -174,6 +200,7 @@ export default function QuotationsPage() {
     onSuccess: (data) => {
       setShowAutoProcessConfirm(false);
       setAutoProcessResult(data);
+      setShowWhatsAppSummary(true);
       utils.suppliers.list.invalidate();
       utils.purchaseCategories.list.invalidate();
       utils.quotations.listByCategory.invalidate();
@@ -263,6 +290,10 @@ export default function QuotationsPage() {
     return `${window.location.origin}/orcamento/${token}`;
   }
 
+  function getQuotationLink(id: number) {
+    return `${window.location.origin}/orcamentos`;
+  }
+
   function buildWhatsAppMessage(token: string) {
     const requester = (collaborators || []).find(c => String(c.id) === reqRequesterId);
     const validItems = reqItems.filter(i => i.name.trim());
@@ -292,6 +323,42 @@ export default function QuotationsPage() {
     return msg;
   }
 
+  // ===== MENSAGEM WHATSAPP PARA GESTORES (RESUMO DE COMPRAS) =====
+  function buildManagerWhatsAppMessage(result: AutoProcessResult): string {
+    const today = new Date().toLocaleDateString('pt-BR');
+    const systemLink = `https://btreeambiental.com/orcamentos`;
+
+    let msg = `🌿 *BTREE Ambiental — Resumo de Cotação*\n`;
+    msg += `📅 Data: ${today}\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `📋 *${result.quotationTitle}*\n`;
+    msg += `🏢 Fornecedores consultados: ${result.responseCount}\n\n`;
+    msg += `*📦 Melhor preço por item:*\n\n`;
+
+    result.summaryItems.forEach((item, i) => {
+      if (item.found) {
+        msg += `${i + 1}. *${item.name}*\n`;
+        msg += `   • Qtd: ${item.quantity} ${item.unit}\n`;
+        msg += `   • Fornecedor: ${item.bestSupplierName}\n`;
+        msg += `   • Valor un.: ${fmtPrice(item.bestPrice)}\n`;
+        msg += `   • Subtotal: *${fmtPrice(item.subtotal)}*\n\n`;
+      } else {
+        msg += `${i + 1}. *${item.name}*\n`;
+        msg += `   ⚠️ Não cotado\n\n`;
+      }
+    });
+
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `💰 *TOTAL ESTIMADO: ${fmtPrice(result.grandTotal)}*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `🔗 Para ver o orçamento completo com todos os fornecedores e preços:\n`;
+    msg += `${systemLink}\n\n`;
+    msg += `_Aguardamos sua aprovação para prosseguir com a compra._\n`;
+    msg += `\n🌿 *BTREE Ambiental* | ${COMPANY.phone}`;
+
+    return msg;
+  }
+
   async function copyLink(token: string) {
     await navigator.clipboard.writeText(getPublicLink(token));
     setCopiedLink(true);
@@ -308,6 +375,20 @@ export default function QuotationsPage() {
 
   function openWhatsApp(token: string) {
     const msg = encodeURIComponent(buildWhatsAppMessage(token));
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  }
+
+  async function copyManagerMessage() {
+    if (!autoProcessResult) return;
+    await navigator.clipboard.writeText(buildManagerWhatsAppMessage(autoProcessResult));
+    setCopiedWhatsApp(true);
+    setTimeout(() => setCopiedWhatsApp(false), 2500);
+    toast.success("Mensagem copiada para o WhatsApp!");
+  }
+
+  function openManagerWhatsApp() {
+    if (!autoProcessResult) return;
+    const msg = encodeURIComponent(buildManagerWhatsAppMessage(autoProcessResult));
     window.open(`https://wa.me/?text=${msg}`, '_blank');
   }
 
@@ -359,7 +440,7 @@ export default function QuotationsPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.categoryColor }} />
-                          <span className="font-semibold text-gray-900">{cat.categoryName}</span>
+                          <span className="font-semibold text-gray-800">{cat.categoryName}</span>
                           <Badge variant="outline" className="text-xs">{cat.products.length} produto(s)</Badge>
                         </div>
                         {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -369,63 +450,62 @@ export default function QuotationsPage() {
                   {isExpanded && (
                     <CardContent className="p-4 pt-0 space-y-3">
                       {cat.products.map(prod => {
-                        const prodKey = `${catKey}-${prod.productName}`;
-                        const isProdExpanded = expandedProd === prodKey;
-                        const latestQuote = prod.quotes.reduce((latest, q) =>
-                          (q.quotedAt || 0) > (latest.quotedAt || 0) ? q : latest, prod.quotes[0]);
+                        const prodKey = prod.productName;
+                        const isProdExpanded = expandedProd === `${catKey}-${prodKey}`;
+                        const bestEntry = prod.entries.reduce((best: any, e: any) => {
+                          const p = parseFloat(e.unitPrice);
+                          return (!best || p < parseFloat(best.unitPrice)) ? e : best;
+                        }, null);
                         return (
-                          <div key={prod.productName} className="border rounded-lg overflow-hidden">
+                          <div key={prodKey} className="border rounded-lg overflow-hidden">
                             <button
-                              className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-                              onClick={() => setExpandedProd(isProdExpanded ? null : prodKey)}
+                              className="w-full text-left p-3 hover:bg-gray-50 transition-colors"
+                              onClick={() => setExpandedProd(isProdExpanded ? null : `${catKey}-${prodKey}`)}
                             >
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <span className="font-medium text-gray-800">{prod.productName}</span>
-                                  {prod.unit && <span className="text-xs text-gray-400 ml-1">/ {prod.unit}</span>}
+                                  <p className="font-medium text-gray-800">{prod.productName}</p>
+                                  {bestEntry && (
+                                    <p className="text-xs text-green-700 mt-0.5">
+                                      Melhor: {fmtPrice(bestEntry.unitPrice)} — {bestEntry.supplierName}
+                                    </p>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <div className="text-right">
-                                    <div className="flex items-center gap-1">
-                                      <TrendingDown className="w-3 h-3 text-green-500" />
-                                      <span className="text-sm font-bold text-green-700">{fmtPrice(prod.lowestPrice)}</span>
-                                    </div>
-                                    <div className="text-xs text-gray-400">menor preço</div>
-                                  </div>
-                                  {isProdExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                                  <Badge variant="outline" className="text-xs">{prod.entries.length} cot.</Badge>
+                                  {isProdExpanded ? <ChevronUp className="w-3 h-3 text-gray-400" /> : <ChevronDown className="w-3 h-3 text-gray-400" />}
                                 </div>
                               </div>
                             </button>
                             {isProdExpanded && (
-                              <div className="divide-y">
-                                {prod.quotes.map((q) => {
-                                  const isLowest = q.unitPrice === prod.lowestPrice;
-                                  const isLatest = q.id === latestQuote?.id;
-                                  return (
-                                    <div key={q.id} className={`p-3 flex items-center justify-between ${isLowest ? 'bg-green-50' : ''}`}>
-                                      <div className="flex-1">
-                                        <div className="flex items-center gap-2">
+                              <div className="border-t bg-gray-50 p-3 space-y-2">
+                                {prod.entries
+                                  .slice()
+                                  .sort((a: any, b: any) => parseFloat(a.unitPrice) - parseFloat(b.unitPrice))
+                                  .map((entry: any, i: number) => (
+                                    <div key={entry.id} className={`flex items-center justify-between rounded p-2 ${i === 0 ? 'bg-green-50 border border-green-200' : 'bg-white border'}`}>
+                                      <div>
+                                        <div className="flex items-center gap-1">
                                           <Building2 className="w-3 h-3 text-gray-400" />
-                                          <span className="text-sm font-medium text-gray-700">{q.supplierName}</span>
-                                          {isLowest && <Badge className="text-xs bg-green-100 text-green-700 border-green-200"><TrendingDown className="w-2 h-2 mr-1" /> Menor</Badge>}
-                                          {isLatest && <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200"><Clock className="w-2 h-2 mr-1" /> Último</Badge>}
+                                          <span className="text-sm font-medium text-gray-700">{entry.supplierName}</span>
+                                          {i === 0 && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
                                         </div>
-                                        <div className="flex items-center gap-3 mt-1">
-                                          <span className={`text-sm font-bold ${isLowest ? 'text-green-700' : 'text-gray-700'}`}>{fmtPrice(q.unitPrice)}</span>
-                                          <span className="text-xs text-gray-400">{q.quotedAt ? new Date(q.quotedAt).toLocaleDateString('pt-BR') : ''}</span>
-                                          {q.supplierPhone && <a href={`tel:${q.supplierPhone}`} className="text-xs text-blue-500 hover:underline">{q.supplierPhone}</a>}
-                                          {q.supplierWhatsapp && (
-                                            <a href={`https://wa.me/55${q.supplierWhatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-xs text-green-500 hover:underline">WhatsApp</a>
-                                          )}
-                                        </div>
-                                        {q.notes && <p className="text-xs text-gray-400 mt-0.5">{q.notes}</p>}
+                                        <p className="text-xs text-gray-400 mt-0.5">{fmt(entry.quotedAt)} · {entry.unit}</p>
+                                        {entry.notes && <p className="text-xs text-gray-400 italic mt-0.5">{entry.notes}</p>}
                                       </div>
-                                      <Button variant="ghost" size="sm" onClick={() => deleteQuoteMutation.mutate({ id: q.id })} className="text-red-300 hover:text-red-500 p-1">
-                                        <Trash2 className="w-3 h-3" />
-                                      </Button>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`font-bold text-sm ${i === 0 ? 'text-green-700' : 'text-gray-700'}`}>{fmtPrice(entry.unitPrice)}</span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-red-300 hover:text-red-500 p-1 h-auto"
+                                          onClick={() => deleteQuoteMutation.mutate({ id: entry.id })}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
                                     </div>
-                                  );
-                                })}
+                                  ))}
                               </div>
                             )}
                           </div>
@@ -439,66 +519,54 @@ export default function QuotationsPage() {
           )}
         </TabsContent>
 
-        {/* SOLICITAR ORÇAMENTO TAB */}
+        {/* REQUESTS TAB */}
         <TabsContent value="requests" className="space-y-3 mt-3">
           <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-500">Crie solicitações para enviar a fornecedores via WhatsApp ou link</p>
+            <p className="text-sm text-gray-500">Solicite orçamentos para fornecedores via link</p>
             <Button size="sm" onClick={() => setShowRequestForm(true)} className="bg-green-600 hover:bg-green-700">
               <Plus className="w-3 h-3 mr-1" /> Nova Solicitação
             </Button>
           </div>
 
-          {/* Lista de solicitações */}
           {!quotRequests || quotRequests.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Send className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p>Nenhuma solicitação criada</p>
-              <p className="text-xs mt-1">Crie uma solicitação para gerar mensagem WhatsApp ou link para fornecedores</p>
-              <Button variant="outline" className="mt-3" onClick={() => setShowRequestForm(true)}>
-                <Plus className="w-4 h-4 mr-2" /> Criar primeira solicitação
-              </Button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {quotRequests.map(req => {
-                const statusInfo = STATUS_LABELS[req.status] || STATUS_LABELS.ativa;
+            <div className="space-y-2">
+              {quotRequests.map((req: any) => {
                 const expired = req.isExpired;
+                const statusKey = expired && req.status === 'ativa' ? 'expirada' : req.status;
+                const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS['ativa'];
                 return (
-                  <Card key={req.id} className={expired && req.status === 'ativa' ? 'opacity-60' : ''}>
+                  <Card key={req.id}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-gray-900 truncate">{req.title}</span>
+                            <p className="font-semibold text-gray-800 truncate">{req.title}</p>
                             <Badge className={`text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
-                            {expired && req.status === 'ativa' && (
-                              <Badge className="text-xs bg-orange-100 text-orange-600 border-orange-200">Expirado</Badge>
-                            )}
                           </div>
-                          {req.requesterName && (
-                            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                              <User className="w-3 h-3" />
-                              <span>{req.requesterName}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-400">
-                            <Package className="w-3 h-3" />
-                            <span>{req.items.length} item(s)</span>
-                            <span className="mx-1">·</span>
-                            <span>{fmt(req.createdAt)}</span>
-                            {!expired && req.status === 'ativa' && (
-                              <>
-                                <span className="mx-1">·</span>
-                                <span className="text-amber-600">{fmtExpiry(req.expiresAt)}</span>
-                              </>
+                          <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
+                            <span className="flex items-center gap-1">
+                              <Package className="w-3 h-3" /> {req.items.length} item(s)
+                            </span>
+                            {req.requesterName && (
+                              <span className="flex items-center gap-1">
+                                <User className="w-3 h-3" /> {req.requesterName}
+                              </span>
                             )}
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> {fmtExpiry(req.expiresAt)}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex gap-1 flex-shrink-0">
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setViewResponsesId(req.id)}
+                            onClick={() => { setAutoProcessResult(null); setViewResponsesId(req.id); }}
                             className="text-blue-500 hover:text-blue-700 p-1"
                             title="Ver respostas"
                           >
@@ -558,18 +626,28 @@ export default function QuotationsPage() {
           <div className="space-y-2">
             {(categories || []).map(cat => (
               <Card key={cat.id}>
-                <CardContent className="p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
-                    <span className="font-medium text-gray-800">{cat.name}</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => { setCatName(cat.name); setCatColor(cat.color); setEditCatId(cat.id); setShowCatForm(true); }} className="text-blue-400 hover:text-blue-600 p-1">
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => deleteCatMutation.mutate({ id: cat.id })} className="text-red-300 hover:text-red-500 p-1">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: cat.color }} />
+                      <span className="font-medium text-gray-800">{cat.name}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => { setEditCatId(cat.id); setCatName(cat.name); setCatColor(cat.color || '#6B7280'); setShowCatForm(true); }}
+                        className="text-gray-400 hover:text-gray-600 p-1"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => deleteCatMutation.mutate({ id: cat.id })}
+                        className="text-red-300 hover:text-red-500 p-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -578,82 +656,61 @@ export default function QuotationsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* ===== DIALOG: NOVA SOLICITAÇÃO DE ORÇAMENTO ===== */}
-      <Dialog open={showRequestForm} onOpenChange={(open) => { if (!open) resetRequestForm(); else setShowRequestForm(true); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* ===== DIALOG: CRIAR SOLICITAÇÃO ===== */}
+      <Dialog open={showRequestForm} onOpenChange={(open) => { if (!open) resetRequestForm(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="w-5 h-5 text-green-600" />
-              {generatedToken ? 'Solicitação Criada!' : 'Nova Solicitação de Orçamento'}
+              Nova Solicitação de Orçamento
             </DialogTitle>
           </DialogHeader>
 
           {!generatedToken ? (
             <div className="space-y-4">
-              {/* Título */}
               <div>
                 <Label>Título da Solicitação *</Label>
-                <Input value={reqTitle} onChange={e => setReqTitle(e.target.value)} placeholder="Ex: Orçamento de Óleos e Filtros — Junho/2026" />
+                <Input value={reqTitle} onChange={e => setReqTitle(e.target.value)} placeholder="Ex: Óleos e Lubrificantes — Julho 2025" />
               </div>
-
-              {/* Solicitante */}
               <div>
-                <Label>Solicitante (Colaborador)</Label>
+                <Label>Solicitante</Label>
                 <Select value={reqRequesterId} onValueChange={setReqRequesterId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar colaborador..." />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecionar colaborador..." /></SelectTrigger>
                   <SelectContent>
-                    {(collaborators || []).filter(c => c.active !== 0).map(c => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
+                    {(collaborators || []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                {reqRequesterId && (() => {
-                  const c = (collaborators || []).find(x => String(x.id) === reqRequesterId);
-                  return c ? (
-                    <div className="mt-1 text-xs text-gray-500 flex gap-3">
-                      {c.phone && <span>📱 {c.phone}</span>}
-                      {c.email && <span>✉️ {c.email}</span>}
-                    </div>
-                  ) : null;
-                })()}
               </div>
-
-              {/* Itens */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <Label>Itens Solicitados *</Label>
+                  <Label>Itens *</Label>
                   <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                    <Plus className="w-3 h-3 mr-1" /> Adicionar Item
+                    <Plus className="w-3 h-3 mr-1" /> Adicionar
                   </Button>
                 </div>
                 <div className="space-y-2">
                   {reqItems.map((item, idx) => (
                     <div key={idx} className="flex gap-2 items-start">
-                      <div className="flex-1">
-                        <Input
-                          value={item.name}
-                          onChange={e => updateItem(idx, 'name', e.target.value)}
-                          placeholder={`Item ${idx + 1} — Ex: Óleo Motor 15W40`}
-                        />
-                      </div>
-                      <div className="w-20">
-                        <Input
-                          value={item.quantity}
-                          onChange={e => updateItem(idx, 'quantity', e.target.value)}
-                          placeholder="Qtd"
-                        />
-                      </div>
-                      <div className="w-16">
-                        <Input
-                          value={item.unit}
-                          onChange={e => updateItem(idx, 'unit', e.target.value)}
-                          placeholder="un"
-                        />
-                      </div>
+                      <Input
+                        placeholder="Nome do item"
+                        value={item.name}
+                        onChange={e => updateItem(idx, 'name', e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="Qtd"
+                        value={item.quantity}
+                        onChange={e => updateItem(idx, 'quantity', e.target.value)}
+                        className="w-16"
+                      />
+                      <Input
+                        placeholder="Un"
+                        value={item.unit}
+                        onChange={e => updateItem(idx, 'unit', e.target.value)}
+                        className="w-16"
+                      />
                       {reqItems.length > 1 && (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600 p-1 mt-0.5">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(idx)} className="text-red-400 p-1">
                           <X className="w-4 h-4" />
                         </Button>
                       )}
@@ -661,42 +718,22 @@ export default function QuotationsPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Observações */}
               <div>
                 <Label>Observações</Label>
-                <Textarea value={reqNotes} onChange={e => setReqNotes(e.target.value)} placeholder="Condições especiais, prazo de entrega, etc." rows={2} />
+                <Textarea value={reqNotes} onChange={e => setReqNotes(e.target.value)} placeholder="Prazo, especificações, etc." rows={2} />
               </div>
-
-              {/* Preview da mensagem */}
-              {reqTitle && reqItems.some(i => i.name.trim()) && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
-                    <MessageCircle className="w-3 h-3" /> Preview da Mensagem WhatsApp
-                  </p>
-                  <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">
-                    {(() => {
-                      const r = (collaborators || []).find(c => String(c.id) === reqRequesterId);
-                      const fn = r?.name ? r.name.split(' ')[0] : 'a equipe BTREE Ambiental';
-                      return `🌿 *${COMPANY.name}*\n📞 Contato Comercial: ${COMPANY.phone} · ${COMPANY.commercial}\n🌐 ${COMPANY.site}\n📸 Instagram: ${COMPANY.instagram}\n━━━━━━━━━━━━━━━━━━━━\n\nOlá! Tudo bem? Aqui é o ${fn} da BTREE Ambiental!!\nEu gostaria de solicitar um orçamento! Segue abaixo:\n\n📋 *${reqTitle}*\n\n*Itens solicitados:*\n${reqItems.filter(i => i.name.trim()).map((item, idx) => `${idx + 1}. ${item.name} — ${item.quantity} ${item.unit}`).join('\n')}\n\nFavor mandar formulário de orçamento, ou se preferir preencha nosso formulário pelo link:\n[link será gerado ao criar]`;
-                    })()}
-                  </pre>
-                </div>
-              )}
             </div>
           ) : (
-            /* ===== RESULTADO APÓS CRIAÇÃO ===== */
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                <Check className="w-10 h-10 text-green-600 mx-auto mb-2" />
-                <p className="font-semibold text-green-800">Solicitação criada com sucesso!</p>
-                <p className="text-sm text-green-600 mt-1">Compartilhe o link com o fornecedor</p>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <p className="text-sm text-green-700 font-medium">Solicitação criada com sucesso!</p>
               </div>
 
-              {/* Link público */}
+              {/* Link para fornecedor */}
               <div>
                 <Label className="text-sm font-semibold flex items-center gap-1 mb-2">
-                  <Link2 className="w-4 h-4 text-blue-500" /> Link para o Fornecedor
+                  <Link2 className="w-4 h-4 text-blue-500" /> Link para Fornecedor
                 </Label>
                 <div className="flex gap-2">
                   <Input value={getPublicLink(generatedToken)} readOnly className="text-xs bg-gray-50" />
@@ -767,7 +804,7 @@ export default function QuotationsPage() {
       </Dialog>
 
       {/* ===== DIALOG: VER RESPOSTAS ===== */}
-      <Dialog open={viewResponsesId !== null} onOpenChange={(open) => { if (!open) setViewResponsesId(null); }}>
+      <Dialog open={viewResponsesId !== null} onOpenChange={(open) => { if (!open) { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -845,7 +882,14 @@ export default function QuotationsPage() {
                             })
                             .filter(Boolean)
                             .sort((a: any, b: any) => a.price - b.price);
-                          if (allPrices.length === 0) return null;
+                          if (allPrices.length === 0) return (
+                            <div key={i} className="bg-white rounded p-2 border border-amber-100">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-700">{reqItem.name}</span>
+                                <span className="text-xs text-gray-400 italic">Não cotado</span>
+                              </div>
+                            </div>
+                          );
                           const bestSupplier = allPrices[0]!;
                           const worstPrice = allPrices[allPrices.length - 1]?.price || 0;
                           const saving = worstPrice - bestSupplier.price;
@@ -936,31 +980,34 @@ export default function QuotationsPage() {
             {requestDetail && requestDetail.responses.length > 0 && !autoProcessResult && (
               <Button
                 onClick={() => setShowAutoProcessConfirm(true)}
-                className="bg-purple-600 hover:bg-purple-700 text-white w-full sm:w-auto"
+                className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
                 disabled={autoProcessMutation.isPending}
               >
-                <Zap className="w-4 h-4 mr-2" />
-                {autoProcessMutation.isPending ? "Processando..." : "Processar Automaticamente"}
+                <MessageCircle className="w-4 h-4 mr-2" />
+                {autoProcessMutation.isPending ? "Gerando resumo..." : "Gerar Resumo para Gestores"}
               </Button>
             )}
             {autoProcessResult && (
-              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 w-full">
-                <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span>Processado! {autoProcessResult.suppliersCreated} fornecedor(es) criado(s), {autoProcessResult.catalogEntriesCreated} entradas no catálogo, solicitação de compra #{autoProcessResult.purchaseRequestId} gerada.</span>
-              </div>
+              <Button
+                onClick={() => setShowWhatsAppSummary(true)}
+                className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
+              >
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Ver Resumo WhatsApp
+              </Button>
             )}
-            <Button variant="outline" onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); }}>Fechar</Button>
+            <Button variant="outline" onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Modal de confirmação: Processar Automaticamente */}
+      {/* Modal de confirmação: Gerar Resumo */}
       <AlertDialog open={showAutoProcessConfirm} onOpenChange={setShowAutoProcessConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-purple-600" />
-              Processar orçamento automaticamente?
+              <MessageCircle className="w-5 h-5 text-green-600" />
+              Gerar resumo de cotação?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
@@ -979,22 +1026,9 @@ export default function QuotationsPage() {
                     <span><strong>Registrar catálogo de preços</strong> com todos os itens e valores</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <ShoppingCart className="w-4 h-4 text-green-500" />
-                    <span><strong>Criar solicitação de compra</strong> com os menores preços</span>
+                    <MessageCircle className="w-4 h-4 text-green-500" />
+                    <span><strong>Gerar mensagem profissional</strong> com resumo de onde comprar e totais</span>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-700">Urgência da solicitação de compra</label>
-                  <select
-                    value={autoProcessUrgency}
-                    onChange={(e) => setAutoProcessUrgency(e.target.value as any)}
-                    className="w-full border rounded-md px-3 py-1.5 text-sm bg-white"
-                  >
-                    <option value="baixa">Baixa</option>
-                    <option value="media">Média</option>
-                    <option value="alta">Alta</option>
-                    <option value="critica">Crítica</option>
-                  </select>
                 </div>
               </div>
             </AlertDialogDescription>
@@ -1004,16 +1038,149 @@ export default function QuotationsPage() {
             <AlertDialogAction
               onClick={() => {
                 if (viewResponsesId) {
-                  autoProcessMutation.mutate({ quotationRequestId: viewResponsesId, urgency: autoProcessUrgency });
+                  autoProcessMutation.mutate({ quotationRequestId: viewResponsesId });
                 }
               }}
-              className="bg-purple-600 hover:bg-purple-700"
+              className="bg-green-600 hover:bg-green-700"
             >
-              <Zap className="w-4 h-4 mr-2" /> Processar agora
+              <Sparkles className="w-4 h-4 mr-2" /> Gerar Resumo
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ===== MODAL: RESUMO WHATSAPP PARA GESTORES ===== */}
+      <Dialog open={showWhatsAppSummary} onOpenChange={setShowWhatsAppSummary}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-green-600" />
+              Resumo para Gestores — WhatsApp
+            </DialogTitle>
+          </DialogHeader>
+
+          {autoProcessResult && (
+            <div className="space-y-4">
+              {/* Resumo visual */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-semibold text-green-800">Processado com sucesso</span>
+                </div>
+                <p className="text-xs text-green-700">
+                  {autoProcessResult.suppliersCreated} fornecedor(es) criado(s) · {autoProcessResult.catalogEntriesCreated} entradas no catálogo
+                </p>
+              </div>
+
+              {/* Tabela de itens */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                  <Trophy className="w-4 h-4 text-amber-500" /> Melhor preço por item
+                </h3>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="text-left p-2 text-xs font-semibold text-gray-600">Item</th>
+                        <th className="text-center p-2 text-xs font-semibold text-gray-600">Qtd</th>
+                        <th className="text-left p-2 text-xs font-semibold text-gray-600">Fornecedor</th>
+                        <th className="text-right p-2 text-xs font-semibold text-gray-600">Valor Un.</th>
+                        <th className="text-right p-2 text-xs font-semibold text-gray-600">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {autoProcessResult.summaryItems.map((item, i) => (
+                        <tr key={i} className={`border-b last:border-0 ${item.found ? '' : 'bg-red-50'}`}>
+                          <td className="p-2 font-medium text-gray-800">{item.name}</td>
+                          <td className="p-2 text-center text-gray-600">{item.quantity} {item.unit}</td>
+                          <td className="p-2 text-gray-600">
+                            {item.found ? (
+                              <span className="flex items-center gap-1">
+                                <Star className="w-3 h-3 text-amber-500 fill-amber-500 flex-shrink-0" />
+                                {item.bestSupplierName}
+                              </span>
+                            ) : (
+                              <span className="text-red-400 italic text-xs">Não cotado</span>
+                            )}
+                          </td>
+                          <td className="p-2 text-right text-gray-700">
+                            {item.found ? fmtPrice(item.bestPrice) : '—'}
+                          </td>
+                          <td className="p-2 text-right font-semibold text-gray-800">
+                            {item.found ? fmtPrice(item.subtotal) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                      <tr>
+                        <td colSpan={4} className="p-2 text-right font-bold text-gray-700">TOTAL ESTIMADO:</td>
+                        <td className="p-2 text-right font-bold text-green-700 text-base">{fmtPrice(autoProcessResult.grandTotal)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* Link para o sistema */}
+              <div className="flex items-center gap-2 text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg p-2">
+                <ExternalLinkIcon className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                <span>Link para o orçamento completo:</span>
+                <a
+                  href="https://btreeambiental.com/orcamentos"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline font-medium truncate"
+                >
+                  btreeambiental.com/orcamentos
+                </a>
+              </div>
+
+              {/* Mensagem formatada */}
+              <div>
+                <Label className="text-sm font-semibold flex items-center gap-1 mb-2">
+                  <MessageCircle className="w-4 h-4 text-green-500" /> Mensagem para Gestores
+                </Label>
+                <div className="bg-[#ECE5DD] border rounded-lg p-3 max-h-72 overflow-y-auto">
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <pre className="text-xs text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
+                      {buildManagerWhatsAppMessage(autoProcessResult)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões de ação */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={copyManagerMessage}
+                  className="flex-1"
+                >
+                  {copiedWhatsApp ? (
+                    <><Check className="w-4 h-4 mr-2 text-green-500" /> Copiado!</>
+                  ) : (
+                    <><Copy className="w-4 h-4 mr-2" /> Copiar Mensagem</>
+                  )}
+                </Button>
+                <Button
+                  onClick={openManagerWhatsApp}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Abrir no WhatsApp
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWhatsAppSummary(false)} className="w-full">
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* New Quotation Dialog */}
       <Dialog open={showQuoteForm} onOpenChange={setShowQuoteForm}>

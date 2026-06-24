@@ -12418,10 +12418,9 @@ var quotationRequestsRouter = router({
   // 1. Cria/atualiza fornecedores de todas as respostas
   // 2. Cria/encontra categoria com o título do orçamento
   // 3. Popula catálogo de preços com todos os itens de todas as respostas
-  // 4. Cria solicitação de compra com os itens de menor preço
+  // 4. Retorna resumo estruturado para mensagem WhatsApp (NÃO cria solicitação de compra)
   autoProcess: protectedProcedure.input(z36.object({
-    quotationRequestId: z36.number(),
-    urgency: z36.enum(["baixa", "media", "alta", "critica"]).optional().default("media")
+    quotationRequestId: z36.number()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
@@ -12438,8 +12437,7 @@ var quotationRequestsRouter = router({
       suppliersUpdated: 0,
       categoryId: 0,
       categoryName: req.title,
-      catalogEntriesCreated: 0,
-      purchaseRequestId: 0
+      catalogEntriesCreated: 0
     };
     const supplierIdByResponse = /* @__PURE__ */ new Map();
     for (const resp of responses) {
@@ -12501,10 +12499,8 @@ var quotationRequestsRouter = router({
         );
         categoryId = fallbackRows[0][0]?.id ?? 0;
       }
-      console.log("[autoProcess] Categoria criada/encontrada:", categoryId, catName);
     }
     result.categoryId = categoryId;
-    result.categoryName = req.title;
     for (const resp of responses) {
       const supplierId = supplierIdByResponse.get(resp.id);
       if (!supplierId) continue;
@@ -12513,95 +12509,68 @@ var quotationRequestsRouter = router({
         if (!item.price || parseFloat(item.price) <= 0) continue;
         const qNotes = item.brand ? `Marca: ${item.brand}${item.notes ? ` | ${item.notes}` : ""}` : item.notes || null;
         const qUnit = item.unit || "un";
-        const qDate = now;
-        const qCreatedBy = ctx.user.id;
-        const qReqId = input.quotationRequestId;
         const qUnitPrice = item.price;
         const qTotalPrice = (parseFloat(item.price) * parseFloat(item.quantity || "1")).toFixed(2);
         const qQuotedAt = Date.now();
+        const qCreatedBy = ctx.user.id;
         await db.execute(
           sql21`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by, created_at) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || "1"}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy}, NOW())`
         );
         result.catalogEntriesCreated++;
       }
     }
-    const bestPriceByItem = /* @__PURE__ */ new Map();
-    for (const resp of responses) {
-      const respItems = JSON.parse(resp.itemsJson || "[]");
-      for (const item of respItems) {
-        const price = parseFloat(item.price);
-        if (isNaN(price) || price <= 0) continue;
-        const existing = bestPriceByItem.get(item.name);
-        if (!existing || price < existing.price) {
-          bestPriceByItem.set(item.name, {
-            price,
-            supplierName: resp.supplierName || "",
-            unit: item.unit || "un",
-            quantity: item.quantity
-          });
+    const summaryItems = [];
+    for (const reqItem of requestItems) {
+      const key = reqItem.name.toLowerCase().trim();
+      let bestPrice = Infinity;
+      let bestSupplierName = "";
+      let bestSupplierPhone = null;
+      let found = false;
+      for (const resp of responses) {
+        const respItems = JSON.parse(resp.itemsJson || "[]");
+        const match = respItems.find((it) => it.name.toLowerCase().trim() === key);
+        if (match) {
+          const price = parseFloat(match.price);
+          if (!isNaN(price) && price > 0 && price < bestPrice) {
+            bestPrice = price;
+            bestSupplierName = resp.supplierName || "";
+            bestSupplierPhone = resp.sellerPhone || null;
+            found = true;
+          }
         }
       }
-    }
-    const purchaseItems = requestItems.map((reqItem) => {
-      const best = bestPriceByItem.get(reqItem.name);
-      return {
+      const qty = parseFloat(reqItem.quantity) || 1;
+      summaryItems.push({
         name: reqItem.name,
         quantity: reqItem.quantity,
-        unit: reqItem.unit || best?.unit || "un",
-        notes: best ? `Menor pre\xE7o: R$ ${parseFloat(best.price.toString()).toFixed(2).replace(".", ",")} \u2014 ${best.supplierName}` : void 0
-      };
-    });
-    const supplierSummary = responses.map((r) => `\u2022 ${r.supplierName}`).join("\n");
-    const prTitle = `Compra: ${req.title}`;
-    const prDesc = `Gerado automaticamente a partir do or\xE7amento "${req.title}".
-
-Fornecedores consultados:
-${supplierSummary}`;
-    const prNotes = `Or\xE7amento origem: #${req.id} \u2014 ${responses.length} resposta(s) recebida(s)`;
-    const urgencyMap = { baixa: "low", media: "medium", alta: "high", critica: "critical" };
-    const prUrgency = urgencyMap[input.urgency] || "medium";
-    const prRequestedBy = ctx.user.id;
-    const prRequestedAt = Date.now();
-    const prCategoryId = categoryId && categoryId > 0 ? categoryId : null;
-    console.log("[autoProcess] Criando purchase_request com categoryId:", prCategoryId, "urgency:", prUrgency, "requestedBy:", prRequestedBy, "requestedAt:", prRequestedAt);
-    let purchaseRequestId;
-    try {
-      const prInsResult = await db.execute(
-        sql21`INSERT INTO purchase_requests (title, description, category_id, urgency, status, requested_at, requested_by, notes, created_at, updated_at) VALUES (${prTitle}, ${prDesc}, ${prCategoryId}, ${prUrgency}, 'pending', ${prRequestedAt}, ${prRequestedBy}, ${prNotes}, NOW(), NOW())`
-      );
-      purchaseRequestId = prInsResult[0]?.insertId;
-      result.purchaseRequestId = purchaseRequestId;
-    } catch (prErr) {
-      const realErr = prErr?.cause || prErr;
-      const mysqlMsg = realErr?.sqlMessage || realErr?.message || String(prErr);
-      const mysqlCode = realErr?.code || realErr?.errno || "unknown";
-      const mysqlState = realErr?.sqlState || "";
-      console.error("[autoProcess] ERRO INSERT purchase_requests:", mysqlCode, mysqlState, mysqlMsg, "| categoryId:", prCategoryId, "| urgency:", prUrgency, "| requestedBy:", prRequestedBy);
-      throw new TRPCError26({
-        code: "INTERNAL_SERVER_ERROR",
-        message: `Erro ao criar solicita\xE7\xE3o de compra [${mysqlCode}/${mysqlState}]: ${mysqlMsg}`
+        unit: reqItem.unit || "un",
+        bestPrice: found ? bestPrice : 0,
+        bestSupplierName,
+        bestSupplierPhone,
+        subtotal: found ? bestPrice * qty : 0,
+        found
       });
     }
-    if (purchaseItems.length > 0) {
-      for (const item of purchaseItems) {
-        const piNotes = item.notes || null;
-        await db.execute(
-          sql21`INSERT INTO purchase_request_items (request_id, name, quantity, unit, notes, created_at) VALUES (${purchaseRequestId}, ${item.name}, ${item.quantity}, ${item.unit}, ${piNotes}, NOW())`
-        );
-      }
-    }
+    const grandTotal = summaryItems.reduce((sum, item) => sum + item.subtotal, 0);
     try {
       await notifyOwner({
-        title: `\u2705 Or\xE7amento processado automaticamente: ${req.title}`,
+        title: `\u2705 Or\xE7amento processado: ${req.title}`,
         content: `O or\xE7amento "${req.title}" foi processado.
 
 \u2022 ${result.suppliersCreated} fornecedor(es) criado(s)
 \u2022 ${result.catalogEntriesCreated} entradas no cat\xE1logo
-\u2022 Solicita\xE7\xE3o de compra #${purchaseRequestId} criada com ${purchaseItems.length} item(s)`
+\u2022 Total estimado: R$ ${grandTotal.toFixed(2).replace(".", ",")}`
       });
     } catch (_) {
     }
-    return result;
+    return {
+      ...result,
+      quotationRequestId: input.quotationRequestId,
+      quotationTitle: req.title,
+      summaryItems,
+      grandTotal,
+      responseCount: responses.length
+    };
   }),
   // ===== ROTAS PÚBLICAS (sem auth) =====
   // Buscar solicitação por token (fornecedor acessa)
@@ -12668,75 +12637,13 @@ ${supplierSummary}`;
     });
     await db.update(quotationRequests).set({ status: "respondida" }).where(eq35(quotationRequests.id, req.id));
     try {
-      const existingSuppliers = await db.execute(
-        sql21`SELECT id FROM suppliers WHERE company_name = ${input.supplierName.trim()} LIMIT 1`
-      );
-      const existingArr = existingSuppliers[0];
-      if (existingArr.length === 0) {
-        await db.insert(suppliers).values({
-          companyName: input.supplierName.trim(),
-          cnpj: input.cnpj ?? null,
-          address: input.address ?? null,
-          phone: input.sellerPhone ?? null,
-          whatsapp: input.sellerPhone ?? null,
-          email: input.sellerEmail ?? null,
-          contactName: input.sellerName ?? null,
-          isActive: 1
-        });
-      }
-    } catch (_) {
-    }
-    try {
       await notifyOwner({
-        title: `\u{1F4CB} Novo or\xE7amento recebido: ${req.title}`,
-        content: `Fornecedor "${input.supplierName}" respondeu a solicita\xE7\xE3o de or\xE7amento "${req.title}".
-
-Vendedor: ${input.sellerName || "\u2014"}
-Telefone: ${input.sellerPhone || "\u2014"}
-
-Acesse o sistema para visualizar os valores.`
+        title: `\u{1F4EC} Nova resposta de or\xE7amento: ${req.title}`,
+        content: `O fornecedor "${input.supplierName}" respondeu ao or\xE7amento "${req.title}" com ${input.items.length} item(s).`
       });
     } catch (_) {
     }
     return { success: true };
-  }),
-  // Sincronizar fornecedores retroativamente a partir das respostas existentes
-  syncSuppliersFromResponses: protectedProcedure.mutation(async () => {
-    const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
-    const allResponses = await db.select().from(quotationResponses);
-    let created = 0;
-    let updated = 0;
-    for (const resp of allResponses) {
-      if (!resp.supplierName?.trim()) continue;
-      const existingRows = await db.execute(
-        sql21`SELECT id, phone, whatsapp, email FROM suppliers WHERE company_name = ${resp.supplierName.trim()} LIMIT 1`
-      );
-      const existing = existingRows[0];
-      if (existing.length === 0) {
-        await db.insert(suppliers).values({
-          companyName: resp.supplierName.trim(),
-          address: resp.address || null,
-          phone: resp.sellerPhone || null,
-          whatsapp: resp.sellerPhone || null,
-          email: resp.sellerEmail || null,
-          contactName: resp.sellerName || null,
-          isActive: 1
-        });
-        created++;
-      } else {
-        const s = existing[0];
-        const updates = {};
-        if (!s.phone && resp.sellerPhone) updates.phone = resp.sellerPhone;
-        if (!s.whatsapp && resp.sellerPhone) updates.whatsapp = resp.sellerPhone;
-        if (!s.email && resp.sellerEmail) updates.email = resp.sellerEmail;
-        if (Object.keys(updates).length > 0) {
-          await db.update(suppliers).set(updates).where(eq35(suppliers.id, s.id));
-          updated++;
-        }
-      }
-    }
-    return { created, updated, total: allResponses.length };
   })
 });
 

@@ -2200,3 +2200,19 @@
 - [ ] Rota protegida por role=admin
 - [ ] Navegação: adicionar link "Auditoria de Dados" no menu admin
 - [ ] Mostrar: data, tipo (custo/receita), categoria, valor, local de trabalho, origem (tabela do banco), descrição técnica
+
+---
+
+## 📱 FASE X: RESUMO WHATSAPP PARA GESTORES (NOVA FUNCIONALIDADE)
+
+- [ ] Backend: Remover criação de purchase_request do autoProcess
+- [ ] Backend: autoProcess retorna resumo estruturado (melhor preço por item, fornecedor, totais, link)
+- [ ] Frontend: Substituir modal "Processar Automaticamente" por modal de resumo WhatsApp
+- [ ] Frontend: Modal mostra tabela de itens (item | fornecedor | preço un | qtd | subtotal)
+- [ ] Frontend: Modal mostra total geral do orçamento
+- [ ] Frontend: Modal tem mensagem formatada pronta para copiar (estilo profissional)
+- [ ] Frontend: Botão "Copiar para WhatsApp" copia mensagem formatada
+- [ ] Frontend: Link direto para o orçamento completo no sistema
+- [ ] Fix TypeScript: purchaseRequests.ts linhas 47/60 (as any[] → as unknown as any[])
+- [ ] Recompilar backend (esbuild) e frontend (vite build)
+- [ ] Push para GitHub e informar usuário para redeploy na Hostinger
