@@ -288,6 +288,7 @@ export const quotationRequestsRouter = router({
         ...result,
         quotationRequestId: input.quotationRequestId,
         quotationTitle: req.title,
+        requesterName: req.requesterName ?? null,
         summaryItems,
         grandTotal,
         responseCount: responses.length,

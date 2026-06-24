@@ -83,6 +83,7 @@ type AutoProcessResult = {
   catalogEntriesCreated: number;
   quotationRequestId: number;
   quotationTitle: string;
+  requesterName?: string | null;
   summaryItems: SummaryItem[];
   grandTotal: number;
   responseCount: number;
@@ -294,31 +295,36 @@ export default function QuotationsPage() {
     return `${window.location.origin}/orcamentos`;
   }
 
-  function buildWhatsAppMessage(token: string) {
-    const requester = (collaborators || []).find(c => String(c.id) === reqRequesterId);
-    const validItems = reqItems.filter(i => i.name.trim());
+  // Aceita dados do formulário (ao criar) OU de uma solicitação já salva (ao reenviar)
+  function buildWhatsAppMessage(token: string, savedReq?: any) {
+    const title = savedReq ? savedReq.title : reqTitle;
+    const items: QuotItem[] = savedReq ? (savedReq.items || []) : reqItems.filter(i => i.name.trim());
+    const notes = savedReq ? savedReq.notes : reqNotes;
+    const requesterName = savedReq ? savedReq.requesterName : (collaborators || []).find(c => String(c.id) === reqRequesterId)?.name;
+    const requesterPhone = savedReq ? savedReq.requesterPhone : (collaborators || []).find(c => String(c.id) === reqRequesterId)?.phone;
+    const requesterEmail = savedReq ? savedReq.requesterEmail : (collaborators || []).find(c => String(c.id) === reqRequesterId)?.email;
     const link = getPublicLink(token);
-    const firstName = requester?.name ? requester.name.split(' ')[0] : 'a equipe BTREE Ambiental';
+    const firstName = requesterName ? requesterName.split(' ')[0] : 'a equipe BTREE Ambiental';
 
     let msg = `🌿 *${COMPANY.name}*\n`;
     msg += `📞 Contato Comercial: ${COMPANY.phone} · ${COMPANY.commercial}\n`;
     msg += `🌐 ${COMPANY.site}\n`;
     msg += `📸 Instagram: ${COMPANY.instagram}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    msg += `Olá! Tudo bem? Aqui é o ${firstName} da BTREE Ambiental!!\n`;
+    msg += `Olá! Tudo bem? Aqui é ${firstName} da BTREE Ambiental!!\n`;
     msg += `Eu gostaria de solicitar um orçamento! Segue abaixo:\n\n`;
-    msg += `📋 *${reqTitle}*\n\n`;
+    msg += `📋 *${title}*\n\n`;
     msg += `*Itens solicitados:*\n`;
-    validItems.forEach((item, i) => {
+    items.forEach((item, i) => {
       msg += `${i + 1}. ${item.name} — ${item.quantity} ${item.unit}\n`;
     });
-    if (reqNotes) msg += `\n📝 *Obs:* ${reqNotes}\n`;
+    if (notes) msg += `\n📝 *Obs:* ${notes}\n`;
     msg += `\nFavor mandar formulário de orçamento, ou se preferir preencha nosso formulário pelo link:\n${link}\n`;
     msg += `\n━━━━━━━━━━━━━━━━━━━━\n`;
-    if (requester) {
-      msg += `*Solicitante:* ${requester.name}\n`;
-      if (requester.phone) msg += `📱 ${requester.phone}\n`;
-      if (requester.email) msg += `✉️ ${requester.email}\n`;
+    if (requesterName) {
+      msg += `*Solicitante:* ${requesterName}\n`;
+      if (requesterPhone) msg += `📱 ${requesterPhone}\n`;
+      if (requesterEmail) msg += `✉️ ${requesterEmail}\n`;
     }
     return msg;
   }
@@ -330,6 +336,7 @@ export default function QuotationsPage() {
 
     let msg = `🌿 *BTREE Ambiental — Resumo de Cotação*\n`;
     msg += `📅 Data: ${today}\n`;
+    if (result.requesterName) msg += `👤 Solicitante: ${result.requesterName}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
     msg += `📋 *${result.quotationTitle}*\n`;
     msg += `🏢 Fornecedores consultados: ${result.responseCount}\n\n`;
@@ -366,15 +373,15 @@ export default function QuotationsPage() {
     toast.success("Link copiado!");
   }
 
-  async function copyMessage(token: string) {
-    await navigator.clipboard.writeText(buildWhatsAppMessage(token));
+  async function copyMessage(token: string, savedReq?: any) {
+    await navigator.clipboard.writeText(buildWhatsAppMessage(token, savedReq));
     setCopiedMsg(true);
     setTimeout(() => setCopiedMsg(false), 2000);
     toast.success("Mensagem copiada!");
   }
 
-  function openWhatsApp(token: string) {
-    const msg = encodeURIComponent(buildWhatsAppMessage(token));
+  function openWhatsApp(token: string, savedReq?: any) {
+    const msg = encodeURIComponent(buildWhatsAppMessage(token, savedReq));
     window.open(`https://wa.me/?text=${msg}`, '_blank');
   }
 
@@ -586,7 +593,7 @@ export default function QuotationsPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => openWhatsApp(req.token)}
+                                onClick={() => openWhatsApp(req.token, req)}
                                 className="text-green-500 hover:text-green-700 p-1"
                                 title="Enviar WhatsApp"
                               >
@@ -976,7 +983,19 @@ export default function QuotationsPage() {
             </div>
           )}
 
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="flex-col sm:flex-row gap-2 flex-wrap">
+            {requestDetail && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (requestDetail) openWhatsApp(requestDetail.token, requestDetail);
+                }}
+                className="w-full sm:w-auto border-green-300 text-green-700 hover:bg-green-50"
+              >
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Enviar para mais fornecedores
+              </Button>
+            )}
             {requestDetail && requestDetail.responses.length > 0 && !autoProcessResult && (
               <Button
                 onClick={() => setShowAutoProcessConfirm(true)}
