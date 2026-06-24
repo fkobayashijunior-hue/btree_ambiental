@@ -51,6 +51,7 @@ import QuotationsPage from "./pages/QuotationsPage";
 import FreightCyclesPage from "./pages/FreightCyclesPage";
 import InvoiceControlPage from "./pages/InvoiceControlPage";
 import PublicQuotationPage from "./pages/PublicQuotationPage";
+import PublicResponseReviewPage from "./pages/PublicResponseReviewPage";
 import ThirdPartyPage from "./pages/ThirdPartyPage";
 import AuditDataPage from "./pages/AuditDataPage";
 
@@ -194,6 +195,8 @@ function Router() {
       </Route>
       {/* Rota pública para fornecedores preencherem orçamento */}
       <Route path={"/orcamento/:token"} component={PublicQuotationPage} />
+      {/* Rota pública para fornecedores revisarem/editarem sua resposta */}
+      <Route path={"/orcamento/resposta/:responseToken"} component={PublicResponseReviewPage} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

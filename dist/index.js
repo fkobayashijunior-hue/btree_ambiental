@@ -1483,6 +1483,8 @@ var init_schema = __esm({
       itemsJson: text("items_json").notNull(),
       // JSON array: [{name, quantity, unit, price, brand, notes}]
       notes: text(),
+      responseToken: varchar("response_token", { length: 64 }),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
     });
     freightRates = mysqlTable("freight_rates", {
@@ -12567,12 +12569,87 @@ var quotationRequestsRouter = router({
       ...result,
       quotationRequestId: input.quotationRequestId,
       quotationTitle: req.title,
+      requesterName: req.requesterName ?? null,
       summaryItems,
       grandTotal,
       responseCount: responses.length
     };
   }),
   // ===== ROTAS PÚBLICAS (sem auth) =====
+  // Fornecedor busca sua resposta existente pelo token + nome da empresa
+  getMyResponse: publicProcedure.input(z36.object({ token: z36.string(), supplierName: z36.string() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { found: false };
+    const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.token, input.token));
+    if (!req) return { found: false };
+    const responses = await db.select().from(quotationResponses).where(eq35(quotationResponses.quotationRequestId, req.id));
+    const match = responses.find(
+      (r) => r.supplierName?.toLowerCase().trim() === input.supplierName.toLowerCase().trim()
+    );
+    if (!match) return { found: false };
+    return {
+      found: true,
+      response: {
+        id: match.id,
+        supplierName: match.supplierName,
+        cnpj: match.cnpj,
+        address: match.address,
+        sellerName: match.sellerName,
+        sellerPhone: match.sellerPhone,
+        sellerEmail: match.sellerEmail,
+        notes: match.notes,
+        items: JSON.parse(match.itemsJson || "[]")
+      }
+    };
+  }),
+  // Fornecedor atualiza sua resposta existente (público)
+  updateResponse: publicProcedure.input(z36.object({
+    token: z36.string(),
+    responseId: z36.number(),
+    supplierName: z36.string().min(1),
+    cnpj: z36.string().optional(),
+    address: z36.string().optional(),
+    sellerName: z36.string().optional(),
+    sellerPhone: z36.string().optional(),
+    sellerEmail: z36.string().optional(),
+    items: z36.array(z36.object({
+      name: z36.string(),
+      quantity: z36.string(),
+      unit: z36.string().optional(),
+      price: z36.string(),
+      brand: z36.string().optional(),
+      notes: z36.string().optional()
+    })).min(1),
+    notes: z36.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.token, input.token));
+    if (!req) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError26({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    const [existing] = await db.select().from(quotationResponses).where(eq35(quotationResponses.id, input.responseId));
+    if (!existing || existing.quotationRequestId !== req.id) {
+      throw new TRPCError26({ code: "FORBIDDEN", message: "Resposta n\xE3o encontrada" });
+    }
+    await db.update(quotationResponses).set({
+      supplierName: input.supplierName,
+      cnpj: input.cnpj ?? null,
+      address: input.address ?? null,
+      sellerName: input.sellerName ?? null,
+      sellerPhone: input.sellerPhone ?? null,
+      sellerEmail: input.sellerEmail ?? null,
+      itemsJson: JSON.stringify(input.items),
+      notes: input.notes ?? null
+    }).where(eq35(quotationResponses.id, input.responseId));
+    try {
+      await notifyOwner({
+        title: `\u270F\uFE0F Or\xE7amento revisado: ${req.title}`,
+        content: `O fornecedor "${input.supplierName}" atualizou sua resposta ao or\xE7amento "${req.title}".`
+      });
+    } catch (_) {
+    }
+    return { success: true };
+  }),
   // Buscar solicitação por token (fornecedor acessa)
   getByToken: publicProcedure.input(z36.object({ token: z36.string() })).query(async ({ input }) => {
     const db = await getDb();
@@ -12624,7 +12701,8 @@ var quotationRequestsRouter = router({
     const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.token, input.token));
     if (!req) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     if (req.status === "cancelada") throw new TRPCError26({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
-    await db.insert(quotationResponses).values({
+    const responseToken = crypto.randomBytes(32).toString("hex");
+    const [insertResult] = await db.insert(quotationResponses).values({
       quotationRequestId: req.id,
       supplierName: input.supplierName,
       cnpj: input.cnpj,
@@ -12633,13 +12711,93 @@ var quotationRequestsRouter = router({
       sellerPhone: input.sellerPhone,
       sellerEmail: input.sellerEmail,
       itemsJson: JSON.stringify(input.items),
-      notes: input.notes
+      notes: input.notes,
+      responseToken
     });
+    const responseId = insertResult.insertId;
     await db.update(quotationRequests).set({ status: "respondida" }).where(eq35(quotationRequests.id, req.id));
     try {
       await notifyOwner({
         title: `\u{1F4EC} Nova resposta de or\xE7amento: ${req.title}`,
         content: `O fornecedor "${input.supplierName}" respondeu ao or\xE7amento "${req.title}" com ${input.items.length} item(s).`
+      });
+    } catch (_) {
+    }
+    return { success: true, responseToken, responseId };
+  }),
+  // Buscar resposta pelo responseToken (fornecedor acessa para revisar)
+  getByResponseToken: publicProcedure.input(z36.object({ responseToken: z36.string() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { found: false };
+    const [resp] = await db.select().from(quotationResponses).where(eq35(quotationResponses.responseToken, input.responseToken));
+    if (!resp) return { found: false };
+    const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.id, resp.quotationRequestId));
+    if (!req) return { found: false };
+    return {
+      found: true,
+      isCancelled: req.status === "cancelada",
+      response: {
+        id: resp.id,
+        supplierName: resp.supplierName,
+        cnpj: resp.cnpj,
+        address: resp.address,
+        sellerName: resp.sellerName,
+        sellerPhone: resp.sellerPhone,
+        sellerEmail: resp.sellerEmail,
+        notes: resp.notes,
+        createdAt: resp.createdAt,
+        updatedAt: resp.updatedAt,
+        items: JSON.parse(resp.itemsJson || "[]")
+      },
+      request: {
+        id: req.id,
+        title: req.title,
+        requesterName: req.requesterName,
+        items: JSON.parse(req.itemsJson || "[]"),
+        notes: req.notes
+      }
+    };
+  }),
+  // Atualizar resposta pelo responseToken (fornecedor revisa)
+  updateResponseByToken: publicProcedure.input(z36.object({
+    responseToken: z36.string(),
+    supplierName: z36.string().min(1),
+    cnpj: z36.string().optional(),
+    address: z36.string().optional(),
+    sellerName: z36.string().optional(),
+    sellerPhone: z36.string().optional(),
+    sellerEmail: z36.string().optional(),
+    items: z36.array(z36.object({
+      name: z36.string(),
+      quantity: z36.string(),
+      unit: z36.string().optional(),
+      price: z36.string(),
+      brand: z36.string().optional(),
+      notes: z36.string().optional()
+    })).min(1),
+    notes: z36.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [resp] = await db.select().from(quotationResponses).where(eq35(quotationResponses.responseToken, input.responseToken));
+    if (!resp) throw new TRPCError26({ code: "NOT_FOUND", message: "Resposta n\xE3o encontrada" });
+    const [req] = await db.select().from(quotationRequests).where(eq35(quotationRequests.id, resp.quotationRequestId));
+    if (!req) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError26({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    await db.update(quotationResponses).set({
+      supplierName: input.supplierName,
+      cnpj: input.cnpj ?? null,
+      address: input.address ?? null,
+      sellerName: input.sellerName ?? null,
+      sellerPhone: input.sellerPhone ?? null,
+      sellerEmail: input.sellerEmail ?? null,
+      itemsJson: JSON.stringify(input.items),
+      notes: input.notes ?? null
+    }).where(eq35(quotationResponses.id, resp.id));
+    try {
+      await notifyOwner({
+        title: `\u270F\uFE0F Or\xE7amento revisado: ${req.title}`,
+        content: `O fornecedor "${input.supplierName}" atualizou sua resposta ao or\xE7amento "${req.title}".`
       });
     } catch (_) {
     }

@@ -446,7 +446,9 @@ export const quotationRequestsRouter = router({
       if (!req) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
       if (req.status === "cancelada") throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação cancelada" });
 
-      await db.insert(quotationResponses).values({
+      const responseToken = crypto.randomBytes(32).toString("hex");
+
+      const [insertResult] = await db.insert(quotationResponses).values({
         quotationRequestId: req.id,
         supplierName: input.supplierName,
         cnpj: input.cnpj,
@@ -456,7 +458,10 @@ export const quotationRequestsRouter = router({
         sellerEmail: input.sellerEmail,
         itemsJson: JSON.stringify(input.items),
         notes: input.notes,
+        responseToken,
       });
+
+      const responseId = (insertResult as { insertId: number }).insertId;
 
       // Atualizar status da solicitação para "respondida"
       await db
@@ -472,6 +477,93 @@ export const quotationRequestsRouter = router({
         });
       } catch (_) { /* não bloquear */ }
 
+      return { success: true, responseToken, responseId };
+    }),
+
+  // Buscar resposta pelo responseToken (fornecedor acessa para revisar)
+  getByResponseToken: publicProcedure
+    .input(z.object({ responseToken: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { found: false as const };
+      const [resp] = await db.select().from(quotationResponses)
+        .where(eq(quotationResponses.responseToken, input.responseToken));
+      if (!resp) return { found: false as const };
+      const [req] = await db.select().from(quotationRequests)
+        .where(eq(quotationRequests.id, resp.quotationRequestId));
+      if (!req) return { found: false as const };
+      return {
+        found: true as const,
+        isCancelled: req.status === 'cancelada',
+        response: {
+          id: resp.id,
+          supplierName: resp.supplierName,
+          cnpj: resp.cnpj,
+          address: resp.address,
+          sellerName: resp.sellerName,
+          sellerPhone: resp.sellerPhone,
+          sellerEmail: resp.sellerEmail,
+          notes: resp.notes,
+          createdAt: resp.createdAt,
+          updatedAt: (resp as any).updatedAt,
+          items: JSON.parse(resp.itemsJson || '[]') as Array<{ name: string; quantity: string; unit: string; price: string; brand?: string; notes?: string }>,
+        },
+        request: {
+          id: req.id,
+          title: req.title,
+          requesterName: req.requesterName,
+          items: JSON.parse(req.itemsJson || '[]') as Array<{ name: string; quantity: string; unit: string }>,
+          notes: req.notes,
+        },
+      };
+    }),
+
+  // Atualizar resposta pelo responseToken (fornecedor revisa)
+  updateResponseByToken: publicProcedure
+    .input(z.object({
+      responseToken: z.string(),
+      supplierName: z.string().min(1),
+      cnpj: z.string().optional(),
+      address: z.string().optional(),
+      sellerName: z.string().optional(),
+      sellerPhone: z.string().optional(),
+      sellerEmail: z.string().optional(),
+      items: z.array(z.object({
+        name: z.string(),
+        quantity: z.string(),
+        unit: z.string().optional(),
+        price: z.string(),
+        brand: z.string().optional(),
+        notes: z.string().optional(),
+      })).min(1),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const [resp] = await db.select().from(quotationResponses)
+        .where(eq(quotationResponses.responseToken, input.responseToken));
+      if (!resp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Resposta não encontrada' });
+      const [req] = await db.select().from(quotationRequests)
+        .where(eq(quotationRequests.id, resp.quotationRequestId));
+      if (!req) throw new TRPCError({ code: 'NOT_FOUND', message: 'Solicitação não encontrada' });
+      if (req.status === 'cancelada') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Solicitação cancelada' });
+      await db.update(quotationResponses).set({
+        supplierName: input.supplierName,
+        cnpj: input.cnpj ?? null,
+        address: input.address ?? null,
+        sellerName: input.sellerName ?? null,
+        sellerPhone: input.sellerPhone ?? null,
+        sellerEmail: input.sellerEmail ?? null,
+        itemsJson: JSON.stringify(input.items),
+        notes: input.notes ?? null,
+      }).where(eq(quotationResponses.id, resp.id));
+      try {
+        await notifyOwner({
+          title: `✏️ Orçamento revisado: ${req.title}`,
+          content: `O fornecedor "${input.supplierName}" atualizou sua resposta ao orçamento "${req.title}".`,
+        });
+      } catch (_) { /* não bloquear */ }
       return { success: true };
     }),
 });

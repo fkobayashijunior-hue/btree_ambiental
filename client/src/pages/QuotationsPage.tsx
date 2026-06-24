@@ -15,7 +15,7 @@ import {
   Pencil, Trash2, MessageCircle, Link2, Copy, Check, Send, User,
   Package, X, Eye, FileText, Phone, Mail, ExternalLink, Ban,
   Trophy, Star, AlertCircle, Zap, ShoppingCart, CheckCircle2,
-  Sparkles, ExternalLink as ExternalLinkIcon
+  Sparkles, ExternalLink as ExternalLinkIcon, Edit
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -973,6 +973,22 @@ export default function QuotationsPage() {
                               })}
                             </div>
                             {resp.notes && <p className="text-xs text-gray-500 mt-2 italic border-t pt-2">{resp.notes}</p>}
+                            {resp.responseToken && (
+                              <div className="mt-3 pt-2 border-t">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+                                  onClick={() => {
+                                    const link = `${window.location.origin}/orcamento/resposta/${resp.responseToken}`;
+                                    navigator.clipboard.writeText(link).then(() => toast.success(`Link de revisão copiado! Envie para ${resp.supplierName}`));
+                                  }}
+                                >
+                                  <Edit className="w-3 h-3 mr-1" />
+                                  Copiar link de revisão para {resp.supplierName}
+                                </Button>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       );

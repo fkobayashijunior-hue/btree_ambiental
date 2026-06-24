@@ -1385,6 +1385,8 @@ export const quotationResponses = mysqlTable("quotation_responses", {
   sellerEmail: varchar("seller_email", { length: 255 }),
   itemsJson: text("items_json").notNull(), // JSON array: [{name, quantity, unit, price, brand, notes}]
   notes: text(),
+  responseToken: varchar("response_token", { length: 64 }),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
 export type QuotationResponse = typeof quotationResponses.$inferSelect;
