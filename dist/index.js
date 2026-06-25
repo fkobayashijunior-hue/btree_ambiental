@@ -12909,6 +12909,12 @@ var clientAdvancesRouter = router({
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(eq36(clientAdvances.clientId, input.clientId)).orderBy(desc30(clientAdvances.date));
   }),
+  // Listar adiantamentos de um cliente (alias para uso no CargoControl)
+  listByClient: protectedProcedure.input(z37.object({ clientId: z37.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    return db.select().from(clientAdvances).where(eq36(clientAdvances.clientId, input.clientId)).orderBy(desc30(clientAdvances.date));
+  }),
   // Criar novo adiantamento
   create: protectedProcedure.input(z37.object({
     clientId: z37.number(),

@@ -18,6 +18,17 @@ export const clientAdvancesRouter = router({
         .orderBy(desc(clientAdvances.date));
     }),
 
+  // Listar adiantamentos de um cliente (alias para uso no CargoControl)
+  listByClient: protectedProcedure
+    .input(z.object({ clientId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      return db.select().from(clientAdvances)
+        .where(eq(clientAdvances.clientId, input.clientId))
+        .orderBy(desc(clientAdvances.date));
+    }),
+
   // Criar novo adiantamento
   create: protectedProcedure
     .input(z.object({

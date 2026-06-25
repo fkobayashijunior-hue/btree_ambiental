@@ -735,23 +735,18 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             ))}
           </div>
         ) : (() => {
-          // Calcular valor total, valor pago e saldo
-          const pricePerTon = parseFloat(data?.client?.pricePerTon || '0');
+          // Calcular valor pago e saldo usando adiantamentos reais
           const allLoads = data?.loads || [];
-          const totalValorCargas = allLoads.reduce((sum: number, l: any) => {
-            const w = parseFloat((l as any).weightNetKg || (l as any).weightOutKg || '0');
-            return sum + (w > 0 && pricePerTon > 0 ? (w / 1000) * pricePerTon : 0);
+          // Valor pago = soma dos valores já abatidos nos adiantamentos (totalAmount - balanceRemaining)
+          const advances = data?.advances || [];
+          const valorPago = advances.reduce((sum: number, a: any) => {
+            const total = parseFloat(a.totalAmount || a.amount || '0');
+            const saldoAdiantamento = parseFloat(a.balanceRemaining || '0');
+            return sum + Math.max(0, total - saldoAdiantamento);
           }, 0);
-          // Valor pago = cargas com paymentStatus 'pago' + fechamentos pagos
-          const valorPagoCargas = allLoads
-            .filter((l: any) => (l as any).paymentStatus === 'pago')
-            .reduce((sum: number, l: any) => {
-              const w = parseFloat((l as any).weightNetKg || (l as any).weightOutKg || '0');
-              return sum + (w > 0 && pricePerTon > 0 ? (w / 1000) * pricePerTon : 0);
-            }, 0);
-          const valorPagoFechamentos = (data?.payments || []).reduce((sum: number, p: any) => sum + parseFloat(p.netAmount || p.grossAmount || '0'), 0);
-          const valorPago = Math.max(valorPagoCargas, valorPagoFechamentos);
-          const saldo = Math.max(0, totalValorCargas - valorPago);
+          // Saldo a receber = saldo disponível nos adiantamentos ativos
+          const saldo = data?.totalAdvanceBalance ?? 0;
+          const totalValorCargas = valorPago + saldo; // para controle de exibição
           return (
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-2xl p-4 shadow-sm text-center">

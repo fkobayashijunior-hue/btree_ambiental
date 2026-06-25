@@ -356,7 +356,7 @@ async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "
 }
 
 // ===== PDF RELATÓRIO COMPLETO POR CLIENTE =====
-async function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>, pricePerTon: number = 0, deductions: Array<{cargoLoadId: number | null; amount: string}> = []) {
+async function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>, pricePerTon: number = 0, deductions: Array<{cargoLoadId: number | null; amount: string}> = [], valorPagoAdiantamento: number = 0, saldoAdiantamento: number = 0) {
   const totalCargas = cargas.length;
   const totalVolume = formatBR(cargas.reduce((acc, c) => acc + parseFloat((c.volumeM3 as string) || "0"), 0), 2);
   const totalPendentes = cargas.filter(c => c.status === "pendente").length;
@@ -468,6 +468,8 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</div></div>
       ${pricePerTon > 0 ? `<div class="summary-item"><div class="label">Preço/Ton</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(pricePerTon, 0)}</div></div>` : ""}
       ${totalValor > 0 ? `<div class="summary-item"><div class="label">Valor Total</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(totalValor, 2)}</div></div>` : ""}
+      ${valorPagoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Valor Pago</div><div class="value" style="color:#166534;">R$ ${formatBR(valorPagoAdiantamento, 2)}</div></div>` : ""}
+      ${saldoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Saldo a Receber</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(saldoAdiantamento, 2)}</div></div>` : ""}
       <div class="summary-item"><div class="label">Entregues</div><div class="value" style="color:#166534;">${totalEntregues}</div></div>
       <div class="summary-item"><div class="label">Pendentes</div><div class="value" style="color:#854d0e;">${totalPendentes}</div></div>
     </div>
@@ -1297,6 +1299,11 @@ export default function CargoControl() {
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
   // Deduções de adiantamento para exibir resumo financeiro por carga (todas, sem filtro)
   const { data: allDeductions = [] } = trpc.clientAdvances.listAllDeductions.useQuery();
+  // Adiantamentos do cliente selecionado para cálculo de saldo
+  const { data: clientAdvancesList = [] } = trpc.clientAdvances.listByClient.useQuery(
+    { clientId: filterClientId },
+    { enabled: filterClientId > 0 }
+  );
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
   const { data: buyersList = [] } = trpc.buyerClients.listActive.useQuery();
   const { data: contractorsList = [] } = trpc.thirdPartyContractors.listActive.useQuery();
@@ -1620,15 +1627,17 @@ export default function CargoControl() {
   const statsBase = useMemo(() => filterClientId ? filtered : loads, [filterClientId, filtered, loads]);
   const stats = useMemo(() => {
     const base = statsBase;
-    const pricePerTonClient = filterClientId ? parseFloat((clientsList.find(c => c.id === filterClientId) as any)?.pricePerTon || '0') : 0;
-    const totalValor = pricePerTonClient > 0 ? base.reduce((acc, c) => {
-      const w = parseFloat((c as any).weightNetKg || (c as any).weightOutKg || '0');
-      return acc + (w > 0 ? (w / 1000) * pricePerTonClient : 0);
+    // Valor pago = soma dos abatimentos já realizados nos adiantamentos (totalAmount - balanceRemaining)
+    const valorPago = filterClientId > 0 ? clientAdvancesList.reduce((sum: number, a: any) => {
+      const total = parseFloat(a.amount || a.totalAmount || '0');
+      const saldoAdiantamento = parseFloat(a.balanceRemaining || '0');
+      return sum + Math.max(0, total - saldoAdiantamento);
     }, 0) : 0;
-    const valorPago = pricePerTonClient > 0 ? base.filter(c => (c as any).paymentStatus === 'pago').reduce((acc, c) => {
-      const w = parseFloat((c as any).weightNetKg || (c as any).weightOutKg || '0');
-      return acc + (w > 0 ? (w / 1000) * pricePerTonClient : 0);
-    }, 0) : 0;
+    // Saldo a receber = saldo disponível nos adiantamentos ativos
+    const saldo = filterClientId > 0 ? clientAdvancesList
+      .filter((a: any) => a.status === 'ativo')
+      .reduce((sum: number, a: any) => sum + parseFloat(a.balanceRemaining || '0'), 0) : 0;
+    const totalValor = valorPago + saldo;
     return {
       total: base.length,
       pendente: base.filter(c => c.status === "pendente").length,
@@ -1637,9 +1646,9 @@ export default function CargoControl() {
       pesoTotal: base.reduce((acc, c) => acc + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || "0"), 0),
       totalValor,
       valorPago,
-      saldo: Math.max(0, totalValor - valorPago),
+      saldo,
     };
-  }, [statsBase, filterClientId, clientsList]);
+  }, [statsBase, filterClientId, clientAdvancesList]);
 
   // Resumo semanal (semana atual vs semana passada)
   const weeklyStats = useMemo(() => {
@@ -2132,7 +2141,19 @@ export default function CargoControl() {
                           e.stopPropagation();
                           const client = clientsList.find(c => c.id === group.clientId);
                           const price = parseFloat((client as any)?.pricePerTon || '0');
-                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>, price, (allDeductions as any[]).filter(d => d.clientId === group.clientId));
+                          // Calcular valor pago e saldo dos adiantamentos deste cliente
+                          const groupAdvances = (clientAdvancesList as any[]).length > 0 && filterClientId === group.clientId
+                            ? clientAdvancesList as any[]
+                            : [];
+                          const groupValorPago = groupAdvances.reduce((sum: number, a: any) => {
+                            const total = parseFloat(a.amount || a.totalAmount || '0');
+                            const saldoA = parseFloat(a.balanceRemaining || '0');
+                            return sum + Math.max(0, total - saldoA);
+                          }, 0);
+                          const groupSaldo = groupAdvances
+                            .filter((a: any) => a.status === 'ativo')
+                            .reduce((sum: number, a: any) => sum + parseFloat(a.balanceRemaining || '0'), 0);
+                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>, price, (allDeductions as any[]).filter(d => d.clientId === group.clientId), groupValorPago, groupSaldo);
                         }}
                       >
                         <Download className="h-3.5 w-3.5" /> Relatório PDF
