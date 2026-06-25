@@ -26,6 +26,7 @@ export const clientAdvancesRouter = router({
       description: z.string().optional(),
       receiptUrl: z.string().optional(),
       date: z.string(),
+      startDate: z.string().optional(),  // data de início dos abatimentos
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -41,6 +42,7 @@ export const clientAdvancesRouter = router({
         description: input.description,
         receiptUrl: input.receiptUrl,
         date: input.date,
+        startDate: input.startDate || null,
         status: 'ativo',
         createdBy: ctx.user.id,
       });

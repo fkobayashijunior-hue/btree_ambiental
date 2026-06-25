@@ -759,7 +759,8 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               { id: "fechamentos" as const, label: "Fechamentos", badge: newItems.fechamentos },
               { id: "documentos" as const, label: "Docs", badge: newItems.docs },
               { id: "replantio" as const, label: "Replantio", badge: newItems.replantios },
-              { id: "adiantamentos" as const, label: "Adiantamentos", badge: 0 },
+              // Ocultar aba Adiantamentos para SIMFLOR (sistema de pagamento diferente)
+              ...(!session.clientName?.toLowerCase().includes('simflor') ? [{ id: "adiantamentos" as const, label: "Adiantamentos", badge: 0 }] : []),
             ].map(({ id, label, badge }) => (
               <button
                 key={id}

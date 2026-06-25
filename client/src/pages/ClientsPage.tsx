@@ -51,7 +51,7 @@ export default function ClientsPage() {
 
   // Adiantamentos
   const [advanceDialog, setAdvanceDialog] = useState<{ clientId: number; clientName: string } | null>(null);
-  const [advanceForm, setAdvanceForm] = useState({ amount: "", description: "", date: new Date().toISOString().slice(0, 10) });
+  const [advanceForm, setAdvanceForm] = useState({ amount: "", description: "", date: new Date().toISOString().slice(0, 10), startDate: "" });
   const [advanceClientId, setAdvanceClientId] = useState<number | null>(null);
   const [advanceReceiptFile, setAdvanceReceiptFile] = useState<File | null>(null);
   const [advanceReceiptPreview, setAdvanceReceiptPreview] = useState<string | null>(null);
@@ -688,7 +688,7 @@ export default function ClientsPage() {
       </Sheet>
 
       {/* Dialog: Adiantamentos */}
-      <Dialog open={!!advanceDialog} onOpenChange={(v) => { if (!v) { setAdvanceDialog(null); setAdvanceClientId(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10) }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); } }}>
+      <Dialog open={!!advanceDialog} onOpenChange={(v) => { if (!v) { setAdvanceDialog(null); setAdvanceClientId(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10), startDate: '' }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -728,6 +728,7 @@ export default function ClientsPage() {
                   amount: parseFloat(advanceForm.amount),
                   description: advanceForm.description || undefined,
                   date: advanceForm.date,
+                  startDate: advanceForm.startDate || undefined,
                 });
               }
             }}
@@ -736,7 +737,7 @@ export default function ClientsPage() {
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-gray-700">{editAdvanceId ? '✏️ Editar Adiantamento' : 'Novo Adiantamento'}</p>
               {editAdvanceId && (
-                <button type="button" onClick={() => { setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10) }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); }} className="text-xs text-gray-400 hover:text-gray-600">✕ Cancelar edição</button>
+                <button type="button" onClick={() => { setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10), startDate: '' }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); }} className="text-xs text-gray-400 hover:text-gray-600">✕ Cancelar edição</button>
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -768,6 +769,16 @@ export default function ClientsPage() {
                 placeholder="Ex: Adiantamento ref. maio/2026"
                 className="h-9 text-sm"
               />
+            </div>
+            <div>
+              <Label className="text-xs">Data de início dos abatimentos <span className="text-gray-400 font-normal">(opcional)</span></Label>
+              <Input
+                type="date"
+                value={advanceForm.startDate}
+                onChange={e => setAdvanceForm(f => ({ ...f, startDate: e.target.value }))}
+                className="h-9 text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-0.5">Cargas anteriores a esta data não serão abatidas por este adiantamento</p>
             </div>
             <div>
               <Label className="text-xs">Comprovante (imagem ou PDF)</Label>
@@ -888,6 +899,14 @@ export default function ClientsPage() {
                             setAutoDeductDialog({ advanceId: adv.id, advanceName: adv.description || 'Adiantamento', balance: parseFloat(adv.balanceRemaining) });
                             setAutoDeductResult(null);
                             setAutoDeductFinalBalance(null);
+                            // Pré-preencher data de início com o startDate do adiantamento (se definido)
+                            if (adv.startDate) {
+                              const sd = typeof adv.startDate === 'string' ? adv.startDate.slice(0, 10) : new Date(adv.startDate).toISOString().slice(0, 10);
+                              setAutoDeductDateFrom(sd);
+                            } else {
+                              setAutoDeductDateFrom('');
+                            }
+                            setAutoDeductDateTo('');
                           }}
                         >
                           <Zap className="h-3 w-3 mr-1" /> Abater Cargas
@@ -971,7 +990,7 @@ export default function ClientsPage() {
             )}
           </div>
           <div className="flex justify-end pt-2">
-            <Button variant="outline" onClick={() => { setAdvanceDialog(null); setAdvanceClientId(null); setAutoDeductDialog(null); setAutoDeductResult(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10) }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); }}>Fechar</Button>
+            <Button variant="outline" onClick={() => { setAdvanceDialog(null); setAdvanceClientId(null); setAutoDeductDialog(null); setAutoDeductResult(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10), startDate: '' }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); }}>Fechar</Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -1524,6 +1524,8 @@ var init_schema = __esm({
       receiptUrl: varchar("receipt_url", { length: 1e3 }),
       // comprovante
       date: timestamp({ mode: "string" }).notNull(),
+      startDate: timestamp("start_date", { mode: "string" }),
+      // data de início dos abatimentos (opcional)
       status: mysqlEnum(["ativo", "quitado"]).default("ativo").notNull(),
       createdBy: int("created_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
@@ -12891,7 +12893,9 @@ var clientAdvancesRouter = router({
     amount: z37.number().positive(),
     description: z37.string().optional(),
     receiptUrl: z37.string().optional(),
-    date: z37.string()
+    date: z37.string(),
+    startDate: z37.string().optional()
+    // data de início dos abatimentos
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -12904,6 +12908,7 @@ var clientAdvancesRouter = router({
       description: input.description,
       receiptUrl: input.receiptUrl,
       date: input.date,
+      startDate: input.startDate || null,
       status: "ativo",
       createdBy: ctx.user.id
     });

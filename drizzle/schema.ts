@@ -1438,6 +1438,7 @@ export const clientAdvances = mysqlTable("client_advances", {
   description: text(),
   receiptUrl: varchar("receipt_url", { length: 1000 }), // comprovante
   date: timestamp({ mode: 'string' }).notNull(),
+  startDate: timestamp("start_date", { mode: 'string' }),  // data de início dos abatimentos (opcional)
   status: mysqlEnum(['ativo','quitado']).default('ativo').notNull(),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
