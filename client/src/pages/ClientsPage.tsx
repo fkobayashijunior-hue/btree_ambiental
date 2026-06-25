@@ -161,27 +161,30 @@ export default function ClientsPage() {
   const uploadReceiptMutation = trpc.clientAdvances.uploadReceipt.useMutation();
   const createAdvanceMutation = trpc.clientAdvances.create.useMutation({
     onSuccess: async (data) => {
-      // Se tem comprovante, faz upload após criar
+      // Se tem comprovante, faz upload após criar (fluxo assíncrono correto)
       if (advanceReceiptFile && data.id) {
         setUploadingReceipt(true);
         try {
-          const reader = new FileReader();
-          reader.onload = async (ev) => {
-            const base64 = (ev.target?.result as string).split(',')[1];
-            await uploadReceiptMutation.mutateAsync({
-              advanceId: data.id,
-              fileBase64: base64,
-              mimeType: advanceReceiptFile.type || 'image/jpeg',
-            });
-            setAdvanceReceiptFile(null);
-            setAdvanceReceiptPreview(null);
-          };
-          reader.readAsDataURL(advanceReceiptFile);
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => resolve((ev.target?.result as string).split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(advanceReceiptFile);
+          });
+          await uploadReceiptMutation.mutateAsync({
+            advanceId: data.id,
+            fileBase64: base64,
+            mimeType: advanceReceiptFile.type || 'image/jpeg',
+          });
+          toast.success("Adiantamento e comprovante registrados!");
+        } catch {
+          toast.error("Adiantamento registrado, mas falhou ao enviar comprovante.");
         } finally {
           setUploadingReceipt(false);
         }
+      } else {
+        toast.success("Adiantamento registrado!");
       }
-      toast.success("Adiantamento registrado!");
       utils.clientAdvances.list.invalidate();
       setAdvanceForm({ amount: "", description: "", date: new Date().toISOString().slice(0, 10) });
       setAdvanceReceiptFile(null);

@@ -202,7 +202,7 @@
 - [x] Filtro de data no Controle de Cargas
 - [x] Aba Adiantamentos no portal do cliente
 - [x] PDF de relatório de cargas corrigido (sem corte de colunas)
-- [ ] Upload de comprovante no formulário de adiantamento (S3 + receiptUrl)
+- [x] Upload de comprovante no formulário de adiantamento (S3 + receiptUrl)
 
 ---
 
