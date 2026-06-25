@@ -2254,3 +2254,11 @@
 - [x] Mutation markAsPaid estendida para aceitar paidAt e notes opcionais
 - [x] Botão Marcar como Pago visível para TODAS as cargas não pagas (não só entregues)
 - [x] Corrigir forçar exclusão de adiantamento: NÃO reverter cargas pagas manualmente
+- [x] Botão "Desfazer Pagamento" no Controle de Cargas (ícone laranja)
+- [x] Mutation unmarkAsPaid no backend
+- [x] Aumentar fonte do PDF de cargas (8px→10px células, 7.5px→9px headers)
+- [x] Adicionar Valor Pago e Saldo a Receber no portal do cliente (usando adiantamentos reais)
+- [x] Adicionar Valor Pago e Saldo a Receber no cabeçalho do Controle de Cargas (quando filtrado por cliente)
+- [x] Corrigir cálculo: usar totalAmount - balanceRemaining dos adiantamentos (não paymentStatus das cargas)
+- [x] Adicionar Valor Pago e Saldo a Receber no resumo do PDF de relatório de cargas
+- [x] Procedure listByClient no clientAdvances para buscar adiantamentos por cliente
