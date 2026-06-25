@@ -4041,6 +4041,28 @@ var cargoLoadsRouter = router({
     if (input.status === "pago") updateData.paidAt = input.paidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     if (input.receiptUrl) updateData.receiptUrl = input.receiptUrl;
     await db.update(cargoWeeklyClosings).set(updateData).where(eq6(cargoWeeklyClosings.id, input.id));
+    if (input.status === "pago") {
+      try {
+        const [closing] = await db.select().from(cargoWeeklyClosings).where(eq6(cargoWeeklyClosings.id, input.id)).limit(1);
+        if (closing) {
+          const conn2 = await getDirectConnection();
+          try {
+            const weekStartStr = closing.weekStart ? new Date(closing.weekStart).toISOString().slice(0, 10) : null;
+            const weekEndStr = closing.weekEnd ? new Date(closing.weekEnd).toISOString().slice(0, 10) : null;
+            if (weekStartStr && weekEndStr) {
+              await conn2.execute(
+                `UPDATE cargo_loads SET payment_status = 'pago', updated_at = NOW() WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ? AND payment_status != 'pago'`,
+                [closing.clientId, weekStartStr, weekEndStr]
+              );
+            }
+          } finally {
+            await conn2.end();
+          }
+        }
+      } catch (e) {
+        console.warn("[WeeklyClosing] Error marking loads as paid:", e);
+      }
+    }
     if (input.status === "pago" || input.receiptUrl) {
       try {
         const [closing] = await db.select().from(cargoWeeklyClosings).where(eq6(cargoWeeklyClosings.id, input.id)).limit(1);

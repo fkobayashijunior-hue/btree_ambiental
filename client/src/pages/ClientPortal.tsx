@@ -573,7 +573,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "fechamentos" | "documentos" | "adiantamentos">("cargas");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [showPaidLoads, setShowPaidLoads] = useState(false);
+  const [showPaidLoads, setShowPaidLoads] = useState(true);
   const [showNotification, setShowNotification] = useState(false);
   const [newItems, setNewItems] = useState({ cargas: 0, docs: 0, fechamentos: 0, replantios: 0 });
 
@@ -833,7 +833,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                             : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
                         }`}
                       >
-                        {showPaidLoads ? '✅' : '⬜'} Mostrar cargas pagas
+                        {showPaidLoads ? '✅' : '⬜'} {showPaidLoads ? 'Mostrando pagas' : 'Ocultar pagas'}
                       </button>
                     </div>
                     {(() => {
@@ -841,7 +841,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                         const d = safeDate(l.deliveryDate || l.date);
                         if (dateFrom && d < new Date(dateFrom + 'T00:00:00')) return false;
                         if (dateTo && d > new Date(dateTo + 'T23:59:59')) return false;
-                        // Ocultar cargas pagas por padrão
+                        // Ocultar cargas pagas quando toggle está desativado
                         if (!showPaidLoads && (l as any).paymentStatus === 'pago') return false;
                         return true;
                       });
@@ -1368,8 +1368,8 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
                   ⏳ Pendente de Pagamento
                 </span>
               ) : null}
-              {/* Botão Marcar como Pago - visível diretamente no header */}
-              {!isPago && load.status === 'entregue' && (
+              {/* Botão Marcar como Pago - visível diretamente no header, só para cargas não pagas */}
+              {!isPago && !(totalDeducted > 0 && remaining <= 0) && load.status === 'entregue' && (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (confirm('Marcar esta carga como paga?')) markAsPaidMutation.mutate({ id: load.id }); }}
                   disabled={markAsPaidMutation.isPending}
@@ -1583,7 +1583,7 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
             }`}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Resumo Financeiro</p>
-                {!isPago && load.status === 'entregue' && (
+                {!isPago && !(totalDeducted > 0 && remaining <= 0) && load.status === 'entregue' && (
                   <button
                     onClick={() => { if (confirm('Marcar esta carga como paga?')) markAsPaidMutation.mutate({ id: load.id }); }}
                     disabled={markAsPaidMutation.isPending}
