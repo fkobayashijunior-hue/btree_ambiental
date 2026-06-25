@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink } from "lucide-react";
+import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink, DollarSign, ChevronDown, ChevronUp } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -47,6 +47,11 @@ export default function ClientsPage() {
   const [docTitle, setDocTitle] = useState("");
   const [docType, setDocType] = useState<string>("proposta");
   const [uploading, setUploading] = useState(false);
+
+  // Adiantamentos
+  const [advanceDialog, setAdvanceDialog] = useState<{ clientId: number; clientName: string } | null>(null);
+  const [advanceForm, setAdvanceForm] = useState({ amount: "", description: "", date: new Date().toISOString().slice(0, 10) });
+  const [advanceClientId, setAdvanceClientId] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
   const { data: clientsList = [], isLoading } = trpc.clients.list.useQuery({ search: search || undefined });
@@ -140,6 +145,23 @@ export default function ClientsPage() {
     setPasswordMutation.mutate({ clientId: passwordDialog.clientId, password: newPassword });
   };
 
+  const { data: advancesList = [] } = trpc.clientAdvances.list.useQuery(
+    { clientId: advanceClientId ?? 0 },
+    { enabled: !!advanceClientId }
+  );
+  const createAdvanceMutation = trpc.clientAdvances.create.useMutation({
+    onSuccess: () => {
+      toast.success("Adiantamento registrado!");
+      utils.clientAdvances.list.invalidate();
+      setAdvanceForm({ amount: "", description: "", date: new Date().toISOString().slice(0, 10) });
+    },
+    onError: (e) => toast.error(e.message || "Erro ao registrar adiantamento"),
+  });
+  const deleteAdvanceMutation = trpc.clientAdvances.delete.useMutation({
+    onSuccess: () => { toast.success("Adiantamento removido!"); utils.clientAdvances.list.invalidate(); },
+    onError: (e) => toast.error(e.message || "Erro ao remover"),
+  });
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -214,6 +236,16 @@ export default function ClientsPage() {
                     >
                       <Key className="h-3 w-3" />
                       <span className="hidden sm:inline">Senha Portal</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setAdvanceDialog({ clientId: c.id, clientName: c.name }); setAdvanceClientId(c.id); }}
+                      className="text-amber-700 border-amber-200 hover:bg-amber-50 text-xs gap-1"
+                      title="Gerenciar adiantamentos"
+                    >
+                      <DollarSign className="h-3 w-3" />
+                      <span className="hidden sm:inline">Adiant.</span>
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="text-emerald-700 hover:bg-emerald-50">
                       <Pencil className="h-4 w-4" />
@@ -377,6 +409,121 @@ export default function ClientsPage() {
           </form>
         </SheetContent>
       </Sheet>
+
+      {/* Dialog: Adiantamentos */}
+      <Dialog open={!!advanceDialog} onOpenChange={(v) => { if (!v) { setAdvanceDialog(null); setAdvanceClientId(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-amber-600" /> Adiantamentos — {advanceDialog?.clientName}
+            </DialogTitle>
+            <DialogDescription>
+              Registre pagamentos adiantados. O sistema abate automaticamente nas cargas.
+            </DialogDescription>
+          </DialogHeader>
+          {/* Saldo total */}
+          {advancesList.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2">
+              <p className="text-amber-700 text-xs font-semibold">Saldo disponível</p>
+              <p className="text-amber-900 text-xl font-black">
+                {advancesList
+                  .filter((a: any) => a.status === 'ativo')
+                  .reduce((s: number, a: any) => s + parseFloat(a.balanceRemaining || '0'), 0)
+                  .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+          )}
+          {/* Formulário novo adiantamento */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!advanceDialog) return;
+              createAdvanceMutation.mutate({
+                clientId: advanceDialog.clientId,
+                amount: parseFloat(advanceForm.amount),
+                description: advanceForm.description || undefined,
+                date: advanceForm.date,
+              });
+            }}
+            className="space-y-3 border-b pb-4 mb-4"
+          >
+            <p className="text-sm font-semibold text-gray-700">Novo Adiantamento</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Valor (R$) *</Label>
+                <Input
+                  type="number" step="0.01" min="0.01" required
+                  value={advanceForm.amount}
+                  onChange={e => setAdvanceForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="25000.00"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Data *</Label>
+                <Input
+                  type="date" required
+                  value={advanceForm.date}
+                  onChange={e => setAdvanceForm(f => ({ ...f, date: e.target.value }))}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Descrição</Label>
+              <Input
+                value={advanceForm.description}
+                onChange={e => setAdvanceForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Ex: Adiantamento ref. maio/2026"
+                className="h-9 text-sm"
+              />
+            </div>
+            <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={createAdvanceMutation.isPending}>
+              {createAdvanceMutation.isPending ? "Registrando..." : "Registrar Adiantamento"}
+            </Button>
+          </form>
+          {/* Lista de adiantamentos */}
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {advancesList.length === 0 ? (
+              <p className="text-center text-gray-400 text-sm py-4">Nenhum adiantamento registrado.</p>
+            ) : (
+              advancesList.map((adv: any) => (
+                <div key={adv.id} className="flex items-start justify-between gap-2 p-3 border border-gray-100 rounded-xl">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {parseFloat(adv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {adv.date ? new Date(adv.date).toLocaleDateString('pt-BR') : '—'}
+                      {adv.description ? ` · ${adv.description}` : ''}
+                    </p>
+                    <p className="text-xs text-gray-400">Saldo: {parseFloat(adv.balanceRemaining).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      adv.status === 'quitado' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
+                    }`}>
+                      {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
+                    </span>
+                    {adv.status !== 'quitado' && (
+                      <button
+                        onClick={() => deleteAdvanceMutation.mutate({ id: adv.id })}
+                        className="text-red-400 hover:text-red-600"
+                        title="Remover"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={() => { setAdvanceDialog(null); setAdvanceClientId(null); }}>Fechar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* AlertDialog: Confirmar exclusão */}
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => { if (!v) setDeleteId(null); }}>

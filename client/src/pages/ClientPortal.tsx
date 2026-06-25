@@ -570,7 +570,9 @@ function ClientLogin({ onLogin }: { onLogin: (session: ClientSession) => void })
 
 // ── DASHBOARD DO CLIENTE ──
 function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "fechamentos" | "documentos">("cargas");
+  const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "fechamentos" | "documentos" | "adiantamentos">("cargas");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [showNotification, setShowNotification] = useState(false);
   const [newItems, setNewItems] = useState({ cargas: 0, docs: 0, fechamentos: 0, replantios: 0 });
 
@@ -578,6 +580,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
     { clientId: session.clientId, email: session.clientEmail ?? "" },
     { retry: false }
   );
+  // advancesData vem do getPortalData (já inclui advances e totalAdvanceBalance)
 
   // Track last visit and count new items since then
   useEffect(() => {
@@ -755,6 +758,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               { id: "fechamentos" as const, label: "Fechamentos", badge: newItems.fechamentos },
               { id: "documentos" as const, label: "Docs", badge: newItems.docs },
               { id: "replantio" as const, label: "Replantio", badge: newItems.replantios },
+              { id: "adiantamentos" as const, label: "Adiantamentos", badge: 0 },
             ].map(({ id, label, badge }) => (
               <button
                 key={id}
@@ -787,30 +791,62 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 {/* ── CARGAS ── */}
                 {activeTab === "cargas" && (
                   <div className="space-y-3">
-                    {(data?.loads.length ?? 0) === 0 ? (
-                      <EmptyState icon={<Truck />} text="Nenhuma carga registrada ainda." />
-                    ) : (
-                      <>
-                        {/* Resumo de valor total das cargas */}
-                        {(() => {
-                          const totalValue = (data?.loads || []).reduce((sum, l) => sum + getLoadValue(l), 0);
-                          const totalWeightNet = (data?.loads || []).reduce((sum, l) => sum + parseFloat((l as any).weightNetKg || '0'), 0);
-                          if (totalValue > 0) {
-                            return (
-                              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2">
-                                <p className="text-blue-700 text-xs font-semibold uppercase tracking-wide">Valor Total das Cargas</p>
-                                <p className="text-blue-900 text-lg font-black">{formatCurrency(totalValue)}</p>
-                                <p className="text-blue-600 text-xs">Peso líquido: {formatBR(totalWeightNet / 1000)} ton x R$ {data?.client?.pricePerTon || '0'}/ton</p>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                        {data?.loads.map((load) => (
-                          <CargoCard key={load.id} load={load} formatDate={formatDate} statusColor={statusColor} clientId={session.clientId} loadValue={getLoadValue(load)} />
-                        ))}
-                      </>
-                    )}
+                    {/* Filtro de data */}
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                        <Calendar className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                        <input
+                          type="date"
+                          value={dateFrom}
+                          onChange={e => setDateFrom(e.target.value)}
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 w-full focus:outline-none focus:ring-1 focus:ring-green-500"
+                          placeholder="De"
+                        />
+                      </div>
+                      <span className="text-gray-400 text-xs">até</span>
+                      <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                        <input
+                          type="date"
+                          value={dateTo}
+                          onChange={e => setDateTo(e.target.value)}
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 w-full focus:outline-none focus:ring-1 focus:ring-green-500"
+                          placeholder="Até"
+                        />
+                      </div>
+                      {(dateFrom || dateTo) && (
+                        <button
+                          onClick={() => { setDateFrom(""); setDateTo(""); }}
+                          className="text-xs text-red-500 hover:text-red-700 px-2 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors whitespace-nowrap"
+                        >
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+                    {(() => {
+                      const filteredLoads = (data?.loads || []).filter((l: any) => {
+                        const d = safeDate(l.deliveryDate || l.date);
+                        if (dateFrom && d < new Date(dateFrom + 'T00:00:00')) return false;
+                        if (dateTo && d > new Date(dateTo + 'T23:59:59')) return false;
+                        return true;
+                      });
+                      if (filteredLoads.length === 0) return <EmptyState icon={<Truck />} text={dateFrom || dateTo ? "Nenhuma carga no período selecionado." : "Nenhuma carga registrada ainda."} />;
+                      const totalValue = filteredLoads.reduce((sum: number, l: any) => sum + getLoadValue(l), 0);
+                      const totalWeightNet = filteredLoads.reduce((sum: number, l: any) => sum + parseFloat((l as any).weightNetKg || '0'), 0);
+                      return (
+                        <>
+                          {totalValue > 0 && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                              <p className="text-blue-700 text-xs font-semibold uppercase tracking-wide">Valor Total{dateFrom || dateTo ? ' no Período' : ' das Cargas'}</p>
+                              <p className="text-blue-900 text-lg font-black">{formatCurrency(totalValue)}</p>
+                              <p className="text-blue-600 text-xs">{filteredLoads.length} carga{filteredLoads.length !== 1 ? 's' : ''} · {formatBR(totalWeightNet / 1000)} ton × R$ {data?.client?.pricePerTon || '0'}/ton</p>
+                            </div>
+                          )}
+                          {filteredLoads.map((load: any) => (
+                            <CargoCard key={load.id} load={load} formatDate={formatDate} statusColor={statusColor} clientId={session.clientId} loadValue={getLoadValue(load)} />
+                          ))}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1097,6 +1133,46 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                             <span className="text-blue-600 text-xs font-medium">Abrir ↗</span>
                           </div>
                         </a>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* ── ADIANTAMENTOS ── */}
+                {activeTab === "adiantamentos" && (
+                  <div className="space-y-3">
+                    {/* Saldo atual */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                      <p className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Saldo de Adiantamento</p>
+                      <p className="text-amber-900 text-2xl font-black">{formatCurrency(data?.totalAdvanceBalance ?? 0)}</p>
+                      <p className="text-amber-600 text-xs mt-1">Valor disponível para abatimento nas próximas cargas</p>
+                    </div>
+                    {/* Lista de adiantamentos */}
+                    {(data?.advances?.length ?? 0) === 0 ? (
+                      <EmptyState icon={<DollarSign />} text="Nenhum adiantamento registrado." />
+                    ) : (
+                      data?.advances?.map((adv: any) => (
+                        <div key={adv.id} className="border border-gray-100 rounded-xl p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">
+                                Adiantamento de {formatCurrency(parseFloat(adv.amount))}
+                              </p>
+                              <p className="text-gray-500 text-xs mt-0.5">
+                                {adv.date ? safeDate(adv.date).toLocaleDateString('pt-BR') : '—'}
+                              </p>
+                              {adv.description && <p className="text-gray-400 text-xs mt-1 italic">{adv.description}</p>}
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                adv.status === 'quitado' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
+                              }`}>
+                                {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
+                              </span>
+                              <p className="text-xs text-gray-500 mt-1">Saldo: {formatCurrency(parseFloat(adv.balanceRemaining))}</p>
+                            </div>
+                          </div>
+                        </div>
                       ))
                     )}
                   </div>

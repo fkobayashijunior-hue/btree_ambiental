@@ -398,16 +398,31 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
 <style>${PDF_BASE_STYLES}
   @page { size: A4 landscape; margin: 0; }
   .page { min-height: 100vh; display: flex; flex-direction: column; }
-  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
-  .pdf-header img { height: 52px; }
-  .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
-  .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
-  .pdf-subheader { background: #f0fdf4; padding: 10px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
-  .pdf-content { padding: 20px 32px; flex: 1; }
-  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 18px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  .pdf-header img { height: 40px; }
+  .pdf-header-text h1 { font-size: 17px; font-weight: bold; margin: 0; }
+  .pdf-header-text p { font-size: 10px; opacity: 0.85; margin-top: 2px; }
+  .pdf-subheader { background: #f0fdf4; padding: 7px 24px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .pdf-content { padding: 12px 24px; flex: 1; }
+  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; display: flex; gap: 18px; flex-wrap: wrap; }
   .summary-item { text-align: center; }
-  .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
-  .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }
+  .summary-item .label { font-size: 9px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+  .summary-item .value { font-size: 16px; font-weight: bold; color: #0d4f2e; }
+  table { width: 100%; border-collapse: collapse; font-size: 9px; table-layout: fixed; }
+  table th { background: #0d4f2e; color: white; padding: 5px 4px; text-align: left; font-size: 8.5px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table td { padding: 4px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table tr:nth-child(even) { background: #f9fafb; }
+  col.col-data { width: 7%; }
+  col.col-veiculo { width: 8%; }
+  col.col-motorista { width: 11%; }
+  col.col-destino { width: 10%; }
+  col.col-madeira { width: 9%; }
+  col.col-dim { width: 5%; }
+  col.col-vol { width: 6%; }
+  col.col-peso { width: 6%; }
+  col.col-nota { width: 5%; }
+  col.col-valor { width: 8%; }
+  col.col-status { width: 7%; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="page">
@@ -437,6 +452,23 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
 
     <!-- Tabela -->
     <table>
+      <colgroup>
+        <col class="col-data" />
+        <col class="col-veiculo" />
+        <col class="col-motorista" />
+        <col class="col-destino" />
+        <col class="col-madeira" />
+        <col class="col-dim" />
+        <col class="col-dim" />
+        <col class="col-dim" />
+        <col class="col-vol" />
+        <col class="col-peso" />
+        <col class="col-peso" />
+        <col class="col-peso" />
+        <col class="col-nota" />
+        ${pricePerTon > 0 ? '<col class="col-valor" />' : ''}
+        <col class="col-status" />
+      </colgroup>
       <thead>
         <tr>
           <th>Data</th>

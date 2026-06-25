@@ -37,6 +37,7 @@ import { quotationsRouter } from "./routers/quotations";
 import { purchaseRequestsRouter } from "./routers/purchaseRequests";
 import { invoiceControlRouter } from "./routers/invoiceControl";
 import { quotationRequestsRouter } from "./routers/quotationRequests";
+import { clientAdvancesRouter } from "./routers/clientAdvances";
 import { thirdPartyRouter } from "./routers/thirdParty";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
@@ -295,6 +296,7 @@ export const appRouter = router({
   parts: partsRouter,
   clients: clientsRouter,
   clientPortal: clientPortalRouter,
+  clientAdvances: clientAdvancesRouter,
   collaboratorDocuments: collaboratorDocumentsRouter,
   equipmentDetail: equipmentDetailRouter,
   purchaseOrders: purchaseOrdersRouter,

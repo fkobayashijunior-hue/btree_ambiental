@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { clients, cargoLoads, cargoDestinations, replantingRecords, clientPayments, cargoWeeklyClosings, clientDocuments } from "../../drizzle/schema";
+import { clients, cargoLoads, cargoDestinations, replantingRecords, clientPayments, cargoWeeklyClosings, clientDocuments, clientAdvances, clientAdvanceDeductions } from "../../drizzle/schema";
 import { eq, and, or, isNull, like, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -183,7 +183,24 @@ export const clientPortalRouter = router({
         console.error('[Portal] Erro ao buscar documentos:', e);
       }
 
-      return { client, loads, replanting, payments, weeklyClosings, documents };
+      // Adiantamentos do cliente
+      let advances: any[] = [];
+      let totalAdvanceBalance = 0;
+      try {
+        advances = await db
+          .select()
+          .from(clientAdvances)
+          .where(eq(clientAdvances.clientId, input.clientId))
+          .orderBy(desc(clientAdvances.date))
+          .limit(50);
+        totalAdvanceBalance = advances
+          .filter((a: any) => a.status === 'ativo')
+          .reduce((sum: number, a: any) => sum + parseFloat(a.balanceRemaining || '0'), 0);
+      } catch (e) {
+        console.error('[Portal] Erro ao buscar adiantamentos:', e);
+      }
+
+      return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance };
     }),
 
   // ── LISTAR TODOS OS REPLANTIOS (admin) ──

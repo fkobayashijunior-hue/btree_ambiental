@@ -1426,3 +1426,39 @@ export const thirdPartyFuel = mysqlTable("third_party_fuel", {
 });
 export type ThirdPartyFuel = typeof thirdPartyFuel.$inferSelect;
 export type InsertThirdPartyFuel = typeof thirdPartyFuel.$inferInsert;
+
+// ============================================================
+// MÓDULO: ADIANTAMENTOS DE CLIENTES
+// ============================================================
+export const clientAdvances = mysqlTable("client_advances", {
+  id: int().autoincrement().primaryKey().notNull(),
+  clientId: int("client_id").notNull().references(() => clients.id),
+  amount: varchar({ length: 20 }).notNull(),           // valor do adiantamento
+  balanceRemaining: varchar("balance_remaining", { length: 20 }).notNull(), // saldo restante
+  description: text(),
+  receiptUrl: varchar("receipt_url", { length: 1000 }), // comprovante
+  date: timestamp({ mode: 'string' }).notNull(),
+  status: mysqlEnum(['ativo','quitado']).default('ativo').notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type ClientAdvance = typeof clientAdvances.$inferSelect;
+export type InsertClientAdvance = typeof clientAdvances.$inferInsert;
+
+// Histórico de abatimentos do adiantamento por carga
+export const clientAdvanceDeductions = mysqlTable("client_advance_deductions", {
+  id: int().autoincrement().primaryKey().notNull(),
+  advanceId: int("advance_id").notNull().references(() => clientAdvances.id),
+  clientId: int("client_id").notNull(),
+  cargoLoadId: int("cargo_load_id"),               // carga que gerou o abatimento
+  weeklyClosingId: int("weekly_closing_id"),        // fechamento que gerou o abatimento
+  amount: varchar({ length: 20 }).notNull(),        // valor abatido
+  balanceBefore: varchar("balance_before", { length: 20 }).notNull(),
+  balanceAfter: varchar("balance_after", { length: 20 }).notNull(),
+  description: text(),
+  date: timestamp({ mode: 'string' }).notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+export type ClientAdvanceDeduction = typeof clientAdvanceDeductions.$inferSelect;
+export type InsertClientAdvanceDeduction = typeof clientAdvanceDeductions.$inferInsert;

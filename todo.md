@@ -2222,3 +2222,15 @@
 - [ ] Fix layout mobile: botões do modal de respostas de fornecedores cortados (flex-col em mobile)
 - [ ] Revisão de orçamento pelo fornecedor: backend aceita atualizar resposta existente via token
 - [ ] Revisão de orçamento pelo fornecedor: página de resposta mostra opção de editar quando já respondeu
+
+---
+
+## 🔧 MELHORIAS MÓDULO CLIENTES — 25/06/2026
+
+- [ ] Corrigir valor por carga no portal do cliente (Fazenda GW não mostra valor)
+- [ ] Corrigir PDF de cargas cortando colunas (última coluna sendo cortada)
+- [ ] Adicionar filtro de data nas cargas do portal do cliente
+- [ ] Sistema de adiantamento: lançar pagamento adiantado e abater carga a carga
+- [ ] Corrigir PDF do relatório de cargas (coluna Valor cortada)
+- [ ] Mostrar saldo de adiantamento restante no portal do cliente
+
