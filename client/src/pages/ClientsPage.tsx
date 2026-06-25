@@ -689,7 +689,7 @@ export default function ClientsPage() {
 
       {/* Dialog: Adiantamentos */}
       <Dialog open={!!advanceDialog} onOpenChange={(v) => { if (!v) { setAdvanceDialog(null); setAdvanceClientId(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10), startDate: '' }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); } }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-amber-600" /> Adiantamentos — {advanceDialog?.clientName}
