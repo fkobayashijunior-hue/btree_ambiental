@@ -763,7 +763,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 <div className="bg-green-50 border border-green-200 rounded-2xl p-4 shadow-sm text-center">
                   <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto mb-1" />
                   <div className="text-base font-black text-green-700">{formatCurrency(valorPago)}</div>
-                  <div className="text-green-600 text-xs font-semibold">Adiantamento Pago</div>
+                  <div className="text-green-600 text-xs font-semibold">Valor Abatido</div>
                 </div>
               )}
               {totalValorCargas > 0 && (

@@ -468,7 +468,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</div></div>
       ${pricePerTon > 0 ? `<div class="summary-item"><div class="label">Preço/Ton</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(pricePerTon, 0)}</div></div>` : ""}
       ${totalValor > 0 ? `<div class="summary-item"><div class="label">Valor Total</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(totalValor, 2)}</div></div>` : ""}
-      ${valorPagoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Adiantamento Pago</div><div class="value" style="color:#166534;">R$ ${formatBR(valorPagoAdiantamento, 2)}</div></div>` : ""}
+      ${valorPagoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Valor Abatido</div><div class="value" style="color:#166534;">R$ ${formatBR(valorPagoAdiantamento, 2)}</div></div>` : ""}
       ${saldoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Saldo Adiantamento</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(saldoAdiantamento, 2)}</div></div>` : ""}
       <div class="summary-item"><div class="label">Entregues</div><div class="value" style="color:#166534;">${totalEntregues}</div></div>
       <div class="summary-item"><div class="label">Pendentes</div><div class="value" style="color:#854d0e;">${totalPendentes}</div></div>
@@ -1875,7 +1875,7 @@ export default function CargoControl() {
           { label: "Volume Total", value: `${stats.volumeTotal} m³`, color: "text-emerald-700", bg: "bg-emerald-50" },
           { label: "Peso Total", value: stats.pesoTotal > 0 ? `${formatBR(stats.pesoTotal / 1000)} ton` : "-", color: "text-purple-700", bg: "bg-purple-50" },
           ...(filterClientId && (stats.valorPago > 0 || stats.saldo > 0) ? [
-            { label: "Adiantamento Pago", value: stats.valorPago > 0 ? stats.valorPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: "text-green-700", bg: "bg-green-50" },
+            { label: "Valor Abatido", value: stats.valorPago > 0 ? stats.valorPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: "text-green-700", bg: "bg-green-50" },
             { label: "Saldo Adiantamento", value: stats.saldo > 0 ? stats.saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: stats.saldo > 0 ? "text-blue-700" : "text-gray-500", bg: stats.saldo > 0 ? "bg-blue-50" : "bg-gray-50" },
           ] : []),
         ].map(s => (
