@@ -2,8 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { clientAdvances, clientAdvanceDeductions } from "../../drizzle/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { clientAdvances, clientAdvanceDeductions, clients } from "../../drizzle/schema";
+import { eq, desc, and, asc } from "drizzle-orm";
 
 export const clientAdvancesRouter = router({
   // Listar adiantamentos de um cliente
@@ -116,6 +116,102 @@ export const clientAdvancesRouter = router({
         .where(eq(clientAdvances.id, input.advanceId));
 
       return { deductAmount, balanceAfter };
+    }),
+
+  // Abatimento automático: aplica o saldo do adiantamento nas cargas entregues em ordem cronológica
+  applyAutoDeductionByLoads: protectedProcedure
+    .input(z.object({
+      clientId: z.number(),
+      advanceId: z.number(),
+      // Cargas a abater: array de { id, date, valueAmount } ordenadas da mais antiga para a mais nova
+      loads: z.array(z.object({
+        id: z.number(),
+        date: z.string(),
+        valueAmount: z.number(), // valor em R$ desta carga
+        description: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      // Buscar o adiantamento
+      const [advance] = await db.select().from(clientAdvances)
+        .where(and(eq(clientAdvances.id, input.advanceId), eq(clientAdvances.clientId, input.clientId)));
+      if (!advance) throw new TRPCError({ code: "NOT_FOUND", message: "Adiantamento não encontrado" });
+
+      let balanceRemaining = parseFloat(advance.balanceRemaining || '0');
+      if (balanceRemaining <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Saldo do adiantamento já esgotado" });
+
+      const results: Array<{
+        loadId: number;
+        date: string;
+        loadValue: number;
+        deducted: number;
+        balanceBefore: number;
+        balanceAfter: number;
+        status: 'abatido_total' | 'abatido_parcial' | 'saldo_insuficiente';
+      }> = [];
+
+      // Ordenar cargas por data (mais antiga primeiro)
+      const sortedLoads = [...input.loads].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      for (const load of sortedLoads) {
+        if (balanceRemaining <= 0) {
+          results.push({
+            loadId: load.id,
+            date: load.date,
+            loadValue: load.valueAmount,
+            deducted: 0,
+            balanceBefore: 0,
+            balanceAfter: 0,
+            status: 'saldo_insuficiente',
+          });
+          continue;
+        }
+
+        const balanceBefore = balanceRemaining;
+        const deducted = Math.min(load.valueAmount, balanceRemaining);
+        const balanceAfter = balanceRemaining - deducted;
+
+        // Registrar a dedução no banco
+        await db.insert(clientAdvanceDeductions).values({
+          advanceId: input.advanceId,
+          clientId: input.clientId,
+          cargoLoadId: load.id,
+          amount: String(deducted),
+          balanceBefore: String(balanceBefore),
+          balanceAfter: String(balanceAfter),
+          description: load.description || `Abatimento carga #${load.id} - ${new Date(load.date).toLocaleDateString('pt-BR')}`,
+          date: load.date,
+        });
+
+        balanceRemaining = balanceAfter;
+
+        results.push({
+          loadId: load.id,
+          date: load.date,
+          loadValue: load.valueAmount,
+          deducted,
+          balanceBefore,
+          balanceAfter,
+          status: deducted >= load.valueAmount ? 'abatido_total' : 'abatido_parcial',
+        });
+      }
+
+      // Atualizar saldo do adiantamento
+      await db.update(clientAdvances)
+        .set({
+          balanceRemaining: String(balanceRemaining),
+          status: balanceRemaining <= 0 ? 'quitado' : 'ativo',
+        })
+        .where(eq(clientAdvances.id, input.advanceId));
+
+      return {
+        results,
+        finalBalance: balanceRemaining,
+        totalDeducted: parseFloat(advance.balanceRemaining || '0') - balanceRemaining,
+      };
     }),
 
   // Deletar adiantamento (apenas se não tiver deduções)

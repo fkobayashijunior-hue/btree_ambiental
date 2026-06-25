@@ -408,21 +408,21 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
   .summary-item { text-align: center; }
   .summary-item .label { font-size: 9px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
   .summary-item .value { font-size: 16px; font-weight: bold; color: #0d4f2e; }
-  table { width: 100%; border-collapse: collapse; font-size: 9px; table-layout: fixed; }
-  table th { background: #0d4f2e; color: white; padding: 5px 4px; text-align: left; font-size: 8.5px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  table td { padding: 4px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 7.5px; table-layout: fixed; }
+  table th { background: #0d4f2e; color: white; padding: 4px 3px; text-align: left; font-size: 7px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table td { padding: 3px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   table tr:nth-child(even) { background: #f9fafb; }
-  col.col-data { width: 7%; }
-  col.col-veiculo { width: 8%; }
-  col.col-motorista { width: 11%; }
-  col.col-destino { width: 10%; }
-  col.col-madeira { width: 9%; }
-  col.col-dim { width: 5%; }
-  col.col-vol { width: 6%; }
-  col.col-peso { width: 6%; }
-  col.col-nota { width: 5%; }
-  col.col-valor { width: 8%; }
-  col.col-status { width: 7%; }
+  col.col-data { width: 6.5%; }
+  col.col-veiculo { width: 7%; }
+  col.col-motorista { width: 10%; }
+  col.col-destino { width: 9%; }
+  col.col-madeira { width: 8%; }
+  col.col-dim { width: 4%; }
+  col.col-vol { width: 5.5%; }
+  col.col-peso { width: 5.5%; }
+  col.col-nota { width: 4.5%; }
+  col.col-valor { width: 7.5%; }
+  col.col-status { width: 6.5%; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="page">

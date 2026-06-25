@@ -12935,6 +12935,74 @@ var clientAdvancesRouter = router({
     }).where(eq36(clientAdvances.id, input.advanceId));
     return { deductAmount, balanceAfter };
   }),
+  // Abatimento automático: aplica o saldo do adiantamento nas cargas entregues em ordem cronológica
+  applyAutoDeductionByLoads: protectedProcedure.input(z37.object({
+    clientId: z37.number(),
+    advanceId: z37.number(),
+    // Cargas a abater: array de { id, date, valueAmount } ordenadas da mais antiga para a mais nova
+    loads: z37.array(z37.object({
+      id: z37.number(),
+      date: z37.string(),
+      valueAmount: z37.number(),
+      // valor em R$ desta carga
+      description: z37.string().optional()
+    }))
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [advance] = await db.select().from(clientAdvances).where(and21(eq36(clientAdvances.id, input.advanceId), eq36(clientAdvances.clientId, input.clientId)));
+    if (!advance) throw new TRPCError27({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    let balanceRemaining = parseFloat(advance.balanceRemaining || "0");
+    if (balanceRemaining <= 0) throw new TRPCError27({ code: "BAD_REQUEST", message: "Saldo do adiantamento j\xE1 esgotado" });
+    const results = [];
+    const sortedLoads = [...input.loads].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    for (const load of sortedLoads) {
+      if (balanceRemaining <= 0) {
+        results.push({
+          loadId: load.id,
+          date: load.date,
+          loadValue: load.valueAmount,
+          deducted: 0,
+          balanceBefore: 0,
+          balanceAfter: 0,
+          status: "saldo_insuficiente"
+        });
+        continue;
+      }
+      const balanceBefore = balanceRemaining;
+      const deducted = Math.min(load.valueAmount, balanceRemaining);
+      const balanceAfter = balanceRemaining - deducted;
+      await db.insert(clientAdvanceDeductions).values({
+        advanceId: input.advanceId,
+        clientId: input.clientId,
+        cargoLoadId: load.id,
+        amount: String(deducted),
+        balanceBefore: String(balanceBefore),
+        balanceAfter: String(balanceAfter),
+        description: load.description || `Abatimento carga #${load.id} - ${new Date(load.date).toLocaleDateString("pt-BR")}`,
+        date: load.date
+      });
+      balanceRemaining = balanceAfter;
+      results.push({
+        loadId: load.id,
+        date: load.date,
+        loadValue: load.valueAmount,
+        deducted,
+        balanceBefore,
+        balanceAfter,
+        status: deducted >= load.valueAmount ? "abatido_total" : "abatido_parcial"
+      });
+    }
+    await db.update(clientAdvances).set({
+      balanceRemaining: String(balanceRemaining),
+      status: balanceRemaining <= 0 ? "quitado" : "ativo"
+    }).where(eq36(clientAdvances.id, input.advanceId));
+    return {
+      results,
+      finalBalance: balanceRemaining,
+      totalDeducted: parseFloat(advance.balanceRemaining || "0") - balanceRemaining
+    };
+  }),
   // Deletar adiantamento (apenas se não tiver deduções)
   delete: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
     const db = await getDb();

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink, DollarSign, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink, DollarSign, ChevronDown, ChevronUp, Zap, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -52,6 +52,12 @@ export default function ClientsPage() {
   const [advanceDialog, setAdvanceDialog] = useState<{ clientId: number; clientName: string } | null>(null);
   const [advanceForm, setAdvanceForm] = useState({ amount: "", description: "", date: new Date().toISOString().slice(0, 10) });
   const [advanceClientId, setAdvanceClientId] = useState<number | null>(null);
+  // Abatimento automático por cargas
+  const [autoDeductDialog, setAutoDeductDialog] = useState<{ advanceId: number; advanceName: string; balance: number } | null>(null);
+  const [autoDeductDateFrom, setAutoDeductDateFrom] = useState("");
+  const [autoDeductDateTo, setAutoDeductDateTo] = useState("");
+  const [autoDeductResult, setAutoDeductResult] = useState<any[] | null>(null);
+  const [autoDeductFinalBalance, setAutoDeductFinalBalance] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
   const { data: clientsList = [], isLoading } = trpc.clients.list.useQuery({ search: search || undefined });
@@ -161,6 +167,58 @@ export default function ClientsPage() {
     onSuccess: () => { toast.success("Adiantamento removido!"); utils.clientAdvances.list.invalidate(); },
     onError: (e) => toast.error(e.message || "Erro ao remover"),
   });
+
+  // Buscar cargas do cliente para abatimento
+  const { data: clientLoadsForDeduct = [] } = trpc.cargoLoads.list.useQuery(
+    { clientId: advanceClientId ?? 0 },
+    { enabled: !!autoDeductDialog && !!advanceClientId }
+  );
+
+  const applyAutoDeductMutation = trpc.clientAdvances.applyAutoDeductionByLoads.useMutation({
+    onSuccess: (data) => {
+      setAutoDeductResult(data.results);
+      setAutoDeductFinalBalance(data.finalBalance);
+      utils.clientAdvances.list.invalidate();
+      toast.success(`Abatimento aplicado! Saldo restante: ${data.finalBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
+    },
+    onError: (e) => toast.error(e.message || "Erro ao aplicar abatimento"),
+  });
+
+  const handleAutoDeduct = () => {
+    if (!autoDeductDialog || !advanceClientId) return;
+    // Filtrar cargas entregues no período selecionado
+    const pricePerTon = parseFloat(
+      clientsList.find((c: any) => c.id === advanceClientId)?.pricePerTon || '0'
+    );
+    if (pricePerTon <= 0) {
+      toast.error("Configure o preço por tonelada no cadastro do cliente antes de abater.");
+      return;
+    }
+    let filtered = (clientLoadsForDeduct as any[]).filter((l: any) => {
+      return l.status === 'entregue';
+    });
+    if (autoDeductDateFrom) filtered = filtered.filter((l: any) => l.date >= autoDeductDateFrom);
+    if (autoDeductDateTo) filtered = filtered.filter((l: any) => l.date <= autoDeductDateTo);
+    if (filtered.length === 0) {
+      toast.error("Nenhuma carga entregue encontrada no período selecionado.");
+      return;
+    }
+    const loads = filtered.map((l: any) => ({
+      id: l.id,
+      date: typeof l.date === 'string' ? l.date : new Date(l.date).toISOString().slice(0, 10),
+      valueAmount: (parseFloat(l.weightNetKg || '0') / 1000) * pricePerTon,
+      description: `Carga ${l.vehiclePlate || ''} - ${l.destination || ''} - ${new Date(l.date).toLocaleDateString('pt-BR')}`,
+    })).filter((l: any) => l.valueAmount > 0);
+    if (loads.length === 0) {
+      toast.error("Nenhuma carga com valor calculado. Verifique o preço por tonelada.");
+      return;
+    }
+    applyAutoDeductMutation.mutate({
+      clientId: advanceClientId,
+      advanceId: autoDeductDialog.advanceId,
+      loads,
+    });
+  };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
@@ -488,39 +546,115 @@ export default function ClientsPage() {
               <p className="text-center text-gray-400 text-sm py-4">Nenhum adiantamento registrado.</p>
             ) : (
               advancesList.map((adv: any) => (
-                <div key={adv.id} className="flex items-start justify-between gap-2 p-3 border border-gray-100 rounded-xl">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {parseFloat(adv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {adv.date ? new Date(adv.date).toLocaleDateString('pt-BR') : '—'}
-                      {adv.description ? ` · ${adv.description}` : ''}
-                    </p>
-                    <p className="text-xs text-gray-400">Saldo: {parseFloat(adv.balanceRemaining).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                <div key={adv.id} className="border border-gray-100 rounded-xl p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {parseFloat(adv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {adv.date ? new Date(adv.date).toLocaleDateString('pt-BR') : '—'}
+                        {adv.description ? ` · ${adv.description}` : ''}
+                      </p>
+                      <p className="text-xs text-gray-400">Saldo: {parseFloat(adv.balanceRemaining).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        adv.status === 'quitado' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
+                      }`}>
+                        {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
+                      </span>
+                      {adv.status === 'ativo' && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                            onClick={() => {
+                              setAutoDeductDialog({ advanceId: adv.id, advanceName: adv.description || 'Adiantamento', balance: parseFloat(adv.balanceRemaining) });
+                              setAutoDeductResult(null);
+                              setAutoDeductFinalBalance(null);
+                            }}
+                          >
+                            <Zap className="h-3 w-3 mr-1" /> Abater Cargas
+                          </Button>
+                          <button
+                            onClick={() => deleteAdvanceMutation.mutate({ id: adv.id })}
+                            className="text-red-400 hover:text-red-600"
+                            title="Remover"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      adv.status === 'quitado' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
-                    }`}>
-                      {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
-                    </span>
-                    {adv.status !== 'quitado' && (
-                      <button
-                        onClick={() => deleteAdvanceMutation.mutate({ id: adv.id })}
-                        className="text-red-400 hover:text-red-600"
-                        title="Remover"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
+                  {/* Painel de abatimento automático */}
+                  {autoDeductDialog?.advanceId === adv.id && (
+                    <div className="mt-3 border-t pt-3 space-y-3">
+                      <p className="text-xs font-semibold text-amber-700">Abatimento Automático por Cargas</p>
+                      <p className="text-xs text-gray-500">Saldo disponível: <strong>{parseFloat(adv.balanceRemaining).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">De</Label>
+                          <Input type="date" className="h-8 text-xs" value={autoDeductDateFrom} onChange={e => setAutoDeductDateFrom(e.target.value)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Até</Label>
+                          <Input type="date" className="h-8 text-xs" value={autoDeductDateTo} onChange={e => setAutoDeductDateTo(e.target.value)} />
+                        </div>
+                      </div>
+                      {!autoDeductResult ? (
+                        <Button
+                          size="sm"
+                          className="w-full bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                          onClick={handleAutoDeduct}
+                          disabled={applyAutoDeductMutation.isPending}
+                        >
+                          {applyAutoDeductMutation.isPending ? 'Processando...' : <><Zap className="h-3 w-3 mr-1" /> Aplicar Abatimento nas Cargas</>}
+                        </Button>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-gray-700">Resultado do Abatimento:</p>
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {autoDeductResult.map((r: any, i: number) => (
+                              <div key={i} className={`flex items-center justify-between text-xs p-2 rounded-lg ${
+                                r.status === 'abatido_total' ? 'bg-green-50 border border-green-200' :
+                                r.status === 'abatido_parcial' ? 'bg-yellow-50 border border-yellow-200' :
+                                'bg-gray-50 border border-gray-200'
+                              }`}>
+                                <div className="flex items-center gap-1">
+                                  {r.status === 'abatido_total' ? <CheckCircle className="h-3 w-3 text-green-600" /> :
+                                   r.status === 'abatido_parcial' ? <AlertCircle className="h-3 w-3 text-yellow-600" /> :
+                                   <Clock className="h-3 w-3 text-gray-400" />}
+                                  <span className="text-gray-700">{new Date(r.date).toLocaleDateString('pt-BR')}</span>
+                                  <span className="text-gray-500">Carga #{r.loadId}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-semibold">{r.deducted.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                  {r.status === 'abatido_parcial' && <span className="text-yellow-600 ml-1">(parcial)</span>}
+                                  {r.status === 'saldo_insuficiente' && <span className="text-gray-400 ml-1">(sem saldo)</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs">
+                            <span className="font-semibold text-amber-800">Saldo restante: </span>
+                            <span className="text-amber-900 font-black">{(autoDeductFinalBalance ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                          </div>
+                          <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { setAutoDeductDialog(null); setAutoDeductResult(null); }}>
+                            Fechar resultado
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))
             )}
           </div>
           <div className="flex justify-end pt-2">
-            <Button variant="outline" onClick={() => { setAdvanceDialog(null); setAdvanceClientId(null); }}>Fechar</Button>
+            <Button variant="outline" onClick={() => { setAdvanceDialog(null); setAdvanceClientId(null); setAutoDeductDialog(null); setAutoDeductResult(null); }}>Fechar</Button>
           </div>
         </DialogContent>
       </Dialog>
