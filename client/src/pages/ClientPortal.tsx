@@ -1368,6 +1368,16 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
                   ⏳ Pendente de Pagamento
                 </span>
               ) : null}
+              {/* Botão Marcar como Pago - visível diretamente no header */}
+              {!isPago && load.status === 'entregue' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); if (confirm('Marcar esta carga como paga?')) markAsPaidMutation.mutate({ id: load.id }); }}
+                  disabled={markAsPaidMutation.isPending}
+                  className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors border border-green-700"
+                >
+                  {markAsPaidMutation.isPending ? '...' : '✓ Marcar Pago'}
+                </button>
+              )}
             </div>
             <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
               <span>{formatDate(load.date)}</span>

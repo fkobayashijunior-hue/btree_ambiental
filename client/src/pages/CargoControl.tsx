@@ -429,20 +429,21 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
   table { width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
   table th { background: #0d4f2e; color: white; padding: 5px 4px; text-align: left; font-size: 7.5px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   table td { padding: 4px 4px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; font-size: 8px; }
+  table td:last-child { white-space: normal; word-break: break-word; line-height: 1.3; }
   table tr:nth-child(even) { background: #f9fafb; }
   /* 13 colunas: data veiculo motorista destino madeira dims vol saida chegada liquido nota [valor] status pagamento */
-  col.col-data     { width: 7%; }
-  col.col-veiculo  { width: 7%; }
-  col.col-motorista{ width: 11%; }
-  col.col-destino  { width: 11%; }
-  col.col-madeira  { width: 10%; }
+  col.col-data     { width: 6.5%; }
+  col.col-veiculo  { width: 6.5%; }
+  col.col-motorista{ width: 10%; }
+  col.col-destino  { width: 10%; }
+  col.col-madeira  { width: 9%; }
   col.col-dims     { width: 9%; }
-  col.col-vol      { width: 6%; }
-  col.col-peso     { width: 6%; }
-  col.col-nota     { width: 5%; }
+  col.col-vol      { width: 5.5%; }
+  col.col-peso     { width: 5.5%; }
+  col.col-nota     { width: 4.5%; }
   col.col-valor    { width: 8%; }
   col.col-status   { width: 6%; }
-  col.col-pagamento{ width: 9%; }
+  col.col-pagamento{ width: 10%; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="page">
@@ -1734,6 +1735,11 @@ export default function CargoControl() {
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Gerar PDF" onClick={() => generateCargoPDF(cargo as unknown as Record<string, unknown>)}>
                 <Download className="h-3.5 w-3.5" />
               </Button>
+              {!isPago && cargo.status === 'entregue' && (
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-green-600" title="Marcar como Pago" onClick={() => { if (confirm('Marcar esta carga como paga?')) markAsPaidMutation.mutate({ id: cargo.id }); }} disabled={markAsPaidMutation.isPending}>
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" title="Excluir" onClick={() => { if (confirm("Remover esta carga?")) deleteMutation.mutate({ id: cargo.id }); }}>
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
