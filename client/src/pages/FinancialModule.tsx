@@ -43,6 +43,7 @@ const EXPENSE_CATEGORIES: Record<string, string> = {
   impostos: "Impostos/Taxas",
   aluguel: "Aluguel",
   servico_terceiro: "Serviço de Terceiros",
+  adiantamento_cliente: "Adiantamento a Cliente",
   outro_despesa: "Outras Despesas",
 };
 
