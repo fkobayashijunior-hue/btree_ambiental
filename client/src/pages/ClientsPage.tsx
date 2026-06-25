@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink, DollarSign, ChevronDown, ChevronUp, Zap, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink, DollarSign, ChevronDown, ChevronUp, Zap, CheckCircle, AlertCircle, Clock, FileDown } from "lucide-react";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -55,12 +56,15 @@ export default function ClientsPage() {
   const [advanceReceiptFile, setAdvanceReceiptFile] = useState<File | null>(null);
   const [advanceReceiptPreview, setAdvanceReceiptPreview] = useState<string | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  // Edição de adiantamento
+  const [editAdvanceId, setEditAdvanceId] = useState<number | null>(null);
   // Abatimento automático por cargas
   const [autoDeductDialog, setAutoDeductDialog] = useState<{ advanceId: number; advanceName: string; balance: number } | null>(null);
   const [autoDeductDateFrom, setAutoDeductDateFrom] = useState("");
   const [autoDeductDateTo, setAutoDeductDateTo] = useState("");
   const [autoDeductResult, setAutoDeductResult] = useState<any[] | null>(null);
   const [autoDeductFinalBalance, setAutoDeductFinalBalance] = useState<number | null>(null);
+  const [generatingAdvancePdf, setGeneratingAdvancePdf] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: clientsList = [], isLoading } = trpc.clients.list.useQuery({ search: search || undefined });
@@ -196,6 +200,44 @@ export default function ClientsPage() {
     onSuccess: () => { toast.success("Adiantamento removido!"); utils.clientAdvances.list.invalidate(); },
     onError: (e) => toast.error(e.message || "Erro ao remover"),
   });
+  const updateAdvanceMutation = trpc.clientAdvances.update.useMutation({
+    onSuccess: async (_, vars) => {
+      // Se tem novo comprovante, faz upload
+      if (advanceReceiptFile && vars.id) {
+        setUploadingReceipt(true);
+        try {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => resolve((ev.target?.result as string).split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(advanceReceiptFile);
+          });
+          await uploadReceiptMutation.mutateAsync({
+            advanceId: vars.id,
+            fileBase64: base64,
+            mimeType: advanceReceiptFile.type || 'image/jpeg',
+          });
+          toast.success("Adiantamento e comprovante atualizados!");
+        } catch {
+          toast.error("Adiantamento atualizado, mas falhou ao enviar comprovante.");
+        } finally {
+          setUploadingReceipt(false);
+        }
+      } else {
+        toast.success("Adiantamento atualizado!");
+      }
+      utils.clientAdvances.list.invalidate();
+      setEditAdvanceId(null);
+      setAdvanceForm({ amount: "", description: "", date: new Date().toISOString().slice(0, 10) });
+      setAdvanceReceiptFile(null);
+      setAdvanceReceiptPreview(null);
+    },
+    onError: (e) => toast.error(e.message || "Erro ao atualizar adiantamento"),
+  });
+  const { data: advanceDeductions = [] } = trpc.clientAdvances.listDeductions.useQuery(
+    { clientId: advanceClientId ?? 0 },
+    { enabled: !!advanceClientId }
+  );
 
   // Buscar cargas do cliente para abatimento
   const { data: clientLoadsForDeduct = [] } = trpc.cargoLoads.list.useQuery(
@@ -250,6 +292,133 @@ export default function ClientsPage() {
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  // Gerar PDF de relatório de adiantamento
+  const generateAdvancePDF = async (adv: any) => {
+    if (!advanceDialog) return;
+    setGeneratingAdvancePdf(true);
+    try {
+      const [kobayashiB64] = await loadPdfAssets();
+      const clientName = advanceDialog.clientName;
+      const advDate = adv.date ? new Date(adv.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+      const advAmount = parseFloat(adv.amount || '0');
+      const advBalance = parseFloat(adv.balanceRemaining || '0');
+      const totalDeducted = advAmount - advBalance;
+
+      // Deduções deste adiantamento
+      const deductions = (advanceDeductions as any[]).filter((d: any) => d.advanceId === adv.id)
+        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      const deductRows = deductions.map((d: any, i: number) => {
+        const date = d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+        const amount = parseFloat(d.amount || '0');
+        const balBefore = parseFloat(d.balanceBefore || '0');
+        const balAfter = parseFloat(d.balanceAfter || '0');
+        const desc = d.description || `Carga #${d.cargoLoadId || '-'}`;
+        return `<tr>
+          <td style="text-align:center">${i + 1}</td>
+          <td>${date}</td>
+          <td>${desc}</td>
+          <td style="text-align:right">${balBefore.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+          <td style="text-align:right;color:#166534;font-weight:600">${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+          <td style="text-align:right;font-weight:700">${balAfter.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+        </tr>`;
+      }).join('');
+
+      const statusLabel = advBalance <= 0 ? 'QUITADO' : 'EM ABERTO';
+      const statusColor = advBalance <= 0 ? '#166534' : '#854d0e';
+      const statusBg = advBalance <= 0 ? '#dcfce7' : '#fef9c3';
+
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relatório de Adiantamento - ${clientName}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; }
+  @page { size: A4; margin: 0; }
+  .page { min-height: 100vh; display: flex; flex-direction: column; }
+  .pdf-header { background: linear-gradient(135deg, #0d4f2e 0%, #1a5c3a 100%); color: white; padding: 18px 32px; display: flex; align-items: center; gap: 20px; }
+  .pdf-header img { height: 52px; filter: brightness(0) invert(1); }
+  .pdf-header-text h1 { font-size: 20px; font-weight: bold; margin: 0; }
+  .pdf-header-text p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
+  .pdf-subheader { background: #f0fdf4; padding: 12px 32px; border-bottom: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; }
+  .pdf-content { padding: 20px 32px; flex: 1; }
+  .summary-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px 24px; margin-bottom: 20px; display: flex; gap: 32px; flex-wrap: wrap; }
+  .summary-item { text-align: center; }
+  .summary-item .label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+  .summary-item .value { font-size: 20px; font-weight: bold; color: #0d4f2e; }
+  .summary-item .value.blue { color: #1d4ed8; }
+  .summary-item .value.red { color: #dc2626; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 16px; }
+  table th { background: #0d4f2e; color: white; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+  table td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+  table tr:nth-child(even) { background: #f9fafb; }
+  .pdf-footer { padding: 12px 32px; border-top: 2px solid #0d4f2e; display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+  .pdf-footer-left { display: flex; align-items: center; gap: 10px; }
+  .pdf-footer-left img { height: 28px; }
+  .pdf-footer-text { font-size: 10px; color: #555; }
+  .pdf-footer-text strong { color: #0d4f2e; }
+  .status-badge { padding: 4px 14px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<div class="page">
+  <div class="pdf-header">
+    <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <div class="pdf-header-text">
+      <h1>Relatório de Adiantamento</h1>
+      <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+  </div>
+  <div class="pdf-subheader">
+    <div>
+      <span style="font-size:15px;font-weight:700;color:#0d4f2e;">Cliente: ${clientName}</span><br/>
+      <span style="font-size:12px;color:#6b7280;">Adiantamento de ${advAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} &middot; Data: ${advDate}</span>
+      ${adv.description ? `<br/><span style="font-size:11px;color:#6b7280;font-style:italic;">${adv.description}</span>` : ''}
+    </div>
+    <span class="status-badge" style="background:${statusBg};color:${statusColor}">${statusLabel}</span>
+  </div>
+  <div class="pdf-content">
+    <div class="summary-box">
+      <div class="summary-item"><div class="label">Valor do Adiantamento</div><div class="value">${advAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></div>
+      <div class="summary-item"><div class="label">Total Abatido</div><div class="value blue">${totalDeducted.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></div>
+      <div class="summary-item"><div class="label">Saldo Restante</div><div class="value ${advBalance > 0 ? '' : 'red'}">${advBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></div>
+      <div class="summary-item"><div class="label">Cargas Abatidas</div><div class="value">${deductions.length}</div></div>
+    </div>
+    ${deductions.length > 0 ? `
+    <h3 style="font-size:13px;color:#0d4f2e;margin-bottom:8px;">Detalhamento dos Abatimentos</h3>
+    <table>
+      <thead><tr>
+        <th style="text-align:center">#</th>
+        <th>Data</th>
+        <th>Descrição</th>
+        <th style="text-align:right">Saldo Antes</th>
+        <th style="text-align:right">Valor Abatido</th>
+        <th style="text-align:right">Saldo Após</th>
+      </tr></thead>
+      <tbody>${deductRows}</tbody>
+    </table>` : '<p style="color:#6b7280;font-style:italic;margin-top:16px;">Nenhum abatimento registrado.</p>'}
+  </div>
+  <div class="pdf-footer">
+    <div class="pdf-footer-left">
+      <img src="${kobayashiB64}" alt="Kobayashi" />
+      <div class="pdf-footer-text">
+        Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/>
+        <a href="https://btreeambiental.com" style="color:#15803d">btreeambiental.com</a>
+      </div>
+    </div>
+    <div style="font-size:10px;color:#555;text-align:right">
+      Documento gerado em ${new Date().toLocaleString('pt-BR')}
+    </div>
+  </div>
+</div>
+</body></html>`;
+
+      await generatePDFFromHtml(html, `adiantamento-${clientName.replace(/\s+/g,'-')}-${advDate.replace(/\//g,'-')}.pdf`);
+    } catch (e) {
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setGeneratingAdvancePdf(false);
+    }
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -498,7 +667,7 @@ export default function ClientsPage() {
       </Sheet>
 
       {/* Dialog: Adiantamentos */}
-      <Dialog open={!!advanceDialog} onOpenChange={(v) => { if (!v) { setAdvanceDialog(null); setAdvanceClientId(null); } }}>
+      <Dialog open={!!advanceDialog} onOpenChange={(v) => { if (!v) { setAdvanceDialog(null); setAdvanceClientId(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10) }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -520,21 +689,35 @@ export default function ClientsPage() {
               </p>
             </div>
           )}
-          {/* Formulário novo adiantamento */}
+          {/* Formulário novo / editar adiantamento */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               if (!advanceDialog) return;
-              createAdvanceMutation.mutate({
-                clientId: advanceDialog.clientId,
-                amount: parseFloat(advanceForm.amount),
-                description: advanceForm.description || undefined,
-                date: advanceForm.date,
-              });
+              if (editAdvanceId) {
+                updateAdvanceMutation.mutate({
+                  id: editAdvanceId,
+                  amount: parseFloat(advanceForm.amount),
+                  description: advanceForm.description || null,
+                  date: advanceForm.date,
+                });
+              } else {
+                createAdvanceMutation.mutate({
+                  clientId: advanceDialog.clientId,
+                  amount: parseFloat(advanceForm.amount),
+                  description: advanceForm.description || undefined,
+                  date: advanceForm.date,
+                });
+              }
             }}
             className="space-y-3 border-b pb-4 mb-4"
           >
-            <p className="text-sm font-semibold text-gray-700">Novo Adiantamento</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-700">{editAdvanceId ? '✏️ Editar Adiantamento' : 'Novo Adiantamento'}</p>
+              {editAdvanceId && (
+                <button type="button" onClick={() => { setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10) }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); }} className="text-xs text-gray-400 hover:text-gray-600">✕ Cancelar edição</button>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Valor (R$) *</Label>
@@ -612,8 +795,8 @@ export default function ClientsPage() {
                 />
               </div>
             </div>
-            <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={createAdvanceMutation.isPending || uploadingReceipt}>
-              {createAdvanceMutation.isPending || uploadingReceipt ? "Registrando..." : "Registrar Adiantamento"}
+            <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={createAdvanceMutation.isPending || updateAdvanceMutation.isPending || uploadingReceipt}>
+              {createAdvanceMutation.isPending || updateAdvanceMutation.isPending || uploadingReceipt ? (editAdvanceId ? 'Salvando...' : 'Registrando...') : (editAdvanceId ? 'Salvar Alterações' : 'Registrar Adiantamento')}
             </Button>
           </form>
           {/* Lista de adiantamentos */}
@@ -639,12 +822,42 @@ export default function ClientsPage() {
                         </a>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                         adv.status === 'quitado' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
                       }`}>
                         {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
                       </span>
+                      {/* Botão Gerar PDF */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => generateAdvancePDF(adv)}
+                        disabled={generatingAdvancePdf}
+                        title="Gerar relatório PDF"
+                      >
+                        <FileDown className="h-3 w-3 mr-1" /> PDF
+                      </Button>
+                      {/* Botão Editar */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                        onClick={() => {
+                          setEditAdvanceId(adv.id);
+                          setAdvanceForm({
+                            amount: String(parseFloat(adv.amount)),
+                            description: adv.description || '',
+                            date: adv.date ? String(adv.date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+                          });
+                          setAdvanceReceiptFile(null);
+                          setAdvanceReceiptPreview(null);
+                        }}
+                        title="Editar adiantamento"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
                       {adv.status === 'ativo' && (
                         <>
                           <Button
@@ -735,7 +948,7 @@ export default function ClientsPage() {
             )}
           </div>
           <div className="flex justify-end pt-2">
-            <Button variant="outline" onClick={() => { setAdvanceDialog(null); setAdvanceClientId(null); setAutoDeductDialog(null); setAutoDeductResult(null); }}>Fechar</Button>
+            <Button variant="outline" onClick={() => { setAdvanceDialog(null); setAdvanceClientId(null); setAutoDeductDialog(null); setAutoDeductResult(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10) }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); }}>Fechar</Button>
           </div>
         </DialogContent>
       </Dialog>

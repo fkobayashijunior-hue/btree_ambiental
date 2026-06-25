@@ -5624,13 +5624,15 @@ var clientPortalRouter = router({
     }
     let advances = [];
     let totalAdvanceBalance = 0;
+    let advanceDeductions = [];
     try {
       advances = await db.select().from(clientAdvances).where(eq11(clientAdvances.clientId, input.clientId)).orderBy(desc8(clientAdvances.date)).limit(50);
       totalAdvanceBalance = advances.filter((a) => a.status === "ativo").reduce((sum, a) => sum + parseFloat(a.balanceRemaining || "0"), 0);
+      advanceDeductions = await db.select().from(clientAdvanceDeductions).where(eq11(clientAdvanceDeductions.clientId, input.clientId)).orderBy(desc8(clientAdvanceDeductions.date)).limit(200);
     } catch (e) {
       console.error("[Portal] Erro ao buscar adiantamentos:", e);
     }
-    return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance };
+    return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions };
   }),
   // ── LISTAR TODOS OS REPLANTIOS (admin) ──
   listAllReplantings: protectedProcedure.query(async () => {
@@ -13017,6 +13019,34 @@ var clientAdvancesRouter = router({
     const { url } = await storagePut(key, buffer, input.mimeType);
     await db.update(clientAdvances).set({ receiptUrl: url }).where(eq36(clientAdvances.id, input.advanceId));
     return { url };
+  }),
+  // Atualizar adiantamento (amount, description, date, receiptUrl)
+  update: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    amount: z37.number().positive().optional(),
+    description: z37.string().optional().nullable(),
+    date: z37.string().optional(),
+    receiptUrl: z37.string().optional().nullable()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [advance] = await db.select().from(clientAdvances).where(eq36(clientAdvances.id, input.id));
+    if (!advance) throw new TRPCError27({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    const updateData = {};
+    if (input.description !== void 0) updateData.description = input.description;
+    if (input.date !== void 0) updateData.date = input.date;
+    if (input.receiptUrl !== void 0) updateData.receiptUrl = input.receiptUrl;
+    if (input.amount !== void 0) {
+      const originalAmount = parseFloat(advance.amount || "0");
+      const currentBalance = parseFloat(advance.balanceRemaining || "0");
+      const deducted = originalAmount - currentBalance;
+      const newBalance = Math.max(0, input.amount - deducted);
+      updateData.amount = String(input.amount);
+      updateData.balanceRemaining = String(newBalance);
+      updateData.status = newBalance <= 0 ? "quitado" : "ativo";
+    }
+    await db.update(clientAdvances).set(updateData).where(eq36(clientAdvances.id, input.id));
+    return { success: true };
   }),
   // Deletar adiantamento (apenas se não tiver deduções)
   delete: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {

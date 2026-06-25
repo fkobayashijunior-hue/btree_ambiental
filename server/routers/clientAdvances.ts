@@ -235,6 +235,41 @@ export const clientAdvancesRouter = router({
       return { url };
     }),
 
+  // Atualizar adiantamento (amount, description, date, receiptUrl)
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      amount: z.number().positive().optional(),
+      description: z.string().optional().nullable(),
+      date: z.string().optional(),
+      receiptUrl: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      const [advance] = await db.select().from(clientAdvances).where(eq(clientAdvances.id, input.id));
+      if (!advance) throw new TRPCError({ code: "NOT_FOUND", message: "Adiantamento não encontrado" });
+
+      const updateData: any = {};
+      if (input.description !== undefined) updateData.description = input.description;
+      if (input.date !== undefined) updateData.date = input.date;
+      if (input.receiptUrl !== undefined) updateData.receiptUrl = input.receiptUrl;
+      if (input.amount !== undefined) {
+        // Recalcular balanceRemaining: novo amount - (amount original - balance atual)
+        const originalAmount = parseFloat(advance.amount || '0');
+        const currentBalance = parseFloat(advance.balanceRemaining || '0');
+        const deducted = originalAmount - currentBalance;
+        const newBalance = Math.max(0, input.amount - deducted);
+        updateData.amount = String(input.amount);
+        updateData.balanceRemaining = String(newBalance);
+        updateData.status = newBalance <= 0 ? 'quitado' : 'ativo';
+      }
+
+      await db.update(clientAdvances).set(updateData).where(eq(clientAdvances.id, input.id));
+      return { success: true };
+    }),
+
   // Deletar adiantamento (apenas se não tiver deduções)
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))

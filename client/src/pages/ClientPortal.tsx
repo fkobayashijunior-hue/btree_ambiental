@@ -1145,35 +1145,63 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                       <p className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Saldo de Adiantamento</p>
                       <p className="text-amber-900 text-2xl font-black">{formatCurrency(data?.totalAdvanceBalance ?? 0)}</p>
-                      <p className="text-amber-600 text-xs mt-1">Valor disponível para abatimento nas próximas cargas</p>
+                      <p className="text-amber-600 text-xs mt-1">
+                        {(data?.totalAdvanceBalance ?? 0) > 0 ? 'Valor disponível para abatimento nas próximas cargas' : 'Adiantamento quitado'}
+                      </p>
                     </div>
-                    {/* Lista de adiantamentos */}
+                    {/* Lista de adiantamentos com abatimentos */}
                     {(data?.advances?.length ?? 0) === 0 ? (
                       <EmptyState icon={<DollarSign />} text="Nenhum adiantamento registrado." />
                     ) : (
-                      data?.advances?.map((adv: any) => (
-                        <div key={adv.id} className="border border-gray-100 rounded-xl p-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="font-semibold text-gray-900 text-sm">
-                                Adiantamento de {formatCurrency(parseFloat(adv.amount))}
-                              </p>
-                              <p className="text-gray-500 text-xs mt-0.5">
-                                {adv.date ? safeDate(adv.date).toLocaleDateString('pt-BR') : '—'}
-                              </p>
-                              {adv.description && <p className="text-gray-400 text-xs mt-1 italic">{adv.description}</p>}
+                      data?.advances?.map((adv: any) => {
+                        const deductions = (data?.advanceDeductions ?? []).filter((d: any) => d.advanceId === adv.id)
+                          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        const totalDeducted = parseFloat(adv.amount) - parseFloat(adv.balanceRemaining);
+                        return (
+                          <div key={adv.id} className="border border-gray-100 rounded-xl p-4">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold text-gray-900 text-sm">
+                                  Adiantamento de {formatCurrency(parseFloat(adv.amount))}
+                                </p>
+                                <p className="text-gray-500 text-xs mt-0.5">
+                                  {adv.date ? safeDate(adv.date).toLocaleDateString('pt-BR') : '—'}
+                                </p>
+                                {adv.description && <p className="text-gray-400 text-xs mt-1 italic">{adv.description}</p>}
+                                {totalDeducted > 0 && (
+                                  <p className="text-blue-600 text-xs mt-1">Abatido: {formatCurrency(totalDeducted)}</p>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                  adv.status === 'quitado' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
+                                }`}>
+                                  {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
+                                </span>
+                                <p className="text-xs text-gray-500 mt-1">Saldo: {formatCurrency(parseFloat(adv.balanceRemaining))}</p>
+                              </div>
                             </div>
-                            <div className="text-right shrink-0">
-                              <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                                adv.status === 'quitado' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
-                              }`}>
-                                {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
-                              </span>
-                              <p className="text-xs text-gray-500 mt-1">Saldo: {formatCurrency(parseFloat(adv.balanceRemaining))}</p>
-                            </div>
+                            {/* Histórico de abatimentos */}
+                            {deductions.length > 0 && (
+                              <div className="mt-3 border-t pt-3">
+                                <p className="text-xs font-semibold text-gray-600 mb-2">Histórico de Abatimentos ({deductions.length})</p>
+                                <div className="space-y-1.5">
+                                  {deductions.map((d: any, i: number) => (
+                                    <div key={i} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-green-600 font-bold">✓</span>
+                                        <span className="text-gray-600">{d.date ? safeDate(d.date).toLocaleDateString('pt-BR') : '—'}</span>
+                                        <span className="text-gray-500 truncate max-w-[120px]">{d.description || `Carga #${d.cargoLoadId || '-'}`}</span>
+                                      </div>
+                                      <span className="font-semibold text-emerald-700 shrink-0">{formatCurrency(parseFloat(d.amount))}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 )}

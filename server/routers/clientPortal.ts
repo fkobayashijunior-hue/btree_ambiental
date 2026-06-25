@@ -186,6 +186,7 @@ export const clientPortalRouter = router({
       // Adiantamentos do cliente
       let advances: any[] = [];
       let totalAdvanceBalance = 0;
+      let advanceDeductions: any[] = [];
       try {
         advances = await db
           .select()
@@ -196,11 +197,18 @@ export const clientPortalRouter = router({
         totalAdvanceBalance = advances
           .filter((a: any) => a.status === 'ativo')
           .reduce((sum: number, a: any) => sum + parseFloat(a.balanceRemaining || '0'), 0);
+        // Buscar deduções (abatimentos) do cliente
+        advanceDeductions = await db
+          .select()
+          .from(clientAdvanceDeductions)
+          .where(eq(clientAdvanceDeductions.clientId, input.clientId))
+          .orderBy(desc(clientAdvanceDeductions.date))
+          .limit(200);
       } catch (e) {
         console.error('[Portal] Erro ao buscar adiantamentos:', e);
       }
 
-      return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance };
+      return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions };
     }),
 
   // ── LISTAR TODOS OS REPLANTIOS (admin) ──
