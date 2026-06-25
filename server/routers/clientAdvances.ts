@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { clientAdvances, clientAdvanceDeductions, clients, financialEntries } from "../../drizzle/schema";
+import { clientAdvances, clientAdvanceDeductions, clients, financialEntries, cargoLoads } from "../../drizzle/schema";
 import { eq, desc, and, asc } from "drizzle-orm";
 import { storagePut } from "../storage";
 
@@ -141,6 +141,14 @@ export const clientAdvancesRouter = router({
         date: input.date,
       });
 
+      // Marcar carga como paga se foi abatida via adiantamento
+      if (input.cargoLoadId && deductAmount > 0) {
+        try {
+          await db.update(cargoLoads)
+            .set({ paymentStatus: 'pago', paidAt: new Date().toISOString().slice(0, 19).replace('T', ' ') })
+            .where(eq(cargoLoads.id, input.cargoLoadId));
+        } catch (e) { console.error('[clientAdvances] Erro ao marcar carga como paga:', e); }
+      }
       // Atualizar saldo do adiantamento
       await db.update(clientAdvances)
         .set({
@@ -208,6 +216,12 @@ export const clientAdvancesRouter = router({
         const deducted = Math.min(load.valueAmount, balanceRemaining);
         const balanceAfter = balanceRemaining - deducted;
 
+        // Marcar carga como paga via adiantamento
+        try {
+          await db.update(cargoLoads)
+            .set({ paymentStatus: 'pago', paidAt: new Date().toISOString().slice(0, 19).replace('T', ' ') })
+            .where(eq(cargoLoads.id, load.id));
+        } catch (e) { console.error('[clientAdvances] Erro ao marcar carga como paga:', e); }
         // Registrar a dedução no banco
         await db.insert(clientAdvanceDeductions).values({
           advanceId: input.advanceId,

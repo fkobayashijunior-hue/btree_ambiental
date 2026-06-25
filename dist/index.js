@@ -12956,6 +12956,13 @@ var clientAdvancesRouter = router({
       description: input.description,
       date: input.date
     });
+    if (input.cargoLoadId && deductAmount > 0) {
+      try {
+        await db.update(cargoLoads).set({ paymentStatus: "pago", paidAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") }).where(eq36(cargoLoads.id, input.cargoLoadId));
+      } catch (e) {
+        console.error("[clientAdvances] Erro ao marcar carga como paga:", e);
+      }
+    }
     await db.update(clientAdvances).set({
       balanceRemaining: String(balanceAfter),
       status: balanceAfter <= 0 ? "quitado" : "ativo"
@@ -12999,6 +13006,11 @@ var clientAdvancesRouter = router({
       const balanceBefore = balanceRemaining;
       const deducted = Math.min(load.valueAmount, balanceRemaining);
       const balanceAfter = balanceRemaining - deducted;
+      try {
+        await db.update(cargoLoads).set({ paymentStatus: "pago", paidAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") }).where(eq36(cargoLoads.id, load.id));
+      } catch (e) {
+        console.error("[clientAdvances] Erro ao marcar carga como paga:", e);
+      }
       await db.insert(clientAdvanceDeductions).values({
         advanceId: input.advanceId,
         clientId: input.clientId,
