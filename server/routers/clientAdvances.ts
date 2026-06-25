@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { clientAdvances, clientAdvanceDeductions, clients } from "../../drizzle/schema";
 import { eq, desc, and, asc } from "drizzle-orm";
+import { storagePut } from "../storage";
 
 export const clientAdvancesRouter = router({
   // Listar adiantamentos de um cliente
@@ -212,6 +213,26 @@ export const clientAdvancesRouter = router({
         finalBalance: balanceRemaining,
         totalDeducted: parseFloat(advance.balanceRemaining || '0') - balanceRemaining,
       };
+    }),
+
+  // Upload de comprovante para um adiantamento
+  uploadReceipt: protectedProcedure
+    .input(z.object({
+      advanceId: z.number(),
+      fileBase64: z.string(),
+      mimeType: z.string().default('image/jpeg'),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const ext = input.mimeType.includes('pdf') ? 'pdf' : (input.mimeType.split('/')[1] || 'jpg');
+      const key = `client-advances/${input.advanceId}/comprovante-${Date.now()}.${ext}`;
+      const { url } = await storagePut(key, buffer, input.mimeType);
+      await db.update(clientAdvances)
+        .set({ receiptUrl: url })
+        .where(eq(clientAdvances.id, input.advanceId));
+      return { url };
     }),
 
   // Deletar adiantamento (apenas se não tiver deduções)

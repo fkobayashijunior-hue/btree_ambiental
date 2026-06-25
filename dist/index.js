@@ -13003,6 +13003,21 @@ var clientAdvancesRouter = router({
       totalDeducted: parseFloat(advance.balanceRemaining || "0") - balanceRemaining
     };
   }),
+  // Upload de comprovante para um adiantamento
+  uploadReceipt: protectedProcedure.input(z37.object({
+    advanceId: z37.number(),
+    fileBase64: z37.string(),
+    mimeType: z37.string().default("image/jpeg")
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const buffer = Buffer.from(input.fileBase64, "base64");
+    const ext = input.mimeType.includes("pdf") ? "pdf" : input.mimeType.split("/")[1] || "jpg";
+    const key = `client-advances/${input.advanceId}/comprovante-${Date.now()}.${ext}`;
+    const { url } = await storagePut(key, buffer, input.mimeType);
+    await db.update(clientAdvances).set({ receiptUrl: url }).where(eq36(clientAdvances.id, input.advanceId));
+    return { url };
+  }),
   // Deletar adiantamento (apenas se não tiver deduções)
   delete: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
     const db = await getDb();

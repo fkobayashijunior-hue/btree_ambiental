@@ -52,6 +52,9 @@ export default function ClientsPage() {
   const [advanceDialog, setAdvanceDialog] = useState<{ clientId: number; clientName: string } | null>(null);
   const [advanceForm, setAdvanceForm] = useState({ amount: "", description: "", date: new Date().toISOString().slice(0, 10) });
   const [advanceClientId, setAdvanceClientId] = useState<number | null>(null);
+  const [advanceReceiptFile, setAdvanceReceiptFile] = useState<File | null>(null);
+  const [advanceReceiptPreview, setAdvanceReceiptPreview] = useState<string | null>(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
   // Abatimento automático por cargas
   const [autoDeductDialog, setAutoDeductDialog] = useState<{ advanceId: number; advanceName: string; balance: number } | null>(null);
   const [autoDeductDateFrom, setAutoDeductDateFrom] = useState("");
@@ -155,11 +158,34 @@ export default function ClientsPage() {
     { clientId: advanceClientId ?? 0 },
     { enabled: !!advanceClientId }
   );
+  const uploadReceiptMutation = trpc.clientAdvances.uploadReceipt.useMutation();
   const createAdvanceMutation = trpc.clientAdvances.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      // Se tem comprovante, faz upload após criar
+      if (advanceReceiptFile && data.id) {
+        setUploadingReceipt(true);
+        try {
+          const reader = new FileReader();
+          reader.onload = async (ev) => {
+            const base64 = (ev.target?.result as string).split(',')[1];
+            await uploadReceiptMutation.mutateAsync({
+              advanceId: data.id,
+              fileBase64: base64,
+              mimeType: advanceReceiptFile.type || 'image/jpeg',
+            });
+            setAdvanceReceiptFile(null);
+            setAdvanceReceiptPreview(null);
+          };
+          reader.readAsDataURL(advanceReceiptFile);
+        } finally {
+          setUploadingReceipt(false);
+        }
+      }
       toast.success("Adiantamento registrado!");
       utils.clientAdvances.list.invalidate();
       setAdvanceForm({ amount: "", description: "", date: new Date().toISOString().slice(0, 10) });
+      setAdvanceReceiptFile(null);
+      setAdvanceReceiptPreview(null);
     },
     onError: (e) => toast.error(e.message || "Erro ao registrar adiantamento"),
   });
@@ -536,8 +562,55 @@ export default function ClientsPage() {
                 className="h-9 text-sm"
               />
             </div>
-            <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={createAdvanceMutation.isPending}>
-              {createAdvanceMutation.isPending ? "Registrando..." : "Registrar Adiantamento"}
+            <div>
+              <Label className="text-xs">Comprovante (imagem ou PDF)</Label>
+              <div
+                className="border-2 border-dashed border-amber-200 rounded-lg p-3 text-center cursor-pointer hover:border-amber-400 transition-colors"
+                onClick={() => document.getElementById('advance-receipt-input')?.click()}
+              >
+                {advanceReceiptPreview ? (
+                  advanceReceiptFile?.type?.includes('pdf') ? (
+                    <div className="flex items-center justify-center gap-2 text-amber-700">
+                      <FileText className="h-5 w-5" />
+                      <span className="text-xs font-medium">{advanceReceiptFile.name}</span>
+                      <button type="button" onClick={e => { e.stopPropagation(); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); }} className="text-red-400 hover:text-red-600 ml-1"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <div className="relative inline-block">
+                      <img src={advanceReceiptPreview} alt="Comprovante" className="max-h-24 rounded mx-auto" />
+                      <button type="button" onClick={e => { e.stopPropagation(); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); }} className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs"><X className="h-2 w-2" /></button>
+                    </div>
+                  )
+                ) : (
+                  <div className="text-amber-500">
+                    <Upload className="h-5 w-5 mx-auto mb-1" />
+                    <p className="text-xs">Clique para anexar comprovante</p>
+                    <p className="text-xs text-gray-400">JPG, PNG ou PDF</p>
+                  </div>
+                )}
+                <input
+                  id="advance-receipt-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setAdvanceReceiptFile(file);
+                    if (file.type.includes('pdf')) {
+                      setAdvanceReceiptPreview('pdf');
+                    } else {
+                      const reader = new FileReader();
+                      reader.onload = ev => setAdvanceReceiptPreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            </div>
+            <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={createAdvanceMutation.isPending || uploadingReceipt}>
+              {createAdvanceMutation.isPending || uploadingReceipt ? "Registrando..." : "Registrar Adiantamento"}
             </Button>
           </form>
           {/* Lista de adiantamentos */}
@@ -557,6 +630,11 @@ export default function ClientsPage() {
                         {adv.description ? ` · ${adv.description}` : ''}
                       </p>
                       <p className="text-xs text-gray-400">Saldo: {parseFloat(adv.balanceRemaining).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                      {adv.receiptUrl && (
+                        <a href={adv.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-amber-600 hover:underline flex items-center gap-1 mt-0.5">
+                          <FileText className="h-3 w-3" /> Ver comprovante
+                        </a>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${

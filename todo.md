@@ -196,6 +196,16 @@
 
 ---
 
+## 🆕 MELHORIAS RECENTES (25/06/2026)
+
+- [x] Abatimento automático de adiantamento por cargas (carga a carga)
+- [x] Filtro de data no Controle de Cargas
+- [x] Aba Adiantamentos no portal do cliente
+- [x] PDF de relatório de cargas corrigido (sem corte de colunas)
+- [ ] Upload de comprovante no formulário de adiantamento (S3 + receiptUrl)
+
+---
+
 ## 🐛 BUGS CONHECIDOS
 
 - [ ] Corrigir erro insertBefore em todos os componentes com upload de arquivo (foto equipamento, documentos, peças)
