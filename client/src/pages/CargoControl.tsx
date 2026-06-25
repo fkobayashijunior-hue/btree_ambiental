@@ -355,7 +355,7 @@ async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "
 }
 
 // ===== PDF RELATÓRIO COMPLETO POR CLIENTE =====
-async function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>, pricePerTon: number = 0) {
+async function generateClientReportPDF(clientName: string, cargas: Array<Record<string, unknown>>, pricePerTon: number = 0, deductions: Array<{cargoLoadId: number | null; amount: string}> = []) {
   const totalCargas = cargas.length;
   const totalVolume = formatBR(cargas.reduce((acc, c) => acc + parseFloat((c.volumeM3 as string) || "0"), 0), 2);
   const totalPendentes = cargas.filter(c => c.status === "pendente").length;
@@ -372,6 +372,17 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
     const statusColor = c.status === "entregue" ? "#166534" : c.status === "cancelado" ? "#991b1b" : "#854d0e";
     const weightNet = parseFloat(((c as any).weightNetKg || "0").replace(",", "."));
     const valorCarga = pricePerTon > 0 && weightNet > 0 ? (weightNet / 1000) * pricePerTon : 0;
+    // Abatimento via adiantamento para esta carga
+    const cargoDeductions = deductions.filter(d => d.cargoLoadId === (c.id as number));
+    const totalDeducted = cargoDeductions.reduce((s, d) => s + parseFloat(d.amount || '0'), 0);
+    const remaining = Math.max(0, valorCarga - totalDeducted);
+    const isPago = (c as any).paymentStatus === 'pago';
+    // Label de pagamento
+    let pagLabel = '-'; let pagColor = '#6b7280';
+    if (isPago) { pagLabel = '&#9989; Pago'; pagColor = '#166534'; }
+    else if (totalDeducted > 0 && remaining <= 0) { pagLabel = '&#128176; Via Adiant.'; pagColor = '#166534'; }
+    else if (totalDeducted > 0) { pagLabel = '&#9889; Parcial'; pagColor = '#b45309'; }
+    else if (c.status === 'entregue') { pagLabel = '&#9203; Pendente'; pagColor = '#991b1b'; }
     // Dimensões compactadas em 1 coluna: Alt×Larg×Comp
     const dims = [c.heightM, c.widthM, c.lengthM].filter(Boolean).join("×") || "-";
     // Motorista: apenas primeiro nome + sobrenome
@@ -394,6 +405,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       <td>${c.invoiceNumber || "-"}</td>
       ${pricePerTon > 0 ? `<td style="text-align:right;font-weight:600;color:#1d4ed8;">${valorCarga > 0 ? "R$ " + formatBR(valorCarga, 2) : "-"}</td>` : ""}
       <td style="color:${statusColor};font-weight:600;">${statusLabel}</td>
+      <td style="color:${pagColor};font-weight:600;font-size:7px;">${pagLabel}${totalDeducted > 0 ? `<br><span style="color:#166534;font-size:6.5px;">-R$ ${formatBR(totalDeducted, 2)}</span>` : ''}</td>
     </tr>`;
   }).join("");
 
@@ -418,18 +430,19 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
   table th { background: #0d4f2e; color: white; padding: 5px 4px; text-align: left; font-size: 7.5px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   table td { padding: 4px 4px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; font-size: 8px; }
   table tr:nth-child(even) { background: #f9fafb; }
-  /* 12 colunas: data veiculo motorista destino madeira dims vol saida chegada liquido nota [valor] status */
-  col.col-data     { width: 8%; }
-  col.col-veiculo  { width: 8%; }
-  col.col-motorista{ width: 13%; }
-  col.col-destino  { width: 12%; }
-  col.col-madeira  { width: 11%; }
-  col.col-dims     { width: 10%; }
-  col.col-vol      { width: 7%; }
-  col.col-peso     { width: 7%; }
-  col.col-nota     { width: 6%; }
-  col.col-valor    { width: 9%; }
-  col.col-status   { width: 7%; }
+  /* 13 colunas: data veiculo motorista destino madeira dims vol saida chegada liquido nota [valor] status pagamento */
+  col.col-data     { width: 7%; }
+  col.col-veiculo  { width: 7%; }
+  col.col-motorista{ width: 11%; }
+  col.col-destino  { width: 11%; }
+  col.col-madeira  { width: 10%; }
+  col.col-dims     { width: 9%; }
+  col.col-vol      { width: 6%; }
+  col.col-peso     { width: 6%; }
+  col.col-nota     { width: 5%; }
+  col.col-valor    { width: 8%; }
+  col.col-status   { width: 6%; }
+  col.col-pagamento{ width: 9%; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="page">
@@ -473,6 +486,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
         <col class="col-nota" />
         ${pricePerTon > 0 ? '<col class="col-valor" />' : ''}
         <col class="col-status" />
+        <col class="col-pagamento" />
       </colgroup>
       <thead>
         <tr>
@@ -489,6 +503,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
           <th>Nota</th>
           ${pricePerTon > 0 ? `<th style="text-align:right;">Valor</th>` : ""}
           <th>Status</th>
+          <th>Pagamento</th>
         </tr>
       </thead>
       <tbody>
@@ -503,6 +518,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
           <td></td>
           ${pricePerTon > 0 ? `<td style="text-align:right;color:#1d4ed8;font-size:8px;">R$ ${formatBR(totalValor, 2)}</td>` : ""}
           <td style="text-align:center;color:#0d4f2e;">${totalCargas}</td>
+          <td></td>
         </tr>
       </tfoot>
     </table>
@@ -1277,11 +1293,8 @@ export default function CargoControl() {
   const { data: trucks = [] } = trpc.cargoLoads.listTrucks.useQuery();
   const { data: drivers = [] } = trpc.cargoLoads.listDrivers.useQuery();
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
-  // Deduções de adiantamento para exibir resumo financeiro por carga
-  const { data: allDeductions = [] } = trpc.clientAdvances.listDeductions.useQuery(
-    { clientId: filterClientId || 0 },
-    { enabled: filterClientId > 0 }
-  );
+  // Deduções de adiantamento para exibir resumo financeiro por carga (todas, sem filtro)
+  const { data: allDeductions = [] } = trpc.clientAdvances.listAllDeductions.useQuery();
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
   const { data: buyersList = [] } = trpc.buyerClients.listActive.useQuery();
   const { data: contractorsList = [] } = trpc.thirdPartyContractors.listActive.useQuery();
@@ -2057,7 +2070,7 @@ export default function CargoControl() {
                           e.stopPropagation();
                           const client = clientsList.find(c => c.id === group.clientId);
                           const price = parseFloat((client as any)?.pricePerTon || '0');
-                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>, price);
+                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>, price, (allDeductions as any[]).filter(d => d.clientId === group.clientId));
                         }}
                       >
                         <Download className="h-3.5 w-3.5" /> Relatório PDF

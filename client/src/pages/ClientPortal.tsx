@@ -1315,6 +1315,11 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
   const remaining = Math.max(0, (loadValue || 0) - totalDeducted);
   const isPago = (load as any).paymentStatus === 'pago';
 
+  const utils = trpc.useUtils();
+  const markAsPaidMutation = trpc.cargoLoads.markAsPaid.useMutation({
+    onSuccess: () => { utils.clientPortal.getPortalData.invalidate(); },
+  });
+
   // Buscar fotos de tracking por etapa
   const { data: trackingPhotos } = trpc.cargoLoads.getTrackingPhotosPublic.useQuery(
     { cargoId: load.id, clientId },
@@ -1350,9 +1355,17 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 border border-green-200">
                   ✅ Pago
                 </span>
+              ) : totalDeducted > 0 && remaining <= 0 ? (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 border border-green-200">
+                  💰 Pago via Adiantamento
+                </span>
               ) : totalDeducted > 0 ? (
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 border border-amber-200">
-                  ⚡ Parcialmente abatido
+                  ⚡ Parcialmente Abatido
+                </span>
+              ) : load.status === 'entregue' ? (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 border border-red-200">
+                  ⏳ Pendente de Pagamento
                 </span>
               ) : null}
             </div>
@@ -1552,13 +1565,24 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
           {/* Resumo financeiro: abatido vs. a pagar */}
           {(loadValue || 0) > 0 && (
             <div className={`rounded-xl p-3 border ${
-              isPago
+              isPago || (totalDeducted > 0 && remaining <= 0)
                 ? 'bg-green-50 border-green-200'
                 : totalDeducted > 0
                   ? 'bg-amber-50 border-amber-200'
                   : 'bg-blue-50 border-blue-200'
             }`}>
-              <p className="text-xs font-semibold uppercase tracking-wide mb-2 text-gray-600">Resumo Financeiro</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Resumo Financeiro</p>
+                {!isPago && load.status === 'entregue' && (
+                  <button
+                    onClick={() => { if (confirm('Marcar esta carga como paga?')) markAsPaidMutation.mutate({ id: load.id }); }}
+                    disabled={markAsPaidMutation.isPending}
+                    className="text-xs px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  >
+                    {markAsPaidMutation.isPending ? 'Salvando...' : '✓ Marcar como Pago'}
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-xs text-gray-500">Valor da Carga</p>
@@ -1571,9 +1595,14 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">{isPago ? 'Status' : 'A Receber'}</p>
-                  <p className={`text-sm font-bold ${isPago ? 'text-green-700' : remaining > 0 ? 'text-orange-600' : 'text-green-700'}`}>
-                    {isPago ? '✅ Pago' : remaining > 0 ? `R$ ${formatBR(remaining)}` : '✅ Quitado'}
+                  <p className="text-xs text-gray-500">{isPago || remaining <= 0 ? 'Status' : 'A Receber'}</p>
+                  <p className={`text-sm font-bold ${
+                    isPago ? 'text-green-700'
+                    : remaining <= 0 && totalDeducted > 0 ? 'text-green-700'
+                    : remaining > 0 ? 'text-orange-600'
+                    : 'text-green-700'
+                  }`}>
+                    {isPago ? '✅ Pago' : remaining <= 0 && totalDeducted > 0 ? '💰 Via Adiant.' : remaining > 0 ? `R$ ${formatBR(remaining)}` : '✅ Quitado'}
                   </p>
                 </div>
               </div>

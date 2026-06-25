@@ -880,31 +880,30 @@ export default function ClientsPage() {
                         <Pencil className="h-3 w-3" />
                       </Button>
                       {adv.status === 'ativo' && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
-                            onClick={() => {
-                              setAutoDeductDialog({ advanceId: adv.id, advanceName: adv.description || 'Adiantamento', balance: parseFloat(adv.balanceRemaining) });
-                              setAutoDeductResult(null);
-                              setAutoDeductFinalBalance(null);
-                            }}
-                          >
-                            <Zap className="h-3 w-3 mr-1" /> Abater Cargas
-                          </Button>
-                          <button
-                            onClick={() => {
-                              setForceDeleteAdvanceId(adv.id);
-                              setForceDeleteAdvanceDesc(adv.description || 'Adiantamento');
-                            }}
-                            className="text-red-400 hover:text-red-600"
-                            title="Remover adiantamento"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                          onClick={() => {
+                            setAutoDeductDialog({ advanceId: adv.id, advanceName: adv.description || 'Adiantamento', balance: parseFloat(adv.balanceRemaining) });
+                            setAutoDeductResult(null);
+                            setAutoDeductFinalBalance(null);
+                          }}
+                        >
+                          <Zap className="h-3 w-3 mr-1" /> Abater Cargas
+                        </Button>
                       )}
+                      {/* Botão excluir sempre visível (inclusive para adiantamentos quitados) */}
+                      <button
+                        onClick={() => {
+                          setForceDeleteAdvanceId(adv.id);
+                          setForceDeleteAdvanceDesc(adv.description || 'Adiantamento');
+                        }}
+                        className="text-red-400 hover:text-red-600"
+                        title="Remover adiantamento"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                   {/* Painel de abatimento automático */}

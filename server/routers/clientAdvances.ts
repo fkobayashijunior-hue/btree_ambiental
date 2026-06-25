@@ -102,6 +102,15 @@ export const clientAdvancesRouter = router({
         .orderBy(desc(clientAdvanceDeductions.date));
     }),
 
+  // Listar TODAS as deduções (para o controle de cargas sem filtro de cliente)
+  listAllDeductions: protectedProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      return db.select().from(clientAdvanceDeductions)
+        .orderBy(desc(clientAdvanceDeductions.date));
+    }),
+
   // Aplicar abatimento manual em um adiantamento (para fechamento semanal)
   applyDeduction: protectedProcedure
     .input(z.object({
