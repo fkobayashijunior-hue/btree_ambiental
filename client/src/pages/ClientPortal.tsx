@@ -3,7 +3,7 @@ import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUti
 import { formatBR, formatBRL } from "@/lib/formatBR";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone, FileCheck, Calendar } from "lucide-react";
+import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone, FileCheck, Calendar, CheckCircle2, TrendingUp } from "lucide-react";
 
 // ── HELPERS ──
 // Fix timezone issue: date-only strings like "2026-05-08" are parsed as UTC midnight,
@@ -729,25 +729,58 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
 
         {/* Cards de resumo */}
         {isLoading ? (
-          <div className="grid grid-cols-3 gap-3">
-            {[1, 2, 3].map((i) => (
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="bg-white rounded-2xl p-4 shadow-sm animate-pulse h-20" />
             ))}
           </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
-              <Truck className="h-5 w-5 text-[#0d4f2e] mx-auto mb-1" />
-              <div className="text-xl font-black text-gray-900">{data?.loads.length ?? 0}</div>
-              <div className="text-gray-500 text-xs">Cargas</div>
+        ) : (() => {
+          // Calcular valor total, valor pago e saldo
+          const pricePerTon = parseFloat(data?.client?.pricePerTon || '0');
+          const allLoads = data?.loads || [];
+          const totalValorCargas = allLoads.reduce((sum: number, l: any) => {
+            const w = parseFloat((l as any).weightNetKg || (l as any).weightOutKg || '0');
+            return sum + (w > 0 && pricePerTon > 0 ? (w / 1000) * pricePerTon : 0);
+          }, 0);
+          // Valor pago = cargas com paymentStatus 'pago' + fechamentos pagos
+          const valorPagoCargas = allLoads
+            .filter((l: any) => (l as any).paymentStatus === 'pago')
+            .reduce((sum: number, l: any) => {
+              const w = parseFloat((l as any).weightNetKg || (l as any).weightOutKg || '0');
+              return sum + (w > 0 && pricePerTon > 0 ? (w / 1000) * pricePerTon : 0);
+            }, 0);
+          const valorPagoFechamentos = (data?.payments || []).reduce((sum: number, p: any) => sum + parseFloat(p.netAmount || p.grossAmount || '0'), 0);
+          const valorPago = Math.max(valorPagoCargas, valorPagoFechamentos);
+          const saldo = Math.max(0, totalValorCargas - valorPago);
+          return (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
+                <Truck className="h-5 w-5 text-[#0d4f2e] mx-auto mb-1" />
+                <div className="text-xl font-black text-gray-900">{allLoads.length}</div>
+                <div className="text-gray-500 text-xs">Cargas</div>
+              </div>
+              <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
+                <TreePine className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
+                <div className="text-xl font-black text-gray-900">{data?.replanting.length ?? 0}</div>
+                <div className="text-gray-500 text-xs">Replantios</div>
+              </div>
+              {valorPago > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 shadow-sm text-center">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto mb-1" />
+                  <div className="text-base font-black text-green-700">{formatCurrency(valorPago)}</div>
+                  <div className="text-green-600 text-xs font-semibold">Valor Pago</div>
+                </div>
+              )}
+              {totalValorCargas > 0 && (
+                <div className={`rounded-2xl p-4 shadow-sm text-center border ${saldo > 0 ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <TrendingUp className={`h-5 w-5 mx-auto mb-1 ${saldo > 0 ? 'text-blue-600' : 'text-gray-400'}`} />
+                  <div className={`text-base font-black ${saldo > 0 ? 'text-blue-700' : 'text-gray-500'}`}>{formatCurrency(saldo)}</div>
+                  <div className={`text-xs font-semibold ${saldo > 0 ? 'text-blue-600' : 'text-gray-400'}`}>Saldo a Receber</div>
+                </div>
+              )}
             </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
-              <TreePine className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
-              <div className="text-xl font-black text-gray-900">{data?.replanting.length ?? 0}</div>
-              <div className="text-gray-500 text-xs">Replantios</div>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
 
 

@@ -406,7 +406,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       <td>${c.invoiceNumber || "-"}</td>
       ${pricePerTon > 0 ? `<td style="text-align:right;font-weight:600;color:#1d4ed8;">${valorCarga > 0 ? "R$ " + formatBR(valorCarga, 2) : "-"}</td>` : ""}
       <td style="color:${statusColor};font-weight:600;">${statusLabel}</td>
-      <td style="color:${pagColor};font-weight:600;font-size:7px;">${pagLabel}${totalDeducted > 0 ? `<br><span style="color:#166534;font-size:6.5px;">-R$ ${formatBR(totalDeducted, 2)}</span>` : ''}</td>
+      <td style="color:${pagColor};font-weight:600;font-size:9px;">${pagLabel}${totalDeducted > 0 ? `<br><span style="color:#166534;font-size:8px;">-R$ ${formatBR(totalDeducted, 2)}</span>` : ''}</td>
     </tr>`;
   }).join("");
 
@@ -427,9 +427,9 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
   .summary-item { text-align: center; }
   .summary-item .label { font-size: 9px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
   .summary-item .value { font-size: 16px; font-weight: bold; color: #0d4f2e; }
-  table { width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
-  table th { background: #0d4f2e; color: white; padding: 5px 4px; text-align: left; font-size: 7.5px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  table td { padding: 4px 4px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; font-size: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
+  table th { background: #0d4f2e; color: white; padding: 6px 5px; text-align: left; font-size: 9px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table td { padding: 5px 5px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; font-size: 10px; }
   table td:last-child { white-space: normal; word-break: break-word; line-height: 1.3; }
   table tr:nth-child(even) { background: #f9fafb; }
   /* 13 colunas: data veiculo motorista destino madeira dims vol saida chegada liquido nota [valor] status pagamento */
@@ -1616,14 +1616,30 @@ export default function CargoControl() {
     });
   };
 
-  // Estatísticas
-  const stats = useMemo(() => ({
-    total: loads.length,
-    pendente: loads.filter(c => c.status === "pendente").length,
-    entregue: loads.filter(c => c.status === "entregue").length,
-    volumeTotal: formatBR(loads.reduce((acc, c) => acc + parseFloat(c.volumeM3 || "0"), 0), 2),
-    pesoTotal: loads.reduce((acc, c) => acc + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || "0"), 0),
-  }), [loads]);
+  // Estatísticas — quando há filtro de cliente ativo, usa as cargas filtradas
+  const statsBase = useMemo(() => filterClientId ? filtered : loads, [filterClientId, filtered, loads]);
+  const stats = useMemo(() => {
+    const base = statsBase;
+    const pricePerTonClient = filterClientId ? parseFloat((clientsList.find(c => c.id === filterClientId) as any)?.pricePerTon || '0') : 0;
+    const totalValor = pricePerTonClient > 0 ? base.reduce((acc, c) => {
+      const w = parseFloat((c as any).weightNetKg || (c as any).weightOutKg || '0');
+      return acc + (w > 0 ? (w / 1000) * pricePerTonClient : 0);
+    }, 0) : 0;
+    const valorPago = pricePerTonClient > 0 ? base.filter(c => (c as any).paymentStatus === 'pago').reduce((acc, c) => {
+      const w = parseFloat((c as any).weightNetKg || (c as any).weightOutKg || '0');
+      return acc + (w > 0 ? (w / 1000) * pricePerTonClient : 0);
+    }, 0) : 0;
+    return {
+      total: base.length,
+      pendente: base.filter(c => c.status === "pendente").length,
+      entregue: base.filter(c => c.status === "entregue").length,
+      volumeTotal: formatBR(base.reduce((acc, c) => acc + parseFloat(c.volumeM3 || "0"), 0), 2),
+      pesoTotal: base.reduce((acc, c) => acc + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || "0"), 0),
+      totalValor,
+      valorPago,
+      saldo: Math.max(0, totalValor - valorPago),
+    };
+  }, [statsBase, filterClientId, clientsList]);
 
   // Resumo semanal (semana atual vs semana passada)
   const weeklyStats = useMemo(() => {
@@ -1646,11 +1662,12 @@ export default function CargoControl() {
     lastWeekEnd.setDate(lastWeekEnd.getDate() + 6);
     lastWeekEnd.setHours(23, 59, 59, 999);
 
-    const thisWeekLoads = loads.filter(c => {
+    const baseForWeekly = filterClientId ? filtered : loads;
+    const thisWeekLoads = baseForWeekly.filter(c => {
       const d = safeDate(c.date);
       return d >= thisWeekStart && d <= thisWeekEnd;
     });
-    const lastWeekLoads = loads.filter(c => {
+    const lastWeekLoads = baseForWeekly.filter(c => {
       const d = safeDate(c.date);
       return d >= lastWeekStart && d <= lastWeekEnd;
     });
@@ -1666,7 +1683,7 @@ export default function CargoControl() {
       thisWeek: { ...calcStats(thisWeekLoads), start: thisWeekStart, end: thisWeekEnd },
       lastWeek: { ...calcStats(lastWeekLoads), start: lastWeekStart, end: lastWeekEnd },
     };
-  }, [loads]);
+  }, [loads, filterClientId, filtered]);
 
   // Lista de clientes únicos para filtro
   const uniqueClients = useMemo(() => {
@@ -1839,17 +1856,21 @@ export default function CargoControl() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className={`grid gap-3 ${filterClientId && stats.totalValor > 0 ? 'grid-cols-2 md:grid-cols-7' : 'grid-cols-2 md:grid-cols-5'}`}>
         {[
           { label: "Total", value: stats.total, color: "text-gray-700", bg: "bg-gray-50" },
           { label: "Pendentes", value: stats.pendente, color: "text-red-700", bg: "bg-red-50" },
           { label: "Entregues", value: stats.entregue, color: "text-green-700", bg: "bg-green-50" },
           { label: "Volume Total", value: `${stats.volumeTotal} m³`, color: "text-emerald-700", bg: "bg-emerald-50" },
           { label: "Peso Total", value: stats.pesoTotal > 0 ? `${formatBR(stats.pesoTotal / 1000)} ton` : "-", color: "text-purple-700", bg: "bg-purple-50" },
+          ...(filterClientId && stats.totalValor > 0 ? [
+            { label: "Valor Pago", value: stats.valorPago > 0 ? stats.valorPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: "text-green-700", bg: "bg-green-50" },
+            { label: "Saldo a Receber", value: stats.saldo > 0 ? stats.saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: stats.saldo > 0 ? "text-blue-700" : "text-gray-500", bg: stats.saldo > 0 ? "bg-blue-50" : "bg-gray-50" },
+          ] : []),
         ].map(s => (
           <div key={s.label} className={`${s.bg} rounded-xl p-3`}>
             <p className="text-xs text-gray-500">{s.label}</p>
-            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+            <p className={`text-lg font-bold ${s.color} truncate`}>{s.value}</p>
           </div>
         ))}
       </div>
