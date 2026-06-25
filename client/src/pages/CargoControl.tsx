@@ -1206,6 +1206,8 @@ export default function CargoControl() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("");
   const [filterClientId, setFilterClientId] = useState<number>(0);
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [viewMode, setViewMode] = useState<"cliente" | "lista" | "tracking" | "fechamentos">("cliente");
   const [closingClientId, setClosingClientId] = useState<number>(0);
   const [closingWeekStart, setClosingWeekStart] = useState("");
@@ -1499,9 +1501,15 @@ export default function CargoControl() {
       }
       if (filterStatus && c.status !== filterStatus) return false;
       if (filterClientId && c.clientId !== filterClientId) return false;
+      if (filterDateFrom || filterDateTo) {
+        const d = c.date ? safeDate(c.date as string) : null;
+        if (!d) return false;
+        if (filterDateFrom && d < new Date(filterDateFrom + 'T00:00:00')) return false;
+        if (filterDateTo && d > new Date(filterDateTo + 'T23:59:59')) return false;
+      }
       return true;
     });
-  }, [loads, filterStatus, filterClientId, allowedClientIds]);
+  }, [loads, filterStatus, filterClientId, filterDateFrom, filterDateTo, allowedClientIds]);
 
   // Agrupar por cliente (ordenado por data dentro de cada grupo)
   const groupedByClient = useMemo(() => {
@@ -1851,6 +1859,36 @@ export default function CargoControl() {
           <option value="entregue">Entregue</option>
           <option value="cancelado">Cancelado</option>
         </select>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={filterDateFrom}
+            onChange={e => setFilterDateFrom(e.target.value)}
+            className="h-10 text-sm w-36"
+            title="Data inicial"
+            placeholder="De"
+          />
+          <span className="text-gray-400 text-xs">até</span>
+          <Input
+            type="date"
+            value={filterDateTo}
+            onChange={e => setFilterDateTo(e.target.value)}
+            className="h-10 text-sm w-36"
+            title="Data final"
+            placeholder="Até"
+          />
+          {(filterDateFrom || filterDateTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setFilterDateFrom(""); setFilterDateTo(""); }}
+              className="h-10 px-2 text-gray-400 hover:text-gray-600"
+              title="Limpar filtro de data"
+            >
+              ✕
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Lista de Cargas */}
