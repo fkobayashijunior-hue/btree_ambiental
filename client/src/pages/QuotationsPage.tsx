@@ -999,8 +999,15 @@ export default function QuotationsPage() {
             </div>
           )}
 
-          <DialogFooter className="flex flex-col gap-2 pt-2">
+          <DialogFooter className="pt-2">
             <div className="flex flex-col sm:flex-row gap-2 w-full">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); }}
+              >
+                Fechar
+              </Button>
               {requestDetail && (
                 <Button
                   variant="outline"
@@ -1010,7 +1017,7 @@ export default function QuotationsPage() {
                   className="flex-1 border-green-300 text-green-700 hover:bg-green-50"
                 >
                   <MessageCircle className="w-4 h-4 mr-2" />
-                  Enviar para mais fornecedores
+                  Enviar fornecedores
                 </Button>
               )}
               {requestDetail && requestDetail.responses.length > 0 && !autoProcessResult && (
@@ -1019,7 +1026,7 @@ export default function QuotationsPage() {
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                   disabled={autoProcessMutation.isPending}
                 >
-                  <MessageCircle className="w-4 h-4 mr-2" />
+                  <Sparkles className="w-4 h-4 mr-2" />
                   {autoProcessMutation.isPending ? "Gerando..." : "Resumo Gestores"}
                 </Button>
               )}
@@ -1033,7 +1040,6 @@ export default function QuotationsPage() {
                 </Button>
               )}
             </div>
-            <Button variant="outline" className="w-full" onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
