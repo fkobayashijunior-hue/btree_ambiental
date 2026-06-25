@@ -573,6 +573,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   const [activeTab, setActiveTab] = useState<"cargas" | "replantio" | "fechamentos" | "documentos" | "adiantamentos">("cargas");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [showPaidLoads, setShowPaidLoads] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [newItems, setNewItems] = useState({ cargas: 0, docs: 0, fechamentos: 0, replantios: 0 });
 
@@ -822,11 +823,26 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                         </button>
                       )}
                     </div>
+                    {/* Toggle cargas pagas */}
+                    <div className="flex items-center gap-2 px-1">
+                      <button
+                        onClick={() => setShowPaidLoads(v => !v)}
+                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                          showPaidLoads
+                            ? 'bg-green-100 border-green-400 text-green-700 font-semibold'
+                            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {showPaidLoads ? '✅' : '⬜'} Mostrar cargas pagas
+                      </button>
+                    </div>
                     {(() => {
                       const filteredLoads = (data?.loads || []).filter((l: any) => {
                         const d = safeDate(l.deliveryDate || l.date);
                         if (dateFrom && d < new Date(dateFrom + 'T00:00:00')) return false;
                         if (dateTo && d > new Date(dateTo + 'T23:59:59')) return false;
+                        // Ocultar cargas pagas por padrão
+                        if (!showPaidLoads && (l as any).paymentStatus === 'pago') return false;
                         return true;
                       });
                       if (filteredLoads.length === 0) return <EmptyState icon={<Truck />} text={dateFrom || dateTo ? "Nenhuma carga no período selecionado." : "Nenhuma carga registrada ainda."} />;

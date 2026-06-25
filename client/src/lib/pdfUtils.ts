@@ -15,6 +15,30 @@ export const BTREE_QR_URL =
 // Re-export for convenience
 export { BTREE_LOGO_B64 };
 
+// ─── Date helper (handles MySQL timestamp strings like "2026-05-28 00:00:00") ──
+export function safeDate(dateStr: string | Date | null | undefined): Date {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  const s = String(dateStr);
+  // MySQL timestamp: "2026-05-28 00:00:00" — replace space with T to make it ISO
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+    return new Date(s.replace(' ', 'T'));
+  }
+  // ISO date only: "2026-05-28"
+  if (s.length === 10 && s[4] === '-') return new Date(s + 'T12:00:00');
+  // ISO with Z and midnight: avoid timezone shift
+  if (s.includes('T') && s.endsWith('Z') && s.includes('T00:00:00')) {
+    return new Date(s.replace('T00:00:00.000Z', 'T12:00:00'));
+  }
+  return new Date(s);
+}
+
+export function formatDateBR(dateStr: string | Date | null | undefined): string {
+  const d = safeDate(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('pt-BR');
+}
+
 // ─── Image proxy helper ───────────────────────────────────────────────────────
 /**
  * Fetches an external image via the server-side /api/image-proxy endpoint
@@ -221,12 +245,16 @@ function computeSmartBreaks(
 export async function generatePDFFromHtml(
   html: string,
   filename: string,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  orientation: 'portrait' | 'landscape' = 'portrait'
 ): Promise<void> {
+  const isLandscape = orientation === 'landscape';
   return new Promise((resolve, reject) => {
     const iframe = document.createElement("iframe");
+    const iframeW = isLandscape ? 1123 : 794;
+    const iframeMinH = isLandscape ? 794 : 1123;
     iframe.style.cssText =
-      "position:fixed;top:-9999px;left:-9999px;width:794px;height:auto;min-height:1123px;border:none;visibility:hidden;";
+      `position:fixed;top:-9999px;left:-9999px;width:${iframeW}px;height:auto;min-height:${iframeMinH}px;border:none;visibility:hidden;`;
     document.body.appendChild(iframe);
 
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -262,8 +290,8 @@ export async function generatePDFFromHtml(
         const { default: html2canvas } = await import("html2canvas");
         const { jsPDF } = await import("jspdf");
 
-        const pageWidthPx = 794;
-        const pageHeightPx = 1123;
+        const pageWidthPx = isLandscape ? 1123 : 794;
+        const pageHeightPx = isLandscape ? 794 : 1123;
         const scale = 1.5;
 
         // Compute smart breaks BEFORE capturing (DOM is still live)
@@ -282,7 +310,7 @@ export async function generatePDFFromHtml(
         });
 
         const pdf = new jsPDF({
-          orientation: "portrait",
+          orientation: isLandscape ? 'landscape' : 'portrait',
           unit: "px",
           format: "a4",
           compress: true,

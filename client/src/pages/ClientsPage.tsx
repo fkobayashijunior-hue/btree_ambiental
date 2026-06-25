@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink, DollarSign, ChevronDown, ChevronUp, Zap, CheckCircle, AlertCircle, Clock, FileDown } from "lucide-react";
-import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml, safeDate as pdfSafeDate } from "@/lib/pdfUtils";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -300,7 +300,7 @@ export default function ClientsPage() {
     try {
       const [kobayashiB64] = await loadPdfAssets();
       const clientName = advanceDialog.clientName;
-      const advDate = adv.date ? new Date(adv.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+      const advDate = adv.date ? pdfSafeDate(adv.date).toLocaleDateString('pt-BR') : '-';
       const advAmount = parseFloat(adv.amount || '0');
       const advBalance = parseFloat(adv.balanceRemaining || '0');
       const totalDeducted = advAmount - advBalance;
@@ -310,7 +310,7 @@ export default function ClientsPage() {
         .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       const deductRows = deductions.map((d: any, i: number) => {
-        const date = d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+        const date = d.date ? pdfSafeDate(d.date).toLocaleDateString('pt-BR') : '-';
         const amount = parseFloat(d.amount || '0');
         const balBefore = parseFloat(d.balanceBefore || '0');
         const balAfter = parseFloat(d.balanceAfter || '0');

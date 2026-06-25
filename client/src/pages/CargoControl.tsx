@@ -508,7 +508,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
   ${footerHtml}
 </div>
 </body></html>`;
-  await generatePDFFromHtml(html, `relatorio-cargas-${clientName.replace(/\s+/g,'-')}.pdf`);
+  await generatePDFFromHtml(html, `relatorio-cargas-${clientName.replace(/\s+/g,'-')}.pdf`, undefined, 'landscape');
 }
 
 // ===== COMPONENTE PRINCIPAL =====
@@ -1204,7 +1204,8 @@ export default function CargoControl() {
   const utils = trpc.useUtils();
   const { allowedClientIds, isAdmin } = usePermissions();
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("");
+  const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("")
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<"" | "pago" | "a_pagar" | "sem_boleto">("");
   const [filterClientId, setFilterClientId] = useState<number>(0);
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -1500,6 +1501,7 @@ export default function CargoControl() {
         if (!c.clientId || !allowedClientIds.includes(c.clientId)) return false;
       }
       if (filterStatus && c.status !== filterStatus) return false;
+      if (filterPaymentStatus && (c as any).paymentStatus !== filterPaymentStatus) return false;
       if (filterClientId && c.clientId !== filterClientId) return false;
       if (filterDateFrom || filterDateTo) {
         const d = c.date ? safeDate(c.date as string) : null;
@@ -1509,7 +1511,7 @@ export default function CargoControl() {
       }
       return true;
     });
-  }, [loads, filterStatus, filterClientId, filterDateFrom, filterDateTo, allowedClientIds]);
+  }, [loads, filterStatus, filterPaymentStatus, filterClientId, filterDateFrom, filterDateTo, allowedClientIds]);
 
   // Agrupar por cliente (ordenado por data dentro de cada grupo)
   const groupedByClient = useMemo(() => {
@@ -1638,6 +1640,12 @@ export default function CargoControl() {
                   {cargo.vehiclePlate || cargo.vehicleName || "Veículo"}
                 </span>
                 <Badge className={`text-[10px] sm:text-xs ${STATUS_COLORS[cargo.status]}`}>{cargo.status}</Badge>
+                {(cargo as any).paymentStatus === 'pago' && (
+                  <Badge className="text-[10px] sm:text-xs bg-green-100 text-green-700 border border-green-300">✅ Pago</Badge>
+                )}
+                {(cargo as any).paymentStatus === 'a_pagar' && (
+                  <Badge className="text-[10px] sm:text-xs bg-yellow-100 text-yellow-700 border border-yellow-300">⏳ A Pagar</Badge>
+                )}
                 {trackStep && (
                   <Badge className={`text-[10px] sm:text-xs ${TRACKING_COLORS[cargo.trackingStatus as TrackingStatus]}`}>
                     {trackStep.icon} <span translate="no">{trackStep.label}</span>
@@ -1858,6 +1866,16 @@ export default function CargoControl() {
           <option value="pendente">Pendente</option>
           <option value="entregue">Entregue</option>
           <option value="cancelado">Cancelado</option>
+        </select>
+        <select
+          value={filterPaymentStatus}
+          onChange={e => setFilterPaymentStatus(e.target.value as typeof filterPaymentStatus)}
+          className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+        >
+          <option value="">Todos pagamentos</option>
+          <option value="pago">✅ Pago</option>
+          <option value="a_pagar">⏳ A Pagar</option>
+          <option value="sem_boleto">— Sem Boleto</option>
         </select>
         <div className="flex items-center gap-2">
           <Input
