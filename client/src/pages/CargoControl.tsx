@@ -372,15 +372,21 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
     const statusColor = c.status === "entregue" ? "#166534" : c.status === "cancelado" ? "#991b1b" : "#854d0e";
     const weightNet = parseFloat(((c as any).weightNetKg || "0").replace(",", "."));
     const valorCarga = pricePerTon > 0 && weightNet > 0 ? (weightNet / 1000) * pricePerTon : 0;
+    // Dimensões compactadas em 1 coluna: Alt×Larg×Comp
+    const dims = [c.heightM, c.widthM, c.lengthM].filter(Boolean).join("×") || "-";
+    // Motorista: apenas primeiro nome + sobrenome
+    const driverShort = (() => { const parts = String(c.driverName || "-").split(" "); return parts.length > 2 ? parts[0] + " " + parts[parts.length - 1] : parts.join(" "); })();
+    // Destino: truncar após 16 chars
+    const destShort = String(c.destination || "-").substring(0, 16);
+    // Madeira: truncar após 14 chars
+    const woodShort = String(c.woodType || "-").substring(0, 14);
     return `<tr>
       <td style="font-weight:600;">${date}</td>
       <td>${c.vehiclePlate || c.vehicleName || "-"}</td>
-      <td class="wrap">${c.driverName || "-"}</td>
-      <td class="wrap">${c.destination || "-"}</td>
-      <td class="wrap">${c.woodType || "-"}</td>
-      <td style="text-align:right;">${c.heightM || "-"}</td>
-      <td style="text-align:right;">${c.widthM || "-"}</td>
-      <td style="text-align:right;">${c.lengthM || "-"}</td>
+      <td title="${c.driverName || ''}">${driverShort}</td>
+      <td title="${c.destination || ''}">${destShort}</td>
+      <td title="${c.woodType || ''}">${woodShort}</td>
+      <td style="text-align:center;">${dims}</td>
       <td style="text-align:right;font-weight:700;color:#0d4f2e;">${c.volumeM3 ? formatBR(parseFloat(String(c.volumeM3)), 3) : "-"}</td>
       <td style="text-align:right;">${(c as any).weightOutKg || "-"}</td>
       <td style="text-align:right;">${(c as any).weightInKg || "-"}</td>
@@ -408,22 +414,22 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
   .summary-item { text-align: center; }
   .summary-item .label { font-size: 9px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
   .summary-item .value { font-size: 16px; font-weight: bold; color: #0d4f2e; }
-  table { width: 100%; border-collapse: collapse; font-size: 6.5px; table-layout: fixed; }
-  table th { background: #0d4f2e; color: white; padding: 3px 2px; text-align: left; font-size: 6px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  table td { padding: 2px 2px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
-  table td.wrap { white-space: normal; word-break: break-word; }
+  table { width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
+  table th { background: #0d4f2e; color: white; padding: 5px 4px; text-align: left; font-size: 7.5px; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table td { padding: 4px 4px; border-bottom: 1px solid #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; font-size: 8px; }
   table tr:nth-child(even) { background: #f9fafb; }
-  col.col-data { width: 6%; }
-  col.col-veiculo { width: 6.5%; }
-  col.col-motorista { width: 11%; }
-  col.col-destino { width: 9.5%; }
-  col.col-madeira { width: 9%; }
-  col.col-dim { width: 3.5%; }
-  col.col-vol { width: 5%; }
-  col.col-peso { width: 5%; }
-  col.col-nota { width: 4%; }
-  col.col-valor { width: 7%; }
-  col.col-status { width: 6%; }
+  /* 12 colunas: data veiculo motorista destino madeira dims vol saida chegada liquido nota [valor] status */
+  col.col-data     { width: 8%; }
+  col.col-veiculo  { width: 8%; }
+  col.col-motorista{ width: 13%; }
+  col.col-destino  { width: 12%; }
+  col.col-madeira  { width: 11%; }
+  col.col-dims     { width: 10%; }
+  col.col-vol      { width: 7%; }
+  col.col-peso     { width: 7%; }
+  col.col-nota     { width: 6%; }
+  col.col-valor    { width: 9%; }
+  col.col-status   { width: 7%; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="page">
@@ -459,9 +465,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
         <col class="col-motorista" />
         <col class="col-destino" />
         <col class="col-madeira" />
-        <col class="col-dim" />
-        <col class="col-dim" />
-        <col class="col-dim" />
+        <col class="col-dims" />
         <col class="col-vol" />
         <col class="col-peso" />
         <col class="col-peso" />
@@ -477,9 +481,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
           <th>Motorista</th>
           <th>Destino</th>
           <th>Madeira</th>
-          <th style="text-align:right;">Alt.(m)</th>
-          <th style="text-align:right;">Larg.(m)</th>
-          <th style="text-align:right;">Comp.(m)</th>
+          <th style="text-align:center;">Dim. (A×L×C)</th>
           <th style="text-align:right;">Vol.(m³)</th>
           <th style="text-align:right;">P.Saída</th>
           <th style="text-align:right;">P.Cheg.</th>
@@ -494,13 +496,13 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       </tbody>
       <tfoot>
         <tr style="background:#f0fdf4;font-weight:bold;">
-          <td colspan="8" style="text-align:right;color:#0d4f2e;">TOTAIS:</td>
-          <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalVolume} m³</td>
+          <td colspan="6" style="text-align:right;color:#0d4f2e;">TOTAIS:</td>
+          <td style="text-align:right;color:#0d4f2e;font-size:8px;">${totalVolume} m³</td>
           <td colspan="2"></td>
-          <td style="text-align:right;color:#0d4f2e;font-size:13px;">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</td>
+          <td style="text-align:right;color:#0d4f2e;font-size:8px;">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</td>
           <td></td>
-          ${pricePerTon > 0 ? `<td style="text-align:right;color:#1d4ed8;font-size:13px;">R$ ${formatBR(totalValor, 2)}</td>` : ""}
-          <td style="text-align:center;color:#0d4f2e;">${totalCargas} cargas</td>
+          ${pricePerTon > 0 ? `<td style="text-align:right;color:#1d4ed8;font-size:8px;">R$ ${formatBR(totalValor, 2)}</td>` : ""}
+          <td style="text-align:center;color:#0d4f2e;">${totalCargas}</td>
         </tr>
       </tfoot>
     </table>

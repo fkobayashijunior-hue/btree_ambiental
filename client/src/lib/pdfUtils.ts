@@ -251,7 +251,7 @@ export async function generatePDFFromHtml(
   const isLandscape = orientation === 'landscape';
   return new Promise((resolve, reject) => {
     const iframe = document.createElement("iframe");
-    const iframeW = isLandscape ? 1123 : 794;
+    const iframeW = isLandscape ? 1400 : 794;
     const iframeMinH = isLandscape ? 794 : 1123;
     iframe.style.cssText =
       `position:fixed;top:-9999px;left:-9999px;width:${iframeW}px;height:auto;min-height:${iframeMinH}px;border:none;visibility:hidden;`;
@@ -290,7 +290,7 @@ export async function generatePDFFromHtml(
         const { default: html2canvas } = await import("html2canvas");
         const { jsPDF } = await import("jspdf");
 
-        const pageWidthPx = isLandscape ? 1123 : 794;
+        const pageWidthPx = isLandscape ? 1400 : 794;
         const pageHeightPx = isLandscape ? 794 : 1123;
         const scale = 1.5;
 

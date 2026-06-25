@@ -13085,13 +13085,25 @@ var clientAdvancesRouter = router({
     await db.update(clientAdvances).set(updateData).where(eq36(clientAdvances.id, input.id));
     return { success: true };
   }),
-  // Deletar adiantamento (apenas se não tiver deduções)
-  delete: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
+  // Deletar adiantamento
+  // Se force=true, remove deduções e reverte paymentStatus das cargas abatidas
+  delete: protectedProcedure.input(z37.object({ id: z37.number(), force: z37.boolean().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const deductions = await db.select().from(clientAdvanceDeductions).where(eq36(clientAdvanceDeductions.advanceId, input.id));
-    if (deductions.length > 0) {
-      throw new TRPCError27({ code: "BAD_REQUEST", message: "N\xE3o \xE9 poss\xEDvel excluir um adiantamento com abatimentos registrados" });
+    if (deductions.length > 0 && !input.force) {
+      throw new TRPCError27({ code: "BAD_REQUEST", message: `Este adiantamento possui ${deductions.length} abatimento(s). Use a op\xE7\xE3o 'For\xE7ar exclus\xE3o' para remover tudo.` });
+    }
+    if (deductions.length > 0 && input.force) {
+      const loadIds = deductions.map((d) => d.cargoLoadId).filter(Boolean);
+      for (const loadId of loadIds) {
+        try {
+          await db.update(cargoLoads).set({ paymentStatus: "sem_boleto", paidAt: null }).where(eq36(cargoLoads.id, loadId));
+        } catch (e) {
+          console.error("[clientAdvances] Erro ao reverter carga:", e);
+        }
+      }
+      await db.delete(clientAdvanceDeductions).where(eq36(clientAdvanceDeductions.advanceId, input.id));
     }
     await db.delete(clientAdvances).where(eq36(clientAdvances.id, input.id));
     return { success: true };

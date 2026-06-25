@@ -1333,6 +1333,11 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
                   {currentStep.icon} {currentStep.label}
                 </span>
               )}
+              {(load as any).paymentStatus === 'pago' && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 border border-green-200">
+                  ✅ Pago
+                </span>
+              )}
             </div>
             <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
               <span>{formatDate(load.date)}</span>

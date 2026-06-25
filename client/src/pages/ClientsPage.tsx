@@ -65,6 +65,9 @@ export default function ClientsPage() {
   const [autoDeductResult, setAutoDeductResult] = useState<any[] | null>(null);
   const [autoDeductFinalBalance, setAutoDeductFinalBalance] = useState<number | null>(null);
   const [generatingAdvancePdf, setGeneratingAdvancePdf] = useState(false);
+  // Forçar exclusão de adiantamento com deduções
+  const [forceDeleteAdvanceId, setForceDeleteAdvanceId] = useState<number | null>(null);
+  const [forceDeleteAdvanceDesc, setForceDeleteAdvanceDesc] = useState("");
 
   const utils = trpc.useUtils();
   const { data: clientsList = [], isLoading } = trpc.clients.list.useQuery({ search: search || undefined });
@@ -198,7 +201,25 @@ export default function ClientsPage() {
   });
   const deleteAdvanceMutation = trpc.clientAdvances.delete.useMutation({
     onSuccess: () => { toast.success("Adiantamento removido!"); utils.clientAdvances.list.invalidate(); },
-    onError: (e) => toast.error(e.message || "Erro ao remover"),
+    onError: (e) => {
+      // Se o erro menciona abatimentos, oferecer opção de forçar exclusão
+      if (e.message && e.message.includes('abatimento')) {
+        setForceDeleteAdvanceDesc(e.message);
+        // O id já foi passado via mutate, precisamos capturá-lo
+        toast.error(e.message);
+      } else {
+        toast.error(e.message || "Erro ao remover");
+      }
+    },
+  });
+  const forceDeleteAdvanceMutation = trpc.clientAdvances.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Adiantamento e abatimentos removidos! Cargas revertidas para 'sem boleto'.");
+      utils.clientAdvances.list.invalidate();
+      setForceDeleteAdvanceId(null);
+      setForceDeleteAdvanceDesc("");
+    },
+    onError: (e) => toast.error(e.message || "Erro ao forçar exclusão"),
   });
   const updateAdvanceMutation = trpc.clientAdvances.update.useMutation({
     onSuccess: async (_, vars) => {
@@ -873,9 +894,12 @@ export default function ClientsPage() {
                             <Zap className="h-3 w-3 mr-1" /> Abater Cargas
                           </Button>
                           <button
-                            onClick={() => deleteAdvanceMutation.mutate({ id: adv.id })}
+                            onClick={() => {
+                              setForceDeleteAdvanceId(adv.id);
+                              setForceDeleteAdvanceDesc(adv.description || 'Adiantamento');
+                            }}
                             className="text-red-400 hover:text-red-600"
-                            title="Remover"
+                            title="Remover adiantamento"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -952,6 +976,43 @@ export default function ClientsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog: Confirmar exclusão de adiantamento */}
+      <AlertDialog open={forceDeleteAdvanceId !== null} onOpenChange={(v) => { if (!v) { setForceDeleteAdvanceId(null); setForceDeleteAdvanceDesc(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover adiantamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja remover o adiantamento <strong>{forceDeleteAdvanceDesc}</strong>?
+              <br /><br />
+              Se houver abatimentos registrados, use <strong>"Forçar exclusão"</strong> para remover tudo e reverter as cargas para "Sem boleto".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button
+              variant="outline"
+              className="border-red-300 text-red-600 hover:bg-red-50"
+              onClick={() => {
+                if (forceDeleteAdvanceId) deleteAdvanceMutation.mutate({ id: forceDeleteAdvanceId });
+                setForceDeleteAdvanceId(null);
+              }}
+              disabled={deleteAdvanceMutation.isPending}
+            >
+              {deleteAdvanceMutation.isPending ? "Removendo..." : "Remover (sem abatimentos)"}
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (forceDeleteAdvanceId) forceDeleteAdvanceMutation.mutate({ id: forceDeleteAdvanceId, force: true });
+              }}
+              disabled={forceDeleteAdvanceMutation.isPending}
+            >
+              {forceDeleteAdvanceMutation.isPending ? "Removendo..." : "🚨 Forçar exclusão (reverter cargas)"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* AlertDialog: Confirmar exclusão */}
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => { if (!v) setDeleteId(null); }}>
