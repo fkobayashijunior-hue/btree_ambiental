@@ -468,8 +468,8 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</div></div>
       ${pricePerTon > 0 ? `<div class="summary-item"><div class="label">Preço/Ton</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(pricePerTon, 0)}</div></div>` : ""}
       ${totalValor > 0 ? `<div class="summary-item"><div class="label">Valor Total</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(totalValor, 2)}</div></div>` : ""}
-      ${valorPagoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Valor Pago</div><div class="value" style="color:#166534;">R$ ${formatBR(valorPagoAdiantamento, 2)}</div></div>` : ""}
-      ${saldoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Saldo a Receber</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(saldoAdiantamento, 2)}</div></div>` : ""}
+      ${valorPagoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Adiantamento Pago</div><div class="value" style="color:#166534;">R$ ${formatBR(valorPagoAdiantamento, 2)}</div></div>` : ""}
+      ${saldoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Saldo Adiantamento</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(saldoAdiantamento, 2)}</div></div>` : ""}
       <div class="summary-item"><div class="label">Entregues</div><div class="value" style="color:#166534;">${totalEntregues}</div></div>
       <div class="summary-item"><div class="label">Pendentes</div><div class="value" style="color:#854d0e;">${totalPendentes}</div></div>
     </div>
@@ -1299,6 +1299,8 @@ export default function CargoControl() {
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
   // Deduções de adiantamento para exibir resumo financeiro por carga (todas, sem filtro)
   const { data: allDeductions = [] } = trpc.clientAdvances.listAllDeductions.useQuery();
+  // Todos os adiantamentos (para uso no PDF)
+  const { data: allAdvancesList = [] } = trpc.clientAdvances.listAll.useQuery();
   // Adiantamentos do cliente selecionado para cálculo de saldo
   const { data: clientAdvancesList = [] } = trpc.clientAdvances.listByClient.useQuery(
     { clientId: filterClientId },
@@ -1872,9 +1874,9 @@ export default function CargoControl() {
           { label: "Entregues", value: stats.entregue, color: "text-green-700", bg: "bg-green-50" },
           { label: "Volume Total", value: `${stats.volumeTotal} m³`, color: "text-emerald-700", bg: "bg-emerald-50" },
           { label: "Peso Total", value: stats.pesoTotal > 0 ? `${formatBR(stats.pesoTotal / 1000)} ton` : "-", color: "text-purple-700", bg: "bg-purple-50" },
-          ...(filterClientId && stats.totalValor > 0 ? [
-            { label: "Valor Pago", value: stats.valorPago > 0 ? stats.valorPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: "text-green-700", bg: "bg-green-50" },
-            { label: "Saldo a Receber", value: stats.saldo > 0 ? stats.saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: stats.saldo > 0 ? "text-blue-700" : "text-gray-500", bg: stats.saldo > 0 ? "bg-blue-50" : "bg-gray-50" },
+          ...(filterClientId && (stats.valorPago > 0 || stats.saldo > 0) ? [
+            { label: "Adiantamento Pago", value: stats.valorPago > 0 ? stats.valorPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: "text-green-700", bg: "bg-green-50" },
+            { label: "Saldo Adiantamento", value: stats.saldo > 0 ? stats.saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', color: stats.saldo > 0 ? "text-blue-700" : "text-gray-500", bg: stats.saldo > 0 ? "bg-blue-50" : "bg-gray-50" },
           ] : []),
         ].map(s => (
           <div key={s.label} className={`${s.bg} rounded-xl p-3`}>
@@ -2142,9 +2144,7 @@ export default function CargoControl() {
                           const client = clientsList.find(c => c.id === group.clientId);
                           const price = parseFloat((client as any)?.pricePerTon || '0');
                           // Calcular valor pago e saldo dos adiantamentos deste cliente
-                          const groupAdvances = (clientAdvancesList as any[]).length > 0 && filterClientId === group.clientId
-                            ? clientAdvancesList as any[]
-                            : [];
+                          const groupAdvances = (allAdvancesList as any[]).filter((a: any) => a.clientId === group.clientId);
                           const groupValorPago = groupAdvances.reduce((sum: number, a: any) => {
                             const total = parseFloat(a.amount || a.totalAmount || '0');
                             const saldoA = parseFloat(a.balanceRemaining || '0');

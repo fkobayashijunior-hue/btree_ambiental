@@ -763,14 +763,14 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 <div className="bg-green-50 border border-green-200 rounded-2xl p-4 shadow-sm text-center">
                   <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto mb-1" />
                   <div className="text-base font-black text-green-700">{formatCurrency(valorPago)}</div>
-                  <div className="text-green-600 text-xs font-semibold">Valor Pago</div>
+                  <div className="text-green-600 text-xs font-semibold">Adiantamento Pago</div>
                 </div>
               )}
               {totalValorCargas > 0 && (
                 <div className={`rounded-2xl p-4 shadow-sm text-center border ${saldo > 0 ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
                   <TrendingUp className={`h-5 w-5 mx-auto mb-1 ${saldo > 0 ? 'text-blue-600' : 'text-gray-400'}`} />
                   <div className={`text-base font-black ${saldo > 0 ? 'text-blue-700' : 'text-gray-500'}`}>{formatCurrency(saldo)}</div>
-                  <div className={`text-xs font-semibold ${saldo > 0 ? 'text-blue-600' : 'text-gray-400'}`}>Saldo a Receber</div>
+                  <div className={`text-xs font-semibold ${saldo > 0 ? 'text-blue-600' : 'text-gray-400'}`}>Saldo Adiantamento</div>
                 </div>
               )}
             </div>
