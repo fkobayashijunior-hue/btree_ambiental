@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import {
@@ -1372,6 +1373,31 @@ export default function CargoControl() {
   const [boletoAmount, setBoletoAmount] = useState('');
   const [boletoDueDate, setBoletoDueDate] = useState('');
 
+  // Modal de marcar pagamento
+  const [payDialog, setPayDialog] = useState<{ open: boolean; cargoId: number | null; vehiclePlate: string; clientName: string; loadValue: number }>({ open: false, cargoId: null, vehiclePlate: '', clientName: '', loadValue: 0 });
+  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payNotes, setPayNotes] = useState('');
+
+  function openPayModal(cargo: typeof loads[number], loadValue: number) {
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayNotes('');
+    setPayDialog({ open: true, cargoId: cargo.id, vehiclePlate: cargo.vehiclePlate || cargo.vehicleName || 'Veículo', clientName: cargo.clientName || '', loadValue });
+  }
+
+  function closePayModal() {
+    setPayDialog({ open: false, cargoId: null, vehiclePlate: '', clientName: '', loadValue: 0 });
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayNotes('');
+  }
+
+  function handleConfirmPayment() {
+    if (!payDate) { toast.error('Selecione a data de pagamento'); return; }
+    if (!payDialog.cargoId) return;
+    markAsPaidMutation.mutate({ id: payDialog.cargoId, paidAt: payDate, notes: payNotes || undefined }, {
+      onSuccess: () => closePayModal(),
+    });
+  }
+
   const autoCalcNet = (saidaRoca: string, entradaCliente: string, saidaCliente: string) => {
     const entrada = parseFloat(entradaCliente) || 0;
     const saida = parseFloat(saidaCliente) || 0;
@@ -1735,8 +1761,8 @@ export default function CargoControl() {
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Gerar PDF" onClick={() => generateCargoPDF(cargo as unknown as Record<string, unknown>)}>
                 <Download className="h-3.5 w-3.5" />
               </Button>
-              {!isPago && cargo.status === 'entregue' && (
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-green-600" title="Marcar como Pago" onClick={() => { if (confirm('Marcar esta carga como paga?')) markAsPaidMutation.mutate({ id: cargo.id }); }} disabled={markAsPaidMutation.isPending}>
+              {!isPago && (
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-green-600" title="Marcar como Pago" onClick={() => openPayModal(cargo, loadValue)} disabled={markAsPaidMutation.isPending}>
                   <CheckCircle2 className="h-3.5 w-3.5" />
                 </Button>
               )}
@@ -3084,6 +3110,60 @@ export default function CargoControl() {
                 })}
               >
                 {createDestination.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: MARCAR COMO PAGO ===== */}
+      <Dialog open={payDialog.open} onOpenChange={v => { if (!v) closePayModal(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-green-800 flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              Registrar Pagamento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Resumo da carga */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
+              <p className="text-sm font-semibold text-emerald-800">{payDialog.vehiclePlate}</p>
+              {payDialog.clientName && <p className="text-xs text-emerald-700">Cliente: {payDialog.clientName}</p>}
+              {payDialog.loadValue > 0 && (
+                <p className="text-xs text-emerald-700 font-medium">Valor: R$ {payDialog.loadValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pay-date-cargo">Data de Pagamento *</Label>
+              <Input
+                id="pay-date-cargo"
+                type="date"
+                value={payDate}
+                onChange={e => setPayDate(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pay-notes-cargo">Observação (opcional)</Label>
+              <Textarea
+                id="pay-notes-cargo"
+                placeholder="Ex: Pago via PIX, transferência, boleto..."
+                value={payNotes}
+                onChange={e => setPayNotes(e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={closePayModal}>
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                disabled={!payDate || markAsPaidMutation.isPending}
+                onClick={handleConfirmPayment}
+              >
+                {markAsPaidMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmar Pagamento'}
               </Button>
             </div>
           </div>

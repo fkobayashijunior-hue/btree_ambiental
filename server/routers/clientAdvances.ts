@@ -341,13 +341,44 @@ export const clientAdvancesRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: `Este adiantamento possui ${deductions.length} abatimento(s). Use a opção 'Forçar exclusão' para remover tudo.` });
       }
       if (deductions.length > 0 && input.force) {
-        // Reverter paymentStatus das cargas abatidas
+        // Reverter paymentStatus APENAS das cargas que foram pagas EXCLUSIVAMENTE via este adiantamento
+        // Cargas pagas manualmente (sem deduções vinculadas a este adiantamento, ou com paymentStatus='pago' por outra razão) NÃO devem ser revertidas
         const loadIds = deductions.map(d => d.cargoLoadId).filter(Boolean) as number[];
         for (const loadId of loadIds) {
           try {
-            await db.update(cargoLoads)
-              .set({ paymentStatus: 'sem_boleto', paidAt: null })
+            // Verificar se a carga foi paga manualmente (não via adiantamento)
+            // Uma carga paga manualmente terá paymentStatus='pago' mas NÃO terá deduções de OUTROS adiantamentos
+            // Buscar TODAS as deduções desta carga (de qualquer adiantamento)
+            const allCargoDeductions = await db.select()
+              .from(clientAdvanceDeductions)
+              .where(eq(clientAdvanceDeductions.cargoLoadId, loadId));
+
+            // Deduções de OUTROS adiantamentos (não o que está sendo excluído)
+            const otherDeductions = allCargoDeductions.filter(d => d.advanceId !== input.id);
+
+            // Buscar a carga para verificar o status atual
+            const [cargo] = await db.select({ paymentStatus: cargoLoads.paymentStatus })
+              .from(cargoLoads)
               .where(eq(cargoLoads.id, loadId));
+
+            // Só reverter se:
+            // 1. A carga está marcada como paga
+            // 2. NÃO há deduções de outros adiantamentos (o pagamento veio APENAS deste adiantamento)
+            // 3. A carga não foi paga manualmente (se tiver paidAt mas sem nenhuma dedução, foi manual)
+            if (cargo?.paymentStatus === 'pago' && otherDeductions.length === 0) {
+              // Verificar se a carga tem deduções deste adiantamento que cobrem 100% do valor
+              // Se a soma das deduções deste adiantamento = totalDeducted e não há outros, reverter
+              const thisAdvanceDeductions = allCargoDeductions.filter(d => d.advanceId === input.id);
+              const totalThisAdvance = thisAdvanceDeductions.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0);
+              // Só reverter se o adiantamento que está sendo excluído foi responsável pelo pagamento
+              if (totalThisAdvance > 0) {
+                await db.update(cargoLoads)
+                  .set({ paymentStatus: 'sem_boleto', paidAt: null } as any)
+                  .where(eq(cargoLoads.id, loadId));
+              }
+            }
+            // Se a carga foi paga manualmente (paymentStatus='pago' sem deduções deste adiantamento marcando como pago)
+            // ou se há outros adiantamentos cobrindo, NÃO reverter
           } catch (e) { console.error('[clientAdvances] Erro ao reverter carga:', e); }
         }
         // Excluir deduções

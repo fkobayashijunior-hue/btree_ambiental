@@ -91,7 +91,7 @@ export const clientPortalRouter = router({
           const matchDestination = l.destination && l.destination.toLowerCase().includes(clientNameLower);
           const matchDestId = l.destinationId && destIds.includes(l.destinationId);
           return matchClientId || matchClientName || matchDestination || matchDestId;
-        }).slice(0, 50);
+        }).slice(0, 200);
         
         console.log(`[Portal] Cargas filtradas para cliente: ${loads.length}`);
         if (allLoads.length > 0) {

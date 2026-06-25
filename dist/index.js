@@ -3669,17 +3669,25 @@ var cargoLoadsRouter = router({
       destination: r.destinationNameJoined || r.destination
     }));
   }),
-  // Marcar boleto como pago (sem comprovante)
-  markAsPaid: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
-    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    await db.update(cargoLoads).set({
-      paymentStatus: "pago",
-      paidAt: now,
-      updatedAt: now
-    }).where(eq6(cargoLoads.id, input.id));
-    return { success: true };
+  // Marcar boleto como pago (com data e observação opcionais)
+  markAsPaid: protectedProcedure.input(z6.object({
+    id: z6.number(),
+    paidAt: z6.string().optional(),
+    // formato YYYY-MM-DD
+    notes: z6.string().optional()
+  })).mutation(async ({ input }) => {
+    const conn = await getDirectConnection();
+    try {
+      const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+      const paidAtDatetime = input.paidAt ? input.paidAt + " 12:00:00" : now;
+      await conn.execute(
+        "UPDATE cargo_loads SET payment_status = ?, paid_at = ?, updated_at = ? WHERE id = ?",
+        ["pago", paidAtDatetime, now, input.id]
+      );
+      return { success: true };
+    } finally {
+      await conn.end();
+    }
   }),
   // Atualizar data de pagamento de um boleto já pago
   updatePaymentDate: protectedProcedure.input(z6.object({
@@ -5586,7 +5594,7 @@ var clientPortalRouter = router({
         const matchDestination = l.destination && l.destination.toLowerCase().includes(clientNameLower);
         const matchDestId = l.destinationId && destIds.includes(l.destinationId);
         return matchClientId || matchClientName || matchDestination || matchDestId;
-      }).slice(0, 50);
+      }).slice(0, 200);
       console.log(`[Portal] Cargas filtradas para cliente: ${loads.length}`);
       if (allLoads.length > 0) {
         console.log(`[Portal] Amostra carga[0]: clientId=${allLoads[0].clientId} (tipo: ${typeof allLoads[0].clientId}), clientName=${allLoads[0].clientName}, destination=${allLoads[0].destination}`);
@@ -13131,7 +13139,16 @@ var clientAdvancesRouter = router({
       const loadIds = deductions.map((d) => d.cargoLoadId).filter(Boolean);
       for (const loadId of loadIds) {
         try {
-          await db.update(cargoLoads).set({ paymentStatus: "sem_boleto", paidAt: null }).where(eq36(cargoLoads.id, loadId));
+          const allCargoDeductions = await db.select().from(clientAdvanceDeductions).where(eq36(clientAdvanceDeductions.cargoLoadId, loadId));
+          const otherDeductions = allCargoDeductions.filter((d) => d.advanceId !== input.id);
+          const [cargo] = await db.select({ paymentStatus: cargoLoads.paymentStatus }).from(cargoLoads).where(eq36(cargoLoads.id, loadId));
+          if (cargo?.paymentStatus === "pago" && otherDeductions.length === 0) {
+            const thisAdvanceDeductions = allCargoDeductions.filter((d) => d.advanceId === input.id);
+            const totalThisAdvance = thisAdvanceDeductions.reduce((sum, d) => sum + parseFloat(d.amount || "0"), 0);
+            if (totalThisAdvance > 0) {
+              await db.update(cargoLoads).set({ paymentStatus: "sem_boleto", paidAt: null }).where(eq36(cargoLoads.id, loadId));
+            }
+          }
         } catch (e) {
           console.error("[clientAdvances] Erro ao reverter carga:", e);
         }

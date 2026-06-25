@@ -827,19 +827,29 @@ export const cargoLoadsRouter = router({
       }));
     }),
 
-  // Marcar boleto como pago (sem comprovante)
+  // Marcar boleto como pago (com data e observação opcionais)
   markAsPaid: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({
+      id: z.number(),
+      paidAt: z.string().optional(), // formato YYYY-MM-DD
+      notes: z.string().optional(),
+    }))
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      await db.update(cargoLoads).set({
-        paymentStatus: 'pago',
-        paidAt: now,
-        updatedAt: now,
-      } as any).where(eq(cargoLoads.id, input.id));
-      return { success: true };
+      const conn = await getDirectConnection();
+      try {
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        // Se paidAt for fornecido, usar essa data; caso contrário, usar agora
+        const paidAtDatetime = input.paidAt
+          ? input.paidAt + ' 12:00:00'
+          : now;
+        await conn.execute(
+          'UPDATE cargo_loads SET payment_status = ?, paid_at = ?, updated_at = ? WHERE id = ?',
+          ['pago', paidAtDatetime, now, input.id]
+        );
+        return { success: true };
+      } finally {
+        await conn.end();
+      }
     }),
 
   // Atualizar data de pagamento de um boleto já pago

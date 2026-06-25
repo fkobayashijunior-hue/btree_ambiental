@@ -2244,3 +2244,13 @@
 - [ ] Corrigir PDF do relatório de cargas (coluna Valor cortada)
 - [ ] Mostrar saldo de adiantamento restante no portal do cliente
 
+
+---
+
+## 🆕 MELHORIAS — SESSÃO 25/06/2026 (CONTINUAÇÃO)
+
+- [x] Aumentar limite de cargas no portal do cliente de 50 para 200
+- [x] Modal "Registrar Pagamento" no Controle de Cargas (data + observação)
+- [x] Mutation markAsPaid estendida para aceitar paidAt e notes opcionais
+- [x] Botão Marcar como Pago visível para TODAS as cargas não pagas (não só entregues)
+- [x] Corrigir forçar exclusão de adiantamento: NÃO reverter cargas pagas manualmente
