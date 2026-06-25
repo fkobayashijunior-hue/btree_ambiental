@@ -858,7 +858,15 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                             </div>
                           )}
                           {filteredLoads.map((load: any) => (
-                            <CargoCard key={load.id} load={load} formatDate={formatDate} statusColor={statusColor} clientId={session.clientId} loadValue={getLoadValue(load)} />
+                            <CargoCard
+                              key={load.id}
+                              load={load}
+                              formatDate={formatDate}
+                              statusColor={statusColor}
+                              clientId={session.clientId}
+                              loadValue={getLoadValue(load)}
+                              advanceDeductions={(data?.advanceDeductions || []).filter((d: any) => d.cargoLoadId === load.id)}
+                            />
                           ))}
                         </>
                       );
@@ -1296,11 +1304,16 @@ type CargoLoad = {
   notes: string | null;
 };
 
-function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string; clientId: number; loadValue?: number }) {
+function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advanceDeductions }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string; clientId: number; loadValue?: number; advanceDeductions?: any[] }) {
   const [expanded, setExpanded] = useState(false);
   const currentStep = TRACKING_STEPS.find(s => s.key === load.trackingStatus);
   const currentIdx = TRACKING_STEPS.findIndex(s => s.key === load.trackingStatus);
   const photos: string[] = load.photosJson ? (() => { try { return JSON.parse(load.photosJson); } catch { return []; } })() : [];
+
+  // Calcular abatido via adiantamento para esta carga
+  const totalDeducted = (advanceDeductions || []).reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0);
+  const remaining = Math.max(0, (loadValue || 0) - totalDeducted);
+  const isPago = (load as any).paymentStatus === 'pago';
 
   // Buscar fotos de tracking por etapa
   const { data: trackingPhotos } = trpc.cargoLoads.getTrackingPhotosPublic.useQuery(
@@ -1333,11 +1346,15 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
                   {currentStep.icon} {currentStep.label}
                 </span>
               )}
-              {(load as any).paymentStatus === 'pago' && (
+              {isPago ? (
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 border border-green-200">
                   ✅ Pago
                 </span>
-              )}
+              ) : totalDeducted > 0 ? (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                  ⚡ Parcialmente abatido
+                </span>
+              ) : null}
             </div>
             <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
               <span>{formatDate(load.date)}</span>
@@ -1531,6 +1548,48 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue }: { loa
               </div>
             )}
           </div>
+
+          {/* Resumo financeiro: abatido vs. a pagar */}
+          {(loadValue || 0) > 0 && (
+            <div className={`rounded-xl p-3 border ${
+              isPago
+                ? 'bg-green-50 border-green-200'
+                : totalDeducted > 0
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-blue-50 border-blue-200'
+            }`}>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2 text-gray-600">Resumo Financeiro</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-xs text-gray-500">Valor da Carga</p>
+                  <p className="text-sm font-bold text-blue-700">R$ {formatBR(loadValue!)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Abatido (Adiant.)</p>
+                  <p className={`text-sm font-bold ${totalDeducted > 0 ? 'text-green-700' : 'text-gray-400'}`}>
+                    {totalDeducted > 0 ? `R$ ${formatBR(totalDeducted)}` : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">{isPago ? 'Status' : 'A Receber'}</p>
+                  <p className={`text-sm font-bold ${isPago ? 'text-green-700' : remaining > 0 ? 'text-orange-600' : 'text-green-700'}`}>
+                    {isPago ? '✅ Pago' : remaining > 0 ? `R$ ${formatBR(remaining)}` : '✅ Quitado'}
+                  </p>
+                </div>
+              </div>
+              {(advanceDeductions || []).length > 0 && (
+                <div className="mt-2 border-t border-gray-200 pt-2">
+                  <p className="text-xs text-gray-500 mb-1">Abatimentos registrados:</p>
+                  {(advanceDeductions || []).map((d: any, i: number) => (
+                    <div key={i} className="flex justify-between text-xs text-gray-600">
+                      <span>{d.description || `Abatimento #${i + 1}`}</span>
+                      <span className="font-medium text-green-700">- R$ {formatBR(parseFloat(d.amount || '0'))}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Documentos compartilhados */}
           {((load as any).invoiceUrl || (load as any).boletoUrl || (load as any).paymentReceiptUrl) && (

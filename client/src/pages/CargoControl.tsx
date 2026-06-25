@@ -1277,6 +1277,11 @@ export default function CargoControl() {
   const { data: trucks = [] } = trpc.cargoLoads.listTrucks.useQuery();
   const { data: drivers = [] } = trpc.cargoLoads.listDrivers.useQuery();
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
+  // Deduções de adiantamento para exibir resumo financeiro por carga
+  const { data: allDeductions = [] } = trpc.clientAdvances.listDeductions.useQuery(
+    { clientId: filterClientId || 0 },
+    { enabled: filterClientId > 0 }
+  );
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
   const { data: buyersList = [] } = trpc.buyerClients.listActive.useQuery();
   const { data: contractorsList = [] } = trpc.thirdPartyContractors.listActive.useQuery();
@@ -1632,6 +1637,15 @@ export default function CargoControl() {
   const renderCargoCard = (cargo: typeof loads[number], colorIdx: number) => {
     const trackStep = TRACKING_STEPS.find(s => s.key === cargo.trackingStatus);
     const colors = CLIENT_COLORS[colorIdx % CLIENT_COLORS.length];
+    // Resumo financeiro por carga
+    const cargoDeductions = allDeductions.filter((d: any) => d.cargoLoadId === cargo.id);
+    const totalDeducted = cargoDeductions.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0);
+    const client = clientsList.find(c => c.id === cargo.clientId);
+    const pricePerTon = parseFloat((client as any)?.pricePerTon || '0');
+    const weightNet = parseFloat((cargo as any).weightNetKg || (cargo as any).weightOutKg || '0');
+    const loadValue = weightNet > 0 && pricePerTon > 0 ? (weightNet / 1000) * pricePerTon : 0;
+    const remaining = Math.max(0, loadValue - totalDeducted);
+    const isPago = (cargo as any).paymentStatus === 'pago';
     return (
       <div key={cargo.id} className={`bg-white rounded-lg border border-gray-200 border-l-4 ${colors.border} hover:shadow-md transition-shadow`}>
         <div className="p-3 sm:p-4">
@@ -1643,12 +1657,13 @@ export default function CargoControl() {
                   {cargo.vehiclePlate || cargo.vehicleName || "Veículo"}
                 </span>
                 <Badge className={`text-[10px] sm:text-xs ${STATUS_COLORS[cargo.status]}`}>{cargo.status}</Badge>
-                {(cargo as any).paymentStatus === 'pago' && (
+                {isPago ? (
                   <Badge className="text-[10px] sm:text-xs bg-green-100 text-green-700 border border-green-300">✅ Pago</Badge>
-                )}
-                {(cargo as any).paymentStatus === 'a_pagar' && (
+                ) : totalDeducted > 0 ? (
+                  <Badge className="text-[10px] sm:text-xs bg-amber-100 text-amber-700 border border-amber-300">⚡ Abatido R$ {formatBR(totalDeducted)}</Badge>
+                ) : (cargo as any).paymentStatus === 'a_pagar' ? (
                   <Badge className="text-[10px] sm:text-xs bg-yellow-100 text-yellow-700 border border-yellow-300">⏳ A Pagar</Badge>
-                )}
+                ) : null}
                 {trackStep && (
                   <Badge className={`text-[10px] sm:text-xs ${TRACKING_COLORS[cargo.trackingStatus as TrackingStatus]}`}>
                     {trackStep.icon} <span translate="no">{trackStep.label}</span>
@@ -1675,16 +1690,19 @@ export default function CargoControl() {
                     {(cargo as any).weightNetKg ? ` | Líq: ${formatBR(parseFloat((cargo as any).weightNetKg), 0)}` : ''}
                   </span>
                 )}
-                {(() => {
-                  const weightNet = parseFloat((cargo as any).weightNetKg || (cargo as any).weightOutKg || '0');
-                  const client = clientsList.find(c => c.id === cargo.clientId);
-                  const pricePerTon = parseFloat((client as any)?.pricePerTon || '0');
-                  if (weightNet > 0 && pricePerTon > 0) {
-                    const valor = (weightNet / 1000) * pricePerTon;
-                    return <span className="flex items-center gap-1 font-semibold text-blue-700"><DollarSign className="h-3 w-3" />R$ {formatBR(valor)}</span>;
-                  }
-                  return null;
-                })()}
+                {loadValue > 0 && (
+                  <span className="flex items-center gap-1 font-semibold text-blue-700">
+                    <DollarSign className="h-3 w-3" />R$ {formatBR(loadValue)}
+                    {totalDeducted > 0 && !isPago && (
+                      <span className="text-[10px] text-orange-600 font-normal ml-1">
+                        (falta R$ {formatBR(remaining)})
+                      </span>
+                    )}
+                    {isPago && (
+                      <span className="text-[10px] text-green-600 font-normal ml-1">✔ quitado</span>
+                    )}
+                  </span>
+                )}
                 {cargo.invoiceNumber && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{cargo.invoiceNumber}</span>}
                 {(cargo as any).locationName && <span className="flex items-center gap-1 text-emerald-600"><MapPin className="h-3 w-3" /><span translate="no">{(cargo as any).locationName}</span></span>}
               </div>
@@ -2821,6 +2839,57 @@ export default function CargoControl() {
                   )}
                 </div>
               </div>
+
+              {/* Resumo financeiro no modal de detalhes */}
+              {(() => {
+                const detailClient = clientsList.find(c => c.id === detailCargo.clientId);
+                const detailPricePerTon = parseFloat((detailClient as any)?.pricePerTon || '0');
+                const detailWeightNet = parseFloat((detailCargo as any).weightNetKg || (detailCargo as any).weightOutKg || '0');
+                const detailLoadValue = detailWeightNet > 0 && detailPricePerTon > 0 ? (detailWeightNet / 1000) * detailPricePerTon : 0;
+                const detailDeductions = allDeductions.filter((d: any) => d.cargoLoadId === detailCargo.id);
+                const detailTotalDeducted = detailDeductions.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0);
+                const detailRemaining = Math.max(0, detailLoadValue - detailTotalDeducted);
+                const detailIsPago = (detailCargo as any).paymentStatus === 'pago';
+                if (detailLoadValue <= 0 && detailDeductions.length === 0) return null;
+                return (
+                  <div className={`rounded-xl p-3 border ${
+                    detailIsPago ? 'bg-green-50 border-green-200' :
+                    detailTotalDeducted > 0 ? 'bg-amber-50 border-amber-200' :
+                    'bg-blue-50 border-blue-200'
+                  }`}>
+                    <p className="text-xs font-semibold uppercase tracking-wide mb-2 text-gray-600">Resumo Financeiro</p>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-xs text-gray-500">Valor da Carga</p>
+                        <p className="text-sm font-bold text-blue-700">{detailLoadValue > 0 ? `R$ ${formatBR(detailLoadValue)}` : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Abatido (Adiant.)</p>
+                        <p className={`text-sm font-bold ${detailTotalDeducted > 0 ? 'text-green-700' : 'text-gray-400'}`}>
+                          {detailTotalDeducted > 0 ? `R$ ${formatBR(detailTotalDeducted)}` : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">{detailIsPago ? 'Status' : 'A Receber'}</p>
+                        <p className={`text-sm font-bold ${detailIsPago ? 'text-green-700' : detailRemaining > 0 ? 'text-orange-600' : 'text-green-700'}`}>
+                          {detailIsPago ? '✅ Pago' : detailRemaining > 0 ? `R$ ${formatBR(detailRemaining)}` : '✅ Quitado'}
+                        </p>
+                      </div>
+                    </div>
+                    {detailDeductions.length > 0 && (
+                      <div className="mt-2 border-t border-gray-200 pt-2 space-y-1">
+                        <p className="text-xs text-gray-500">Abatimentos registrados:</p>
+                        {detailDeductions.map((d: any, i: number) => (
+                          <div key={i} className="flex justify-between text-xs text-gray-600">
+                            <span>{d.description || `Abatimento #${i + 1}`}</span>
+                            <span className="font-medium text-green-700">- R$ {formatBR(parseFloat(d.amount || '0'))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" className="flex-1 gap-2" onClick={() => { setDetailId(null); openEdit(detailCargo as unknown as typeof loads[number]); }}>
