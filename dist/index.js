@@ -3689,6 +3689,20 @@ var cargoLoadsRouter = router({
       await conn.end();
     }
   }),
+  // Desfazer pagamento de uma carga (reverter para sem_boleto)
+  unmarkAsPaid: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ input }) => {
+    const conn = await getDirectConnection();
+    try {
+      const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+      await conn.execute(
+        "UPDATE cargo_loads SET payment_status = ?, paid_at = NULL, updated_at = ? WHERE id = ?",
+        ["sem_boleto", now, input.id]
+      );
+      return { success: true };
+    } finally {
+      await conn.end();
+    }
+  }),
   // Atualizar data de pagamento de um boleto já pago
   updatePaymentDate: protectedProcedure.input(z6.object({
     id: z6.number(),

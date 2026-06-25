@@ -17,7 +17,7 @@ import {
   CheckCircle2, Clock, AlertCircle, ChevronRight, Pencil, Trash2,
   BarChart3, Download, Eye, RefreshCw, Building2, ChevronDown, ChevronUp,
   Filter, Users, Receipt, CreditCard, FileCheck, Upload, ExternalLink,
-  DollarSign, CalendarClock, AlertTriangle
+  DollarSign, CalendarClock, AlertTriangle, XCircle
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
@@ -1363,6 +1363,10 @@ export default function CargoControl() {
     onSuccess: () => { toast.success('Marcado como pago!'); utils.cargoLoads.getById.invalidate(); utils.cargoLoads.list.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
+  const unmarkAsPaidMutation = trpc.cargoLoads.unmarkAsPaid.useMutation({
+    onSuccess: () => { toast.success('Pagamento desfeito!'); utils.cargoLoads.getById.invalidate(); utils.cargoLoads.list.invalidate(); utils.clientAdvances.listAllDeductions.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
   const updatePaymentDateMutation = trpc.cargoLoads.updatePaymentDate.useMutation({
     onSuccess: () => { toast.success('Data de pagamento atualizada!'); utils.cargoLoads.getById.invalidate(); utils.cargoLoads.list.invalidate(); setEditPaymentDateId(null); setEditPaymentDateValue(''); },
     onError: (e) => toast.error(e.message),
@@ -1764,6 +1768,11 @@ export default function CargoControl() {
               {!isPago && (
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-green-600" title="Marcar como Pago" onClick={() => openPayModal(cargo, loadValue)} disabled={markAsPaidMutation.isPending}>
                   <CheckCircle2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {isPago && (
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-500 hover:text-orange-500" title="Desfazer Pagamento" onClick={() => { if (confirm('Desfazer o pagamento desta carga?')) unmarkAsPaidMutation.mutate({ id: cargo.id }); }} disabled={unmarkAsPaidMutation.isPending}>
+                  <XCircle className="h-3.5 w-3.5" />
                 </Button>
               )}
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" title="Excluir" onClick={() => { if (confirm("Remover esta carga?")) deleteMutation.mutate({ id: cargo.id }); }}>
