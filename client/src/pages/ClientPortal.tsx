@@ -932,11 +932,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       lastWeekEnd.setHours(23, 59, 59, 999);
 
                       const thisWeekLoads = allLoads.filter((c: any) => {
-                        const d = safeDate(c.date);
+                        const d = safeDate(c.deliveryDate || c.date);
                         return d >= thisWeekStart && d <= thisWeekEnd;
                       });
                       const lastWeekLoads = allLoads.filter((c: any) => {
-                        const d = safeDate(c.date);
+                        const d = safeDate(c.deliveryDate || c.date);
                         return d >= lastWeekStart && d <= lastWeekEnd;
                       });
 

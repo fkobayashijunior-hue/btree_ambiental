@@ -733,11 +733,11 @@ function WeeklyClosingsView({
   lastWeekEnd.setHours(23, 59, 59, 999);
 
   const thisWeekLoads = loads.filter((c: any) => {
-    const d = safeDate(c.date);
+    const d = safeDate(c.deliveryDate || c.date);
     return d >= thisWeekStart && d <= thisWeekEnd;
   });
   const lastWeekLoads = loads.filter((c: any) => {
-    const d = safeDate(c.date);
+    const d = safeDate(c.deliveryDate || c.date);
     return d >= lastWeekStart && d <= lastWeekEnd;
   });
 
@@ -1020,7 +1020,7 @@ function WeeklyClosingsView({
                         wEnd.setHours(23, 59, 59, 999);
                         const realLoads = loads.filter((l: any) => {
                           if (l.clientId !== closing.clientId) return false;
-                          const d = safeDate(l.date);
+                          const d = safeDate(l.deliveryDate || l.date);
                           return d >= wStart && d <= wEnd;
                         });
                         const realWeight = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);

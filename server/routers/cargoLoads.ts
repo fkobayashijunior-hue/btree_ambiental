@@ -1265,7 +1265,7 @@ export const cargoLoadsRouter = router({
       let loadsInPeriod: Array<{ id: number; weight_net_kg: string | null; weight_out_kg: string | null }> = [];
       try {
         const [rows] = await conn.execute(
-          `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
+          `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
           [input.clientId, weekStartStr, weekEndStr]
         ) as any;
         loadsInPeriod = rows;
@@ -1347,7 +1347,7 @@ export const cargoLoadsRouter = router({
               const weekEndStr = closing.weekEnd ? new Date(closing.weekEnd).toISOString().slice(0, 10) : null;
               if (weekStartStr && weekEndStr) {
                 await conn2.execute(
-                  `UPDATE cargo_loads SET payment_status = 'pago', updated_at = NOW() WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ? AND payment_status != 'pago'`,
+                  `UPDATE cargo_loads SET payment_status = 'pago', updated_at = NOW() WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ? AND payment_status != 'pago'`,
                   [closing.clientId, weekStartStr, weekEndStr]
                 );
               }
