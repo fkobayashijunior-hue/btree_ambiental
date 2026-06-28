@@ -539,7 +539,9 @@ export const reportsRouter = router({
       const totalFreteTerceirizadoGlobal = freteTercCargos.reduce((s, c) => s + calcFreightCost(c), 0);
 
       // PAGAMENTO DE CLIENTES (despesa com fornecedores de madeira)
-      const totalPagamentoClientesGlobal = clientPaymentsData.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+      // Usa a receita estimada das cargas como custo a pagar ao dono da madeira
+      // (mesmo cálculo do controle de cargas: peso_liq_ton × pricePerTon)
+      const totalPagamentoClientesGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
 
       // RECEITA ESTIMADA: soma da receita estimada de todas as cargas
       const totalReceitaEstimadaGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
@@ -613,8 +615,8 @@ export const reportsRouter = router({
           : [];
         const totalLocFrete = locFreteTer.reduce((s, c) => s + calcFreightCost(c), 0);
 
-        // Pagamento de clientes por local
-        const totalLocClientPayments = locClientPayments.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+        // Pagamento de clientes por local (valor a pagar ao dono da madeira = receita estimada das cargas)
+        const totalLocClientPayments = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
 
         // Receita estimada por local
         const totalLocReceitaEstimada = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
