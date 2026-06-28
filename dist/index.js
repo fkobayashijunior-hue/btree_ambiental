@@ -8966,6 +8966,19 @@ var reportsRouter = router({
         return price * vol;
       }
     };
+    const clientIds = Array.from(new Set(allCargos.map((c) => c.clientId).filter(Boolean)));
+    const clientPriceMap = /* @__PURE__ */ new Map();
+    if (clientIds.length > 0) {
+      const clientRows = await db.select({ id: clients.id, pricePerTon: clients.pricePerTon }).from(clients).where(inArray6(clients.id, clientIds));
+      for (const r of clientRows) clientPriceMap.set(r.id, r.pricePerTon);
+    }
+    const calcClientPayment = (cargo) => {
+      if (!cargo.clientId) return 0;
+      const pricePerTon = parseFloat(clientPriceMap.get(cargo.clientId) || "0");
+      if (!pricePerTon) return 0;
+      const weightTons = parseFloat(cargo.weightNetKg || "0") / 1e3;
+      return pricePerTon * weightTons;
+    };
     const clientPaymentsData = await db.select({
       id: clientPayments.id,
       clientId: clientPayments.clientId,
@@ -9017,7 +9030,7 @@ var reportsRouter = router({
     const totalCorteTerceirizadoGlobal = corteTerceirizadoCargos.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
     const freteTercCargos = thirdPartyIds.length > 0 ? allCargos.filter((c) => c.vehicleId && thirdPartyIds.includes(c.vehicleId)) : [];
     const totalFreteTerceirizadoGlobal = freteTercCargos.reduce((s, c) => s + calcFreightCost(c), 0);
-    const totalPagamentoClientesGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
+    const totalPagamentoClientesGlobal = allCargos.reduce((s, c) => s + calcClientPayment(c), 0);
     const totalReceitaEstimadaGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
     const buyerPaymentsTotal = allBuyerPayments.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
     const finReceitasManualTotal = allFinReceitas.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
@@ -9055,8 +9068,8 @@ var reportsRouter = router({
       const locExtras = allExtras.filter((r) => r.workLocationId === loc.id);
       const locCargos = allCargos.filter((r) => r.workLocationId === loc.id);
       const locClientPayments = clientPaymentsData.filter((r) => {
-        const clientIds = locCargos.map((c) => c.clientId).filter(Boolean);
-        return clientIds.includes(r.clientId);
+        const clientIds2 = locCargos.map((c) => c.clientId).filter(Boolean);
+        return clientIds2.includes(r.clientId);
       });
       const totalMO = locAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
       const totalVehicleMaintLoc = locVehicleMaints.reduce((s, r) => s + parseFloat(r.maintenanceCost || "0"), 0);
@@ -9067,7 +9080,7 @@ var reportsRouter = router({
       const totalLocCorte = locCorte.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
       const locFreteTer = thirdPartyIds.length > 0 ? locCargos.filter((c) => c.vehicleId && thirdPartyIds.includes(c.vehicleId)) : [];
       const totalLocFrete = locFreteTer.reduce((s, c) => s + calcFreightCost(c), 0);
-      const totalLocClientPayments = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
+      const totalLocClientPayments = locCargos.reduce((s, c) => s + calcClientPayment(c), 0);
       const totalLocReceitaEstimada = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
       const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete + totalVehicleMaintLoc + totalLocClientPayments;
       const dailyMap = /* @__PURE__ */ new Map();

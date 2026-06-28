@@ -443,7 +443,7 @@ export const reportsRouter = router({
         for (const d of dests) destMap.set(d.id, d);
       }
 
-      // Helper: calcular receita estimada por carga
+      // Helper: calcular receita estimada por carga (preço do destino/comprador)
       const calcEstimatedRevenue = (cargo: { destinationId: number | null; weightNetKg: string | null; volumeM3: string | null }) => {
         if (!cargo.destinationId) return 0;
         const dest = destMap.get(cargo.destinationId);
@@ -458,6 +458,25 @@ export const reportsRouter = router({
           const vol = parseFloat(cargo.volumeM3 || '0');
           return price * vol;
         }
+      };
+
+      // Buscar preço por tonelada dos clientes fornecedores de madeira (clients.price_per_ton)
+      const clientIds = Array.from(new Set(allCargos.map(c => c.clientId).filter(Boolean))) as number[];
+      const clientPriceMap = new Map<number, string | null>();
+      if (clientIds.length > 0) {
+        const clientRows = await db.select({ id: clients.id, pricePerTon: clients.pricePerTon })
+          .from(clients)
+          .where(inArray(clients.id, clientIds));
+        for (const r of clientRows) clientPriceMap.set(r.id, r.pricePerTon);
+      }
+
+      // Helper: calcular custo a pagar ao cliente fornecedor de madeira (preço do cliente × peso)
+      const calcClientPayment = (cargo: { clientId: number | null; weightNetKg: string | null }) => {
+        if (!cargo.clientId) return 0;
+        const pricePerTon = parseFloat(clientPriceMap.get(cargo.clientId) || '0');
+        if (!pricePerTon) return 0;
+        const weightTons = parseFloat(cargo.weightNetKg || '0') / 1000;
+        return pricePerTon * weightTons;
       };
 
       // Buscar pagamentos de clientes (despesa: o que pagamos ao cliente fornecedor)
@@ -539,9 +558,8 @@ export const reportsRouter = router({
       const totalFreteTerceirizadoGlobal = freteTercCargos.reduce((s, c) => s + calcFreightCost(c), 0);
 
       // PAGAMENTO DE CLIENTES (despesa com fornecedores de madeira)
-      // Usa a receita estimada das cargas como custo a pagar ao dono da madeira
-      // (mesmo cálculo do controle de cargas: peso_liq_ton × pricePerTon)
-      const totalPagamentoClientesGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
+      // Usa o preço do cliente fornecedor (clients.price_per_ton) × peso líquido das cargas
+      const totalPagamentoClientesGlobal = allCargos.reduce((s, c) => s + calcClientPayment(c), 0);
 
       // RECEITA ESTIMADA: soma da receita estimada de todas as cargas
       const totalReceitaEstimadaGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
@@ -615,8 +633,8 @@ export const reportsRouter = router({
           : [];
         const totalLocFrete = locFreteTer.reduce((s, c) => s + calcFreightCost(c), 0);
 
-        // Pagamento de clientes por local (valor a pagar ao dono da madeira = receita estimada das cargas)
-        const totalLocClientPayments = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
+        // Pagamento de clientes por local (preço do cliente fornecedor × peso das cargas do local)
+        const totalLocClientPayments = locCargos.reduce((s, c) => s + calcClientPayment(c), 0);
 
         // Receita estimada por local
         const totalLocReceitaEstimada = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
