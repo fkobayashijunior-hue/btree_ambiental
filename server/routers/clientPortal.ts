@@ -244,25 +244,22 @@ export const clientPortalRouter = router({
       .select({
         id: clientPayments.id,
         clientId: clientPayments.clientId,
-        referenceDate: clientPayments.referenceDate,
-        description: clientPayments.description,
-        volumeM3: clientPayments.volumeM3,
-        pricePerM3: clientPayments.pricePerM3,
-        grossAmount: clientPayments.grossAmount,
-        deductions: clientPayments.deductions,
-        netAmount: clientPayments.netAmount,
-        status: clientPayments.status,
         dueDate: clientPayments.dueDate,
-        paidAt: clientPayments.paidAt,
-        pixKey: clientPayments.pixKey,
+        paidDate: clientPayments.paidDate,
+        description: clientPayments.description,
+        amount: clientPayments.amount,
+        status: clientPayments.status,
+        referenceMonth: clientPayments.referenceMonth,
+        loadId: clientPayments.loadId,
         notes: clientPayments.notes,
-        registeredBy: clientPayments.registeredBy,
+        invoiceNumber: clientPayments.invoiceNumber,
+        paymentMethod: clientPayments.paymentMethod,
         createdAt: clientPayments.createdAt,
         clientName: clients.name,
       })
       .from(clientPayments)
       .leftJoin(clients, eq(clientPayments.clientId, clients.id))
-      .orderBy(desc(clientPayments.referenceDate));
+      .orderBy(desc(clientPayments.dueDate));
     return records;
   }),
 
@@ -270,21 +267,21 @@ export const clientPortalRouter = router({
   updatePayment: protectedProcedure
     .input(z.object({
       id: z.number(),
-      status: z.enum(["pendente", "pago", "atrasado", "cancelado"]).optional(),
+      status: z.string().optional(),
       paidAt: z.string().optional(),
       notes: z.string().optional(),
       description: z.string().optional(),
-      grossAmount: z.string().optional(),
-      netAmount: z.string().optional(),
-      deductions: z.string().optional(),
+      amount: z.string().optional(),
       dueDate: z.string().optional(),
+      invoiceNumber: z.string().optional(),
+      paymentMethod: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const { id, paidAt, dueDate, ...rest } = input;
       const updateData: Record<string, unknown> = { ...rest };
-      if (paidAt) updateData.paidAt = new Date(paidAt).toISOString().slice(0, 19).replace('T', ' ');
+      if (paidAt) updateData.paidDate = new Date(paidAt).toISOString().slice(0, 19).replace('T', ' ');
       if (dueDate) updateData.dueDate = new Date(dueDate).toISOString().slice(0, 19).replace('T', ' ');
       await db.update(clientPayments).set(updateData).where(eq(clientPayments.id, id));
       return { success: true };
@@ -359,38 +356,34 @@ export const clientPortalRouter = router({
   addPayment: protectedProcedure
     .input(z.object({
       clientId: z.number(),
-      referenceDate: z.string(),
+      referenceDate: z.string().optional(),
       description: z.string().optional(),
-      volumeM3: z.string().optional(),
-      pricePerM3: z.string().optional(),
-      grossAmount: z.string(),
-      deductions: z.string().optional(),
-      netAmount: z.string(),
-      status: z.enum(["pendente", "pago", "atrasado", "cancelado"]).default("pendente"),
+      grossAmount: z.string().optional(),
+      netAmount: z.string().optional(),
+      status: z.string().default("pending"),
       dueDate: z.string().optional(),
       paidAt: z.string().optional(),
-      pixKey: z.string().optional(),
       notes: z.string().optional(),
+      invoiceNumber: z.string().optional(),
+      paymentMethod: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      // O banco usa 'amount' (único campo de valor) e 'dueDate'/'paidDate'
+      const amount = input.netAmount || input.grossAmount || "0";
       await db.insert(clientPayments).values({
         clientId: input.clientId,
-        referenceDate: new Date(input.referenceDate).toISOString().slice(0, 19).replace('T', ' '),
+        amount,
         description: input.description,
-        volumeM3: input.volumeM3,
-        pricePerM3: input.pricePerM3,
-        grossAmount: input.grossAmount,
-        deductions: input.deductions || "0",
-        netAmount: input.netAmount,
         status: input.status,
         dueDate: input.dueDate ? new Date(input.dueDate).toISOString().slice(0, 19).replace('T', ' ') : undefined,
-        paidAt: input.paidAt ? new Date(input.paidAt).toISOString().slice(0, 19).replace('T', ' ') : undefined,
-        pixKey: input.pixKey,
+        paidDate: input.paidAt ? new Date(input.paidAt).toISOString().slice(0, 19).replace('T', ' ') : undefined,
         notes: input.notes,
-        registeredBy: ctx.user.id,
+        invoiceNumber: input.invoiceNumber,
+        paymentMethod: input.paymentMethod,
+        createdBy: ctx.user.id,
       });
 
       return { success: true };

@@ -520,22 +520,23 @@ var init_schema = __esm({
     });
     clientPayments = mysqlTable("client_payments", {
       id: int().autoincrement().notNull(),
-      clientId: int("client_id").notNull().references(() => clients.id),
-      referenceDate: timestamp("reference_date", { mode: "string" }).notNull(),
-      description: varchar({ length: 500 }),
-      volumeM3: varchar("volume_m3", { length: 20 }),
-      pricePerM3: varchar("price_per_m3", { length: 20 }),
-      grossAmount: varchar("gross_amount", { length: 20 }).notNull(),
-      deductions: varchar({ length: 20 }).default("0"),
-      netAmount: varchar("net_amount", { length: 20 }).notNull(),
-      status: mysqlEnum(["pendente", "pago", "atrasado", "cancelado"]).default("pendente").notNull(),
-      dueDate: timestamp("due_date", { mode: "string" }),
-      paidAt: timestamp("paid_at", { mode: "string" }),
-      pixKey: varchar("pix_key", { length: 255 }),
+      // Banco de produção usa camelCase sem underscore
+      clientId: int("clientId").notNull().references(() => clients.id),
+      amount: varchar("amount", { length: 20 }),
+      dueDate: timestamp("dueDate", { mode: "string" }),
+      paidDate: timestamp("paidDate", { mode: "string" }),
+      status: varchar("status", { length: 50 }).default("pending").notNull(),
+      description: text(),
+      referenceMonth: varchar("referenceMonth", { length: 7 }),
+      loadId: int("loadId"),
       notes: text(),
-      registeredBy: int("registered_by").references(() => users.id),
-      createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
-      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+      createdAt: timestamp("createdAt", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
+      updatedAt: timestamp("updatedAt", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
+      createdBy: int("createdBy"),
+      invoiceNumber: varchar("invoiceNumber", { length: 100 }),
+      paymentMethod: varchar("paymentMethod", { length: 100 }),
+      bankDetails: text(),
+      attachmentUrl: text()
     });
     clientPortalAccess = mysqlTable(
       "client_portal_access",
@@ -5707,41 +5708,38 @@ var clientPortalRouter = router({
     const records = await db.select({
       id: clientPayments.id,
       clientId: clientPayments.clientId,
-      referenceDate: clientPayments.referenceDate,
-      description: clientPayments.description,
-      volumeM3: clientPayments.volumeM3,
-      pricePerM3: clientPayments.pricePerM3,
-      grossAmount: clientPayments.grossAmount,
-      deductions: clientPayments.deductions,
-      netAmount: clientPayments.netAmount,
-      status: clientPayments.status,
       dueDate: clientPayments.dueDate,
-      paidAt: clientPayments.paidAt,
-      pixKey: clientPayments.pixKey,
+      paidDate: clientPayments.paidDate,
+      description: clientPayments.description,
+      amount: clientPayments.amount,
+      status: clientPayments.status,
+      referenceMonth: clientPayments.referenceMonth,
+      loadId: clientPayments.loadId,
       notes: clientPayments.notes,
-      registeredBy: clientPayments.registeredBy,
+      invoiceNumber: clientPayments.invoiceNumber,
+      paymentMethod: clientPayments.paymentMethod,
       createdAt: clientPayments.createdAt,
       clientName: clients.name
-    }).from(clientPayments).leftJoin(clients, eq11(clientPayments.clientId, clients.id)).orderBy(desc8(clientPayments.referenceDate));
+    }).from(clientPayments).leftJoin(clients, eq11(clientPayments.clientId, clients.id)).orderBy(desc8(clientPayments.dueDate));
     return records;
   }),
   // ── ATUALIZAR PAGAMENTO (admin) ──
   updatePayment: protectedProcedure.input(z11.object({
     id: z11.number(),
-    status: z11.enum(["pendente", "pago", "atrasado", "cancelado"]).optional(),
+    status: z11.string().optional(),
     paidAt: z11.string().optional(),
     notes: z11.string().optional(),
     description: z11.string().optional(),
-    grossAmount: z11.string().optional(),
-    netAmount: z11.string().optional(),
-    deductions: z11.string().optional(),
-    dueDate: z11.string().optional()
+    amount: z11.string().optional(),
+    dueDate: z11.string().optional(),
+    invoiceNumber: z11.string().optional(),
+    paymentMethod: z11.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const { id, paidAt, dueDate, ...rest } = input;
     const updateData = { ...rest };
-    if (paidAt) updateData.paidAt = new Date(paidAt).toISOString().slice(0, 19).replace("T", " ");
+    if (paidAt) updateData.paidDate = new Date(paidAt).toISOString().slice(0, 19).replace("T", " ");
     if (dueDate) updateData.dueDate = new Date(dueDate).toISOString().slice(0, 19).replace("T", " ");
     await db.update(clientPayments).set(updateData).where(eq11(clientPayments.id, id));
     return { success: true };
@@ -5798,36 +5796,31 @@ var clientPortalRouter = router({
   // ── REGISTRAR PAGAMENTO (admin) ──
   addPayment: protectedProcedure.input(z11.object({
     clientId: z11.number(),
-    referenceDate: z11.string(),
+    referenceDate: z11.string().optional(),
     description: z11.string().optional(),
-    volumeM3: z11.string().optional(),
-    pricePerM3: z11.string().optional(),
-    grossAmount: z11.string(),
-    deductions: z11.string().optional(),
-    netAmount: z11.string(),
-    status: z11.enum(["pendente", "pago", "atrasado", "cancelado"]).default("pendente"),
+    grossAmount: z11.string().optional(),
+    netAmount: z11.string().optional(),
+    status: z11.string().default("pending"),
     dueDate: z11.string().optional(),
     paidAt: z11.string().optional(),
-    pixKey: z11.string().optional(),
-    notes: z11.string().optional()
+    notes: z11.string().optional(),
+    invoiceNumber: z11.string().optional(),
+    paymentMethod: z11.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    const amount = input.netAmount || input.grossAmount || "0";
     await db.insert(clientPayments).values({
       clientId: input.clientId,
-      referenceDate: new Date(input.referenceDate).toISOString().slice(0, 19).replace("T", " "),
+      amount,
       description: input.description,
-      volumeM3: input.volumeM3,
-      pricePerM3: input.pricePerM3,
-      grossAmount: input.grossAmount,
-      deductions: input.deductions || "0",
-      netAmount: input.netAmount,
       status: input.status,
       dueDate: input.dueDate ? new Date(input.dueDate).toISOString().slice(0, 19).replace("T", " ") : void 0,
-      paidAt: input.paidAt ? new Date(input.paidAt).toISOString().slice(0, 19).replace("T", " ") : void 0,
-      pixKey: input.pixKey,
+      paidDate: input.paidAt ? new Date(input.paidAt).toISOString().slice(0, 19).replace("T", " ") : void 0,
       notes: input.notes,
-      registeredBy: ctx.user.id
+      invoiceNumber: input.invoiceNumber,
+      paymentMethod: input.paymentMethod,
+      createdBy: ctx.user.id
     });
     return { success: true };
   })
@@ -8977,13 +8970,12 @@ var reportsRouter = router({
       id: clientPayments.id,
       clientId: clientPayments.clientId,
       clientName: clients.name,
-      grossAmount: clientPayments.grossAmount,
-      netAmount: clientPayments.netAmount,
+      amount: clientPayments.amount,
       status: clientPayments.status,
-      referenceDate: clientPayments.referenceDate
+      dueDate: clientPayments.dueDate
     }).from(clientPayments).leftJoin(clients, eq22(clientPayments.clientId, clients.id)).where(and13(
-      gte6(clientPayments.referenceDate, dateFrom),
-      lte6(clientPayments.referenceDate, dateTo)
+      gte6(clientPayments.dueDate, dateFrom),
+      lte6(clientPayments.dueDate, dateTo)
     ));
     const allBuyerPayments = await db.select({
       amount: buyerPayments.amount,
@@ -9025,7 +9017,7 @@ var reportsRouter = router({
     const totalCorteTerceirizadoGlobal = corteTerceirizadoCargos.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
     const freteTercCargos = thirdPartyIds.length > 0 ? allCargos.filter((c) => c.vehicleId && thirdPartyIds.includes(c.vehicleId)) : [];
     const totalFreteTerceirizadoGlobal = freteTercCargos.reduce((s, c) => s + calcFreightCost(c), 0);
-    const totalPagamentoClientesGlobal = clientPaymentsData.reduce((s, r) => s + parseFloat(r.netAmount || "0"), 0);
+    const totalPagamentoClientesGlobal = clientPaymentsData.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
     const totalReceitaEstimadaGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
     const buyerPaymentsTotal = allBuyerPayments.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
     const finReceitasManualTotal = allFinReceitas.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
@@ -9075,7 +9067,7 @@ var reportsRouter = router({
       const totalLocCorte = locCorte.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
       const locFreteTer = thirdPartyIds.length > 0 ? locCargos.filter((c) => c.vehicleId && thirdPartyIds.includes(c.vehicleId)) : [];
       const totalLocFrete = locFreteTer.reduce((s, c) => s + calcFreightCost(c), 0);
-      const totalLocClientPayments = locClientPayments.reduce((s, r) => s + parseFloat(r.netAmount || "0"), 0);
+      const totalLocClientPayments = locClientPayments.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
       const totalLocReceitaEstimada = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
       const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete + totalVehicleMaintLoc + totalLocClientPayments;
       const dailyMap = /* @__PURE__ */ new Map();

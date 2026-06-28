@@ -1,4 +1,4 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, foreignKey, int, bigint, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, foreignKey, int, bigint, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime, decimal } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const attendanceRecords = mysqlTable("attendance_records", {
@@ -266,22 +266,23 @@ export const clientPaymentReceipts = mysqlTable("client_payment_receipts", {
 
 export const clientPayments = mysqlTable("client_payments", {
 	id: int().autoincrement().notNull(),
-	clientId: int("client_id").notNull().references(() => clients.id),
-	referenceDate: timestamp("reference_date", { mode: 'string' }).notNull(),
-	description: varchar({ length: 500 }),
-	volumeM3: varchar("volume_m3", { length: 20 }),
-	pricePerM3: varchar("price_per_m3", { length: 20 }),
-	grossAmount: varchar("gross_amount", { length: 20 }).notNull(),
-	deductions: varchar({ length: 20 }).default('0'),
-	netAmount: varchar("net_amount", { length: 20 }).notNull(),
-	status: mysqlEnum(['pendente','pago','atrasado','cancelado']).default('pendente').notNull(),
-	dueDate: timestamp("due_date", { mode: 'string' }),
-	paidAt: timestamp("paid_at", { mode: 'string' }),
-	pixKey: varchar("pix_key", { length: 255 }),
+	// Banco de produção usa camelCase sem underscore
+	clientId: int("clientId").notNull().references(() => clients.id),
+	amount: varchar("amount", { length: 20 }),
+	dueDate: timestamp("dueDate", { mode: 'string' }),
+	paidDate: timestamp("paidDate", { mode: 'string' }),
+	status: varchar("status", { length: 50 }).default('pending').notNull(),
+	description: text(),
+	referenceMonth: varchar("referenceMonth", { length: 7 }),
+	loadId: int("loadId"),
 	notes: text(),
-	registeredBy: int("registered_by").references(() => users.id),
-	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	createdAt: timestamp("createdAt", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updatedAt", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	createdBy: int("createdBy"),
+	invoiceNumber: varchar("invoiceNumber", { length: 100 }),
+	paymentMethod: varchar("paymentMethod", { length: 100 }),
+	bankDetails: text(),
+	attachmentUrl: text(),
 });
 
 export const clientPortalAccess = mysqlTable("client_portal_access", {
