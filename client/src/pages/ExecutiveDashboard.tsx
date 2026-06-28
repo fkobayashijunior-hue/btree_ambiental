@@ -18,11 +18,14 @@ import {
   MapPin,
   Download,
   TreePine,
-  Droplets,
   Wrench,
   AlertCircle,
   TrendingDown,
   Package,
+  Scissors,
+  CreditCard,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 // ── Helpers de data ──────────────────────────────────────────────────────────
@@ -30,7 +33,8 @@ function getWeekRange(date: Date) {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day;
-  const start = new Date(d.setDate(diff));
+  const start = new Date(d);
+  start.setDate(diff);
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
   return {
@@ -63,29 +67,35 @@ function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function formatDate(dateStr: string) {
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("pt-BR");
+}
+
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function ExecutiveDashboard() {
-  const [periodType, setPeriodType] = useState<"dia" | "semana" | "mes">("semana");
+  const [periodType, setPeriodType] = useState<"dia" | "semana" | "mes" | "custom">("dia");
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [customFrom, setCustomFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [customTo, setCustomTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
-  const [includeMaoDeObra, setIncludeMaoDeObra] = useState(true);
-  const [includeConsumo, setIncludeConsumo] = useState(true);
-  const [includeCargas, setIncludeCargas] = useState(true);
+  const [showEstimated, setShowEstimated] = useState(true);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [expandedLocation, setExpandedLocation] = useState<number | null>(null);
 
   const generatePdfMutation = trpc.reportPdf.generatePdfHtml.useMutation({
     onSuccess: async (data) => {
-      await generatePDFFromHtml(data.html, `relatorio-executivo-${new Date().toISOString().slice(0,10)}.pdf`);
+      await generatePDFFromHtml(data.html, `relatorio-executivo-${new Date().toISOString().slice(0, 10)}.pdf`);
       setIsGeneratingPdf(false);
     },
     onError: () => setIsGeneratingPdf(false),
   });
 
   const range = useMemo(() => {
+    if (periodType === "custom") return { from: customFrom, to: customTo, label: `${formatDate(customFrom)} — ${formatDate(customTo)}` };
     if (periodType === "dia") return getDayRange(currentDate);
     if (periodType === "semana") return getWeekRange(currentDate);
     return getMonthRange(currentDate);
-  }, [periodType, currentDate]);
+  }, [periodType, currentDate, customFrom, customTo]);
 
   const navigate = (dir: -1 | 1) => {
     const d = new Date(currentDate);
@@ -113,32 +123,81 @@ export default function ExecutiveDashboard() {
   });
 
   const data = dashboardQuery.data;
-  const locations = data?.locations || [];
-  const totals = data?.totals;
+  const allLocations = data?.locations || [];
 
-  // ── Dados para gráfico simples (barras CSS) ──
-  const maxCusto = Math.max(...(locations.map(l => l.custoTotal) || [1]), 1);
+  // Filtrar por local selecionado
+  const locations = selectedLocationId === "all"
+    ? allLocations
+    : allLocations.filter(l => String(l.locationId) === selectedLocationId);
+
+  const totals = useMemo(() => {
+    if (selectedLocationId === "all") return data?.totals;
+    if (!data?.totals) return undefined;
+    // Recalcular totais para o local selecionado
+    const locs = allLocations.filter(l => String(l.locationId) === selectedLocationId);
+    if (locs.length === 0) return data.totals;
+    const loc = locs[0] as any;
+    return {
+      ...data.totals,
+      custoTotal: loc.custoTotal,
+      totalMaoDeObra: loc.maoDeObra.total,
+      totalCombustivel: loc.combustivel.total,
+      totalDespesas: loc.despesasExtras.total,
+      totalManutencao: loc.manutencao?.total ?? 0,
+      totalCorteTerceirizado: loc.corteTerceirizado?.total ?? 0,
+      totalFreteTerceirizado: loc.freteTerceirizado?.total ?? 0,
+      totalPagamentoClientes: loc.pagamentoClientes?.total ?? 0,
+      totalCargas: loc.cargas.total,
+      totalVolumeM3: loc.cargas.volumeM3,
+      totalReceita: loc.receita ?? 0,
+      totalReceitaEstimada: loc.receitaEstimada ?? 0,
+      lucroTotal: (loc.receita ?? 0) - loc.custoTotal,
+      lucroEstimado: (loc.receitaEstimada ?? 0) - loc.custoTotal,
+      dailyBreakdown: loc.dailyBreakdown ?? [],
+    };
+  }, [data, selectedLocationId, allLocations]);
+
+  const receitaExibida = showEstimated
+    ? (totals?.totalReceitaEstimada ?? 0)
+    : (totals?.totalReceita ?? 0);
+  const lucroExibido = receitaExibida - (totals?.custoTotal ?? 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-white" />
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-gray-900">Dashboard Executivo</h1>
+                  <p className="text-xs text-gray-500">Análise financeira por local de trabalho</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">Dashboard Executivo</h1>
-                <p className="text-xs text-gray-500">Visão geral por local de trabalho</p>
-              </div>
+
+              {/* Toggle receita estimada / real */}
+              <button
+                onClick={() => setShowEstimated(!showEstimated)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                  showEstimated
+                    ? "bg-green-50 border-green-300 text-green-700"
+                    : "bg-gray-50 border-gray-300 text-gray-600"
+                }`}
+              >
+                {showEstimated ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                {showEstimated ? "Receita Estimada" : "Receita Real"}
+              </button>
             </div>
 
             {/* Controles de período */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Tipo de período */}
               <div className="flex bg-gray-100 rounded-lg p-0.5">
-                {(["dia", "semana", "mes"] as const).map((p) => (
+                {(["dia", "semana", "mes", "custom"] as const).map((p) => (
                   <button
                     key={p}
                     onClick={() => setPeriodType(p)}
@@ -148,28 +207,64 @@ export default function ExecutiveDashboard() {
                         : "text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    {p === "dia" ? "Dia" : p === "semana" ? "Semana" : "Mês"}
+                    {p === "dia" ? "Dia" : p === "semana" ? "Semana" : p === "mes" ? "Mês" : "Período"}
                   </button>
                 ))}
               </div>
 
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(-1)}>
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <span className="text-sm font-medium text-gray-700 min-w-[140px] text-center" translate="no" suppressHydrationWarning>
-                  <span key={range.label}>{range.label.charAt(0).toUpperCase() + range.label.slice(1)}</span>
-                </span>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(1)}>
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
+              {/* Navegação ou inputs de data */}
+              {periodType === "custom" ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={e => setCustomFrom(e.target.value)}
+                    className="text-xs border rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <span className="text-xs text-gray-400">até</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    min={customFrom}
+                    onChange={e => setCustomTo(e.target.value)}
+                    className="text-xs border rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(-1)}>
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm font-medium text-gray-700 min-w-[160px] text-center" translate="no">
+                    {range.label.charAt(0).toUpperCase() + range.label.slice(1)}
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(1)}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Filtro por local */}
+              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                <SelectTrigger className="h-8 text-xs w-[180px]">
+                  <MapPin className="w-3.5 h-3.5 mr-1 text-green-600" />
+                  <SelectValue placeholder="Todos os locais" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os locais</SelectItem>
+                  {(locationsQuery.data || []).map((loc) => (
+                    <SelectItem key={loc.id} value={String(loc.id)}>
+                      {loc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6" key={`${range.from}-${range.to}`}>
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Loading */}
         {dashboardQuery.isLoading && (
           <div className="flex items-center justify-center py-20">
@@ -187,111 +282,84 @@ export default function ExecutiveDashboard() {
 
         {totals && (
           <>
-            {/* Cards de resumo geral */}
+            {/* ── Cards KPI principais ── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <SummaryCard
+              <KpiCard
                 icon={<TrendingUp className="w-5 h-5" />}
-                label="Receita Total"
-                value={formatCurrency(totals.totalReceita ?? 0)}
+                label={showEstimated ? "Receita Estimada" : "Receita Real"}
+                value={formatCurrency(receitaExibida)}
+                sub={showEstimated ? "baseada nas cargas" : "pagamentos recebidos"}
                 color="green"
               />
-              <SummaryCard
-                icon={(totals.lucroTotal ?? 0) >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                label={(totals.lucroTotal ?? 0) >= 0 ? "Lucro" : "Prejuízo"}
-                value={formatCurrency(Math.abs(totals.lucroTotal ?? 0))}
-                color={(totals.lucroTotal ?? 0) >= 0 ? "green" : "red"}
+              <KpiCard
+                icon={lucroExibido >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                label={lucroExibido >= 0 ? "Lucro" : "Prejuízo"}
+                value={formatCurrency(Math.abs(lucroExibido))}
+                sub={showEstimated ? "estimado" : "realizado"}
+                color={lucroExibido >= 0 ? "green" : "red"}
               />
-              <SummaryCard
+              <KpiCard
                 icon={<DollarSign className="w-5 h-5" />}
                 label="Custo Total"
                 value={formatCurrency(totals.custoTotal)}
+                sub="todos os custos"
                 color="red"
               />
-              <SummaryCard
+              <KpiCard
                 icon={<Truck className="w-5 h-5" />}
                 label="Cargas"
-                value={`${totals.totalCargas} (${totals.totalVolumeM3.toFixed(1)} m³)`}
+                value={`${totals.totalCargas}`}
+                sub={`${totals.totalVolumeM3.toFixed(1)} m³`}
                 color="amber"
               />
             </div>
 
-            {/* Cards de custo detalhado */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <SummaryCard
-                icon={<Users className="w-5 h-5" />}
-                label="Mão de Obra"
-                value={formatCurrency(totals.totalMaoDeObra)}
-                color="blue"
-              />
-              <SummaryCard
-                icon={<Fuel className="w-5 h-5" />}
-                label="Combustível"
-                value={formatCurrency(totals.totalCombustivel)}
-                color="amber"
-              />
-              <SummaryCard
-                icon={<Wrench className="w-5 h-5" />}
-                label="Manutenção"
-                value={formatCurrency(totals.totalManutencao ?? 0)}
-                color="purple"
-              />
-              <SummaryCard
-                icon={<TreePine className="w-5 h-5" />}
-                label="Corte Terc."
-                value={formatCurrency((totals as any).totalCorteTerceirizado ?? 0)}
-                color="amber"
-              />
-              <SummaryCard
-                icon={<Package className="w-5 h-5" />}
-                label="Frete Terc."
-                value={formatCurrency(totals.totalFreteTerceirizado ?? 0)}
-                color="red"
-              />
-              <SummaryCard
-                icon={<DollarSign className="w-5 h-5" />}
-                label="Despesas Extras"
-                value={formatCurrency(totals.totalDespesas)}
-                color="purple"
-              />
+            {/* ── Cards de custo detalhado ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <MiniCostCard icon={<Users className="w-4 h-4" />} label="Mão de Obra" value={totals.totalMaoDeObra} color="blue" />
+              <MiniCostCard icon={<Fuel className="w-4 h-4" />} label="Combustível" value={totals.totalCombustivel} color="amber" />
+              <MiniCostCard icon={<Scissors className="w-4 h-4" />} label="Corte Terc." value={(totals as any).totalCorteTerceirizado ?? 0} color="orange" />
+              <MiniCostCard icon={<Package className="w-4 h-4" />} label="Frete Terc." value={totals.totalFreteTerceirizado ?? 0} color="red" />
+              <MiniCostCard icon={<CreditCard className="w-4 h-4" />} label="Pag. Clientes" value={(totals as any).totalPagamentoClientes ?? 0} color="purple" />
+              <MiniCostCard icon={<Wrench className="w-4 h-4" />} label="Manutenção" value={totals.totalManutencao ?? 0} color="gray" />
             </div>
 
-            {/* ── Gráficos Pizza ── */}
+            {/* ── Gráficos ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Pizza: Distribuição de Custos */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-green-600" />
                     Distribuição de Custos
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {totals && (
-                    <PieChart
-                      slices={[
-                        { label: "Mão de Obra", value: totals.totalMaoDeObra, color: "#3b82f6" },
-                        { label: "Combustível", value: totals.totalCombustivel, color: "#f59e0b" },
-                        { label: "Manutenção", value: totals.totalManutencao ?? 0, color: "#a855f7" },
-                        { label: "Corte Terc.", value: (totals as any).totalCorteTerceirizado ?? 0, color: "#92400e" },
-                        { label: "Frete Terc.", value: totals.totalFreteTerceirizado ?? 0, color: "#ef4444" },
-                        { label: "Despesas Extras", value: totals.totalDespesas, color: "#6366f1" },
-                      ]}
-                    />
-                  )}
+                  <PieChart
+                    slices={[
+                      { label: "Mão de Obra", value: totals.totalMaoDeObra, color: "#3b82f6" },
+                      { label: "Combustível", value: totals.totalCombustivel, color: "#f59e0b" },
+                      { label: "Corte Terc.", value: (totals as any).totalCorteTerceirizado ?? 0, color: "#ea580c" },
+                      { label: "Frete Terc.", value: totals.totalFreteTerceirizado ?? 0, color: "#ef4444" },
+                      { label: "Pag. Clientes", value: (totals as any).totalPagamentoClientes ?? 0, color: "#8b5cf6" },
+                      { label: "Manutenção", value: totals.totalManutencao ?? 0, color: "#a855f7" },
+                      { label: "Despesas Extras", value: totals.totalDespesas, color: "#6366f1" },
+                    ]}
+                  />
                 </CardContent>
               </Card>
 
-              {/* Pizza: Custo por Local de Trabalho */}
+              {/* Pizza: Custo por Local */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-green-600" />
                     Custo por Local
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <PieChart
-                    slices={locations
+                    slices={allLocations
                       .filter(l => l.custoTotal > 0)
                       .map((loc, i) => ({
                         label: loc.locationName,
@@ -303,126 +371,137 @@ export default function ExecutiveDashboard() {
               </Card>
             </div>
 
-            {/* Gráfico de barras por local */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-green-600" />
-                  Custo por Local de Trabalho
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {locations.length === 0 ? (
-                  <p className="text-sm text-gray-500 py-4 text-center">
-                    Nenhum local com dados no período selecionado.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {locations
-                      .sort((a, b) => b.custoTotal - a.custoTotal)
-                      .map((loc) => (
-                        <div key={loc.locationId} className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium text-gray-800 truncate max-w-[200px]">
-                              {loc.locationName}
-                            </span>
-                            <span className="font-semibold text-gray-900">
-                              {formatCurrency(loc.custoTotal)}
-                            </span>
-                          </div>
-                          <div className="h-6 bg-gray-100 rounded-full overflow-hidden flex">
-                            {/* Mão de obra */}
-                            <div
-                              className="h-full bg-blue-500 transition-all duration-500"
-                              style={{ width: `${(loc.maoDeObra.total / maxCusto) * 100}%` }}
-                              title={`Mão de obra: ${formatCurrency(loc.maoDeObra.total)}`}
-                            />
-                            {/* Combustível */}
-                            <div
-                              className="h-full bg-amber-500 transition-all duration-500"
-                              style={{ width: `${(loc.combustivel.total / maxCusto) * 100}%` }}
-                              title={`Combustível: ${formatCurrency(loc.combustivel.total)}`}
-                            />
-                            {/* Despesas */}
-                            <div
-                              className="h-full bg-purple-500 transition-all duration-500"
-                              style={{ width: `${(loc.despesasExtras.total / maxCusto) * 100}%` }}
-                              title={`Despesas: ${formatCurrency(loc.despesasExtras.total)}`}
-                            />
-                          </div>
-                          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                            <span className="flex items-center gap-1">
-                              <span className="w-2 h-2 rounded-full bg-blue-500" />
-                              MO: {formatCurrency(loc.maoDeObra.total)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <span className="w-2 h-2 rounded-full bg-amber-500" />
-                              Comb: {formatCurrency(loc.combustivel.total)}
-                            </span>
-                            {(loc as any).manutencao?.total > 0 && (
-                              <span className="flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-purple-500" />
-                                Manut: {formatCurrency((loc as any).manutencao.total)}
-                              </span>
-                            )}
-                            {(loc as any).freteTerceirizado?.total > 0 && (
-                              <span className="flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-red-500" />
-                                Frete: {formatCurrency((loc as any).freteTerceirizado.total)}
-                              </span>
-                            )}
-                            {loc.cargas.total > 0 && (
-                              <span className="flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-green-500" />
-                                {loc.cargas.total} cargas
-                              </span>
-                            )}
-                            {(loc as any).receita > 0 && (
-                              <span className="flex items-center gap-1 font-semibold text-green-600">
-                                Rec: {formatCurrency((loc as any).receita)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-
-                    {/* Sem local atribuído */}
-                    {data?.unassigned && data.unassigned.maoDeObra.dias > 0 && (
-                      <div className="border-t pt-3 mt-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium text-gray-500 italic">Sem local atribuído</span>
-                          <span className="font-semibold text-gray-600">
-                            {formatCurrency(data.unassigned.maoDeObra.total)}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          {data.unassigned.maoDeObra.dias} dia(s) de mão de obra sem local definido
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Legenda */}
-                <div className="flex flex-wrap gap-4 mt-4 pt-3 border-t text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500" /> Mão de Obra</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-500" /> Combustível</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-500" /> Manutenção</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500" /> Frete Terc.</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-indigo-500" /> Despesas Extras</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Tabela detalhada por local */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <TreePine className="w-4 h-4 text-green-600" />
-                    Detalhamento por Local
+            {/* ── Gráfico de barras: Receita vs Custo por local ── */}
+            {allLocations.length > 0 && (
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-green-600" />
+                    Receita vs Custo por Local
                   </CardTitle>
-                </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {allLocations.filter(l => l.custoTotal > 0 || (l as any).receitaEstimada > 0).map((loc, i) => {
+                      const locAny = loc as any;
+                      const receita = showEstimated ? (locAny.receitaEstimada ?? 0) : (locAny.receita ?? 0);
+                      const maxVal = Math.max(loc.custoTotal, receita, 1);
+                      const lucro = receita - loc.custoTotal;
+                      return (
+                        <div key={loc.locationId}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-semibold text-gray-800">{loc.locationName}</span>
+                            <span className={`text-xs font-bold ${lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {lucro >= 0 ? '+' : ''}{formatCurrency(lucro)}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-green-600 w-20 text-right">{formatCurrency(receita)}</span>
+                              <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-green-500 rounded-full transition-all duration-500"
+                                  style={{ width: `${(receita / maxVal) * 100}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-400 w-14">Receita</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-red-600 w-20 text-right">{formatCurrency(loc.custoTotal)}</span>
+                              <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-red-500 rounded-full transition-all duration-500"
+                                  style={{ width: `${(loc.custoTotal / maxVal) * 100}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-400 w-14">Custo</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Análise Diária ── */}
+            {(() => {
+              const days = (totals as any)?.dailyBreakdown ?? [];
+              if (days.length === 0) return null;
+              return (
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-indigo-600" />
+                      Análise Diária de Cargas e Receita
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto -mx-6">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-indigo-50">
+                            <th className="text-left px-4 py-2 text-indigo-700 font-medium">Data</th>
+                            <th className="text-right px-4 py-2 text-indigo-700 font-medium">Cargas</th>
+                            <th className="text-right px-4 py-2 text-indigo-700 font-medium">Volume (m³)</th>
+                            <th className="text-right px-4 py-2 text-indigo-700 font-medium">
+                              {showEstimated ? "Receita Estimada" : "Receita Real"}
+                            </th>
+                            <th className="text-center px-4 py-2 text-indigo-700 font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {days.map((d: any) => (
+                            <tr key={d.date} className="border-b hover:bg-gray-50">
+                              <td className="px-4 py-2 font-medium">{formatDate(d.date)}</td>
+                              <td className="px-4 py-2 text-right font-bold">{d.cargas}</td>
+                              <td className="px-4 py-2 text-right">{(d.volumeM3 ?? 0).toFixed(2)}</td>
+                              <td className="px-4 py-2 text-right font-semibold text-green-700">
+                                {showEstimated
+                                  ? (d.receitaEstimada > 0 ? formatCurrency(d.receitaEstimada) : <span className="text-gray-400">—</span>)
+                                  : (d.receitaReal > 0 ? formatCurrency(d.receitaReal) : <span className="text-gray-400">—</span>)
+                                }
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  d.cargas >= 2 ? 'bg-green-100 text-green-700' :
+                                  d.cargas === 1 ? 'bg-amber-100 text-amber-700' :
+                                  'bg-gray-100 text-gray-500'
+                                }`}>
+                                  {d.cargas >= 2 ? `${d.cargas} cargas` : d.cargas === 1 ? '1 carga' : 'sem carga'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-indigo-50 font-bold">
+                            <td className="px-4 py-2 text-indigo-800">Total</td>
+                            <td className="px-4 py-2 text-right text-indigo-800">{days.reduce((s: number, d: any) => s + d.cargas, 0)}</td>
+                            <td className="px-4 py-2 text-right text-indigo-800">{days.reduce((s: number, d: any) => s + (d.volumeM3 ?? 0), 0).toFixed(2)}</td>
+                            <td className="px-4 py-2 text-right text-green-800">
+                              {formatCurrency(days.reduce((s: number, d: any) => s + (showEstimated ? (d.receitaEstimada ?? 0) : (d.receitaReal ?? 0)), 0))}
+                            </td>
+                            <td className="px-4 py-2 text-center text-xs text-indigo-600">
+                              {days.filter((d: any) => d.cargas >= 2).length} dias c/ 2+ cargas
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* ── Tabela detalhada por local ── */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <TreePine className="w-4 h-4 text-green-600" />
+                  Detalhamento por Local
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto -mx-6">
@@ -432,83 +511,132 @@ export default function ExecutiveDashboard() {
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Local</th>
                         <th className="text-right px-3 py-2 font-medium text-gray-600">MO</th>
                         <th className="text-right px-3 py-2 font-medium text-gray-600">Comb.</th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-600">Manut.</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Corte T.</th>
                         <th className="text-right px-3 py-2 font-medium text-gray-600">Frete T.</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Pag. Cli.</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Manut.</th>
                         <th className="text-right px-3 py-2 font-medium text-gray-600">Extras</th>
                         <th className="text-right px-3 py-2 font-medium text-gray-600">Cargas</th>
                         <th className="text-right px-3 py-2 font-medium text-red-700">Custo</th>
                         <th className="text-right px-3 py-2 font-medium text-green-700">Receita</th>
                         <th className="text-right px-3 py-2 font-medium text-blue-700">Lucro</th>
+                        <th className="px-3 py-2"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {locations
-                        .sort((a, b) => b.custoTotal - a.custoTotal)
-                        .map((loc) => {
-                          const locAny = loc as any;
-                          const lucro = (locAny.lucro ?? 0);
-                          return (
-                          <tr key={loc.locationId} className="border-b hover:bg-gray-50 transition-colors">
-                            <td className="px-3 py-2 font-medium text-gray-800">{loc.locationName}</td>
-                            <td className="px-3 py-2 text-right text-blue-600 font-medium text-xs">
-                              {formatCurrency(loc.maoDeObra.total)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-amber-600 font-medium text-xs">
-                              {formatCurrency(loc.combustivel.total)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-purple-600 font-medium text-xs">
-                              {formatCurrency(locAny.manutencao?.total ?? 0)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-red-500 font-medium text-xs">
-                              {formatCurrency(locAny.freteTerceirizado?.total ?? 0)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-indigo-600 font-medium text-xs">
-                              {formatCurrency(loc.despesasExtras.total)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-600 text-xs">
-                              {loc.cargas.total > 0 ? `${loc.cargas.total}` : "—"}
-                            </td>
-                            <td className="px-3 py-2 text-right font-bold text-red-700 text-xs">
-                              {formatCurrency(loc.custoTotal)}
-                            </td>
-                            <td className="px-3 py-2 text-right font-bold text-green-700 text-xs">
-                              {formatCurrency(locAny.receita ?? 0)}
-                            </td>
-                            <td className={`px-3 py-2 text-right font-bold text-xs ${lucro >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                              {lucro >= 0 ? '+' : ''}{formatCurrency(lucro)}
-                            </td>
-                          </tr>
-                        )})}
-                      {/* Totais */}
-                      <tr className="bg-gray-100 font-bold">
+                      {locations.sort((a, b) => b.custoTotal - a.custoTotal).map((loc) => {
+                        const locAny = loc as any;
+                        const receita = showEstimated ? (locAny.receitaEstimada ?? 0) : (locAny.receita ?? 0);
+                        const lucro = receita - loc.custoTotal;
+                        const isExpanded = expandedLocation === loc.locationId;
+                        return (
+                          <>
+                            <tr key={loc.locationId} className="border-b hover:bg-gray-50 transition-colors">
+                              <td className="px-3 py-2 font-semibold text-gray-800">{loc.locationName}</td>
+                              <td className="px-3 py-2 text-right text-blue-600 text-xs">{formatCurrency(loc.maoDeObra.total)}</td>
+                              <td className="px-3 py-2 text-right text-amber-600 text-xs">{formatCurrency(loc.combustivel.total)}</td>
+                              <td className="px-3 py-2 text-right text-orange-600 text-xs">{formatCurrency(locAny.corteTerceirizado?.total ?? 0)}</td>
+                              <td className="px-3 py-2 text-right text-red-500 text-xs">{formatCurrency(locAny.freteTerceirizado?.total ?? 0)}</td>
+                              <td className="px-3 py-2 text-right text-purple-600 text-xs">{formatCurrency(locAny.pagamentoClientes?.total ?? 0)}</td>
+                              <td className="px-3 py-2 text-right text-gray-500 text-xs">{formatCurrency(locAny.manutencao?.total ?? 0)}</td>
+                              <td className="px-3 py-2 text-right text-indigo-600 text-xs">{formatCurrency(loc.despesasExtras.total)}</td>
+                              <td className="px-3 py-2 text-right text-gray-600 text-xs">{loc.cargas.total > 0 ? loc.cargas.total : "—"}</td>
+                              <td className="px-3 py-2 text-right font-bold text-red-700 text-xs">{formatCurrency(loc.custoTotal)}</td>
+                              <td className="px-3 py-2 text-right font-bold text-green-700 text-xs">{formatCurrency(receita)}</td>
+                              <td className={`px-3 py-2 text-right font-bold text-xs ${lucro >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                {lucro >= 0 ? '+' : ''}{formatCurrency(lucro)}
+                              </td>
+                              <td className="px-3 py-2">
+                                {locAny.cargasDetalhadas?.length > 0 && (
+                                  <button
+                                    onClick={() => setExpandedLocation(isExpanded ? null : loc.locationId)}
+                                    className="text-xs text-green-600 hover:text-green-800 font-medium"
+                                  >
+                                    {isExpanded ? "▲ Fechar" : "▼ Cargas"}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                            {isExpanded && locAny.cargasDetalhadas?.length > 0 && (
+                              <tr key={`${loc.locationId}-detail`}>
+                                <td colSpan={13} className="bg-green-50 px-4 py-3">
+                                  <p className="text-xs font-semibold text-green-800 mb-2">Cargas — {loc.locationName}</p>
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="border-b border-green-200">
+                                        <th className="text-left py-1 text-green-700">Data</th>
+                                        <th className="text-left py-1 text-green-700">Entrega</th>
+                                        <th className="text-left py-1 text-green-700">Placa</th>
+                                        <th className="text-left py-1 text-green-700">Motorista</th>
+                                        <th className="text-left py-1 text-green-700">Destino</th>
+                                        <th className="text-right py-1 text-green-700">Vol (m³)</th>
+                                        <th className="text-right py-1 text-green-700">Peso (kg)</th>
+                                        <th className="text-right py-1 text-orange-700">Corte</th>
+                                        <th className="text-right py-1 text-red-700">Frete</th>
+                                        <th className="text-right py-1 text-green-700">Receita Est.</th>
+                                        <th className="text-center py-1 text-green-700">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {locAny.cargasDetalhadas.map((c: any) => (
+                                        <tr key={c.id} className="border-b border-green-100">
+                                          <td className="py-1">{formatDate(c.date)}</td>
+                                          <td className="py-1">{c.deliveryDate ? formatDate(c.deliveryDate) : "—"}</td>
+                                          <td className="py-1 font-mono">{c.vehiclePlate || "—"}</td>
+                                          <td className="py-1">{c.driverName || "—"}</td>
+                                          <td className="py-1">{c.destination || "—"}</td>
+                                          <td className="py-1 text-right">{c.volumeM3.toFixed(2)}</td>
+                                          <td className="py-1 text-right">{c.weightNetKg > 0 ? c.weightNetKg.toLocaleString("pt-BR") : "—"}</td>
+                                          <td className="py-1 text-right text-orange-600">{c.custoCorteTerceirizado > 0 ? formatCurrency(c.custoCorteTerceirizado) : "—"}</td>
+                                          <td className="py-1 text-right text-red-600">{c.custoFreteTerceirizado > 0 ? formatCurrency(c.custoFreteTerceirizado) : "—"}</td>
+                                          <td className="py-1 text-right text-green-700 font-semibold">{c.receitaEstimada > 0 ? formatCurrency(c.receitaEstimada) : "—"}</td>
+                                          <td className="py-1 text-center">
+                                            <span className={`px-1.5 py-0.5 rounded text-xs ${
+                                              c.paymentStatus === 'pago' ? 'bg-green-100 text-green-700' :
+                                              c.paymentStatus === 'a_pagar' ? 'bg-amber-100 text-amber-700' :
+                                              'bg-gray-100 text-gray-500'
+                                            }`}>
+                                              {c.paymentStatus === 'pago' ? 'Pago' : c.paymentStatus === 'a_pagar' ? 'A pagar' : 'Sem boleto'}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="font-bold border-t border-green-200">
+                                        <td colSpan={5} className="py-1 text-green-800">Total</td>
+                                        <td className="py-1 text-right text-green-800">{locAny.cargasDetalhadas.reduce((s: number, c: any) => s + c.volumeM3, 0).toFixed(2)}</td>
+                                        <td className="py-1 text-right text-green-800">{locAny.cargasDetalhadas.reduce((s: number, c: any) => s + c.weightNetKg, 0).toLocaleString("pt-BR")}</td>
+                                        <td className="py-1 text-right text-orange-700">{formatCurrency(locAny.cargasDetalhadas.reduce((s: number, c: any) => s + c.custoCorteTerceirizado, 0))}</td>
+                                        <td className="py-1 text-right text-red-700">{formatCurrency(locAny.cargasDetalhadas.reduce((s: number, c: any) => s + c.custoFreteTerceirizado, 0))}</td>
+                                        <td className="py-1 text-right text-green-700">{formatCurrency(locAny.cargasDetalhadas.reduce((s: number, c: any) => s + c.receitaEstimada, 0))}</td>
+                                        <td></td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })}
+                      {/* Linha de totais */}
+                      <tr className="bg-gray-100 font-bold border-t-2">
                         <td className="px-3 py-2 text-gray-800">TOTAL</td>
-                        <td className="px-3 py-2 text-right text-blue-700 text-xs">
-                          {formatCurrency(totals.totalMaoDeObra)}
+                        <td className="px-3 py-2 text-right text-blue-700 text-xs">{formatCurrency(totals.totalMaoDeObra)}</td>
+                        <td className="px-3 py-2 text-right text-amber-700 text-xs">{formatCurrency(totals.totalCombustivel)}</td>
+                        <td className="px-3 py-2 text-right text-orange-700 text-xs">{formatCurrency((totals as any).totalCorteTerceirizado ?? 0)}</td>
+                        <td className="px-3 py-2 text-right text-red-600 text-xs">{formatCurrency(totals.totalFreteTerceirizado ?? 0)}</td>
+                        <td className="px-3 py-2 text-right text-purple-700 text-xs">{formatCurrency((totals as any).totalPagamentoClientes ?? 0)}</td>
+                        <td className="px-3 py-2 text-right text-gray-600 text-xs">{formatCurrency(totals.totalManutencao ?? 0)}</td>
+                        <td className="px-3 py-2 text-right text-indigo-700 text-xs">{formatCurrency(totals.totalDespesas)}</td>
+                        <td className="px-3 py-2 text-right text-gray-800 text-xs">{totals.totalCargas > 0 ? totals.totalCargas : "—"}</td>
+                        <td className="px-3 py-2 text-right text-red-800 text-sm">{formatCurrency(totals.custoTotal)}</td>
+                        <td className="px-3 py-2 text-right text-green-800 text-sm">{formatCurrency(receitaExibida)}</td>
+                        <td className={`px-3 py-2 text-right text-sm ${lucroExibido >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                          {lucroExibido >= 0 ? '+' : ''}{formatCurrency(lucroExibido)}
                         </td>
-                        <td className="px-3 py-2 text-right text-amber-700 text-xs">
-                          {formatCurrency(totals.totalCombustivel)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-purple-700 text-xs">
-                          {formatCurrency(totals.totalManutencao ?? 0)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-red-600 text-xs">
-                          {formatCurrency(totals.totalFreteTerceirizado ?? 0)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-indigo-700 text-xs">
-                          {formatCurrency(totals.totalDespesas)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-gray-800 text-xs">
-                          {totals.totalCargas > 0 ? `${totals.totalCargas}` : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right text-red-800 text-sm">
-                          {formatCurrency(totals.custoTotal)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-green-800 text-sm">
-                          {formatCurrency(totals.totalReceita ?? 0)}
-                        </td>
-                        <td className={`px-3 py-2 text-right text-sm ${(totals.lucroTotal ?? 0) >= 0 ? 'text-green-800' : 'text-red-800'}`}>
-                          {(totals.lucroTotal ?? 0) >= 0 ? '+' : ''}{formatCurrency(totals.lucroTotal ?? 0)}
-                        </td>
+                        <td></td>
                       </tr>
                     </tbody>
                   </table>
@@ -516,11 +644,11 @@ export default function ExecutiveDashboard() {
               </CardContent>
             </Card>
 
-            {/* Detalhamento de Receita por Comprador */}
-            {totals && (totals as any).receitaBreakdown && (
+            {/* ── Detalhamento de Receita ── */}
+            {(totals as any).receitaBreakdown && (
               <Card className="shadow-sm border-green-200">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2 text-green-800">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2 text-green-800">
                     <TrendingUp className="w-4 h-4 text-green-600" />
                     Detalhamento de Receita
                     <span className="ml-auto text-sm font-normal text-green-700">
@@ -529,85 +657,50 @@ export default function ExecutiveDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {/* Pagamentos de compradores (Líder, Sonoco, etc.) */}
-                  {(totals as any).receitaBreakdown.byBuyer.length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-green-600" />
-                        Pagamentos de Compradores
-                        <span className="ml-auto text-green-700 font-bold">
-                          {formatCurrency((totals as any).receitaBreakdown.totalBuyerPayments)}
-                        </span>
-                      </h4>
-                      <div className="space-y-2">
-                        {(totals as any).receitaBreakdown.byBuyer.map((buyer: any) => (
-                          <div key={buyer.buyerId} className="bg-green-50 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold text-green-900 text-sm">{buyer.buyerName}</span>
-                              <span className="font-bold text-green-700">{formatCurrency(buyer.total)}</span>
-                            </div>
-                            <div className="space-y-1">
-                              {buyer.payments.map((p: any, i: number) => (
-                                <div key={i} className="flex items-center justify-between text-xs text-gray-600 pl-2">
-                                  <span>
-                                    {new Date(p.paymentDate + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                    {p.invoiceNumber && <span className="ml-2 text-gray-400">NF: {p.invoiceNumber}</span>}
-                                    {p.notes && <span className="ml-2 text-gray-400 italic">{p.notes}</span>}
-                                  </span>
-                                  <span className="font-medium text-green-700">{formatCurrency(p.amount)}</span>
-                                </div>
-                              ))}
-                            </div>
+                  {(totals as any).receitaBreakdown.byBuyer.length > 0 ? (
+                    <div className="space-y-2">
+                      {(totals as any).receitaBreakdown.byBuyer.map((buyer: any) => (
+                        <div key={buyer.buyerId} className="bg-green-50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-semibold text-green-900 text-sm">{buyer.buyerName}</span>
+                            <span className="font-bold text-green-700">{formatCurrency(buyer.total)}</span>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {/* Receitas manuais do financeiro */}
-                  {(totals as any).receitaBreakdown.manualEntries.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-blue-600" />
-                        Outras Receitas (Financeiro)
-                        <span className="ml-auto text-blue-700 font-bold">
-                          {formatCurrency((totals as any).receitaBreakdown.totalManual)}
-                        </span>
-                      </h4>
-                      <div className="space-y-1">
-                        {(totals as any).receitaBreakdown.manualEntries.map((e: any, i: number) => (
-                          <div key={i} className="flex items-center justify-between text-sm bg-blue-50 rounded px-3 py-2">
-                            <div>
-                              <span className="font-medium text-gray-800">{e.description}</span>
-                              {e.clientName && <span className="ml-2 text-xs text-gray-500">{e.clientName}</span>}
-                              <span className="ml-2 text-xs text-gray-400">
-                                {new Date(e.date).toLocaleDateString('pt-BR')}
-                              </span>
-                            </div>
-                            <span className="font-bold text-blue-700">{formatCurrency(e.amount)}</span>
+                          <div className="space-y-1">
+                            {buyer.payments.map((p: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between text-xs text-gray-600 pl-2">
+                                <span>
+                                  {formatDate(p.paymentDate)}
+                                  {p.invoiceNumber && <span className="ml-2 text-gray-400">NF: {p.invoiceNumber}</span>}
+                                </span>
+                                <span className="font-medium text-green-700">{formatCurrency(p.amount)}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                  {(totals as any).receitaBreakdown.byBuyer.length === 0 && (totals as any).receitaBreakdown.manualEntries.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-4">Nenhuma receita registrada no período.</p>
+                  ) : (
+                    <p className="text-sm text-gray-400 text-center py-4">
+                      Nenhum pagamento recebido no período.{" "}
+                      {showEstimated && <span className="text-green-600">Receita estimada: {formatCurrency(totals.totalReceitaEstimada ?? 0)}</span>}
+                    </p>
                   )}
                 </CardContent>
               </Card>
             )}
 
-            {/* Seção de Relatório Detalhado por Local */}
+            {/* ── Relatório Detalhado (PDF) ── */}
             <Card className="shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <FileText className="w-4 h-4 text-green-600" />
-                  Relatório Detalhado
+                  Exportar Relatório PDF
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
                   <div className="flex-1 w-full">
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Selecione o local</label>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Local para o relatório</label>
                     <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Selecione um local" />
@@ -631,9 +724,9 @@ export default function ExecutiveDashboard() {
                         locationId: selectedLocationId !== "all" ? parseInt(selectedLocationId) : undefined,
                         dateFrom: range.from,
                         dateTo: range.to,
-                        includeMaoDeObra,
-                        includeConsumo,
-                        includeCargas,
+                        includeMaoDeObra: true,
+                        includeConsumo: true,
+                        includeCargas: true,
                       });
                     }}
                   >
@@ -642,57 +735,33 @@ export default function ExecutiveDashboard() {
                   </Button>
                 </div>
 
-                {/* Checkboxes de seções */}
-                <div className="flex flex-wrap gap-4 mt-3">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" checked={includeMaoDeObra} onChange={(e) => setIncludeMaoDeObra(e.target.checked)} className="rounded border-gray-300 text-green-600 focus:ring-green-500" />
-                    <span className="text-gray-700">Mão de Obra</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" checked={includeConsumo} onChange={(e) => setIncludeConsumo(e.target.checked)} className="rounded border-gray-300 text-green-600 focus:ring-green-500" />
-                    <span className="text-gray-700">Consumo (Combustível, Despesas)</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" checked={includeCargas} onChange={(e) => setIncludeCargas(e.target.checked)} className="rounded border-gray-300 text-green-600 focus:ring-green-500" />
-                    <span className="text-gray-700">Cargas</span>
-                  </label>
-                </div>
-
-                {/* Relatório detalhado */}
+                {/* Relatório detalhado inline */}
                 {reportQuery.data && (
-                  <div className="mt-6 space-y-6" id="report-content">
-                    {/* Resumo do local */}
+                  <div className="mt-6 space-y-6">
+                    {/* Resumo */}
                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
-                      <h3 className="font-bold text-green-800 text-lg mb-2">
+                      <h3 className="font-bold text-green-800 text-base mb-1">
                         {selectedLocationId === "all" ? "Todos os Locais" : (locationsQuery.data?.find(l => String(l.id) === selectedLocationId)?.name || "Local")}
                       </h3>
-                      <p className="text-sm text-green-700 mb-3">
-                        Período: {new Date(range.from).toLocaleDateString("pt-BR")} a {new Date(range.to).toLocaleDateString("pt-BR")}
+                      <p className="text-xs text-green-700 mb-3">
+                        Período: {formatDate(range.from)} a {formatDate(range.to)}
                       </p>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div className="bg-white rounded-lg p-3 text-center">
                           <p className="text-xs text-gray-500">Custo Total</p>
-                          <p className="text-lg font-bold text-red-600">
-                            {formatCurrency(reportQuery.data.resumo.custoTotal)}
-                          </p>
+                          <p className="text-base font-bold text-red-600">{formatCurrency(reportQuery.data.resumo.custoTotal)}</p>
                         </div>
                         <div className="bg-white rounded-lg p-3 text-center">
                           <p className="text-xs text-gray-500">Mão de Obra</p>
-                          <p className="text-lg font-bold text-blue-600">
-                            {formatCurrency(reportQuery.data.resumo.totalMaoDeObra)}
-                          </p>
+                          <p className="text-base font-bold text-blue-600">{formatCurrency(reportQuery.data.resumo.totalMaoDeObra)}</p>
                         </div>
                         <div className="bg-white rounded-lg p-3 text-center">
                           <p className="text-xs text-gray-500">Consumo</p>
-                          <p className="text-lg font-bold text-amber-600">
-                            {formatCurrency(reportQuery.data.resumo.totalConsumo)}
-                          </p>
+                          <p className="text-base font-bold text-amber-600">{formatCurrency(reportQuery.data.resumo.totalConsumo)}</p>
                         </div>
                         <div className="bg-white rounded-lg p-3 text-center">
                           <p className="text-xs text-gray-500">Cargas</p>
-                          <p className="text-lg font-bold text-green-600">
-                            {reportQuery.data.resumo.totalCargas} ({reportQuery.data.resumo.totalVolumeM3.toFixed(1)}m³)
-                          </p>
+                          <p className="text-base font-bold text-green-600">{reportQuery.data.resumo.totalCargas} ({reportQuery.data.resumo.totalVolumeM3.toFixed(1)}m³)</p>
                         </div>
                       </div>
                     </div>
@@ -745,9 +814,7 @@ export default function ExecutiveDashboard() {
                             <tfoot>
                               <tr className="bg-blue-50 font-bold">
                                 <td colSpan={4} className="px-3 py-2 text-blue-800">Total Mão de Obra</td>
-                                <td className="px-3 py-2 text-right text-blue-800">
-                                  {formatCurrency(reportQuery.data.maoDeObra.totalValor)}
-                                </td>
+                                <td className="px-3 py-2 text-right text-blue-800">{formatCurrency(reportQuery.data.maoDeObra.totalValor)}</td>
                                 <td className="px-3 py-2 text-center text-xs text-blue-600">
                                   {reportQuery.data.maoDeObra.pendentes} pend. / {reportQuery.data.maoDeObra.pagos} pagos
                                 </td>
@@ -758,7 +825,7 @@ export default function ExecutiveDashboard() {
                       </div>
                     )}
 
-                    {/* Consumo - Combustível Veículos */}
+                    {/* Combustível */}
                     {reportQuery.data.consumo.veiculos.length > 0 && (
                       <div>
                         <h4 className="font-semibold text-gray-800 flex items-center gap-2 mb-3">
@@ -791,136 +858,6 @@ export default function ExecutiveDashboard() {
                         </div>
                       </div>
                     )}
-
-                    {/* Consumo - Combustível Máquinas */}
-                    {reportQuery.data.consumo.maquinas.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-gray-800 flex items-center gap-2 mb-3">
-                          <Droplets className="w-4 h-4 text-orange-500" />
-                          Combustível — Máquinas ({reportQuery.data.consumo.maquinas.length} registros)
-                        </h4>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b bg-orange-50">
-                                <th className="text-left px-3 py-2 text-orange-700">Data</th>
-                                <th className="text-left px-3 py-2 text-orange-700">Máquina</th>
-                                <th className="text-left px-3 py-2 text-orange-700">Tipo</th>
-                                <th className="text-right px-3 py-2 text-orange-700">Litros</th>
-                                <th className="text-right px-3 py-2 text-orange-700">Valor</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {reportQuery.data.consumo.maquinas.map((r: any) => (
-                                <tr key={r.id} className="border-b hover:bg-gray-50">
-                                  <td className="px-3 py-2">{new Date(r.date).toLocaleDateString("pt-BR")}</td>
-                                  <td className="px-3 py-2 font-medium">{r.equipmentName}</td>
-                                  <td className="px-3 py-2 capitalize">{r.fuelType}</td>
-                                  <td className="px-3 py-2 text-right">{parseFloat(r.liters || "0").toFixed(1)}L</td>
-                                  <td className="px-3 py-2 text-right font-medium">{formatCurrency(parseFloat(r.totalValue || "0"))}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Análise Diária de Cargas */}
-                    {(() => {
-                      // Usar dailyBreakdown global do totals (já inclui receita por dia)
-                      const days = (totals as any)?.dailyBreakdown ?? [];
-                      if (days.length === 0) return null;
-                      return (
-                        <div>
-                          <h4 className="font-semibold text-gray-800 flex items-center gap-2 mb-3">
-                            <Calendar className="w-4 h-4 text-indigo-500" />
-                            Análise Diária de Cargas e Receita
-                          </h4>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b bg-indigo-50">
-                                  <th className="text-left px-3 py-2 text-indigo-700">Data</th>
-                                  <th className="text-right px-3 py-2 text-indigo-700">Cargas</th>
-                                  <th className="text-right px-3 py-2 text-indigo-700">Volume (m³)</th>
-                                  <th className="text-right px-3 py-2 text-indigo-700">Receita do Dia</th>
-                                  <th className="text-center px-3 py-2 text-indigo-700">Status</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {days.map((d: any) => (
-                                  <tr key={d.date} className="border-b hover:bg-gray-50">
-                                    <td className="px-3 py-2">{new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                                    <td className="px-3 py-2 text-right font-bold">{d.cargas}</td>
-                                    <td className="px-3 py-2 text-right">{(d.volumeM3 ?? 0).toFixed(2)}</td>
-                                    <td className="px-3 py-2 text-right font-semibold text-green-700">
-                                      {d.receita > 0 ? formatCurrency(d.receita) : <span className="text-gray-400">—</span>}
-                                    </td>
-                                    <td className="px-3 py-2 text-center">
-                                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                        d.cargas >= 2 ? 'bg-green-100 text-green-700' :
-                                        d.cargas === 1 ? 'bg-amber-100 text-amber-700' :
-                                        'bg-gray-100 text-gray-500'
-                                      }`}>
-                                        {d.cargas >= 2 ? `${d.cargas} cargas` : d.cargas === 1 ? '1 carga' : 'sem carga'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                              <tfoot>
-                                <tr className="bg-indigo-50 font-bold">
-                                  <td className="px-3 py-2 text-indigo-800">Total</td>
-                                  <td className="px-3 py-2 text-right text-indigo-800">{days.reduce((s: number, d: any) => s + d.cargas, 0)}</td>
-                                  <td className="px-3 py-2 text-right text-indigo-800">{days.reduce((s: number, d: any) => s + (d.volumeM3 ?? 0), 0).toFixed(2)}</td>
-                                  <td className="px-3 py-2 text-right text-green-800">{formatCurrency(days.reduce((s: number, d: any) => s + (d.receita ?? 0), 0))}</td>
-                                  <td className="px-3 py-2 text-center text-xs text-indigo-600">
-                                    {days.filter((d: any) => d.cargas >= 2).length} dias c/ 2+ cargas
-                                  </td>
-                                </tr>
-                              </tfoot>
-                            </table>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Cargas */}
-                    {reportQuery.data.cargas.registros.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-gray-800 flex items-center gap-2 mb-3">
-                          <Truck className="w-4 h-4 text-green-500" />
-                          Cargas ({reportQuery.data.cargas.totalCargas} registros — {reportQuery.data.cargas.totalVolumeM3.toFixed(1)}m³)
-                        </h4>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b bg-green-50">
-                                <th className="text-left px-3 py-2 text-green-700">Data</th>
-                                <th className="text-left px-3 py-2 text-green-700">Motorista</th>
-                                <th className="text-left px-3 py-2 text-green-700">Placa</th>
-                                <th className="text-left px-3 py-2 text-green-700">Madeira</th>
-                                <th className="text-right px-3 py-2 text-green-700">Volume (m³)</th>
-                                <th className="text-left px-3 py-2 text-green-700">Destino</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {reportQuery.data.cargas.registros.map((r: any) => (
-                                <tr key={r.id} className="border-b hover:bg-gray-50">
-                                  <td className="px-3 py-2">{new Date(r.date).toLocaleDateString("pt-BR")}</td>
-                                  <td className="px-3 py-2 font-medium">{r.driverName || "—"}</td>
-                                  <td className="px-3 py-2">{r.vehiclePlate || "—"}</td>
-                                  <td className="px-3 py-2 capitalize">{r.woodType || "—"}</td>
-                                  <td className="px-3 py-2 text-right font-medium">{parseFloat(r.volumeM3 || "0").toFixed(2)}</td>
-                                  <td className="px-3 py-2">{r.destination || "—"}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </CardContent>
@@ -929,7 +866,6 @@ export default function ExecutiveDashboard() {
         )}
       </div>
 
-      {/* Print styles */}
       <style>{`
         @media print {
           body { background: white !important; }
@@ -947,6 +883,55 @@ const LOCATION_COLORS = [
   "#16a34a", "#2563eb", "#d97706", "#9333ea", "#dc2626",
   "#0891b2", "#65a30d", "#db2777", "#ea580c", "#7c3aed",
 ];
+
+// ── KPI Card ─────────────────────────────────────────────────────────────────
+function KpiCard({ icon, label, value, sub, color }: {
+  icon: React.ReactNode; label: string; value: string; sub: string;
+  color: "red" | "blue" | "amber" | "purple" | "green";
+}) {
+  const colors = {
+    red: "from-red-500 to-red-600",
+    blue: "from-blue-500 to-blue-600",
+    amber: "from-amber-500 to-amber-600",
+    purple: "from-purple-500 to-purple-600",
+    green: "from-green-500 to-green-600",
+  };
+  return (
+    <div className={`rounded-xl bg-gradient-to-br ${colors[color]} text-white p-4 shadow-sm`}>
+      <div className="flex items-center gap-2 opacity-80 mb-1">
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
+      </div>
+      <p className="text-xl font-bold leading-tight">{value}</p>
+      <p className="text-xs opacity-70 mt-0.5">{sub}</p>
+    </div>
+  );
+}
+
+// ── Mini Cost Card ────────────────────────────────────────────────────────────
+function MiniCostCard({ icon, label, value, color }: {
+  icon: React.ReactNode; label: string; value: number;
+  color: "red" | "blue" | "amber" | "purple" | "green" | "orange" | "gray";
+}) {
+  const colors: Record<string, string> = {
+    red: "bg-red-50 border-red-200 text-red-700",
+    blue: "bg-blue-50 border-blue-200 text-blue-700",
+    amber: "bg-amber-50 border-amber-200 text-amber-700",
+    purple: "bg-purple-50 border-purple-200 text-purple-700",
+    green: "bg-green-50 border-green-200 text-green-700",
+    orange: "bg-orange-50 border-orange-200 text-orange-700",
+    gray: "bg-gray-50 border-gray-200 text-gray-700",
+  };
+  return (
+    <div className={`rounded-xl border p-3 ${colors[color]}`}>
+      <div className="flex items-center gap-1.5 mb-1 opacity-70">
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
+      </div>
+      <p className="text-sm font-bold">{value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    </div>
+  );
+}
 
 // ── Gráfico Pizza SVG ─────────────────────────────────────────────────────────
 function PieChart({ slices }: { slices: { label: string; value: number; color: string }[] }) {
@@ -971,9 +956,8 @@ function PieChart({ slices }: { slices: { label: string; value: number; color: s
       const y2 = cy + radius * Math.sin(endAngle);
       const largeArc = angle > Math.PI ? 1 : 0;
       const d = `M${cx},${cy} L${x1},${y1} A${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z`;
-      const midAngle = startAngle + angle / 2;
       startAngle = endAngle;
-      return { ...sl, d, midAngle };
+      return { ...sl, d };
     });
 
   return (
@@ -981,7 +965,7 @@ function PieChart({ slices }: { slices: { label: string; value: number; color: s
       <svg viewBox="0 0 180 180" className="w-36 h-36 flex-shrink-0">
         {paths.map((p, i) => (
           <path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth="1.5">
-            <title>{p.label}: {formatCurrency(p.value)} ({((p.value / total) * 100).toFixed(1)}%)</title>
+            <title>{p.label}: {p.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} ({((p.value / total) * 100).toFixed(1)}%)</title>
           </path>
         ))}
       </svg>
@@ -999,40 +983,9 @@ function PieChart({ slices }: { slices: { label: string; value: number; color: s
         ))}
         <div className="border-t pt-1 mt-1 flex justify-between text-xs font-bold">
           <span className="text-gray-600">Total</span>
-          <span className="text-gray-900">{formatCurrency(total)}</span>
+          <span className="text-gray-900">{total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Componente de card de resumo ─────────────────────────────────────────────
-function SummaryCard({
-  icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  color: "red" | "blue" | "amber" | "purple" | "green";
-}) {
-  const colors = {
-    red: "from-red-500 to-red-600 text-white",
-    blue: "from-blue-500 to-blue-600 text-white",
-    amber: "from-amber-500 to-amber-600 text-white",
-    purple: "from-purple-500 to-purple-600 text-white",
-    green: "from-green-500 to-green-600 text-white",
-  };
-
-  return (
-    <div className={`rounded-xl bg-gradient-to-br ${colors[color]} p-4 shadow-sm`}>
-      <div className="flex items-center gap-2 opacity-80 mb-1">
-        {icon}
-        <span className="text-xs font-medium">{label}</span>
-      </div>
-      <p className="text-lg font-bold leading-tight">{value}</p>
     </div>
   );
 }

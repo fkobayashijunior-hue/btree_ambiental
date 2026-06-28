@@ -22,6 +22,9 @@ import {
   buyerClients,
   equipmentOilRecords,
   maintenanceParts,
+  freightRates,
+  clientPayments,
+  clients,
 } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte, sql, inArray, isNull } from "drizzle-orm";
 
@@ -269,6 +272,7 @@ export const reportsRouter = router({
     .input(z.object({
       dateFrom: z.string(),
       dateTo: z.string(),
+      locationId: z.number().optional(), // filtro por local específico
     }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -289,44 +293,81 @@ export const reportsRouter = router({
         .where(eq(equipment.isThirdParty, 1));
       const thirdPartyIds = thirdPartyTrucks.map(t => t.id);
 
-      // ── TOTAIS GLOBAIS (sem filtro de local) ──
+      // Buscar tarifas de frete para calcular custo de frete terceirizado
+      const allFreightRates = await db.select().from(freightRates);
+      const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
+      const locationMap = new Map(locationRows.map(l => [l.id, l.name]));
 
-      // Mão de obra global
+      // Helper fuzzy match para tarifas de frete
+      const fuzzyMatch = (a: string, b: string) => {
+        const aL = a.toLowerCase().trim();
+        const bL = b.toLowerCase().trim();
+        if (aL === bL) return true;
+        if (aL.includes(bL) || bL.includes(aL)) return true;
+        const bWords = bL.split(/\s+/).filter((w: string) => w.length > 2);
+        return bWords.length > 0 && bWords.every((w: string) => aL.includes(w));
+      };
+
+      // Helper: calcular custo de frete por carga (usando tarifas cadastradas)
+      const calcFreightCost = (cargo: { vehicleId: number | null; workLocationId: number | null; destination: string | null; weightNetKg: string | null }) => {
+        if (!cargo.vehicleId || !thirdPartyIds.includes(cargo.vehicleId)) return 0;
+        const worksiteName = cargo.workLocationId ? (locationMap.get(cargo.workLocationId) ?? '') : '';
+        const destName = cargo.destination ?? '';
+        const weightTons = parseFloat(cargo.weightNetKg || '0') / 1000;
+        let rate = allFreightRates.find(r =>
+          r.worksite.toLowerCase() === worksiteName.toLowerCase() &&
+          r.destination.toLowerCase() === destName.toLowerCase()
+        );
+        if (!rate) rate = allFreightRates.find(r => fuzzyMatch(worksiteName, r.worksite) && fuzzyMatch(destName, r.destination));
+        if (!rate) rate = allFreightRates.find(r => fuzzyMatch(destName, r.destination));
+        if (!rate && worksiteName) rate = allFreightRates.find(r => fuzzyMatch(worksiteName, r.worksite));
+        return rate ? parseFloat(rate.ratePerTon) * weightTons : 0;
+      };
+
+      // ── DADOS GLOBAIS ──
+      const locFilter = input.locationId ? [eq(collaboratorAttendance.workLocationId, input.locationId)] : [];
+      const locCargoFilter = input.locationId ? [eq(cargoLoads.workLocationId, input.locationId)] : [];
+      const locFuelFilter = input.locationId ? [eq(vehicleRecords.workLocationId, input.locationId)] : [];
+      const locMFuelFilter = input.locationId ? [eq(machineFuel.workLocationId, input.locationId)] : [];
+      const locExtrasFilter = input.locationId ? [eq(extraExpenses.workLocationId, input.locationId)] : [];
+      const locVehicleMaintFilter = input.locationId ? [eq(vehicleRecords.workLocationId, input.locationId)] : [];
+
+      // Mão de obra
       const allAttendance = await db
         .select({ dailyValue: collaboratorAttendance.dailyValue, workLocationId: collaboratorAttendance.workLocationId })
         .from(collaboratorAttendance)
-        .where(and(gte(collaboratorAttendance.date, dateFrom), lte(collaboratorAttendance.date, dateTo)));
+        .where(and(gte(collaboratorAttendance.date, dateFrom), lte(collaboratorAttendance.date, dateTo), ...locFilter));
 
-      // Combustível veículos global (vehicle_records com recordType='abastecimento')
+      // Combustível veículos (vehicle_records com recordType='abastecimento')
       const allVehicleFuel = await db
         .select({ fuelCost: vehicleRecords.fuelCost, liters: vehicleRecords.liters, workLocationId: vehicleRecords.workLocationId })
         .from(vehicleRecords)
-        .where(and(eq(vehicleRecords.recordType, 'abastecimento'), gte(vehicleRecords.date, dateFrom), lte(vehicleRecords.date, dateTo)));
-      // Manutenções de veículos global (vehicle_records com recordType='manutencao')
+        .where(and(eq(vehicleRecords.recordType, 'abastecimento'), gte(vehicleRecords.date, dateFrom), lte(vehicleRecords.date, dateTo), ...locFuelFilter));
+
+      // Manutenções de veículos
       const allVehicleMaints = await db
         .select({ maintenanceCost: vehicleRecords.maintenanceCost, workLocationId: vehicleRecords.workLocationId })
         .from(vehicleRecords)
-        .where(and(eq(vehicleRecords.recordType, 'manutencao'), gte(vehicleRecords.date, dateFrom), lte(vehicleRecords.date, dateTo)));
+        .where(and(eq(vehicleRecords.recordType, 'manutencao'), gte(vehicleRecords.date, dateFrom), lte(vehicleRecords.date, dateTo), ...locVehicleMaintFilter));
 
-      // Combustível máquinas global
+      // Combustível máquinas
       const allMFuel = await db
         .select({ totalValue: machineFuel.totalValue, liters: machineFuel.liters, workLocationId: machineFuel.workLocationId })
         .from(machineFuel)
-        .where(and(gte(machineFuel.date, dateFrom), lte(machineFuel.date, dateTo)));
+        .where(and(gte(machineFuel.date, dateFrom), lte(machineFuel.date, dateTo), ...locMFuelFilter));
 
-      // Despesas extras global
+      // Despesas extras
       const allExtras = await db
         .select({ amount: extraExpenses.amount, workLocationId: extraExpenses.workLocationId })
         .from(extraExpenses)
-        .where(and(gte(extraExpenses.date, dateFrom), lte(extraExpenses.date, dateTo)));
+        .where(and(gte(extraExpenses.date, dateFrom), lte(extraExpenses.date, dateTo), ...locExtrasFilter));
 
-      // Manutenções de equipamentos global (equipmentMaintenance não tem workLocationId)
+      // Manutenções de equipamentos
       const allEquipMaints = await db
         .select({ cost: equipmentMaintenance.cost })
         .from(equipmentMaintenance)
         .where(and(gte(equipmentMaintenance.performedAt, dateFrom), lte(equipmentMaintenance.performedAt, dateTo)));
 
-      // Peças de manutenção de equipamentos (maintenanceParts)
       const allEquipMaintsIds = await db
         .select({ id: equipmentMaintenance.id })
         .from(equipmentMaintenance)
@@ -338,30 +379,33 @@ export const reportsRouter = router({
           .where(inArray(maintenanceParts.maintenanceId, maintIds))
         : [];
 
-      // Manutenções de máquinas global (machineMaintenance não tem workLocationId)
+      // Manutenções de máquinas
       const allMachMaints = await db
         .select({ totalCost: machineMaintenance.totalCost })
         .from(machineMaintenance)
         .where(and(gte(machineMaintenance.date, dateFrom), lte(machineMaintenance.date, dateTo)));
 
-      // Óleos de equipamentos global
+      // Óleos de equipamentos
       const allOilRecords = await db
         .select({ totalValue: equipmentOilRecords.totalValue })
         .from(equipmentOilRecords)
         .where(and(gte(equipmentOilRecords.date, dateFrom), lte(equipmentOilRecords.date, dateTo)));
 
-      // Combustível terceirizados global
+      // Combustível terceirizados
       const allTPFuel = await db
         .select({ total: thirdPartyFuel.total })
         .from(thirdPartyFuel)
         .where(and(gte(thirdPartyFuel.date, dateFrom), lte(thirdPartyFuel.date, dateTo)));
 
-      // Cargas global
+      // Cargas com destinationId para calcular receita estimada
       const allCargos = await db
         .select({
           id: cargoLoads.id,
           date: cargoLoads.date,
+          deliveryDate: cargoLoads.deliveryDate,
           vehicleId: cargoLoads.vehicleId,
+          vehiclePlate: cargoLoads.vehiclePlate,
+          driverName: cargoLoads.driverName,
           volumeM3: cargoLoads.volumeM3,
           weightNetKg: cargoLoads.weightNetKg,
           workLocationId: cargoLoads.workLocationId,
@@ -369,11 +413,61 @@ export const reportsRouter = router({
           thirdPartyContractor: cargoLoads.thirdPartyContractor,
           destinationId: cargoLoads.destinationId,
           destination: cargoLoads.destination,
+          clientId: cargoLoads.clientId,
+          clientName: cargoLoads.clientName,
+          paymentStatus: cargoLoads.paymentStatus,
+          invoiceNumber: cargoLoads.invoiceNumber,
+          status: cargoLoads.status,
         })
         .from(cargoLoads)
-        .where(and(gte(cargoLoads.date, dateFrom), lte(cargoLoads.date, dateTo)));
+        .where(and(gte(cargoLoads.date, dateFrom), lte(cargoLoads.date, dateTo), ...locCargoFilter));
 
-            // Receita: buyerPayments pagos no período (com nome do comprador)
+      // Buscar destinos para calcular receita estimada (pricePerTon / pricePerM3)
+      const destIds = Array.from(new Set(allCargos.map(c => c.destinationId).filter(Boolean))) as number[];
+      const destMap = new Map<number, { pricePerTon: string | null; pricePerM3: string | null; priceType: string | null }>();
+      if (destIds.length > 0) {
+        const dests = await db.select({ id: cargoDestinations.id, pricePerTon: cargoDestinations.pricePerTon, pricePerM3: cargoDestinations.pricePerM3, priceType: cargoDestinations.priceType })
+          .from(cargoDestinations)
+          .where(inArray(cargoDestinations.id, destIds));
+        for (const d of dests) destMap.set(d.id, d);
+      }
+
+      // Helper: calcular receita estimada por carga
+      const calcEstimatedRevenue = (cargo: { destinationId: number | null; weightNetKg: string | null; volumeM3: string | null }) => {
+        if (!cargo.destinationId) return 0;
+        const dest = destMap.get(cargo.destinationId);
+        if (!dest) return 0;
+        const priceType = dest.priceType ?? 'ton';
+        if (priceType === 'ton' || priceType === 'peso') {
+          const price = parseFloat(dest.pricePerTon || '0');
+          const weightTons = parseFloat(cargo.weightNetKg || '0') / 1000;
+          return price * weightTons;
+        } else {
+          const price = parseFloat(dest.pricePerM3 || '0');
+          const vol = parseFloat(cargo.volumeM3 || '0');
+          return price * vol;
+        }
+      };
+
+      // Buscar pagamentos de clientes (despesa: o que pagamos ao cliente fornecedor)
+      const clientPaymentsData = await db
+        .select({
+          id: clientPayments.id,
+          clientId: clientPayments.clientId,
+          clientName: clients.name,
+          grossAmount: clientPayments.grossAmount,
+          netAmount: clientPayments.netAmount,
+          status: clientPayments.status,
+          referenceDate: clientPayments.referenceDate,
+        })
+        .from(clientPayments)
+        .leftJoin(clients, eq(clientPayments.clientId, clients.id))
+        .where(and(
+          gte(clientPayments.referenceDate, dateFrom),
+          lte(clientPayments.referenceDate, dateTo),
+        ));
+
+      // Receita: buyerPayments pagos no período
       const allBuyerPayments = await db
         .select({
           amount: buyerPayments.amount,
@@ -391,9 +485,8 @@ export const reportsRouter = router({
           lte(buyerPayments.paymentDate, input.dateTo),
         ))
         .orderBy(desc(buyerPayments.paymentDate));
-      // Receita: financialEntries tipo receita MANUAL (autoGenerated=0) no período
-      // Os buyerPayments com createFinancialEntry=true já ficam em financialEntries com autoGenerated=1
-      // Para evitar duplicidade: somamos buyerPayments pagos + financialEntries manuais (autoGenerated=0)
+
+      // Receita: financialEntries manuais (autoGenerated=0)
       const allFinReceitas = await db
         .select({
           amount: financialEntries.amount,
@@ -410,7 +503,7 @@ export const reportsRouter = router({
         ))
         .orderBy(desc(financialEntries.date));
 
-      // Calcular totais globais
+      // ── CALCULAR TOTAIS ──
       const totalMaoDeObraGlobal = allAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
       const totalVehicleFuelGlobal = allVehicleFuel.reduce((s, r) => s + parseFloat(r.fuelCost || "0"), 0);
       const totalMFuelGlobal = allMFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
@@ -423,52 +516,61 @@ export const reportsRouter = router({
       const totalManutencaoGlobal = totalEquipMaintCost + totalPartsCost + totalMachMaintGlobal + totalOilGlobal + totalVehicleMaintGlobal;
       const totalTPFuelGlobal = allTPFuel.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
 
-      // Corte terceirizado: cargas com thirdPartyContractor preenchido
+      // CORTE terceirizado: cargas com thirdPartyContractor preenchido (campo thirdPartyCost = custo do corte)
       const corteTerceirizadoCargos = allCargos.filter(c =>
         c.thirdPartyContractor && c.thirdPartyContractor.trim() !== ''
       );
       const totalCorteTerceirizadoGlobal = corteTerceirizadoCargos.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
 
-      // Frete terceirizado: cargas de caminhões terceirizados (vehicleId)
+      // FRETE terceirizado: cargas de caminhões terceirizados — custo calculado pela tarifa (R$/ton × peso)
       const freteTercCargos = thirdPartyIds.length > 0
         ? allCargos.filter(c => c.vehicleId && thirdPartyIds.includes(c.vehicleId))
         : [];
-      const totalFreteTerceirizadoGlobal = freteTercCargos.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
+      const totalFreteTerceirizadoGlobal = freteTercCargos.reduce((s, c) => s + calcFreightCost(c), 0);
 
-      // Receita total: buyerPayments pagos + financialEntries manuais (sem duplicar)
-      // buyerPayments com createFinancialEntry=true já estão em financialEntries (autoGenerated=1)
-      // buyerPayments sem createFinancialEntry ficam apenas em buyerPayments
-      // financialEntries manuais (autoGenerated=0) são receitas inseridas diretamente no financeiro
+      // PAGAMENTO DE CLIENTES (despesa com fornecedores de madeira)
+      const totalPagamentoClientesGlobal = clientPaymentsData.reduce((s, r) => s + parseFloat(r.netAmount || "0"), 0);
+
+      // RECEITA ESTIMADA: soma da receita estimada de todas as cargas
+      const totalReceitaEstimadaGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
+
+      // RECEITA REAL: buyerPayments pagos + financialEntries manuais
       const buyerPaymentsTotal = allBuyerPayments.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
       const finReceitasManualTotal = allFinReceitas.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
-      // Soma: todos os buyerPayments pagos + receitas manuais do financeiro
-      const totalReceitaFinal = buyerPaymentsTotal + finReceitasManualTotal;
+      const totalReceitaReal = buyerPaymentsTotal + finReceitasManualTotal;
 
-      const totalCustoGlobal = totalMaoDeObraGlobal + totalVehicleFuelGlobal + totalMFuelGlobal + totalExtrasGlobal + totalManutencaoGlobal + totalCorteTerceirizadoGlobal + totalFreteTerceirizadoGlobal + totalTPFuelGlobal;
-      const lucroGlobal = totalReceitaFinal - totalCustoGlobal;
+      const totalCustoGlobal = totalMaoDeObraGlobal + totalVehicleFuelGlobal + totalMFuelGlobal + totalExtrasGlobal + totalManutencaoGlobal + totalCorteTerceirizadoGlobal + totalFreteTerceirizadoGlobal + totalTPFuelGlobal + totalPagamentoClientesGlobal;
+      const lucroEstimadoGlobal = totalReceitaEstimadaGlobal - totalCustoGlobal;
+      const lucroRealGlobal = totalReceitaReal - totalCustoGlobal;
 
       // ── ANÁLISE DIÁRIA GLOBAL ──
-      const dailyMapGlobal = new Map<string, { cargas: number; volumeM3: number; receita: number }>();
+      const dailyMapGlobal = new Map<string, { cargas: number; volumeM3: number; receitaEstimada: number; receitaReal: number; custo: number }>();
       for (const c of allCargos) {
         const day = (c.date || '').slice(0, 10);
         if (!day) continue;
-        const prev = dailyMapGlobal.get(day) || { cargas: 0, volumeM3: 0, receita: 0 };
+        const prev = dailyMapGlobal.get(day) || { cargas: 0, volumeM3: 0, receitaEstimada: 0, receitaReal: 0, custo: 0 };
+        const recEst = calcEstimatedRevenue(c);
+        // Custo por carga: corte + frete
+        const cargoCusto = parseFloat(c.thirdPartyCost || '0') * (c.thirdPartyContractor ? 1 : 0)
+          + calcFreightCost(c);
         dailyMapGlobal.set(day, {
           cargas: prev.cargas + 1,
           volumeM3: prev.volumeM3 + parseFloat(c.volumeM3 || '0'),
-          receita: prev.receita,
+          receitaEstimada: prev.receitaEstimada + recEst,
+          receitaReal: prev.receitaReal,
+          custo: prev.custo + cargoCusto,
         });
       }
-      // Adicionar receita por dia (buyerPayments)
+      // Adicionar receita real por dia (buyerPayments)
       for (const p of allBuyerPayments) {
         const day = p.paymentDate?.slice(0, 10) ?? '';
         if (!day) continue;
-        const prev = dailyMapGlobal.get(day) || { cargas: 0, volumeM3: 0, receita: 0 };
-        dailyMapGlobal.set(day, { ...prev, receita: prev.receita + parseFloat(p.amount || '0') });
+        const prev = dailyMapGlobal.get(day) || { cargas: 0, volumeM3: 0, receitaEstimada: 0, receitaReal: 0, custo: 0 };
+        dailyMapGlobal.set(day, { ...prev, receitaReal: prev.receitaReal + parseFloat(p.amount || '0') });
       }
       const dailyBreakdownGlobal = Array.from(dailyMapGlobal.entries())
         .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([date, v]) => ({ date, ...v }));
+        .map(([date, v]) => ({ date, ...v, receita: v.receitaEstimada }));
 
       // ── DADOS POR LOCAL (para tabela detalhada) ──
       const locationData = locations.map(loc => {
@@ -478,6 +580,11 @@ export const reportsRouter = router({
         const locMFuel = allMFuel.filter(r => r.workLocationId === loc.id);
         const locExtras = allExtras.filter(r => r.workLocationId === loc.id);
         const locCargos = allCargos.filter(r => r.workLocationId === loc.id);
+        const locClientPayments = clientPaymentsData.filter(r => {
+          // Associar pagamentos de clientes ao local via clientId das cargas
+          const clientIds = locCargos.map(c => c.clientId).filter(Boolean);
+          return clientIds.includes(r.clientId);
+        });
 
         const totalMO = locAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
         const totalVehicleMaintLoc = locVehicleMaints.reduce((s, r) => s + parseFloat(r.maintenanceCost || "0"), 0);
@@ -486,29 +593,57 @@ export const reportsRouter = router({
         const totalExt = locExtras.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
         const totalVol = locCargos.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0);
 
-        // Corte terceirizado por local
+        // Corte terceirizado por local (thirdPartyCost = custo do corte)
         const locCorte = locCargos.filter(c => c.thirdPartyContractor && c.thirdPartyContractor.trim() !== '');
         const totalLocCorte = locCorte.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
 
-        // Frete terceirizado por local
+        // Frete terceirizado por local (calculado pela tarifa)
         const locFreteTer = thirdPartyIds.length > 0
           ? locCargos.filter(c => c.vehicleId && thirdPartyIds.includes(c.vehicleId))
           : [];
-        const totalLocFrete = locFreteTer.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
+        const totalLocFrete = locFreteTer.reduce((s, c) => s + calcFreightCost(c), 0);
 
-        const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete + totalVehicleMaintLoc;
+        // Pagamento de clientes por local
+        const totalLocClientPayments = locClientPayments.reduce((s, r) => s + parseFloat(r.netAmount || "0"), 0);
+
+        // Receita estimada por local
+        const totalLocReceitaEstimada = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
+
+        const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete + totalVehicleMaintLoc + totalLocClientPayments;
 
         // Análise diária por local
-        const dailyMap = new Map<string, { cargas: number; volumeM3: number }>();
+        const dailyMap = new Map<string, { cargas: number; volumeM3: number; receitaEstimada: number }>();
         for (const c of locCargos) {
           const day = (c.date || '').slice(0, 10);
           if (!day) continue;
-          const prev = dailyMap.get(day) || { cargas: 0, volumeM3: 0 };
-          dailyMap.set(day, { cargas: prev.cargas + 1, volumeM3: prev.volumeM3 + parseFloat(c.volumeM3 || '0') });
+          const prev = dailyMap.get(day) || { cargas: 0, volumeM3: 0, receitaEstimada: 0 };
+          dailyMap.set(day, {
+            cargas: prev.cargas + 1,
+            volumeM3: prev.volumeM3 + parseFloat(c.volumeM3 || '0'),
+            receitaEstimada: prev.receitaEstimada + calcEstimatedRevenue(c),
+          });
         }
         const dailyBreakdown = Array.from(dailyMap.entries())
           .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([date, v]) => ({ date, ...v }));
+          .map(([date, v]) => ({ date, ...v, receita: v.receitaEstimada }));
+
+        // Detalhamento de cargas por local
+        const cargasDetalhadas = locCargos.map(c => ({
+          id: c.id,
+          date: (c.date || '').slice(0, 10),
+          deliveryDate: c.deliveryDate ? (c.deliveryDate || '').slice(0, 10) : null,
+          vehiclePlate: c.vehiclePlate,
+          driverName: c.driverName,
+          destination: c.destination,
+          volumeM3: parseFloat(c.volumeM3 || '0'),
+          weightNetKg: parseFloat(c.weightNetKg || '0'),
+          invoiceNumber: c.invoiceNumber,
+          paymentStatus: c.paymentStatus,
+          status: c.status,
+          receitaEstimada: calcEstimatedRevenue(c),
+          custoCorteTerceirizado: c.thirdPartyContractor ? parseFloat(c.thirdPartyCost || '0') : 0,
+          custoFreteTerceirizado: calcFreightCost(c),
+        }));
 
         return {
           locationId: loc.id,
@@ -523,11 +658,14 @@ export const reportsRouter = router({
           manutencao: { total: totalVehicleMaintLoc, qtd: locVehicleMaints.length },
           freteTerceirizado: { total: totalLocFrete, qtd: locFreteTer.length },
           corteTerceirizado: { total: totalLocCorte, qtd: locCorte.length },
+          pagamentoClientes: { total: totalLocClientPayments, qtd: locClientPayments.length },
           cargas: { total: locCargos.length, volumeM3: totalVol },
-          receita: 0, // receita não é por local ainda
+          receitaEstimada: totalLocReceitaEstimada,
+          receita: totalLocReceitaEstimada,
           custoTotal: custo,
-          lucro: -custo, // sem receita por local
+          lucro: totalLocReceitaEstimada - custo,
           dailyBreakdown,
+          cargasDetalhadas,
         };
       });
 
@@ -547,14 +685,16 @@ export const reportsRouter = router({
           totalManutencao: totalManutencaoGlobal,
           totalCorteTerceirizado: totalCorteTerceirizadoGlobal,
           totalFreteTerceirizado: totalFreteTerceirizadoGlobal + totalTPFuelGlobal,
+          totalPagamentoClientes: totalPagamentoClientesGlobal,
           totalCargas: allCargos.length,
           totalVolumeM3: allCargos.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0),
-          totalReceita: totalReceitaFinal,
-          lucroTotal: lucroGlobal,
+          totalReceita: totalReceitaReal,
+          totalReceitaEstimada: totalReceitaEstimadaGlobal,
+          lucroTotal: lucroRealGlobal,
+          lucroEstimado: lucroEstimadoGlobal,
           dailyBreakdown: dailyBreakdownGlobal,
           receitaBreakdown: {
             byBuyer: (() => {
-              // Agrupar buyerPayments por comprador
               const map: Record<string, { buyerId: number; buyerName: string; total: number; payments: { amount: number; paymentDate: string; invoiceNumber: string | null; notes: string | null }[] }> = {};
               for (const p of allBuyerPayments) {
                 const key = String(p.buyerId);
