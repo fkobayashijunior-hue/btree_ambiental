@@ -4006,7 +4006,7 @@ var cargoLoadsRouter = router({
     let loadsInPeriod = [];
     try {
       const [rows] = await conn.execute(
-        `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
+        `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
         [input.clientId, weekStartStr, weekEndStr]
       );
       loadsInPeriod = rows;
@@ -4075,7 +4075,7 @@ var cargoLoadsRouter = router({
             const weekEndStr = closing.weekEnd ? new Date(closing.weekEnd).toISOString().slice(0, 10) : null;
             if (weekStartStr && weekEndStr) {
               await conn2.execute(
-                `UPDATE cargo_loads SET payment_status = 'pago', updated_at = NOW() WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ? AND payment_status != 'pago'`,
+                `UPDATE cargo_loads SET payment_status = 'pago', updated_at = NOW() WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ? AND payment_status != 'pago'`,
                 [closing.clientId, weekStartStr, weekEndStr]
               );
             }
@@ -8876,7 +8876,9 @@ var reportsRouter = router({
   // ── Dashboard resumo por local (para a tela executiva) ─────────────────────
   dashboardByLocation: protectedProcedure.input(z23.object({
     dateFrom: z23.string(),
-    dateTo: z23.string()
+    dateTo: z23.string(),
+    locationId: z23.number().optional()
+    // filtro por local específico
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
@@ -8885,11 +8887,44 @@ var reportsRouter = router({
     const locations = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(eq22(gpsLocations.isActive, 1)).orderBy(gpsLocations.name);
     const thirdPartyTrucks = await db.select({ id: equipment.id }).from(equipment).where(eq22(equipment.isThirdParty, 1));
     const thirdPartyIds = thirdPartyTrucks.map((t2) => t2.id);
-    const allAttendance = await db.select({ dailyValue: collaboratorAttendance.dailyValue, workLocationId: collaboratorAttendance.workLocationId }).from(collaboratorAttendance).where(and13(gte6(collaboratorAttendance.date, dateFrom), lte6(collaboratorAttendance.date, dateTo)));
-    const allVehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost, liters: vehicleRecords.liters, workLocationId: vehicleRecords.workLocationId }).from(vehicleRecords).where(and13(eq22(vehicleRecords.recordType, "abastecimento"), gte6(vehicleRecords.date, dateFrom), lte6(vehicleRecords.date, dateTo)));
-    const allVehicleMaints = await db.select({ maintenanceCost: vehicleRecords.maintenanceCost, workLocationId: vehicleRecords.workLocationId }).from(vehicleRecords).where(and13(eq22(vehicleRecords.recordType, "manutencao"), gte6(vehicleRecords.date, dateFrom), lte6(vehicleRecords.date, dateTo)));
-    const allMFuel = await db.select({ totalValue: machineFuel.totalValue, liters: machineFuel.liters, workLocationId: machineFuel.workLocationId }).from(machineFuel).where(and13(gte6(machineFuel.date, dateFrom), lte6(machineFuel.date, dateTo)));
-    const allExtras = await db.select({ amount: extraExpenses.amount, workLocationId: extraExpenses.workLocationId }).from(extraExpenses).where(and13(gte6(extraExpenses.date, dateFrom), lte6(extraExpenses.date, dateTo)));
+    const allFreightRates = await db.select().from(freightRates);
+    const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
+    const locationMap = new Map(locationRows.map((l) => [l.id, l.name]));
+    const fuzzyMatch = (a, b) => {
+      const aL = a.toLowerCase().trim();
+      const bL = b.toLowerCase().trim();
+      if (aL === bL) return true;
+      if (aL.includes(bL) || bL.includes(aL)) return true;
+      const bWords = bL.split(/\s+/).filter((w) => w.length > 2);
+      return bWords.length > 0 && bWords.every((w) => aL.includes(w));
+    };
+    const destNameMap = /* @__PURE__ */ new Map();
+    const allDestinations = await db.select({ id: cargoDestinations.id, name: cargoDestinations.name }).from(cargoDestinations);
+    for (const d of allDestinations) destNameMap.set(d.id, d.name);
+    const calcFreightCost = (cargo) => {
+      if (!cargo.vehicleId || !thirdPartyIds.includes(cargo.vehicleId)) return 0;
+      const worksiteName = cargo.workLocationId ? locationMap.get(cargo.workLocationId) ?? "" : "";
+      const destName = (cargo.destinationId ? destNameMap.get(cargo.destinationId) : null) ?? cargo.destination ?? "";
+      const weightTons = parseFloat(cargo.weightNetKg || "0") / 1e3;
+      let rate = allFreightRates.find(
+        (r) => r.worksite.toLowerCase() === worksiteName.toLowerCase() && r.destination.toLowerCase() === destName.toLowerCase()
+      );
+      if (!rate) rate = allFreightRates.find((r) => fuzzyMatch(worksiteName, r.worksite) && fuzzyMatch(destName, r.destination));
+      if (!rate) rate = allFreightRates.find((r) => fuzzyMatch(destName, r.destination));
+      if (!rate && worksiteName) rate = allFreightRates.find((r) => fuzzyMatch(worksiteName, r.worksite));
+      return rate ? parseFloat(rate.ratePerTon) * weightTons : 0;
+    };
+    const locFilter = input.locationId ? [eq22(collaboratorAttendance.workLocationId, input.locationId)] : [];
+    const locCargoFilter = input.locationId ? [eq22(cargoLoads.workLocationId, input.locationId)] : [];
+    const locFuelFilter = input.locationId ? [eq22(vehicleRecords.workLocationId, input.locationId)] : [];
+    const locMFuelFilter = input.locationId ? [eq22(machineFuel.workLocationId, input.locationId)] : [];
+    const locExtrasFilter = input.locationId ? [eq22(extraExpenses.workLocationId, input.locationId)] : [];
+    const locVehicleMaintFilter = input.locationId ? [eq22(vehicleRecords.workLocationId, input.locationId)] : [];
+    const allAttendance = await db.select({ dailyValue: collaboratorAttendance.dailyValue, workLocationId: collaboratorAttendance.workLocationId }).from(collaboratorAttendance).where(and13(gte6(collaboratorAttendance.date, dateFrom), lte6(collaboratorAttendance.date, dateTo), ...locFilter));
+    const allVehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost, liters: vehicleRecords.liters, workLocationId: vehicleRecords.workLocationId }).from(vehicleRecords).where(and13(eq22(vehicleRecords.recordType, "abastecimento"), gte6(vehicleRecords.date, dateFrom), lte6(vehicleRecords.date, dateTo), ...locFuelFilter));
+    const allVehicleMaints = await db.select({ maintenanceCost: vehicleRecords.maintenanceCost, workLocationId: vehicleRecords.workLocationId }).from(vehicleRecords).where(and13(eq22(vehicleRecords.recordType, "manutencao"), gte6(vehicleRecords.date, dateFrom), lte6(vehicleRecords.date, dateTo), ...locVehicleMaintFilter));
+    const allMFuel = await db.select({ totalValue: machineFuel.totalValue, liters: machineFuel.liters, workLocationId: machineFuel.workLocationId }).from(machineFuel).where(and13(gte6(machineFuel.date, dateFrom), lte6(machineFuel.date, dateTo), ...locMFuelFilter));
+    const allExtras = await db.select({ amount: extraExpenses.amount, workLocationId: extraExpenses.workLocationId }).from(extraExpenses).where(and13(gte6(extraExpenses.date, dateFrom), lte6(extraExpenses.date, dateTo), ...locExtrasFilter));
     const allEquipMaints = await db.select({ cost: equipmentMaintenance.cost }).from(equipmentMaintenance).where(and13(gte6(equipmentMaintenance.performedAt, dateFrom), lte6(equipmentMaintenance.performedAt, dateTo)));
     const allEquipMaintsIds = await db.select({ id: equipmentMaintenance.id }).from(equipmentMaintenance).where(and13(gte6(equipmentMaintenance.performedAt, dateFrom), lte6(equipmentMaintenance.performedAt, dateTo)));
     const maintIds = allEquipMaintsIds.map((m) => m.id);
@@ -8900,15 +8935,56 @@ var reportsRouter = router({
     const allCargos = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
+      deliveryDate: cargoLoads.deliveryDate,
       vehicleId: cargoLoads.vehicleId,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      driverName: cargoLoads.driverName,
       volumeM3: cargoLoads.volumeM3,
       weightNetKg: cargoLoads.weightNetKg,
       workLocationId: cargoLoads.workLocationId,
       thirdPartyCost: cargoLoads.thirdPartyCost,
       thirdPartyContractor: cargoLoads.thirdPartyContractor,
       destinationId: cargoLoads.destinationId,
-      destination: cargoLoads.destination
-    }).from(cargoLoads).where(and13(gte6(cargoLoads.date, dateFrom), lte6(cargoLoads.date, dateTo)));
+      destination: cargoLoads.destination,
+      clientId: cargoLoads.clientId,
+      clientName: cargoLoads.clientName,
+      paymentStatus: cargoLoads.paymentStatus,
+      invoiceNumber: cargoLoads.invoiceNumber,
+      status: cargoLoads.status
+    }).from(cargoLoads).where(and13(gte6(cargoLoads.date, dateFrom), lte6(cargoLoads.date, dateTo), ...locCargoFilter));
+    const destIds = Array.from(new Set(allCargos.map((c) => c.destinationId).filter(Boolean)));
+    const destMap = /* @__PURE__ */ new Map();
+    if (destIds.length > 0) {
+      const dests = await db.select({ id: cargoDestinations.id, pricePerTon: cargoDestinations.pricePerTon, pricePerM3: cargoDestinations.pricePerM3, priceType: cargoDestinations.priceType }).from(cargoDestinations).where(inArray6(cargoDestinations.id, destIds));
+      for (const d of dests) destMap.set(d.id, d);
+    }
+    const calcEstimatedRevenue = (cargo) => {
+      if (!cargo.destinationId) return 0;
+      const dest = destMap.get(cargo.destinationId);
+      if (!dest) return 0;
+      const priceType = dest.priceType ?? "ton";
+      if (priceType === "ton" || priceType === "peso") {
+        const price = parseFloat(dest.pricePerTon || "0");
+        const weightTons = parseFloat(cargo.weightNetKg || "0") / 1e3;
+        return price * weightTons;
+      } else {
+        const price = parseFloat(dest.pricePerM3 || "0");
+        const vol = parseFloat(cargo.volumeM3 || "0");
+        return price * vol;
+      }
+    };
+    const clientPaymentsData = await db.select({
+      id: clientPayments.id,
+      clientId: clientPayments.clientId,
+      clientName: clients.name,
+      grossAmount: clientPayments.grossAmount,
+      netAmount: clientPayments.netAmount,
+      status: clientPayments.status,
+      referenceDate: clientPayments.referenceDate
+    }).from(clientPayments).leftJoin(clients, eq22(clientPayments.clientId, clients.id)).where(and13(
+      gte6(clientPayments.referenceDate, dateFrom),
+      lte6(clientPayments.referenceDate, dateTo)
+    ));
     const allBuyerPayments = await db.select({
       amount: buyerPayments.amount,
       paymentDate: buyerPayments.paymentDate,
@@ -8948,30 +9024,37 @@ var reportsRouter = router({
     );
     const totalCorteTerceirizadoGlobal = corteTerceirizadoCargos.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
     const freteTercCargos = thirdPartyIds.length > 0 ? allCargos.filter((c) => c.vehicleId && thirdPartyIds.includes(c.vehicleId)) : [];
-    const totalFreteTerceirizadoGlobal = freteTercCargos.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
+    const totalFreteTerceirizadoGlobal = freteTercCargos.reduce((s, c) => s + calcFreightCost(c), 0);
+    const totalPagamentoClientesGlobal = clientPaymentsData.reduce((s, r) => s + parseFloat(r.netAmount || "0"), 0);
+    const totalReceitaEstimadaGlobal = allCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
     const buyerPaymentsTotal = allBuyerPayments.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
     const finReceitasManualTotal = allFinReceitas.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
-    const totalReceitaFinal = buyerPaymentsTotal + finReceitasManualTotal;
-    const totalCustoGlobal = totalMaoDeObraGlobal + totalVehicleFuelGlobal + totalMFuelGlobal + totalExtrasGlobal + totalManutencaoGlobal + totalCorteTerceirizadoGlobal + totalFreteTerceirizadoGlobal + totalTPFuelGlobal;
-    const lucroGlobal = totalReceitaFinal - totalCustoGlobal;
+    const totalReceitaReal = buyerPaymentsTotal + finReceitasManualTotal;
+    const totalCustoGlobal = totalMaoDeObraGlobal + totalVehicleFuelGlobal + totalMFuelGlobal + totalExtrasGlobal + totalManutencaoGlobal + totalCorteTerceirizadoGlobal + totalFreteTerceirizadoGlobal + totalTPFuelGlobal + totalPagamentoClientesGlobal;
+    const lucroEstimadoGlobal = totalReceitaEstimadaGlobal - totalCustoGlobal;
+    const lucroRealGlobal = totalReceitaReal - totalCustoGlobal;
     const dailyMapGlobal = /* @__PURE__ */ new Map();
     for (const c of allCargos) {
       const day = (c.date || "").slice(0, 10);
       if (!day) continue;
-      const prev = dailyMapGlobal.get(day) || { cargas: 0, volumeM3: 0, receita: 0 };
+      const prev = dailyMapGlobal.get(day) || { cargas: 0, volumeM3: 0, receitaEstimada: 0, receitaReal: 0, custo: 0 };
+      const recEst = calcEstimatedRevenue(c);
+      const cargoCusto = parseFloat(c.thirdPartyCost || "0") * (c.thirdPartyContractor ? 1 : 0) + calcFreightCost(c);
       dailyMapGlobal.set(day, {
         cargas: prev.cargas + 1,
         volumeM3: prev.volumeM3 + parseFloat(c.volumeM3 || "0"),
-        receita: prev.receita
+        receitaEstimada: prev.receitaEstimada + recEst,
+        receitaReal: prev.receitaReal,
+        custo: prev.custo + cargoCusto
       });
     }
     for (const p of allBuyerPayments) {
       const day = p.paymentDate?.slice(0, 10) ?? "";
       if (!day) continue;
-      const prev = dailyMapGlobal.get(day) || { cargas: 0, volumeM3: 0, receita: 0 };
-      dailyMapGlobal.set(day, { ...prev, receita: prev.receita + parseFloat(p.amount || "0") });
+      const prev = dailyMapGlobal.get(day) || { cargas: 0, volumeM3: 0, receitaEstimada: 0, receitaReal: 0, custo: 0 };
+      dailyMapGlobal.set(day, { ...prev, receitaReal: prev.receitaReal + parseFloat(p.amount || "0") });
     }
-    const dailyBreakdownGlobal = Array.from(dailyMapGlobal.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
+    const dailyBreakdownGlobal = Array.from(dailyMapGlobal.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v, receita: v.receitaEstimada }));
     const locationData = locations.map((loc) => {
       const locAttendance = allAttendance.filter((r) => r.workLocationId === loc.id);
       const locVehicleFuel = allVehicleFuel.filter((r) => r.workLocationId === loc.id);
@@ -8979,6 +9062,10 @@ var reportsRouter = router({
       const locMFuel = allMFuel.filter((r) => r.workLocationId === loc.id);
       const locExtras = allExtras.filter((r) => r.workLocationId === loc.id);
       const locCargos = allCargos.filter((r) => r.workLocationId === loc.id);
+      const locClientPayments = clientPaymentsData.filter((r) => {
+        const clientIds = locCargos.map((c) => c.clientId).filter(Boolean);
+        return clientIds.includes(r.clientId);
+      });
       const totalMO = locAttendance.reduce((s, r) => s + parseFloat(r.dailyValue || "0"), 0);
       const totalVehicleMaintLoc = locVehicleMaints.reduce((s, r) => s + parseFloat(r.maintenanceCost || "0"), 0);
       const totalComb = locVehicleFuel.reduce((s, r) => s + parseFloat(r.fuelCost || "0"), 0) + locMFuel.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
@@ -8987,16 +9074,38 @@ var reportsRouter = router({
       const locCorte = locCargos.filter((c) => c.thirdPartyContractor && c.thirdPartyContractor.trim() !== "");
       const totalLocCorte = locCorte.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
       const locFreteTer = thirdPartyIds.length > 0 ? locCargos.filter((c) => c.vehicleId && thirdPartyIds.includes(c.vehicleId)) : [];
-      const totalLocFrete = locFreteTer.reduce((s, r) => s + parseFloat(r.thirdPartyCost || "0"), 0);
-      const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete + totalVehicleMaintLoc;
+      const totalLocFrete = locFreteTer.reduce((s, c) => s + calcFreightCost(c), 0);
+      const totalLocClientPayments = locClientPayments.reduce((s, r) => s + parseFloat(r.netAmount || "0"), 0);
+      const totalLocReceitaEstimada = locCargos.reduce((s, c) => s + calcEstimatedRevenue(c), 0);
+      const custo = totalMO + totalComb + totalExt + totalLocCorte + totalLocFrete + totalVehicleMaintLoc + totalLocClientPayments;
       const dailyMap = /* @__PURE__ */ new Map();
       for (const c of locCargos) {
         const day = (c.date || "").slice(0, 10);
         if (!day) continue;
-        const prev = dailyMap.get(day) || { cargas: 0, volumeM3: 0 };
-        dailyMap.set(day, { cargas: prev.cargas + 1, volumeM3: prev.volumeM3 + parseFloat(c.volumeM3 || "0") });
+        const prev = dailyMap.get(day) || { cargas: 0, volumeM3: 0, receitaEstimada: 0 };
+        dailyMap.set(day, {
+          cargas: prev.cargas + 1,
+          volumeM3: prev.volumeM3 + parseFloat(c.volumeM3 || "0"),
+          receitaEstimada: prev.receitaEstimada + calcEstimatedRevenue(c)
+        });
       }
-      const dailyBreakdown = Array.from(dailyMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
+      const dailyBreakdown = Array.from(dailyMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v, receita: v.receitaEstimada }));
+      const cargasDetalhadas = locCargos.map((c) => ({
+        id: c.id,
+        date: (c.date || "").slice(0, 10),
+        deliveryDate: c.deliveryDate ? (c.deliveryDate || "").slice(0, 10) : null,
+        vehiclePlate: c.vehiclePlate,
+        driverName: c.driverName,
+        destination: c.destination,
+        volumeM3: parseFloat(c.volumeM3 || "0"),
+        weightNetKg: parseFloat(c.weightNetKg || "0"),
+        invoiceNumber: c.invoiceNumber,
+        paymentStatus: c.paymentStatus,
+        status: c.status,
+        receitaEstimada: calcEstimatedRevenue(c),
+        custoCorteTerceirizado: c.thirdPartyContractor ? parseFloat(c.thirdPartyCost || "0") : 0,
+        custoFreteTerceirizado: calcFreightCost(c)
+      }));
       return {
         locationId: loc.id,
         locationName: loc.name,
@@ -9009,13 +9118,14 @@ var reportsRouter = router({
         manutencao: { total: totalVehicleMaintLoc, qtd: locVehicleMaints.length },
         freteTerceirizado: { total: totalLocFrete, qtd: locFreteTer.length },
         corteTerceirizado: { total: totalLocCorte, qtd: locCorte.length },
+        pagamentoClientes: { total: totalLocClientPayments, qtd: locClientPayments.length },
         cargas: { total: locCargos.length, volumeM3: totalVol },
-        receita: 0,
-        // receita não é por local ainda
+        receitaEstimada: totalLocReceitaEstimada,
+        receita: totalLocReceitaEstimada,
         custoTotal: custo,
-        lucro: -custo,
-        // sem receita por local
-        dailyBreakdown
+        lucro: totalLocReceitaEstimada - custo,
+        dailyBreakdown,
+        cargasDetalhadas
       };
     });
     return {
@@ -9034,10 +9144,13 @@ var reportsRouter = router({
         totalManutencao: totalManutencaoGlobal,
         totalCorteTerceirizado: totalCorteTerceirizadoGlobal,
         totalFreteTerceirizado: totalFreteTerceirizadoGlobal + totalTPFuelGlobal,
+        totalPagamentoClientes: totalPagamentoClientesGlobal,
         totalCargas: allCargos.length,
         totalVolumeM3: allCargos.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0),
-        totalReceita: totalReceitaFinal,
-        lucroTotal: lucroGlobal,
+        totalReceita: totalReceitaReal,
+        totalReceitaEstimada: totalReceitaEstimadaGlobal,
+        lucroTotal: lucroRealGlobal,
+        lucroEstimado: lucroEstimadoGlobal,
         dailyBreakdown: dailyBreakdownGlobal,
         receitaBreakdown: {
           byBuyer: (() => {
