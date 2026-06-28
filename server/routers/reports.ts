@@ -298,7 +298,7 @@ export const reportsRouter = router({
       const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
       const locationMap = new Map(locationRows.map(l => [l.id, l.name]));
 
-      // Helper fuzzy match para tarifas de frete
+      // Helper fuzzy match para tarifas de frete (fallback)
       const fuzzyMatch = (a: string, b: string) => {
         const aL = a.toLowerCase().trim();
         const bL = b.toLowerCase().trim();
@@ -308,18 +308,29 @@ export const reportsRouter = router({
         return bWords.length > 0 && bWords.every((w: string) => aL.includes(w));
       };
 
+      // Buscar nome do destino por destinationId (para match com freight_rates)
+      const destNameMap = new Map<number, string>();
+      const allDestinations = await db.select({ id: cargoDestinations.id, name: cargoDestinations.name }).from(cargoDestinations);
+      for (const d of allDestinations) destNameMap.set(d.id, d.name);
+
       // Helper: calcular custo de frete por carga (usando tarifas cadastradas)
-      const calcFreightCost = (cargo: { vehicleId: number | null; workLocationId: number | null; destination: string | null; weightNetKg: string | null }) => {
+      // Prioridade: 1) destination_id → nome exato, 2) destination text fuzzy match
+      const calcFreightCost = (cargo: { vehicleId: number | null; workLocationId: number | null; destination: string | null; destinationId: number | null; weightNetKg: string | null }) => {
         if (!cargo.vehicleId || !thirdPartyIds.includes(cargo.vehicleId)) return 0;
         const worksiteName = cargo.workLocationId ? (locationMap.get(cargo.workLocationId) ?? '') : '';
-        const destName = cargo.destination ?? '';
+        // Usar nome do destino via destinationId se disponível, senão usar campo texto
+        const destName = (cargo.destinationId ? destNameMap.get(cargo.destinationId) : null) ?? cargo.destination ?? '';
         const weightTons = parseFloat(cargo.weightNetKg || '0') / 1000;
+        // 1. Match exato por worksite + destination
         let rate = allFreightRates.find(r =>
           r.worksite.toLowerCase() === worksiteName.toLowerCase() &&
           r.destination.toLowerCase() === destName.toLowerCase()
         );
+        // 2. Fuzzy match por worksite + destination
         if (!rate) rate = allFreightRates.find(r => fuzzyMatch(worksiteName, r.worksite) && fuzzyMatch(destName, r.destination));
+        // 3. Fuzzy match só por destination
         if (!rate) rate = allFreightRates.find(r => fuzzyMatch(destName, r.destination));
+        // 4. Fuzzy match só por worksite (último recurso)
         if (!rate && worksiteName) rate = allFreightRates.find(r => fuzzyMatch(worksiteName, r.worksite));
         return rate ? parseFloat(rate.ratePerTon) * weightTons : 0;
       };

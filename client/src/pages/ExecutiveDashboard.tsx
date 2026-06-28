@@ -3,6 +3,8 @@ import { generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   BarChart3,
@@ -11,7 +13,7 @@ import {
   Fuel,
   Truck,
   DollarSign,
-  Calendar,
+  Calendar as CalendarIcon,
   FileText,
   ChevronLeft,
   ChevronRight,
@@ -215,29 +217,67 @@ export default function ExecutiveDashboard() {
               {/* Navegação ou inputs de data */}
               {periodType === "custom" ? (
                 <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={customFrom}
-                    onChange={e => setCustomFrom(e.target.value)}
-                    className="text-xs border rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                  {/* Data início */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="flex items-center gap-1.5 text-xs border rounded-lg px-2 py-1.5 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                        <CalendarIcon className="w-3.5 h-3.5 text-green-600" />
+                        {customFrom ? new Date(customFrom + 'T12:00:00').toLocaleDateString('pt-BR') : 'Data início'}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={customFrom ? new Date(customFrom + 'T12:00:00') : undefined}
+                        onSelect={(date) => date && setCustomFrom(date.toISOString().slice(0, 10))}
+                        captionLayout="dropdown"
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                   <span className="text-xs text-gray-400">até</span>
-                  <input
-                    type="date"
-                    value={customTo}
-                    min={customFrom}
-                    onChange={e => setCustomTo(e.target.value)}
-                    className="text-xs border rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                  {/* Data fim */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="flex items-center gap-1.5 text-xs border rounded-lg px-2 py-1.5 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                        <CalendarIcon className="w-3.5 h-3.5 text-green-600" />
+                        {customTo ? new Date(customTo + 'T12:00:00').toLocaleDateString('pt-BR') : 'Data fim'}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={customTo ? new Date(customTo + 'T12:00:00') : undefined}
+                        onSelect={(date) => date && setCustomTo(date.toISOString().slice(0, 10))}
+                        captionLayout="dropdown"
+                        disabled={(date) => customFrom ? date < new Date(customFrom + 'T12:00:00') : false}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               ) : (
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(-1)}>
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <span className="text-sm font-medium text-gray-700 min-w-[160px] text-center" translate="no">
-                    {range.label.charAt(0).toUpperCase() + range.label.slice(1)}
-                  </span>
+                  {/* Label clicável abre calendário para ir direto a uma data */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="text-sm font-medium text-gray-700 min-w-[160px] text-center hover:bg-gray-100 rounded-lg px-2 py-1 transition-colors" translate="no">
+                        {range.label.charAt(0).toUpperCase() + range.label.slice(1)}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="center">
+                      <Calendar
+                        mode="single"
+                        selected={currentDate}
+                        onSelect={(date) => date && setCurrentDate(date)}
+                        captionLayout="dropdown"
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(1)}>
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -433,7 +473,7 @@ export default function ExecutiveDashboard() {
                 <Card className="shadow-sm">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-indigo-600" />
+                      <CalendarIcon className="w-4 h-4 text-indigo-600" />
                       Análise Diária de Cargas e Receita
                     </CardTitle>
                   </CardHeader>

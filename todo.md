@@ -2262,3 +2262,10 @@
 - [x] Corrigir cálculo: usar totalAmount - balanceRemaining dos adiantamentos (não paymentStatus das cargas)
 - [x] Adicionar Valor Pago e Saldo a Receber no resumo do PDF de relatório de cargas
 - [x] Procedure listByClient no clientAdvances para buscar adiantamentos por cliente
+
+## ✅ BUGS CORRIGIDOS — SPRINT 28/06/2026
+
+- [x] Bug: Dashboard Executivo - Receita Estimada zerada para SONOCO: `cargo_destinations.price_per_ton` estava NULL para id=7 (SONOCO do Brasil Ltda.) — corrigido para R$310,00/ton via SQL no banco de produção
+- [x] Bug: Dashboard Executivo - Frete terceirizado zerado para Fazenda GW → SONOCO: `freight_rates.destination` estava como "Sonoco Lda." mas cargas usam "Sonoco do Brasil Ltda." — corrigido via SQL no banco de produção
+- [x] Bug: Dashboard Executivo - `calcFreightCost` agora usa `destinationId` para resolver o nome do destino antes de fazer fuzzy match, garantindo correspondência correta mesmo quando o campo texto da carga difere da tarifa
+- [x] Feature: Dashboard Executivo - Calendário visual (Popover + react-day-picker) para seleção de datas: label de data clicável abre calendário nos modos Dia/Semana/Mês; modo Período usa botões com calendário ao invés de inputs nativos
