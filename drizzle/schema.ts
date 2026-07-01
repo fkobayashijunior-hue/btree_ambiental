@@ -903,6 +903,7 @@ export const vehicleRecords = mysqlTable("vehicle_records", {
 	photoUrl: text("photo_url"),
 	workLocationId: int("work_location_id"),
 	fuelInvoiceId: int("fuel_invoice_id"),
+	chargedValue: varchar("charged_value", { length: 20 }),
 });
 
 

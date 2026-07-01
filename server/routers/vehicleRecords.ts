@@ -117,6 +117,7 @@ export const vehicleRecordsRouter = router({
       notes: z.string().optional(),
       workLocationId: z.number().optional(),
       fuelInvoiceId: z.number().optional(),
+      chargedValue: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -243,6 +244,7 @@ export const vehicleRecordsRouter = router({
       notes: z.string().optional().nullable(),
       workLocationId: z.number().optional().nullable(),
       fuelInvoiceId: z.number().optional().nullable(),
+      chargedValue: z.string().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

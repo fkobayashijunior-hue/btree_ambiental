@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Car, Plus, Calendar, Camera, X, User, Pencil, ImageIcon, FileDown, FileSpreadsheet, MapPin } from "lucide-react";
+import { Car, Plus, Calendar, Camera, X, User, Pencil, Trash2, ImageIcon, FileDown, FileSpreadsheet, MapPin } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -48,6 +48,7 @@ const emptyForm = {
   notes: "",
   workLocationId: "",
   fuelInvoiceId: "",
+  chargedValue: "",
 };
 
 // Meses em português
@@ -179,6 +180,7 @@ export default function VehicleControlPage() {
       notes: r.notes || "",
       workLocationId: r.workLocationId ? String(r.workLocationId) : "",
       fuelInvoiceId: r.fuelInvoiceId ? String(r.fuelInvoiceId) : "",
+      chargedValue: r.chargedValue || "",
     });
     // Carregar fotos existentes do registro
     let existingPhotos: Array<{ preview: string; base64: string | null }> = [];
@@ -237,6 +239,7 @@ export default function VehicleControlPage() {
       photosBase64: photos.length > 0 ? photos.map(p => p.base64 || p.preview) : undefined,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
       fuelInvoiceId: form.fuelInvoiceId ? parseInt(form.fuelInvoiceId) : undefined,
+      chargedValue: (form.recordType === "abastecimento" && form.serviceType === "terceirizado") ? (form.chargedValue || undefined) : undefined,
     };
 
     if (editingId) {
@@ -768,6 +771,21 @@ export default function VehicleControlPage() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-400 hover:text-red-600"
+                            onClick={() => {
+                              if (confirm(`Excluir este registro de ${RECORD_LABELS[r.recordType as RecordType] || r.recordType}? Esta ação não pode ser desfeita.`)) {
+                                deleteMutation.mutate({ id: r.id });
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div className="text-xs text-gray-500 mt-1 flex gap-3 flex-wrap">
@@ -779,6 +797,11 @@ export default function VehicleControlPage() {
                       {r.supplier && <span>{r.supplier}</span>}
                       {r.maintenanceType && <span>{r.maintenanceType}</span>}
                       {r.fuelType && r.recordType === "abastecimento" && <span className="capitalize">{r.fuelType}</span>}
+                      {r.serviceType === "terceirizado" && r.chargedValue && (
+                        <span className="flex items-center gap-1 text-amber-700 font-semibold">
+                          Cobrado: R$ {r.chargedValue}
+                        </span>
+                      )}
                       {r.registeredByName && (
                         <span className="flex items-center gap-1 text-gray-400">
                           <User className="h-3 w-3" /> {r.registeredByName}
@@ -917,6 +940,26 @@ export default function VehicleControlPage() {
                 </div>
                 {form.fuelLocation !== 'postos' && form.supplier && (
                   <p className="text-xs text-green-700">Preço preenchido automaticamente pelo cadastro do fornecedor.</p>
+                )}
+                {/* Tipo de serviço e valor cobrado para terceirizados */}
+                <div>
+                  <Label>Tipo de Veículo</Label>
+                  <select value={form.serviceType} onChange={e => setForm(f => ({ ...f, serviceType: e.target.value as any }))} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="proprio">Próprio (BTREE)</option>
+                    <option value="terceirizado">Terceirizado</option>
+                  </select>
+                </div>
+                {form.serviceType === "terceirizado" && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <Label className="text-amber-800 font-semibold">Valor a Cobrar do Terceirizado (R$)</Label>
+                    <Input
+                      value={form.chargedValue}
+                      onChange={e => setForm(f => ({ ...f, chargedValue: e.target.value }))}
+                      placeholder="0,00"
+                      className="mt-1 border-amber-300 focus:ring-amber-400"
+                    />
+                    <p className="text-xs text-amber-700 mt-1">Valor diferente do custo real que será cobrado do caminhoneiro.</p>
+                  </div>
                 )}
                 {/* Vincular à Nota Fiscal */}
                 {form.fuelLocation !== 'postos' && (() => {
