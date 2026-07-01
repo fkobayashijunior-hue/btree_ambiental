@@ -8,7 +8,7 @@ import {
   Droplets, Scissors, RefreshCw, AlertCircle, Download,
   Image as ImageIcon, ChevronDown, ChevronUp, X, Package,
   Search, CheckCircle, AlertTriangle, FileText, BookOpen,
-  Minus, DollarSign, ClipboardList
+  Minus, DollarSign, ClipboardList, Pencil
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -245,6 +245,7 @@ export default function EquipmentDetail() {
   const [showAddPhoto, setShowAddPhoto] = useState(false);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [expandedMaint, setExpandedMaint] = useState<number | null>(null);
+  const [editMaintId, setEditMaintId] = useState<number | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const maintPhotoRef = useRef<HTMLInputElement>(null);
@@ -296,6 +297,7 @@ export default function EquipmentDetail() {
   const updateMainPhoto = trpc.equipmentDetail.updateMainPhoto.useMutation();
   const addMaintenance = trpc.equipmentDetail.addMaintenance.useMutation();
   const removeMaintenance = trpc.equipmentDetail.removeMaintenance.useMutation();
+  const updateMaintenance = trpc.equipmentDetail.updateMaintenance.useMutation();
   const createTemplate = trpc.equipmentDetail.createTemplate.useMutation();
   const deleteTemplate = trpc.equipmentDetail.deleteTemplate.useMutation();
 
@@ -364,30 +366,54 @@ export default function EquipmentDetail() {
     if (!maintDesc.trim()) { toast.error("Descreva o serviço realizado"); return; }
     setIsSaving(true);
     try {
-      await addMaintenance.mutateAsync({
-        equipmentId,
-        type: maintType,
-        description: maintDesc,
-        performedBy: maintBy || undefined,
-        cost: totalGeral > 0 ? totalGeral.toFixed(2) : undefined,
-        nextMaintenanceDate: maintNextDate || undefined,
-        performedAt: maintDate,
-        photoBase64: maintPhoto || undefined,
-        templateId: selectedTemplateId || undefined,
-        parts: partsList.map(p => ({
-          partId: p.partId,
-          partCode: p.partCode,
-          partName: p.partName,
-          partPhotoUrl: p.partPhotoUrl,
-          quantity: p.quantity,
-          unit: p.unit,
-          unitCost: p.unitCost,
-          fromStock: p.fromStock,
-        })),
-        laborCost: laborCost || undefined,
-      });
-
-      toast.success("Manutenção registrada com sucesso!");
+      if (editMaintId) {
+        // Modo edição
+        await updateMaintenance.mutateAsync({
+          id: editMaintId,
+          type: maintType,
+          description: maintDesc,
+          performedBy: maintBy || undefined,
+          nextMaintenanceDate: maintNextDate || undefined,
+          performedAt: maintDate,
+          laborCost: laborCost || undefined,
+          parts: partsList.map(p => ({
+            partId: p.partId,
+            partCode: p.partCode,
+            partName: p.partName,
+            partPhotoUrl: p.partPhotoUrl,
+            quantity: p.quantity,
+            unit: p.unit,
+            unitCost: p.unitCost,
+            fromStock: p.fromStock,
+          })),
+        });
+        toast.success("Manutenção atualizada com sucesso!");
+      } else {
+        // Modo criação
+        await addMaintenance.mutateAsync({
+          equipmentId,
+          type: maintType,
+          description: maintDesc,
+          performedBy: maintBy || undefined,
+          cost: totalGeral > 0 ? totalGeral.toFixed(2) : undefined,
+          nextMaintenanceDate: maintNextDate || undefined,
+          performedAt: maintDate,
+          photoBase64: maintPhoto || undefined,
+          templateId: selectedTemplateId || undefined,
+          parts: partsList.map(p => ({
+            partId: p.partId,
+            partCode: p.partCode,
+            partName: p.partName,
+            partPhotoUrl: p.partPhotoUrl,
+            quantity: p.quantity,
+            unit: p.unit,
+            unitCost: p.unitCost,
+            fromStock: p.fromStock,
+          })),
+          laborCost: laborCost || undefined,
+        });
+        toast.success("Manutenção registrada com sucesso!");
+      }
       setShowAddMaint(false);
       resetMaintForm();
       refetchMaint();
@@ -409,7 +435,37 @@ export default function EquipmentDetail() {
     setSelectedTemplateId(null);
     setPartsList([]);
     setPartSearch("");
+    setEditMaintId(null);
     prevTemplateId.current = null;
+  }
+
+  function openEditMaintenance(m: any, mParts: any[]) {
+    setEditMaintId(m.id);
+    setMaintType(m.type as MaintType);
+    setMaintDesc(m.description || "");
+    setMaintBy(m.performedBy || "");
+    // Converter data para yyyy-MM-dd
+    const d = m.performedAt ? new Date(m.performedAt) : new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setMaintDate(`${yyyy}-${mm}-${dd}`);
+    setMaintNextDate("");
+    setMaintPhoto(null);
+    setLaborCost(m.laborCost || "");
+    setSelectedTemplateId(null);
+    prevTemplateId.current = null;
+    setPartsList(mParts.map((p: any) => ({
+      partId: p.partId ?? undefined,
+      partCode: p.partCode ?? undefined,
+      partName: p.partName,
+      partPhotoUrl: p.partPhotoUrl ?? undefined,
+      quantity: p.quantity,
+      unit: p.unit || "un",
+      unitCost: p.unitCost ?? undefined,
+      fromStock: p.fromStock ?? 0,
+    })));
+    setShowAddMaint(true);
   }
 
   // ─── Salvar Template ───────────────────────────────────────────────────────
@@ -713,6 +769,10 @@ ${maintenances.length > 0 ? `<table><thead><tr><th>Data</th><th>Tipo</th><th>Des
                               })}>
                               <FileText className="h-4 w-4 mr-1" /> PDF
                             </Button>
+                            <Button size="sm" variant="outline" className="text-emerald-600 hover:text-emerald-700"
+                              onClick={() => openEditMaintenance(m, mParts)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                             <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700"
                               onClick={() => removeMaintenance.mutate({ id: m.id }, { onSuccess: () => refetchMaint() })}>
                               <Trash2 className="h-4 w-4" />
@@ -813,7 +873,7 @@ ${maintenances.length > 0 ? `<table><thead><tr><th>Data</th><th>Tipo</th><th>Des
       {/* ── DIALOG: Registrar Manutenção ── */}
       <Dialog open={showAddMaint} onOpenChange={(open) => { if (!open) resetMaintForm(); setShowAddMaint(open); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Registrar Manutenção</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editMaintId ? "Editar Manutenção" : "Registrar Manutenção"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {/* Tipo e Data */}
             <div className="grid grid-cols-2 gap-3">
@@ -1012,7 +1072,7 @@ ${maintenances.length > 0 ? `<table><thead><tr><th>Data</th><th>Tipo</th><th>Des
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => { resetMaintForm(); setShowAddMaint(false); }}>Cancelar</Button>
             <Button disabled={isSaving} className="bg-green-600 hover:bg-green-700" onClick={handleSaveMaintenance}>
-              {isSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</> : "Salvar Manutenção"}
+              {isSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</> : editMaintId ? "Atualizar Manutenção" : "Salvar Manutenção"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -304,6 +304,76 @@ export const equipmentDetailRouter = router({
       return { success: true };
     }),
 
+  updateMaintenance: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      type: z.enum(["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]),
+      description: z.string().min(3),
+      performedBy: z.string().optional(),
+      nextMaintenanceDate: z.string().optional(),
+      performedAt: z.string(),
+      laborCost: z.string().optional(),
+      parts: z.array(z.object({
+        partId: z.number().optional(),
+        partCode: z.string().optional(),
+        partName: z.string(),
+        partPhotoUrl: z.string().optional(),
+        quantity: z.number().min(1),
+        unit: z.string().optional(),
+        unitCost: z.string().optional(),
+        fromStock: z.number().optional(),
+      })).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Recalcular custo total
+      const usedParts = input.parts || [];
+      let totalParts = 0;
+      for (const p of usedParts) {
+        if (p.unitCost) totalParts += parseFloat(p.unitCost.replace(",", ".")) * p.quantity;
+      }
+      const laborCostNum = input.laborCost ? parseFloat(input.laborCost.replace(",", ".")) : 0;
+      const totalCost = (totalParts + laborCostNum).toFixed(2);
+
+      // Atualizar registro principal
+      await db.update(equipmentMaintenance).set({
+        type: input.type,
+        description: input.description,
+        performedBy: input.performedBy,
+        cost: totalCost,
+        nextMaintenanceDate: input.nextMaintenanceDate
+          ? new Date(input.nextMaintenanceDate).toISOString().slice(0,19).replace('T',' ')
+          : null,
+        performedAt: new Date(input.performedAt).toISOString().slice(0,19).replace('T',' '),
+      }).where(eq(equipmentMaintenance.id, input.id));
+
+      // Substituir peças (delete + re-insert, sem mexer no estoque)
+      await db.delete(maintenanceParts).where(eq(maintenanceParts.maintenanceId, input.id));
+      if (usedParts.length > 0) {
+        for (const p of usedParts) {
+          const totalCostPart = p.unitCost
+            ? (parseFloat(p.unitCost.replace(",", ".")) * p.quantity).toFixed(2)
+            : undefined;
+          await db.insert(maintenanceParts).values({
+            maintenanceId: input.id,
+            partId: p.partId,
+            partCode: p.partCode,
+            partName: p.partName,
+            partPhotoUrl: p.partPhotoUrl,
+            quantity: p.quantity,
+            unit: p.unit || "un",
+            unitCost: p.unitCost,
+            totalCost: totalCostPart,
+            fromStock: p.fromStock ?? 0,
+          });
+        }
+      }
+
+      return { success: true };
+    }),
+
   // ─── Estoque de Peças ────────────────────────────────────────────────────────
   addStockEntry: protectedProcedure
     .input(z.object({
