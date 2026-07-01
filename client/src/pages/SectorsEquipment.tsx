@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { BTREE_LOGO_B64, fetchImageAsBase64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
+import { BTREE_LOGO_B64, fetchImageAsBase64, loadPdfAssets, generatePDFFromHtml, wrapInPdfDocument } from "@/lib/pdfUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,15 +84,19 @@ export default function SectorsEquipment() {
 
       const equipCards = equipsByOp.map((e: any, i: number) => {
         const photo = photosB64[i];
+        const statusBadgeClass = e.status === 'ativo' ? 'badge badge-green' : e.status === 'manutencao' ? 'badge badge-yellow' : 'badge badge-red';
         return `
-        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px;page-break-inside:avoid;display:flex;gap:16px;">
-          ${photo ? `<img src="${photo}" style="width:100px;height:100px;border-radius:8px;object-fit:cover;border:2px solid #0d4f2e;flex-shrink:0;"/>` : `<div style="width:100px;height:100px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:32px;">🚜</div>`}
+        <div class="section" style="border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px;display:flex;gap:16px;">
+          ${photo
+            ? `<img src="${photo}" style="width:110px;height:110px;border-radius:8px;object-fit:cover;border:2px solid #0d4f2e;flex-shrink:0;"/>`
+            : `<div style="width:110px;height:110px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:36px;">🚜</div>`
+          }
           <div style="flex:1;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-              <h3 style="margin:0;font-size:15px;color:#0d4f2e;">${e.name}</h3>
-              <span style="font-size:11px;padding:2px 8px;border-radius:12px;background:${statusColor[e.status] || '#6b7280'}20;color:${statusColor[e.status] || '#6b7280'};font-weight:bold;">${statusLabel[e.status] || e.status}</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+              <strong style="font-size:15px;color:#0d4f2e;">${e.name}</strong>
+              <span class="${statusBadgeClass}">${statusLabel[e.status] || e.status}</span>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;">
               ${e.typeName ? `<div><span style="color:#6b7280;">Tipo:</span> <strong>${e.typeName}</strong></div>` : ""}
               ${e.brand ? `<div><span style="color:#6b7280;">Marca:</span> <strong>${e.brand}</strong></div>` : ""}
               ${e.model ? `<div><span style="color:#6b7280;">Modelo:</span> <strong>${e.model}</strong></div>` : ""}
@@ -104,12 +108,13 @@ export default function SectorsEquipment() {
         </div>`;
       }).join("");
 
-      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Ficha da Operação — ${clientName}</title>
-<style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:0}.header{background:linear-gradient(135deg,#0d4f2e,#1a7a4a);color:white;padding:20px 30px;display:flex;align-items:center;gap:20px}.header img{height:60px;filter:brightness(0) invert(1)}.header-text h1{margin:0;font-size:20px}.header-text p{margin:4px 0 0;opacity:.8;font-size:12px}.content{padding:24px 30px}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head>
-<body><div class="header"><img src="${BTREE_LOGO_B64}" alt="BTREE"/><div class="header-text"><h1>Ficha da Operação: ${clientName}</h1><p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${now} · ${equipsByOp.length} equipamento(s)</p></div></div>
-<div class="content">${equipCards}</div>
-<div style="margin-top:24px;padding:12px 30px;border-top:2px solid #0d4f2e;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px;"><img src="${kobayashiB64}" alt="Kobayashi" style="height:28px;"/><div style="font-size:10px;color:#555;">Desenvolvido por <strong style="color:#0d4f2e;">Kobayashi Desenvolvimento de Sistemas</strong><br/><a href="https://btreeambiental.com" style="color:#15803d;text-decoration:none;font-weight:bold;">btreeambiental.com</a></div></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><img src="${qrB64}" alt="QR" style="width:60px;height:60px;"/><span style="font-size:9px;color:#555;">Acesse nosso site</span></div></div>
-</body></html>`;
+      const html = wrapInPdfDocument(
+        `Ficha da Operação: ${clientName}`,
+        `BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${now} · ${equipsByOp.length} equipamento(s)`,
+        equipCards,
+        kobayashiB64,
+        qrB64
+      );
 
       await generatePDFFromHtml(html, `operacao-${clientName.replace(/\s+/g, '-')}.pdf`);
     } catch (e) {
