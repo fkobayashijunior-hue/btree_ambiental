@@ -13,7 +13,8 @@ interface WorkLocationSelectProps {
 /**
  * Componente reutilizável de seletor de local de trabalho.
  * Busca os locais cadastrados no GPS Locations e exibe como dropdown.
- * Auto-seleciona o primeiro local se houver apenas um disponível.
+ * Auto-seleciona o único local se houver apenas um disponível (usuário com permissão restrita).
+ * Quando há apenas 1 local, exibe o nome como texto fixo (sem dropdown) para evitar alteração.
  */
 export default function WorkLocationSelect({
   value,
@@ -22,7 +23,7 @@ export default function WorkLocationSelect({
   label = "Local de Trabalho",
   showLabel = true,
 }: WorkLocationSelectProps) {
-  const { locations, isLoading } = useWorkLocations();
+  const { locations, isLoading, isRestricted } = useWorkLocations();
 
   // Auto-selecionar se há apenas um local disponível e nenhum selecionado
   useEffect(() => {
@@ -30,6 +31,9 @@ export default function WorkLocationSelect({
       onChange(String(locations[0].id), locations[0].name);
     }
   }, [isLoading, locations, value, onChange]);
+
+  // Se há apenas 1 local (usuário restrito), exibir como texto fixo sem dropdown
+  const isSingleRestricted = !isLoading && isRestricted && locations.length === 1;
 
   return (
     <div className={className}>
@@ -39,23 +43,29 @@ export default function WorkLocationSelect({
           {label}
         </label>
       )}
-      <select
-        value={value}
-        onChange={(e) => {
-          const id = e.target.value;
-          const loc = locations.find((l) => String(l.id) === id);
-          onChange(id, loc?.name || "");
-        }}
-        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        disabled={isLoading}
-      >
-        <option value="">— Sem local definido —</option>
-        {locations.map((loc) => (
-          <option key={loc.id} value={String(loc.id)}>
-            {loc.name}
-          </option>
-        ))}
-      </select>
+      {isSingleRestricted ? (
+        <div className="w-full h-10 px-3 rounded-md border border-input bg-muted text-sm flex items-center text-muted-foreground cursor-not-allowed">
+          {locations[0].name}
+        </div>
+      ) : (
+        <select
+          value={value}
+          onChange={(e) => {
+            const id = e.target.value;
+            const loc = locations.find((l) => String(l.id) === id);
+            onChange(id, loc?.name || "");
+          }}
+          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          disabled={isLoading}
+        >
+          <option value="">— Sem local definido —</option>
+          {locations.map((loc) => (
+            <option key={loc.id} value={String(loc.id)}>
+              {loc.name}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
