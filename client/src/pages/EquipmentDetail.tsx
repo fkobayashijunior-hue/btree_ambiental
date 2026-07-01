@@ -430,6 +430,51 @@ export default function EquipmentDetail() {
     }
   }
 
+  // ─── Gerar Ficha PDF do Equipamento ────────────────────────────────────────
+  const handleGenerateEquipmentPdf = async () => {
+    if (!equip) return;
+    toast.info("Gerando PDF...");
+    const [kobayashiB64, qrB64] = await loadPdfAssets();
+    const photoB64 = equip.imageUrl ? await fetchImageAsBase64(equip.imageUrl) : null;
+    const now = new Date().toLocaleDateString("pt-BR");
+
+    const statusLabel: Record<string, string> = { ativo: "Ativo", manutencao: "Em Manutenção", inativo: "Inativo" };
+    const maintTypeLabel: Record<string, string> = { manutencao: "Manutenção Geral", limpeza: "Limpeza", afiacao: "Afiação", revisao: "Revisão", troca_oleo: "Troca de Óleo", outros: "Outros" };
+
+    const maintRows = maintenances.map((m: any) => `
+      <tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${m.performedAt ? new Date(m.performedAt).toLocaleDateString("pt-BR") : "-"}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${maintTypeLabel[m.type] || m.type}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${m.description || "-"}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${m.performedBy || "-"}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${m.cost ? `R$ ${parseFloat(m.cost).toFixed(2).replace(".", ",")}` : "-"}</td>
+      </tr>`).join("");
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Ficha — ${equip.name}</title>
+<style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:0}.header{background:linear-gradient(135deg,#0d4f2e,#1a7a4a);color:white;padding:20px 30px;display:flex;align-items:center;gap:20px}.header img.logo{height:60px;filter:brightness(0) invert(1)}.header-text h1{margin:0;font-size:20px}.header-text p{margin:4px 0 0;opacity:.8;font-size:12px}.content{padding:24px 30px}.section{margin-bottom:24px}.section-title{font-size:14px;font-weight:bold;color:#0d4f2e;border-bottom:2px solid #0d4f2e;padding-bottom:4px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{margin-bottom:8px}.field label{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:2px}.equip-photo{width:120px;height:120px;border-radius:8px;object-fit:cover;border:3px solid #0d4f2e;float:right;margin-left:20px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f3f4f6;padding:8px;text-align:left;font-size:11px;color:#374151;text-transform:uppercase}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head>
+<body><div class="header"><img class="logo" src="${BTREE_LOGO}" alt="BTREE"/><div class="header-text"><h1>Ficha do Equipamento</h1><p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${now}</p></div></div>
+<div class="content">
+${photoB64 ? `<img src="${photoB64}" class="equip-photo" alt="${equip.name}"/>` : ""}
+<div class="section"><div class="section-title">Dados do Equipamento</div><div class="grid">
+<div class="field"><label>Nome</label>${equip.name}</div>
+<div class="field"><label>Status</label>${statusLabel[equip.status] || equip.status}</div>
+${equip.brand ? `<div class="field"><label>Marca</label>${equip.brand}</div>` : ""}
+${equip.model ? `<div class="field"><label>Modelo</label>${equip.model}</div>` : ""}
+${equip.year ? `<div class="field"><label>Ano</label>${equip.year}</div>` : ""}
+${equip.serialNumber ? `<div class="field"><label>Nº de Série</label>${equip.serialNumber}</div>` : ""}
+${(equip as any).licensePlate ? `<div class="field"><label>Placa</label>${(equip as any).licensePlate}</div>` : ""}
+${(equip as any).clientName ? `<div class="field"><label>Operação</label>${(equip as any).clientName}</div>` : ""}
+</div></div>
+<div style="clear:both"></div>
+<div class="section"><div class="section-title">Histórico de Manutenção (${maintenances.length} registros)</div>
+${maintenances.length > 0 ? `<table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Realizado por</th><th>Custo</th></tr></thead><tbody>${maintRows}</tbody></table>` : "<p style='color:#9ca3af;font-size:12px;'>Nenhuma manutenção registrada.</p>"}
+</div></div>
+<div style="margin-top:24px;padding:12px 30px;border-top:2px solid #0d4f2e;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px;"><img src="${kobayashiB64}" alt="Kobayashi" style="height:28px;"/><div style="font-size:10px;color:#555;">Desenvolvido por <strong style="color:#0d4f2e;">Kobayashi Desenvolvimento de Sistemas</strong><br/><a href="https://btreeambiental.com" style="color:#15803d;text-decoration:none;font-weight:bold;">btreeambiental.com</a></div></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><img src="${qrB64}" alt="QR" style="width:60px;height:60px;"/><span style="font-size:9px;color:#555;">Acesse nosso site</span></div></div>
+</body></html>`;
+
+    await generatePDFFromHtml(html, `ficha-${equip.name.replace(/\s+/g, '-')}.pdf`);
+  };
+
   // ─── Calcular totais ───────────────────────────────────────────────────────
   const totalParts = partsList.reduce((acc, p) => {
     if (p.unitCost) acc += parseFloat(p.unitCost.replace(",", ".")) * p.quantity;
@@ -480,6 +525,9 @@ export default function EquipmentDetail() {
           <Badge className={statusColors[equip.status as keyof typeof statusColors] || "bg-gray-100 text-gray-800"}>
             {equip.status}
           </Badge>
+          <Button variant="outline" size="sm" className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50" onClick={handleGenerateEquipmentPdf}>
+            <FileText className="h-4 w-4" /> Ficha PDF
+          </Button>
         </div>
       </div>
 

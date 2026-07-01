@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { BTREE_LOGO_B64, fetchImageAsBase64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,6 +45,8 @@ export default function SectorsEquipment() {
     defaultHeightM: "", defaultWidthM: "", defaultLengthM: "",
   });
   const [filterSectorId, setFilterSectorId] = useState(0);
+  const [filterClientId, setFilterClientId] = useState(0);
+  const [generatingOperationPdf, setGeneratingOperationPdf] = useState(false);
   // Upload de foto do equipamento
   const [equipPhotoPreview, setEquipPhotoPreview] = useState<string | null>(null);
   const [equipPhotoBase64, setEquipPhotoBase64] = useState<string | null>(null);
@@ -61,6 +64,60 @@ export default function SectorsEquipment() {
     search: equipSearch || undefined,
   });
   const { data: clientsList = [] } = trpc.permissions.listClients.useQuery();
+
+  // Gerar Ficha PDF por Operação
+  const handleGenerateOperationPdf = async (clientId: number, clientName: string) => {
+    const equipsByOp = equipList.filter((e: any) => e.clientId === clientId);
+    if (equipsByOp.length === 0) { toast.error("Nenhum equipamento nesta operação."); return; }
+    setGeneratingOperationPdf(true);
+    toast.info(`Gerando ficha da operação ${clientName}...`);
+    try {
+      const [kobayashiB64, qrB64] = await loadPdfAssets();
+      const now = new Date().toLocaleDateString("pt-BR");
+      const statusLabel: Record<string, string> = { ativo: "Ativo", manutencao: "Em Manutenção", inativo: "Inativo" };
+      const statusColor: Record<string, string> = { ativo: "#16a34a", manutencao: "#d97706", inativo: "#dc2626" };
+
+      // Converter todas as fotos para base64 em paralelo
+      const photosB64 = await Promise.all(
+        equipsByOp.map((e: any) => e.imageUrl ? fetchImageAsBase64(e.imageUrl) : Promise.resolve(null))
+      );
+
+      const equipCards = equipsByOp.map((e: any, i: number) => {
+        const photo = photosB64[i];
+        return `
+        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px;page-break-inside:avoid;display:flex;gap:16px;">
+          ${photo ? `<img src="${photo}" style="width:100px;height:100px;border-radius:8px;object-fit:cover;border:2px solid #0d4f2e;flex-shrink:0;"/>` : `<div style="width:100px;height:100px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:32px;">🚜</div>`}
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <h3 style="margin:0;font-size:15px;color:#0d4f2e;">${e.name}</h3>
+              <span style="font-size:11px;padding:2px 8px;border-radius:12px;background:${statusColor[e.status] || '#6b7280'}20;color:${statusColor[e.status] || '#6b7280'};font-weight:bold;">${statusLabel[e.status] || e.status}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;">
+              ${e.typeName ? `<div><span style="color:#6b7280;">Tipo:</span> <strong>${e.typeName}</strong></div>` : ""}
+              ${e.brand ? `<div><span style="color:#6b7280;">Marca:</span> <strong>${e.brand}</strong></div>` : ""}
+              ${e.model ? `<div><span style="color:#6b7280;">Modelo:</span> <strong>${e.model}</strong></div>` : ""}
+              ${e.year ? `<div><span style="color:#6b7280;">Ano:</span> <strong>${e.year}</strong></div>` : ""}
+              ${e.serialNumber ? `<div><span style="color:#6b7280;">Nº Série:</span> <strong>${e.serialNumber}</strong></div>` : ""}
+              ${e.licensePlate ? `<div><span style="color:#6b7280;">Placa:</span> <strong>${e.licensePlate}</strong></div>` : ""}
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Ficha da Operação — ${clientName}</title>
+<style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:0}.header{background:linear-gradient(135deg,#0d4f2e,#1a7a4a);color:white;padding:20px 30px;display:flex;align-items:center;gap:20px}.header img{height:60px;filter:brightness(0) invert(1)}.header-text h1{margin:0;font-size:20px}.header-text p{margin:4px 0 0;opacity:.8;font-size:12px}.content{padding:24px 30px}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head>
+<body><div class="header"><img src="${BTREE_LOGO_B64}" alt="BTREE"/><div class="header-text"><h1>Ficha da Operação: ${clientName}</h1><p>BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${now} · ${equipsByOp.length} equipamento(s)</p></div></div>
+<div class="content">${equipCards}</div>
+<div style="margin-top:24px;padding:12px 30px;border-top:2px solid #0d4f2e;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px;"><img src="${kobayashiB64}" alt="Kobayashi" style="height:28px;"/><div style="font-size:10px;color:#555;">Desenvolvido por <strong style="color:#0d4f2e;">Kobayashi Desenvolvimento de Sistemas</strong><br/><a href="https://btreeambiental.com" style="color:#15803d;text-decoration:none;font-weight:bold;">btreeambiental.com</a></div></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;"><img src="${qrB64}" alt="QR" style="width:60px;height:60px;"/><span style="font-size:9px;color:#555;">Acesse nosso site</span></div></div>
+</body></html>`;
+
+      await generatePDFFromHtml(html, `operacao-${clientName.replace(/\s+/g, '-')}.pdf`);
+    } catch (e) {
+      toast.error("Erro ao gerar PDF da operação");
+    } finally {
+      setGeneratingOperationPdf(false);
+    }
+  };
 
   // Sector mutations
   const createSector = trpc.sectors.createSector.useMutation({
@@ -312,6 +369,30 @@ export default function SectorsEquipment() {
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+            <select
+              value={filterClientId}
+              onChange={e => setFilterClientId(parseInt(e.target.value))}
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value={0}>Todas as operações</option>
+              {clientsList.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {filterClientId > 0 && (
+              <Button
+                variant="outline"
+                className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                disabled={generatingOperationPdf}
+                onClick={() => {
+                  const client = clientsList.find((c: any) => c.id === filterClientId);
+                  if (client) handleGenerateOperationPdf(filterClientId, (client as any).name);
+                }}
+              >
+                <FileText className="h-4 w-4" />
+                {generatingOperationPdf ? "Gerando..." : "Ficha da Operação"}
+              </Button>
+            )}
             <div className="flex gap-2">
               {/* Botão para criar novo tipo */}
               <Dialog open={typeOpen} onOpenChange={setTypeOpen}>
@@ -528,15 +609,20 @@ export default function SectorsEquipment() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />)}
             </div>
-          ) : (filterSectorId ? equipList.filter(e => (e as any).sectorId === filterSectorId) : equipList).length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              <Tractor className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <p className="text-lg font-medium">Nenhum equipamento cadastrado</p>
-              <p className="text-sm mt-1">Primeiro crie um tipo (Motosserra, Trator...) e depois cadastre os equipamentos</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(filterSectorId ? equipList.filter(e => (e as any).sectorId === filterSectorId) : equipList).map(e => {
+          ) : (() => {
+            const filteredList = equipList.filter(e =>
+              (!filterSectorId || (e as any).sectorId === filterSectorId) &&
+              (!filterClientId || (e as any).clientId === filterClientId)
+            );
+            return filteredList.length === 0 ? (
+              <div className="text-center py-16 text-gray-400">
+                <Tractor className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                <p className="text-lg font-medium">Nenhum equipamento encontrado</p>
+                <p className="text-sm mt-1">Tente ajustar os filtros de setor ou operação</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredList.map(e => {
                 const sc = STATUS_CONFIG[e.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.ativo;
                 const Icon = sc.icon;
                 return (
@@ -579,10 +665,11 @@ export default function SectorsEquipment() {
                       </div>
                     </CardContent>
                   </Card>
-                );
+                                );
               })}
-            </div>
-          )}
+              </div>
+            );
+          })()}
         </TabsContent>
       </Tabs>
     </div>
