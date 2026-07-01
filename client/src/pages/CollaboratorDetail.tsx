@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
+import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml, fetchImageAsBase64 } from "@/lib/pdfUtils";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -172,6 +172,8 @@ export default function CollaboratorDetail() {
     if (!collab) return;
     const [kobayashiB64, qrB64] = await loadPdfAssets();
     const logoUrl = BTREE_LOGO_B64;
+    // Converter foto do colaborador para base64 para evitar bloqueio CORS no PDF
+    const photoB64 = collab.photoUrl ? await fetchImageAsBase64(collab.photoUrl) : null;
     const docList = documents.map(d => `
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${DOC_TYPE_LABELS[d.type]?.label || d.type}</td>
@@ -183,7 +185,7 @@ export default function CollaboratorDetail() {
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Ficha — ${collab.name}</title>
 <style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:0}.header{background:linear-gradient(135deg,#0d4f2e,#1a7a4a);color:white;padding:20px 30px;display:flex;align-items:center;gap:20px}.header img{height:60px;filter:brightness(0) invert(1)}.header-text h1{margin:0;font-size:20px}.header-text p{margin:4px 0 0;opacity:.8;font-size:12px}.content{padding:24px 30px}.section{margin-bottom:24px}.section-title{font-size:14px;font-weight:bold;color:#0d4f2e;border-bottom:2px solid #0d4f2e;padding-bottom:4px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{margin-bottom:8px}.field label{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:2px}.photo{width:100px;height:100px;border-radius:50%;object-fit:cover;border:3px solid #0d4f2e;float:right;margin-left:20px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f3f4f6;padding:8px;text-align:left;font-size:11px;color:#374151;text-transform:uppercase}.footer{background:#f9fafb;border-top:1px solid #e5e7eb;padding:12px 30px;text-align:center;font-size:11px;color:#9ca3af}.footer strong{color:#0d4f2e}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head>
 <body><div class="header"><img src="${logoUrl}" alt="BTREE"/><div class="header-text"><h1>Ficha do Colaborador</h1><p>BTREE Empreendimentos LTDA · btreeambiental.com</p></div></div>
-<div class="content">${collab.photoUrl ? `<img src="${collab.photoUrl}" class="photo" alt="Foto"/>` : ""}
+<div class="content">${photoB64 ? `<img src="${photoB64}" class="photo" alt="Foto"/>` : ""}
 <div class="section"><div class="section-title">Dados Pessoais</div><div class="grid">
 <div class="field"><label>Nome</label>${collab.name}</div>
 <div class="field"><label>CPF</label>${collab.cpf || "-"}</div>
