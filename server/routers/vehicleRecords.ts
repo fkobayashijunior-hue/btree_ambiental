@@ -59,7 +59,7 @@ export const vehicleRecordsRouter = router({
         allowedLocationIds = locs.map((l: any) => l.id);
       }
 
-      const results = await db.select().from(vehicleRecords).orderBy(desc(vehicleRecords.createdAt));
+      const results = await db.select().from(vehicleRecords).orderBy(desc(vehicleRecords.date), desc(vehicleRecords.createdAt));
       let filtered = results;
       if (input?.equipmentId) filtered = filtered.filter(r => r.equipmentId === input.equipmentId);
       if (input?.recordType) filtered = filtered.filter(r => r.recordType === input.recordType);
