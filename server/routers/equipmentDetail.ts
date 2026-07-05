@@ -4,9 +4,11 @@ import { getDb } from "../db";
 import {
   equipment, equipmentPhotos, equipmentMaintenance,
   maintenanceParts, maintenanceTemplates, maintenanceTemplateParts,
-  partsStockMovements, parts
+  partsStockMovements, parts, collaborators
 } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
+const driverAlias = alias(collaborators, "driver");
 import { cloudinaryUpload } from "../cloudinary";
 
 export const equipmentDetailRouter = router({
@@ -16,7 +18,35 @@ export const equipmentDetailRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const result = await db.select().from(equipment).where(eq(equipment.id, input.id)).limit(1);
+      const result = await db
+        .select({
+          id: equipment.id,
+          name: equipment.name,
+          brand: equipment.brand,
+          model: equipment.model,
+          year: equipment.year,
+          serialNumber: equipment.serialNumber,
+          licensePlate: equipment.licensePlate,
+          imageUrl: equipment.imageUrl,
+          status: equipment.status,
+          typeId: equipment.typeId,
+          sectorId: equipment.sectorId,
+          clientId: equipment.clientId,
+          category: equipment.category,
+          invoiceUrl: equipment.invoiceUrl,
+          documentUrl: equipment.documentUrl,
+          insuranceUrl: equipment.insuranceUrl,
+          responsibleDriverId: equipment.responsibleDriverId,
+          responsibleDriverName: driverAlias.name,
+          createdAt: equipment.createdAt,
+          defaultHeightM: equipment.defaultHeightM,
+          defaultWidthM: equipment.defaultWidthM,
+          defaultLengthM: equipment.defaultLengthM,
+        })
+        .from(equipment)
+        .leftJoin(driverAlias, eq(equipment.responsibleDriverId, driverAlias.id))
+        .where(eq(equipment.id, input.id))
+        .limit(1);
       return result[0] || null;
     }),
 

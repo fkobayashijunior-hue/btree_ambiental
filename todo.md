@@ -2269,3 +2269,61 @@
 - [x] Bug: Dashboard Executivo - Frete terceirizado zerado para Fazenda GW → SONOCO: `freight_rates.destination` estava como "Sonoco Lda." mas cargas usam "Sonoco do Brasil Ltda." — corrigido via SQL no banco de produção
 - [x] Bug: Dashboard Executivo - `calcFreightCost` agora usa `destinationId` para resolver o nome do destino antes de fazer fuzzy match, garantindo correspondência correta mesmo quando o campo texto da carga difere da tarifa
 - [x] Feature: Dashboard Executivo - Calendário visual (Popover + react-day-picker) para seleção de datas: label de data clicável abre calendário nos modos Dia/Semana/Mês; modo Período usa botões com calendário ao invés de inputs nativos
+
+## Melhorias 05/07/2026
+
+- [ ] Corrigir ano mínimo do equipamento de 1990 para 1900
+- [ ] Ordenar abastecimentos por data decrescente no frontend (sort client-side)
+- [ ] Documentos do veículo: NF, documento e seguro (upload foto/PDF) na ficha do equipamento
+- [ ] Motorista responsável: campo para selecionar motorista no equipamento tipo Carro/Caminhão
+- [ ] Exibir motorista responsável e documentos no PDF do veículo
+- [ ] Gastos extras: adicionar forma de pagamento "Débito"
+- [ ] Gastos extras: adicionar botão editar registro
+- [ ] Gastos extras: adicionar botão remover registro
+- [ ] Fornecedores: adicionar campo "Nome do Vendedor"
+- [ ] Fornecedores: adicionar campo "Nome do Gerente"
+- [ ] Estoque de óleo: criar módulo de cadastro de estoque (marca, quantidade, valor pago, foto)
+- [ ] Estoque de óleo: ao lançar consumo, selecionar tipo/marca e quantidade — abater do estoque e registrar valor no equipamento
+
+---
+
+## ✅ MELHORIAS IMPLEMENTADAS — 05/07/2026
+
+### 📅 Abastecimentos
+- [x] Corrigir ordenação por data (mais recente primeiro)
+- [x] Corrigir campo de data (aceitar datas antigas)
+
+### 💸 Gastos Extras
+- [x] Adicionar forma de pagamento "Débito" (enum no banco e frontend)
+- [x] Botão Editar gasto extra (modal com todos os campos)
+- [x] Botão Remover gasto extra
+
+### 🏢 Fornecedores
+- [x] Adicionar campo "Nome do Vendedor" (vendorName)
+- [x] Adicionar campo "Nome do Gerente" (managerName)
+- [x] Exibir vendedor e gerente nos cards de fornecedores
+
+### 🚗 Documentos do Veículo (Setores & Equipamentos)
+- [x] Campo para upload de Nota Fiscal (foto ou PDF)
+- [x] Campo para upload de Documento/CRLV (foto ou PDF)
+- [x] Campo para upload de Seguro (foto ou PDF)
+- [x] Campo para selecionar Motorista Responsável
+- [x] Exibir documentos na ficha do equipamento (EquipmentDetail) com links diretos
+- [x] Exibir motorista responsável na ficha do equipamento
+- [x] Incluir documentos e motorista no PDF do equipamento
+
+### 📄 PDF de Equipamentos
+- [x] Botão "PDF Geral" — todos os equipamentos agrupados por operação
+- [x] Botão "PDF do Setor" — equipamentos do setor selecionado
+- [x] Botão "PDF da Operação" — equipamentos da operação selecionada
+
+### 🛢️ Estoque de Óleo
+- [x] Tabela oil_stock no banco de dados
+- [x] Cadastro de estoque: tipo, marca, quantidade comprada, preço/L, total, fornecedor, foto
+- [x] Lógica de soma automática: se mesmo tipo+marca já existe, soma ao estoque
+- [x] Exibição do estoque atual na aba Óleo (com quantidade disponível)
+- [x] Remover item do estoque (apenas admin)
+- [x] Ao registrar consumo: selecionar item do estoque → abate automático da quantidade
+- [x] Cálculo automático do custo (pricePerLiter × quantityUsed)
+- [x] Lançamento financeiro automático ao consumir do estoque
+

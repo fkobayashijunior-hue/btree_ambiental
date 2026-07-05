@@ -2,7 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { machineHours, machineMaintenance, machineFuel, equipment, gpsLocations, userPermissions, collaborators, financialEntries, equipmentOilRecords } from "../../drizzle/schema";
+import { machineHours, machineMaintenance, machineFuel, equipment, gpsLocations, userPermissions, collaborators, financialEntries, equipmentOilRecords, oilStock } from "../../drizzle/schema";
+import { cloudinaryUpload } from "../cloudinary";
 import { eq, desc, sql, inArray } from "drizzle-orm";
 
 // Helper: resolve allowedClientIds for the current user
@@ -564,5 +565,142 @@ export const machineHoursRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       await db.delete(equipmentOilRecords).where(eq(equipmentOilRecords.id, input.id));
       return { success: true };
+    }),
+
+  // === ESTOQUE DE ÓLEO ===
+  listOilStock: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+    return db.select().from(oilStock).orderBy(desc(oilStock.createdAt));
+  }),
+
+  addOilStock: protectedProcedure
+    .input(z.object({
+      oilType: z.enum(["hidraulico", "motor", "transmissao", "diferencial", "outros"]),
+      brand: z.string().min(1),
+      purchaseQuantityLiters: z.string(),
+      pricePerLiter: z.string().optional(),
+      totalValue: z.string().optional(),
+      photoBase64: z.string().optional(),
+      supplier: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      let photoUrl: string | undefined;
+      if (input.photoBase64 && input.photoBase64.startsWith("data:")) {
+        const res = await cloudinaryUpload(input.photoBase64, "btree/oil-stock");
+        photoUrl = res.url;
+      }
+      // Verificar se já existe item com mesmo tipo+marca para somar ao estoque
+      const existing = await db.select().from(oilStock)
+        .where(eq(oilStock.oilType, input.oilType))
+        .then((rows: any[]) => rows.find((r: any) => r.brand.toLowerCase() === input.brand.toLowerCase()));
+      if (existing) {
+        const newQty = (parseFloat(existing.quantityLiters) + parseFloat(input.purchaseQuantityLiters)).toFixed(2);
+        await db.update(oilStock).set({
+          quantityLiters: newQty,
+          purchaseQuantityLiters: input.purchaseQuantityLiters,
+          pricePerLiter: input.pricePerLiter || existing.pricePerLiter,
+          totalValue: input.totalValue || existing.totalValue,
+          photoUrl: photoUrl || existing.photoUrl,
+          supplier: input.supplier || existing.supplier,
+          notes: input.notes || existing.notes,
+        }).where(eq(oilStock.id, existing.id));
+        return { id: existing.id, updated: true };
+      }
+      const [res] = await db.insert(oilStock).values({
+        oilType: input.oilType,
+        brand: input.brand,
+        quantityLiters: input.purchaseQuantityLiters,
+        purchaseQuantityLiters: input.purchaseQuantityLiters,
+        pricePerLiter: input.pricePerLiter,
+        totalValue: input.totalValue,
+        photoUrl,
+        supplier: input.supplier,
+        notes: input.notes,
+        registeredBy: ctx.user.id,
+      });
+      return { id: (res as any).insertId, updated: false };
+    }),
+
+  deleteOilStock: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      await db.delete(oilStock).where(eq(oilStock.id, input.id));
+      return { success: true };
+    }),
+
+  // createOil com baixa de estoque
+  createOilWithStock: protectedProcedure
+    .input(z.object({
+      equipmentId: z.number(),
+      date: z.string(),
+      hourMeter: z.string().optional(),
+      oilStockId: z.number(),
+      quantityLiters: z.string(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      // Buscar item do estoque
+      const [stockItem] = await db.select().from(oilStock).where(eq(oilStock.id, input.oilStockId));
+      if (!stockItem) throw new TRPCError({ code: "NOT_FOUND", message: "Item de estoque não encontrado" });
+      const currentQty = parseFloat(stockItem.quantityLiters);
+      const usedQty = parseFloat(input.quantityLiters);
+      if (usedQty > currentQty) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Estoque insuficiente. Disponível: ${currentQty.toFixed(2)}L` });
+      }
+      // Abater do estoque
+      const newQty = (currentQty - usedQty).toFixed(2);
+      await db.update(oilStock).set({ quantityLiters: newQty }).where(eq(oilStock.id, input.oilStockId));
+      // Calcular custo unitário
+      const pricePerLiter = stockItem.pricePerLiter ? parseFloat(stockItem.pricePerLiter) : 0;
+      const totalValue = pricePerLiter > 0 ? (pricePerLiter * usedQty).toFixed(2) : undefined;
+      // Registrar consumo
+      await db.insert(equipmentOilRecords).values({
+        equipmentId: input.equipmentId,
+        date: input.date,
+        hourMeter: input.hourMeter,
+        oilType: stockItem.oilType,
+        quantityLiters: input.quantityLiters,
+        brand: stockItem.brand,
+        supplier: stockItem.supplier,
+        pricePerLiter: stockItem.pricePerLiter,
+        totalValue,
+        notes: input.notes,
+        registeredBy: ctx.user.id,
+      });
+      // Lançamento financeiro automático
+      if (totalValue && parseFloat(totalValue) > 0) {
+        try {
+          const [eqRow] = await db.select({ name: equipment.name }).from(equipment).where(eq(equipment.id, input.equipmentId));
+          const eqName = eqRow?.name || `Equipamento #${input.equipmentId}`;
+          const dateObj = new Date(input.date);
+          const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+          const oilLabels: Record<string, string> = { hidraulico: 'Hidráulico', motor: 'Motor', transmissao: 'Transmissão', diferencial: 'Diferencial', outros: 'Outros' };
+          await db.insert(financialEntries).values({
+            type: 'despesa',
+            category: 'manutencao',
+            description: `Óleo ${oilLabels[stockItem.oilType] || stockItem.oilType} (${stockItem.brand}) - ${eqName} - ${input.quantityLiters}L`,
+            amount: totalValue,
+            date: dateObj.toISOString().slice(0, 10),
+            referenceMonth: refMonth,
+            paymentMethod: 'transferencia',
+            status: 'confirmado',
+            autoGenerated: 1,
+            equipmentId: input.equipmentId,
+            equipmentName: eqName,
+            registeredBy: ctx.user.id,
+            registeredByName: ctx.user.name + ' (auto)',
+          });
+        } catch { /* não bloquear */ }
+      }
+      return { success: true, newStockQty: newQty };
     }),
 });

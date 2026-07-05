@@ -49,6 +49,8 @@ function getEmptyForm() {
     phone: "",
     email: "",
     contactName: "",
+    vendorName: "",
+    managerName: "",
     address: "",
     city: "",
     state: "",
@@ -99,6 +101,8 @@ export default function FuelSuppliersPage() {
       phone: s.phone || "",
       email: s.email || "",
       contactName: s.contactName || "",
+      vendorName: s.vendorName || "",
+      managerName: s.managerName || "",
       address: s.address || "",
       city: s.city || "",
       state: s.state || "",
@@ -125,6 +129,8 @@ export default function FuelSuppliersPage() {
       phone: form.phone || undefined,
       email: form.email || undefined,
       contactName: form.contactName || undefined,
+      vendorName: form.vendorName || undefined,
+      managerName: form.managerName || undefined,
       address: form.address || undefined,
       city: form.city || undefined,
       state: form.state || undefined,
@@ -239,7 +245,17 @@ export default function FuelSuppliersPage() {
                     )}
                     {s.contactName && (
                       <span className="flex items-center gap-1">
-                        <User className="h-3 w-3" /> {s.contactName}
+                        <User className="h-3 w-3" /> Contato: {s.contactName}
+                      </span>
+                    )}
+                    {s.vendorName && (
+                      <span className="flex items-center gap-1">
+                        <User className="h-3 w-3 text-blue-500" /> Vendedor: {s.vendorName}
+                      </span>
+                    )}
+                    {s.managerName && (
+                      <span className="flex items-center gap-1">
+                        <User className="h-3 w-3 text-purple-500" /> Gerente: {s.managerName}
                       </span>
                     )}
                   </div>
@@ -313,6 +329,16 @@ export default function FuelSuppliersPage() {
               <div>
                 <label className="text-sm font-medium">Pessoa de Contato</label>
                 <Input value={form.contactName} onChange={e => setForm({ ...form, contactName: e.target.value })} placeholder="Nome do contato" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">Nome do Vendedor</label>
+                <Input value={form.vendorName} onChange={e => setForm({ ...form, vendorName: e.target.value })} placeholder="Vendedor responsável" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Nome do Gerente</label>
+                <Input value={form.managerName} onChange={e => setForm({ ...form, managerName: e.target.value })} placeholder="Gerente responsável" />
               </div>
             </div>
 

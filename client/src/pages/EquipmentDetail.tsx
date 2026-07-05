@@ -520,7 +520,9 @@ ${equip.year ? `<div class="field"><label>Ano</label>${equip.year}</div>` : ""}
 ${equip.serialNumber ? `<div class="field"><label>Nº de Série</label>${equip.serialNumber}</div>` : ""}
 ${(equip as any).licensePlate ? `<div class="field"><label>Placa</label>${(equip as any).licensePlate}</div>` : ""}
 ${(equip as any).clientName ? `<div class="field"><label>Operação</label>${(equip as any).clientName}</div>` : ""}
+${(equip as any).responsibleDriverName ? `<div class="field"><label>Motorista Responsável</label>${(equip as any).responsibleDriverName}</div>` : ""}
 </div></div>
+${((equip as any).invoiceUrl || (equip as any).documentUrl || (equip as any).insuranceUrl) ? `<div class="section"><div class="section-title">Documentos do Veículo</div><div style="display:flex;gap:16px;flex-wrap:wrap;">${(equip as any).invoiceUrl ? `<a href="${(equip as any).invoiceUrl}" style="color:#0d4f2e;text-decoration:none;border:1px solid #0d4f2e;border-radius:4px;padding:4px 10px;font-size:12px;">&#128196; Nota Fiscal</a>` : ""}${(equip as any).documentUrl ? `<a href="${(equip as any).documentUrl}" style="color:#0d4f2e;text-decoration:none;border:1px solid #0d4f2e;border-radius:4px;padding:4px 10px;font-size:12px;">&#128196; Documento (CRLV)</a>` : ""}${(equip as any).insuranceUrl ? `<a href="${(equip as any).insuranceUrl}" style="color:#0d4f2e;text-decoration:none;border:1px solid #0d4f2e;border-radius:4px;padding:4px 10px;font-size:12px;">&#128196; Seguro</a>` : ""}</div></div>` : ""}
 <div style="clear:both"></div>
 <div class="section"><div class="section-title">Histórico de Manutenção (${maintenances.length} registros)</div>
 ${maintenances.length > 0 ? `<table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Realizado por</th><th>Custo</th></tr></thead><tbody>${maintRows}</tbody></table>` : "<p style='color:#9ca3af;font-size:12px;'>Nenhuma manutenção registrada.</p>"}
@@ -603,6 +605,37 @@ ${maintenances.length > 0 ? `<table><thead><tr><th>Data</th><th>Tipo</th><th>Des
                 {equip.year && <div><span className="text-gray-500">Ano:</span> <span className="font-medium">{equip.year}</span></div>}
               </div>
             </div>
+            {/* Motorista Responsável e Documentos */}
+            {((equip as any).responsibleDriverId || (equip as any).invoiceUrl || (equip as any).documentUrl || (equip as any).insuranceUrl) && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                {(equip as any).responsibleDriverId && (
+                  <div className="text-sm mb-2">
+                    <span className="text-gray-500">👤 Motorista Responsável:</span>{" "}
+                    <span className="font-medium text-emerald-700">{(equip as any).responsibleDriverName || `Colaborador #${(equip as any).responsibleDriverId}`}</span>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {(equip as any).invoiceUrl && (
+                    <a href={(equip as any).invoiceUrl} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1 hover:bg-blue-100">
+                      📄 Nota Fiscal
+                    </a>
+                  )}
+                  {(equip as any).documentUrl && (
+                    <a href={(equip as any).documentUrl} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-1 hover:bg-green-100">
+                      📄 Documento (CRLV)
+                    </a>
+                  )}
+                  {(equip as any).insuranceUrl && (
+                    <a href={(equip as any).insuranceUrl} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 border border-orange-200 rounded px-2 py-1 hover:bg-orange-100">
+                      📄 Seguro
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

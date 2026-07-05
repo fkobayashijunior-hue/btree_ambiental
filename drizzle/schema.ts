@@ -408,6 +408,10 @@ export const equipment = mysqlTable("equipment", {
 	accumulatedKm: varchar("accumulated_km", { length: 20 }).default('0'),
 	isThirdParty: tinyint("is_third_party").default(0).notNull(),
 	thirdPartyOwner: varchar("third_party_owner", { length: 255 }),
+	invoiceUrl: text("invoice_url"),
+	documentUrl: text("document_url"),
+	insuranceUrl: text("insurance_url"),
+	responsibleDriverId: int("responsible_driver_id"),
 });
 
 export const equipmentMaintenance = mysqlTable("equipment_maintenance", {
@@ -445,7 +449,7 @@ export const extraExpenses = mysqlTable("extra_expenses", {
 	category: mysqlEnum(['abastecimento','refeicao','compra_material','servico_terceiro','pedagio','outro']).notNull(),
 	description: varchar({ length: 500 }).notNull(),
 	amount: varchar({ length: 20 }).notNull(),
-	paymentMethod: mysqlEnum("payment_method", ['dinheiro','pix','cartao','transferencia']).default('dinheiro').notNull(),
+	paymentMethod: mysqlEnum("payment_method", ['dinheiro','pix','cartao','transferencia','debito']).default('dinheiro').notNull(),
 	receiptImageUrl: text("receipt_image_url"),
 	notes: text(),
 	registeredBy: int("registered_by").references(() => users.id),
@@ -616,6 +620,25 @@ export const equipmentOilRecords = mysqlTable("equipment_oil_records", {
 	registeredBy: int("registered_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
+
+export const oilStock = mysqlTable("oil_stock", {
+	id: int().autoincrement().notNull(),
+	oilType: mysqlEnum("oil_type", ['hidraulico','motor','transmissao','diferencial','outros']).notNull(),
+	brand: varchar({ length: 100 }).notNull(),
+	quantityLiters: varchar("quantity_liters", { length: 20 }).notNull(),
+	purchaseQuantityLiters: varchar("purchase_quantity_liters", { length: 20 }).notNull(),
+	pricePerLiter: varchar("price_per_liter", { length: 20 }),
+	totalValue: varchar("total_value", { length: 20 }),
+	photoUrl: text("photo_url"),
+	supplier: varchar({ length: 255 }),
+	notes: text(),
+	registeredBy: int("registered_by").references(() => users.id),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export type OilStock = typeof oilStock.$inferSelect;
+export type InsertOilStock = typeof oilStock.$inferInsert;
 
 export const machineMaintenance = mysqlTable("machine_maintenance", {
 	id: int().autoincrement().notNull(),
@@ -1134,6 +1157,8 @@ export const fuelSuppliers = mysqlTable("fuel_suppliers", {
 	notes: text(),
 	tankCapacity: varchar("tank_capacity", { length: 20 }),
 	tankAlertThreshold: varchar("tank_alert_threshold", { length: 5 }).default('20'),
+	vendorName: varchar("vendor_name", { length: 255 }),
+	managerName: varchar("manager_name", { length: 255 }),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });

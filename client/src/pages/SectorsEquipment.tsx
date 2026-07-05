@@ -47,6 +47,15 @@ export default function SectorsEquipment() {
   const [filterSectorId, setFilterSectorId] = useState(0);
   const [filterClientId, setFilterClientId] = useState(0);
   const [generatingOperationPdf, setGeneratingOperationPdf] = useState(false);
+  const [generatingAllPdf, setGeneratingAllPdf] = useState(false);
+  // Documentos do veículo
+  const [invoiceBase64, setInvoiceBase64] = useState<string | null>(null);
+  const [documentBase64, setDocumentBase64] = useState<string | null>(null);
+  const [insuranceBase64, setInsuranceBase64] = useState<string | null>(null);
+  const [existingInvoiceUrl, setExistingInvoiceUrl] = useState<string | null>(null);
+  const [existingDocumentUrl, setExistingDocumentUrl] = useState<string | null>(null);
+  const [existingInsuranceUrl, setExistingInsuranceUrl] = useState<string | null>(null);
+  const [equipResponsibleDriverId, setEquipResponsibleDriverId] = useState<number>(0);
   // Upload de foto do equipamento
   const [equipPhotoPreview, setEquipPhotoPreview] = useState<string | null>(null);
   const [equipPhotoBase64, setEquipPhotoBase64] = useState<string | null>(null);
@@ -64,6 +73,79 @@ export default function SectorsEquipment() {
     search: equipSearch || undefined,
   });
   const { data: clientsList = [] } = trpc.permissions.listClients.useQuery();
+  const { data: driversList = [] } = trpc.collaborators.list.useQuery({});
+
+  // Gerar Ficha PDF de TODOS os equipamentos
+  const handleGenerateAllEquipmentsPdf = async () => {
+    const list = equipList.filter((e: any) =>
+      (!filterSectorId || (e as any).sectorId === filterSectorId)
+    );
+    if (list.length === 0) { toast.error("Nenhum equipamento para gerar PDF."); return; }
+    setGeneratingAllPdf(true);
+    toast.info(`Gerando ficha de ${list.length} equipamento(s)...`);
+    try {
+      const [kobayashiB64, qrB64] = await loadPdfAssets();
+      const now = new Date().toLocaleDateString("pt-BR");
+      const statusLabel: Record<string, string> = { ativo: "Ativo", manutencao: "Em Manutenção", inativo: "Inativo" };
+
+      const photosB64 = await Promise.all(
+        list.map((e: any) => e.imageUrl ? fetchImageAsBase64(e.imageUrl) : Promise.resolve(null))
+      );
+
+      // Agrupar por operação para organizar o PDF
+      const byClient: Record<string, { name: string; items: any[]; photos: (string|null)[] }> = {};
+      list.forEach((e: any, i: number) => {
+        const key = e.clientName || "Sem Operação";
+        if (!byClient[key]) byClient[key] = { name: key, items: [], photos: [] };
+        byClient[key].items.push(e);
+        byClient[key].photos.push(photosB64[i]);
+      });
+
+      let body = "";
+      for (const [, group] of Object.entries(byClient)) {
+        body += `<div style="margin-bottom:8px;padding:8px 12px;background:#0d4f2e;color:#fff;border-radius:6px;font-size:13px;font-weight:600;">${group.name} — ${group.items.length} equipamento(s)</div>`;
+        body += group.items.map((e: any, i: number) => {
+          const photo = group.photos[i];
+          const statusBadgeClass = e.status === 'ativo' ? 'badge badge-green' : e.status === 'manutencao' ? 'badge badge-yellow' : 'badge badge-red';
+          return `
+          <div class="section" style="border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:12px;display:flex;gap:14px;">
+            ${ photo
+              ? `<img src="${photo}" style="width:100px;height:100px;border-radius:8px;object-fit:cover;border:2px solid #0d4f2e;flex-shrink:0;"/>`
+              : `<div style="width:100px;height:100px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:32px;">🚜</div>`
+            }
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <strong style="font-size:14px;color:#0d4f2e;">${e.name}</strong>
+                <span class="${statusBadgeClass}">${statusLabel[e.status] || e.status}</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:11px;">
+                ${e.typeName ? `<div><span style="color:#6b7280;">Tipo:</span> <strong>${e.typeName}</strong></div>` : ""}
+                ${e.brand ? `<div><span style="color:#6b7280;">Marca:</span> <strong>${e.brand}</strong></div>` : ""}
+                ${e.model ? `<div><span style="color:#6b7280;">Modelo:</span> <strong>${e.model}</strong></div>` : ""}
+                ${e.year ? `<div><span style="color:#6b7280;">Ano:</span> <strong>${e.year}</strong></div>` : ""}
+                ${e.serialNumber ? `<div><span style="color:#6b7280;">Nº Série:</span> <strong>${e.serialNumber}</strong></div>` : ""}
+                ${e.licensePlate ? `<div><span style="color:#6b7280;">Placa:</span> <strong>${e.licensePlate}</strong></div>` : ""}
+              </div>
+            </div>
+          </div>`;
+        }).join("");
+      }
+
+      const sectorName = filterSectorId > 0 ? (sectorsList.find(s => s.id === filterSectorId)?.name || "Setor") : "Todos os Setores";
+      const html = wrapInPdfDocument(
+        `Ficha de Equipamentos — ${sectorName}`,
+        `BTREE Empreendimentos LTDA · btreeambiental.com · Emitido em ${now} · ${list.length} equipamento(s)`,
+        body,
+        kobayashiB64,
+        qrB64
+      );
+      await generatePDFFromHtml(html, `equipamentos-${sectorName.replace(/\s+/g, '-')}.pdf`);
+    } catch {
+      toast.error("Erro ao gerar PDF dos equipamentos");
+    } finally {
+      setGeneratingAllPdf(false);
+    }
+  };
 
   // Gerar Ficha PDF por Operação
   const handleGenerateOperationPdf = async (clientId: number, clientName: string) => {
@@ -163,6 +245,9 @@ export default function SectorsEquipment() {
     setEquipPhotoPreview(null);
     setEquipPhotoBase64(null);
     setExistingImageUrl(null);
+    setInvoiceBase64(null); setDocumentBase64(null); setInsuranceBase64(null);
+    setExistingInvoiceUrl(null); setExistingDocumentUrl(null); setExistingInsuranceUrl(null);
+    setEquipResponsibleDriverId(0);
   };
 
   // Detectar se o tipo selecionado é veículo/caminhão (campo dinâmico)
@@ -200,6 +285,12 @@ export default function SectorsEquipment() {
       setEquipPhotoPreview(null);
     }
     setEquipPhotoBase64(null);
+    // Carregar documentos existentes
+    setExistingInvoiceUrl((e as any).invoiceUrl || null);
+    setExistingDocumentUrl((e as any).documentUrl || null);
+    setExistingInsuranceUrl((e as any).insuranceUrl || null);
+    setInvoiceBase64(null); setDocumentBase64(null); setInsuranceBase64(null);
+    setEquipResponsibleDriverId((e as any).responsibleDriverId || 0);
     setEquipOpen(true);
   };
 
@@ -247,6 +338,10 @@ export default function SectorsEquipment() {
       defaultHeightM: isVehicleType ? (equipForm.defaultHeightM || undefined) : undefined,
       defaultWidthM: isVehicleType ? (equipForm.defaultWidthM || undefined) : undefined,
       defaultLengthM: isVehicleType ? (equipForm.defaultLengthM || undefined) : undefined,
+      invoiceUrl: invoiceBase64 || existingInvoiceUrl || undefined,
+      documentUrl: documentBase64 || existingDocumentUrl || undefined,
+      insuranceUrl: insuranceBase64 || existingInsuranceUrl || undefined,
+      responsibleDriverId: equipResponsibleDriverId || undefined,
     };
     if (editEquipId) {
       updateEquip.mutate({ id: editEquipId, ...data });
@@ -384,6 +479,17 @@ export default function SectorsEquipment() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {/* Botão PDF de todos (ou setor filtrado) */}
+            <Button
+              variant="outline"
+              className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+              disabled={generatingAllPdf}
+              onClick={handleGenerateAllEquipmentsPdf}
+            >
+              <FileText className="h-4 w-4" />
+              {generatingAllPdf ? "Gerando..." : filterSectorId > 0 ? "PDF do Setor" : "PDF Geral"}
+            </Button>
+            {/* Botão PDF por operação (só aparece quando operação selecionada) */}
             {filterClientId > 0 && (
               <Button
                 variant="outline"
@@ -395,7 +501,7 @@ export default function SectorsEquipment() {
                 }}
               >
                 <FileText className="h-4 w-4" />
-                {generatingOperationPdf ? "Gerando..." : "Ficha da Operação"}
+                {generatingOperationPdf ? "Gerando..." : "PDF da Operação"}
               </Button>
             )}
             <div className="flex gap-2">
@@ -528,7 +634,7 @@ export default function SectorsEquipment() {
                       </div>
                       <div>
                         <Label>Ano</Label>
-                        <Input type="number" value={equipForm.year} onChange={e => setEquipForm(f => ({ ...f, year: e.target.value }))} placeholder="ex: 2022" min={1990} max={2030} />
+                        <Input type="number" value={equipForm.year} onChange={e => setEquipForm(f => ({ ...f, year: e.target.value }))} placeholder="ex: 2022" min={1900} max={2030} />
                       </div>
                       <div>
                         {isVehicleType ? (
@@ -596,6 +702,89 @@ export default function SectorsEquipment() {
                           <option value="manutencao">Em Manutenção</option>
                           <option value="inativo">Inativo</option>
                         </select>
+                      </div>
+                      {/* Motorista Responsável */}
+                      <div className="col-span-2">
+                        <Label>Motorista Responsável</Label>
+                        <select
+                          value={equipResponsibleDriverId}
+                          onChange={e => setEquipResponsibleDriverId(parseInt(e.target.value))}
+                          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value={0}>Nenhum</option>
+                          {(driversList as any[]).map((c: any) => (
+                            <option key={c.id} value={c.id}>{c.name}{c.role ? ` (${c.role})` : ""}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Documentos do Veículo */}
+                      <div className="col-span-2">
+                        <div className="border-t pt-3 mt-1">
+                          <Label className="text-emerald-700 font-semibold">📄 Documentos do Veículo</Label>
+                          <p className="text-xs text-gray-500 mb-2">Aceita foto (JPG/PNG) ou PDF. Serão exibidos na ficha PDF.</p>
+                        </div>
+                        <div className="space-y-2">
+                          {/* Nota Fiscal */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium w-28 text-gray-600">Nota Fiscal:</span>
+                            {(invoiceBase64 || existingInvoiceUrl) ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <a href={invoiceBase64 || existingInvoiceUrl!} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline truncate max-w-[160px]">Ver documento</a>
+                                <button type="button" onClick={() => { setInvoiceBase64(null); setExistingInvoiceUrl(null); }} className="text-red-500 hover:text-red-700"><X className="h-3 w-3" /></button>
+                              </div>
+                            ) : (
+                              <button type="button" className="text-xs text-emerald-600 border border-dashed border-emerald-400 rounded px-2 py-1 hover:bg-emerald-50"
+                                onClick={() => openFilePicker({ accept: "image/*,application/pdf" }, (files) => {
+                                  const f = files[0]; if (!f) return;
+                                  const reader = new FileReader();
+                                  reader.onload = (ev) => setInvoiceBase64(ev.target?.result as string);
+                                  reader.readAsDataURL(f);
+                                })}>
+                                + Anexar NF
+                              </button>
+                            )}
+                          </div>
+                          {/* Documento CRLV */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium w-28 text-gray-600">Documento (CRLV):</span>
+                            {(documentBase64 || existingDocumentUrl) ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <a href={documentBase64 || existingDocumentUrl!} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline truncate max-w-[160px]">Ver documento</a>
+                                <button type="button" onClick={() => { setDocumentBase64(null); setExistingDocumentUrl(null); }} className="text-red-500 hover:text-red-700"><X className="h-3 w-3" /></button>
+                              </div>
+                            ) : (
+                              <button type="button" className="text-xs text-emerald-600 border border-dashed border-emerald-400 rounded px-2 py-1 hover:bg-emerald-50"
+                                onClick={() => openFilePicker({ accept: "image/*,application/pdf" }, (files) => {
+                                  const f = files[0]; if (!f) return;
+                                  const reader = new FileReader();
+                                  reader.onload = (ev) => setDocumentBase64(ev.target?.result as string);
+                                  reader.readAsDataURL(f);
+                                })}>
+                                + Anexar CRLV
+                              </button>
+                            )}
+                          </div>
+                          {/* Seguro */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium w-28 text-gray-600">Seguro:</span>
+                            {(insuranceBase64 || existingInsuranceUrl) ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <a href={insuranceBase64 || existingInsuranceUrl!} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline truncate max-w-[160px]">Ver documento</a>
+                                <button type="button" onClick={() => { setInsuranceBase64(null); setExistingInsuranceUrl(null); }} className="text-red-500 hover:text-red-700"><X className="h-3 w-3" /></button>
+                              </div>
+                            ) : (
+                              <button type="button" className="text-xs text-emerald-600 border border-dashed border-emerald-400 rounded px-2 py-1 hover:bg-emerald-50"
+                                onClick={() => openFilePicker({ accept: "image/*,application/pdf" }, (files) => {
+                                  const f = files[0]; if (!f) return;
+                                  const reader = new FileReader();
+                                  reader.onload = (ev) => setInsuranceBase64(ev.target?.result as string);
+                                  reader.readAsDataURL(f);
+                                })}>
+                                + Anexar Seguro
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-3 pt-2">

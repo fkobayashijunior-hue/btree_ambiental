@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, X, Receipt, Filter, TrendingDown, MapPin, Settings } from "lucide-react";
+import { Plus, Trash2, Pencil, Camera, X, Receipt, Filter, TrendingDown, MapPin, Settings } from "lucide-react";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { useFilePicker } from "@/hooks/useFilePicker";
 
@@ -26,7 +26,8 @@ const CATEGORIES = [
 const PAYMENT_METHODS = [
   { value: "dinheiro", label: "Dinheiro" },
   { value: "pix", label: "PIX" },
-  { value: "cartao", label: "Cartão" },
+  { value: "cartao", label: "Cartão de Crédito" },
+  { value: "debito", label: "Débito" },
   { value: "transferencia", label: "Transferência" },
 ];
 
@@ -43,6 +44,18 @@ function formatCurrency(value: string) {
   return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+const emptyForm = {
+  date: new Date().toISOString().split("T")[0],
+  category: "" as any,
+  description: "",
+  amount: "",
+  paymentMethod: "dinheiro" as any,
+  receiptImageUrl: "",
+  notes: "",
+  workLocationId: "",
+  equipmentId: "",
+};
+
 export default function ExtraExpenses() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -51,19 +64,10 @@ export default function ExtraExpenses() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [showDialog, setShowDialog] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  const [form, setForm] = useState({
-    date: new Date().toISOString().split("T")[0],
-    category: "" as any,
-    description: "",
-    amount: "",
-    paymentMethod: "dinheiro" as any,
-    receiptImageUrl: "",
-    notes: "",
-    workLocationId: "",
-    equipmentId: "",
-  });
+  const [form, setForm] = useState({ ...emptyForm });
 
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
 
@@ -85,23 +89,40 @@ export default function ExtraExpenses() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const updateMutation = trpc.extraExpenses.update.useMutation({
+    onSuccess: () => {
+      toast.success("Gasto atualizado!");
+      setShowDialog(false);
+      setEditingId(null);
+      resetForm();
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const deleteMutation = trpc.extraExpenses.delete.useMutation({
     onSuccess: () => { toast.success("Gasto removido."); refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
   function resetForm() {
+    setForm({ ...emptyForm, date: new Date().toISOString().split("T")[0] });
+    setEditingId(null);
+  }
+
+  function openEdit(expense: typeof expenses[number]) {
+    setEditingId(expense.id);
     setForm({
-      date: new Date().toISOString().split("T")[0],
-      category: "" as any,
-      description: "",
-      amount: "",
-      paymentMethod: "dinheiro" as any,
-      receiptImageUrl: "",
-      notes: "",
-      workLocationId: "",
-      equipmentId: "",
+      date: expense.date?.toString().slice(0, 10) || new Date().toISOString().split("T")[0],
+      category: expense.category,
+      description: expense.description,
+      amount: expense.amount,
+      paymentMethod: expense.paymentMethod || "dinheiro",
+      receiptImageUrl: expense.receiptImageUrl || "",
+      notes: expense.notes || "",
+      workLocationId: expense.workLocationId?.toString() || "",
+      equipmentId: (expense as any).equipmentId?.toString() || "",
     });
+    setShowDialog(true);
   }
 
   async function handlePhotoUpload() {
@@ -143,11 +164,16 @@ export default function ExtraExpenses() {
     if (!form.category) return toast.error("Selecione uma categoria.");
     if (!form.description.trim()) return toast.error("Informe uma descrição.");
     if (!form.amount || parseFloat(form.amount) <= 0) return toast.error("Informe o valor.");
-    createMutation.mutate({
+    const payload = {
       ...form,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
       equipmentId: form.equipmentId ? parseInt(form.equipmentId) : undefined,
-    });
+    };
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, ...payload });
+    } else {
+      createMutation.mutate(payload);
+    }
   }
 
   // Totais
@@ -168,7 +194,7 @@ export default function ExtraExpenses() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Registro de despesas avulsas com foto da nota</p>
         </div>
-        <Button onClick={() => setShowDialog(true)} className="bg-green-600 hover:bg-green-700 text-white">
+        <Button onClick={() => { resetForm(); setShowDialog(true); }} className="bg-green-600 hover:bg-green-700 text-white">
           <Plus className="w-4 h-4 mr-2" /> Novo Gasto
         </Button>
       </div>
@@ -233,10 +259,10 @@ export default function ExtraExpenses() {
         <div className="space-y-3">
           {expenses.map(expense => {
             const catInfo = getCategoryInfo(expense.category);
+            const payLabel = PAYMENT_METHODS.find(m => m.value === expense.paymentMethod)?.label || expense.paymentMethod;
             return (
               <Card key={expense.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
-                  {/* Mobile-first: stack vertically */}
                   <div className="flex flex-col gap-2">
                     {/* Top row: badge + date + payment */}
                     <div className="flex items-center gap-2 flex-wrap">
@@ -244,7 +270,7 @@ export default function ExtraExpenses() {
                       <span className="text-xs text-muted-foreground">
                         {new Date(expense.date).toLocaleDateString("pt-BR")}
                       </span>
-                      <span className="text-xs text-muted-foreground">• {expense.paymentMethod}</span>
+                      <span className="text-xs text-muted-foreground">• {payLabel}</span>
                     </div>
 
                     {/* Description + amount row */}
@@ -258,7 +284,7 @@ export default function ExtraExpenses() {
                       )}
                     </div>
 
-                    {/* Footer: author + location + photo + delete */}
+                    {/* Footer: author + location + photo + actions */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-muted-foreground">Por: {expense.registeredByName || "—"}</p>
@@ -280,6 +306,12 @@ export default function ExtraExpenses() {
                             <img src={expense.receiptImageUrl} alt="Nota" className="w-full h-full object-cover" />
                           </a>
                         )}
+                        {/* Botão editar — disponível para todos */}
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-800 hover:bg-green-50"
+                          onClick={() => openEdit(expense)}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        {/* Botão remover — apenas admin */}
                         {isAdmin && (
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
                             onClick={() => { if (confirm("Remover este gasto?")) deleteMutation.mutate({ id: expense.id }); }}>
@@ -296,11 +328,11 @@ export default function ExtraExpenses() {
         </div>
       )}
 
-      {/* Dialog de novo gasto */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      {/* Dialog de novo/editar gasto */}
+      <Dialog open={showDialog} onOpenChange={(v) => { if (!v) { setShowDialog(false); resetForm(); } else setShowDialog(v); }}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Registrar Gasto Extra</DialogTitle>
+            <DialogTitle>{editingId ? "Editar Gasto Extra" : "Registrar Gasto Extra"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="grid grid-cols-2 gap-3">
@@ -337,7 +369,7 @@ export default function ExtraExpenses() {
               <Label>Forma de Pagamento</Label>
               <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v as any }))}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
                   {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
@@ -392,10 +424,10 @@ export default function ExtraExpenses() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowDialog(false)}>Cancelar</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { setShowDialog(false); resetForm(); }}>Cancelar</Button>
               <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                onClick={handleSubmit} disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Salvando..." : "Registrar Gasto"}
+                onClick={handleSubmit} disabled={createMutation.isPending || updateMutation.isPending}>
+                {(createMutation.isPending || updateMutation.isPending) ? "Salvando..." : editingId ? "Salvar Alterações" : "Registrar Gasto"}
               </Button>
             </div>
           </div>

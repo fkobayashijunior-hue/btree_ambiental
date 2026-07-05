@@ -1,6 +1,9 @@
 import { z } from "zod";import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { sectors, equipment, equipmentTypes, clients, userPermissions, collaborators } from "../../drizzle/schema";
+import { sectors, equipment, equipmentTypes, clients, userPermissions, collaborators as collaboratorsTable } from "../../drizzle/schema";
+import { alias } from "drizzle-orm/mysql-core";
+const collaborators = collaboratorsTable;
+const driverAlias = alias(collaboratorsTable, "driver");
 import { eq } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 
@@ -123,10 +126,16 @@ export const sectorsRouter = router({
           category: equipment.category,
           isThirdParty: equipment.isThirdParty,
           thirdPartyOwner: equipment.thirdPartyOwner,
+          invoiceUrl: equipment.invoiceUrl,
+          documentUrl: equipment.documentUrl,
+          insuranceUrl: equipment.insuranceUrl,
+          responsibleDriverId: equipment.responsibleDriverId,
+          responsibleDriverName: driverAlias.name,
         })
         .from(equipment)
         .leftJoin(equipmentTypes, eq(equipment.typeId, equipmentTypes.id))
         .leftJoin(clients, eq(equipment.clientId, clients.id))
+        .leftJoin(driverAlias, eq(equipment.responsibleDriverId, driverAlias.id))
         .orderBy(equipment.name);
 
       return rows.filter((r: typeof rows[number]) => {
@@ -164,6 +173,10 @@ export const sectorsRouter = router({
       defaultHeightM: z.string().optional(),
       defaultWidthM: z.string().optional(),
       defaultLengthM: z.string().optional(),
+      invoiceUrl: z.string().optional(),
+      documentUrl: z.string().optional(),
+      insuranceUrl: z.string().optional(),
+      responsibleDriverId: z.number().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -199,6 +212,10 @@ export const sectorsRouter = router({
       defaultHeightM: z.string().optional().nullable(),
       defaultWidthM: z.string().optional().nullable(),
       defaultLengthM: z.string().optional().nullable(),
+      invoiceUrl: z.string().optional().nullable(),
+      documentUrl: z.string().optional().nullable(),
+      insuranceUrl: z.string().optional().nullable(),
+      responsibleDriverId: z.number().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

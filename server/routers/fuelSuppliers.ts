@@ -52,6 +52,8 @@ export const fuelSuppliersRouter = router({
       notes: z.string().optional(),
       tankCapacity: z.string().optional(),
       tankAlertThreshold: z.string().optional(),
+      vendorName: z.string().optional(),
+      managerName: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -74,6 +76,8 @@ export const fuelSuppliersRouter = router({
         notes: input.notes || null,
         tankCapacity: input.tankCapacity || null,
         tankAlertThreshold: input.tankAlertThreshold || '20',
+        vendorName: input.vendorName || null,
+        managerName: input.managerName || null,
       });
       return { success: true };
     }),
@@ -99,6 +103,8 @@ export const fuelSuppliersRouter = router({
       notes: z.string().nullable().optional(),
       tankCapacity: z.string().nullable().optional(),
       tankAlertThreshold: z.string().nullable().optional(),
+      vendorName: z.string().nullable().optional(),
+      managerName: z.string().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -123,6 +129,8 @@ export const fuelSuppliersRouter = router({
       if (data.notes !== undefined) updateData.notes = data.notes;
       if (data.tankCapacity !== undefined) updateData.tankCapacity = data.tankCapacity;
       if (data.tankAlertThreshold !== undefined) updateData.tankAlertThreshold = data.tankAlertThreshold;
+      if (data.vendorName !== undefined) updateData.vendorName = data.vendorName;
+      if (data.managerName !== undefined) updateData.managerName = data.managerName;
       // If price changed, record in history
       if (data.pricePerLiter !== undefined) {
         const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq(fuelSuppliers.id, id));

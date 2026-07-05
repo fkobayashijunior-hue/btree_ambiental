@@ -151,6 +151,10 @@ export default function MachineHoursPage() {
   const { data: maintenance = [], isLoading: loadingMaint } = trpc.machineHours.listMaintenance.useQuery({});
   const { data: fuel = [], isLoading: loadingFuel } = trpc.machineHours.listFuel.useQuery({});
   const { data: oilRecords = [], isLoading: loadingOil } = trpc.machineHours.listOil.useQuery({});
+  const { data: oilStockList = [], refetch: refetchOilStock } = trpc.machineHours.listOilStock.useQuery();
+  const [showOilStockForm, setShowOilStockForm] = useState(false);
+  const [oilStockForm, setOilStockForm] = useState({ oilType: "hidraulico" as "hidraulico"|"motor"|"transmissao"|"diferencial"|"outros", brand: "", purchaseQuantityLiters: "", pricePerLiter: "", totalValue: "", supplier: "", notes: "", photoBase64: "" });
+  const [selectedOilStockId, setSelectedOilStockId] = useState<string>("");
   const { data: alerts = [] } = trpc.machineHours.maintenanceAlerts.useQuery();
   const { data: summary = [] } = trpc.machineHours.equipmentSummary.useQuery();
 
@@ -255,6 +259,21 @@ export default function MachineHoursPage() {
 
   const createOilMutation = trpc.machineHours.createOil.useMutation({
     onSuccess: () => { toast.success("Óleo registrado! Lançamento financeiro gerado automaticamente."); utils.machineHours.listOil.invalidate(); utils.machineHours.equipmentSummary.invalidate(); setIsOpen(false); resetForms(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const createOilWithStockMutation = trpc.machineHours.createOilWithStock.useMutation({
+    onSuccess: (d) => { toast.success(`Óleo registrado! Estoque atualizado (${d.newStockQty}L restantes).`); utils.machineHours.listOil.invalidate(); utils.machineHours.equipmentSummary.invalidate(); refetchOilStock(); setIsOpen(false); resetForms(); setSelectedOilStockId(""); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const addOilStockMutation = trpc.machineHours.addOilStock.useMutation({
+    onSuccess: (d) => { toast.success(d.updated ? "Estoque atualizado!" : "Óleo adicionado ao estoque!"); refetchOilStock(); setShowOilStockForm(false); setOilStockForm({ oilType: "hidraulico", brand: "", purchaseQuantityLiters: "", pricePerLiter: "", totalValue: "", supplier: "", notes: "", photoBase64: "" }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteOilStockMutation = trpc.machineHours.deleteOilStock.useMutation({
+    onSuccess: () => { toast.success("Item removido do estoque!"); refetchOilStock(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -391,18 +410,29 @@ export default function MachineHoursPage() {
       });
     } else {
       // oleo
-      createOilMutation.mutate({
-        equipmentId: parseInt(oilForm.equipmentId),
-        date: oilForm.date,
-        hourMeter: oilForm.hourMeter || undefined,
-        oilType: oilForm.oilType,
-        quantityLiters: oilForm.quantityLiters,
-        brand: oilForm.brand || undefined,
-        supplier: oilForm.supplier || undefined,
-        pricePerLiter: oilForm.pricePerLiter || undefined,
-        totalValue: oilForm.totalValue || undefined,
-        notes: oilForm.notes || undefined,
-      });
+      if (selectedOilStockId) {
+        createOilWithStockMutation.mutate({
+          equipmentId: parseInt(oilForm.equipmentId),
+          date: oilForm.date,
+          hourMeter: oilForm.hourMeter || undefined,
+          oilStockId: parseInt(selectedOilStockId),
+          quantityLiters: oilForm.quantityLiters,
+          notes: oilForm.notes || undefined,
+        });
+      } else {
+        createOilMutation.mutate({
+          equipmentId: parseInt(oilForm.equipmentId),
+          date: oilForm.date,
+          hourMeter: oilForm.hourMeter || undefined,
+          oilType: oilForm.oilType,
+          quantityLiters: oilForm.quantityLiters,
+          brand: oilForm.brand || undefined,
+          supplier: oilForm.supplier || undefined,
+          pricePerLiter: oilForm.pricePerLiter || undefined,
+          totalValue: oilForm.totalValue || undefined,
+          notes: oilForm.notes || undefined,
+        });
+      }
     }
   };
 
@@ -783,9 +813,98 @@ export default function MachineHoursPage() {
       {/* ===== ABA ÓLEO ===== */}
       {activeTab === "oleo" && (
         <div className="space-y-3">
+          {/* Estoque de Óleo */}
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-purple-800 text-sm">📦 Estoque de Óleo</h3>
+              <Button size="sm" variant="outline" onClick={() => setShowOilStockForm(!showOilStockForm)} className="text-purple-700 border-purple-300 text-xs h-7">
+                {showOilStockForm ? "Cancelar" : "+ Entrada de Estoque"}
+              </Button>
+            </div>
+            {showOilStockForm && (
+              <div className="bg-white rounded-lg p-3 border border-purple-100 mb-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Tipo *</Label>
+                    <select value={oilStockForm.oilType} onChange={e => setOilStockForm(f => ({ ...f, oilType: e.target.value as any }))} className="w-full h-9 px-2 rounded-md border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="hidraulico">Hidráulico</option>
+                      <option value="motor">Motor</option>
+                      <option value="transmissao">Transmissão</option>
+                      <option value="diferencial">Diferencial</option>
+                      <option value="outros">Outros</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Marca *</Label>
+                    <Input value={oilStockForm.brand} onChange={e => setOilStockForm(f => ({ ...f, brand: e.target.value }))} placeholder="ex: Castrol, Shell" className="h-9 text-xs" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Qtd Comprada (L) *</Label>
+                    <Input value={oilStockForm.purchaseQuantityLiters} onChange={e => setOilStockForm(f => ({ ...f, purchaseQuantityLiters: e.target.value }))} placeholder="0,0" className="h-9 text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Preço/L (R$)</Label>
+                    <Input value={oilStockForm.pricePerLiter} onChange={e => setOilStockForm(f => ({ ...f, pricePerLiter: e.target.value }))} placeholder="0,00" className="h-9 text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Total (R$)</Label>
+                    <Input value={oilStockForm.totalValue} onChange={e => setOilStockForm(f => ({ ...f, totalValue: e.target.value }))} placeholder="0,00" className="h-9 text-xs" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Fornecedor</Label>
+                  <Input value={oilStockForm.supplier} onChange={e => setOilStockForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do fornecedor" className="h-9 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-xs">Foto do Produto</Label>
+                  <button type="button" className="text-xs text-purple-600 border border-dashed border-purple-400 rounded px-2 py-1 hover:bg-purple-50 w-full"
+                    onClick={() => {
+                      const input = document.createElement("input"); input.type = "file"; input.accept = "image/*";
+                      input.onchange = () => {
+                        const f = input.files?.[0]; if (!f) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setOilStockForm(prev => ({ ...prev, photoBase64: ev.target?.result as string }));
+                        reader.readAsDataURL(f);
+                      };
+                      document.body.appendChild(input); input.click(); setTimeout(() => { if (document.body.contains(input)) document.body.removeChild(input); }, 60000);
+                    }}>
+                    {oilStockForm.photoBase64 ? "✓ Foto selecionada" : "+ Selecionar foto"}
+                  </button>
+                  {oilStockForm.photoBase64 && <img src={oilStockForm.photoBase64} alt="preview" className="mt-1 h-16 rounded object-cover" />}
+                </div>
+                <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs" disabled={addOilStockMutation.isPending}
+                  onClick={() => addOilStockMutation.mutate({ oilType: oilStockForm.oilType, brand: oilStockForm.brand, purchaseQuantityLiters: oilStockForm.purchaseQuantityLiters, pricePerLiter: oilStockForm.pricePerLiter || undefined, totalValue: oilStockForm.totalValue || undefined, photoBase64: oilStockForm.photoBase64 || undefined, supplier: oilStockForm.supplier || undefined })}>
+                  {addOilStockMutation.isPending ? "Salvando..." : "Salvar no Estoque"}
+                </Button>
+              </div>
+            )}
+            {(oilStockList as any[]).length === 0 ? (
+              <p className="text-xs text-purple-500 text-center py-2">Nenhum item em estoque. Adicione uma entrada acima.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-2">
+                {(oilStockList as any[]).map((s: any) => (
+                  <div key={s.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-purple-100">
+                    <div className="flex items-center gap-2">
+                      {s.photoUrl && <img src={s.photoUrl} alt="" className="h-8 w-8 rounded object-cover" />}
+                      <div>
+                        <p className="text-xs font-semibold text-purple-800">{OIL_TYPE_LABELS[s.oilType]} · {s.brand}</p>
+                        <p className="text-xs text-gray-500">{parseFloat(s.quantityLiters).toFixed(1)}L disponíveis{s.pricePerLiter ? ` · R$ ${s.pricePerLiter}/L` : ""}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => { if (confirm("Remover do estoque?")) deleteOilStockMutation.mutate({ id: s.id }); }} className="text-red-400 hover:text-red-600 ml-2">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end">
             <Button size="sm" onClick={() => openNew("oleo")} className="bg-purple-600 hover:bg-purple-700 text-white gap-1">
-              <Plus className="h-3.5 w-3.5" /> Registrar Óleo
+              <Plus className="h-3.5 w-3.5" /> Registrar Consumo de Óleo
             </Button>
           </div>
           {loadingOil ? (
@@ -1147,46 +1266,80 @@ export default function MachineHoursPage() {
                   <Label>Horímetro</Label>
                   <Input value={oilForm.hourMeter} onChange={e => setOilForm(f => ({ ...f, hourMeter: e.target.value }))} placeholder="ex: 1250" />
                 </div>
+                {/* Seleção do item do estoque */}
                 <div>
-                  <Label>Tipo de Óleo *</Label>
-                  <select value={oilForm.oilType} onChange={e => setOilForm(f => ({ ...f, oilType: e.target.value as any }))} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                    <option value="hidraulico">Hidráulico</option>
-                    <option value="motor">Motor</option>
-                    <option value="transmissao">Transmissão</option>
-                    <option value="diferencial">Diferencial</option>
-                    <option value="outros">Outros</option>
+                  <Label>Óleo do Estoque</Label>
+                  <select
+                    value={selectedOilStockId}
+                    onChange={e => setSelectedOilStockId(e.target.value)}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">— Sem estoque (manual) —</option>
+                    {(oilStockList as any[]).map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {OIL_TYPE_LABELS[s.oilType]} · {s.brand} — {parseFloat(s.quantityLiters).toFixed(1)}L disponíveis
+                      </option>
+                    ))}
                   </select>
+                  {selectedOilStockId && (() => {
+                    const item = (oilStockList as any[]).find((s: any) => String(s.id) === selectedOilStockId);
+                    return item ? (
+                      <p className="text-xs text-emerald-700 mt-1">✓ {OIL_TYPE_LABELS[item.oilType]} · {item.brand} · R$ {item.pricePerLiter || "—"}/L · Estoque: {parseFloat(item.quantityLiters).toFixed(1)}L</p>
+                    ) : null;
+                  })()}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                {/* Campos manuais apenas se não selecionou estoque */}
+                {!selectedOilStockId && (
+                  <>
+                    <div>
+                      <Label>Tipo de Óleo *</Label>
+                      <select value={oilForm.oilType} onChange={e => setOilForm(f => ({ ...f, oilType: e.target.value as any }))} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                        <option value="hidraulico">Hidráulico</option>
+                        <option value="motor">Motor</option>
+                        <option value="transmissao">Transmissão</option>
+                        <option value="diferencial">Diferencial</option>
+                        <option value="outros">Outros</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Marca</Label>
+                        <Input value={oilForm.brand} onChange={e => setOilForm(f => ({ ...f, brand: e.target.value }))} placeholder="ex: Shell, Castrol..." />
+                      </div>
+                      <div>
+                        <Label>Fornecedor</Label>
+                        <Input value={oilForm.supplier} onChange={e => setOilForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do fornecedor" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <Label>Litros *</Label>
+                        <Input value={oilForm.quantityLiters} onChange={e => setOilForm(f => ({ ...f, quantityLiters: e.target.value }))} placeholder="0,0" required />
+                      </div>
+                      <div>
+                        <Label>Preço/L (R$)</Label>
+                        <Input value={oilForm.pricePerLiter} onChange={e => setOilForm(f => ({ ...f, pricePerLiter: e.target.value }))} placeholder="0,00" />
+                      </div>
+                      <div>
+                        <Label>Total (R$)</Label>
+                        <Input value={oilForm.totalValue} onChange={e => setOilForm(f => ({ ...f, totalValue: e.target.value }))} placeholder="0,00" />
+                      </div>
+                    </div>
+                  </>
+                )}
+                {/* Litros quando usa estoque */}
+                {selectedOilStockId && (
                   <div>
-                    <Label>Marca</Label>
-                    <Input value={oilForm.brand} onChange={e => setOilForm(f => ({ ...f, brand: e.target.value }))} placeholder="ex: Shell, Castrol..." />
-                  </div>
-                  <div>
-                    <Label>Fornecedor</Label>
-                    <Input value={oilForm.supplier} onChange={e => setOilForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do fornecedor" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <Label>Litros *</Label>
+                    <Label>Quantidade Utilizada (L) *</Label>
                     <Input value={oilForm.quantityLiters} onChange={e => setOilForm(f => ({ ...f, quantityLiters: e.target.value }))} placeholder="0,0" required />
                   </div>
-                  <div>
-                    <Label>Preço/L (R$)</Label>
-                    <Input value={oilForm.pricePerLiter} onChange={e => setOilForm(f => ({ ...f, pricePerLiter: e.target.value }))} placeholder="0,00" />
-                  </div>
-                  <div>
-                    <Label>Total (R$)</Label>
-                    <Input value={oilForm.totalValue} onChange={e => setOilForm(f => ({ ...f, totalValue: e.target.value }))} placeholder="0,00" />
-                  </div>
-                </div>
+                )}
                 <div>
                   <Label>Observações</Label>
                   <textarea value={oilForm.notes} onChange={e => setOilForm(f => ({ ...f, notes: e.target.value }))} className="w-full min-h-[60px] px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" placeholder="Observações..." />
                 </div>
                 <div className="bg-purple-50 rounded-lg p-3 text-xs text-purple-700">
-                  ℹ️ O custo será lançado automaticamente no módulo Financeiro.
+                  {selectedOilStockId ? "✓ O estoque será abatido automaticamente e o custo lançado no Financeiro." : "ℹ️ O custo será lançado automaticamente no módulo Financeiro."}
                 </div>
               </>
             )}

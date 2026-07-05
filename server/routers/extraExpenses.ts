@@ -101,7 +101,7 @@ export const extraExpensesRouter = router({
       category: z.enum(["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]),
       description: z.string().min(1),
       amount: z.string().min(1),
-      paymentMethod: z.enum(["dinheiro", "pix", "cartao", "transferencia"]).default("dinheiro"),
+      paymentMethod: z.enum(["dinheiro", "pix", "cartao", "debito", "transferencia"]).default("dinheiro"),
       receiptImageUrl: z.string().optional(),
       notes: z.string().optional(),
       workLocationId: z.number().optional(),
@@ -164,6 +164,37 @@ export const extraExpensesRouter = router({
       await db.update(extraExpenses).set({
         workLocationId: input.workLocationId,
       }).where(eq(extraExpenses.id, input.id));
+      return { success: true };
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      date: z.string().optional(),
+      category: z.enum(["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]).optional(),
+      description: z.string().min(1).optional(),
+      amount: z.string().optional(),
+      paymentMethod: z.enum(["dinheiro", "pix", "cartao", "debito", "transferencia"]).optional(),
+      receiptImageUrl: z.string().optional(),
+      notes: z.string().optional(),
+      workLocationId: z.number().optional(),
+      equipmentId: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const { id, ...fields } = input;
+      await db.update(extraExpenses).set({
+        ...(fields.date !== undefined && { date: fields.date }),
+        ...(fields.category !== undefined && { category: fields.category }),
+        ...(fields.description !== undefined && { description: fields.description }),
+        ...(fields.amount !== undefined && { amount: fields.amount }),
+        ...(fields.paymentMethod !== undefined && { paymentMethod: fields.paymentMethod as any }),
+        ...(fields.receiptImageUrl !== undefined && { receiptImageUrl: fields.receiptImageUrl }),
+        ...(fields.notes !== undefined && { notes: fields.notes }),
+        ...(fields.workLocationId !== undefined && { workLocationId: fields.workLocationId || null }),
+        ...(fields.equipmentId !== undefined && { equipmentId: fields.equipmentId || null }),
+      }).where(eq(extraExpenses.id, id));
       return { success: true };
     }),
 
