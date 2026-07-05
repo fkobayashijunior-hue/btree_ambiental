@@ -294,11 +294,11 @@ export default function FuelSuppliersPage() {
 
       {/* Form Sheet */}
       <Sheet open={formOpen} onOpenChange={setFormOpen}>
-        <SheetContent className="overflow-y-auto w-full sm:max-w-lg">
+        <SheetContent className="overflow-y-auto w-full sm:max-w-lg flex flex-col">
           <SheetHeader>
             <SheetTitle>{editId ? "Editar Fornecedor" : "Novo Fornecedor de Combustível"}</SheetTitle>
           </SheetHeader>
-          <div className="space-y-4 mt-4 pb-8">
+          <div className="flex-1 overflow-y-auto space-y-4 mt-4 pb-8 pr-1">
             {/* Seção: Dados da Empresa */}
             <div className="border-b pb-2 mb-2">
               <h3 className="text-sm font-semibold text-green-800 uppercase tracking-wide">Dados da Empresa</h3>
@@ -306,6 +306,16 @@ export default function FuelSuppliersPage() {
             <div>
               <label className="text-sm font-medium">Razão Social *</label>
               <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex: Unipetro Distribuidora de Petróleo Ltda" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">Nome do Vendedor</label>
+                <Input value={form.vendorName} onChange={e => setForm({ ...form, vendorName: e.target.value })} placeholder="Vendedor responsável" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Nome do Gerente</label>
+                <Input value={form.managerName} onChange={e => setForm({ ...form, managerName: e.target.value })} placeholder="Gerente responsável" />
+              </div>
             </div>
             <div>
               <label className="text-sm font-medium">Nome Fantasia</label>
@@ -331,17 +341,6 @@ export default function FuelSuppliersPage() {
                 <Input value={form.contactName} onChange={e => setForm({ ...form, contactName: e.target.value })} placeholder="Nome do contato" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium">Nome do Vendedor</label>
-                <Input value={form.vendorName} onChange={e => setForm({ ...form, vendorName: e.target.value })} placeholder="Vendedor responsável" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Nome do Gerente</label>
-                <Input value={form.managerName} onChange={e => setForm({ ...form, managerName: e.target.value })} placeholder="Gerente responsável" />
-              </div>
-            </div>
-
             {/* Seção: Endereço */}
             <div className="border-b pb-2 mb-2 mt-4">
               <h3 className="text-sm font-semibold text-green-800 uppercase tracking-wide">Endereço</h3>
