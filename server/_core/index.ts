@@ -407,6 +407,39 @@ async function runAutoMigrations() {
     try { await db.execute(/*sql*/`ALTER TABLE cargo_destinations ADD COLUMN price_per_m3 varchar(20) NULL`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE cargo_destinations ADD COLUMN price_type varchar(10) NULL DEFAULT 'ton'`); } catch(e) {}
 
+    // Add vendor_name and manager_name to fuel_suppliers
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN vendor_name varchar(255)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers ADD COLUMN manager_name varchar(255)`); } catch(e) {}
+
+    // Add document columns to equipment
+    try { await db.execute(/*sql*/`ALTER TABLE equipment ADD COLUMN invoice_url text`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE equipment ADD COLUMN document_url text`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE equipment ADD COLUMN insurance_url text`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE equipment ADD COLUMN responsible_driver_id int`); } catch(e) {}
+
+    // Add debito to extra_expenses payment_method enum
+    try { await db.execute(/*sql*/`ALTER TABLE extra_expenses MODIFY COLUMN payment_method enum('dinheiro','pix','credito','debito','transferencia','boleto','outros') NOT NULL DEFAULT 'pix'`); } catch(e) {}
+
+    // Create oil_stock table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS oil_stock (
+        id int AUTO_INCREMENT NOT NULL,
+        oil_type enum('hidraulico','motor','transmissao','diferencial','outros') NOT NULL DEFAULT 'hidraulico',
+        brand varchar(255) NOT NULL,
+        quantity_liters varchar(20) NOT NULL DEFAULT '0',
+        purchase_quantity_liters varchar(20),
+        price_per_liter varchar(20),
+        total_value varchar(20),
+        photo_url text,
+        supplier varchar(255),
+        notes text,
+        registered_by int,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT oil_stock_id PRIMARY KEY(id)
+      )
+    `);
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);

@@ -14957,6 +14957,76 @@ async function runAutoMigrations() {
       );
     } catch (e) {
     }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_suppliers ADD COLUMN vendor_name varchar(255)`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_suppliers ADD COLUMN manager_name varchar(255)`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE equipment ADD COLUMN invoice_url text`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE equipment ADD COLUMN document_url text`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE equipment ADD COLUMN insurance_url text`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE equipment ADD COLUMN responsible_driver_id int`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE extra_expenses MODIFY COLUMN payment_method enum('dinheiro','pix','credito','debito','transferencia','boleto','outros') NOT NULL DEFAULT 'pix'`
+      );
+    } catch (e) {
+    }
+    await db.execute(
+      /*sql*/
+      `
+      CREATE TABLE IF NOT EXISTS oil_stock (
+        id int AUTO_INCREMENT NOT NULL,
+        oil_type enum('hidraulico','motor','transmissao','diferencial','outros') NOT NULL DEFAULT 'hidraulico',
+        brand varchar(255) NOT NULL,
+        quantity_liters varchar(20) NOT NULL DEFAULT '0',
+        purchase_quantity_liters varchar(20),
+        price_per_liter varchar(20),
+        total_value varchar(20),
+        photo_url text,
+        supplier varchar(255),
+        notes text,
+        registered_by int,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT oil_stock_id PRIMARY KEY(id)
+      )
+    `
+    );
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
     console.error("[AutoMigration] Error:", err);
