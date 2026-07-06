@@ -65,10 +65,11 @@ export const vehicleRecordsRouter = router({
       if (input?.recordType) filtered = filtered.filter(r => r.recordType === input.recordType);
 
       // Filtro server-side por allowedClientIds (via workLocationId)
+      // Registros sem workLocationId sempre aparecem (não é possível determinar o cliente)
       if (allowedClientIds && allowedClientIds.length > 0 && allowedLocationIds) {
         filtered = filtered.filter(r => {
-          if (r.workLocationId && allowedLocationIds!.includes(r.workLocationId)) return true;
-          return false;
+          if (!r.workLocationId) return true; // sem local → sempre visível
+          return allowedLocationIds!.includes(r.workLocationId);
         });
       }
 

@@ -5290,8 +5290,8 @@ var vehicleRecordsRouter = router({
     if (input?.recordType) filtered = filtered.filter((r) => r.recordType === input.recordType);
     if (allowedClientIds && allowedClientIds.length > 0 && allowedLocationIds) {
       filtered = filtered.filter((r) => {
-        if (r.workLocationId && allowedLocationIds.includes(r.workLocationId)) return true;
-        return false;
+        if (!r.workLocationId) return true;
+        return allowedLocationIds.includes(r.workLocationId);
       });
     }
     const userIdsRaw = filtered.map((r) => r.registeredBy).filter((id) => id !== null && id !== void 0);
