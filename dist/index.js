@@ -5361,7 +5361,7 @@ var vehicleRecordsRouter = router({
     const { photoBase64, photosBase64, workLocationId, fuelInvoiceId, ...rest } = input;
     await db.insert(vehicleRecords).values({
       ...rest,
-      date: new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
+      date: input.date.length === 10 ? `${input.date} 00:00:00` : new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       photoUrl,
       photosJson,
       registeredBy: ctx.user.id,
