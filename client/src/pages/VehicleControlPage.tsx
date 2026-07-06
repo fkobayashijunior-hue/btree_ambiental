@@ -100,18 +100,31 @@ export default function VehicleControlPage() {
   // Filtrar por mês/ano ou período + local
   const filteredRecords = useMemo(() => {
     return (records as any[]).filter((r: any) => {
-      const d = new Date(r.date || r.createdAt);
+      // Interpretar data como local para evitar problema de fuso horário (UTC-3)
+      // r.date pode ser "2026-06-15" ou timestamp ISO
+      const rawDate = r.date || r.createdAt;
+      let month: number, year: number, dateObj: Date;
+      if (typeof rawDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
+        const parts = rawDate.slice(0, 10).split("-");
+        year = parseInt(parts[0]);
+        month = parseInt(parts[1]) - 1; // 0-indexed
+        dateObj = new Date(year, month, parseInt(parts[2]));
+      } else {
+        dateObj = new Date(rawDate);
+        month = dateObj.getMonth();
+        year = dateObj.getFullYear();
+      }
       // Filtro de período
       if (filterMode === "month") {
-        if (d.getMonth() !== filterMonth || d.getFullYear() !== filterYear) return false;
+        if (month !== filterMonth || year !== filterYear) return false;
       } else {
         if (filterDateFrom) {
           const from = new Date(filterDateFrom + "T00:00:00");
-          if (d < from) return false;
+          if (dateObj < from) return false;
         }
         if (filterDateTo) {
           const to = new Date(filterDateTo + "T23:59:59");
-          if (d > to) return false;
+          if (dateObj > to) return false;
         }
       }
       // Filtro por local de trabalho
