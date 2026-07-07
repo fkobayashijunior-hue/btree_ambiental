@@ -3,11 +3,11 @@ name: Deploy para Hostinger
 on:
   push:
     branches:
-      - main
+      - principal
 
 jobs:
   build-and-deploy:
-    name: Build e Deploy
+    name: Construir e implantar
     runs-on: ubuntu-latest
 
     steps:
@@ -21,21 +21,15 @@ jobs:
         with:
           node-version: '22'
 
-      # 3. Instalar pnpm
-      - name: Instalar pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      # 4. Instalar dependências
+      # 3. Instalar dependências (npm)
       - name: Instalar dependências
-        run: pnpm install --frozen-lockfile
+        run: npm install --legacy-peer-deps
 
-      # 5. Compilar frontend (Vite)
+      # 4. Compilar frontend (Vite)
       - name: Compilar frontend
-        run: pnpm vite build
+        run: npx vite build
 
-      # 6. Compilar backend (esbuild)
+      # 5. Compilar backend (esbuild)
       - name: Compilar backend
         run: |
           npx esbuild server/_core/index.ts \
@@ -45,7 +39,7 @@ jobs:
             --format=esm \
             --outfile=dist/index.js
 
-      # 7. Enviar arquivos para a Hostinger via SSH (rsync)
+      # 6. Enviar arquivos para a Hostinger via SSH
       - name: Deploy via SSH para Hostinger
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -59,18 +53,10 @@ jobs:
             cd ~/domains/btreeambiental.com/nodejs
 
             # Fazer pull do repositório
-            git pull origin main
+            git pull origin principal
 
             # Instalar dependências de runtime (sem devDependencies)
-            if [ -f "package.hostinger.json" ]; then
-              cp package.json package.json.bak
-              cp package.hostinger.json package.json
-              npm install --legacy-peer-deps --omit=dev
-              cp package.json.bak package.json
-              rm -f package.json.bak
-            else
-              npm install --legacy-peer-deps --omit=dev
-            fi
+            npm install --legacy-peer-deps --omit=dev
 
             # Copiar arquivos estáticos para public_html
             PUBLIC_HTML="$HOME/domains/btreeambiental.com/public_html"
