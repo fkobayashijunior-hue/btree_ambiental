@@ -46,7 +46,7 @@ jobs:
           host: ${{ secrets.HOSTINGER_HOST }}
           username: ${{ secrets.HOSTINGER_USER }}
           password: ${{ secrets.HOSTINGER_PASSWORD }}
-          port: 22
+          port: ${{ secrets.HOSTINGER_PORT }}
           script: |
             set -e
             echo "=== Iniciando deploy BTREE Ambiental ==="
