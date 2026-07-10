@@ -18,7 +18,8 @@ const LOCATION_TYPE_LABELS: Record<string, string> = {
 };
 
 const FUEL_TYPE_LABELS: Record<string, string> = {
-  diesel: "Diesel",
+  diesel: "Diesel S500",
+  diesel_s10: "Diesel S10",
   gasolina: "Gasolina",
   etanol: "Etanol",
   gnv: "GNV",
@@ -370,7 +371,8 @@ export default function FuelSuppliersPage() {
                 <Select value={form.fuelType} onValueChange={v => setForm({ ...form, fuelType: v as any })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="diesel">Diesel</SelectItem>
+                    <SelectItem value="diesel">Diesel S500</SelectItem>
+                    <SelectItem value="diesel_s10">Diesel S10</SelectItem>
                     <SelectItem value="gasolina">Gasolina</SelectItem>
                     <SelectItem value="etanol">Etanol</SelectItem>
                     <SelectItem value="gnv">GNV</SelectItem>

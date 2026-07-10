@@ -888,7 +888,8 @@ export default function VehicleControlPage() {
                 <div>
                   <Label>Combustível *</Label>
                   <select value={form.fuelType} onChange={e => setForm(f => ({ ...f, fuelType: e.target.value as any }))} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                    <option value="diesel">Diesel</option>
+                    <option value="diesel">Diesel S500</option>
+                    <option value="diesel_s10">Diesel S10</option>
                     <option value="gasolina">Gasolina</option>
                     <option value="etanol">Etanol</option>
                     <option value="gnv">GNV</option>

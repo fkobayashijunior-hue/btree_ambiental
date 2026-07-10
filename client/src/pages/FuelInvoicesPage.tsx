@@ -762,7 +762,7 @@ export default function FuelInvoicesPage() {
               <div><span className="text-gray-500">Status:</span><p><Badge className={STATUS_COLORS[viewInvoice.effectiveStatus || viewInvoice.status]}>{STATUS_LABELS[viewInvoice.effectiveStatus || viewInvoice.status]}</Badge></p></div>
               {viewInvoice.liters && <div><span className="text-gray-500">Litros:</span><p className="font-medium">{viewInvoice.liters}L</p></div>}
               {viewInvoice.pricePerLiter && <div><span className="text-gray-500">Preço/L:</span><p className="font-medium">R$ {viewInvoice.pricePerLiter}</p></div>}
-              {viewInvoice.fuelType && <div><span className="text-gray-500">Combustível:</span><p className="font-medium capitalize">{viewInvoice.fuelType}</p></div>}
+              {viewInvoice.fuelType && <div><span className="text-gray-500">Combustível:</span><p className="font-medium">{viewInvoice.fuelType === 'diesel' ? 'Diesel S500' : viewInvoice.fuelType === 'diesel_s10' ? 'Diesel S10' : viewInvoice.fuelType}</p></div>}
               {viewInvoice.paymentMethod && <div><span className="text-gray-500">Forma Pgto:</span><p className="font-medium capitalize">{viewInvoice.paymentMethod}</p></div>}
               {viewInvoice.bankName && <div><span className="text-gray-500">Banco:</span><p className="font-medium">{viewInvoice.bankName}</p></div>}
               {viewInvoice.barcodeNumber && <div className="col-span-2"><span className="text-gray-500">Cód. Barras:</span><p className="font-mono text-xs break-all">{viewInvoice.barcodeNumber}</p></div>}
@@ -940,7 +940,8 @@ export default function FuelInvoicesPage() {
                   onChange={e => setForm(f => ({ ...f, fuelType: e.target.value as any }))}
                   className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
                 >
-                  <option value="diesel">Diesel</option>
+                  <option value="diesel">Diesel S500</option>
+                  <option value="diesel_s10">Diesel S10</option>
                   <option value="gasolina">Gasolina</option>
                   <option value="etanol">Etanol</option>
                   <option value="gnv">GNV</option>

@@ -47,7 +47,8 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
 };
 
 const FUEL_TYPE_LABELS: Record<string, string> = {
-  diesel: "Diesel",
+  diesel: "Diesel S500",
+  diesel_s10: "Diesel S10",
   gasolina: "Gasolina",
   mistura_2t: "Mistura 2T",
   arla: "Arla 32",
@@ -1380,7 +1381,8 @@ export default function MachineHoursPage() {
                 <div>
                   <Label>Combustível *</Label>
                   <select value={fuelForm.fuelType} onChange={e => setFuelForm(f => ({ ...f, fuelType: e.target.value as any }))} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                    <option value="diesel">Diesel</option>
+                    <option value="diesel">Diesel S500</option>
+                    <option value="diesel_s10">Diesel S10</option>
                     <option value="gasolina">Gasolina</option>
                     <option value="mistura_2t">Mistura 2T</option>
                     <option value="arla">Arla 32</option>

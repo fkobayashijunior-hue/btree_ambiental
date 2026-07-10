@@ -440,6 +440,13 @@ async function runAutoMigrations() {
       )
     `);
 
+    // Adicionar diesel_s10 nos enums de fuel_type
+    try { await db.execute(/*sql*/`ALTER TABLE equipment_fuel_records MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','mistura_2t') NOT NULL`); console.log('[AutoMigration] Added diesel_s10 to equipment_fuel_records'); } catch(e: any) { if (!e?.message?.includes('diesel_s10')) console.log('[AutoMigration] equipment_fuel_records fuel_type already updated or error:', e?.message); }
+    try { await db.execute(/*sql*/`ALTER TABLE machine_hours_fuel MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','mistura_2t','arla') NOT NULL`); console.log('[AutoMigration] Added diesel_s10 to machine_hours_fuel'); } catch(e: any) { if (!e?.message?.includes('diesel_s10')) console.log('[AutoMigration] machine_hours_fuel fuel_type already updated or error:', e?.message); }
+    try { await db.execute(/*sql*/`ALTER TABLE vehicle_records MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','etanol','gnv')`); console.log('[AutoMigration] Added diesel_s10 to vehicle_records'); } catch(e: any) { if (!e?.message?.includes('diesel_s10')) console.log('[AutoMigration] vehicle_records fuel_type already updated or error:', e?.message); }
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_suppliers MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','etanol','gnv') NOT NULL DEFAULT 'diesel'`); console.log('[AutoMigration] Added diesel_s10 to fuel_suppliers'); } catch(e: any) { if (!e?.message?.includes('diesel_s10')) console.log('[AutoMigration] fuel_suppliers fuel_type already updated or error:', e?.message); }
+    try { await db.execute(/*sql*/`ALTER TABLE fuel_invoices MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','etanol','gnv') DEFAULT 'diesel'`); console.log('[AutoMigration] Added diesel_s10 to fuel_invoices'); } catch(e: any) { if (!e?.message?.includes('diesel_s10')) console.log('[AutoMigration] fuel_invoices fuel_type already updated or error:', e?.message); }
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);
