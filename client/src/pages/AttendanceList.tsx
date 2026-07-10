@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useWorkLocations } from "@/hooks/useWorkLocations";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -121,6 +122,7 @@ export default function AttendanceList() {
   const [gpsError, setGpsError] = useState("");
 
   const utils = trpc.useUtils();
+  const { isOnline, addToQueue } = useOfflineQueue();
    const { data: collaboratorsList = [] } = trpc.collaborators.list.useQuery({});
   // ── Locais GPS cadastrados ──────────────────────────────────────
   const { data: gpsLocationsList = [] } = trpc.gpsLocations.listActive.useQuery();
@@ -271,7 +273,7 @@ export default function AttendanceList() {
     if (!form.collaboratorId) { toast.error("Selecione o colaborador"); return; }
     // Líder não precisa informar valor da diária
     if (!isLider && !form.dailyValue) { toast.error("Informe o valor da diária"); return; }
-    createMutation.mutate({
+    const payload = {
       collaboratorId: parseInt(form.collaboratorId),
       date: form.date,
       employmentType: form.employmentType,
@@ -283,7 +285,14 @@ export default function AttendanceList() {
       longitude: form.longitude || undefined,
       locationName: form.locationName || undefined,
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
-    });
+    };
+    if (!isOnline) {
+      addToQueue("attendance.create", payload);
+      setIsOpen(false);
+      setForm({ ...emptyForm, workLocationId: defaultWorkLocationId, locationName: defaultLocationName });
+    } else {
+      createMutation.mutate(payload);
+    }
   };
 
   const handleCollaboratorChange = (id: string) => {

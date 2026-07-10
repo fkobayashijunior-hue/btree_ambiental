@@ -54,6 +54,10 @@ import PublicQuotationPage from "./pages/PublicQuotationPage";
 import PublicResponseReviewPage from "./pages/PublicResponseReviewPage";
 import ThirdPartyPage from "./pages/ThirdPartyPage";
 import AuditDataPage from "./pages/AuditDataPage";
+import { registerAllOfflineHandlers } from "@/lib/offlineSync";
+
+// Registrar handlers de sincronização offline uma única vez ao carregar o app
+registerAllOfflineHandlers();
 
 // Wrapper que aplica DashboardLayout a páginas protegidas
 function WithLayout({ component: Component }: { component: React.ComponentType }) {

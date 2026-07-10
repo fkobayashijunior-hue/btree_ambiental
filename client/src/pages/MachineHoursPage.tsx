@@ -14,6 +14,7 @@ import {
   Package, Search, Trash2, MapPin, Droplets
 } from "lucide-react";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 type ActiveTab = "resumo" | "horas" | "manutencao" | "abastecimento" | "oleo";
 type SheetMode = "horas" | "manutencao" | "abastecimento" | "oleo";
@@ -145,6 +146,7 @@ export default function MachineHoursPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   const utils = trpc.useUtils();
+  const { isOnline, addToQueue } = useOfflineQueue();
 
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
   const { data: hours = [], isLoading: loadingHours } = trpc.machineHours.listHours.useQuery({});
@@ -359,6 +361,9 @@ export default function MachineHoursPage() {
       };
       if (editingId) {
         updateHoursMutation.mutate({ id: editingId, ...payload });
+      } else if (!isOnline) {
+        addToQueue("machineHours.createHours", payload);
+        setIsOpen(false); resetForms();
       } else {
         createHoursMutation.mutate(payload);
       }
@@ -392,11 +397,14 @@ export default function MachineHoursPage() {
       };
       if (editingId) {
         updateMaintMutation.mutate({ id: editingId, ...payload });
+      } else if (!isOnline) {
+        addToQueue("machineHours.createMaintenance", payloadWithParts);
+        setIsOpen(false); resetForms();
       } else {
         createMaintMutation.mutate(payloadWithParts);
       }
     } else if (sheetMode === "abastecimento") {
-      createFuelMutation.mutate({
+      const fuelPayload = {
         equipmentId: parseInt(fuelForm.equipmentId),
         date: fuelForm.date,
         hourMeter: fuelForm.hourMeter || undefined,
@@ -407,20 +415,32 @@ export default function MachineHoursPage() {
         supplier: fuelForm.supplier || undefined,
         notes: fuelForm.notes || undefined,
         workLocationId: fuelForm.workLocationId ? parseInt(fuelForm.workLocationId) : undefined,
-      });
+      };
+      if (!isOnline) {
+        addToQueue("machineHours.createFuel", fuelPayload);
+        setIsOpen(false); resetForms();
+      } else {
+        createFuelMutation.mutate(fuelPayload);
+      }
     } else {
       // oleo
       if (selectedOilStockId) {
-        createOilWithStockMutation.mutate({
+        const oilStockPayload = {
           equipmentId: parseInt(oilForm.equipmentId),
           date: oilForm.date,
           hourMeter: oilForm.hourMeter || undefined,
           oilStockId: parseInt(selectedOilStockId),
           quantityLiters: oilForm.quantityLiters,
           notes: oilForm.notes || undefined,
-        });
+        };
+        if (!isOnline) {
+          addToQueue("machineHours.createOilWithStock", oilStockPayload);
+          setIsOpen(false); resetForms(); setSelectedOilStockId("");
+        } else {
+          createOilWithStockMutation.mutate(oilStockPayload);
+        }
       } else {
-        createOilMutation.mutate({
+        const oilPayload = {
           equipmentId: parseInt(oilForm.equipmentId),
           date: oilForm.date,
           hourMeter: oilForm.hourMeter || undefined,
@@ -431,7 +451,13 @@ export default function MachineHoursPage() {
           pricePerLiter: oilForm.pricePerLiter || undefined,
           totalValue: oilForm.totalValue || undefined,
           notes: oilForm.notes || undefined,
-        });
+        };
+        if (!isOnline) {
+          addToQueue("machineHours.createOil", oilPayload);
+          setIsOpen(false); resetForms();
+        } else {
+          createOilMutation.mutate(oilPayload);
+        }
       }
     }
   };

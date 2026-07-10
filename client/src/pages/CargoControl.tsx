@@ -22,6 +22,7 @@ import {
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 // ===== HELPERS =====
 // Fix timezone issue: date-only strings like "2026-05-08" are parsed as UTC midnight,
@@ -1225,6 +1226,7 @@ function WeeklyClosingsView({
 
 export default function CargoControl() {
   const utils = trpc.useUtils();
+  const { isOnline, addToQueue } = useOfflineQueue();
   const { allowedClientIds, isAdmin } = usePermissions();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("")
@@ -1495,7 +1497,13 @@ export default function CargoControl() {
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
     } else {
-      createMutation.mutate(data);
+      if (!isOnline) {
+        addToQueue("cargo.create", data);
+        setIsFormOpen(false);
+        resetForm();
+      } else {
+        createMutation.mutate(data);
+      }
     }
   };
 
