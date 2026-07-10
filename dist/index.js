@@ -15376,7 +15376,7 @@ function scheduleWeeklyClosingCron() {
           }
           const [loadsInWeek] = await conn.execute(
             `SELECT weight_net_kg, weight_out_kg FROM cargo_loads 
-             WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
+             WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
             [client.id, weekStartStr, weekEndStr]
           );
           if (loadsInWeek.length === 0) {

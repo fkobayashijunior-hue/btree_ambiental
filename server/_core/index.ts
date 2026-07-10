@@ -838,10 +838,10 @@ function scheduleWeeklyClosingCron() {
             continue;
           }
 
-          // Buscar cargas do cliente nesta semana
+          // Buscar cargas do cliente nesta semana (usa delivery_date se disponível, senão date)
           const [loadsInWeek] = await conn.execute(
             `SELECT weight_net_kg, weight_out_kg FROM cargo_loads 
-             WHERE client_id = ? AND DATE(date) >= ? AND DATE(date) <= ?`,
+             WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
             [client.id, weekStartStr, weekEndStr]
           ) as any;
 

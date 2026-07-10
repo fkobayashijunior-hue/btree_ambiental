@@ -1675,11 +1675,11 @@ export default function CargoControl() {
 
     const baseForWeekly = filterClientId ? filtered : loads;
     const thisWeekLoads = baseForWeekly.filter(c => {
-      const d = safeDate(c.date);
+      const d = safeDate((c as any).deliveryDate || c.date);
       return d >= thisWeekStart && d <= thisWeekEnd;
     });
     const lastWeekLoads = baseForWeekly.filter(c => {
-      const d = safeDate(c.date);
+      const d = safeDate((c as any).deliveryDate || c.date);
       return d >= lastWeekStart && d <= lastWeekEnd;
     });
 
