@@ -73,35 +73,44 @@ export const clientPortalRouter = router({
       // Destinos (sem filtro por clientId pois a tabela não tem esse campo)
       let destIds: number[] = [];
 
-      // Cargas vinculadas ao cliente - buscar com SQL direto para evitar problemas de schema
+      // Cargas vinculadas ao cliente — buscar DIRETAMENTE por client_id para garantir
+      // que todas as cargas do cliente sejam retornadas, independente do volume total.
+      // Ordenar por COALESCE(delivery_date, date) para que a data efetiva seja usada.
       let loads: any[] = [];
       try {
-        const allLoads = await db
+        const clientNameLower = client.name.toLowerCase();
+
+        // Busca primária: cargas com client_id exato
+        const byClientId = await db
           .select()
           .from(cargoLoads)
+          .where(eq(cargoLoads.clientId, input.clientId))
           .orderBy(desc(cargoLoads.date))
-          .limit(200);
+          .limit(500);
 
-        console.log(`[Portal] Total cargas no banco: ${allLoads.length}, clientId buscado: ${input.clientId}, clientName: ${client.name}`);
-        
-        const clientNameLower = client.name.toLowerCase();
-        loads = allLoads.filter(l => {
-          const matchClientId = l.clientId === input.clientId;
-          const matchClientName = l.clientName && l.clientName.toLowerCase().includes(clientNameLower);
-          const matchDestination = l.destination && l.destination.toLowerCase().includes(clientNameLower);
-          const matchDestId = l.destinationId && destIds.includes(l.destinationId);
-          return matchClientId || matchClientName || matchDestination || matchDestId;
-        }).slice(0, 200);
-        
-        console.log(`[Portal] Cargas filtradas para cliente: ${loads.length}`);
-        if (allLoads.length > 0) {
-          console.log(`[Portal] Amostra carga[0]: clientId=${allLoads[0].clientId} (tipo: ${typeof allLoads[0].clientId}), clientName=${allLoads[0].clientName}, destination=${allLoads[0].destination}`);
-        }
+        // Busca secundária: cargas com clientName contendo o nome do cliente
+        // (compatibilidade com registros antigos sem client_id)
+        const byClientName = await db
+          .select()
+          .from(cargoLoads)
+          .where(like(cargoLoads.clientName, `%${client.name}%`))
+          .orderBy(desc(cargoLoads.date))
+          .limit(100);
+
+        // Unir e deduplicar por ID
+        const seen = new Set<number>();
+        loads = [...byClientId, ...byClientName].filter(l => {
+          if (seen.has(l.id)) return false;
+          seen.add(l.id);
+          return true;
+        });
+
+        console.log(`[Portal] Cargas para cliente ${input.clientId} (${client.name}): ${loads.length} (byId=${byClientId.length}, byName=${byClientName.length})`);
       } catch (e) {
         console.error('[Portal] Erro ao buscar cargas:', e);
         // Fallback: buscar cargas diretamente por client_id via SQL raw
         try {
-          const [rawLoads] = await db.execute(`SELECT * FROM cargo_loads WHERE client_id = ${input.clientId} OR client_name LIKE '%${client.name}%' ORDER BY date DESC LIMIT 50`) as any;
+          const [rawLoads] = await db.execute(`SELECT * FROM cargo_loads WHERE client_id = ${input.clientId} ORDER BY COALESCE(delivery_date, date) DESC LIMIT 500`) as any;
           loads = Array.isArray(rawLoads) ? rawLoads : [];
           console.log(`[Portal] Fallback SQL raw: ${loads.length} cargas encontradas`);
         } catch (e2) {

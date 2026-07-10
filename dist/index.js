@@ -5719,7 +5719,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z11 } from "zod";
-import { eq as eq11, and as and4, desc as desc8 } from "drizzle-orm";
+import { eq as eq11, and as and4, like as like3, desc as desc8 } from "drizzle-orm";
 import bcrypt3 from "bcryptjs";
 var clientPortalRouter = router({
   // ── LOGIN DO CLIENTE (público) ──
@@ -5762,24 +5762,20 @@ var clientPortalRouter = router({
     let destIds = [];
     let loads = [];
     try {
-      const allLoads = await db.select().from(cargoLoads).orderBy(desc8(cargoLoads.date)).limit(200);
-      console.log(`[Portal] Total cargas no banco: ${allLoads.length}, clientId buscado: ${input.clientId}, clientName: ${client.name}`);
       const clientNameLower = client.name.toLowerCase();
-      loads = allLoads.filter((l) => {
-        const matchClientId = l.clientId === input.clientId;
-        const matchClientName = l.clientName && l.clientName.toLowerCase().includes(clientNameLower);
-        const matchDestination = l.destination && l.destination.toLowerCase().includes(clientNameLower);
-        const matchDestId = l.destinationId && destIds.includes(l.destinationId);
-        return matchClientId || matchClientName || matchDestination || matchDestId;
-      }).slice(0, 200);
-      console.log(`[Portal] Cargas filtradas para cliente: ${loads.length}`);
-      if (allLoads.length > 0) {
-        console.log(`[Portal] Amostra carga[0]: clientId=${allLoads[0].clientId} (tipo: ${typeof allLoads[0].clientId}), clientName=${allLoads[0].clientName}, destination=${allLoads[0].destination}`);
-      }
+      const byClientId = await db.select().from(cargoLoads).where(eq11(cargoLoads.clientId, input.clientId)).orderBy(desc8(cargoLoads.date)).limit(500);
+      const byClientName = await db.select().from(cargoLoads).where(like3(cargoLoads.clientName, `%${client.name}%`)).orderBy(desc8(cargoLoads.date)).limit(100);
+      const seen = /* @__PURE__ */ new Set();
+      loads = [...byClientId, ...byClientName].filter((l) => {
+        if (seen.has(l.id)) return false;
+        seen.add(l.id);
+        return true;
+      });
+      console.log(`[Portal] Cargas para cliente ${input.clientId} (${client.name}): ${loads.length} (byId=${byClientId.length}, byName=${byClientName.length})`);
     } catch (e) {
       console.error("[Portal] Erro ao buscar cargas:", e);
       try {
-        const [rawLoads] = await db.execute(`SELECT * FROM cargo_loads WHERE client_id = ${input.clientId} OR client_name LIKE '%${client.name}%' ORDER BY date DESC LIMIT 50`);
+        const [rawLoads] = await db.execute(`SELECT * FROM cargo_loads WHERE client_id = ${input.clientId} ORDER BY COALESCE(delivery_date, date) DESC LIMIT 500`);
         loads = Array.isArray(rawLoads) ? rawLoads : [];
         console.log(`[Portal] Fallback SQL raw: ${loads.length} cargas encontradas`);
       } catch (e2) {

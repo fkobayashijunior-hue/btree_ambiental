@@ -221,7 +221,13 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
   const statusLabel = closing.status === 'pago' ? 'PAGO' : closing.status === 'atrasado' ? 'ATRASADO' : 'AGUARDANDO PAGAMENTO';
   const statusClass = closing.status === 'pago' ? 'badge-pago' : closing.status === 'atrasado' ? 'badge-atrasado' : 'badge-pendente';
 
-  // Filter loads in this week period
+  // Usar dados do fechamento oficial — idênticos ao sistema admin
+  const actualTotalLoads = closing.totalLoads ?? 0;
+  const actualTotalWeightKg = parseFloat(closing.totalWeightKg || '0');
+  const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
+  const actualTotalAmount = formatBR(parseFloat(closing.totalAmount || '0'), 2);
+
+  // Listar cargas do período para detalhamento no PDF (apenas visual)
   const weekStart = safeDate(closing.weekStart);
   const weekEnd = safeDate(closing.weekEnd);
   weekEnd.setHours(23, 59, 59, 999);
@@ -229,15 +235,6 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
     const d = safeDate(l.deliveryDate || l.date);
     return d >= weekStart && d <= weekEnd;
   });
-
-  // Use actual filtered loads count (not the saved totalLoads which may be stale)
-  const actualTotalLoads = weekLoads.length;
-  const actualTotalWeightKg = weekLoads.reduce((sum: number, l: any) => {
-    const w = parseFloat(l.weightNetKg || l.weightOutKg || '0');
-    return sum + w;
-  }, 0);
-  const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
-  const actualTotalAmount = formatBR(actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon), 2);
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
     const date = (l.deliveryDate || l.date) ? safeDate(l.deliveryDate || l.date).toLocaleDateString('pt-BR') : '-';
@@ -1088,23 +1085,9 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                           </span>
                                         </div>
                                         <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                                          {(() => {
-                                            const wStart = safeDate(closing.weekStart);
-                                            const wEnd = safeDate(closing.weekEnd);
-                                            wEnd.setHours(23, 59, 59, 999);
-                                            const realLoads = (data?.loads || []).filter((l: any) => {
-                                              const d = safeDate(l.deliveryDate || l.date);
-                                              return d >= wStart && d <= wEnd;
-                                            });
-                                            const realWeight = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
-                                            const realCount = realLoads.length;
-                                            return (
-                                              <>
-                                                <span>{realCount} carga{realCount !== 1 ? 's' : ''}</span>
-                                                <span>{formatBR(realWeight / 1000)} ton</span>
-                                              </>
-                                            );
-                                          })()}
+                                          {/* Usar dados do fechamento oficial — idêntico ao sistema admin */}
+                                          <span>{closing.totalLoads ?? 0} carga{(closing.totalLoads ?? 0) !== 1 ? 's' : ''}</span>
+                                          <span>{formatBR(parseFloat(closing.totalWeightKg || '0') / 1000)} ton</span>
                                           {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
                                         </div>
                                         {closing.status !== 'pago' && closing.dueDate && (
