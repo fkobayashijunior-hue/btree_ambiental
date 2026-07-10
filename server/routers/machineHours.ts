@@ -288,7 +288,7 @@ export const machineHoursRouter = router({
       equipmentId: z.number(),
       date: z.string(),
       hourMeter: z.string().optional(),
-      fuelType: z.enum(["diesel", "gasolina", "mistura_2t", "arla"]),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "mistura_2t", "arla"]),
       liters: z.string(),
       pricePerLiter: z.string().optional(),
       totalValue: z.string().optional(),
@@ -313,7 +313,7 @@ export const machineHoursRouter = router({
           const eqName = eqRow?.name || `Equipamento #${input.equipmentId}`;
           const dateObj = new Date(input.date);
           const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-          const fuelLabels: Record<string, string> = { diesel: 'Diesel', gasolina: 'Gasolina', mistura_2t: 'Mistura 2T', arla: 'Arla 32' };
+          const fuelLabels: Record<string, string> = { diesel: 'Diesel S500', diesel_s10: 'Diesel S10', gasolina: 'Gasolina', mistura_2t: 'Mistura 2T', arla: 'Arla 32' };
           await db.insert(financialEntries).values({
             type: 'despesa',
             category: 'combustivel',
