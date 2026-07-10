@@ -73,8 +73,14 @@ export default function InvoiceControlPage() {
     if (filterChecked === "checked") list = list.filter(i => i.invoiceChecked === 1);
     if (filterChecked === "pending") list = list.filter(i => i.invoiceChecked === 0);
     if (filterDestination !== "all") list = list.filter(i => String(i.destinationId) === filterDestination);
-    if (dateFrom) list = list.filter(i => i.date && i.date >= dateFrom);
-    if (dateTo) list = list.filter(i => i.date && i.date <= dateTo);
+    if (dateFrom) list = list.filter(i => {
+      const d = i.deliveryDate || i.date;
+      return d && d >= dateFrom;
+    });
+    if (dateTo) list = list.filter(i => {
+      const d = i.deliveryDate || i.date;
+      return d && d <= dateTo;
+    });
     return list;
   }, [invoices, search, filterChecked, filterDestination, dateFrom, dateTo]);
 
@@ -241,7 +247,12 @@ export default function InvoiceControlPage() {
               <tbody>
                 {filtered.map((inv, idx) => (
                   <tr key={inv.id} className={`border-t transition-colors ${inv.invoiceChecked === 1 ? 'bg-green-50/50 dark:bg-green-950/10' : idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}`}>
-                    <td className="p-3 text-muted-foreground">{formatDate(inv.date)}</td>
+                    <td className="p-3 text-muted-foreground">
+                      {formatDate(inv.deliveryDate || inv.date)}
+                      {inv.deliveryDate && inv.deliveryDate !== inv.date && (
+                        <div className="text-xs text-muted-foreground/60">reg: {formatDate(inv.date)}</div>
+                      )}
+                    </td>
                     <td className="p-3">
                       <div className="flex items-center gap-1">
                         {inv.invoiceNumber ? (

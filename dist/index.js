@@ -762,7 +762,7 @@ var init_schema = __esm({
       equipmentId: int("equipment_id").notNull().references(() => equipment.id),
       operatorId: int("operator_id").notNull().references(() => users.id),
       date: timestamp({ mode: "string" }).notNull(),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "mistura_2t"]).notNull(),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "mistura_2t"]).notNull(),
       liters: varchar({ length: 20 }).notNull(),
       totalValue: varchar("total_value", { length: 20 }).notNull(),
       pricePerLiter: varchar("price_per_liter", { length: 20 }),
@@ -817,7 +817,7 @@ var init_schema = __esm({
       equipmentId: int("equipment_id").notNull().references(() => equipment.id),
       date: timestamp({ mode: "string" }).notNull(),
       hourMeter: varchar("hour_meter", { length: 20 }),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "mistura_2t", "arla"]).notNull(),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "mistura_2t", "arla"]).notNull(),
       liters: varchar({ length: 20 }).notNull(),
       pricePerLiter: varchar("price_per_liter", { length: 20 }),
       totalValue: varchar("total_value", { length: 20 }),
@@ -1130,7 +1130,7 @@ var init_schema = __esm({
       equipmentId: int("equipment_id").notNull().references(() => equipment.id),
       date: timestamp({ mode: "string" }).notNull(),
       recordType: mysqlEnum("record_type", ["abastecimento", "manutencao", "km"]).notNull(),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "etanol", "gnv"]),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
       liters: varchar({ length: 20 }),
       fuelCost: varchar("fuel_cost", { length: 20 }),
       pricePerLiter: varchar("price_per_liter", { length: 20 }),
@@ -1284,7 +1284,7 @@ var init_schema = __esm({
       address: text(),
       city: varchar({ length: 100 }),
       state: varchar({ length: 2 }),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "etanol", "gnv"]).default("diesel").notNull(),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel").notNull(),
       pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
       locationType: mysqlEnum("location_type", ["simflor", "astorga", "postos"]).default("simflor").notNull(),
       location: varchar({ length: 255 }),
@@ -1315,7 +1315,7 @@ var init_schema = __esm({
       totalAmount: varchar("total_amount", { length: 20 }).notNull(),
       liters: varchar({ length: 20 }),
       pricePerLiter: varchar("price_per_liter", { length: 20 }),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "gasolina", "etanol", "gnv"]).default("diesel"),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
       paymentMethod: varchar("payment_method", { length: 50 }),
       bankName: varchar("bank_name", { length: 100 }),
       barcodeNumber: varchar("barcode_number", { length: 100 }),
@@ -15023,6 +15023,51 @@ async function runAutoMigrations() {
       )
     `
     );
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE equipment_fuel_records MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','mistura_2t') NOT NULL`
+      );
+      console.log("[AutoMigration] Added diesel_s10 to equipment_fuel_records");
+    } catch (e) {
+      if (!e?.message?.includes("diesel_s10")) console.log("[AutoMigration] equipment_fuel_records fuel_type already updated or error:", e?.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE machine_hours_fuel MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','mistura_2t','arla') NOT NULL`
+      );
+      console.log("[AutoMigration] Added diesel_s10 to machine_hours_fuel");
+    } catch (e) {
+      if (!e?.message?.includes("diesel_s10")) console.log("[AutoMigration] machine_hours_fuel fuel_type already updated or error:", e?.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE vehicle_records MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','etanol','gnv')`
+      );
+      console.log("[AutoMigration] Added diesel_s10 to vehicle_records");
+    } catch (e) {
+      if (!e?.message?.includes("diesel_s10")) console.log("[AutoMigration] vehicle_records fuel_type already updated or error:", e?.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_suppliers MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','etanol','gnv') NOT NULL DEFAULT 'diesel'`
+      );
+      console.log("[AutoMigration] Added diesel_s10 to fuel_suppliers");
+    } catch (e) {
+      if (!e?.message?.includes("diesel_s10")) console.log("[AutoMigration] fuel_suppliers fuel_type already updated or error:", e?.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fuel_invoices MODIFY COLUMN fuel_type ENUM('diesel','diesel_s10','gasolina','etanol','gnv') DEFAULT 'diesel'`
+      );
+      console.log("[AutoMigration] Added diesel_s10 to fuel_invoices");
+    } catch (e) {
+      if (!e?.message?.includes("diesel_s10")) console.log("[AutoMigration] fuel_invoices fuel_type already updated or error:", e?.message);
+    }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
     console.error("[AutoMigration] Error:", err);

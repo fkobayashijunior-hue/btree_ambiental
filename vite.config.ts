@@ -193,7 +193,8 @@ const plugins = [
       maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limit
       globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       navigateFallback: "/index.html",
-      navigateFallbackDenylist: [/^\/api\//],
+      navigateFallbackDenylist: [/^\/api\//, /LSCWP/, /nocache/, /\?.*=/],
+      navigationPreload: false,
       runtimeCaching: [
         {
           urlPattern: /^\/api\/trpc\//,
@@ -205,15 +206,7 @@ const plugins = [
             cacheableResponse: { statuses: [0, 200] },
           },
         },
-        {
-          urlPattern: /^https:\/\//,
-          handler: "StaleWhileRevalidate",
-          options: {
-            cacheName: "external-cache",
-            expiration: { maxEntries: 50, maxAgeSeconds: 24 * 60 * 60 },
-            cacheableResponse: { statuses: [0, 200] },
-          },
-        },
+
       ],
     },
   }),

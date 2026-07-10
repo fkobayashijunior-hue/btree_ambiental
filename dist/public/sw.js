@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
+define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -94,7 +94,7 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "index.html",
-    "revision": "2d79e70ab3c6991da890fa7fa7df0983"
+    "revision": "180ca691e6f84853945f54636fdc87b9"
   }, {
     "url": "icon-btree-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
@@ -105,25 +105,25 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     "url": "assets/purify.es-BgtpMKW3.js",
     "revision": null
   }, {
-    "url": "assets/jspdf.es.min-Dbp6-hvp.js",
+    "url": "assets/jspdf.es.min-C8BmP6xF.js",
     "revision": null
   }, {
-    "url": "assets/index.es-4Z3pC-Vj.js",
+    "url": "assets/index.es-MYa14gCV.js",
     "revision": null
   }, {
-    "url": "assets/index-CoNLR-0R.css",
+    "url": "assets/index-BI_v5qti.css",
     "revision": null
   }, {
-    "url": "assets/index-B4xj3nqQ.js",
+    "url": "assets/index-BAGD-86t.js",
     "revision": null
   }, {
     "url": "assets/html2canvas.esm-B0tyYwQk.js",
     "revision": null
   }, {
-    "url": "assets/exceljs.min-BbppuQR1.js",
+    "url": "assets/exceljs.min-DQrPFtSf.js",
     "revision": null
   }, {
-    "url": "assets/FileSaver.min-CtTFY0Ur.js",
+    "url": "assets/FileSaver.min-CwnjDet3.js",
     "revision": null
   }, {
     "url": "__manus__/debug-collector.js",
@@ -152,7 +152,7 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
-    denylist: [/^\/api\//]
+    denylist: [/^\/api\//, /LSCWP/, /nocache/, /\?.*=/]
   }));
   workbox.registerRoute(/^\/api\/trpc\//, new workbox.NetworkFirst({
     "cacheName": "trpc-cache",
@@ -160,15 +160,6 @@ define(['./workbox-8c83623c'], (function (workbox) { 'use strict';
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 200,
       maxAgeSeconds: 604800
-    }), new workbox.CacheableResponsePlugin({
-      statuses: [0, 200]
-    })]
-  }), 'GET');
-  workbox.registerRoute(/^https:\/\//, new workbox.StaleWhileRevalidate({
-    "cacheName": "external-cache",
-    plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 50,
-      maxAgeSeconds: 86400
     }), new workbox.CacheableResponsePlugin({
       statuses: [0, 200]
     })]

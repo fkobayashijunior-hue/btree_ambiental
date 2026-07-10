@@ -284,7 +284,7 @@ export default function VehicleControlPage() {
         <td>${new Date(r.date || r.createdAt).toLocaleDateString("pt-BR")}</td>
         <td>${equipMap[r.equipmentId] || `#${r.equipmentId}`}</td>
         <td>${RECORD_LABELS[r.recordType as RecordType] || r.recordType}</td>
-        <td>${r.recordType === "abastecimento" ? (r.fuelType || "-") : "-"}</td>
+        <td>${r.recordType === "abastecimento" ? (r.fuelType === 'diesel' ? 'Diesel S500' : r.fuelType === 'diesel_s10' ? 'Diesel S10' : r.fuelType || "-") : "-"}</td>
         <td>${r.recordType === "abastecimento" ? `${r.liters || "0"} L` : (r.kmDriven ? `${r.kmDriven} km` : "-")}</td>
         <td>${r.fuelCost || r.maintenanceCost ? `R$ ${r.fuelCost || r.maintenanceCost}` : "-"}</td>
         <td>${r.supplier || r.maintenanceType || "-"}</td>
@@ -809,7 +809,7 @@ export default function VehicleControlPage() {
                       {r.odometer && <span>{r.odometer} km</span>}
                       {r.supplier && <span>{r.supplier}</span>}
                       {r.maintenanceType && <span>{r.maintenanceType}</span>}
-                      {r.fuelType && r.recordType === "abastecimento" && <span className="capitalize">{r.fuelType}</span>}
+                      {r.fuelType && r.recordType === "abastecimento" && <span className="capitalize">{r.fuelType === 'diesel' ? 'Diesel S500' : r.fuelType === 'diesel_s10' ? 'Diesel S10' : r.fuelType}</span>}
                       {r.serviceType === "terceirizado" && r.chargedValue && (
                         <span className="flex items-center gap-1 text-amber-700 font-semibold">
                           Cobrado: R$ {r.chargedValue}
