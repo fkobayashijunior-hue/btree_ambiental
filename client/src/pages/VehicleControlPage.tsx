@@ -33,7 +33,7 @@ const emptyForm = {
   equipmentId: "",
   date: new Date().toISOString().slice(0, 10),
   recordType: "abastecimento" as RecordType,
-  fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv",
+  fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv" | "diesel_s10" | "arla",
   liters: "",
   fuelCost: "",
   pricePerLiter: "",
@@ -893,6 +893,7 @@ export default function VehicleControlPage() {
                     <option value="gasolina">Gasolina</option>
                     <option value="etanol">Etanol</option>
                     <option value="gnv">GNV</option>
+                    <option value="arla">Arla 32</option>
                   </select>
                 </div>
                 {/* Local de Abastecimento */}

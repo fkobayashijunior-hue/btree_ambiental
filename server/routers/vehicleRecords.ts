@@ -101,7 +101,7 @@ export const vehicleRecordsRouter = router({
       equipmentId: z.number(),
       date: z.string(),
       recordType: z.enum(["abastecimento", "manutencao", "km"]),
-      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).optional(),
       liters: z.string().optional(),
       fuelCost: z.string().optional(),
       pricePerLiter: z.string().optional(),
@@ -177,7 +177,7 @@ export const vehicleRecordsRouter = router({
           const eqName = eqRow?.name || `Equipamento #${input.equipmentId}`;
           const dateObj = new Date(input.date);
           const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-          const fuelLabels: Record<string, string> = { diesel: 'Diesel S500', diesel_s10: 'Diesel S10', gasolina: 'Gasolina', etanol: 'Etanol', gnv: 'GNV' };
+          const fuelLabels: Record<string, string> = { diesel: 'Diesel S500', diesel_s10: 'Diesel S10', gasolina: 'Gasolina', etanol: 'Etanol', gnv: 'GNV', arla: 'Arla 32' };
           const desc = input.recordType === 'abastecimento'
             ? `Abastecimento ${fuelLabels[input.fuelType!] || input.fuelType} - ${eqName} - ${input.liters}L${input.supplier ? ' (' + input.supplier + ')' : ''}`
             : `Manutenção ${input.maintenanceType || ''} - ${eqName}${input.notes ? ': ' + input.notes.slice(0, 60) : ''}`;
@@ -202,7 +202,7 @@ export const vehicleRecordsRouter = router({
       // Notificação por e-mail apenas para abastecimentos
       if (input.recordType === "abastecimento") {
         const dateFormatted = new Date(input.date).toLocaleDateString("pt-BR");
-        const fuelLabels: Record<string, string> = { diesel: "Diesel S500", diesel_s10: "Diesel S10", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV" };
+        const fuelLabels: Record<string, string> = { diesel: "Diesel S500", diesel_s10: "Diesel S10", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV", arla: "Arla 32" };
         notifyTeam({
           event: "abastecimento_registrado",
           title: `Abastecimento registrado em ${dateFormatted}.`,
@@ -228,7 +228,7 @@ export const vehicleRecordsRouter = router({
       id: z.number(),
       date: z.string().optional(),
       recordType: z.enum(["abastecimento", "manutencao", "km"]).optional(),
-      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional().nullable(),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).optional().nullable(),
       liters: z.string().optional().nullable(),
       fuelCost: z.string().optional().nullable(),
       pricePerLiter: z.string().optional().nullable(),

@@ -61,7 +61,7 @@ const emptyForm = {
   totalAmount: "",
   liters: "",
   pricePerLiter: "",
-  fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv",
+  fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv" | "diesel_s10" | "arla",
   paymentMethod: "boleto",
   bankName: "",
   barcodeNumber: "",
@@ -945,6 +945,7 @@ export default function FuelInvoicesPage() {
                   <option value="gasolina">Gasolina</option>
                   <option value="etanol">Etanol</option>
                   <option value="gnv">GNV</option>
+                  <option value="arla">Arla 32</option>
                 </select>
               </div>
 
