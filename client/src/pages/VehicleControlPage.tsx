@@ -71,6 +71,7 @@ export default function VehicleControlPage() {
   // Múltiplas fotos: cada item é { preview: string, base64: string | null } onde base64 é null se já é URL
   const [photos, setPhotos] = useState<Array<{ preview: string; base64: string | null }>>([]);
   const [viewPhotoIndex, setViewPhotoIndex] = useState<number | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
 
   const { openFilePicker } = useFilePicker();
@@ -835,11 +836,20 @@ export default function VehicleControlPage() {
         </div>
       )}
 
-      {/* Modal visualização de fotos */}
+      {/* Modal visualização de fotos (lista de registros) */}
       <Dialog open={viewPhotoIndex !== null} onOpenChange={() => setViewPhotoIndex(null)}>
         <DialogContent className="max-w-lg p-2">
           {viewPhotoIndex !== null && (
             <img src={String(viewPhotoIndex)} alt="Foto do registro" className="w-full rounded-lg object-contain max-h-[80vh]" />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox para ampliar fotos no formulário de edição */}
+      <Dialog open={lightboxUrl !== null} onOpenChange={() => setLightboxUrl(null)}>
+        <DialogContent className="max-w-2xl p-2 bg-black/95">
+          {lightboxUrl && (
+            <img src={lightboxUrl} alt="Foto ampliada" className="w-full rounded-lg object-contain max-h-[85vh]" />
           )}
         </DialogContent>
       </Dialog>
@@ -1040,18 +1050,29 @@ export default function VehicleControlPage() {
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   {photos.map((p, idx) => (
                     <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200">
-                      <img src={p.preview} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                      {/* Clique na foto para ampliar */}
+                      <button
+                        type="button"
+                        onClick={() => setLightboxUrl(p.preview)}
+                        className="w-full h-full block"
+                      >
+                        <img src={p.preview} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                      </button>
+                      {/* Botão de remover */}
                       <button
                         type="button"
                         onClick={() => removePhoto(idx)}
-                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80"
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80 z-10"
                       >
                         <X className="h-3 w-3" />
                       </button>
-                      <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs rounded px-1">{idx + 1}</span>
+                      <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs rounded px-1 pointer-events-none">{idx + 1}</span>
                     </div>
                   ))}
                 </div>
+              )}
+              {photos.length > 0 && (
+                <p className="text-xs text-blue-600 mb-2">Toque em uma foto para ampliar</p>
               )}
 
               {/* Botões para adicionar fotos */}
