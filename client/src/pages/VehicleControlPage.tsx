@@ -175,6 +175,13 @@ export default function VehicleControlPage() {
 
   const openEdit = (r: any) => {
     setEditingId(r.id);
+    // Detectar fuelLocation baseado no supplier salvo:
+    // Se o supplier bate com um fornecedor cadastrado, usa o locationType dele;
+    // caso contrário, é um posto de gasolina (texto livre)
+    const matchedSupplier = (fuelSuppliersList as any[]).find((s: any) => s.name === r.supplier);
+    const detectedLocation: "simflor" | "astorga" | "postos" = matchedSupplier
+      ? (matchedSupplier.locationType as "simflor" | "astorga" | "postos")
+      : (r.supplier ? "postos" : "simflor");
     setForm({
       equipmentId: String(r.equipmentId || ""),
       date: r.date ? new Date(r.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -184,7 +191,7 @@ export default function VehicleControlPage() {
       fuelCost: r.fuelCost || "",
       pricePerLiter: r.pricePerLiter || "",
       supplier: r.supplier || "",
-      fuelLocation: "simflor",
+      fuelLocation: detectedLocation,
       odometer: r.odometer || "",
       kmDriven: r.kmDriven || "",
       maintenanceType: r.maintenanceType || "",
