@@ -22,7 +22,9 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, Database, Radio } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, Database, Radio, ChevronRight } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { SidebarGroup, SidebarGroupLabel, SidebarGroupContent } from "@/components/ui/sidebar";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -66,47 +68,109 @@ function useDashboardInstallPrompt() {
   return { canInstall: !!deferredPrompt && !isInstalled && !dismissed, isInstalled, isIOS, install, dismiss };
 }
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Painel", path: "/app", slug: null }, // sempre visível
-  { icon: ClipboardList, label: "Presenças", path: "/presencas", slug: "presencas" },
-  { icon: UserCheck, label: "Colaboradores", path: "/colaboradores", slug: "colaboradores" },
-  { icon: Users, label: "Clientes", path: "/clientes", slug: "clientes" },
-  { icon: Users, label: "Usuários", path: "/usuarios", slug: null }, // admin only - controlado pelo role
-  { icon: Layers, label: "Setores e Equipamentos", path: "/setores", slug: "equipamentos" },
-  { icon: Truck, label: "Controle de Cargas", path: "/cargas", slug: "cargas" },
-  { icon: ClipboardList, label: "Controle de Equipamentos", path: "/maquinas", slug: "manutencao" },
-  { icon: Car, label: "Controle de Abastecimento", path: "/veiculos", slug: "abastecimento" },
-  { icon: Fuel, label: "Fornecedores Combustível", path: "/fornecedores-combustivel", slug: "fornecedores-combustivel" },
-  { icon: Fuel, label: "Relatórios Combustível", path: "/relatorios-combustivel", slug: "relatorios-combustivel" },
-  { icon: Fuel, label: "Contas a Pagar (Combustível)", path: "/contas-pagar-combustivel", slug: "contas-pagar-combustivel" },
-  { icon: Package, label: "Peças e Acessórios", path: "/pecas", slug: "pecas" },
-  { icon: Globe, label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente" },
-  { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },
-  { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps" },
-  { icon: Scissors, label: "Motosserras", path: "/motosserras", slug: "motosserras" },
-  { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", slug: "gastos-extras" },
-  { icon: Leaf, label: "Replantios", path: "/replantios", slug: "replantios" },
-  { icon: DollarSign, label: "Pagamentos Clientes", path: "/pagamentos-clientes", slug: "pagamentos-clientes" },
-  { icon: Wallet, label: "Financeiro", path: "/financeiro", slug: "financeiro" },
-  { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: "locais-gps" },
-  { icon: Truck, label: "Minha Carga", path: "/motorista", slug: "minha-carga" },
-  { icon: Building2, label: "Compradores", path: "/compradores", slug: "compradores" },
-  { icon: FileBarChart, label: "Relatório Destinos", path: "/relatorio-destinos", slug: "relatorio-destinos" },
-  { icon: TrendingUp, label: "Dashboard Financeiro", path: "/dashboard-financeiro", slug: "dashboard-financeiro" },
-  { icon: Wrench, label: "Corte Terceirizado", path: "/corte-terceirizado", slug: "corte-terceirizado" },
-  { icon: UserCheck, label: "Terceirizados", path: "/terceirizados", slug: "terceirizados" },
-  { icon: Truck, label: "Caminhões Terceirizados", path: "/caminhoes-terceirizados", slug: "caminhoes-terceirizados" },
-  { icon: Route, label: "Cálculo de Fretes", path: "/fretes", slug: "fretes" },
-  { icon: BarChart3, label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec" },
-  { icon: ShoppingCart, label: "Solicitações de Compras", path: "/compras", slug: "compras" },
-  { icon: Building2, label: "Fornecedores", path: "/fornecedores", slug: "fornecedores" },
-  { icon: TrendingDown, label: "Orçamentos", path: "/orcamentos", slug: "orcamentos" },
-  { icon: RefreshCw, label: "Ciclos de Frete", path: "/ciclos-frete", slug: "ciclos-frete" },
-  { icon: FileText, label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas" },
-  { icon: Database, label: "Auditoria de Dados", path: "/auditoria-dados", slug: null }, // admin only
-  { icon: Radio, label: "Porteiras Virtuais", path: "/porteiras-virtuais", slug: "porteiras-virtuais" },
-  { icon: Truck, label: "Fretes GPS", path: "/fretes-gps", slug: "fretes-gps" },
+// Item simples do menu
+type MenuItem = { icon: React.ElementType; label: string; path: string; slug: string | null };
+
+// Grupos do menu lateral (igual ao staging)
+const MENU_GROUPS: { label: string | null; items: MenuItem[] }[] = [
+  {
+    label: null, // Sem grupo — Painel
+    items: [
+      { icon: LayoutDashboard, label: "Painel", path: "/app", slug: null },
+    ],
+  },
+  {
+    label: "Pessoas",
+    items: [
+      { icon: ClipboardList, label: "Presenças", path: "/presencas", slug: "presencas" },
+      { icon: UserCheck, label: "Colaboradores", path: "/colaboradores", slug: "colaboradores" },
+      { icon: Users, label: "Clientes", path: "/clientes", slug: "clientes" },
+      { icon: Users, label: "Usuários", path: "/usuarios", slug: null }, // admin only
+    ],
+  },
+  {
+    label: "Equipamentos",
+    items: [
+      { icon: Layers, label: "Setores e Equipamentos", path: "/setores", slug: "equipamentos" },
+      { icon: ClipboardList, label: "Controle de Equipamentos", path: "/maquinas", slug: "manutencao" },
+      { icon: Scissors, label: "Motosserras", path: "/motosserras", slug: "motosserras" },
+      { icon: Package, label: "Peças e Acessórios", path: "/pecas", slug: "pecas" },
+    ],
+  },
+  {
+    label: "Operações",
+    items: [
+      { icon: Truck, label: "Controle de Cargas", path: "/cargas", slug: "cargas" },
+      { icon: Truck, label: "Minha Carga", path: "/motorista", slug: "minha-carga" },
+      { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", slug: "gastos-extras" },
+      { icon: Leaf, label: "Replantios", path: "/replantios", slug: "replantios" },
+    ],
+  },
+  {
+    label: "GPS e Fretes",
+    items: [
+      { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps" },
+      { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: "locais-gps" },
+      { icon: Radio, label: "Porteiras Virtuais", path: "/porteiras-virtuais", slug: "porteiras-virtuais" },
+      { icon: RefreshCw, label: "Ciclos de Frete", path: "/ciclos-frete", slug: "ciclos-frete" },
+      { icon: Route, label: "Cálculo de Fretes", path: "/fretes", slug: "fretes" },
+      { icon: Truck, label: "Fretes GPS", path: "/fretes-gps", slug: "fretes-gps" },
+    ],
+  },
+  {
+    label: "Terceirizados",
+    items: [
+      { icon: UserCheck, label: "Terceirizados", path: "/terceirizados", slug: "terceirizados" },
+      { icon: Truck, label: "Caminhões Terceirizados", path: "/caminhoes-terceirizados", slug: "caminhoes-terceirizados" },
+      { icon: Wrench, label: "Corte Terceirizado", path: "/corte-terceirizado", slug: "corte-terceirizado" },
+    ],
+  },
+  {
+    label: "Combustível",
+    items: [
+      { icon: Car, label: "Controle de Abastecimento", path: "/veiculos", slug: "abastecimento" },
+      { icon: Fuel, label: "Fornecedores Combustível", path: "/fornecedores-combustivel", slug: "fornecedores-combustivel" },
+      { icon: Fuel, label: "Relatórios Combustível", path: "/relatorios-combustivel", slug: "relatorios-combustivel" },
+      { icon: Fuel, label: "Contas a Pagar (Combustível)", path: "/contas-pagar-combustivel", slug: "contas-pagar-combustivel" },
+    ],
+  },
+  {
+    label: "Comercial",
+    items: [
+      { icon: Building2, label: "Compradores", path: "/compradores", slug: "compradores" },
+      { icon: FileBarChart, label: "Relatório Destinos", path: "/relatorio-destinos", slug: "relatorio-destinos" },
+      { icon: DollarSign, label: "Pagamentos Clientes", path: "/pagamentos-clientes", slug: "pagamentos-clientes" },
+      { icon: Globe, label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente" },
+      { icon: FileText, label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas" },
+    ],
+  },
+  {
+    label: "Compras",
+    items: [
+      { icon: ShoppingCart, label: "Solicitações de Compras", path: "/compras", slug: "compras" },
+      { icon: Building2, label: "Fornecedores", path: "/fornecedores", slug: "fornecedores" },
+      { icon: TrendingDown, label: "Orçamentos", path: "/orcamentos", slug: "orcamentos" },
+    ],
+  },
+  {
+    label: "Financeiro",
+    items: [
+      { icon: Wallet, label: "Financeiro", path: "/financeiro", slug: "financeiro" },
+      { icon: TrendingUp, label: "Dashboard Financeiro", path: "/dashboard-financeiro", slug: "dashboard-financeiro" },
+      { icon: BarChart3, label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec" },
+    ],
+  },
+  {
+    label: "Administração",
+    items: [
+      { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },
+      { icon: Database, label: "Auditoria de Dados", path: "/auditoria-dados", slug: null }, // admin only
+    ],
+  },
 ];
+
+// Lista plana para compatibilidade com getPageTitle e activeMenuItem
+const menuItems: MenuItem[] = MENU_GROUPS.flatMap(g => g.items);
 
 // Rotas que são subpáginas (não estão no menu principal)
 const SUB_PAGES: Record<string, { label: string; parent: string }> = {
@@ -295,35 +359,84 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {menuItems.filter(item => {
-                // Painel sempre visível
+          <SidebarContent className="gap-0 overflow-y-auto">
+            {MENU_GROUPS.map((group, gi) => {
+              // Filtrar itens visíveis do grupo
+              const visibleItems = group.items.filter(item => {
                 if (item.slug === null) {
-                  // Usuários e Auditoria: apenas admin
                   if (item.path === "/usuarios" || item.path === "/auditoria-dados") return isAdmin;
                   return true;
                 }
                 return hasAccess(item.slug);
-              }).map(item => {
-                const isActive = location === item.path;
+              });
+              if (visibleItems.length === 0) return null;
+
+              // Grupo sem label (Painel) — renderiza diretamente
+              if (!group.label) {
                 return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className="h-10 transition-all font-medium text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:bg-white/15 data-[active=true]:text-white"
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-emerald-300" : "text-white/70"}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <SidebarGroup key={gi} className="px-2 py-1 pb-0">
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {visibleItems.map(item => {
+                          const isActive = location === item.path;
+                          return (
+                            <SidebarMenuItem key={item.path}>
+                              <SidebarMenuButton
+                                isActive={isActive}
+                                onClick={() => setLocation(item.path)}
+                                tooltip={item.label}
+                                className="h-10 transition-all font-medium text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:bg-white/15 data-[active=true]:text-white"
+                              >
+                                <item.icon className={`h-4 w-4 ${isActive ? "text-emerald-300" : "text-white/70"}`} />
+                                <span>{item.label}</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          );
+                        })}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
                 );
-              })}
-            </SidebarMenu>
+              }
+
+              // Verificar se algum item do grupo está ativo (para abrir automaticamente)
+              const hasActiveItem = visibleItems.some(item => location === item.path || location.startsWith(item.path + "/"));
+
+              return (
+                <SidebarGroup key={gi} className="px-2 py-0">
+                  <Collapsible defaultOpen={hasActiveItem || gi <= 2}>
+                    <CollapsibleTrigger asChild>
+                      <SidebarGroupLabel className="flex items-center justify-between cursor-pointer hover:bg-white/10 rounded-md px-2 py-1.5 text-white/50 hover:text-white/80 text-xs font-semibold uppercase tracking-wider transition-colors group/label w-full">
+                        <span>{group.label}</span>
+                        <ChevronRight className="h-3 w-3 transition-transform group-data-[state=open]/label:rotate-90 ml-auto" />
+                      </SidebarGroupLabel>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarGroupContent>
+                        <SidebarMenu>
+                          {visibleItems.map(item => {
+                            const isActive = location === item.path;
+                            return (
+                              <SidebarMenuItem key={item.path}>
+                                <SidebarMenuButton
+                                  isActive={isActive}
+                                  onClick={() => setLocation(item.path)}
+                                  tooltip={item.label}
+                                  className="h-9 transition-all font-medium text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:bg-white/15 data-[active=true]:text-white pl-3"
+                                >
+                                  <item.icon className={`h-4 w-4 ${isActive ? "text-emerald-300" : "text-white/70"}`} />
+                                  <span>{item.label}</span>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            );
+                          })}
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarGroup>
+              );
+            })}
           </SidebarContent>
 
           <SidebarFooter className="p-3 space-y-3">

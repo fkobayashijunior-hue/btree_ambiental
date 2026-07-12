@@ -454,31 +454,12 @@ export default function SectorsEquipment() {
 
         {/* ===== EQUIPAMENTOS ===== */}
         <TabsContent value="equipamentos" className="space-y-4 pt-4">
+          {/* Barra de busca + ações */}
           <div className="flex flex-wrap gap-3 justify-between">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input placeholder="Buscar equipamento, placa..." value={equipSearch} onChange={e => setEquipSearch(e.target.value)} className="pl-10" />
             </div>
-            <select
-              value={filterSectorId}
-              onChange={e => setFilterSectorId(parseInt(e.target.value))}
-              className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value={0}>Todos os setores</option>
-              {sectorsList.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <select
-              value={filterClientId}
-              onChange={e => setFilterClientId(parseInt(e.target.value))}
-              className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value={0}>Todas as operações</option>
-              {clientsList.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
             {/* Botão PDF de todos (ou setor filtrado) */}
             <Button
               variant="outline"
@@ -798,6 +779,80 @@ export default function SectorsEquipment() {
               </Dialog>
             </div>
           </div>
+
+          {/* ── Filtros rápidos por SETOR ── */}
+          {sectorsList.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Filtrar por Setor</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setFilterSectorId(0)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                    filterSectorId === 0
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                      : "bg-white text-gray-600 border-gray-300 hover:border-emerald-400 hover:text-emerald-600"
+                  }`}
+                >
+                  Todos os Setores
+                </button>
+                {sectorsList.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setFilterSectorId(filterSectorId === s.id ? 0 : s.id)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all flex items-center gap-1.5 ${
+                      filterSectorId === s.id
+                        ? "text-white border-transparent shadow-sm"
+                        : "bg-white text-gray-600 border-gray-300 hover:text-white hover:border-transparent"
+                    }`}
+                    style={filterSectorId === s.id
+                      ? { backgroundColor: s.color || "#16a34a", borderColor: s.color || "#16a34a" }
+                      : { "--hover-color": s.color || "#16a34a" } as any
+                    }
+                    onMouseEnter={e => { if (filterSectorId !== s.id) { (e.currentTarget as HTMLButtonElement).style.backgroundColor = s.color || "#16a34a"; (e.currentTarget as HTMLButtonElement).style.borderColor = s.color || "#16a34a"; } }}
+                    onMouseLeave={e => { if (filterSectorId !== s.id) { (e.currentTarget as HTMLButtonElement).style.backgroundColor = ""; (e.currentTarget as HTMLButtonElement).style.borderColor = ""; } }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: filterSectorId === s.id ? "rgba(255,255,255,0.7)" : (s.color || "#16a34a") }}
+                    />
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Filtros rápidos por OPERAÇÃO ── */}
+          {(clientsList as any[]).length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Filtrar por Operação</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setFilterClientId(0)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                    filterClientId === 0
+                      ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                      : "bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600"
+                  }`}
+                >
+                  Todas as Operações
+                </button>
+                {(clientsList as any[]).map((c: any) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setFilterClientId(filterClientId === c.id ? 0 : c.id)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                      filterClientId === c.id
+                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                        : "bg-white text-gray-600 border-gray-300 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600"
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {equipLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
