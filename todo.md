@@ -2327,3 +2327,28 @@
 - [x] Cálculo automático do custo (pricePerLiter × quantityUsed)
 - [x] Lançamento financeiro automático ao consumir do estoque
 
+
+---
+
+## 🚪 MÓDULO: PORTEIRAS VIRTUAIS (GPS Geofence) — 12/07/2026
+
+### Backend
+- [x] Schema: tabela `geofences` (porteiras virtuais com lat/lng/raio/traccarDeviceId)
+- [x] Schema: tabela `freight_trips` (fretes abertos/fechados automaticamente)
+- [x] Router tRPC `geofences`: list, getById, create, update, toggleActive, delete
+- [x] Router tRPC `freightTrips`: list, getById, open, close, update, cancel, getOpenTrip, stats
+- [x] Handler Heartbeat `/api/scheduled/geofence-check` (polling Traccar a cada 2min)
+- [x] Endpoint Express POST `/api/scheduled/geofence-check` registrado no servidor
+- [x] Migrações SQL aplicadas no banco de dados
+
+### Frontend
+- [x] Página `GeofencesPage.tsx`: CRUD de porteiras virtuais com mapa Google Maps
+- [x] Página `FreightTripsPage.tsx`: lista de fretes por data, estatísticas, edição de custos
+- [x] Rotas `/porteiras-virtuais` e `/fretes-gps` registradas no App.tsx
+- [x] Itens "Porteiras Virtuais" e "Fretes GPS" adicionados ao menu lateral
+
+### Pendente
+- [ ] Criar Heartbeat job no Manus (polling a cada 2 minutos)
+- [ ] Configurar porteira SIMFLOR: lat/lng exatos + ID dispositivo Scania Julieta no Traccar
+- [ ] Habilitar permissões `porteiras-virtuais` e `fretes-gps` para usuários no controle de acesso
+- [ ] Testar abertura/fechamento automático de fretes com GPS real

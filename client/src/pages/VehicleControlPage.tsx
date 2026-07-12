@@ -33,7 +33,7 @@ const emptyForm = {
   equipmentId: "",
   date: new Date().toISOString().slice(0, 10),
   recordType: "abastecimento" as RecordType,
-  fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv" | "diesel_s10" | "arla",
+  fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv",
   liters: "",
   fuelCost: "",
   pricePerLiter: "",
@@ -71,7 +71,6 @@ export default function VehicleControlPage() {
   // Múltiplas fotos: cada item é { preview: string, base64: string | null } onde base64 é null se já é URL
   const [photos, setPhotos] = useState<Array<{ preview: string; base64: string | null }>>([]);
   const [viewPhotoIndex, setViewPhotoIndex] = useState<number | null>(null);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
 
   const { openFilePicker } = useFilePicker();
@@ -175,13 +174,6 @@ export default function VehicleControlPage() {
 
   const openEdit = (r: any) => {
     setEditingId(r.id);
-    // Detectar fuelLocation baseado no supplier salvo:
-    // Se o supplier bate com um fornecedor cadastrado, usa o locationType dele;
-    // caso contrário, é um posto de gasolina (texto livre)
-    const matchedSupplier = (fuelSuppliersList as any[]).find((s: any) => s.name === r.supplier);
-    const detectedLocation: "simflor" | "astorga" | "postos" = matchedSupplier
-      ? (matchedSupplier.locationType as "simflor" | "astorga" | "postos")
-      : (r.supplier ? "postos" : "simflor");
     setForm({
       equipmentId: String(r.equipmentId || ""),
       date: r.date ? new Date(r.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -191,7 +183,7 @@ export default function VehicleControlPage() {
       fuelCost: r.fuelCost || "",
       pricePerLiter: r.pricePerLiter || "",
       supplier: r.supplier || "",
-      fuelLocation: detectedLocation,
+      fuelLocation: "simflor",
       odometer: r.odometer || "",
       kmDriven: r.kmDriven || "",
       maintenanceType: r.maintenanceType || "",
@@ -843,20 +835,11 @@ export default function VehicleControlPage() {
         </div>
       )}
 
-      {/* Modal visualização de fotos (lista de registros) */}
+      {/* Modal visualização de fotos */}
       <Dialog open={viewPhotoIndex !== null} onOpenChange={() => setViewPhotoIndex(null)}>
         <DialogContent className="max-w-lg p-2">
           {viewPhotoIndex !== null && (
             <img src={String(viewPhotoIndex)} alt="Foto do registro" className="w-full rounded-lg object-contain max-h-[80vh]" />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Lightbox para ampliar fotos no formulário de edição */}
-      <Dialog open={lightboxUrl !== null} onOpenChange={() => setLightboxUrl(null)}>
-        <DialogContent className="max-w-2xl p-2 bg-black/95">
-          {lightboxUrl && (
-            <img src={lightboxUrl} alt="Foto ampliada" className="w-full rounded-lg object-contain max-h-[85vh]" />
           )}
         </DialogContent>
       </Dialog>
@@ -910,7 +893,6 @@ export default function VehicleControlPage() {
                     <option value="gasolina">Gasolina</option>
                     <option value="etanol">Etanol</option>
                     <option value="gnv">GNV</option>
-                    <option value="arla">Arla 32</option>
                   </select>
                 </div>
                 {/* Local de Abastecimento */}
@@ -1057,29 +1039,18 @@ export default function VehicleControlPage() {
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   {photos.map((p, idx) => (
                     <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200">
-                      {/* Clique na foto para ampliar */}
-                      <button
-                        type="button"
-                        onClick={() => setLightboxUrl(p.preview)}
-                        className="w-full h-full block"
-                      >
-                        <img src={p.preview} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
-                      </button>
-                      {/* Botão de remover */}
+                      <img src={p.preview} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
                       <button
                         type="button"
                         onClick={() => removePhoto(idx)}
-                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80 z-10"
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80"
                       >
                         <X className="h-3 w-3" />
                       </button>
-                      <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs rounded px-1 pointer-events-none">{idx + 1}</span>
+                      <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs rounded px-1">{idx + 1}</span>
                     </div>
                   ))}
                 </div>
-              )}
-              {photos.length > 0 && (
-                <p className="text-xs text-blue-600 mb-2">Toque em uma foto para ampliar</p>
               )}
 
               {/* Botões para adicionar fotos */}

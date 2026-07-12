@@ -54,6 +54,8 @@ import PublicQuotationPage from "./pages/PublicQuotationPage";
 import PublicResponseReviewPage from "./pages/PublicResponseReviewPage";
 import ThirdPartyPage from "./pages/ThirdPartyPage";
 import AuditDataPage from "./pages/AuditDataPage";
+import GeofencesPage from "./pages/GeofencesPage";
+import FreightTripsPage from "./pages/FreightTripsPage";
 import { registerAllOfflineHandlers } from "@/lib/offlineSync";
 
 // Registrar handlers de sincronização offline uma única vez ao carregar o app
@@ -196,6 +198,12 @@ function Router() {
       </Route>
       <Route path={"/auditoria-dados"}>
         {() => <WithLayout component={AuditDataPage} />}
+      </Route>
+      <Route path={"/porteiras-virtuais"}>
+        {() => <WithLayout component={GeofencesPage} />}
+      </Route>
+      <Route path={"/fretes-gps"}>
+        {() => <WithLayout component={FreightTripsPage} />}
       </Route>
       {/* Rota pública para fornecedores revisarem/editarem sua resposta (DEVE vir antes de /orcamento/:token) */}
       <Route path={"/orcamento/resposta/:responseToken"} component={PublicResponseReviewPage} />

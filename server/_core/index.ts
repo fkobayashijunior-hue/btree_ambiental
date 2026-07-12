@@ -581,6 +581,17 @@ async function startServer() {
     }
   });
 
+  // Heartbeat: verificação de porteiras virtuais (geofence)
+  app.post("/api/scheduled/geofence-check", async (req, res) => {
+    try {
+      const { geofenceCheckHandler } = await import("../handlers/geofenceCheck");
+      return geofenceCheckHandler(req, res);
+    } catch (err: any) {
+      console.error("[GeofenceCheck] Erro ao carregar handler:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

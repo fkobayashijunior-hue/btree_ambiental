@@ -44,9 +44,8 @@ export const fuelSuppliersRouter = router({
       address: z.string().optional(),
       city: z.string().optional(),
       state: z.string().optional(),
-      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).default("diesel"),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
       pricePerLiter: z.string().min(1),
-      pricePerLiterS10: z.string().optional(),
       locationType: z.enum(["simflor", "astorga", "postos"]).default("simflor"),
       location: z.string().optional(),
       workLocationId: z.number().optional(),
@@ -71,7 +70,6 @@ export const fuelSuppliersRouter = router({
         state: input.state || null,
         fuelType: input.fuelType,
         pricePerLiter: input.pricePerLiter,
-        pricePerLiterS10: input.pricePerLiterS10 || null,
         locationType: input.locationType,
         location: input.location || null,
         workLocationId: input.workLocationId || null,
@@ -96,9 +94,8 @@ export const fuelSuppliersRouter = router({
       address: z.string().nullable().optional(),
       city: z.string().nullable().optional(),
       state: z.string().nullable().optional(),
-      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).optional(),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
       pricePerLiter: z.string().optional(),
-      pricePerLiterS10: z.string().nullable().optional(),
       locationType: z.enum(["simflor", "astorga", "postos"]).optional(),
       location: z.string().nullable().optional(),
       workLocationId: z.number().nullable().optional(),
@@ -125,7 +122,6 @@ export const fuelSuppliersRouter = router({
       if (data.state !== undefined) updateData.state = data.state;
       if (data.fuelType !== undefined) updateData.fuelType = data.fuelType;
       if (data.pricePerLiter !== undefined) updateData.pricePerLiter = data.pricePerLiter;
-      if (data.pricePerLiterS10 !== undefined) updateData.pricePerLiterS10 = data.pricePerLiterS10;
       if (data.locationType !== undefined) updateData.locationType = data.locationType;
       if (data.location !== undefined) updateData.location = data.location;
       if (data.workLocationId !== undefined) updateData.workLocationId = data.workLocationId;
@@ -407,7 +403,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       totalAmount: z.string().min(1),
       liters: z.string().optional(),
       pricePerLiter: z.string().optional(),
-      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).default("diesel"),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
       paymentMethod: z.string().optional(),
       bankName: z.string().optional(),
       barcodeNumber: z.string().optional(),
@@ -466,7 +462,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       totalAmount: z.string().optional(),
       liters: z.string().nullable().optional(),
       pricePerLiter: z.string().nullable().optional(),
-      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).optional(),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
       paymentMethod: z.string().nullable().optional(),
       bankName: z.string().nullable().optional(),
       barcodeNumber: z.string().nullable().optional(),

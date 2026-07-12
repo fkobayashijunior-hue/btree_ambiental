@@ -23,7 +23,6 @@ const FUEL_TYPE_LABELS: Record<string, string> = {
   gasolina: "Gasolina",
   etanol: "Etanol",
   gnv: "GNV",
-  arla: "Arla 32",
 };
 
 function formatCNPJ(value: string) {
@@ -56,9 +55,8 @@ function getEmptyForm() {
     address: "",
     city: "",
     state: "",
-    fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv" | "diesel_s10" | "arla",
+    fuelType: "diesel" as "diesel" | "gasolina" | "etanol" | "gnv",
     pricePerLiter: "",
-    pricePerLiterS10: "",
     locationType: "simflor" as "simflor" | "astorga" | "postos",
     notes: "",
     tankCapacity: "",
@@ -111,7 +109,6 @@ export default function FuelSuppliersPage() {
       state: s.state || "",
       fuelType: s.fuelType || "diesel",
       pricePerLiter: s.pricePerLiter || "",
-      pricePerLiterS10: s.pricePerLiterS10 || "",
       locationType: s.locationType || "simflor",
       notes: s.notes || "",
       tankCapacity: s.tankCapacity || "",
@@ -140,7 +137,6 @@ export default function FuelSuppliersPage() {
       state: form.state || undefined,
       fuelType: form.fuelType,
       pricePerLiter: form.pricePerLiter,
-      pricePerLiterS10: form.pricePerLiterS10 || undefined,
       locationType: form.locationType,
       notes: form.notes || undefined,
       tankCapacity: form.tankCapacity || undefined,
@@ -227,13 +223,7 @@ export default function FuelSuppliersPage() {
                   <div className="mt-2 flex items-center gap-4 flex-wrap">
                     <span className="font-semibold text-green-700 text-lg">
                       R$ {parseFloat(s.pricePerLiter || "0").toFixed(2)}/L
-                      {s.fuelType === 'diesel' ? <span className="text-xs text-muted-foreground ml-1">(S500)</span> : null}
                     </span>
-                    {s.pricePerLiterS10 && (
-                      <span className="font-semibold text-blue-700 text-base">
-                        R$ {parseFloat(s.pricePerLiterS10).toFixed(2)}/L <span className="text-xs font-normal">(S10)</span>
-                      </span>
-                    )}
                     {s.tradeName && <span className="text-sm text-muted-foreground">({s.tradeName})</span>}
                   </div>
 
@@ -377,7 +367,7 @@ export default function FuelSuppliersPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium">Tipo de Combustível Principal</label>
+                <label className="text-sm font-medium">Tipo de Combustível</label>
                 <Select value={form.fuelType} onValueChange={v => setForm({ ...form, fuelType: v as any })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -386,21 +376,12 @@ export default function FuelSuppliersPage() {
                     <SelectItem value="gasolina">Gasolina</SelectItem>
                     <SelectItem value="etanol">Etanol</SelectItem>
                     <SelectItem value="gnv">GNV</SelectItem>
-                    <SelectItem value="arla">Arla 32</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">Preço por Litro (R$) *</label>
                 <Input type="number" step="0.01" value={form.pricePerLiter} onChange={e => setForm({ ...form, pricePerLiter: e.target.value })} placeholder="Ex: 5.89" />
-              </div>
-            </div>
-            {/* Preço S10 - campo extra para fornecedores que vendem ambos */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium text-blue-700">Preço Diesel S10 (R$/L)</label>
-                <Input type="number" step="0.01" value={form.pricePerLiterS10} onChange={e => setForm({ ...form, pricePerLiterS10: e.target.value })} placeholder="Ex: 6.09 (opcional)" />
-                <p className="text-xs text-muted-foreground mt-1">Preencha se este fornecedor também vende S10</p>
               </div>
             </div>
 

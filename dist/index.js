@@ -1130,7 +1130,7 @@ var init_schema = __esm({
       equipmentId: int("equipment_id").notNull().references(() => equipment.id),
       date: timestamp({ mode: "string" }).notNull(),
       recordType: mysqlEnum("record_type", ["abastecimento", "manutencao", "km"]).notNull(),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
       liters: varchar({ length: 20 }),
       fuelCost: varchar("fuel_cost", { length: 20 }),
       pricePerLiter: varchar("price_per_liter", { length: 20 }),
@@ -1284,9 +1284,8 @@ var init_schema = __esm({
       address: text(),
       city: varchar({ length: 100 }),
       state: varchar({ length: 2 }),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).default("diesel").notNull(),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel").notNull(),
       pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
-      pricePerLiterS10: varchar("price_per_liter_s10", { length: 20 }),
       locationType: mysqlEnum("location_type", ["simflor", "astorga", "postos"]).default("simflor").notNull(),
       location: varchar({ length: 255 }),
       workLocationId: int("work_location_id"),
@@ -1316,7 +1315,7 @@ var init_schema = __esm({
       totalAmount: varchar("total_amount", { length: 20 }).notNull(),
       liters: varchar({ length: 20 }),
       pricePerLiter: varchar("price_per_liter", { length: 20 }),
-      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).default("diesel"),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
       paymentMethod: varchar("payment_method", { length: 50 }),
       bankName: varchar("bank_name", { length: 100 }),
       barcodeNumber: varchar("barcode_number", { length: 100 }),
@@ -5319,7 +5318,7 @@ var vehicleRecordsRouter = router({
     equipmentId: z8.number(),
     date: z8.string(),
     recordType: z8.enum(["abastecimento", "manutencao", "km"]),
-    fuelType: z8.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).optional(),
+    fuelType: z8.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
     liters: z8.string().optional(),
     fuelCost: z8.string().optional(),
     pricePerLiter: z8.string().optional(),
@@ -5388,7 +5387,7 @@ var vehicleRecordsRouter = router({
         const eqName = eqRow?.name || `Equipamento #${input.equipmentId}`;
         const dateObj = new Date(input.date);
         const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
-        const fuelLabels = { diesel: "Diesel S500", diesel_s10: "Diesel S10", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV", arla: "Arla 32" };
+        const fuelLabels = { diesel: "Diesel S500", diesel_s10: "Diesel S10", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV" };
         const desc32 = input.recordType === "abastecimento" ? `Abastecimento ${fuelLabels[input.fuelType] || input.fuelType} - ${eqName} - ${input.liters}L${input.supplier ? " (" + input.supplier + ")" : ""}` : `Manuten\xE7\xE3o ${input.maintenanceType || ""} - ${eqName}${input.notes ? ": " + input.notes.slice(0, 60) : ""}`;
         await db.insert(financialEntries).values({
           type: "despesa",
@@ -5410,7 +5409,7 @@ var vehicleRecordsRouter = router({
     }
     if (input.recordType === "abastecimento") {
       const dateFormatted = new Date(input.date).toLocaleDateString("pt-BR");
-      const fuelLabels = { diesel: "Diesel S500", diesel_s10: "Diesel S10", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV", arla: "Arla 32" };
+      const fuelLabels = { diesel: "Diesel S500", diesel_s10: "Diesel S10", gasolina: "Gasolina", etanol: "Etanol", gnv: "GNV" };
       notifyTeam({
         event: "abastecimento_registrado",
         title: `Abastecimento registrado em ${dateFormatted}.`,
@@ -5434,7 +5433,7 @@ var vehicleRecordsRouter = router({
     id: z8.number(),
     date: z8.string().optional(),
     recordType: z8.enum(["abastecimento", "manutencao", "km"]).optional(),
-    fuelType: z8.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).optional().nullable(),
+    fuelType: z8.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional().nullable(),
     liters: z8.string().optional().nullable(),
     fuelCost: z8.string().optional().nullable(),
     pricePerLiter: z8.string().optional().nullable(),
@@ -11109,9 +11108,8 @@ var fuelSuppliersRouter = router({
     address: z28.string().optional(),
     city: z28.string().optional(),
     state: z28.string().optional(),
-    fuelType: z28.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).default("diesel"),
+    fuelType: z28.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
     pricePerLiter: z28.string().min(1),
-    pricePerLiterS10: z28.string().optional(),
     locationType: z28.enum(["simflor", "astorga", "postos"]).default("simflor"),
     location: z28.string().optional(),
     workLocationId: z28.number().optional(),
@@ -11135,7 +11133,6 @@ var fuelSuppliersRouter = router({
       state: input.state || null,
       fuelType: input.fuelType,
       pricePerLiter: input.pricePerLiter,
-      pricePerLiterS10: input.pricePerLiterS10 || null,
       locationType: input.locationType,
       location: input.location || null,
       workLocationId: input.workLocationId || null,
@@ -11158,9 +11155,8 @@ var fuelSuppliersRouter = router({
     address: z28.string().nullable().optional(),
     city: z28.string().nullable().optional(),
     state: z28.string().nullable().optional(),
-    fuelType: z28.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).optional(),
+    fuelType: z28.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
     pricePerLiter: z28.string().optional(),
-    pricePerLiterS10: z28.string().nullable().optional(),
     locationType: z28.enum(["simflor", "astorga", "postos"]).optional(),
     location: z28.string().nullable().optional(),
     workLocationId: z28.number().nullable().optional(),
@@ -11186,7 +11182,6 @@ var fuelSuppliersRouter = router({
     if (data.state !== void 0) updateData.state = data.state;
     if (data.fuelType !== void 0) updateData.fuelType = data.fuelType;
     if (data.pricePerLiter !== void 0) updateData.pricePerLiter = data.pricePerLiter;
-    if (data.pricePerLiterS10 !== void 0) updateData.pricePerLiterS10 = data.pricePerLiterS10;
     if (data.locationType !== void 0) updateData.locationType = data.locationType;
     if (data.location !== void 0) updateData.location = data.location;
     if (data.workLocationId !== void 0) updateData.workLocationId = data.workLocationId;
@@ -11428,7 +11423,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     totalAmount: z28.string().min(1),
     liters: z28.string().optional(),
     pricePerLiter: z28.string().optional(),
-    fuelType: z28.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).default("diesel"),
+    fuelType: z28.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
     paymentMethod: z28.string().optional(),
     bankName: z28.string().optional(),
     barcodeNumber: z28.string().optional(),
@@ -11485,7 +11480,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     totalAmount: z28.string().optional(),
     liters: z28.string().nullable().optional(),
     pricePerLiter: z28.string().nullable().optional(),
-    fuelType: z28.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv", "arla"]).optional(),
+    fuelType: z28.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
     paymentMethod: z28.string().nullable().optional(),
     bankName: z28.string().nullable().optional(),
     barcodeNumber: z28.string().nullable().optional(),

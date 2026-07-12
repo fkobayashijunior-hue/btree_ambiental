@@ -39,6 +39,8 @@ import { invoiceControlRouter } from "./routers/invoiceControl";
 import { quotationRequestsRouter } from "./routers/quotationRequests";
 import { clientAdvancesRouter } from "./routers/clientAdvances";
 import { thirdPartyRouter } from "./routers/thirdParty";
+import { geofencesRouter } from "./routers/geofences";
+import { freightTripsRouter } from "./routers/freightTrips";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { SignJWT } from "jose";
@@ -323,6 +325,8 @@ export const appRouter = router({
   invoiceControl: invoiceControlRouter,
   quotationRequests: quotationRequestsRouter,
   thirdParty: thirdPartyRouter,
+  geofences: geofencesRouter,
+  freightTrips: freightTripsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
     run: publicProcedure

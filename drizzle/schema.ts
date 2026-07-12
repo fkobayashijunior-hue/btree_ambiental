@@ -906,7 +906,7 @@ export const vehicleRecords = mysqlTable("vehicle_records", {
 	equipmentId: int("equipment_id").notNull().references(() => equipment.id),
 	date: timestamp({ mode: 'string' }).notNull(),
 	recordType: mysqlEnum("record_type", ['abastecimento','manutencao','km']).notNull(),
-	fuelType: mysqlEnum("fuel_type", ['diesel','diesel_s10','gasolina','etanol','gnv','arla']),
+	fuelType: mysqlEnum("fuel_type", ['diesel','diesel_s10','gasolina','etanol','gnv']),
 	liters: varchar({ length: 20 }),
 	fuelCost: varchar("fuel_cost", { length: 20 }),
 	pricePerLiter: varchar("price_per_liter", { length: 20 }),
@@ -1148,9 +1148,8 @@ export const fuelSuppliers = mysqlTable("fuel_suppliers", {
 	address: text(),
 	city: varchar({ length: 100 }),
 	state: varchar({ length: 2 }),
-	fuelType: mysqlEnum("fuel_type", ['diesel','diesel_s10','gasolina','etanol','gnv','arla']).default('diesel').notNull(),
+	fuelType: mysqlEnum("fuel_type", ['diesel','diesel_s10','gasolina','etanol','gnv']).default('diesel').notNull(),
 	pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
-	pricePerLiterS10: varchar("price_per_liter_s10", { length: 20 }),
 	locationType: mysqlEnum("location_type", ['simflor','astorga','postos']).default('simflor').notNull(),
 	location: varchar({ length: 255 }),
 	workLocationId: int("work_location_id"),
@@ -1182,7 +1181,7 @@ export const fuelInvoices = mysqlTable("fuel_invoices", {
 	totalAmount: varchar("total_amount", { length: 20 }).notNull(),
 	liters: varchar({ length: 20 }),
 	pricePerLiter: varchar("price_per_liter", { length: 20 }),
-	fuelType: mysqlEnum("fuel_type", ['diesel','diesel_s10','gasolina','etanol','gnv','arla']).default('diesel'),
+	fuelType: mysqlEnum("fuel_type", ['diesel','diesel_s10','gasolina','etanol','gnv']).default('diesel'),
 	paymentMethod: varchar("payment_method", { length: 50 }),
 	bankName: varchar("bank_name", { length: 100 }),
 	barcodeNumber: varchar("barcode_number", { length: 100 }),
@@ -1491,3 +1490,51 @@ export const clientAdvanceDeductions = mysqlTable("client_advance_deductions", {
 });
 export type ClientAdvanceDeduction = typeof clientAdvanceDeductions.$inferSelect;
 export type InsertClientAdvanceDeduction = typeof clientAdvanceDeductions.$inferInsert;
+
+// ============================================================
+// MÓDULO: PORTEIRA VIRTUAL (GEOFENCE)
+// ============================================================
+export const geofences = mysqlTable("geofences", {
+  id: int().autoincrement().primaryKey().notNull(),
+  name: varchar({ length: 255 }).notNull(),
+  lat: varchar({ length: 30 }).notNull(),
+  lng: varchar({ length: 30 }).notNull(),
+  radiusMeters: int("radius_meters").default(300).notNull(),
+  isActive: tinyint("is_active").default(1).notNull(),
+  traccarDeviceId: int("traccar_device_id"),        // ID do dispositivo no Traccar (ex: Scania Julieta)
+  traccarGeofenceId: int("traccar_geofence_id"),    // ID da cerca no Traccar (para sincronização)
+  defaultOriginName: varchar("default_origin_name", { length: 255 }).default("SIMFLOR"), // origem padrão dos fretes
+  notes: text(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type Geofence = typeof geofences.$inferSelect;
+export type InsertGeofence = typeof geofences.$inferInsert;
+
+// Fretes abertos/fechados automaticamente pela porteira virtual
+export const freightTrips = mysqlTable("freight_trips", {
+  id: int().autoincrement().primaryKey().notNull(),
+  geofenceId: int("geofence_id").notNull().references(() => geofences.id),
+  vehicleId: int("vehicle_id").references(() => equipment.id),  // equipamento (Scania Julieta)
+  vehicleName: varchar("vehicle_name", { length: 255 }),        // nome do veículo (cache)
+  driverId: int("driver_id").references(() => collaborators.id), // motorista detectado pelo equipamento
+  driverName: varchar("driver_name", { length: 255 }),          // nome do motorista (cache)
+  status: mysqlEnum(['open','closed','cancelled']).default('open').notNull(),
+  originName: varchar("origin_name", { length: 255 }).default("SIMFLOR").notNull(),
+  destinationName: varchar("destination_name", { length: 255 }), // preenchido manualmente depois
+  entryAt: timestamp("entry_at", { mode: 'string' }).notNull(),  // quando entrou na geofence
+  exitAt: timestamp("exit_at", { mode: 'string' }),              // quando saiu da geofence
+  distanceKm: varchar("distance_km", { length: 20 }),            // km percorridos (calculado via Traccar)
+  routeNotes: text("route_notes"),                               // notas de rota (ex: passou na oficina)
+  tollCost: varchar("toll_cost", { length: 20 }).default("0"),   // custo de pedágio
+  maintenanceCost: varchar("maintenance_cost", { length: 20 }).default("0"), // custo de manutenção
+  fuelCost: varchar("fuel_cost", { length: 20 }).default("0"),   // custo de combustível
+  totalCost: varchar("total_cost", { length: 20 }).default("0"), // custo total calculado
+  traccarPositionsJson: text("traccar_positions_json"),           // rota GPS em JSON
+  scheduleCronTaskUid: varchar("schedule_cron_task_uid", { length: 255 }), // UID do heartbeat job
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type FreightTrip = typeof freightTrips.$inferSelect;
+export type InsertFreightTrip = typeof freightTrips.$inferInsert;
