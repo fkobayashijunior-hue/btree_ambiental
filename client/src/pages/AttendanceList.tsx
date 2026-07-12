@@ -931,6 +931,15 @@ export default function AttendanceList() {
                                   {d.paymentStatus === "pago" ? "✓ Pago" : "Pendente"}
                                 </button>
                               )}
+                              {isAdmin && (
+                                <button
+                                  className="text-xs px-2 py-0.5 rounded-full font-medium text-red-500 hover:bg-red-50 border border-red-200 flex items-center gap-1 transition-colors"
+                                  onClick={() => handleDelete(d.id, collab.name)}
+                                  title="Excluir presença"
+                                >
+                                  <Trash2 className="h-3 w-3" /> Excluir
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}
