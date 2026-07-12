@@ -401,15 +401,16 @@ function DashboardLayoutContent({
 
               // Verificar se algum item do grupo está ativo (para abrir automaticamente)
               const hasActiveItem = visibleItems.some(item => location === item.path || location.startsWith(item.path + "/"));
+              const defaultOpen = hasActiveItem || gi <= 2;
 
               return (
-                <SidebarGroup key={gi} className="px-2 py-0">
-                  <Collapsible defaultOpen={hasActiveItem || gi <= 2}>
+                <Collapsible key={gi} defaultOpen={defaultOpen} className="group/collapsible">
+                  <SidebarGroup className="px-2 py-0">
                     <CollapsibleTrigger asChild>
-                      <SidebarGroupLabel className="flex items-center justify-between cursor-pointer hover:bg-white/10 rounded-md px-2 py-1.5 text-white/50 hover:text-white/80 text-xs font-semibold uppercase tracking-wider transition-colors group/label w-full">
-                        <span>{group.label}</span>
-                        <ChevronRight className="h-3 w-3 transition-transform group-data-[state=open]/label:rotate-90 ml-auto" />
-                      </SidebarGroupLabel>
+                      <button className="flex items-center justify-between w-full cursor-pointer hover:bg-white/10 rounded-md px-2 py-1.5 transition-colors mb-0.5">
+                        <span className="text-white/50 hover:text-white/80 text-xs font-semibold uppercase tracking-wider transition-colors">{group.label}</span>
+                        <ChevronRight className="h-3 w-3 text-white/40 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                      </button>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarGroupContent>
@@ -433,8 +434,8 @@ function DashboardLayoutContent({
                         </SidebarMenu>
                       </SidebarGroupContent>
                     </CollapsibleContent>
-                  </Collapsible>
-                </SidebarGroup>
+                  </SidebarGroup>
+                </Collapsible>
               );
             })}
           </SidebarContent>
