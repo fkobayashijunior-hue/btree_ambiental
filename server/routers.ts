@@ -21,6 +21,7 @@ import { chainsawModuleRouter } from "./routers/chainsaws";
 import { extraExpensesRouter } from "./routers/extraExpenses";
 import { dashboardRouter } from "./routers/dashboard";
 import { financialRouter } from "./routers/financial";
+import { financialDashboardRouter } from "./routers/financialDashboard";
 import { gpsLocationsRouter } from "./routers/gpsLocations";
 import { reportsRouter } from "./routers/reports";
 import { auditDataRouter } from "./routers/auditData";
@@ -308,6 +309,7 @@ export const appRouter = router({
   chainsawModule: chainsawModuleRouter,
   extraExpenses: extraExpensesRouter,
   financial: financialRouter,
+  financialDashboard: financialDashboardRouter,
   gpsLocations: gpsLocationsRouter,
   reports: reportsRouter,
   auditData: auditDataRouter,
