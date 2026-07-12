@@ -616,6 +616,39 @@ async function startServer() {
 
 startServer().catch(console.error);
 
+// ── Heartbeat: registrar job de verificação de porteiras virtuais ────────────
+async function setupGeofenceHeartbeatJob() {
+  try {
+    const { createHeartbeatJob, listHeartbeatJobs } = await import('./heartbeat');
+    const JOB_NAME = 'geofence-check-v1';
+
+    // Verificar se o job já existe
+    const listResult = await listHeartbeatJobs('').catch(() => null);
+    const jobs = listResult?.jobs ?? [];
+    const existing = jobs.find((j: any) => j.name === JOB_NAME);
+    if (existing) {
+      console.log(`[Heartbeat] Job '${JOB_NAME}' já existe (uid: ${existing.taskUid}). Próxima execução: ${existing.nextExecutionAt}`);
+      return;
+    }
+
+    // Criar job: a cada 2 minutos
+    const result = await createHeartbeatJob(
+      {
+        name: JOB_NAME,
+        cron: '0 */2 * * * *', // a cada 2 minutos
+        path: '/api/scheduled/geofence-check',
+        method: 'POST',
+        description: 'Verifica posição GPS dos veículos e abre/fecha fretes automaticamente pelas porteiras virtuais',
+      },
+      '' // owner session
+    );
+    console.log(`[Heartbeat] Job '${JOB_NAME}' criado com sucesso! uid: ${result.taskUid}, próxima execução: ${result.nextExecutionAt}`);
+  } catch (err: any) {
+    console.warn('[Heartbeat] Não foi possível registrar o job de geofence:', err.message);
+  }
+}
+setupGeofenceHeartbeatJob();
+
 // ── Cron job: verificar pagamentos pendentes toda segunda-feira às 8h ────────
 function schedulePendingPaymentsCheck() {
   const checkAndSchedule = async () => {
