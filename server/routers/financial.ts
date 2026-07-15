@@ -26,6 +26,36 @@ const EXPENSE_CATEGORIES = [
   "outro_despesa",
 ] as const;
 
+async function ensureFinancialTable(db: any) {
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS financial_entries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        type ENUM('receita','despesa') NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        description VARCHAR(500) NOT NULL,
+        amount VARCHAR(20) NOT NULL,
+        date TIMESTAMP NOT NULL,
+        reference_month VARCHAR(7),
+        payment_method ENUM('dinheiro','pix','cartao','transferencia','boleto','cheque') NOT NULL DEFAULT 'pix',
+        status ENUM('pendente','confirmado','cancelado') NOT NULL DEFAULT 'confirmado',
+        client_id INT,
+        client_name VARCHAR(255),
+        receipt_image_url TEXT,
+        notes TEXT,
+        registered_by INT,
+        registered_by_name VARCHAR(255),
+        cargo_load_id INT,
+        auto_generated INT DEFAULT 0,
+        equipment_id INT,
+        equipment_name VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+  } catch { /* already exists or no permissions */ }
+}
+
 export const financialRouter = router({
   // ── Listar lançamentos ──────────────────────────────────────────────────
   list: protectedProcedure
@@ -40,6 +70,7 @@ export const financialRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      await ensureFinancialTable(db);
       const conditions = [];
       if (input.type !== "all") {
         conditions.push(eq(financialEntries.type, input.type));
@@ -74,6 +105,7 @@ export const financialRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return { totalReceitas: 0, totalDespesas: 0, saldo: 0, entries: [] };
+      await ensureFinancialTable(db);
 
       const [year, month] = input.referenceMonth.split("-").map(Number);
       const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -113,6 +145,7 @@ export const financialRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      await ensureFinancialTable(db);
 
       const [year, month] = input.referenceMonth.split("-").map(Number);
       const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -146,6 +179,7 @@ export const financialRouter = router({
     .query(async () => {
       const db = await getDb();
       if (!db) return [];
+      await ensureFinancialTable(db);
 
       const rows = await db
         .select({
@@ -192,6 +226,7 @@ export const financialRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
+      await ensureFinancialTable(db);
       const dateObj = new Date(input.date);
       const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
       const [result] = await db.insert(financialEntries).values({
@@ -332,6 +367,7 @@ export const financialRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
+      await ensureFinancialTable(db);
       const existing = await db.select({ id: financialEntries.id, amount: financialEntries.amount, description: financialEntries.description })
         .from(financialEntries)
         .where(and(

@@ -11,20 +11,31 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Camera, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, MapPin, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, Database, Radio, ChevronRight } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { SidebarGroup, SidebarGroupLabel, SidebarGroupContent } from "@/components/ui/sidebar";
+import {
+  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, Database, Settings, Bell, ChevronRight, Radio
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -68,111 +79,155 @@ function useDashboardInstallPrompt() {
   return { canInstall: !!deferredPrompt && !isInstalled && !dismissed, isInstalled, isIOS, install, dismiss };
 }
 
-// Item simples do menu
-type MenuItem = { icon: React.ElementType; label: string; path: string; slug: string | null };
+type MenuItem = {
+  label: string;
+  path: string;
+  slug: string | null;
+  icon?: React.ElementType;
+};
 
-// Grupos do menu lateral (igual ao staging)
-const MENU_GROUPS: { label: string | null; items: MenuItem[] }[] = [
+type MenuGroup = {
+  label: string;
+  icon: React.ElementType;
+  items: MenuItem[];
+  adminOnly?: boolean;
+  driverOnly?: boolean;
+  isFixed?: boolean;
+  path?: string;
+  slug?: string | null;
+};
+
+const menuGroups: MenuGroup[] = [
+  // ── Painel ──
   {
-    label: null, // Sem grupo — Painel
-    items: [
-      { icon: LayoutDashboard, label: "Painel", path: "/app", slug: null },
-    ],
+    label: "Painel",
+    icon: LayoutDashboard,
+    isFixed: true,
+    path: "/app",
+    slug: null,
+    items: [],
   },
+  // ── Pessoas ──
   {
     label: "Pessoas",
+    icon: Users,
     items: [
-      { icon: ClipboardList, label: "Presenças", path: "/presencas", slug: "presencas" },
-      { icon: UserCheck, label: "Colaboradores", path: "/colaboradores", slug: "colaboradores" },
-      { icon: Users, label: "Clientes", path: "/clientes", slug: "clientes" },
-      { icon: Users, label: "Usuários", path: "/usuarios", slug: null }, // admin only
+      { label: "Colaboradores", path: "/colaboradores", slug: "colaboradores", icon: UserCheck },
+      { label: "Presenças", path: "/presencas", slug: "presencas", icon: ClipboardList },
+      { label: "Clientes", path: "/clientes", slug: "clientes", icon: Users },
     ],
   },
+  // ── Equipamentos ──
   {
     label: "Equipamentos",
+    icon: Wrench,
     items: [
-      { icon: Layers, label: "Setores e Equipamentos", path: "/setores", slug: "equipamentos" },
-      { icon: ClipboardList, label: "Controle de Equipamentos", path: "/maquinas", slug: "manutencao" },
-      { icon: Scissors, label: "Motosserras", path: "/motosserras", slug: "motosserras" },
-      { icon: Package, label: "Peças e Acessórios", path: "/pecas", slug: "pecas" },
+      { label: "Setores e Máquinas", path: "/setores", slug: "equipamentos", icon: Layers },
+      { label: "Horímetro e Manutenção", path: "/maquinas", slug: "manutencao", icon: ClipboardList },
+      { label: "Motosserras", path: "/motosserras", slug: "motosserras", icon: Scissors },
+      { label: "Peças e Acessórios", path: "/pecas", slug: "pecas", icon: Package },
+      { label: "Abastecimento de Veículos", path: "/veiculos", slug: "abastecimento", icon: Car },
     ],
   },
+  // ── Operações ──
   {
     label: "Operações",
+    icon: ClipboardList,
     items: [
-      { icon: Truck, label: "Controle de Cargas", path: "/cargas", slug: "cargas" },
-      { icon: Truck, label: "Minha Carga", path: "/motorista", slug: "minha-carga" },
-      { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", slug: "gastos-extras" },
-      { icon: Leaf, label: "Replantios", path: "/replantios", slug: "replantios" },
+      { label: "Controle de Cargas", path: "/cargas", slug: "cargas", icon: Truck },
+      { label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas", icon: FileText },
+      { label: "Relatório de Destinos", path: "/relatorio-destinos", slug: "relatorio-destinos", icon: FileBarChart },
+      { label: "Replantios", path: "/replantios", slug: "replantios", icon: Leaf },
     ],
   },
+  // ── GPS e Fretes ──
   {
     label: "GPS e Fretes",
+    icon: Navigation,
     items: [
-      { icon: Navigation, label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps" },
-      { icon: Map, label: "Locais GPS", path: "/locais-gps", slug: "locais-gps" },
-      { icon: Radio, label: "Porteiras Virtuais", path: "/porteiras-virtuais", slug: "porteiras-virtuais" },
-      { icon: RefreshCw, label: "Ciclos de Frete", path: "/ciclos-frete", slug: "ciclos-frete" },
-      { icon: Route, label: "Cálculo de Fretes", path: "/fretes", slug: "fretes" },
-      { icon: Truck, label: "Fretes GPS", path: "/fretes-gps", slug: "fretes-gps" },
+      { label: "Rastreamento GPS", path: "/rastreamento-gps", slug: "gps", icon: Navigation },
+      { label: "Locais GPS", path: "/locais-gps", slug: "locais-gps", icon: Map },
+      { label: "Porteiras Virtuais", path: "/porteiras-virtuais", slug: "porteiras-virtuais", icon: Radio },
+      { label: "Cálculo de Fretes", path: "/fretes", slug: "fretes", icon: Route },
+      { label: "Ciclos de Frete", path: "/ciclos-frete", slug: "ciclos-frete", icon: RefreshCw },
+      { label: "Fretes GPS", path: "/fretes-gps", slug: "fretes-gps", icon: Truck },
     ],
   },
+  // ── Terceirizados ──
   {
     label: "Terceirizados",
+    icon: UserCheck,
     items: [
-      { icon: UserCheck, label: "Terceirizados", path: "/terceirizados", slug: "terceirizados" },
-      { icon: Truck, label: "Caminhões Terceirizados", path: "/caminhoes-terceirizados", slug: "caminhoes-terceirizados" },
-      { icon: Wrench, label: "Corte Terceirizado", path: "/corte-terceirizado", slug: "corte-terceirizado" },
+      { label: "Contratados", path: "/terceirizados", slug: "terceirizados", icon: UserCheck },
+      { label: "Caminhões", path: "/caminhoes-terceirizados", slug: "caminhoes-terceirizados", icon: Truck },
+      { label: "Relatório de Corte", path: "/corte-terceirizado", slug: "corte-terceirizado", icon: FileBarChart },
     ],
   },
+  // ── Combustível ──
   {
     label: "Combustível",
+    icon: Fuel,
     items: [
-      { icon: Car, label: "Controle de Abastecimento", path: "/veiculos", slug: "abastecimento" },
-      { icon: Fuel, label: "Fornecedores Combustível", path: "/fornecedores-combustivel", slug: "fornecedores-combustivel" },
-      { icon: Fuel, label: "Relatórios Combustível", path: "/relatorios-combustivel", slug: "relatorios-combustivel" },
-      { icon: Fuel, label: "Contas a Pagar (Combustível)", path: "/contas-pagar-combustivel", slug: "contas-pagar-combustivel" },
+      { label: "Fornecedores", path: "/fornecedores-combustivel", slug: "fornecedores-combustivel", icon: Fuel },
+      { label: "Relatórios", path: "/relatorios-combustivel", slug: "relatorios-combustivel", icon: BarChart3 },
+      { label: "Contas a Pagar", path: "/contas-pagar-combustivel", slug: "contas-pagar-combustivel", icon: Receipt },
     ],
   },
+  // ── Comercial ──
   {
     label: "Comercial",
+    icon: Building2,
     items: [
-      { icon: Building2, label: "Compradores", path: "/compradores", slug: "compradores" },
-      { icon: FileBarChart, label: "Relatório Destinos", path: "/relatorio-destinos", slug: "relatorio-destinos" },
-      { icon: DollarSign, label: "Pagamentos Clientes", path: "/pagamentos-clientes", slug: "pagamentos-clientes" },
-      { icon: Globe, label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente" },
-      { icon: FileText, label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas" },
+      { label: "Compradores", path: "/compradores", slug: "compradores", icon: Building2 },
+      { label: "Portal do Cliente", path: "/client-portal", slug: "portal-cliente", icon: Globe },
     ],
   },
+  // ── Compras ──
   {
     label: "Compras",
+    icon: ShoppingCart,
     items: [
-      { icon: ShoppingCart, label: "Solicitações de Compras", path: "/compras", slug: "compras" },
-      { icon: Building2, label: "Fornecedores", path: "/fornecedores", slug: "fornecedores" },
-      { icon: TrendingDown, label: "Orçamentos", path: "/orcamentos", slug: "orcamentos" },
+      { label: "Solicitações", path: "/compras", slug: "compras", icon: ShoppingCart },
+      { label: "Fornecedores", path: "/fornecedores", slug: "fornecedores", icon: Building2 },
+      { label: "Orçamentos", path: "/orcamentos", slug: "orcamentos", icon: TrendingDown },
     ],
   },
+  // ── Financeiro ──
   {
     label: "Financeiro",
+    icon: Wallet,
     items: [
-      { icon: Wallet, label: "Financeiro", path: "/financeiro", slug: "financeiro" },
-      { icon: TrendingUp, label: "Dashboard Financeiro", path: "/dashboard-financeiro", slug: "dashboard-financeiro" },
-      { icon: BarChart3, label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec" },
+      { label: "Gastos Extras", path: "/gastos-extras", slug: "gastos-extras", icon: Receipt },
+      { label: "Pagamentos de Compradores", path: "/pagamentos-clientes", slug: "pagamentos-clientes", icon: DollarSign },
+      { label: "Lançamentos Financeiros", path: "/financeiro", slug: "financeiro", icon: Wallet },
+      { label: "Dashboard Financeiro", path: "/dashboard-financeiro", slug: "dashboard-financeiro", icon: TrendingUp },
+      { label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec", icon: BarChart3 },
     ],
   },
+  // ── Administração (admin only) ──
   {
     label: "Administração",
+    icon: Settings,
+    adminOnly: true,
     items: [
-      { icon: ShieldCheck, label: "Controle de Acesso", path: "/controle-acesso", slug: "acesso" },
-      { icon: Database, label: "Auditoria de Dados", path: "/auditoria-dados", slug: null }, // admin only
+      { label: "Usuários", path: "/usuarios", slug: null, icon: Users },
+      { label: "Controle de Acesso", path: "/controle-acesso", slug: null, icon: ShieldCheck },
+      { label: "Config. Notificações", path: "/config-notificacoes", slug: null, icon: Bell },
+      { label: "Auditoria de Dados", path: "/auditoria-dados", slug: null, icon: Database },
     ],
+  },
+  // ── Minha Carga (motorista only) ──
+  {
+    label: "Minha Carga",
+    icon: Truck,
+    isFixed: true,
+    driverOnly: true,
+    path: "/motorista",
+    slug: "minha-carga",
+    items: [],
   },
 ];
 
-// Lista plana para compatibilidade com getPageTitle e activeMenuItem
-const menuItems: MenuItem[] = MENU_GROUPS.flatMap(g => g.items);
-
-// Rotas que são subpáginas (não estão no menu principal)
 const SUB_PAGES: Record<string, { label: string; parent: string }> = {
   "/colaboradores/": { label: "Detalhes do Colaborador", parent: "/colaboradores" },
   "/setores/equipamento/": { label: "Detalhes do Equipamento", parent: "/setores" },
@@ -203,7 +258,6 @@ export default function DashboardLayout({
   }
 
   if (!user) {
-    // Redirecionar para /login
     window.location.href = "/login";
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -252,7 +306,16 @@ function DashboardLayoutContent({
   const { canInstall, isIOS, isInstalled, install, dismiss } = useDashboardInstallPrompt();
   const [showIOSGuide, setShowIOSGuide] = useState(false);
 
-  // Switch manifest to collaborator-specific version
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const group of menuGroups) {
+      if (group.isFixed) continue;
+      const hasActive = group.items.some(item => item.path === location);
+      if (hasActive) initial[group.label] = true;
+    }
+    return initial;
+  });
+
   useEffect(() => {
     const link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
     if (link) link.href = '/manifest-equipe.json';
@@ -264,7 +327,6 @@ function DashboardLayoutContent({
     };
   }, []);
 
-  // Redirecionar motorista para /motorista automaticamente ao logar
   useEffect(() => {
     if (!didRedirect && (profile === 'motorista') && location === '/app' && hasAccess('minha-carga')) {
       setDidRedirect(true);
@@ -272,17 +334,29 @@ function DashboardLayoutContent({
     }
   }, [profile, location, didRedirect, setLocation]);
 
-  // Determinar se é subpágina e qual o parent
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  useEffect(() => {
+    for (const group of menuGroups) {
+      if (group.isFixed) continue;
+      const hasActive = group.items.some(item => item.path === location);
+      if (hasActive) {
+        setOpenGroups(prev => ({ ...prev, [group.label]: true }));
+        break;
+      }
+    }
+  }, [location]);
+
+  const toggleGroup = (label: string) => {
+    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const allMenuItems = menuGroups.flatMap(g => g.isFixed ? [{ path: g.path!, label: g.label, slug: g.slug ?? null }] : g.items);
+  const activeMenuItem = allMenuItems.find(item => item.path === location);
   const isSubPage = !activeMenuItem && location !== "/app";
-  
-  // Encontrar parent para subpáginas (ex: /colaboradores/5 → /colaboradores)
+
   const getParentPath = () => {
-    // Verificar padrões de subpáginas
     for (const [pattern, info] of Object.entries(SUB_PAGES)) {
       if (location.startsWith(pattern)) return info.parent;
     }
-    // Padrão genérico: /colaboradores/5 → /colaboradores
     const parts = location.split("/").filter(Boolean);
     if (parts.length >= 2) {
       return "/" + parts[0];
@@ -292,7 +366,6 @@ function DashboardLayoutContent({
 
   const getPageTitle = () => {
     if (activeMenuItem) return activeMenuItem.label;
-    // Tentar encontrar no mapa de subpáginas
     for (const [pattern, info] of Object.entries(SUB_PAGES)) {
       if (location.startsWith(pattern)) return info.label;
     }
@@ -330,6 +403,19 @@ function DashboardLayoutContent({
     };
   }, [isResizing, setSidebarWidth]);
 
+  const visibleGroups = menuGroups.filter(group => {
+    if (group.adminOnly && !isAdmin) return false;
+    if (group.driverOnly && profile !== 'motorista') return false;
+    if (group.isFixed) {
+      if (group.driverOnly) return profile === 'motorista' && hasAccess(group.slug ?? '');
+      return true;
+    }
+    return group.items.some(item => {
+      if (item.slug === null) return isAdmin;
+      return hasAccess(item.slug);
+    });
+  });
+
   return (
     <>
       <div className="relative" ref={sidebarRef}>
@@ -360,88 +446,98 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0 overflow-y-auto">
-            {MENU_GROUPS.map((group, gi) => {
-              // Filtrar itens visíveis do grupo
-              const visibleItems = group.items.filter(item => {
-                if (item.slug === null) {
-                  if (item.path === "/usuarios" || item.path === "/auditoria-dados") return isAdmin;
-                  return true;
+            <SidebarMenu className="px-2 py-1 gap-0.5">
+              {visibleGroups.map(group => {
+                // ── Fixed single items (Painel, Minha Carga) ──
+                if (group.isFixed) {
+                  const isActive = location === group.path;
+                  return (
+                    <SidebarMenuItem key={group.label}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => setLocation(group.path!)}
+                        tooltip={group.label}
+                        className="h-10 transition-all font-semibold text-white/90 hover:text-white hover:bg-white/10 data-[active=true]:bg-white/15 data-[active=true]:text-white"
+                      >
+                        <group.icon className={`h-4 w-4 ${isActive ? "text-emerald-300" : "text-white/70"}`} />
+                        <span>{group.label}</span>
+                        {group.driverOnly && !isCollapsed && (
+                          <span className="ml-auto text-[10px] text-white/40 font-normal">(motorista)</span>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
                 }
-                return hasAccess(item.slug);
-              });
-              if (visibleItems.length === 0) return null;
 
-              // Grupo sem label (Painel) — renderiza diretamente
-              if (!group.label) {
+                // ── Collapsible group ──
+                const isGroupOpen = !!openGroups[group.label];
+                const hasActiveChild = group.items.some(item => item.path === location);
+                const visibleItems = group.items.filter(item => {
+                  if (item.slug === null) return isAdmin;
+                  return hasAccess(item.slug);
+                });
+                if (visibleItems.length === 0) return null;
+
                 return (
-                  <SidebarGroup key={gi} className="px-2 py-1 pb-0">
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {visibleItems.map(item => {
-                          const isActive = location === item.path;
-                          return (
-                            <SidebarMenuItem key={item.path}>
-                              <SidebarMenuButton
-                                isActive={isActive}
-                                onClick={() => setLocation(item.path)}
-                                tooltip={item.label}
-                                className="h-10 transition-all font-medium text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:bg-white/15 data-[active=true]:text-white"
-                              >
-                                <item.icon className={`h-4 w-4 ${isActive ? "text-emerald-300" : "text-white/70"}`} />
-                                <span>{item.label}</span>
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                          );
-                        })}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                );
-              }
+                  <Collapsible
+                    key={group.label}
+                    open={isGroupOpen}
+                    onOpenChange={() => toggleGroup(group.label)}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          tooltip={group.label}
+                          className={`h-10 transition-all font-semibold hover:text-white hover:bg-white/10 ${
+                            hasActiveChild
+                              ? "text-white bg-white/10"
+                              : "text-white/80"
+                          }`}
+                        >
+                          <group.icon className={`h-4 w-4 ${hasActiveChild ? "text-emerald-300" : "text-white/60"}`} />
+                          <span>{group.label}</span>
+                          <ChevronRight
+                            className={`ml-auto h-3.5 w-3.5 text-white/40 transition-transform duration-200 ${
+                              isGroupOpen ? "rotate-90" : ""
+                            }`}
+                          />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
 
-              // Verificar se algum item do grupo está ativo (para abrir automaticamente)
-              const hasActiveItem = visibleItems.some(item => location === item.path || location.startsWith(item.path + "/"));
-              const defaultOpen = hasActiveItem || gi <= 2;
-
-              return (
-                <Collapsible key={gi} defaultOpen={defaultOpen} className="group/collapsible">
-                  <SidebarGroup className="px-2 py-0">
-                    <CollapsibleTrigger asChild>
-                      <button className="flex items-center justify-between w-full cursor-pointer hover:bg-white/10 rounded-md px-2 py-1.5 transition-colors mb-0.5">
-                        <span className="text-white/50 hover:text-white/80 text-xs font-semibold uppercase tracking-wider transition-colors">{group.label}</span>
-                        <ChevronRight className="h-3 w-3 text-white/40 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarGroupContent>
-                        <SidebarMenu>
+                      <CollapsibleContent>
+                        <SidebarMenuSub className="ml-3 border-l border-white/10 pl-2">
                           {visibleItems.map(item => {
                             const isActive = location === item.path;
                             return (
-                              <SidebarMenuItem key={item.path}>
-                                <SidebarMenuButton
+                              <SidebarMenuSubItem key={item.path}>
+                                <SidebarMenuSubButton
                                   isActive={isActive}
                                   onClick={() => setLocation(item.path)}
-                                  tooltip={item.label}
-                                  className="h-9 transition-all font-medium text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:bg-white/15 data-[active=true]:text-white pl-3"
+                                  className={`h-9 text-sm transition-all cursor-pointer ${
+                                    isActive
+                                      ? "text-white bg-white/15 font-medium"
+                                      : "text-white/70 hover:text-white hover:bg-white/10"
+                                  }`}
                                 >
-                                  <item.icon className={`h-4 w-4 ${isActive ? "text-emerald-300" : "text-white/70"}`} />
+                                  {item.icon && (
+                                    <item.icon className={`h-3.5 w-3.5 ${isActive ? "text-emerald-300" : "text-white/50"}`} />
+                                  )}
                                   <span>{item.label}</span>
-                                </SidebarMenuButton>
-                              </SidebarMenuItem>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
                             );
                           })}
-                        </SidebarMenu>
-                      </SidebarGroupContent>
-                    </CollapsibleContent>
-                  </SidebarGroup>
-                </Collapsible>
-              );
-            })}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                );
+              })}
+            </SidebarMenu>
           </SidebarContent>
 
           <SidebarFooter className="p-3 space-y-3">
-            {/* Botão Instalar App - Android */}
             {!isCollapsed && canInstall && !isInstalled && (
               <button
                 onClick={install}
@@ -451,7 +547,6 @@ function DashboardLayoutContent({
                 <span>Instalar App</span>
               </button>
             )}
-            {/* Botão Instalar App - iOS */}
             {!isCollapsed && isIOS && !isInstalled && !canInstall && (
               <button
                 onClick={() => setShowIOSGuide(true)}
@@ -558,13 +653,10 @@ function DashboardLayoutContent({
       </Dialog>
 
       <SidebarInset>
-        {/* Header fixo — sempre visível com botão menu e botão voltar */}
         <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-[60]">
           <div className="flex items-center gap-2">
-            {/* Botão menu — SEMPRE visível no mobile */}
             <SidebarTrigger className="h-9 w-9 rounded-lg bg-background flex-shrink-0" />
 
-            {/* Botão voltar — aparece em subpáginas */}
             {isSubPage && (
               <button
                 onClick={() => setLocation(getParentPath())}
@@ -575,13 +667,11 @@ function DashboardLayoutContent({
               </button>
             )}
 
-            {/* Título da página */}
             <span className="tracking-tight text-foreground font-medium text-sm truncate">
               {getPageTitle()}
             </span>
           </div>
 
-          {/* Botões de Acesso Rápido no topo */}
           <div className="flex items-center gap-1">
             <button
               onClick={() => setLocation("/cargas")}
@@ -591,103 +681,14 @@ function DashboardLayoutContent({
               <Truck className="h-4 w-4 text-teal-600" />
               <span className="text-xs font-medium hidden sm:inline">Cargas</span>
             </button>
-            <button
-              onClick={() => setLocation("/presencas")}
-              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
-              title="Registrar Presença"
-            >
-              <CheckCircle2 className="h-4 w-4 text-blue-600" />
-              <span className="text-xs font-medium hidden sm:inline">Presenças</span>
-            </button>
-            <button
-              onClick={() => setLocation("/veiculos")}
-              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
-              title="Abastecimento"
-            >
-              <Fuel className="h-4 w-4 text-yellow-600" />
-              <span className="text-xs font-medium hidden sm:inline">Abastec.</span>
-            </button>
-            <button
-              onClick={() => setLocation("/maquinas?tab=oleo")}
-              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
-              title="Registrar Consumo de Óleo"
-            >
-              <Droplets className="h-4 w-4 text-cyan-600" />
-              <span className="text-xs font-medium hidden sm:inline">Óleo</span>
-            </button>
-            <button
-              onClick={() => setLocation("/maquinas?tab=manutencao")}
-              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
-              title="Registrar Manutenção"
-            >
-              <Wrench className="h-4 w-4 text-orange-600" />
-              <span className="text-xs font-medium hidden sm:inline">Manut.</span>
-            </button>
             <NotificationBell />
-            <button
-              onClick={() => setLocation("/app")}
-              className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent transition-colors flex-shrink-0"
-              aria-label="Dashboard"
-              title="Ir para o Painel"
-            >
-              <Home className="h-4 w-4 text-muted-foreground" />
-            </button>
           </div>
         </div>
 
-        <main className="flex-1 p-4">{children}</main>
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
       </SidebarInset>
-
-      {/* Modal guia iOS para instalação */}
-      {showIOSGuide && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center" onClick={() => setShowIOSGuide(false)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div
-            className="relative bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-sm mx-4 mb-0 sm:mb-auto shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button onClick={() => setShowIOSGuide(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-              <X className="h-5 w-5" />
-            </button>
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0d4f2e] to-[#1a5c3a] flex items-center justify-center mx-auto mb-3 shadow-lg">
-                <Smartphone className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="font-black text-gray-900 text-lg">Salvar na Tela Inicial</h3>
-              <p className="text-gray-500 text-sm mt-1">Siga os 3 passos abaixo:</p>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
-                <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">1</div>
-                <div>
-                  <p className="font-semibold text-gray-900 text-sm">Toque no botão Compartilhar</p>
-                  <p className="text-gray-500 text-xs mt-0.5">O ícone <span className="inline-block text-blue-500 font-bold text-lg leading-none align-middle">↑</span> na barra do Safari</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
-                <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">2</div>
-                <div>
-                  <p className="font-semibold text-gray-900 text-sm">Adicionar à Tela de Início</p>
-                  <p className="text-gray-500 text-xs mt-0.5">Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong></p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
-                <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">3</div>
-                <div>
-                  <p className="font-semibold text-gray-900 text-sm">Confirme tocando "Adicionar"</p>
-                  <p className="text-gray-500 text-xs mt-0.5">Pronto! O app BTREE aparecerá na sua tela</p>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowIOSGuide(false)}
-              className="w-full mt-5 py-3 bg-[#0d4f2e] text-white font-bold rounded-xl text-sm hover:bg-[#1a5c3a] transition-colors"
-            >
-              Entendi!
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

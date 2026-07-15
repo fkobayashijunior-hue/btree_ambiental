@@ -34,7 +34,6 @@ export default function Landing() {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 md:h-20">
-            {/* Logo */}
             <button onClick={() => scrollTo("inicio")} className="flex items-center">
               <img
                 src={BTREE_LOGO}
@@ -45,7 +44,6 @@ export default function Landing() {
               />
             </button>
 
-            {/* Desktop nav */}
             <div className="hidden md:flex items-center gap-8">
               {[
                 { label: "Início", id: "inicio" },
@@ -86,7 +84,6 @@ export default function Landing() {
               </a>
             </div>
 
-            {/* Mobile menu button */}
             <button
               className={`md:hidden p-2 ${scrolled ? "text-gray-700" : "text-white"}`}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -101,7 +98,6 @@ export default function Landing() {
             </button>
           </div>
 
-          {/* Mobile menu */}
           {mobileMenuOpen && (
             <div className="md:hidden bg-white shadow-lg rounded-b-xl pb-4">
               {[
@@ -146,7 +142,6 @@ export default function Landing() {
           background: "linear-gradient(135deg, #1b5e20 0%, #2e7d32 40%, #388e3c 70%, #43a047 100%)",
         }}
       >
-        {/* Background pattern */}
         <div
           className="absolute inset-0 opacity-10"
           style={{
@@ -156,7 +151,6 @@ export default function Landing() {
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left: text */}
             <div>
               <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white text-sm font-medium px-4 py-2 rounded-full mb-6 border border-white/30">
                 <span>🌿</span>
@@ -186,13 +180,12 @@ export default function Landing() {
               </div>
             </div>
 
-            {/* Right: stats */}
             <div className="grid grid-cols-2 gap-4">
               {[
-                { value: "PR", label: "Astorga, Paraná", suffix: "" },
-                { value: "100%", label: "Venda garantida", suffix: "" },
-                { value: "100%", label: "Sustentável", suffix: "" },
-                { value: "Japão", label: "Origem do grupo", suffix: "" },
+                { value: "PR", label: "Astorga, Paraná" },
+                { value: "100%", label: "Venda garantida" },
+                { value: "100%", label: "Sustentável" },
+                { value: "Japão", label: "Origem do grupo" },
               ].map((stat) => (
                 <div
                   key={stat.label}
@@ -206,7 +199,6 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Wave divider */}
         <div className="absolute bottom-0 left-0 right-0">
           <svg viewBox="0 0 1440 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
             <path d="M0 80L60 66.7C120 53.3 240 26.7 360 20C480 13.3 600 26.7 720 33.3C840 40 960 40 1080 36.7C1200 33.3 1320 26.7 1380 23.3L1440 20V80H0Z" fill="white" />
@@ -229,39 +221,12 @@ export default function Landing() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              {
-                icon: "🌱",
-                title: "Venda de Mudas",
-                desc: "Qualidade genética e alto desempenho. Mudas de eucalipto selecionadas para máxima produtividade.",
-                color: "from-green-50 to-emerald-50",
-                border: "border-green-200",
-              },
-              {
-                icon: "💰",
-                title: "Compra e Venda de Eucalipto",
-                desc: "Transparência e pagamento justo. Sua confiança é nosso maior valor — pagamentos pontuais e honestos.",
-                color: "from-amber-50 to-yellow-50",
-                border: "border-amber-200",
-              },
-              {
-                icon: "🪚",
-                title: "Corte Profissional",
-                desc: "Eficiência e segurança no manejo. Equipe capacitada com parceria SENAR-PR para operação de motosserras.",
-                color: "from-blue-50 to-sky-50",
-                border: "border-blue-200",
-              },
-              {
-                icon: "🌳",
-                title: "Reflorestamento Sustentável",
-                desc: "Renovamos o solo e o futuro da produção. Restauração de áreas degradadas com planejamento técnico.",
-                color: "from-teal-50 to-green-50",
-                border: "border-teal-200",
-              },
+              { icon: "🌱", title: "Venda de Mudas", desc: "Qualidade genética e alto desempenho. Mudas de eucalipto selecionadas para máxima produtividade.", color: "from-green-50 to-emerald-50", border: "border-green-200" },
+              { icon: "💰", title: "Compra e Venda de Eucalipto", desc: "Transparência e pagamento justo. Sua confiança é nosso maior valor — pagamentos pontuais e honestos.", color: "from-amber-50 to-yellow-50", border: "border-amber-200" },
+              { icon: "🪚", title: "Corte Profissional", desc: "Eficiência e segurança no manejo. Equipe capacitada com parceria SENAR-PR para operação de motosserras.", color: "from-blue-50 to-sky-50", border: "border-blue-200" },
+              { icon: "🌳", title: "Reflorestamento Sustentável", desc: "Renovamos o solo e o futuro da produção. Restauração de áreas degradadas com planejamento técnico.", color: "from-teal-50 to-green-50", border: "border-teal-200" },
             ].map((s) => (
-              <div
-                key={s.title}
-                className={`bg-gradient-to-br ${s.color} border ${s.border} rounded-2xl p-6 hover:shadow-lg transition-all hover:-translate-y-1`}
-              >
+              <div key={s.title} className={`bg-gradient-to-br ${s.color} border ${s.border} rounded-2xl p-6 hover:shadow-lg transition-all hover:-translate-y-1`}>
                 <div className="text-4xl mb-4">{s.icon}</div>
                 <h3 className="font-bold text-gray-900 text-lg mb-2">{s.title}</h3>
                 <p className="text-gray-600 text-sm leading-relaxed">{s.desc}</p>
@@ -271,7 +236,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── SOBRE / HISTÓRIA ── */}
+      {/* ── SOBRE ── */}
       <section id="sobre" className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
@@ -309,7 +274,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── NOSSA HISTÓRIA (galeria Instagram) ── */}
+      {/* ── HISTÓRIA / GALERIA ── */}
       <section id="historia" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
@@ -320,59 +285,27 @@ export default function Landing() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
-            {/* Card 1 */}
-            <div className="relative rounded-3xl overflow-hidden group cursor-pointer shadow-lg">
-              <img
-                src={IMG_PAGAMENTO}
-                alt="Pagamento justo, parceria verdadeira"
-                className="w-full h-80 object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <h3 className="text-white font-black text-xl mb-1">Pagamento justo,<br />parceria verdadeira.</h3>
-                <p className="text-green-300 text-sm">Respeito e transparência em cada negócio</p>
+            {[
+              { src: IMG_PAGAMENTO, alt: "Pagamento justo", title: "Pagamento justo,\nparceria verdadeira.", sub: "Respeito e transparência em cada negócio" },
+              { src: IMG_MUDA, alt: "De uma muda", title: "De uma muda,\nnasce um futuro verde.", sub: "Cuidamos de cada etapa com respeito à natureza" },
+              { src: IMG_CULTIVANDO, alt: "Cultivando", title: "Cultivando um Futuro\nSustentável Desde a Raiz.", sub: "Da venda de mudas ao corte e reflorestamento" },
+            ].map((card) => (
+              <div key={card.alt} className="relative rounded-3xl overflow-hidden group cursor-pointer shadow-lg">
+                <img src={card.src} alt={card.alt} className="w-full h-80 object-cover group-hover:scale-105 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-6">
+                  <h3 className="text-white font-black text-xl mb-1 whitespace-pre-line">{card.title}</h3>
+                  <p className="text-green-300 text-sm">{card.sub}</p>
+                </div>
               </div>
-            </div>
-
-            {/* Card 2 */}
-            <div className="relative rounded-3xl overflow-hidden group cursor-pointer shadow-lg">
-              <img
-                src={IMG_MUDA}
-                alt="De uma muda, nasce um futuro verde"
-                className="w-full h-80 object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <h3 className="text-white font-black text-xl mb-1">De uma muda,<br />nasce um futuro verde.</h3>
-                <p className="text-green-300 text-sm">Cuidamos de cada etapa com respeito à natureza</p>
-              </div>
-            </div>
-
-            {/* Card 3 */}
-            <div className="relative rounded-3xl overflow-hidden group cursor-pointer shadow-lg">
-              <img
-                src={IMG_CULTIVANDO}
-                alt="Cultivando um Futuro Sustentável"
-                className="w-full h-80 object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <h3 className="text-white font-black text-xl mb-1">Cultivando um Futuro<br />Sustentável Desde a Raiz.</h3>
-                <p className="text-green-300 text-sm">Da venda de mudas ao corte e reflorestamento</p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* ── POR QUE BTREE ── */}
       <section className="py-24 bg-[#1b5e20] relative overflow-hidden">
-        <div
-          className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        />
+        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
@@ -402,12 +335,7 @@ export default function Landing() {
               </div>
             </div>
             <div className="relative">
-              <img
-                src={IMG_PARCEIRO}
-                alt="Parceiro completo para seu eucalipto"
-                className="rounded-3xl shadow-2xl w-full object-cover"
-                style={{ maxHeight: "520px" }}
-              />
+              <img src={IMG_PARCEIRO} alt="Parceiro completo" className="rounded-3xl shadow-2xl w-full object-cover" style={{ maxHeight: "520px" }} />
             </div>
           </div>
         </div>
@@ -418,19 +346,12 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <span className="text-[#2e7d32] font-semibold text-sm uppercase tracking-widest">Fale conosco</span>
-            <h2 className="text-3xl md:text-4xl font-black text-gray-900 mt-2 mb-4">
-              Vamos crescer juntos?
-            </h2>
-            <p className="text-gray-500 max-w-xl mx-auto">
-              Entre em contato e descubra como a BTREE Ambiental pode ser o parceiro que você precisa para o seu eucalipto.
-            </p>
+            <h2 className="text-3xl md:text-4xl font-black text-gray-900 mt-2 mb-4">Vamos crescer juntos?</h2>
+            <p className="text-gray-500 max-w-xl mx-auto">Entre em contato e descubra como a BTREE Ambiental pode ser o parceiro que você precisa para o seu eucalipto.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            <a
-              href="tel:+5544988334679"
-              className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 hover:shadow-md hover:-translate-y-1 transition-all group"
-            >
+            <a href="tel:+5544988334679" className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 hover:shadow-md hover:-translate-y-1 transition-all group">
               <div className="w-14 h-14 bg-[#2e7d32]/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-[#2e7d32]/20 transition-colors">
                 <svg className="w-7 h-7 text-[#2e7d32]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -441,12 +362,7 @@ export default function Landing() {
               <p className="text-gray-500 text-sm mt-1">Fábio Jundy Kobayashi</p>
             </a>
 
-            <a
-              href="https://www.instagram.com/btree_ambiental"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 hover:shadow-md hover:-translate-y-1 transition-all group"
-            >
+            <a href="https://www.instagram.com/btree_ambiental" target="_blank" rel="noopener noreferrer" className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 hover:shadow-md hover:-translate-y-1 transition-all group">
               <div className="w-14 h-14 bg-[#2e7d32]/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-[#2e7d32]/20 transition-colors">
                 <svg className="w-7 h-7 text-[#2e7d32]" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
@@ -479,22 +395,12 @@ export default function Landing() {
           <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
             Pronto para fazer parte do futuro verde do Brasil?
           </h2>
-          <p className="text-green-200 text-lg mb-8">
-            Junte-se aos produtores que já confiam na BTREE Ambiental.
-          </p>
+          <p className="text-green-200 text-lg mb-8">Junte-se aos produtores que já confiam na BTREE Ambiental.</p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <button
-              onClick={() => scrollTo("contato")}
-              className="bg-white text-[#2e7d32] px-8 py-4 rounded-full font-bold text-base hover:bg-green-50 transition-all shadow-lg"
-            >
+            <button onClick={() => scrollTo("contato")} className="bg-white text-[#2e7d32] px-8 py-4 rounded-full font-bold text-base hover:bg-green-50 transition-all shadow-lg">
               Falar com a BTREE →
             </button>
-            <a
-              href="https://www.instagram.com/btree_ambiental"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="border-2 border-white text-white px-8 py-4 rounded-full font-bold text-base hover:bg-white/10 transition-all"
-            >
+            <a href="https://www.instagram.com/btree_ambiental" target="_blank" rel="noopener noreferrer" className="border-2 border-white text-white px-8 py-4 rounded-full font-bold text-base hover:bg-white/10 transition-all">
               Ver no Instagram
             </a>
           </div>
@@ -505,58 +411,26 @@ export default function Landing() {
       <footer className="bg-gray-900 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <img
-                src={BTREE_LOGO}
-                alt="BTREE Ambiental"
-                className="h-12 w-auto object-contain brightness-0 invert opacity-90"
-              />
-            </div>
+            <img src={BTREE_LOGO} alt="BTREE Ambiental" className="h-12 w-auto object-contain brightness-0 invert opacity-90" />
             <div className="text-center">
-              <p className="text-gray-400 text-sm">
-                Av. Pres. Epitácio, 278 — 1º Andar — Centro | Astorga - PR
-              </p>
-              <p className="text-gray-500 text-xs mt-1">
-                BIOMASSA · TRATAMENTO · REFLORESTAMENTO · ESTRUTURA · EUCALIPTO
-              </p>
+              <p className="text-gray-400 text-sm">Av. Pres. Epitácio, 278 — 1º Andar — Centro | Astorga - PR</p>
+              <p className="text-gray-500 text-xs mt-1">BIOMASSA · TRATAMENTO · REFLORESTAMENTO · ESTRUTURA · EUCALIPTO</p>
             </div>
             <div className="flex items-center gap-4">
-              <a
-                href="https://www.instagram.com/btree_ambiental"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
-              >
+              <a href="https://www.instagram.com/btree_ambiental" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
                 </svg>
               </a>
-              <a
-                href="/client-portal"
-                className="text-gray-400 hover:text-white transition-colors text-sm"
-              >
-                Área do Cliente
-              </a>
-              <a
-                href={getLoginUrl()}
-                className="text-gray-400 hover:text-white transition-colors text-sm"
-              >
-                Área do Colaborador
-              </a>
+              <a href="/client-portal" className="text-gray-400 hover:text-white transition-colors text-sm">Área do Cliente</a>
+              <a href={getLoginUrl()} className="text-gray-400 hover:text-white transition-colors text-sm">Área do Colaborador</a>
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="text-gray-600 text-xs">
-              © 2025 BTREE Ambiental. Todos os direitos reservados. | Astorga, Paraná, Brasil
-            </p>
+            <p className="text-gray-600 text-xs">© 2025 BTREE Ambiental. Todos os direitos reservados. | Astorga, Paraná, Brasil</p>
             <p className="text-gray-700 text-xs">
               Desenvolvido por{" "}
-              <a
-                href="https://wa.me/5544988334679?text=Ol%C3%A1%2C+vi+o+site+da+BTREE+Ambiental+e+gostaria+de+saber+mais+sobre+sistemas+e+sites!"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-500 hover:text-[#2e7d32] transition-colors font-medium"
-              >
+              <a href="https://wa.me/5544988334679?text=Ol%C3%A1%2C+vi+o+site+da+BTREE+Ambiental+e+gostaria+de+saber+mais+sobre+sistemas+e+sites!" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-[#2e7d32] transition-colors font-medium">
                 Fernando Kobayashi Jr. — Sistemas &amp; Web
               </a>
             </p>

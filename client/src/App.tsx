@@ -56,6 +56,7 @@ import ThirdPartyPage from "./pages/ThirdPartyPage";
 import AuditDataPage from "./pages/AuditDataPage";
 import GeofencesPage from "./pages/GeofencesPage";
 import FreightTripsPage from "./pages/FreightTripsPage";
+import NotificationSettings from "./pages/NotificationSettings";
 import { registerAllOfflineHandlers } from "@/lib/offlineSync";
 
 // Registrar handlers de sincronização offline uma única vez ao carregar o app
@@ -198,6 +199,9 @@ function Router() {
       </Route>
       <Route path={"/auditoria-dados"}>
         {() => <WithLayout component={AuditDataPage} />}
+      </Route>
+      <Route path={"/config-notificacoes"}>
+        {() => <WithLayout component={NotificationSettings} />}
       </Route>
       <Route path={"/porteiras-virtuais"}>
         {() => <WithLayout component={GeofencesPage} />}

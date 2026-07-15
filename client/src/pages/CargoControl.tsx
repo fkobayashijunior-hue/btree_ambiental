@@ -989,6 +989,17 @@ function WeeklyClosingsView({
             const isOverdue = closing.status === 'fechado' && closing.dueDate && safeDate(closing.dueDate) < new Date();
             const clientForClosing = clientsList.find(c => c.id === closing.clientId);
             const pricePerTon = parseFloat(closing.pricePerTon || (clientForClosing as any)?.pricePerTon || '130');
+            // Calculate live totals from actual loads in the period (same logic as PDF)
+            const wStart = safeDate(closing.weekStart);
+            const wEnd = safeDate(closing.weekEnd);
+            wEnd.setHours(23, 59, 59, 999);
+            const realLoads = loads.filter((l: any) => {
+              if (l.clientId !== closing.clientId) return false;
+              const d = safeDate(l.deliveryDate || l.date);
+              return d >= wStart && d <= wEnd;
+            });
+            const realWeightKg = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+            const realAmount = realWeightKg / 1000 * pricePerTon;
             return (
               <div key={closing.id} className={`border rounded-xl p-4 transition-all hover:shadow-md ${
                 closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
@@ -1014,25 +1025,8 @@ function WeeklyClosingsView({
                       </span>
                     </div>
                     <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      {(() => {
-                        // Use real count from actual loads in period
-                        const wStart = safeDate(closing.weekStart);
-                        const wEnd = safeDate(closing.weekEnd);
-                        wEnd.setHours(23, 59, 59, 999);
-                        const realLoads = loads.filter((l: any) => {
-                          if (l.clientId !== closing.clientId) return false;
-                          const d = safeDate(l.deliveryDate || l.date);
-                          return d >= wStart && d <= wEnd;
-                        });
-                        const realWeight = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
-                        const realCount = realLoads.length;
-                        return (
-                          <>
-                            <span>{realCount} carga{realCount !== 1 ? 's' : ''}</span>
-                            <span>{formatBR(realWeight / 1000)} ton</span>
-                          </>
-                        );
-                      })()}
+                      <span>{realLoads.length} carga{realLoads.length !== 1 ? 's' : ''}</span>
+                      <span>{formatBR(realWeightKg / 1000)} ton</span>
                       {closing.pricePerTon && <span>R$ {formatBR(parseFloat(closing.pricePerTon))}/ton</span>}
                     </div>
                     {closing.status !== 'pago' && closing.dueDate && (
@@ -1073,7 +1067,7 @@ function WeeklyClosingsView({
                     )}
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                    <p className="font-black text-emerald-800 text-lg">{formatCurrency(parseFloat(closing.totalAmount || '0'))}</p>
+                    <p className="font-black text-emerald-800 text-lg">{formatCurrency(realAmount)}</p>
                     {/* PDF Button */}
                     <button
                       onClick={() => {
