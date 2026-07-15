@@ -672,7 +672,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             <div className="hidden sm:flex items-center justify-between">
               <div className="flex-1" />
               <img
-                src="/manus-storage/btree-logo-full_b3947036.png"
+                src={BTREE_LOGO_B64}
                 alt="BTREE Ambiental"
                 className="h-16 w-auto object-contain"
               />
@@ -694,7 +694,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             {/* Layout Mobile: logo centralizada + botões abaixo */}
             <div className="flex sm:hidden flex-col items-center gap-2">
               <img
-                src="/manus-storage/btree-logo-full_b3947036.png"
+                src={BTREE_LOGO_B64}
                 alt="BTREE Ambiental"
                 className="h-14 w-auto object-contain"
               />
