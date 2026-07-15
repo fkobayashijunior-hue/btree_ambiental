@@ -1949,7 +1949,13 @@ __export(notifications_exports, {
 import { z as z5 } from "zod";
 import mysql2 from "mysql2/promise";
 async function getConnection() {
-  return mysql2.createConnection(process.env.DATABASE_URL);
+  return mysql2.createConnection({
+    host: process.env.DB_HOST || "localhost",
+    port: parseInt(process.env.DB_PORT || "3306"),
+    user: process.env.DB_USER || "",
+    password: process.env.DB_PASSWORD || "",
+    database: process.env.DB_NAME || ""
+  });
 }
 async function createNotification(params) {
   const conn = await getConnection();
@@ -2193,7 +2199,7 @@ var geofenceCheck_exports = {};
 __export(geofenceCheck_exports, {
   geofenceCheckHandler: () => geofenceCheckHandler
 });
-import { eq as eq41, and as and25, sql as sql24 } from "drizzle-orm";
+import { eq as eq41, and as and25, sql as sql25 } from "drizzle-orm";
 function traccarHeaders2() {
   if (TRACCAR_TOKEN2) {
     return {
@@ -2269,7 +2275,7 @@ async function geofenceCheckHandler(req, res) {
   const log = [];
   let processed = 0;
   try {
-    const activeGeofences = await db.select().from(geofences).where(and25(eq41(geofences.isActive, 1), sql24`${geofences.traccarDeviceId} IS NOT NULL`));
+    const activeGeofences = await db.select().from(geofences).where(and25(eq41(geofences.isActive, 1), sql25`${geofences.traccarDeviceId} IS NOT NULL`));
     for (const geo of activeGeofences) {
       if (!geo.traccarDeviceId) continue;
       const pos = await getDevicePosition2(geo.traccarDeviceId);
@@ -8980,6 +8986,36 @@ init_db();
 init_schema();
 import { z as z21 } from "zod";
 import { desc as desc16, eq as eq20, and as and11, gte as gte5, lte as lte5, sql as sql11 } from "drizzle-orm";
+async function ensureFinancialTable(db) {
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS financial_entries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        type ENUM('receita','despesa') NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        description VARCHAR(500) NOT NULL,
+        amount VARCHAR(20) NOT NULL,
+        date TIMESTAMP NOT NULL,
+        reference_month VARCHAR(7),
+        payment_method ENUM('dinheiro','pix','cartao','transferencia','boleto','cheque') NOT NULL DEFAULT 'pix',
+        status ENUM('pendente','confirmado','cancelado') NOT NULL DEFAULT 'confirmado',
+        client_id INT,
+        client_name VARCHAR(255),
+        receipt_image_url TEXT,
+        notes TEXT,
+        registered_by INT,
+        registered_by_name VARCHAR(255),
+        cargo_load_id INT,
+        auto_generated INT DEFAULT 0,
+        equipment_id INT,
+        equipment_name VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+  } catch {
+  }
+}
 var financialRouter = router({
   // ── Listar lançamentos ──────────────────────────────────────────────────
   list: protectedProcedure.input(z21.object({
@@ -8993,6 +9029,7 @@ var financialRouter = router({
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
+    await ensureFinancialTable(db);
     const conditions = [];
     if (input.type !== "all") {
       conditions.push(eq20(financialEntries.type, input.type));
@@ -9021,6 +9058,7 @@ var financialRouter = router({
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { totalReceitas: 0, totalDespesas: 0, saldo: 0, entries: [] };
+    await ensureFinancialTable(db);
     const [year, month] = input.referenceMonth.split("-").map(Number);
     const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
@@ -9045,6 +9083,7 @@ var financialRouter = router({
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
+    await ensureFinancialTable(db);
     const [year, month] = input.referenceMonth.split("-").map(Number);
     const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
@@ -9068,6 +9107,7 @@ var financialRouter = router({
   monthlyHistory: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
+    await ensureFinancialTable(db);
     const rows = await db.select({
       referenceMonth: financialEntries.referenceMonth,
       type: financialEntries.type,
@@ -9102,6 +9142,7 @@ var financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
+    await ensureFinancialTable(db);
     const dateObj = new Date(input.date);
     const refMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
     const [result] = await db.insert(financialEntries).values({
@@ -9223,6 +9264,7 @@ var financialRouter = router({
   checkPayrollStatus: protectedProcedure.input(z21.object({ referenceMonth: z21.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
+    await ensureFinancialTable(db);
     const existing = await db.select({ id: financialEntries.id, amount: financialEntries.amount, description: financialEntries.description }).from(financialEntries).where(and11(
       eq20(financialEntries.referenceMonth, input.referenceMonth),
       eq20(financialEntries.category, "folha_pagamento"),
@@ -14893,8 +14935,150 @@ var freightTripsRouter = router({
   })
 });
 
-// server/routers.ts
+// server/routers/notificationSettings.ts
+init_trpc();
+init_db();
 import { z as z42 } from "zod";
+import { sql as sql24 } from "drizzle-orm";
+var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
+var JOB_META = {
+  pagamentosPendentes: {
+    label: "Pagamentos Pendentes",
+    description: "Notifica diariamente quando h\xE1 presen\xE7as com pagamento em aberto.",
+    weekly: false
+  },
+  boletoCombustivel: {
+    label: "Boletos de Combust\xEDvel",
+    description: "Notifica diariamente quando h\xE1 boletos de combust\xEDvel vencendo.",
+    weekly: false
+  },
+  fechamentoSemanal: {
+    label: "Fechamento Semanal",
+    description: "Notifica o fechamento autom\xE1tico semanal das cargas.",
+    weekly: true
+  }
+};
+var CLIENT_NOTIF_KEYS = ["cargaRegistrada", "cargaEntregue", "pagamentoConfirmado"];
+var CLIENT_META = {
+  cargaRegistrada: {
+    label: "Carga registrada",
+    description: "Notifica o cliente via WhatsApp quando uma nova carga \xE9 registrada.",
+    template: "carga_registrada"
+  },
+  cargaEntregue: {
+    label: "Carga entregue",
+    description: "Notifica o cliente via WhatsApp quando a carga \xE9 marcada como entregue.",
+    template: "carga_entregue"
+  },
+  pagamentoConfirmado: {
+    label: "Pagamento confirmado",
+    description: "Notifica o cliente via WhatsApp quando o fechamento semanal \xE9 marcado como pago.",
+    template: "pagamento_confirmado"
+  }
+};
+var DEFAULT_JOB_CONFIG = Object.fromEntries(
+  JOB_KEYS.map((k) => [
+    k,
+    { enabled: true, hour: 8, minute: 0, weekday: k === "fechamentoSemanal" ? 5 : null, whatsappCollaboratorIds: [] }
+  ])
+);
+var DEFAULT_CLIENT_CONFIG = Object.fromEntries(
+  CLIENT_NOTIF_KEYS.map((k) => [k, { enabled: false, clientIds: [] }])
+);
+async function ensureTable(db) {
+  await db.execute(sql24`
+    CREATE TABLE IF NOT EXISTS notification_settings (
+      \`key\` VARCHAR(100) PRIMARY KEY,
+      value JSON NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+}
+async function getSetting(db, key) {
+  const rows = await db.execute(sql24`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
+  const data = Array.isArray(rows[0]) ? rows[0] : rows;
+  if (!data || data.length === 0) return null;
+  const val = data[0]?.value;
+  if (!val) return null;
+  return typeof val === "string" ? JSON.parse(val) : val;
+}
+async function setSetting(db, key, value) {
+  const json = JSON.stringify(value);
+  await db.execute(sql24`
+    INSERT INTO notification_settings (\`key\`, value) VALUES (${key}, ${json})
+    ON DUPLICATE KEY UPDATE value = ${json}
+  `);
+}
+var notificationSettingsRouter = router({
+  get: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return {
+      config: DEFAULT_JOB_CONFIG,
+      clientConfig: DEFAULT_CLIENT_CONFIG,
+      jobKeys: JOB_KEYS,
+      meta: JOB_META,
+      collaborators: [],
+      clientNotifKeys: CLIENT_NOTIF_KEYS,
+      clientMeta: CLIENT_META,
+      clients: []
+    };
+    await ensureTable(db);
+    const storedConfig = await getSetting(db, "jobConfig");
+    const storedClientConfig = await getSetting(db, "clientConfig");
+    const config = storedConfig ? { ...DEFAULT_JOB_CONFIG, ...storedConfig } : DEFAULT_JOB_CONFIG;
+    const clientConfig = storedClientConfig ? { ...DEFAULT_CLIENT_CONFIG, ...storedClientConfig } : DEFAULT_CLIENT_CONFIG;
+    let collaborators5 = [];
+    try {
+      const rows = await db.execute(sql24`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
+      const data = Array.isArray(rows[0]) ? rows[0] : rows;
+      collaborators5 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
+    } catch {
+    }
+    let clients3 = [];
+    try {
+      const rows = await db.execute(sql24`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
+      const data = Array.isArray(rows[0]) ? rows[0] : rows;
+      clients3 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
+    } catch {
+    }
+    return {
+      config,
+      clientConfig,
+      jobKeys: JOB_KEYS,
+      meta: JOB_META,
+      collaborators: collaborators5,
+      clientNotifKeys: CLIENT_NOTIF_KEYS,
+      clientMeta: CLIENT_META,
+      clients: clients3
+    };
+  }),
+  update: protectedProcedure.input(z42.record(z42.string(), z42.object({
+    enabled: z42.boolean(),
+    hour: z42.number().int().min(0).max(23),
+    minute: z42.number().int().min(0).max(59),
+    weekday: z42.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z42.array(z42.number())
+  }))).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Banco de dados indispon\xEDvel");
+    await ensureTable(db);
+    await setSetting(db, "jobConfig", input);
+    return { ok: true };
+  }),
+  updateClientConfig: protectedProcedure.input(z42.record(z42.string(), z42.object({
+    enabled: z42.boolean(),
+    clientIds: z42.array(z42.number())
+  }))).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Banco de dados indispon\xEDvel");
+    await ensureTable(db);
+    await setSetting(db, "clientConfig", input);
+    return { ok: true };
+  })
+});
+
+// server/routers.ts
+import { z as z43 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -15007,12 +15191,12 @@ var appRouter = router({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { error: "DB null" };
-        const { sql: sql25 } = await import("drizzle-orm");
-        const [permsRows] = await db.execute(sql25`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
-        const [collabRows] = await db.execute(sql25`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
-        const [countRows] = await db.execute(sql25`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
-        const [colsRows] = await db.execute(sql25`SHOW COLUMNS FROM collaborators`);
-        const [sampleRows] = await db.execute(sql25`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        const { sql: sql26 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql26`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql26`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql26`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql26`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql26`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -15076,10 +15260,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z42.object({
-      name: z42.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z42.string().email("Email inv\xE1lido"),
-      password: z42.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z43.object({
+      name: z43.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z43.string().email("Email inv\xE1lido"),
+      password: z43.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -15094,9 +15278,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z42.object({
-      email: z42.string().email("Email inv\xE1lido"),
-      password: z42.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z43.object({
+      email: z43.string().email("Email inv\xE1lido"),
+      password: z43.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -15115,11 +15299,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z42.object({
-      seedKey: z42.string(),
-      email: z42.string().email(),
-      name: z42.string(),
-      password: z42.string().min(4)
+    seedAdmin: publicProcedure.input(z43.object({
+      seedKey: z43.string(),
+      email: z43.string().email(),
+      name: z43.string(),
+      password: z43.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -15129,9 +15313,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z42.object({
-      email: z42.string().email("Email inv\xE1lido"),
-      origin: z42.string().url().optional()
+    forgotPassword: publicProcedure.input(z43.object({
+      email: z43.string().email("Email inv\xE1lido"),
+      origin: z43.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -15145,9 +15329,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z42.object({
-      token: z42.string().min(1),
-      password: z42.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z43.object({
+      token: z43.string().min(1),
+      password: z43.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -15210,9 +15394,10 @@ var appRouter = router({
   thirdParty: thirdPartyRouter,
   geofences: geofencesRouter,
   freightTrips: freightTripsRouter,
+  notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z42.object({ key: z42.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z43.object({ key: z43.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();

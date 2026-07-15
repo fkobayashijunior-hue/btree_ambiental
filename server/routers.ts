@@ -42,6 +42,7 @@ import { clientAdvancesRouter } from "./routers/clientAdvances";
 import { thirdPartyRouter } from "./routers/thirdParty";
 import { geofencesRouter } from "./routers/geofences";
 import { freightTripsRouter } from "./routers/freightTrips";
+import { notificationSettingsRouter } from "./routers/notificationSettings";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
 import { SignJWT } from "jose";
@@ -329,6 +330,7 @@ export const appRouter = router({
   thirdParty: thirdPartyRouter,
   geofences: geofencesRouter,
   freightTrips: freightTripsRouter,
+  notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
     run: publicProcedure
