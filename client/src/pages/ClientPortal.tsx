@@ -12,6 +12,9 @@ function safeDate(dateStr: string | null | undefined): Date {
   if (!dateStr) return new Date();
   const s = String(dateStr);
   if (s.length === 10 && s[4] === '-') return new Date(s + 'T12:00:00');
+  if (s.length >= 10 && s[4] === '-' && s[7] === '-' && !s.includes('T')) {
+    return new Date(s.slice(0, 10) + 'T12:00:00');
+  }
   if (s.includes('T') && s.endsWith('Z') && s.includes('T00:00:00')) {
     return new Date(s.replace('T00:00:00.000Z', 'T12:00:00'));
   }
@@ -221,11 +224,18 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
   const statusLabel = closing.status === 'pago' ? 'PAGO' : closing.status === 'atrasado' ? 'ATRASADO' : 'AGUARDANDO PAGAMENTO';
   const statusClass = closing.status === 'pago' ? 'badge-pago' : closing.status === 'atrasado' ? 'badge-atrasado' : 'badge-pendente';
 
-  // Usar dados do fechamento oficial — idênticos ao sistema admin
-  const actualTotalLoads = closing.totalLoads ?? 0;
-  const actualTotalWeightKg = parseFloat(closing.totalWeightKg || '0');
+  // Recalcular ao vivo pelas cargas do período (idêntico ao admin/PDF)
+  const pdfWkStart = safeDate(closing.weekStart);
+  const pdfWkEnd = safeDate(closing.weekEnd);
+  pdfWkEnd.setHours(23, 59, 59, 999);
+  const pdfLoads = loads.filter((l: any) => {
+    const d = safeDate(l.deliveryDate || l.date);
+    return d >= pdfWkStart && d <= pdfWkEnd;
+  });
+  const actualTotalLoads = pdfLoads.length;
+  const actualTotalWeightKg = pdfLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
   const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
-  const actualTotalAmount = formatBR(parseFloat(closing.totalAmount || '0'), 2);
+  const actualTotalAmount = formatBR(actualTotalWeightKg / 1000 * parseFloat(String(closing.pricePerTon || pricePerTon)), 2);
 
   // Listar cargas do período para detalhamento no PDF (apenas visual)
   const weekStart = safeDate(closing.weekStart);
@@ -640,7 +650,17 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
 
   const totalPendente = data?.weeklyClosings
     ?.filter((c: any) => c.status === "pendente" || c.status === "atrasado" || c.status === "aberto" || c.status === "fechado")
-    .reduce((acc: number, c: any) => acc + parseFloat(c.totalAmount || "0"), 0) ?? 0;
+    .reduce((acc: number, c: any) => {
+      const pStart = safeDate(c.weekStart);
+      const pEnd = safeDate(c.weekEnd);
+      pEnd.setHours(23, 59, 59, 999);
+      const pLoads = (data?.loads || []).filter((l: any) => {
+        const d = safeDate(l.deliveryDate || l.date);
+        return d >= pStart && d <= pEnd;
+      });
+      const pKg = pLoads.reduce((s: number, l: any) => s + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+      return acc + (pKg / 1000) * parseFloat(c.pricePerTon || data?.client?.pricePerTon || '130');
+    }, 0) ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1063,6 +1083,16 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                               </p>
                               {formalClosings.map((closing: any) => {
                                 const isOverdue = closing.status === 'fechado' && closing.dueDate && safeDate(closing.dueDate) < new Date();
+                                // Live calculation from actual loads (same as PDF/admin)
+                                const cwStart = safeDate(closing.weekStart);
+                                const cwEnd = safeDate(closing.weekEnd);
+                                cwEnd.setHours(23, 59, 59, 999);
+                                const realLoads = allLoads.filter((l: any) => {
+                                  const d = safeDate(l.deliveryDate || l.date);
+                                  return d >= cwStart && d <= cwEnd;
+                                });
+                                const realWeightKg = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+                                const realAmount = realWeightKg / 1000 * parseFloat(closing.pricePerTon || String(pricePerTon) || '130');
                                 return (
                                   <div key={`formal-${closing.id}`} className={`border rounded-xl p-4 transition-all ${
                                     closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
@@ -1085,9 +1115,8 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                           </span>
                                         </div>
                                         <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                                          {/* Usar dados do fechamento oficial — idêntico ao sistema admin */}
-                                          <span>{closing.totalLoads ?? 0} carga{(closing.totalLoads ?? 0) !== 1 ? 's' : ''}</span>
-                                          <span>{formatBR(parseFloat(closing.totalWeightKg || '0') / 1000)} ton</span>
+                                          <span>{realLoads.length} carga{realLoads.length !== 1 ? 's' : ''}</span>
+                                          <span>{formatBR(realWeightKg / 1000)} ton</span>
                                           {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
                                         </div>
                                         {closing.status !== 'pago' && closing.dueDate && (
@@ -1116,7 +1145,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                         )}
                                       </div>
                                       <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                                        <p className="font-black text-[#0d4f2e] text-base">{formatCurrency(closing.totalAmount)}</p>
+                                        <p className="font-black text-[#0d4f2e] text-base">{formatCurrency(realAmount)}</p>
                                         <button
                                           onClick={() => generateClosingPDF(closing, data?.client?.name || '', allLoads, pricePerTon)}
                                           className="inline-flex items-center gap-1 px-2 py-1 bg-[#0d4f2e]/10 text-[#0d4f2e] rounded-lg text-[10px] font-semibold hover:bg-[#0d4f2e]/20 transition-colors mt-1"
