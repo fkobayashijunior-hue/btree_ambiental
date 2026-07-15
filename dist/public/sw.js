@@ -84,6 +84,18 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "url": "registerSW.js",
     "revision": "1872c500de691dce40960bb85481de07"
   }, {
+    "url": "pwa-collaborator-512.png",
+    "revision": "66617113cb674ec16a9fefca7714cb50"
+  }, {
+    "url": "pwa-collaborator-192.png",
+    "revision": "dd2372f17cdf6ff21cf06c295e1319a0"
+  }, {
+    "url": "pwa-client-512.png",
+    "revision": "2902ec040a6cd78f11df1e37e1291fef"
+  }, {
+    "url": "pwa-client-192.png",
+    "revision": "15949959c9db3ed6d78a93e08b17a08f"
+  }, {
     "url": "pwa-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
   }, {
@@ -97,7 +109,7 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "index.html",
-    "revision": "4eb33f135a3f361c574e08048d4c8101"
+    "revision": "9462027049a20cdda3c5c522bf01012d"
   }, {
     "url": "icon-btree-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
@@ -105,32 +117,38 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "url": "icon-btree-192.png",
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
+    "url": "btree-logo-full.png",
+    "revision": "34a190ddee9ab64ba00a5ddf6b4c4fc5"
+  }, {
     "url": "assets/purify.es-BgtpMKW3.js",
     "revision": null
   }, {
-    "url": "assets/jspdf.es.min-B5Ud6XBF.js",
+    "url": "assets/jspdf.es.min-B4b4q37C.js",
     "revision": null
   }, {
-    "url": "assets/index.es-CTMGAjD1.js",
+    "url": "assets/index.es-BCPbfxE6.js",
     "revision": null
   }, {
-    "url": "assets/index-Ciu1yXIs.js",
+    "url": "assets/index-Djyi7xMD.js",
     "revision": null
   }, {
-    "url": "assets/index-BU2HnuJs.css",
+    "url": "assets/index-Ctouepv3.css",
     "revision": null
   }, {
     "url": "assets/html2canvas.esm-B0tyYwQk.js",
     "revision": null
   }, {
-    "url": "assets/exceljs.min-D29IJNce.js",
+    "url": "assets/exceljs.min-IbehuzWk.js",
     "revision": null
   }, {
-    "url": "assets/FileSaver.min-BZBAFllR.js",
+    "url": "assets/FileSaver.min-Co1h3Ygs.js",
     "revision": null
   }, {
     "url": "__manus__/debug-collector.js",
     "revision": "45b1e83bacf2dc3d3b20bb18b465abe0"
+  }, {
+    "url": "btree-logo-full.png",
+    "revision": "34a190ddee9ab64ba00a5ddf6b4c4fc5"
   }, {
     "url": "icon-btree-192.png",
     "revision": "3f504e54ba9aa202f0bca871a50df851"
@@ -149,6 +167,18 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
   }, {
     "url": "pwa-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "pwa-client-192.png",
+    "revision": "15949959c9db3ed6d78a93e08b17a08f"
+  }, {
+    "url": "pwa-client-512.png",
+    "revision": "2902ec040a6cd78f11df1e37e1291fef"
+  }, {
+    "url": "pwa-collaborator-192.png",
+    "revision": "dd2372f17cdf6ff21cf06c295e1319a0"
+  }, {
+    "url": "pwa-collaborator-512.png",
+    "revision": "66617113cb674ec16a9fefca7714cb50"
   }, {
     "url": "sima-logo.png",
     "revision": "79bedf5dc9d215d2fad2e8f1212e6f84"

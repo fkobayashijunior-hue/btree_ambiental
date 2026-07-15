@@ -662,7 +662,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
     }, 0) ?? 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f0faf4]">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#0d4f2e] to-[#1a5c3a] text-white shadow-lg">
         {/* Barra principal - PC: logo centralizada + botões direita | Mobile: logo centralizada + botões abaixo */}
@@ -672,7 +672,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             <div className="hidden sm:flex items-center justify-between">
               <div className="flex-1" />
               <img
-                src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png"
+                src="/manus-storage/btree-logo-full_b3947036.png"
                 alt="BTREE Ambiental"
                 className="h-16 w-auto object-contain"
               />
@@ -694,7 +694,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             {/* Layout Mobile: logo centralizada + botões abaixo */}
             <div className="flex sm:hidden flex-col items-center gap-2">
               <img
-                src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png"
+                src="/manus-storage/btree-logo-full_b3947036.png"
                 alt="BTREE Ambiental"
                 className="h-14 w-auto object-contain"
               />

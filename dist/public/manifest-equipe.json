@@ -3,33 +3,33 @@
   "short_name": "BTREE Equipe",
   "description": "Área do Colaborador - BTREE Ambiental",
   "start_url": "/dashboard",
-  "id": "btree-equipe-v1",
+  "id": "btree-equipe-v2",
   "display": "standalone",
   "background_color": "#0d4f2e",
   "theme_color": "#0d4f2e",
   "orientation": "portrait",
-  "version": "1.0",
+  "version": "2.0",
   "icons": [
     {
-      "src": "/manus-storage/pwa-collaborator-192_835bec4b.png",
+      "src": "/manus-storage/pwa-collaborator-192_c51ba8a0.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/manus-storage/pwa-collaborator-192_835bec4b.png",
+      "src": "/manus-storage/pwa-collaborator-192_c51ba8a0.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/manus-storage/pwa-collaborator-512_b7e75b6e.png",
+      "src": "/manus-storage/pwa-collaborator-512_29ff8973.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/manus-storage/pwa-collaborator-512_b7e75b6e.png",
+      "src": "/manus-storage/pwa-collaborator-512_29ff8973.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
