@@ -205,9 +205,8 @@ const TRACKING_STEPS: { key: TrackingStatus; label: string; icon: string; desc: 
   { key: "aguardando", label: "Aguardando", icon: "⏳", desc: "Carga aguardando início do carregamento" },
   { key: "carregando", label: "Carregando", icon: "📦", desc: "Carga sendo carregada no caminhão" },
   { key: "em_transito", label: "Em Trânsito", icon: "🚛", desc: "Caminhão a caminho do destino" },
-  { key: "pesagem_saida", label: "Pesagem Saída", icon: "⚖️", desc: "Realizando pesagem na saída" },
   { key: "descarregando", label: "Descarregando", icon: "🏭", desc: "Carga sendo descarregada no destino" },
-  { key: "pesagem_chegada", label: "Pesagem Chegada", icon: "⚖️", desc: "Realizando pesagem na chegada" },
+  { key: "pesagem_chegada", label: "Pesagem", icon: "⚖️", desc: "Realizando pesagem" },
   { key: "finalizado", label: "Finalizado", icon: "✅", desc: "Entrega concluída com sucesso" },
 ];
 
@@ -666,56 +665,59 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#0d4f2e] to-[#1a5c3a] text-white shadow-lg">
-        {/* Barra principal */}
+        {/* Barra principal - PC: logo centralizada + botões direita | Mobile: logo centralizada + botões abaixo */}
         <div className="px-4 py-3">
-          <div className="max-w-2xl mx-auto flex items-center justify-between">
-            {/* Logo BTREE maior */}
-            <div className="flex items-center gap-3">
+          <div className="max-w-5xl mx-auto">
+            {/* Layout PC: flex row */}
+            <div className="hidden sm:flex items-center justify-between">
+              <div className="flex-1" />
               <img
-                src={BTREE_LOGO}
+                src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png"
                 alt="BTREE Ambiental"
-                className="h-12 w-auto object-contain"
+                className="h-16 w-auto object-contain"
               />
-              <div>
-                <p className="font-black text-base leading-none">BTREE Ambiental</p>
-                <p className="text-green-300 text-xs mt-0.5">Portal do Cliente</p>
+              <div className="flex-1 flex justify-end items-center gap-2">
+                <a href="https://btreeambiental.com" target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-white/10 border border-white/20">
+                  <Globe className="h-3.5 w-3.5 shrink-0" /><span>Nosso Site</span>
+                </a>
+                <a href="https://wa.me/5544988334679?text=Ol%C3%A1%2C+gostaria+de+falar+com+a+BTREE+Ambiental!" target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-white/10 border border-white/20">
+                  <MessageCircle className="h-3.5 w-3.5 shrink-0" /><span>Contato</span>
+                </a>
+                <button onClick={onLogout}
+                  className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-white/10 border border-white/20">
+                  <LogOut className="h-3.5 w-3.5 shrink-0" /><span>Sair</span>
+                </button>
               </div>
             </div>
-            {/* Botões de ação */}
-            <div className="flex items-center gap-2">
-              <a
-                href="https://btreeambiental.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2 py-1.5 rounded-lg hover:bg-white/10"
-                title="Nosso Site"
-              >
-                <Globe className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Nosso Site</span>
-              </a>
-              <a
-                href="https://wa.me/5544988334679?text=Ol%C3%A1%2C+gostaria+de+falar+com+a+BTREE+Ambiental!"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2 py-1.5 rounded-lg hover:bg-white/10"
-                title="Contato WhatsApp"
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Contato</span>
-              </a>
-              <button
-                onClick={onLogout}
-                className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2 py-1.5 rounded-lg hover:bg-white/10"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Sair</span>
-              </button>
+            {/* Layout Mobile: logo centralizada + botões abaixo */}
+            <div className="flex sm:hidden flex-col items-center gap-2">
+              <img
+                src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png"
+                alt="BTREE Ambiental"
+                className="h-14 w-auto object-contain"
+              />
+              <div className="flex items-center gap-2">
+                <a href="https://btreeambiental.com" target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-white/10 border border-white/20">
+                  <Globe className="h-3.5 w-3.5 shrink-0" /><span>Nosso Site</span>
+                </a>
+                <a href="https://wa.me/5544988334679?text=Ol%C3%A1%2C+gostaria+de+falar+com+a+BTREE+Ambiental!" target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-white/10 border border-white/20">
+                  <MessageCircle className="h-3.5 w-3.5 shrink-0" /><span>Contato</span>
+                </a>
+                <button onClick={onLogout}
+                  className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-white/10 border border-white/20">
+                  <LogOut className="h-3.5 w-3.5 shrink-0" /><span>Sair</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
         {/* Faixa do cliente */}
         <div className="bg-black/20 px-4 py-2">
-          <div className="max-w-2xl mx-auto flex items-center justify-between">
+          <div className="max-w-5xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* Logo do cliente - SIMA para SIMFLOR */}
               {session.clientName?.toLowerCase().includes('simflor') && (
@@ -735,7 +737,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         {/* Banner de instalação PWA */}
         <InstallBanner />
 
@@ -940,17 +942,24 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                               <p className="text-blue-600 text-xs">{filteredLoads.length} carga{filteredLoads.length !== 1 ? 's' : ''} · {formatBR(totalWeightNet / 1000)} ton × R$ {data?.client?.pricePerTon || '0'}/ton</p>
                             </div>
                           )}
-                          {filteredLoads.map((load: any) => (
-                            <CargoCard
-                              key={load.id}
-                              load={load}
-                              formatDate={formatDate}
-                              statusColor={statusColor}
-                              clientId={session.clientId}
-                              loadValue={getLoadValue(load)}
-                              advanceDeductions={(data?.advanceDeductions || []).filter((d: any) => d.cargoLoadId === load.id)}
-                            />
-                          ))}
+                          {(() => {
+                              const allLoadsForCode = data?.loads || [];
+                              const codeMap = buildClientCodeMap(allLoadsForCode);
+                              const clientName = data?.client?.name || '';
+                              return filteredLoads.map((load: any) => (
+                                <CargoCard
+                                  key={load.id}
+                                  load={load}
+                                  formatDate={formatDate}
+                                  statusColor={statusColor}
+                                  clientId={session.clientId}
+                                  loadValue={getLoadValue(load)}
+                                  advanceDeductions={(data?.advanceDeductions || []).filter((d: any) => d.cargoLoadId === load.id)}
+                                  clientName={clientName}
+                                  codeMap={codeMap}
+                                />
+                              ));
+                            })()}
                         </>
                       );
                     })()}
@@ -1119,6 +1128,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                               pricePerTon={pricePerTon}
                               clientName={data?.client?.name || ''}
                               formatCurrency={formatCurrency}
+                              codeMap={buildClientCodeMap(allLoads)}
                             />
                           )}
                         </>
@@ -1277,27 +1287,45 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   );
 }
 
-// ── HELPER: gerar código do cliente (SF001, GW001, etc.) ──
-function getClientCode(clientName: string, loadId: number): string {
+// ── HELPER: gerar prefixo do cliente ──
+function getClientPrefix(clientName: string): string {
   const name = (clientName || '').toLowerCase();
-  let prefix = 'CL';
-  if (name.includes('simflor') || name.includes('sima')) prefix = 'SF';
-  else if (name.includes('fazenda gw') || name.includes('gw')) prefix = 'GW';
-  else {
-    // Pegar iniciais das palavras
-    const words = clientName.trim().split(/\s+/);
-    prefix = words.map(w => w[0]?.toUpperCase() || '').join('').slice(0, 3);
-  }
-  return `${prefix}${String(loadId).padStart(3, '0')}`;
+  if (name.includes('simflor') || name.includes('sima')) return 'SF';
+  if (name.includes('fazenda gw') || name.includes('gw')) return 'GW';
+  const words = clientName.trim().split(/\s+/);
+  return words.map(w => w[0]?.toUpperCase() || '').join('').slice(0, 3);
+}
+
+// ── HELPER: gerar código sequencial por cliente (SF 001, GW 001...) ──
+// loads deve estar ordenado da mais antiga para a mais nova
+function buildClientCodeMap(loads: any[]): Map<number, string> {
+  const map = new Map<number, string>();
+  // Ordenar por data crescente para que a primeira carga seja 001
+  const sorted = [...loads].sort((a, b) => {
+    const da = safeDate(a.deliveryDate || a.date).getTime();
+    const db = safeDate(b.deliveryDate || b.date).getTime();
+    return da !== db ? da - db : a.id - b.id;
+  });
+  sorted.forEach((l, idx) => {
+    map.set(l.id, `${String(idx + 1).padStart(3, '0')}`);
+  });
+  return map;
+}
+
+function getClientCode(clientName: string, loadId: number, codeMap?: Map<number, string>): string {
+  const prefix = getClientPrefix(clientName);
+  const seq = codeMap?.get(loadId) ?? String(loadId).padStart(3, '0');
+  return `${prefix} ${seq}`;
 }
 
 // ── FECHAMENTOS COM EXPANSÃO ──
-function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurrency }: {
+function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurrency, codeMap }: {
   closings: any[];
   allLoads: any[];
   pricePerTon: number;
   clientName: string;
   formatCurrency: (v: string | number | null) => string;
+  codeMap?: Map<number, string>;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
@@ -1416,7 +1444,7 @@ function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurre
                     const date = (l.deliveryDate || l.date) ? safeDate(l.deliveryDate || l.date).toLocaleDateString('pt-BR') : '-';
                     const weightNet = parseFloat(l.weightNetKg || l.weightOutKg || '0');
                     const weightTon = weightNet > 0 ? formatBR(weightNet / 1000, 3) : '-';
-                    const clientCode = getClientCode(clientName, l.id);
+                    const clientCode = getClientCode(clientName, l.id, codeMap);
                     const unitPrice = parseFloat(closing.pricePerTon || String(pricePerTon) || '0');
                     const loadAmount = weightNet > 0 && unitPrice > 0 ? weightNet / 1000 * unitPrice : 0;
                     return (
@@ -1483,7 +1511,7 @@ type CargoLoad = {
   notes: string | null;
 };
 
-function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advanceDeductions }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string; clientId: number; loadValue?: number; advanceDeductions?: any[] }) {
+function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advanceDeductions, clientName, codeMap }: { load: CargoLoad; formatDate: (d: Date | string | null) => string; statusColor: (s: string) => string; clientId: number; loadValue?: number; advanceDeductions?: any[]; clientName?: string; codeMap?: Map<number, string> }) {
   const [expanded, setExpanded] = useState(false);
   const currentStep = TRACKING_STEPS.find(s => s.key === load.trackingStatus);
   const currentIdx = TRACKING_STEPS.findIndex(s => s.key === load.trackingStatus);
@@ -1550,10 +1578,11 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
               {/* Botão Marcar Pago removido do portal do cliente */}
             </div>
             <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
-              <span>{formatDate(load.date)}</span>
+              <span>{formatDate((load as any).deliveryDate || load.date)}</span>
               {(load as any).weightNetKg && <span className="flex items-center gap-0.5 font-medium text-emerald-700"><Weight className="h-3 w-3" />{(load as any).weightNetKg} kg (líq.)</span>}
               {load.woodType && <span>{load.woodType}</span>}
               {load.vehiclePlate && <span className="flex items-center gap-0.5"><Truck className="h-3 w-3" />{load.vehiclePlate}</span>}
+              {clientName && <span className="flex items-center gap-0.5 font-mono text-[#0d4f2e] font-semibold">{getClientCode(clientName, load.id, codeMap)}</span>}
             </div>
             {(loadValue ?? 0) > 0 && (
               <p className="text-blue-700 text-xs font-bold mt-1">
@@ -1707,10 +1736,10 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
                 <p className="font-medium text-gray-700">{load.driverName}</p>
               </div>
             )}
-            {load.invoiceNumber && (
+            {clientName && (
               <div className="bg-white rounded-lg p-2">
-                <p className="text-gray-400">Nota Fiscal</p>
-                <p className="font-medium text-gray-700 font-mono">{load.invoiceNumber}</p>
+                <p className="text-gray-400">Cód. da Carga</p>
+                <p className="font-medium text-[#0d4f2e] font-mono font-bold">{getClientCode(clientName, load.id, codeMap)}</p>
               </div>
             )}
             {(load as any).weightOutKg && (
