@@ -23,13 +23,14 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
-const TRACCAR_URL = process.env.TRACCAR_URL || "";
-const TRACCAR_TOKEN = process.env.TRACCAR_TOKEN || "";
+function getTraccarUrl() { return process.env.TRACCAR_URL || ""; }
+function getTraccarToken() { return process.env.TRACCAR_TOKEN || ""; }
 
 function traccarAuth() {
-  if (TRACCAR_TOKEN) {
+  const token = getTraccarToken();
+  if (token) {
     return {
-      Authorization: `Bearer ${TRACCAR_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       Accept: "application/json",
     };
@@ -46,6 +47,7 @@ function traccarAuth() {
 }
 
 async function traccarFetch(path: string, options?: RequestInit) {
+  const TRACCAR_URL = getTraccarUrl();
   if (!TRACCAR_URL) {
     throw new Error("Traccar nao configurado. Configure TRACCAR_URL e TRACCAR_TOKEN.");
   }
@@ -118,7 +120,7 @@ async function checkAndGenerateAlerts(equipmentId: number, currentHourMeter: num
 export const traccarRouter = router({
   /** Verifica se o Traccar esta configurado e acessivel */
   status: protectedProcedure.query(async () => {
-    if (!TRACCAR_URL) {
+    if (!getTraccarUrl()) {
       return { configured: false, message: "Traccar nao configurado" };
     }
     try {
@@ -171,7 +173,7 @@ export const traccarRouter = router({
           if (!endAddress && trip.endLat && trip.endLon) {
             try {
               const geoRes = await fetch(
-                `${TRACCAR_URL}/api/server/geocode?latitude=${trip.endLat}&longitude=${trip.endLon}`,
+                `${getTraccarUrl()}/api/server/geocode?latitude=${trip.endLat}&longitude=${trip.endLon}`,
                 { headers: traccarAuth() }
               );
               if (geoRes.ok) {
@@ -185,7 +187,7 @@ export const traccarRouter = router({
           if (!startAddress && trip.startLat && trip.startLon) {
             try {
               const geoRes = await fetch(
-                `${TRACCAR_URL}/api/server/geocode?latitude=${trip.startLat}&longitude=${trip.startLon}`,
+                `${getTraccarUrl()}/api/server/geocode?latitude=${trip.startLat}&longitude=${trip.startLon}`,
                 { headers: traccarAuth() }
               );
               if (geoRes.ok) {
