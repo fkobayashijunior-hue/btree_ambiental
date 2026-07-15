@@ -3,7 +3,7 @@ import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUti
 import { formatBR, formatBRL } from "@/lib/formatBR";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone, FileCheck, Calendar, CheckCircle2, TrendingUp } from "lucide-react";
+import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone, FileCheck, Calendar, CheckCircle2, TrendingUp, Globe, MessageCircle } from "lucide-react";
 
 // ── HELPERS ──
 // Fix timezone issue: date-only strings like "2026-05-08" are parsed as UTC midnight,
@@ -665,35 +665,72 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-[#0d4f2e] to-[#1a5c3a] text-white px-4 py-4 shadow-lg">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src={BTREE_LOGO}
-              alt="BTREE Ambiental"
-              className="h-8 w-auto object-contain"
-            />
-            <div>
-              <p className="font-bold text-sm leading-none">{session.clientName}</p>
-              <p className="text-green-300 text-xs mt-0.5">Portal do Cliente</p>
+      <header className="bg-gradient-to-r from-[#0d4f2e] to-[#1a5c3a] text-white shadow-lg">
+        {/* Barra principal */}
+        <div className="px-4 py-3">
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
+            {/* Logo BTREE maior */}
+            <div className="flex items-center gap-3">
+              <img
+                src={BTREE_LOGO}
+                alt="BTREE Ambiental"
+                className="h-12 w-auto object-contain"
+              />
+              <div>
+                <p className="font-black text-base leading-none">BTREE Ambiental</p>
+                <p className="text-green-300 text-xs mt-0.5">Portal do Cliente</p>
+              </div>
+            </div>
+            {/* Botões de ação */}
+            <div className="flex items-center gap-2">
+              <a
+                href="https://btreeambiental.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2 py-1.5 rounded-lg hover:bg-white/10"
+                title="Nosso Site"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Nosso Site</span>
+              </a>
+              <a
+                href="https://wa.me/5544988334679?text=Ol%C3%A1%2C+gostaria+de+falar+com+a+BTREE+Ambiental!"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2 py-1.5 rounded-lg hover:bg-white/10"
+                title="Contato WhatsApp"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Contato</span>
+              </a>
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-xs font-medium px-2 py-1.5 rounded-lg hover:bg-white/10"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Sair</span>
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => window.history.back()}
-              className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-sm"
-              title="Voltar"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-              Voltar
-            </button>
-            <button
-              onClick={onLogout}
-              className="flex items-center gap-1.5 text-green-200 hover:text-white transition-colors text-sm"
-            >
-              <LogOut className="h-4 w-4" />
-              Sair
-            </button>
+        </div>
+        {/* Faixa do cliente */}
+        <div className="bg-black/20 px-4 py-2">
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* Logo do cliente - SIMA para SIMFLOR */}
+              {session.clientName?.toLowerCase().includes('simflor') && (
+                <img
+                  src="/sima-logo.webp"
+                  alt="SIMA"
+                  className="h-8 w-auto object-contain rounded"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
+              <div>
+                <p className="font-bold text-sm leading-none">{session.clientName}</p>
+                <p className="text-green-300 text-xs mt-0.5">Área do Cliente</p>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -1076,88 +1113,13 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                           )}
 
                           {formalClosings.length > 0 && (
-                            <div className="space-y-3">
-                              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                                <FileCheck className="h-3.5 w-3.5" />
-                                Fechamentos Oficiais
-                              </p>
-                              {formalClosings.map((closing: any) => {
-                                const isOverdue = closing.status === 'fechado' && closing.dueDate && safeDate(closing.dueDate) < new Date();
-                                // Live calculation from actual loads (same as PDF/admin)
-                                const cwStart = safeDate(closing.weekStart);
-                                const cwEnd = safeDate(closing.weekEnd);
-                                cwEnd.setHours(23, 59, 59, 999);
-                                const realLoads = allLoads.filter((l: any) => {
-                                  const d = safeDate(l.deliveryDate || l.date);
-                                  return d >= cwStart && d <= cwEnd;
-                                });
-                                const realWeightKg = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
-                                const realAmount = realWeightKg / 1000 * parseFloat(closing.pricePerTon || String(pricePerTon) || '130');
-                                return (
-                                  <div key={`formal-${closing.id}`} className={`border rounded-xl p-4 transition-all ${
-                                    closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
-                                    isOverdue ? 'border-red-200 bg-red-50/30' :
-                                    'border-yellow-100 bg-yellow-50/30'
-                                  }`}>
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="font-semibold text-gray-900 text-sm">
-                                            Semana {closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} a {closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
-                                          </span>
-                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                            closing.status === 'pago' ? 'bg-green-100 text-green-700' :
-                                            isOverdue ? 'bg-red-100 text-red-700' :
-                                            closing.status === 'fechado' ? 'bg-yellow-100 text-yellow-700' :
-                                            'bg-blue-100 text-blue-700'
-                                          }`}>
-                                            {closing.status === 'pago' ? 'Pago' : isOverdue ? 'Atrasado' : closing.status === 'fechado' ? 'Aguardando Pagamento' : closing.status}
-                                          </span>
-                                        </div>
-                                        <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                                          <span>{realLoads.length} carga{realLoads.length !== 1 ? 's' : ''}</span>
-                                          <span>{formatBR(realWeightKg / 1000)} ton</span>
-                                          {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
-                                        </div>
-                                        {closing.status !== 'pago' && closing.dueDate && (
-                                          <p className={`text-xs mt-1.5 font-medium ${isOverdue ? 'text-red-600' : 'text-orange-600'}`}>
-                                            Vencimento: {safeDate(closing.dueDate).toLocaleDateString('pt-BR')}
-                                            {isOverdue && ' (VENCIDO)'}
-                                          </p>
-                                        )}
-                                        {closing.status === 'pago' && closing.paidAt && (
-                                          <p className="text-xs mt-1.5 text-green-700 font-medium">
-                                            Pago em: {safeDate(closing.paidAt).toLocaleDateString('pt-BR')}
-                                          </p>
-                                        )}
-                                        {closing.status === 'pago' && closing.receiptUrl && (
-                                          <a
-                                            href={closing.receiptUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 transition-colors"
-                                          >
-                                            <FileCheck className="h-3 w-3" /> Ver Comprovante de Pagamento
-                                          </a>
-                                        )}
-                                        {closing.notes && (
-                                          <p className="text-xs text-gray-500 mt-1.5 italic">{closing.notes}</p>
-                                        )}
-                                      </div>
-                                      <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                                        <p className="font-black text-[#0d4f2e] text-base">{formatCurrency(realAmount)}</p>
-                                        <button
-                                          onClick={() => generateClosingPDF(closing, data?.client?.name || '', allLoads, pricePerTon)}
-                                          className="inline-flex items-center gap-1 px-2 py-1 bg-[#0d4f2e]/10 text-[#0d4f2e] rounded-lg text-[10px] font-semibold hover:bg-[#0d4f2e]/20 transition-colors mt-1"
-                                        >
-                                          <Download className="h-3 w-3" /> PDF
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
+                            <ClosingsList
+                              closings={formalClosings}
+                              allLoads={allLoads}
+                              pricePerTon={pricePerTon}
+                              clientName={data?.client?.name || ''}
+                              formatCurrency={formatCurrency}
+                            />
                           )}
                         </>
                       );
@@ -1315,6 +1277,182 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   );
 }
 
+// ── HELPER: gerar código do cliente (SF001, GW001, etc.) ──
+function getClientCode(clientName: string, loadId: number): string {
+  const name = (clientName || '').toLowerCase();
+  let prefix = 'CL';
+  if (name.includes('simflor') || name.includes('sima')) prefix = 'SF';
+  else if (name.includes('fazenda gw') || name.includes('gw')) prefix = 'GW';
+  else {
+    // Pegar iniciais das palavras
+    const words = clientName.trim().split(/\s+/);
+    prefix = words.map(w => w[0]?.toUpperCase() || '').join('').slice(0, 3);
+  }
+  return `${prefix}${String(loadId).padStart(3, '0')}`;
+}
+
+// ── FECHAMENTOS COM EXPANSÃO ──
+function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurrency }: {
+  closings: any[];
+  allLoads: any[];
+  pricePerTon: number;
+  clientName: string;
+  formatCurrency: (v: string | number | null) => string;
+}) {
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+        <FileCheck className="h-3.5 w-3.5" />
+        Fechamentos Oficiais
+      </p>
+      {closings.map((closing: any) => {
+        const isOverdue = closing.status === 'fechado' && closing.dueDate && safeDate(closing.dueDate) < new Date();
+        const cwStart = safeDate(closing.weekStart);
+        const cwEnd = safeDate(closing.weekEnd);
+        cwEnd.setHours(23, 59, 59, 999);
+        const realLoads = allLoads.filter((l: any) => {
+          const d = safeDate(l.deliveryDate || l.date);
+          return d >= cwStart && d <= cwEnd;
+        });
+        const realWeightKg = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+        const realAmount = realWeightKg / 1000 * parseFloat(closing.pricePerTon || String(pricePerTon) || '130');
+        const isExpanded = expandedIds.has(closing.id);
+
+        return (
+          <div key={`formal-${closing.id}`} className={`border rounded-xl overflow-hidden transition-all ${
+            closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
+            isOverdue ? 'border-red-200 bg-red-50/30' :
+            'border-yellow-100 bg-yellow-50/30'
+          }`}>
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900 text-sm">
+                      Semana {closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} a {closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      closing.status === 'pago' ? 'bg-green-100 text-green-700' :
+                      isOverdue ? 'bg-red-100 text-red-700' :
+                      closing.status === 'fechado' ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {closing.status === 'pago' ? 'Pago' : isOverdue ? 'Atrasado' : closing.status === 'fechado' ? 'Aguardando Pagamento' : closing.status}
+                    </span>
+                  </div>
+                  <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                    <span>{realLoads.length} carga{realLoads.length !== 1 ? 's' : ''}</span>
+                    <span>{formatBR(realWeightKg / 1000)} ton</span>
+                    {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
+                  </div>
+                  {closing.status !== 'pago' && closing.dueDate && (
+                    <p className={`text-xs mt-1.5 font-medium ${isOverdue ? 'text-red-600' : 'text-orange-600'}`}>
+                      Vencimento: {safeDate(closing.dueDate).toLocaleDateString('pt-BR')}
+                      {isOverdue && ' (VENCIDO)'}
+                    </p>
+                  )}
+                  {closing.status === 'pago' && closing.paidAt && (
+                    <p className="text-xs mt-1.5 text-green-700 font-medium">
+                      Pago em: {safeDate(closing.paidAt).toLocaleDateString('pt-BR')}
+                    </p>
+                  )}
+                  {closing.status === 'pago' && closing.receiptUrl && (
+                    <a
+                      href={closing.receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 transition-colors"
+                    >
+                      <FileCheck className="h-3 w-3" /> Ver Comprovante de Pagamento
+                    </a>
+                  )}
+                  {closing.notes && (
+                    <p className="text-xs text-gray-500 mt-1.5 italic">{closing.notes}</p>
+                  )}
+                </div>
+                <div className="shrink-0 flex flex-col items-end gap-1">
+                  <p className="font-black text-[#0d4f2e] text-base">{formatCurrency(realAmount)}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <button
+                      onClick={() => generateClosingPDF(closing, clientName, allLoads, pricePerTon)}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-[#0d4f2e]/10 text-[#0d4f2e] rounded-lg text-[10px] font-semibold hover:bg-[#0d4f2e]/20 transition-colors"
+                    >
+                      <Download className="h-3 w-3" /> PDF
+                    </button>
+                    {realLoads.length > 0 && (
+                      <button
+                        onClick={() => toggleExpand(closing.id)}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-semibold hover:bg-gray-200 transition-colors"
+                        title={isExpanded ? 'Ocultar cargas' : 'Ver cargas'}
+                      >
+                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        {isExpanded ? 'Ocultar' : 'Cargas'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Lista de cargas expandida */}
+            {isExpanded && realLoads.length > 0 && (
+              <div className="border-t border-gray-200 bg-white">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+                  <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Detalhamento das Cargas ({realLoads.length})</p>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {realLoads.map((l: any, idx: number) => {
+                    const date = (l.deliveryDate || l.date) ? safeDate(l.deliveryDate || l.date).toLocaleDateString('pt-BR') : '-';
+                    const weightNet = parseFloat(l.weightNetKg || l.weightOutKg || '0');
+                    const weightTon = weightNet > 0 ? formatBR(weightNet / 1000, 3) : '-';
+                    const clientCode = getClientCode(clientName, l.id);
+                    const unitPrice = parseFloat(closing.pricePerTon || String(pricePerTon) || '0');
+                    const loadAmount = weightNet > 0 && unitPrice > 0 ? weightNet / 1000 * unitPrice : 0;
+                    return (
+                      <div key={l.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-mono font-bold text-[#0d4f2e] bg-[#0d4f2e]/10 px-1.5 py-0.5 rounded">{clientCode}</span>
+                            <span className="text-xs text-gray-700 font-medium">{date}</span>
+                            {l.destination && <span className="text-xs text-gray-500 truncate max-w-[100px]">{l.destination}</span>}
+                          </div>
+                          <div className="text-[10px] text-gray-400 mt-0.5 flex gap-2">
+                            {l.vehiclePlate && <span>{l.vehiclePlate}</span>}
+                            {l.driverName && <span>{l.driverName}</span>}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-bold text-emerald-700">{weightTon} ton</p>
+                          {loadAmount > 0 && <p className="text-[10px] text-blue-600 font-semibold">{formatCurrency(loadAmount)}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+                  <span className="text-xs font-bold text-gray-600">{realLoads.length} cargas · {formatBR(realWeightKg / 1000)} ton</span>
+                  <span className="text-xs font-black text-[#0d4f2e]">{formatCurrency(realAmount)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
     <div className="text-center py-10 text-gray-400">
@@ -1409,16 +1547,7 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
                   ⏳ Pendente de Pagamento
                 </span>
               ) : null}
-              {/* Botão Marcar como Pago - visível diretamente no header, só para cargas não pagas */}
-              {!isPago && !(totalDeducted > 0 && remaining <= 0) && load.status === 'entregue' && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); if (confirm('Marcar esta carga como paga?')) markAsPaidMutation.mutate({ id: load.id }); }}
-                  disabled={markAsPaidMutation.isPending}
-                  className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors border border-green-700"
-                >
-                  {markAsPaidMutation.isPending ? '...' : '✓ Marcar Pago'}
-                </button>
-              )}
+              {/* Botão Marcar Pago removido do portal do cliente */}
             </div>
             <div className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
               <span>{formatDate(load.date)}</span>
@@ -1581,18 +1710,18 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
             {load.invoiceNumber && (
               <div className="bg-white rounded-lg p-2">
                 <p className="text-gray-400">Nota Fiscal</p>
-                <p className="font-medium text-gray-700">{load.invoiceNumber}</p>
+                <p className="font-medium text-gray-700 font-mono">{load.invoiceNumber}</p>
               </div>
             )}
             {(load as any).weightOutKg && (
               <div className="bg-white rounded-lg p-2">
-                <p className="text-gray-400">Peso Bruto Saída</p>
+                <p className="text-gray-400">Peso Total</p>
                 <p className="font-medium text-gray-700">{(load as any).weightOutKg} kg</p>
               </div>
             )}
             {(load as any).weightInKg && (
               <div className="bg-white rounded-lg p-2">
-                <p className="text-gray-400">Peso Bruto Chegada</p>
+                <p className="text-gray-400">Peso Tara</p>
                 <p className="font-medium text-gray-700">{(load as any).weightInKg} kg</p>
               </div>
             )}
@@ -1624,15 +1753,6 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
             }`}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Resumo Financeiro</p>
-                {!isPago && !(totalDeducted > 0 && remaining <= 0) && load.status === 'entregue' && (
-                  <button
-                    onClick={() => { if (confirm('Marcar esta carga como paga?')) markAsPaidMutation.mutate({ id: load.id }); }}
-                    disabled={markAsPaidMutation.isPending}
-                    className="text-xs px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-                  >
-                    {markAsPaidMutation.isPending ? 'Salvando...' : '✓ Marcar como Pago'}
-                  </button>
-                )}
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>

@@ -85,6 +85,19 @@ const CLIENT_COLORS = [
   { border: "border-l-indigo-500", bg: "bg-indigo-50", text: "text-indigo-700", headerBg: "bg-indigo-600" },
 ];
 
+// ── HELPER: gerar código do cliente (SF001, GW001, etc.) ──
+function getClientCode(clientName: string | null | undefined, loadId: number): string {
+  const name = (clientName || '').toLowerCase();
+  let prefix = 'CL';
+  if (name.includes('simflor') || name.includes('sima')) prefix = 'SF';
+  else if (name.includes('fazenda gw') || name.includes('gw')) prefix = 'GW';
+  else {
+    const words = (clientName || '').trim().split(/\s+/);
+    prefix = words.map((w: string) => w[0]?.toUpperCase() || '').join('').slice(0, 3) || 'CL';
+  }
+  return `${prefix}${String(loadId).padStart(3, '0')}`;
+}
+
 function calcVolume(h: string, w: string, l: string): string {
   const hN = parseFloat(h.replace(",", "."));
   const wN = parseFloat(w.replace(",", "."));
@@ -297,8 +310,8 @@ async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "
         <div class="field"><div class="field-label">Largura (m)</div><div class="field-value">${cargo.widthM || "-"}</div></div>
         <div class="field"><div class="field-label">Comprimento (m)</div><div class="field-value">${cargo.lengthM || "-"}</div></div>
         <div class="field"><div class="field-label">Volume (m³)</div><div class="field-value highlight">${cargo.volumeM3 ? formatBR(parseFloat(String(cargo.volumeM3)), 3) : "-"} m³</div></div>
-        <div class="field"><div class="field-label">Peso Bruto Saída</div><div class="field-value">${(cargo as any).weightOutKg ? (cargo as any).weightOutKg + " kg" : "-"}</div></div>
-        <div class="field"><div class="field-label">Peso Bruto Chegada</div><div class="field-value">${(cargo as any).weightInKg ? (cargo as any).weightInKg + " kg" : "-"}</div></div>
+        <div class="field"><div class="field-label">Peso Total</div><div class="field-value">${(cargo as any).weightOutKg ? (cargo as any).weightOutKg + " kg" : "-"}</div></div>
+        <div class="field"><div class="field-label">Peso Tara</div><div class="field-value">${(cargo as any).weightInKg ? (cargo as any).weightInKg + " kg" : "-"}</div></div>
         <div class="field"><div class="field-label">Peso Líquido</div><div class="field-value highlight">${(cargo as any).weightNetKg ? (cargo as any).weightNetKg + " kg" : "-"}</div></div>
         <div class="field"><div class="field-label">Peso (kg)</div><div class="field-value">${cargo.weightKg ? cargo.weightKg + " kg" : "-"}</div></div>
         <div class="field"><div class="field-label">&nbsp;</div><div class="field-value">&nbsp;</div></div>
@@ -1758,9 +1771,9 @@ export default function CargoControl() {
                 {((cargo as any).weightOutKg || (cargo as any).weightInKg) && (
                   <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">
                     <Weight className="h-2.5 w-2.5" />
-                    {(cargo as any).weightOutKg ? `Saída: ${formatBR(parseFloat((cargo as any).weightOutKg), 0)}` : ''}
+                    {(cargo as any).weightOutKg ? `Total: ${formatBR(parseFloat((cargo as any).weightOutKg), 0)}` : ''}
                     {(cargo as any).weightOutKg && (cargo as any).weightInKg ? ' | ' : ''}
-                    {(cargo as any).weightInKg ? `Entrada: ${formatBR(parseFloat((cargo as any).weightInKg), 0)}` : ''}
+                    {(cargo as any).weightInKg ? `Tara: ${formatBR(parseFloat((cargo as any).weightInKg), 0)}` : ''}
                     {(cargo as any).weightNetKg ? ` | Líq: ${formatBR(parseFloat((cargo as any).weightNetKg), 0)}` : ''}
                   </span>
                 )}
@@ -1777,6 +1790,10 @@ export default function CargoControl() {
                     )}
                   </span>
                 )}
+                {/* Código do cliente: SF001, GW001, etc. */}
+                <span className="flex items-center gap-1 font-mono font-bold text-[#0d4f2e] bg-[#0d4f2e]/10 px-1.5 py-0.5 rounded text-[10px]">
+                  {getClientCode(cargo.clientName, cargo.id)}
+                </span>
                 {cargo.invoiceNumber && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{cargo.invoiceNumber}</span>}
                 {(cargo as any).locationName && <span className="flex items-center gap-1 text-emerald-600"><MapPin className="h-3 w-3" /><span translate="no">{(cargo as any).locationName}</span></span>}
               </div>
@@ -2661,9 +2678,10 @@ export default function CargoControl() {
                   ["Volume Previsto", `${detailCargo.volumeM3 ? formatBR(parseFloat(detailCargo.volumeM3), 3) : '-'} m³`],
                   ["Peso Previsto", detailCargo.weightKg ? `${detailCargo.weightKg} kg` : "-"],
                   ["Nota Fiscal", detailCargo.invoiceNumber || "-"],
+                  ["Código Cliente", getClientCode(detailCargo.clientName, detailCargo.id)],
                   ["Status", detailCargo.status],
-                  ["Peso Bruto Saída (kg)", (detailCargo as any).weightOutKg ? `${(detailCargo as any).weightOutKg} kg` : "-"],
-                  ["Peso Bruto Chegada (kg)", (detailCargo as any).weightInKg ? `${(detailCargo as any).weightInKg} kg` : "-"],
+                  ["Peso Total (kg)", (detailCargo as any).weightOutKg ? `${(detailCargo as any).weightOutKg} kg` : "-"],
+                  ["Peso Tara (kg)", (detailCargo as any).weightInKg ? `${(detailCargo as any).weightInKg} kg` : "-"],
                   ["Peso Líquido (kg)", (detailCargo as any).weightNetKg ? `${(detailCargo as any).weightNetKg} kg` : "-"],
                   ["Metragem Final", (detailCargo as any).finalHeightM ? `${(detailCargo as any).finalHeightM} x ${(detailCargo as any).finalWidthM} x ${(detailCargo as any).finalLengthM} m = ${calcVolume((detailCargo as any).finalHeightM || "0", (detailCargo as any).finalWidthM || "0", (detailCargo as any).finalLengthM || "0")} m³` : "-"],
                 ].map(([label, value]) => (
