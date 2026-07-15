@@ -674,7 +674,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               <img
                 src={BTREE_LOGO_B64}
                 alt="BTREE Ambiental"
-                className="h-16 w-auto object-contain"
+                className="h-20 w-auto object-contain"
               />
               <div className="flex-1 flex justify-end items-center gap-2">
                 <a href="https://btreeambiental.com" target="_blank" rel="noopener noreferrer"
@@ -696,7 +696,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               <img
                 src={BTREE_LOGO_B64}
                 alt="BTREE Ambiental"
-                className="h-14 w-auto object-contain"
+                className="h-16 w-auto object-contain"
               />
               <div className="flex items-center gap-2">
                 <a href="https://btreeambiental.com" target="_blank" rel="noopener noreferrer"
