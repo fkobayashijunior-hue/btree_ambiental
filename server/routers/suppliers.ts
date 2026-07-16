@@ -193,7 +193,7 @@ export const suppliersRouter = router({
         if (!resp.supplierName?.trim()) continue;
         const trimmedName = resp.supplierName.trim();
         const rows = await db.execute(
-          sql`SELECT id FROM suppliers WHERE name = ${trimmedName} LIMIT 1`
+          sql`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
         );
         const existing = (rows as any)[0] as Array<{ id: number }>;
         if (existing.length > 0) { skipped++; continue; }

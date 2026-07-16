@@ -1407,10 +1407,13 @@ var init_schema = __esm({
     });
     suppliers = mysqlTable("suppliers", {
       id: int().autoincrement().primaryKey().notNull(),
-      companyName: varchar("name", { length: 255 }).notNull(),
-      address: varchar({ length: 500 }),
+      companyName: varchar("company_name", { length: 255 }).notNull(),
+      tradeName: varchar("trade_name", { length: 255 }),
+      cnpj: varchar({ length: 20 }),
+      address: text(),
       city: varchar({ length: 100 }),
       state: varchar({ length: 2 }),
+      zipCode: varchar("zip_code", { length: 10 }),
       phone: varchar({ length: 30 }),
       whatsapp: varchar({ length: 30 }),
       email: varchar({ length: 255 }),
@@ -13077,7 +13080,7 @@ var suppliersRouter = router({
       if (!resp.supplierName?.trim()) continue;
       const trimmedName = resp.supplierName.trim();
       const rows = await db.execute(
-        sql19`SELECT id FROM suppliers WHERE name = ${trimmedName} LIMIT 1`
+        sql19`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
       );
       const existing = rows[0];
       if (existing.length > 0) {
