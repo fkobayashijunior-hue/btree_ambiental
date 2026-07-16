@@ -212,6 +212,7 @@ const TRACKING_STEPS: { key: TrackingStatus; label: string; icon: string; desc: 
 ];
 
 const BTREE_LOGO = BTREE_LOGO_B64; // base64 embedded, no CORS
+const BTREE_LOGO_NEW = "/manus-storage/LOGO-BTREE-01_7a7571bc.jpeg";
 const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 
 // ===== PDF FECHAMENTO SEMANAL =====
@@ -673,9 +674,10 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             <div className="hidden sm:flex items-center justify-between">
               <div className="flex-1" />
               <img
-                src={BTREE_LOGO_B64}
+                src={BTREE_LOGO_NEW}
                 alt="BTREE Ambiental"
-                className="h-20 w-auto object-contain"
+                className="h-24 w-auto object-contain"
+                onError={(e) => { (e.target as HTMLImageElement).src = BTREE_LOGO_B64; }}
               />
               <div className="flex-1 flex justify-end items-center gap-2">
                 <a href="https://btreeambiental.com" target="_blank" rel="noopener noreferrer"
@@ -695,9 +697,10 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             {/* Layout Mobile: logo centralizada + botões abaixo */}
             <div className="flex sm:hidden flex-col items-center gap-2">
               <img
-                src={BTREE_LOGO_B64}
+                src={BTREE_LOGO_NEW}
                 alt="BTREE Ambiental"
-                className="h-16 w-auto object-contain"
+                className="h-20 w-auto object-contain"
+                onError={(e) => { (e.target as HTMLImageElement).src = BTREE_LOGO_B64; }}
               />
               <div className="flex items-center gap-2">
                 <a href="https://btreeambiental.com" target="_blank" rel="noopener noreferrer"
@@ -716,24 +719,52 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             </div>
           </div>
         </div>
-        {/* Faixa do cliente */}
-        <div className="bg-black/20 px-4 py-2">
-          <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Logo do cliente - SIMA para SIMFLOR */}
-              {session.clientName?.toLowerCase().includes('simflor') && (
-                <img
-                  src="/sima-logo.webp"
-                  alt="SIMA"
-                  className="h-8 w-auto object-contain rounded"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              )}
-              <div>
-                <p className="font-bold text-sm leading-none">{session.clientName}</p>
-                <p className="text-green-300 text-xs mt-0.5">Área do Cliente</p>
-              </div>
+        {/* Faixa do cliente com resumo */}
+        <div className="bg-black/20 px-4 py-3">
+          <div className="max-w-5xl mx-auto">
+            {/* Nome do cliente */}
+            <div className="mb-2">
+              <p className="font-bold text-sm leading-none">{session.clientName}</p>
+              <p className="text-green-300 text-xs mt-0.5">Área do Cliente</p>
             </div>
+            {/* Resumo rápido */}
+            {!isLoading && data && (() => {
+              const allLoads = data.loads || [];
+              const entregues = allLoads.filter((l: any) => l.status === 'entregue');
+              const totalEntregues = entregues.length;
+              const pricePerTon = parseFloat(data.client?.pricePerTon || '0');
+              const valorTotalEntregues = entregues.reduce((sum: number, l: any) => {
+                const kg = parseFloat(l.weightNetKg || l.weightOutKg || '0');
+                return sum + (kg / 1000) * pricePerTon;
+              }, 0);
+              const advances = data.advances || [];
+              const valorPago = advances.reduce((sum: number, a: any) => {
+                const total = parseFloat(a.totalAmount || a.amount || '0');
+                const saldo = parseFloat(a.balanceRemaining || '0');
+                return sum + Math.max(0, total - saldo);
+              }, 0);
+              const valorAReceber = Math.max(0, valorTotalEntregues - valorPago);
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
+                    <p className="text-white font-black text-lg leading-none">{totalEntregues}</p>
+                    <p className="text-green-200 text-[10px] mt-0.5">Cargas Entregues</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
+                    <p className="text-white font-black text-sm leading-none">{valorTotalEntregues > 0 ? valorTotalEntregues.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</p>
+                    <p className="text-green-200 text-[10px] mt-0.5">Valor Total</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
+                    <p className="text-green-300 font-black text-sm leading-none">{valorPago > 0 ? valorPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</p>
+                    <p className="text-green-200 text-[10px] mt-0.5">Valor Pago</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
+                    <p className="text-amber-300 font-black text-sm leading-none">{valorAReceber > 0 ? valorAReceber.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</p>
+                    <p className="text-green-200 text-[10px] mt-0.5">A Receber</p>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </header>
@@ -1520,13 +1551,17 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-gray-900 text-sm">
-                {load.destination || "Destino não informado"}
-              </span>
+              {/* Código da carga em destaque */}
+              {clientName && (
+                <span className="font-bold text-gray-900 text-sm font-mono">
+                  {getClientCode(clientName, load.id, codeMap)}
+                </span>
+              )}
+              {/* Status de entrega */}
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(load.status)}`}>
-                {load.status}
+                {load.status === 'entregue' ? 'entregue' : load.status === 'pendente' ? 'pendente' : load.status}
               </span>
-              {currentStep && (
+              {currentStep && currentStep.key !== 'finalizado' && (
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700">
                   {currentStep.icon} {currentStep.label}
                 </span>
@@ -1555,7 +1590,7 @@ function CargoCard({ load, formatDate, statusColor, clientId, loadValue, advance
               {(load as any).weightNetKg && <span className="flex items-center gap-0.5 font-medium text-emerald-700"><Weight className="h-3 w-3" />{(load as any).weightNetKg} kg (líq.)</span>}
               {load.woodType && <span>{load.woodType}</span>}
               {load.vehiclePlate && <span className="flex items-center gap-0.5"><Truck className="h-3 w-3" />{load.vehiclePlate}</span>}
-              {clientName && <span className="flex items-center gap-0.5 font-mono text-[#0d4f2e] font-semibold">{getClientCode(clientName, load.id, codeMap)}</span>}
+              {load.destination && <span className="flex items-center gap-0.5 text-gray-400"><MapPin className="h-3 w-3" />{load.destination}</span>}
             </div>
             {(loadValue ?? 0) > 0 && (
               <p className="text-blue-700 text-xs font-bold mt-1">
