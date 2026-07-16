@@ -81,6 +81,7 @@ type FormData = {
   shoeSize: string; bootSize: string; photoBase64: string;
   password: string; linkedUserId: number | null;
   clientId: number | null;
+  active: boolean;
 };
 
 const emptyForm: FormData = {
@@ -89,7 +90,7 @@ const emptyForm: FormData = {
   role: "operador", pixKey: "", dailyRate: "",
   employmentType: "diarista", shirtSize: "", pantsSize: "",
   shoeSize: "", bootSize: "", photoBase64: "", password: "",
-  linkedUserId: null, clientId: null,
+  linkedUserId: null, clientId: null, active: true,
 };
 
 function SectionTitle({ icon, title, open, onToggle }: { icon: React.ReactNode; title: string; open: boolean; onToggle: () => void }) {
@@ -176,6 +177,7 @@ export default function Collaborators() {
       photoBase64: form.photoBase64 || undefined,
       password: form.password || undefined,
       clientId: form.clientId,
+      active: form.active,
     };
     if (editId) {
       updateMutation.mutate({ id: editId, ...data });
@@ -213,6 +215,7 @@ export default function Collaborators() {
       pantsSize: c.pantsSize || "", shoeSize: c.shoeSize || "", bootSize: c.bootSize || "",
       photoBase64: "", password: "",
       linkedUserId: c.userId || null, clientId: c.clientId || null,
+      active: c.active === 1 || c.active === true,
     });
     setOpenSections({ pessoal: true, endereco: false, epi: false });
     setIsOpen(true);
@@ -539,6 +542,26 @@ export default function Collaborators() {
                     <option value="terceirizado">Terceirizado</option>
                   </select>
                 </div>
+                {/* Toggle Ativo/Inativo — apenas na edição */}
+                {editId && (
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Status do Colaborador</p>
+                      <p className="text-xs text-gray-500">{form.active ? "Aparece nas listas e relatórios" : "Oculto nas listas e relatórios"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, active: !f.active }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        form.active ? "bg-emerald-600" : "bg-gray-300"
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        form.active ? "translate-x-6" : "translate-x-1"
+                      }`} />
+                    </button>
+                  </div>
+                )}
                 <div>
                   <Label className="text-sm font-semibold text-gray-700 mb-2 block">🦺 Tamanhos para EPI</Label>
                   <div className="grid grid-cols-2 gap-3">
