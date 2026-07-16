@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Fuel, Edit, Trash2, ToggleLeft, ToggleRight, Building2, Phone, Mail, MapPin, User, History, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { Plus, Fuel, Edit, Trash2, ToggleLeft, ToggleRight, Building2, Phone, Mail, MapPin, User, History, TrendingUp, TrendingDown, DollarSign, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -77,6 +77,8 @@ export default function FuelSuppliersPage() {
   const [pricesSupplierId, setPricesSupplierId] = useState<number | null>(null);
   const [pricesSupplierName, setPricesSupplierName] = useState("");
   const [newPriceForm, setNewPriceForm] = useState({ fuelType: 'diesel' as string, locationType: 'simflor' as string, pricePerLiter: '' });
+  // Resumo expandido por fornecedor
+  const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
   const { data: suppliers = [] } = trpc.fuelSuppliers.list.useQuery();
@@ -87,6 +89,10 @@ export default function FuelSuppliersPage() {
   const { data: supplierPrices = [] } = trpc.fuelSuppliers.listSupplierPrices.useQuery(
     { supplierId: pricesSupplierId || 0 },
     { enabled: pricesOpen && !!pricesSupplierId }
+  );
+  const { data: supplierSummary = [] } = trpc.fuelSuppliers.getSupplierSummary.useQuery(
+    { supplierId: expandedSupplierId || 0 },
+    { enabled: !!expandedSupplierId }
   );
   const createMut = trpc.fuelSuppliers.create.useMutation({
     onSuccess: () => { utils.fuelSuppliers.list.invalidate(); utils.fuelSuppliers.listActive.invalidate(); setFormOpen(false); resetForm(); toast.success("Fornecedor cadastrado!"); },
@@ -285,6 +291,58 @@ export default function FuelSuppliersPage() {
                   {s.notes && (
                     <div className="mt-1 text-sm text-amber-700 bg-amber-50 px-2 py-1 rounded inline-block">
                       {s.notes}
+                    </div>
+                  )}
+
+                  {/* Botão para expandir resumo de entregas */}
+                  <button
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+                    onClick={() => setExpandedSupplierId(expandedSupplierId === s.id ? null : s.id)}
+                  >
+                    <FileText className="h-3 w-3" />
+                    {expandedSupplierId === s.id ? 'Ocultar resumo de entregas' : 'Ver resumo de entregas por local/tipo'}
+                    {expandedSupplierId === s.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </button>
+
+                  {/* Resumo de entregas expandido */}
+                  {expandedSupplierId === s.id && (
+                    <div className="mt-2 border rounded-lg overflow-hidden">
+                      {supplierSummary.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-muted-foreground italic">Nenhuma nota fiscal cadastrada ainda para este fornecedor.</div>
+                      ) : (
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="text-left px-3 py-1.5 font-semibold text-gray-600">Local de Entrega</th>
+                              <th className="text-left px-3 py-1.5 font-semibold text-gray-600">Tipo</th>
+                              <th className="text-right px-3 py-1.5 font-semibold text-gray-600">Total Litros</th>
+                              <th className="text-right px-3 py-1.5 font-semibold text-gray-600">Total Valor</th>
+                              <th className="text-right px-3 py-1.5 font-semibold text-gray-600">Último Preço/L</th>
+                              <th className="text-right px-3 py-1.5 font-semibold text-gray-600">NFs</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {supplierSummary.map((row: any, i: number) => (
+                              <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-3 py-1.5 font-medium">{row.location}</td>
+                                <td className="px-3 py-1.5">
+                                  <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                                    row.fuelType === 'diesel_s10' ? 'bg-blue-100 text-blue-700' :
+                                    row.fuelType === 'diesel' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {FUEL_TYPE_LABELS[row.fuelType] || row.fuelType}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-1.5 text-right">{row.totalLiters.toLocaleString('pt-BR')}L</td>
+                                <td className="px-3 py-1.5 text-right font-semibold text-green-700">R$ {row.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td className="px-3 py-1.5 text-right">{row.lastPrice ? `R$ ${parseFloat(row.lastPrice).toFixed(2)}/L` : '-'}</td>
+                                <td className="px-3 py-1.5 text-right text-muted-foreground">{row.invoiceCount}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
                   )}
                 </div>

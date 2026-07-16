@@ -1005,8 +1005,18 @@ export default function FuelInvoicesPage() {
 
               {/* Local de entrega */}
               <div>
-                <label className="text-sm font-medium text-gray-700">Local de Entrega</label>
-                <Input value={form.deliveryLocation} onChange={e => setForm(f => ({ ...f, deliveryLocation: e.target.value }))} placeholder="Ex: SIMFLOR, Astorga..." />
+                <label className="text-sm font-medium text-gray-700">Local de Entrega *</label>
+                <select
+                  value={form.deliveryLocation}
+                  onChange={e => setForm(f => ({ ...f, deliveryLocation: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value="">Selecione o local...</option>
+                  <option value="SIMFLOR">SIMFLOR</option>
+                  <option value="Sede Astorga">Sede Astorga</option>
+                  <option value="Postos">Postos</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">Local onde o combustível foi entregue/abastecido</p>
               </div>
 
               {/* Observações */}

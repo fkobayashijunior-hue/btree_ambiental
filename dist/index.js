@@ -11897,6 +11897,29 @@ var fuelSuppliersRouter = router({
       eq28(fuelSuppliers.locationType, input.locationType)
     )).orderBy(fuelSuppliers.name);
   }),
+  // ===== RESUMO DE LOCAIS/PREÇOS POR FORNECEDOR (baseado nas NFs cadastradas) =====
+  getSupplierSummary: protectedProcedure.input(z29.object({ supplierId: z29.number() })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    const invoices = await db.select().from(fuelInvoices).where(eq28(fuelInvoices.supplierId, input.supplierId)).orderBy(desc23(fuelInvoices.id));
+    const groups = {};
+    for (const inv of invoices) {
+      const loc = inv.deliveryLocation || "N\xE3o informado";
+      const fuel = inv.fuelType || "diesel";
+      const key = `${loc}||${fuel}`;
+      if (!groups[key]) {
+        groups[key] = { location: loc, fuelType: fuel, totalLiters: 0, totalAmount: 0, invoiceCount: 0, lastPrice: null, lastInvoiceDate: null };
+      }
+      groups[key].totalLiters += parseFloat(inv.liters || "0");
+      groups[key].totalAmount += parseFloat(inv.totalAmount || "0");
+      groups[key].invoiceCount += 1;
+      if (!groups[key].lastPrice && inv.pricePerLiter) {
+        groups[key].lastPrice = inv.pricePerLiter;
+        groups[key].lastInvoiceDate = inv.invoiceDate;
+      }
+    }
+    return Object.values(groups).sort((a, b) => a.location.localeCompare(b.location));
+  }),
   // ===== PREÇOS POR LOCAL/TIPO (nova tabela multi-preço) =====
   listSupplierPrices: protectedProcedure.input(z29.object({ supplierId: z29.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
