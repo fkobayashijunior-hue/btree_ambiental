@@ -25,10 +25,10 @@ export default function UniformReport() {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [filterShirtSize, setFilterShirtSize] = useState("all");
+  const [filterStatus, setFilterStatus] = useState<"active" | "inactive" | "all">("active");
 
-  const { data: collaborators = [], isLoading } = trpc.collaborators.list.useQuery({
-    active: true,
-  });
+  // Busca todos os colaboradores (sem filtro de active) para poder alternar entre ativos/inativos
+  const { data: collaborators = [], isLoading } = trpc.collaborators.list.useQuery({});
 
   const roles = useMemo(() => {
     const set = new Set<string>();
@@ -38,12 +38,15 @@ export default function UniformReport() {
 
   const filtered = useMemo(() => {
     return collaborators.filter((c: any) => {
+      // Filtro de status ativo/inativo
+      if (filterStatus === "active" && !c.active) return false;
+      if (filterStatus === "inactive" && c.active) return false;
       if (search && !c.name?.toLowerCase().includes(search.toLowerCase())) return false;
       if (filterRole !== "all" && c.role !== filterRole) return false;
       if (filterShirtSize !== "all" && c.shirtSize !== filterShirtSize) return false;
       return true;
     });
-  }, [collaborators, search, filterRole, filterShirtSize]);
+  }, [collaborators, search, filterRole, filterShirtSize, filterStatus]);
 
   // Totais por tipo de uniforme
   const shirtTotals = useMemo(() => {
@@ -185,7 +188,7 @@ export default function UniformReport() {
             <Shirt className="w-6 h-6 text-green-700" />
             Relatório de Uniformes
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">Tamanhos de uniformes dos funcionários ativos</p>
+          <p className="text-sm text-gray-500 mt-0.5">Tamanhos de uniformes por funcionário</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
@@ -322,6 +325,16 @@ export default function UniformReport() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={filterStatus} onValueChange={v => setFilterStatus(v as any)}>
+          <SelectTrigger className="sm:max-w-[150px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">✅ Ativos</SelectItem>
+            <SelectItem value="inactive">❌ Inativos</SelectItem>
+            <SelectItem value="all">Todos</SelectItem>
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-1.5 text-sm text-gray-500 ml-auto">
           <Users className="w-4 h-4" />
           <span>{filtered.length} funcionário(s)</span>
@@ -340,6 +353,7 @@ export default function UniformReport() {
               <thead>
                 <tr className="bg-green-800 text-white">
                   <th className="text-left px-4 py-3 font-semibold">Nome</th>
+                  <th className="text-center px-4 py-3 font-semibold">Status</th>
                   <th className="text-left px-4 py-3 font-semibold">Função</th>
                   <th className="text-center px-4 py-3 font-semibold">Camisa</th>
                   <th className="text-center px-4 py-3 font-semibold">Calça</th>
@@ -351,6 +365,11 @@ export default function UniformReport() {
                 {filtered.map((c: any, i: number) => (
                   <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     <td className="px-4 py-3 font-medium text-gray-900">{c.name || "—"}</td>
+                    <td className="px-4 py-3 text-center">
+                      {c.active
+                        ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Ativo</span>
+                        : <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-600">Inativo</span>}
+                    </td>
                     <td className="px-4 py-3 text-gray-600 capitalize">{roleLabel[c.role] || c.role || "—"}</td>
                     <td className="px-4 py-3 text-center">
                       {c.shirtSize ? (
