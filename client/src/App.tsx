@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Collaborators from "./pages/Collaborators";
+import UniformReport from "./pages/UniformReport";
 import AttendanceList from "./pages/AttendanceList";
 import Landing from "./pages/Landing";
 import SectorsEquipment from "./pages/SectorsEquipment";
@@ -87,6 +88,9 @@ function Router() {
       </Route>
       <Route path={"/colaboradores"}>
         {() => <WithLayout component={Collaborators} />}
+      </Route>
+      <Route path={"/uniformes"}>
+        {() => <WithLayout component={UniformReport} />}
       </Route>
       <Route path={"/colaboradores/:id"}>
         {() => <WithLayout component={CollaboratorDetail} />}

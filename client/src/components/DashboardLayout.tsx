@@ -34,7 +34,7 @@ import {
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, Database, Settings, Bell, ChevronRight, Radio
+  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, Database, Settings, Bell, ChevronRight, Radio, Shirt
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -114,6 +114,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { label: "Colaboradores", path: "/colaboradores", slug: "colaboradores", icon: UserCheck },
       { label: "Presenças", path: "/presencas", slug: "presencas", icon: ClipboardList },
+      { label: "Uniformes", path: "/uniformes", slug: "uniformes", icon: Shirt },
       { label: "Clientes", path: "/clientes", slug: "clientes", icon: Users },
     ],
   },
