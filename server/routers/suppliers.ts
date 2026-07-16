@@ -56,6 +56,8 @@ export const suppliersRouter = router({
       contactName: z.string().optional(),
       website: z.string().optional(),
       notes: z.string().optional(),
+      sellerName: z.string().optional(),
+      pixKey: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -74,6 +76,8 @@ export const suppliersRouter = router({
         contactName: input.contactName,
         website: input.website,
         notes: input.notes,
+        sellerName: input.sellerName,
+        pixKey: input.pixKey,
         isActive: 1,
         createdBy: ctx.user.id,
       });
@@ -97,6 +101,8 @@ export const suppliersRouter = router({
       website: z.string().optional(),
       notes: z.string().optional(),
       active: z.number().optional(),
+      sellerName: z.string().optional(),
+      pixKey: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

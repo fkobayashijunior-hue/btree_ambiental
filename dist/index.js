@@ -1424,7 +1424,9 @@ var init_schema = __esm({
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
       website: varchar({ length: 500 }),
-      active: tinyint().default(1).notNull()
+      active: tinyint().default(1).notNull(),
+      sellerName: varchar("seller_name", { length: 255 }),
+      pixKey: varchar("pix_key", { length: 255 })
     });
     quotations = mysqlTable("quotations", {
       id: int().autoincrement().primaryKey().notNull(),
@@ -12955,7 +12957,9 @@ var suppliersRouter = router({
     email: z33.string().email().optional().or(z33.literal("")),
     contactName: z33.string().optional(),
     website: z33.string().optional(),
-    notes: z33.string().optional()
+    notes: z33.string().optional(),
+    sellerName: z33.string().optional(),
+    pixKey: z33.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -12973,6 +12977,8 @@ var suppliersRouter = router({
       contactName: input.contactName,
       website: input.website,
       notes: input.notes,
+      sellerName: input.sellerName,
+      pixKey: input.pixKey,
       isActive: 1,
       createdBy: ctx.user.id
     });
@@ -12993,7 +12999,9 @@ var suppliersRouter = router({
     contactName: z33.string().optional(),
     website: z33.string().optional(),
     notes: z33.string().optional(),
-    active: z33.number().optional()
+    active: z33.number().optional(),
+    sellerName: z33.string().optional(),
+    pixKey: z33.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });

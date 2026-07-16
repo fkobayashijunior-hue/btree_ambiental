@@ -23,11 +23,14 @@ interface SupplierForm {
   email: string;
   website: string;
   notes: string;
+  sellerName: string;
+  pixKey: string;
 }
 
 const emptyForm: SupplierForm = {
   name: '', address: '', city: '', state: '', phone: '',
   whatsapp: '', email: '', website: '', notes: '',
+  sellerName: '', pixKey: '',
 };
 
 export default function SuppliersPage() {
@@ -91,6 +94,8 @@ export default function SuppliersPage() {
       email: s.email || '',
       website: s.website || '',
       notes: s.notes || '',
+      sellerName: s.sellerName || '',
+      pixKey: s.pixKey || '',
     });
     setEditId(s.id);
     setShowForm(true);
@@ -220,7 +225,7 @@ export default function SuppliersPage() {
                 </div>
 
                 {/* Expandable details */}
-                {(s.address || s.notes) && (
+                {(s.address || s.notes || s.sellerName || s.pixKey) && (
                   <button
                     className="flex items-center gap-1 text-xs text-gray-400 mt-2 hover:text-gray-600"
                     onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
@@ -231,6 +236,8 @@ export default function SuppliersPage() {
                 )}
                 {expandedId === s.id && (
                   <div className="mt-2 pt-2 border-t space-y-1 text-sm text-gray-600">
+                    {s.sellerName && <p><span className="font-medium">Vendedor:</span> {s.sellerName}</p>}
+                    {s.pixKey && <p><span className="font-medium">Chave PIX:</span> <span className="font-mono">{s.pixKey}</span></p>}
                     {s.address && <p><span className="font-medium">Endereço:</span> {s.address}</p>}
                     {s.notes && <p><span className="font-medium">Obs:</span> {s.notes}</p>}
                   </div>
@@ -271,6 +278,17 @@ export default function SuppliersPage() {
             <div>
               <Label>E-mail</Label>
               <Input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="contato@empresa.com" type="email" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Nome do Vendedor</Label>
+                <Input value={form.sellerName} onChange={e => setForm(f => ({ ...f, sellerName: e.target.value }))} placeholder="Nome do responsável" />
+              </div>
+              <div>
+                <Label>Chave PIX</Label>
+                <Input value={form.pixKey} onChange={e => setForm(f => ({ ...f, pixKey: e.target.value }))} placeholder="CPF, CNPJ, e-mail ou telefone" />
+              </div>
             </div>
 
             <div>

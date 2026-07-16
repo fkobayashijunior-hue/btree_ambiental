@@ -1309,6 +1309,8 @@ export const suppliers = mysqlTable("suppliers", {
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
   website: varchar({ length: 500 }),
   active: tinyint().default(1).notNull(),
+  sellerName: varchar("seller_name", { length: 255 }),
+  pixKey: varchar("pix_key", { length: 255 }),
 });
 export type Supplier = typeof suppliers.$inferSelect;
 export type InsertSupplier = typeof suppliers.$inferInsert;
