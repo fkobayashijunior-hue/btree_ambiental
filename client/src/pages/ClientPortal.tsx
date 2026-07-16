@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getClientPrefix, buildClientCodeMap, getClientCode } from "@shared/clientCode";
 import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { formatBR, formatBRL } from "@/lib/formatBR";
 import { trpc } from "@/lib/trpc";
@@ -1287,36 +1288,8 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   );
 }
 
-// ── HELPER: gerar prefixo do cliente ──
-function getClientPrefix(clientName: string): string {
-  const name = (clientName || '').toLowerCase();
-  if (name.includes('simflor') || name.includes('sima')) return 'SF';
-  if (name.includes('fazenda gw') || name.includes('gw')) return 'GW';
-  const words = clientName.trim().split(/\s+/);
-  return words.map(w => w[0]?.toUpperCase() || '').join('').slice(0, 3);
-}
-
-// ── HELPER: gerar código sequencial por cliente (SF 001, GW 001...) ──
-// loads deve estar ordenado da mais antiga para a mais nova
-function buildClientCodeMap(loads: any[]): Map<number, string> {
-  const map = new Map<number, string>();
-  // Ordenar por data crescente para que a primeira carga seja 001
-  const sorted = [...loads].sort((a, b) => {
-    const da = safeDate(a.deliveryDate || a.date).getTime();
-    const db = safeDate(b.deliveryDate || b.date).getTime();
-    return da !== db ? da - db : a.id - b.id;
-  });
-  sorted.forEach((l, idx) => {
-    map.set(l.id, `${String(idx + 1).padStart(3, '0')}`);
-  });
-  return map;
-}
-
-function getClientCode(clientName: string, loadId: number, codeMap?: Map<number, string>): string {
-  const prefix = getClientPrefix(clientName);
-  const seq = codeMap?.get(loadId) ?? String(loadId).padStart(3, '0');
-  return `${prefix} ${seq}`;
-}
+// Código sequencial de carga: importado de shared/clientCode.ts
+// getClientPrefix, buildClientCodeMap, getClientCode
 
 // ── FECHAMENTOS COM EXPANSÃO ──
 function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurrency, codeMap }: {

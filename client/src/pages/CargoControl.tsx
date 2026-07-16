@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { getClientPrefix, buildClientCodeMap, getClientCode } from "@shared/clientCode";
 import { formatBR, formatBRL } from "@/lib/formatBR";
 import { BTREE_LOGO_B64, fetchImageAsBase64, loadPdfAssets, generatePDFFromHtml, buildPdfFooterHtml, PDF_BASE_STYLES } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
@@ -85,32 +86,8 @@ const CLIENT_COLORS = [
   { border: "border-l-indigo-500", bg: "bg-indigo-50", text: "text-indigo-700", headerBg: "bg-indigo-600" },
 ];
 
-// ── HELPER: gerar código do cliente (SF 001, GW 001...) ──
-function getClientPrefix(clientName: string | null | undefined): string {
-  const name = (clientName || '').toLowerCase();
-  if (name.includes('simflor') || name.includes('sima')) return 'SF';
-  if (name.includes('fazenda gw') || name.includes('gw')) return 'GW';
-  const words = (clientName || '').trim().split(/\s+/);
-  return words.map((w: string) => w[0]?.toUpperCase() || '').join('').slice(0, 3) || 'CL';
-}
-
-// Constrói mapa id→sequência para um array de cargas de UM cliente (ordenado por data crescente)
-function buildClientCodeMap(loads: any[]): Map<number, string> {
-  const map = new Map<number, string>();
-  const sorted = [...loads].sort((a, b) => {
-    const da = safeDate(a.deliveryDate || a.date).getTime();
-    const db = safeDate(b.deliveryDate || b.date).getTime();
-    return da !== db ? da - db : a.id - b.id;
-  });
-  sorted.forEach((l, idx) => map.set(l.id, String(idx + 1).padStart(3, '0')));
-  return map;
-}
-
-function getClientCode(clientName: string | null | undefined, loadId: number, codeMap?: Map<number, string>): string {
-  const prefix = getClientPrefix(clientName);
-  const seq = codeMap?.get(loadId) ?? String(loadId).padStart(3, '0');
-  return `${prefix} ${seq}`;
-}
+// Código sequencial de carga: importado de shared/clientCode.ts
+// getClientPrefix, buildClientCodeMap, getClientCode
 
 function calcVolume(h: string, w: string, l: string): string {
   const hN = parseFloat(h.replace(",", "."));
