@@ -11,12 +11,14 @@ export const suppliersRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const query = db.select().from(suppliers);
       let rows;
       if (input?.activeOnly !== false) {
-        rows = await query.where(eq(suppliers.isActive, 1)).orderBy(suppliers.companyName);
+        rows = await db.select().from(suppliers)
+          .where(eq(suppliers.active, 1))
+          .orderBy(suppliers.companyName);
       } else {
-        rows = await query.orderBy(suppliers.companyName);
+        rows = await db.select().from(suppliers)
+          .orderBy(suppliers.companyName);
       }
       // Attach contacts for each supplier
       const allContacts = await db.select().from(supplierContacts);
@@ -53,16 +55,12 @@ export const suppliersRouter = router({
   create: protectedProcedure
     .input(z.object({
       name: z.string().min(1).max(255),
-      tradeName: z.string().optional(),
-      cnpj: z.string().optional(),
       address: z.string().optional(),
       city: z.string().optional(),
       state: z.string().max(2).optional(),
-      zipCode: z.string().optional(),
       phone: z.string().optional(),
       whatsapp: z.string().optional(),
       email: z.string().email().optional().or(z.literal('')),
-      contactName: z.string().optional(),
       website: z.string().optional(),
       notes: z.string().optional(),
       sellerName: z.string().optional(),
@@ -73,21 +71,17 @@ export const suppliersRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [result] = await db.insert(suppliers).values({
         companyName: input.name,
-        tradeName: input.tradeName,
-        cnpj: input.cnpj,
         address: input.address,
         city: input.city,
         state: input.state,
-        zipCode: input.zipCode,
         phone: input.phone,
         whatsapp: input.whatsapp,
         email: input.email || undefined,
-        contactName: input.contactName,
         website: input.website,
         notes: input.notes,
         sellerName: input.sellerName,
         pixKey: input.pixKey,
-        isActive: 1,
+        active: 1,
         createdBy: ctx.user.id,
       });
       return { id: (result as any).insertId, ...input };
@@ -97,16 +91,12 @@ export const suppliersRouter = router({
     .input(z.object({
       id: z.number(),
       name: z.string().min(1).max(255),
-      tradeName: z.string().optional(),
-      cnpj: z.string().optional(),
       address: z.string().optional(),
       city: z.string().optional(),
       state: z.string().max(2).optional(),
-      zipCode: z.string().optional(),
       phone: z.string().optional(),
       whatsapp: z.string().optional(),
       email: z.string().email().optional().or(z.literal('')),
-      contactName: z.string().optional(),
       website: z.string().optional(),
       notes: z.string().optional(),
       active: z.number().optional(),
@@ -121,7 +111,7 @@ export const suppliersRouter = router({
         companyName: name,
         ...rest,
         email: rest.email || undefined,
-        isActive: active !== undefined ? active : undefined,
+        active: active !== undefined ? active : undefined,
       }).where(eq(suppliers.id, id));
       return { success: true };
     }),
@@ -203,19 +193,17 @@ export const suppliersRouter = router({
         if (!resp.supplierName?.trim()) continue;
         const trimmedName = resp.supplierName.trim();
         const rows = await db.execute(
-          sql`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
+          sql`SELECT id FROM suppliers WHERE name = ${trimmedName} LIMIT 1`
         );
         const existing = (rows as any)[0] as Array<{ id: number }>;
         if (existing.length > 0) { skipped++; continue; }
         await db.insert(suppliers).values({
           companyName: trimmedName,
-          cnpj: resp.cnpj ?? null,
           address: resp.address ?? null,
           phone: resp.sellerPhone ?? null,
           whatsapp: resp.sellerPhone ?? null,
           email: resp.sellerEmail ?? null,
-          contactName: resp.sellerName ?? null,
-          isActive: 1,
+          active: 1,
           createdBy: ctx.user.id,
         });
         created++;

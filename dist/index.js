@@ -1407,27 +1407,21 @@ var init_schema = __esm({
     });
     suppliers = mysqlTable("suppliers", {
       id: int().autoincrement().primaryKey().notNull(),
-      companyName: varchar("company_name", { length: 255 }).notNull(),
-      tradeName: varchar("trade_name", { length: 255 }),
-      cnpj: varchar({ length: 20 }),
-      address: text(),
+      companyName: varchar("name", { length: 255 }).notNull(),
+      address: varchar({ length: 500 }),
       city: varchar({ length: 100 }),
       state: varchar({ length: 2 }),
-      zipCode: varchar("zip_code", { length: 10 }),
       phone: varchar({ length: 30 }),
       whatsapp: varchar({ length: 30 }),
       email: varchar({ length: 255 }),
-      contactName: varchar("contact_name", { length: 255 }),
-      productCategories: text("product_categories"),
-      notes: text(),
-      isActive: tinyint("is_active").default(1).notNull(),
-      createdBy: int("created_by").references(() => users.id),
-      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
-      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull(),
       website: varchar({ length: 500 }),
+      notes: text(),
       active: tinyint().default(1).notNull(),
       sellerName: varchar("seller_name", { length: 255 }),
-      pixKey: varchar("pix_key", { length: 255 })
+      pixKey: varchar("pix_key", { length: 255 }),
+      createdBy: int("created_by").references(() => users.id),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
     supplierContacts = mysqlTable("supplier_contacts", {
       id: int().autoincrement().primaryKey().notNull(),
@@ -12933,12 +12927,11 @@ var suppliersRouter = router({
   list: protectedProcedure.input(z33.object({ activeOnly: z33.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    const query = db.select().from(suppliers);
     let rows;
     if (input?.activeOnly !== false) {
-      rows = await query.where(eq32(suppliers.isActive, 1)).orderBy(suppliers.companyName);
+      rows = await db.select().from(suppliers).where(eq32(suppliers.active, 1)).orderBy(suppliers.companyName);
     } else {
-      rows = await query.orderBy(suppliers.companyName);
+      rows = await db.select().from(suppliers).orderBy(suppliers.companyName);
     }
     const allContacts = await db.select().from(supplierContacts);
     return rows.map((s) => ({
@@ -12965,16 +12958,12 @@ var suppliersRouter = router({
   }),
   create: protectedProcedure.input(z33.object({
     name: z33.string().min(1).max(255),
-    tradeName: z33.string().optional(),
-    cnpj: z33.string().optional(),
     address: z33.string().optional(),
     city: z33.string().optional(),
     state: z33.string().max(2).optional(),
-    zipCode: z33.string().optional(),
     phone: z33.string().optional(),
     whatsapp: z33.string().optional(),
     email: z33.string().email().optional().or(z33.literal("")),
-    contactName: z33.string().optional(),
     website: z33.string().optional(),
     notes: z33.string().optional(),
     sellerName: z33.string().optional(),
@@ -12984,21 +12973,17 @@ var suppliersRouter = router({
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(suppliers).values({
       companyName: input.name,
-      tradeName: input.tradeName,
-      cnpj: input.cnpj,
       address: input.address,
       city: input.city,
       state: input.state,
-      zipCode: input.zipCode,
       phone: input.phone,
       whatsapp: input.whatsapp,
       email: input.email || void 0,
-      contactName: input.contactName,
       website: input.website,
       notes: input.notes,
       sellerName: input.sellerName,
       pixKey: input.pixKey,
-      isActive: 1,
+      active: 1,
       createdBy: ctx.user.id
     });
     return { id: result.insertId, ...input };
@@ -13006,16 +12991,12 @@ var suppliersRouter = router({
   update: protectedProcedure.input(z33.object({
     id: z33.number(),
     name: z33.string().min(1).max(255),
-    tradeName: z33.string().optional(),
-    cnpj: z33.string().optional(),
     address: z33.string().optional(),
     city: z33.string().optional(),
     state: z33.string().max(2).optional(),
-    zipCode: z33.string().optional(),
     phone: z33.string().optional(),
     whatsapp: z33.string().optional(),
     email: z33.string().email().optional().or(z33.literal("")),
-    contactName: z33.string().optional(),
     website: z33.string().optional(),
     notes: z33.string().optional(),
     active: z33.number().optional(),
@@ -13029,7 +13010,7 @@ var suppliersRouter = router({
       companyName: name,
       ...rest,
       email: rest.email || void 0,
-      isActive: active !== void 0 ? active : void 0
+      active: active !== void 0 ? active : void 0
     }).where(eq32(suppliers.id, id));
     return { success: true };
   }),
@@ -13096,7 +13077,7 @@ var suppliersRouter = router({
       if (!resp.supplierName?.trim()) continue;
       const trimmedName = resp.supplierName.trim();
       const rows = await db.execute(
-        sql19`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
+        sql19`SELECT id FROM suppliers WHERE name = ${trimmedName} LIMIT 1`
       );
       const existing = rows[0];
       if (existing.length > 0) {
@@ -13105,13 +13086,11 @@ var suppliersRouter = router({
       }
       await db.insert(suppliers).values({
         companyName: trimmedName,
-        cnpj: resp.cnpj ?? null,
         address: resp.address ?? null,
         phone: resp.sellerPhone ?? null,
         whatsapp: resp.sellerPhone ?? null,
         email: resp.sellerEmail ?? null,
-        contactName: resp.sellerName ?? null,
-        isActive: 1,
+        active: 1,
         createdBy: ctx.user.id
       });
       created++;
@@ -13757,14 +13736,11 @@ var quotationRequestsRouter = router({
       if (existing.length === 0) {
         const [ins] = await db.insert(suppliers).values({
           companyName: resp.supplierName.trim(),
-          cnpj: resp.cnpj ?? null,
           address: resp.address ?? null,
           phone: resp.sellerPhone ?? null,
           whatsapp: resp.sellerPhone ?? null,
           email: resp.sellerEmail ?? null,
-          contactName: resp.sellerName ?? null,
-          notes: resp.notes ?? null,
-          isActive: 1
+          notes: resp.notes ?? null
         });
         const newId = ins.insertId;
         supplierIdByResponse.set(resp.id, newId);

@@ -148,14 +148,14 @@ export const quotationRequestsRouter = router({
         if (existing.length === 0) {
           const [ins] = await db.insert(suppliers).values({
             companyName: resp.supplierName.trim(),
-            cnpj: resp.cnpj ?? null,
+            
             address: resp.address ?? null,
             phone: resp.sellerPhone ?? null,
             whatsapp: resp.sellerPhone ?? null,
             email: resp.sellerEmail ?? null,
-            contactName: resp.sellerName ?? null,
+            
             notes: resp.notes ?? null,
-            isActive: 1,
+            
           });
           const newId = (ins as any).insertId as number;
           supplierIdByResponse.set(resp.id, newId);
