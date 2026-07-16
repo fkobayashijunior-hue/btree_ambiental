@@ -85,17 +85,31 @@ const CLIENT_COLORS = [
   { border: "border-l-indigo-500", bg: "bg-indigo-50", text: "text-indigo-700", headerBg: "bg-indigo-600" },
 ];
 
-// ── HELPER: gerar código do cliente (SF001, GW001, etc.) ──
-function getClientCode(clientName: string | null | undefined, loadId: number): string {
+// ── HELPER: gerar código do cliente (SF 001, GW 001...) ──
+function getClientPrefix(clientName: string | null | undefined): string {
   const name = (clientName || '').toLowerCase();
-  let prefix = 'CL';
-  if (name.includes('simflor') || name.includes('sima')) prefix = 'SF';
-  else if (name.includes('fazenda gw') || name.includes('gw')) prefix = 'GW';
-  else {
-    const words = (clientName || '').trim().split(/\s+/);
-    prefix = words.map((w: string) => w[0]?.toUpperCase() || '').join('').slice(0, 3) || 'CL';
-  }
-  return `${prefix}${String(loadId).padStart(3, '0')}`;
+  if (name.includes('simflor') || name.includes('sima')) return 'SF';
+  if (name.includes('fazenda gw') || name.includes('gw')) return 'GW';
+  const words = (clientName || '').trim().split(/\s+/);
+  return words.map((w: string) => w[0]?.toUpperCase() || '').join('').slice(0, 3) || 'CL';
+}
+
+// Constrói mapa id→sequência para um array de cargas de UM cliente (ordenado por data crescente)
+function buildClientCodeMap(loads: any[]): Map<number, string> {
+  const map = new Map<number, string>();
+  const sorted = [...loads].sort((a, b) => {
+    const da = safeDate(a.deliveryDate || a.date).getTime();
+    const db = safeDate(b.deliveryDate || b.date).getTime();
+    return da !== db ? da - db : a.id - b.id;
+  });
+  sorted.forEach((l, idx) => map.set(l.id, String(idx + 1).padStart(3, '0')));
+  return map;
+}
+
+function getClientCode(clientName: string | null | undefined, loadId: number, codeMap?: Map<number, string>): string {
+  const prefix = getClientPrefix(clientName);
+  const seq = codeMap?.get(loadId) ?? String(loadId).padStart(3, '0');
+  return `${prefix} ${seq}`;
 }
 
 function calcVolume(h: string, w: string, l: string): string {
@@ -1321,6 +1335,12 @@ export default function CargoControl() {
   const { data: detailCargo } = trpc.cargoLoads.getById.useQuery(
     { id: detailId! }, { enabled: !!detailId }
   );
+  // Código sequencial para o modal de detalhes (usa todas as cargas do mesmo cliente)
+  const detailCodeMap = useMemo(() => {
+    if (!detailCargo) return new Map<number, string>();
+    const sameClient = loads.filter(l => l.clientId === detailCargo.clientId);
+    return buildClientCodeMap(sameClient);
+  }, [detailCargo, loads]);
   const { data: detailTrackingPhotos = [] } = trpc.cargoLoads.listTrackingPhotos.useQuery(
     { cargoId: detailId! }, { enabled: !!detailId }
   );
@@ -1721,7 +1741,7 @@ export default function CargoControl() {
   }, [loads]);
 
   // Renderizar um card de carga individual
-  const renderCargoCard = (cargo: typeof loads[number], colorIdx: number) => {
+  const renderCargoCard = (cargo: typeof loads[number], colorIdx: number, codeMap?: Map<number, string>) => {
     const trackStep = TRACKING_STEPS.find(s => s.key === cargo.trackingStatus);
     const colors = CLIENT_COLORS[colorIdx % CLIENT_COLORS.length];
     // Resumo financeiro por carga
@@ -1790,9 +1810,9 @@ export default function CargoControl() {
                     )}
                   </span>
                 )}
-                {/* Código do cliente: SF001, GW001, etc. */}
+                {/* Código do cliente: SF 001, GW 001, etc. */}
                 <span className="flex items-center gap-1 font-mono font-bold text-[#0d4f2e] bg-[#0d4f2e]/10 px-1.5 py-0.5 rounded text-[10px]">
-                  {getClientCode(cargo.clientName, cargo.id)}
+                  {getClientCode(cargo.clientName, cargo.id, codeMap)}
                 </span>
                 {cargo.invoiceNumber && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{cargo.invoiceNumber}</span>}
                 {(cargo as any).locationName && <span className="flex items-center gap-1 text-emerald-600"><MapPin className="h-3 w-3" /><span translate="no">{(cargo as any).locationName}</span></span>}
@@ -2093,6 +2113,7 @@ export default function CargoControl() {
                     {/* Subheader com datas */}
                     {(() => {
                       let lastDate = "";
+                      const groupCodeMap = buildClientCodeMap(group.cargas);
                       return group.cargas.map((cargo) => {
                         const cargoDate = cargo.date ? safeDate(cargo.date).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }) : "Sem data";
                         const showDateHeader = cargoDate !== lastDate;
@@ -2108,7 +2129,7 @@ export default function CargoControl() {
                               </div>
                             )}
                             <div className="px-3 py-2">
-                              {renderCargoCard(cargo, groupIdx)}
+                              {renderCargoCard(cargo, groupIdx, groupCodeMap)}
                             </div>
                           </div>
                         );
@@ -2678,7 +2699,7 @@ export default function CargoControl() {
                   ["Volume Previsto", `${detailCargo.volumeM3 ? formatBR(parseFloat(detailCargo.volumeM3), 3) : '-'} m³`],
                   ["Peso Previsto", detailCargo.weightKg ? `${detailCargo.weightKg} kg` : "-"],
                   ["Nota Fiscal", detailCargo.invoiceNumber || "-"],
-                  ["Código Cliente", getClientCode(detailCargo.clientName, detailCargo.id)],
+                  ["Código Cliente", getClientCode(detailCargo.clientName, detailCargo.id, detailCodeMap)],
                   ["Status", detailCargo.status],
                   ["Peso Total (kg)", (detailCargo as any).weightOutKg ? `${(detailCargo as any).weightOutKg} kg` : "-"],
                   ["Peso Tara (kg)", (detailCargo as any).weightInKg ? `${(detailCargo as any).weightInKg} kg` : "-"],
