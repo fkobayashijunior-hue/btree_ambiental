@@ -259,6 +259,7 @@ __export(schema_exports, {
   replantingRecords: () => replantingRecords,
   rolePermissions: () => rolePermissions,
   sectors: () => sectors,
+  supplierContacts: () => supplierContacts,
   suppliers: () => suppliers,
   thirdPartyContractors: () => thirdPartyContractors,
   thirdPartyFuel: () => thirdPartyFuel,
@@ -268,7 +269,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, bigint, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, oilStock, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel, clientAdvances, clientAdvanceDeductions, geofences, freightTrips;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, oilStock, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, supplierContacts, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel, clientAdvances, clientAdvanceDeductions, geofences, freightTrips;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -1427,6 +1428,16 @@ var init_schema = __esm({
       active: tinyint().default(1).notNull(),
       sellerName: varchar("seller_name", { length: 255 }),
       pixKey: varchar("pix_key", { length: 255 })
+    });
+    supplierContacts = mysqlTable("supplier_contacts", {
+      id: int().autoincrement().primaryKey().notNull(),
+      supplierId: int("supplier_id").notNull().references(() => suppliers.id),
+      contactName: varchar("contact_name", { length: 255 }).notNull(),
+      role: varchar({ length: 100 }),
+      phone: varchar({ length: 50 }),
+      whatsapp: varchar({ length: 50 }),
+      email: varchar({ length: 255 }),
+      createdAt: bigint("created_at", { mode: "number" }).notNull()
     });
     quotations = mysqlTable("quotations", {
       id: int().autoincrement().primaryKey().notNull(),
@@ -12923,16 +12934,24 @@ var suppliersRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const query = db.select().from(suppliers);
+    let rows;
     if (input?.activeOnly !== false) {
-      return await query.where(eq32(suppliers.isActive, 1)).orderBy(suppliers.companyName);
+      rows = await query.where(eq32(suppliers.isActive, 1)).orderBy(suppliers.companyName);
+    } else {
+      rows = await query.orderBy(suppliers.companyName);
     }
-    return await query.orderBy(suppliers.companyName);
+    const allContacts = await db.select().from(supplierContacts);
+    return rows.map((s) => ({
+      ...s,
+      contacts: allContacts.filter((c) => c.supplierId === s.id)
+    }));
   }),
   getById: protectedProcedure.input(z33.object({ id: z33.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const [supplier] = await db.select().from(suppliers).where(eq32(suppliers.id, input.id));
     if (!supplier) throw new TRPCError22({ code: "NOT_FOUND" });
+    const contacts = await db.select().from(supplierContacts).where(eq32(supplierContacts.supplierId, input.id));
     const recentQuotations = await db.select({
       id: quotations.id,
       productName: quotations.productName,
@@ -12942,7 +12961,7 @@ var suppliersRouter = router({
       categoryId: quotations.categoryId,
       notes: quotations.notes
     }).from(quotations).where(eq32(quotations.supplierId, input.id)).orderBy(desc26(quotations.quotedAt)).limit(20);
-    return { ...supplier, recentQuotations };
+    return { ...supplier, contacts, recentQuotations };
   }),
   create: protectedProcedure.input(z33.object({
     name: z33.string().min(1).max(255),
@@ -13014,10 +13033,57 @@ var suppliersRouter = router({
     }).where(eq32(suppliers.id, id));
     return { success: true };
   }),
+  // Permanent delete
   delete: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(suppliers).set({ isActive: 0 }).where(eq32(suppliers.id, input.id));
+    await db.delete(supplierContacts).where(eq32(supplierContacts.supplierId, input.id));
+    await db.delete(suppliers).where(eq32(suppliers.id, input.id));
+    return { success: true };
+  }),
+  // --- Supplier Contacts ---
+  addContact: protectedProcedure.input(z33.object({
+    supplierId: z33.number(),
+    contactName: z33.string().min(1).max(255),
+    role: z33.string().optional(),
+    phone: z33.string().optional(),
+    whatsapp: z33.string().optional(),
+    email: z33.string().email().optional().or(z33.literal(""))
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    const [result] = await db.insert(supplierContacts).values({
+      supplierId: input.supplierId,
+      contactName: input.contactName,
+      role: input.role,
+      phone: input.phone,
+      whatsapp: input.whatsapp,
+      email: input.email || void 0,
+      createdAt: Date.now()
+    });
+    return { id: result.insertId };
+  }),
+  updateContact: protectedProcedure.input(z33.object({
+    id: z33.number(),
+    contactName: z33.string().min(1).max(255),
+    role: z33.string().optional(),
+    phone: z33.string().optional(),
+    whatsapp: z33.string().optional(),
+    email: z33.string().email().optional().or(z33.literal(""))
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    const { id, ...rest } = input;
+    await db.update(supplierContacts).set({
+      ...rest,
+      email: rest.email || void 0
+    }).where(eq32(supplierContacts.id, id));
+    return { success: true };
+  }),
+  deleteContact: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(supplierContacts).where(eq32(supplierContacts.id, input.id));
     return { success: true };
   }),
   syncFromQuotationResponses: protectedProcedure.mutation(async ({ ctx }) => {

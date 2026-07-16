@@ -1315,6 +1315,19 @@ export const suppliers = mysqlTable("suppliers", {
 export type Supplier = typeof suppliers.$inferSelect;
 export type InsertSupplier = typeof suppliers.$inferInsert;
 
+export const supplierContacts = mysqlTable("supplier_contacts", {
+  id: int().autoincrement().primaryKey().notNull(),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id),
+  contactName: varchar("contact_name", { length: 255 }).notNull(),
+  role: varchar({ length: 100 }),
+  phone: varchar({ length: 50 }),
+  whatsapp: varchar({ length: 50 }),
+  email: varchar({ length: 255 }),
+  createdAt: bigint("created_at", { mode: 'number' }).notNull(),
+});
+export type SupplierContact = typeof supplierContacts.$inferSelect;
+export type InsertSupplierContact = typeof supplierContacts.$inferInsert;
+
 export const quotations = mysqlTable("quotations", {
   id: int().autoincrement().primaryKey().notNull(),
   supplierId: int("supplier_id").notNull().references(() => suppliers.id),
