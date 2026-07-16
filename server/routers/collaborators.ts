@@ -385,6 +385,18 @@ export const collaboratorsRouter = router({
       return records;
     }),
 
+  // Toggle ativo/inativo
+  toggleActive: protectedProcedure
+    .input(z.object({ id: z.number(), active: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.update(collaborators)
+        .set({ active: input.active ? 1 : 0 })
+        .where(eq(collaborators.id, input.id));
+      return { success: true };
+    }),
+
   // Buscar todos os descritores faciais (para reconhecimento)
   getMyPhoto: protectedProcedure
     .query(async ({ ctx }) => {

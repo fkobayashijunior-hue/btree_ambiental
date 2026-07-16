@@ -2906,6 +2906,13 @@ var collaboratorsRouter = router({
     const records = await baseQuery.orderBy(desc(biometricAttendance.checkInTime));
     return records;
   }),
+  // Toggle ativo/inativo
+  toggleActive: protectedProcedure.input(z2.object({ id: z2.number(), active: z2.boolean() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.update(collaborators).set({ active: input.active ? 1 : 0 }).where(eq2(collaborators.id, input.id));
+    return { success: true };
+  }),
   // Buscar todos os descritores faciais (para reconhecimento)
   getMyPhoto: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();

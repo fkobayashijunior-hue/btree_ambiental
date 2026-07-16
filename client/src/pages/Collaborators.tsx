@@ -204,6 +204,13 @@ export default function Collaborators() {
   // Query de clientes para seletor de local de trabalho
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
 
+  const toggleActiveMutation = trpc.collaborators.toggleActive.useMutation({
+    onSuccess: () => {
+      utils.collaborators.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const openEdit = (c: any) => {
     setEditId(c.id);
     setForm({
@@ -302,12 +309,37 @@ export default function Collaborators() {
                     </div>
                   </div>
                 </div>
+                {/* Badge de status */}
+                <div className="mt-2">
+                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
+                    c.active === 1 || c.active === true
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-red-100 text-red-600"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      c.active === 1 || c.active === true ? "bg-emerald-500" : "bg-red-400"
+                    }`} />
+                    {c.active === 1 || c.active === true ? "Ativo" : "Inativo"}
+                  </span>
+                </div>
                 <div className="flex gap-2 mt-3 pt-3 border-t">
                   <Button
                     variant="outline" size="sm" className="flex-1 text-xs"
                     onClick={() => openEdit(c)}
                   >
                     Editar
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className={`text-xs px-2 ${
+                      c.active === 1 || c.active === true
+                        ? "text-red-600 border-red-200 hover:bg-red-50"
+                        : "text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                    }`}
+                    onClick={() => toggleActiveMutation.mutate({ id: c.id, active: !(c.active === 1 || c.active === true) })}
+                    disabled={toggleActiveMutation.isPending}
+                    title={c.active === 1 || c.active === true ? "Inativar" : "Ativar"}
+                  >
+                    {c.active === 1 || c.active === true ? "Inativar" : "Ativar"}
                   </Button>
                   <Button
                     size="sm" className="flex-1 gap-1 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
