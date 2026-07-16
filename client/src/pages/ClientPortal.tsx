@@ -737,12 +737,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 const kg = parseFloat(l.weightNetKg || l.weightOutKg || '0');
                 return sum + (kg / 1000) * pricePerTon;
               }, 0);
-              const advances = data.advances || [];
-              const valorPago = advances.reduce((sum: number, a: any) => {
-                const total = parseFloat(a.totalAmount || a.amount || '0');
-                const saldo = parseFloat(a.balanceRemaining || '0');
-                return sum + Math.max(0, total - saldo);
-              }, 0);
+              // Valor pago = soma dos fechamentos semanais com status 'pago'
+              const weeklyClosings = data.weeklyClosings || [];
+              const valorPago = weeklyClosings
+                .filter((c: any) => c.status === 'pago')
+                .reduce((sum: number, c: any) => sum + parseFloat(c.totalAmount || '0'), 0);
               const valorAReceber = Math.max(0, valorTotalEntregues - valorPago);
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -954,6 +953,8 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                       </button>
                     </div>
                     {(() => {
+                      const allLoadsForCodeSort = data?.loads || [];
+                      const codeMapForSort = buildClientCodeMap(allLoadsForCodeSort);
                       const filteredLoads = (data?.loads || []).filter((l: any) => {
                         const d = safeDate(l.deliveryDate || l.date);
                         if (dateFrom && d < new Date(dateFrom + 'T00:00:00')) return false;
@@ -961,6 +962,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                         // Ocultar cargas pagas quando toggle está desativado
                         if (!showPaidLoads && (l as any).paymentStatus === 'pago') return false;
                         return true;
+                      // Ordenar por código sequencial (mais recente primeiro = maior número primeiro)
+                      }).sort((a: any, b: any) => {
+                        const codeA = parseInt(codeMapForSort.get(a.id) || '0', 10);
+                        const codeB = parseInt(codeMapForSort.get(b.id) || '0', 10);
+                        return codeB - codeA;
                       });
                       if (filteredLoads.length === 0) return <EmptyState icon={<Truck />} text={dateFrom || dateTo ? "Nenhuma carga no período selecionado." : "Nenhuma carga registrada ainda."} />;
                       const totalValue = filteredLoads.reduce((sum: number, l: any) => sum + getLoadValue(l), 0);
@@ -976,7 +982,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                           )}
                           {(() => {
                               const allLoadsForCode = data?.loads || [];
-                              const codeMap = buildClientCodeMap(allLoadsForCode);
+                              const codeMap = codeMapForSort;
                               const clientName = data?.client?.name || '';
                               return filteredLoads.map((load: any) => (
                                 <CargoCard
