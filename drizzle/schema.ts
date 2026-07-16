@@ -1550,3 +1550,18 @@ export const freightTrips = mysqlTable("freight_trips", {
 });
 export type FreightTrip = typeof freightTrips.$inferSelect;
 export type InsertFreightTrip = typeof freightTrips.$inferInsert;
+
+// Tabela de preços por tipo de combustível e local por fornecedor
+// Permite que um fornecedor tenha diferentes preços para S10/S500 e múltiplos locais
+export const fuelSupplierPrices = mysqlTable("fuel_supplier_prices", {
+  id: int().autoincrement().notNull(),
+  supplierId: int("supplier_id").notNull(),
+  fuelType: mysqlEnum("fuel_type", ['diesel','diesel_s10','gasolina','etanol','gnv']).notNull(),
+  pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
+  locationType: mysqlEnum("location_type", ['simflor','astorga','postos']).notNull(),
+  isActive: tinyint("is_active").default(1).notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type FuelSupplierPrice = typeof fuelSupplierPrices.$inferSelect;
+export type InsertFuelSupplierPrice = typeof fuelSupplierPrices.$inferInsert;

@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Fuel, Edit, Trash2, ToggleLeft, ToggleRight, Building2, Phone, Mail, MapPin, User, History, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Fuel, Edit, Trash2, ToggleLeft, ToggleRight, Building2, Phone, Mail, MapPin, User, History, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -72,12 +72,21 @@ export default function FuelSuppliersPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySupplierId, setHistorySupplierId] = useState<number | null>(null);
   const [historySupplierName, setHistorySupplierName] = useState("");
+  // Gerenciamento de preços por local/tipo
+  const [pricesOpen, setPricesOpen] = useState(false);
+  const [pricesSupplierId, setPricesSupplierId] = useState<number | null>(null);
+  const [pricesSupplierName, setPricesSupplierName] = useState("");
+  const [newPriceForm, setNewPriceForm] = useState({ fuelType: 'diesel' as string, locationType: 'simflor' as string, pricePerLiter: '' });
 
   const utils = trpc.useUtils();
   const { data: suppliers = [] } = trpc.fuelSuppliers.list.useQuery();
   const { data: priceHistory = [] } = trpc.fuelSuppliers.priceHistory.useQuery(
     { supplierId: historySupplierId || undefined },
     { enabled: historyOpen && !!historySupplierId }
+  );
+  const { data: supplierPrices = [] } = trpc.fuelSuppliers.listSupplierPrices.useQuery(
+    { supplierId: pricesSupplierId || 0 },
+    { enabled: pricesOpen && !!pricesSupplierId }
   );
   const createMut = trpc.fuelSuppliers.create.useMutation({
     onSuccess: () => { utils.fuelSuppliers.list.invalidate(); utils.fuelSuppliers.listActive.invalidate(); setFormOpen(false); resetForm(); toast.success("Fornecedor cadastrado!"); },
@@ -89,6 +98,14 @@ export default function FuelSuppliersPage() {
   });
   const deleteMut = trpc.fuelSuppliers.delete.useMutation({
     onSuccess: () => { utils.fuelSuppliers.list.invalidate(); utils.fuelSuppliers.listActive.invalidate(); toast.success("Fornecedor removido!"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const upsertPriceMut = trpc.fuelSuppliers.upsertSupplierPrice.useMutation({
+    onSuccess: () => { utils.fuelSuppliers.listSupplierPrices.invalidate(); setNewPriceForm({ fuelType: 'diesel', locationType: 'simflor', pricePerLiter: '' }); toast.success("Preço salvo!"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deletePriceMut = trpc.fuelSuppliers.deleteSupplierPrice.useMutation({
+    onSuccess: () => { utils.fuelSuppliers.listSupplierPrices.invalidate(); toast.success("Preço removido!"); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -274,6 +291,9 @@ export default function FuelSuppliersPage() {
 
                 {/* Ações */}
                 <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" onClick={() => { setPricesSupplierId(s.id); setPricesSupplierName(s.name); setPricesOpen(true); }} title="Gerenciar Preços por Local/Tipo">
+                    <DollarSign className="h-4 w-4 text-emerald-600" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => { setHistorySupplierId(s.id); setHistorySupplierName(s.name); setHistoryOpen(true); }} title="Histórico de Preços">
                     <History className="h-4 w-4 text-blue-600" />
                   </Button>
@@ -441,6 +461,106 @@ export default function FuelSuppliersPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Preços por Local/Tipo Dialog */}
+      <Dialog open={pricesOpen} onOpenChange={setPricesOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-emerald-600" />
+              Preços por Local e Tipo
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">{pricesSupplierName}</p>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded p-2">
+              Configure preços diferentes por local de abastecimento e tipo de combustível. Isso permite que um fornecedor como UNIPETRO abasteça tanto SIMFLOR (S10) quanto Astorga (S500) com preços diferentes.
+            </p>
+            {/* Lista de preços cadastrados */}
+            {(supplierPrices as any[]).length === 0 ? (
+              <p className="text-center text-muted-foreground py-4 text-sm">Nenhum preço por local/tipo cadastrado ainda.</p>
+            ) : (
+              <div className="space-y-2">
+                {(supplierPrices as any[]).map((p: any) => (
+                  <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="border-blue-300 text-blue-700">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {LOCATION_TYPE_LABELS[p.locationType] || p.locationType}
+                      </Badge>
+                      <Badge variant="outline">{FUEL_TYPE_LABELS[p.fuelType] || p.fuelType}</Badge>
+                      <span className="font-bold text-green-700">R$ {parseFloat(p.pricePerLiter || '0').toFixed(2)}/L</span>
+                      {!p.isActive && <Badge variant="secondary">Inativo</Badge>}
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => { if (confirm('Remover este preço?')) deletePriceMut.mutate({ id: p.id }); }}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Formulário para adicionar/atualizar preço */}
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-semibold mb-3">Adicionar / Atualizar Preço</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium">Local</label>
+                  <Select value={newPriceForm.locationType} onValueChange={v => setNewPriceForm(f => ({ ...f, locationType: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="simflor">SIMFLOR</SelectItem>
+                      <SelectItem value="astorga">Sede Astorga</SelectItem>
+                      <SelectItem value="postos">Postos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Tipo de Combustível</label>
+                  <Select value={newPriceForm.fuelType} onValueChange={v => setNewPriceForm(f => ({ ...f, fuelType: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="diesel">Diesel S500</SelectItem>
+                      <SelectItem value="diesel_s10">Diesel S10</SelectItem>
+                      <SelectItem value="gasolina">Gasolina</SelectItem>
+                      <SelectItem value="etanol">Etanol</SelectItem>
+                      <SelectItem value="gnv">GNV</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className="text-xs font-medium">Preço por Litro (R$)</label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newPriceForm.pricePerLiter}
+                    onChange={e => setNewPriceForm(f => ({ ...f, pricePerLiter: e.target.value }))}
+                    placeholder="Ex: 5.89"
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={() => {
+                      if (!newPriceForm.pricePerLiter || !pricesSupplierId) { toast.error('Informe o preço'); return; }
+                      upsertPriceMut.mutate({
+                        supplierId: pricesSupplierId,
+                        fuelType: newPriceForm.fuelType as any,
+                        locationType: newPriceForm.locationType as any,
+                        pricePerLiter: newPriceForm.pricePerLiter,
+                        isActive: 1,
+                      });
+                    }}
+                    disabled={upsertPriceMut.isPending}
+                    className="bg-green-700 hover:bg-green-800"
+                  >
+                    Salvar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Price History Dialog */}
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>

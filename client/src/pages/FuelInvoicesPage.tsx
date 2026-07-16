@@ -601,7 +601,16 @@ export default function FuelInvoicesPage() {
                           <p className="font-bold text-lg text-gray-800">{formatCurrency(inv.totalAmount)}</p>
                         </div>
                       </div>
-                      <div className="text-xs text-gray-500 mt-1 flex gap-3 flex-wrap">
+                      <div className="text-xs text-gray-500 mt-1 flex gap-3 flex-wrap items-center">
+                        {inv.fuelType && (
+                          <span className={`font-semibold px-1.5 py-0.5 rounded text-xs ${
+                            inv.fuelType === 'diesel_s10' ? 'bg-blue-100 text-blue-700' :
+                            inv.fuelType === 'diesel' ? 'bg-amber-100 text-amber-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {inv.fuelType === 'diesel_s10' ? 'S10' : inv.fuelType === 'diesel' ? 'S500' : inv.fuelType}
+                          </span>
+                        )}
                         <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> NF {inv.invoiceNumber}</span>
                         <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Emissão: {formatDate(inv.invoiceDate)}</span>
                         <span className="flex items-center gap-1">

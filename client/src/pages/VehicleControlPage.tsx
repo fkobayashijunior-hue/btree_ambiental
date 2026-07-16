@@ -925,8 +925,15 @@ export default function VehicleControlPage() {
                       className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="">— Selecione o fornecedor —</option>
-                      {(fuelSuppliersList as any[]).filter((s: any) => s.locationType === form.fuelLocation).map((s: any) => (
-                        <option key={s.id} value={s.name}>{s.name} (R$ {parseFloat(s.pricePerLiter).toFixed(2)}/L)</option>
+                      {(fuelSuppliersList as any[]).filter((s: any) => {
+                        // Filtrar por local E por tipo de combustível
+                        // Fornecedores com locationType no cadastro principal
+                        if (s.locationType !== form.fuelLocation) return false;
+                        // Se o fornecedor tem fuelType definido, filtrar pelo tipo selecionado
+                        if (s.fuelType && s.fuelType !== form.fuelType) return false;
+                        return true;
+                      }).map((s: any) => (
+                        <option key={s.id} value={s.name}>{s.name} (R$ {parseFloat(s.pricePerLiter || '0').toFixed(2)}/L)</option>
                       ))}
                     </select>
                     {(fuelSuppliersList as any[]).filter((s: any) => s.locationType === form.fuelLocation).length === 0 && (
@@ -982,6 +989,8 @@ export default function VehicleControlPage() {
                     const supplier = (fuelSuppliersList as any[]).find((s: any) => s.name === form.supplier);
                     if (!supplier) return false;
                     if (inv.supplierId !== supplier.id) return false;
+                    // Filtrar por tipo de combustível se a NF tiver fuelType definido
+                    if (inv.fuelType && form.fuelType && inv.fuelType !== form.fuelType) return false;
                     if (!inv.liters) return true;
                     const remaining = parseFloat(inv.liters) - parseFloat(inv.litersUsed || '0');
                     return remaining > 0;
@@ -997,9 +1006,10 @@ export default function VehicleControlPage() {
                         <option value="">— Sem vinculação —</option>
                         {availableInvoices.map((inv: any) => {
                           const remaining = inv.liters ? Math.max(0, parseFloat(inv.liters) - parseFloat(inv.litersUsed || '0')).toFixed(0) : '?';
+                          const fuelLabel = inv.fuelType === 'diesel_s10' ? 'S10' : inv.fuelType === 'diesel' ? 'S500' : inv.fuelType || '';
                           return (
                             <option key={inv.id} value={inv.id}>
-                              NF {inv.invoiceNumber} — {inv.invoiceDate ? inv.invoiceDate.split('-').reverse().join('/') : ''} — Saldo: {remaining}L
+                              NF {inv.invoiceNumber}{fuelLabel ? ` [${fuelLabel}]` : ''} — {inv.invoiceDate ? inv.invoiceDate.split('-').reverse().join('/') : ''} — Saldo: {remaining}L
                             </option>
                           );
                         })}

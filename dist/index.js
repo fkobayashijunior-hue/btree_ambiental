@@ -229,6 +229,7 @@ __export(schema_exports, {
   fuelInvoices: () => fuelInvoices,
   fuelPriceHistory: () => fuelPriceHistory,
   fuelRecords: () => fuelRecords,
+  fuelSupplierPrices: () => fuelSupplierPrices,
   fuelSuppliers: () => fuelSuppliers,
   geofences: () => geofences,
   gpsDeviceLinks: () => gpsDeviceLinks,
@@ -269,7 +270,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, bigint, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, oilStock, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, supplierContacts, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel, clientAdvances, clientAdvanceDeductions, geofences, freightTrips;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, oilStock, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, supplierContacts, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel, clientAdvances, clientAdvanceDeductions, geofences, freightTrips, fuelSupplierPrices;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -1636,6 +1637,16 @@ var init_schema = __esm({
       // rota GPS em JSON
       scheduleCronTaskUid: varchar("schedule_cron_task_uid", { length: 255 }),
       // UID do heartbeat job
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    fuelSupplierPrices = mysqlTable("fuel_supplier_prices", {
+      id: int().autoincrement().notNull(),
+      supplierId: int("supplier_id").notNull(),
+      fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).notNull(),
+      pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
+      locationType: mysqlEnum("location_type", ["simflor", "astorga", "postos"]).notNull(),
+      isActive: tinyint("is_active").default(1).notNull(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
@@ -11855,13 +11866,79 @@ var fuelSuppliersRouter = router({
     if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).where(eq28(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
   }),
-  listActiveByLocation: protectedProcedure.input(z29.object({ locationType: z29.enum(["simflor", "astorga", "postos"]) })).query(async ({ ctx, input }) => {
+  listActiveByLocation: protectedProcedure.input(z29.object({
+    locationType: z29.enum(["simflor", "astorga", "postos"]),
+    fuelType: z29.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional()
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.fuelType) {
+      const priceRows = await db.select({
+        supplierId: fuelSupplierPrices.supplierId,
+        fuelType: fuelSupplierPrices.fuelType,
+        pricePerLiter: fuelSupplierPrices.pricePerLiter,
+        locationType: fuelSupplierPrices.locationType
+      }).from(fuelSupplierPrices).where(and18(
+        eq28(fuelSupplierPrices.locationType, input.locationType),
+        eq28(fuelSupplierPrices.fuelType, input.fuelType),
+        eq28(fuelSupplierPrices.isActive, 1)
+      ));
+      if (priceRows.length > 0) {
+        const supplierIds = priceRows.map((p) => p.supplierId);
+        const allSuppliers = await db.select().from(fuelSuppliers).where(eq28(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
+        return allSuppliers.filter((s) => supplierIds.includes(s.id)).map((s) => {
+          const price = priceRows.find((p) => p.supplierId === s.id);
+          return { ...s, pricePerLiter: price?.pricePerLiter || s.pricePerLiter, locationType: input.locationType };
+        });
+      }
+    }
     return db.select().from(fuelSuppliers).where(and18(
       eq28(fuelSuppliers.isActive, 1),
       eq28(fuelSuppliers.locationType, input.locationType)
     )).orderBy(fuelSuppliers.name);
+  }),
+  // ===== PREÇOS POR LOCAL/TIPO (nova tabela multi-preço) =====
+  listSupplierPrices: protectedProcedure.input(z29.object({ supplierId: z29.number() })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(fuelSupplierPrices).where(eq28(fuelSupplierPrices.supplierId, input.supplierId)).orderBy(fuelSupplierPrices.locationType, fuelSupplierPrices.fuelType);
+  }),
+  upsertSupplierPrice: protectedProcedure.input(z29.object({
+    supplierId: z29.number(),
+    fuelType: z29.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
+    locationType: z29.enum(["simflor", "astorga", "postos"]),
+    pricePerLiter: z29.string().min(1),
+    isActive: z29.number().optional().default(1)
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    const [existing] = await db.select().from(fuelSupplierPrices).where(and18(
+      eq28(fuelSupplierPrices.supplierId, input.supplierId),
+      eq28(fuelSupplierPrices.fuelType, input.fuelType),
+      eq28(fuelSupplierPrices.locationType, input.locationType)
+    ));
+    if (existing) {
+      await db.update(fuelSupplierPrices).set({
+        pricePerLiter: input.pricePerLiter,
+        isActive: input.isActive ?? 1
+      }).where(eq28(fuelSupplierPrices.id, existing.id));
+      return { success: true, id: existing.id };
+    } else {
+      await db.insert(fuelSupplierPrices).values({
+        supplierId: input.supplierId,
+        fuelType: input.fuelType,
+        locationType: input.locationType,
+        pricePerLiter: input.pricePerLiter,
+        isActive: input.isActive ?? 1
+      });
+      return { success: true };
+    }
+  }),
+  deleteSupplierPrice: protectedProcedure.input(z29.object({ id: z29.number() })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    await db.delete(fuelSupplierPrices).where(eq28(fuelSupplierPrices.id, input.id));
+    return { success: true };
   }),
   create: protectedProcedure.input(z29.object({
     name: z29.string().min(1),

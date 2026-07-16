@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { fuelSuppliers, fuelPriceHistory, fuelInvoices } from "../../drizzle/schema";
+import { fuelSuppliers, fuelPriceHistory, fuelInvoices, fuelSupplierPrices } from "../../drizzle/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
@@ -21,16 +21,102 @@ export const fuelSuppliersRouter = router({
   }),
 
   listActiveByLocation: protectedProcedure
-    .input(z.object({ locationType: z.enum(["simflor", "astorga", "postos"]) }))
+    .input(z.object({
+      locationType: z.enum(["simflor", "astorga", "postos"]),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
+    }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // First try new multi-price table
+      if (input.fuelType) {
+        const priceRows = await db.select({
+          supplierId: fuelSupplierPrices.supplierId,
+          fuelType: fuelSupplierPrices.fuelType,
+          pricePerLiter: fuelSupplierPrices.pricePerLiter,
+          locationType: fuelSupplierPrices.locationType,
+        }).from(fuelSupplierPrices)
+          .where(and(
+            eq(fuelSupplierPrices.locationType, input.locationType),
+            eq(fuelSupplierPrices.fuelType, input.fuelType),
+            eq(fuelSupplierPrices.isActive, 1)
+          ));
+        if (priceRows.length > 0) {
+          const supplierIds = priceRows.map(p => p.supplierId);
+          const allSuppliers = await db.select().from(fuelSuppliers)
+            .where(eq(fuelSuppliers.isActive, 1))
+            .orderBy(fuelSuppliers.name);
+          return allSuppliers
+            .filter(s => supplierIds.includes(s.id))
+            .map(s => {
+              const price = priceRows.find(p => p.supplierId === s.id);
+              return { ...s, pricePerLiter: price?.pricePerLiter || s.pricePerLiter, locationType: input.locationType };
+            });
+        }
+      }
+      // Fallback to old single-location/type per supplier
       return db.select().from(fuelSuppliers)
         .where(and(
           eq(fuelSuppliers.isActive, 1),
           eq(fuelSuppliers.locationType, input.locationType)
         ))
         .orderBy(fuelSuppliers.name);
+    }),
+
+  // ===== PREÇOS POR LOCAL/TIPO (nova tabela multi-preço) =====
+  listSupplierPrices: protectedProcedure
+    .input(z.object({ supplierId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(fuelSupplierPrices)
+        .where(eq(fuelSupplierPrices.supplierId, input.supplierId))
+        .orderBy(fuelSupplierPrices.locationType, fuelSupplierPrices.fuelType);
+    }),
+
+  upsertSupplierPrice: protectedProcedure
+    .input(z.object({
+      supplierId: z.number(),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
+      locationType: z.enum(["simflor", "astorga", "postos"]),
+      pricePerLiter: z.string().min(1),
+      isActive: z.number().optional().default(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Check if exists
+      const [existing] = await db.select().from(fuelSupplierPrices)
+        .where(and(
+          eq(fuelSupplierPrices.supplierId, input.supplierId),
+          eq(fuelSupplierPrices.fuelType, input.fuelType),
+          eq(fuelSupplierPrices.locationType, input.locationType)
+        ));
+      if (existing) {
+        await db.update(fuelSupplierPrices).set({
+          pricePerLiter: input.pricePerLiter,
+          isActive: input.isActive ?? 1,
+        }).where(eq(fuelSupplierPrices.id, existing.id));
+        return { success: true, id: existing.id };
+      } else {
+        await db.insert(fuelSupplierPrices).values({
+          supplierId: input.supplierId,
+          fuelType: input.fuelType,
+          locationType: input.locationType,
+          pricePerLiter: input.pricePerLiter,
+          isActive: input.isActive ?? 1,
+        });
+        return { success: true };
+      }
+    }),
+
+  deleteSupplierPrice: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(fuelSupplierPrices).where(eq(fuelSupplierPrices.id, input.id));
+      return { success: true };
     }),
 
   create: protectedProcedure
