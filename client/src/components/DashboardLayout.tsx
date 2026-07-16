@@ -674,12 +674,44 @@ function DashboardLayoutContent({
 
           <div className="flex items-center gap-1">
             <button
+              onClick={() => setLocation("/presencas")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Registrar Presença"
+            >
+              <CheckCircle2 className="h-4 w-4 text-blue-600" />
+              <span className="text-xs font-medium hidden sm:inline">Presenças</span>
+            </button>
+            <button
               onClick={() => setLocation("/cargas")}
               className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
               title="Nova Carga"
             >
               <Truck className="h-4 w-4 text-teal-600" />
               <span className="text-xs font-medium hidden sm:inline">Cargas</span>
+            </button>
+            <button
+              onClick={() => setLocation("/veiculos")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Abastecimento"
+            >
+              <Fuel className="h-4 w-4 text-yellow-600" />
+              <span className="text-xs font-medium hidden sm:inline">Abastec.</span>
+            </button>
+            <button
+              onClick={() => setLocation("/maquinas?tab=oleo")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Registrar Consumo de Óleo"
+            >
+              <Droplets className="h-4 w-4 text-cyan-600" />
+              <span className="text-xs font-medium hidden sm:inline">Óleo</span>
+            </button>
+            <button
+              onClick={() => setLocation("/maquinas?tab=manutencao")}
+              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Registrar Manutenção"
+            >
+              <Wrench className="h-4 w-4 text-orange-600" />
+              <span className="text-xs font-medium hidden sm:inline">Manut.</span>
             </button>
             <NotificationBell />
           </div>
