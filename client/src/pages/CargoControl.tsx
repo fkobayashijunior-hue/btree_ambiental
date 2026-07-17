@@ -2426,43 +2426,7 @@ export default function CargoControl() {
             {/* Carga */}
             <div className="space-y-3 p-3 bg-emerald-50 rounded-xl">
               <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2"><Package className="h-4 w-4" /> Informações da Carga</p>
-              <div>
-                <Label>Tipo de Madeira / Produto</Label>
-                {buyerProductPrices.length > 0 ? (
-                  <div className="space-y-1">
-                    <select
-                      value={form.woodType}
-                      onChange={e => {
-                        const selected = (buyerProductPrices as any[]).find(p => p.productName === e.target.value);
-                        setForm(f => ({ ...f, woodType: e.target.value }));
-                        // Futuramente: preencher preço automaticamente
-                      }}
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                    >
-                      <option value="">-- Selecione o tipo de produto --</option>
-                      {(buyerProductPrices as any[]).map((p: any) => (
-                        <option key={p.id} value={p.productName}>
-                          {p.productName} — R$ {parseFloat(p.pricePerUnit).toFixed(2)}/{p.unit === 'm3' ? 'm³' : p.unit === 'unidade' ? 'un' : 'ton'}
-                        </option>
-                      ))}
-                    </select>
-                    {form.woodType && (() => {
-                      const sel = (buyerProductPrices as any[]).find(p => p.productName === form.woodType);
-                      if (!sel) return null;
-                      return (
-                        <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-md">
-                          <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
-                          <span className="text-sm text-emerald-700">
-                            Valor: <strong>R$ {parseFloat(sel.pricePerUnit).toFixed(2)}/{sel.unit === 'm3' ? 'm³' : sel.unit === 'unidade' ? 'un' : 'ton'}</strong>
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <Input value={form.woodType} onChange={e => setForm(f => ({ ...f, woodType: e.target.value }))} placeholder="ex: Eucalipto, Pinus" />
-                )}
-              </div>
+              {/* Tipo de Madeira movido para depois do destino */}
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label>Altura (m) *</Label>
@@ -2614,8 +2578,43 @@ export default function CargoControl() {
                   </div>
                 );
               })()}
+              {/* Tipo de Madeira / Produto - select dinâmico para compradores */}
+              <div>
+                <Label>Tipo de Madeira / Produto</Label>
+                {buyerProductPrices.length > 0 ? (
+                  <div className="space-y-1">
+                    <select
+                      value={form.woodType}
+                      onChange={e => {
+                        setForm(f => ({ ...f, woodType: e.target.value }));
+                      }}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                    >
+                      <option value="">-- Selecione o tipo de produto --</option>
+                      {(buyerProductPrices as any[]).map((p: any) => (
+                        <option key={p.id} value={p.productName}>
+                          {p.productName} — R$ {parseFloat(p.pricePerUnit).toFixed(2)}/{p.unit === 'm3' ? 'm³' : p.unit === 'unidade' ? 'un' : 'ton'}
+                        </option>
+                      ))}
+                    </select>
+                    {form.woodType && (() => {
+                      const sel = (buyerProductPrices as any[]).find((p: any) => p.productName === form.woodType);
+                      if (!sel) return null;
+                      return (
+                        <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-md">
+                          <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
+                          <span className="text-sm text-emerald-700">
+                            Receita: <strong>R$ {parseFloat(sel.pricePerUnit).toFixed(2)}/{sel.unit === 'm3' ? 'm³' : sel.unit === 'unidade' ? 'un' : 'ton'}</strong>
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <Input value={form.woodType} onChange={e => setForm(f => ({ ...f, woodType: e.target.value }))} placeholder="ex: Eucalipto, Pinus" />
+                )}
+              </div>
             </div>
-
             {/* Local de Trabalho */}
             <WorkLocationSelect
               value={form.workLocationId}
