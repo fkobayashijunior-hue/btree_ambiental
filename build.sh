@@ -47,8 +47,24 @@ else
   # ── Copiar arquivos estáticos para public_html ──
   # O LiteSpeed/Passenger da Hostinger serve arquivos estáticos de public_html
   # Sem isso, rotas SPA como /login retornam 403 Forbidden
-  PUBLIC_HTML="$HOME/domains/btreeambiental.com/public_html"
-  if [ -d "$PUBLIC_HTML" ] && [ -d "dist/public" ]; then
+  # Detectar o caminho correto do public_html (varia conforme plano Hostinger)
+  PUBLIC_HTML=""
+  for CANDIDATE in \
+    "$HOME/htdocs/btreeambiental.com/public_html" \
+    "$HOME/htdocs/btreeambiental.com" \
+    "$HOME/domains/btreeambiental.com/public_html" \
+    "$HOME/public_html"; do
+    if [ -d "$CANDIDATE" ]; then
+      PUBLIC_HTML="$CANDIDATE"
+      echo "Diretório public_html encontrado: $PUBLIC_HTML"
+      break
+    fi
+  done
+  if [ -z "$PUBLIC_HTML" ]; then
+    echo "AVISO: Nenhum diretório public_html encontrado. Listando $HOME:"
+    ls "$HOME" 2>/dev/null || true
+  fi
+  if [ -n "$PUBLIC_HTML" ] && [ -d "dist/public" ]; then
     echo "Limpando assets antigos do public_html..."
     rm -rf "$PUBLIC_HTML/assets" 2>/dev/null || true
     rm -f "$PUBLIC_HTML/index.html" 2>/dev/null || true
