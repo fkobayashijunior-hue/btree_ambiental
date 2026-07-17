@@ -191,11 +191,23 @@ const plugins = [
       skipWaiting: true,
       clientsClaim: true,
       maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limit
-      globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+      // Não pré-cachear assets JS/CSS — eles têm hash no nome e o SW os detecta automaticamente
+      globPatterns: ["**/*.{html,ico,png,svg,woff2}"],
       navigateFallback: "/index.html",
-      navigateFallbackDenylist: [/^\/api\//, /LSCWP/, /nocache/, /\?.*=/],
+      navigateFallbackDenylist: [/^\/api\//, /LSCWP/, /nocache/, /\?.*=/, /\.js$/, /\.css$/],
       navigationPreload: false,
       runtimeCaching: [
+        {
+          // Assets JS/CSS com hash: NetworkFirst para sempre pegar versão nova
+          urlPattern: /\/assets\/.+\.(js|css)$/,
+          handler: "NetworkFirst",
+          options: {
+            cacheName: "assets-cache",
+            networkTimeoutSeconds: 10,
+            expiration: { maxEntries: 100, maxAgeSeconds: 7 * 24 * 60 * 60 },
+            cacheableResponse: { statuses: [0, 200] },
+          },
+        },
         {
           urlPattern: /^\/api\/trpc\//,
           handler: "NetworkFirst",
@@ -206,7 +218,6 @@ const plugins = [
             cacheableResponse: { statuses: [0, 200] },
           },
         },
-
       ],
     },
   }),

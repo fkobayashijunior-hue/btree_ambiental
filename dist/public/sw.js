@@ -81,9 +81,6 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "url": "sima-logo.png",
     "revision": "79bedf5dc9d215d2fad2e8f1212e6f84"
   }, {
-    "url": "registerSW.js",
-    "revision": "1872c500de691dce40960bb85481de07"
-  }, {
     "url": "pwa-collaborator-512.png",
     "revision": "66617113cb674ec16a9fefca7714cb50"
   }, {
@@ -119,33 +116,6 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
   }, {
     "url": "btree-logo-full.png",
     "revision": "34a190ddee9ab64ba00a5ddf6b4c4fc5"
-  }, {
-    "url": "assets/purify.es-BgtpMKW3.js",
-    "revision": null
-  }, {
-    "url": "assets/jspdf.es.min-Bls9gnWD.js",
-    "revision": null
-  }, {
-    "url": "assets/index.es-CpsQdGbt.js",
-    "revision": null
-  }, {
-    "url": "assets/index-C3NWvr3h.js",
-    "revision": null
-  }, {
-    "url": "assets/index-BeEYFBrk.css",
-    "revision": null
-  }, {
-    "url": "assets/html2canvas.esm-B0tyYwQk.js",
-    "revision": null
-  }, {
-    "url": "assets/exceljs.min-BcMN6wIb.js",
-    "revision": null
-  }, {
-    "url": "assets/FileSaver.min-DGbWo3jr.js",
-    "revision": null
-  }, {
-    "url": "__manus__/debug-collector.js",
-    "revision": "45b1e83bacf2dc3d3b20bb18b465abe0"
   }, {
     "url": "btree-logo-full.png",
     "revision": "34a190ddee9ab64ba00a5ddf6b4c4fc5"
@@ -188,8 +158,18 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
-    denylist: [/^\/api\//, /LSCWP/, /nocache/, /\?.*=/]
+    denylist: [/^\/api\//, /LSCWP/, /nocache/, /\?.*=/, /\.js$/, /\.css$/]
   }));
+  workbox.registerRoute(/\/assets\/.+\.(js|css)$/, new workbox.NetworkFirst({
+    "cacheName": "assets-cache",
+    "networkTimeoutSeconds": 10,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 100,
+      maxAgeSeconds: 604800
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
+  }), 'GET');
   workbox.registerRoute(/^\/api\/trpc\//, new workbox.NetworkFirst({
     "cacheName": "trpc-cache",
     "networkTimeoutSeconds": 5,
