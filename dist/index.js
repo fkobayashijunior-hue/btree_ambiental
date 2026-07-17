@@ -1727,8 +1727,13 @@ async function getDb() {
         const pool = mysql.createPool({
           ...config,
           waitForConnections: true,
-          connectionLimit: 10,
-          queueLimit: 0
+          connectionLimit: 3,
+          // Hostinger limita 500 conexões/hora — usar pool pequeno
+          queueLimit: 0,
+          idleTimeout: 6e4,
+          // Fechar conexões ociosas após 60s
+          enableKeepAlive: true,
+          keepAliveInitialDelay: 1e4
         });
         _db = drizzle(pool);
       }

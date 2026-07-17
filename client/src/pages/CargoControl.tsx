@@ -1723,6 +1723,29 @@ export default function CargoControl() {
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
   }, [loads]);
 
+  // Detectar dados incompletos em uma carga finalizada
+  const getCargoIncompleteReasons = (cargo: typeof loads[number]): string[] => {
+    const reasons: string[] = [];
+    // Destino: deve ser comprador cadastrado (destinationId >= 10000) ou ter destinationId de destino antigo
+    const destId = Number(cargo.destinationId || 0);
+    const isBuyerDest = destId >= 10000;
+    const isOldDest = destId > 0 && destId < 10000;
+    const isManualDest = !cargo.destinationId && !!cargo.destination;
+    if (isManualDest) reasons.push('Destino preenchido manualmente (cadastre um comprador)');
+    if (isOldDest) reasons.push('Destino usa cadastro antigo (vincule a um comprador)');
+    // Cliente: deve estar vinculado a cadastro
+    if (!cargo.clientId && cargo.clientName) reasons.push('Cliente preenchido manualmente (cadastre o cliente)');
+    if (!cargo.clientId && !cargo.clientName) reasons.push('Cliente não informado');
+    // Tipo de madeira: se não for vazio, verificar se está nos produtos do comprador
+    // (não temos lista aqui, então só alertamos se estiver vazio)
+    if (!cargo.woodType) reasons.push('Tipo de Madeira / Produto não informado');
+    // Pesos: para cargas entregues, peso líquido deve estar preenchido
+    if (cargo.status === 'entregue') {
+      if (!(cargo as any).weightNetKg && !(cargo as any).weightOutKg) reasons.push('Peso não informado');
+    }
+    return reasons;
+  };
+
   // Renderizar um card de carga individual
   const renderCargoCard = (cargo: typeof loads[number], colorIdx: number, codeMap?: Map<number, string>) => {
     const trackStep = TRACKING_STEPS.find(s => s.key === cargo.trackingStatus);
@@ -1736,6 +1759,9 @@ export default function CargoControl() {
     const loadValue = weightNet > 0 && pricePerTon > 0 ? (weightNet / 1000) * pricePerTon : 0;
     const remaining = Math.max(0, loadValue - totalDeducted);
     const isPago = (cargo as any).paymentStatus === 'pago';
+    // Badge de dados incompletos — apenas para admins, apenas em cargas entregues
+    const incompleteReasons = isAdmin && cargo.status === 'entregue' ? getCargoIncompleteReasons(cargo) : [];
+    const hasIncomplete = incompleteReasons.length > 0;
     return (
       <div key={cargo.id} className={`bg-white rounded-lg border border-gray-200 border-l-4 ${colors.border} hover:shadow-md transition-shadow`}>
         <div className="p-3 sm:p-4">
@@ -1760,6 +1786,20 @@ export default function CargoControl() {
                   </Badge>
                 )}
               </div>
+              {/* Badge de dados incompletos — apenas admins, cargas entregues */}
+              {hasIncomplete && (
+                <div className="mt-1.5 flex items-start gap-1.5 bg-amber-50 border border-amber-300 rounded-md px-2 py-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800">⚠️ Dados incompletos — corrija as informações</p>
+                    <ul className="mt-0.5 space-y-0.5">
+                      {incompleteReasons.map((r, i) => (
+                        <li key={i} className="text-[10px] text-amber-700">• {r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
               {/* Linha 2: Data, motorista, destino, volume */}
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
                 <span className="flex items-center gap-1 font-medium text-gray-700">
@@ -2499,9 +2539,14 @@ export default function CargoControl() {
                 </select>
               </div>
               {!form.clientId && (
-                <div>
+                <div className="space-y-1">
                   <Label>Cliente (manual)</Label>
                   <Input value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} placeholder="Nome do cliente" />
+                  {form.clientName && (
+                    <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Cliente manual — cadastre o cliente para integração completa
+                    </p>
+                  )}
                 </div>
               )}
               <div>
@@ -2538,46 +2583,23 @@ export default function CargoControl() {
                   }}
                   className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
                 >
-                  <option value={0}>Selecionar destino cadastrado...</option>
-                  {destinations.length > 0 && <optgroup label="Destinos">
-                    {[...destinations].sort((a, b) => {
-                      const countA = loads.filter(l => l.destinationId === a.id).length;
-                      const countB = loads.filter(l => l.destinationId === b.id).length;
-                      return countB - countA;
-                    }).map(d => {
-                      const dExt = d as typeof d & { pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null };
-                      const dWithNick = d as typeof d & { nickname?: string | null };
-                      return <option key={`dest-${d.id}`} value={d.id}>{dWithNick.nickname || d.name}</option>;
-                    })}
-                  </optgroup>}
-                  {buyersList.length > 0 && <optgroup label="💰 Compradores">
-                    {buyersList.map((b: any) => (
-                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.nickname || b.name}</option>
-                    ))}
-                  </optgroup>}
+                  <option value={0}>Selecionar comprador cadastrado...</option>
+                  {buyersList.map((b: any) => (
+                    <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.nickname || b.name}</option>
+                  ))}
                 </select>
               </div>
               {!form.destinationId && (
-                <div>
+                <div className="space-y-1">
                   <Label>Destino (manual)</Label>
                   <Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} placeholder="Nome do destino" />
+                  {form.destination && (
+                    <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Destino manual — cadastre o comprador para integração completa
+                    </p>
+                  )}
                 </div>
               )}
-              {/* Exibe o preço cadastrado no destino selecionado */}
-              {form.destinationId > 0 && form.destinationId < 10000 && (() => {
-                const dExt = destinations.find(d => d.id === form.destinationId) as (typeof destinations[number] & { pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null }) | undefined;
-                const price = dExt?.priceType === 'm3' ? dExt?.pricePerM3 : dExt?.pricePerTon;
-                const unit = dExt?.priceType === 'm3' ? 'm³' : 'ton';
-                if (!price) return null;
-                return (
-                  <div className="flex items-center gap-2 mt-1 p-2 bg-emerald-50 border border-emerald-200 rounded-md">
-                    <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span className="text-sm text-emerald-700">
-                      Valor cadastrado: <strong>R$ {price}/{unit}</strong>
-                    </span>
-                  </div>
-                );
-              })()}
               {/* Tipo de Madeira / Produto - select dinâmico para compradores */}
               <div>
                 <Label>Tipo de Madeira / Produto</Label>
@@ -2611,7 +2633,14 @@ export default function CargoControl() {
                     })()}
                   </div>
                 ) : (
-                  <Input value={form.woodType} onChange={e => setForm(f => ({ ...f, woodType: e.target.value }))} placeholder="ex: Eucalipto, Pinus" />
+                  <div className="space-y-1">
+                    <Input value={form.woodType} onChange={e => setForm(f => ({ ...f, woodType: e.target.value }))} placeholder="ex: Eucalipto, Pinus" />
+                    {form.woodType && (
+                      <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" /> Produto manual — selecione um comprador para usar produtos cadastrados
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
