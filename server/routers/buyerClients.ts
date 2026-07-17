@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { cargoDestinations, buyerPriceHistory, buyerPayments, financialEntries } from "../../drizzle/schema";
+import { cargoDestinations, buyerPriceHistory, buyerPayments, financialEntries, buyerProductPrices } from "../../drizzle/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 
 // ─── Helper: map cargo_destinations row to buyer-like shape ──────────────────
@@ -400,5 +400,73 @@ export const buyerClientsRouter = router({
         .where(eq(buyerPayments.buyerId, input.buyerId))
         .orderBy(desc(buyerPayments.id));
       return payments;
+    }),
+
+  // ─── Produtos/Preços por Comprador ──────────────────────────────────────────
+  listProductPrices: protectedProcedure
+    .input(z.object({ buyerId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(buyerProductPrices)
+        .where(and(eq(buyerProductPrices.buyerId, input.buyerId), eq(buyerProductPrices.isActive, 1)))
+        .orderBy(buyerProductPrices.productName);
+    }),
+
+  listActiveProductPricesByBuyer: protectedProcedure
+    .input(z.object({ buyerId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(buyerProductPrices)
+        .where(and(eq(buyerProductPrices.buyerId, input.buyerId), eq(buyerProductPrices.isActive, 1)))
+        .orderBy(buyerProductPrices.productName);
+    }),
+
+  addProductPrice: protectedProcedure
+    .input(z.object({
+      buyerId: z.number(),
+      productName: z.string().min(1),
+      unit: z.enum(['ton', 'm3', 'unidade']),
+      pricePerUnit: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.insert(buyerProductPrices).values({
+        buyerId: input.buyerId,
+        productName: input.productName,
+        unit: input.unit,
+        pricePerUnit: input.pricePerUnit,
+        isActive: 1,
+      });
+      return { success: true };
+    }),
+
+  updateProductPrice: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      productName: z.string().min(1),
+      unit: z.enum(['ton', 'm3', 'unidade']),
+      pricePerUnit: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(buyerProductPrices)
+        .set({ productName: input.productName, unit: input.unit, pricePerUnit: input.pricePerUnit })
+        .where(eq(buyerProductPrices.id, input.id));
+      return { success: true };
+    }),
+
+  deleteProductPrice: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(buyerProductPrices)
+        .set({ isActive: 0 })
+        .where(eq(buyerProductPrices.id, input.id));
+      return { success: true };
     }),
 });

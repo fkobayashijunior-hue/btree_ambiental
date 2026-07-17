@@ -189,6 +189,7 @@ __export(schema_exports, {
   buyerClients: () => buyerClients,
   buyerPayments: () => buyerPayments,
   buyerPriceHistory: () => buyerPriceHistory,
+  buyerProductPrices: () => buyerProductPrices,
   cargoDestinations: () => cargoDestinations,
   cargoLoads: () => cargoLoads,
   cargoShipments: () => cargoShipments,
@@ -270,7 +271,7 @@ __export(schema_exports, {
   vehicleRecords: () => vehicleRecords
 });
 import { mysqlTable, int, bigint, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, oilStock, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, supplierContacts, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel, clientAdvances, clientAdvanceDeductions, geofences, freightTrips, fuelSupplierPrices;
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, oilStock, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, supplierContacts, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel, clientAdvances, clientAdvanceDeductions, geofences, freightTrips, fuelSupplierPrices, buyerProductPrices;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -1652,6 +1653,19 @@ var init_schema = __esm({
       fuelType: mysqlEnum("fuel_type", ["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).notNull(),
       pricePerLiter: varchar("price_per_liter", { length: 20 }).notNull(),
       locationType: mysqlEnum("location_type", ["simflor", "astorga", "postos"]).notNull(),
+      isActive: tinyint("is_active").default(1).notNull(),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    });
+    buyerProductPrices = mysqlTable("buyer_product_prices", {
+      id: int().autoincrement().notNull(),
+      buyerId: int("buyer_id").notNull(),
+      // ID do cargo_destinations (isBuyer=1)
+      productName: varchar("product_name", { length: 100 }).notNull(),
+      // Ex: "Metrinho", "Metrão", "Lenha Eucalipto"
+      unit: mysqlEnum("unit", ["ton", "m3", "unidade"]).default("ton").notNull(),
+      pricePerUnit: varchar("price_per_unit", { length: 20 }).notNull(),
+      // Preço por unidade
       isActive: tinyint("is_active").default(1).notNull(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
@@ -11469,6 +11483,51 @@ var buyerClientsRouter = router({
     if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
     const payments = await db.select().from(buyerPayments).where(eq26(buyerPayments.buyerId, input.buyerId)).orderBy(desc21(buyerPayments.id));
     return payments;
+  }),
+  // ─── Produtos/Preços por Comprador ──────────────────────────────────────────
+  listProductPrices: protectedProcedure.input(z27.object({ buyerId: z27.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(buyerProductPrices).where(and17(eq26(buyerProductPrices.buyerId, input.buyerId), eq26(buyerProductPrices.isActive, 1))).orderBy(buyerProductPrices.productName);
+  }),
+  listActiveProductPricesByBuyer: protectedProcedure.input(z27.object({ buyerId: z27.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    return db.select().from(buyerProductPrices).where(and17(eq26(buyerProductPrices.buyerId, input.buyerId), eq26(buyerProductPrices.isActive, 1))).orderBy(buyerProductPrices.productName);
+  }),
+  addProductPrice: protectedProcedure.input(z27.object({
+    buyerId: z27.number(),
+    productName: z27.string().min(1),
+    unit: z27.enum(["ton", "m3", "unidade"]),
+    pricePerUnit: z27.string().min(1)
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    await db.insert(buyerProductPrices).values({
+      buyerId: input.buyerId,
+      productName: input.productName,
+      unit: input.unit,
+      pricePerUnit: input.pricePerUnit,
+      isActive: 1
+    });
+    return { success: true };
+  }),
+  updateProductPrice: protectedProcedure.input(z27.object({
+    id: z27.number(),
+    productName: z27.string().min(1),
+    unit: z27.enum(["ton", "m3", "unidade"]),
+    pricePerUnit: z27.string().min(1)
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(buyerProductPrices).set({ productName: input.productName, unit: input.unit, pricePerUnit: input.pricePerUnit }).where(eq26(buyerProductPrices.id, input.id));
+    return { success: true };
+  }),
+  deleteProductPrice: protectedProcedure.input(z27.object({ id: z27.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(buyerProductPrices).set({ isActive: 0 }).where(eq26(buyerProductPrices.id, input.id));
+    return { success: true };
   })
 });
 

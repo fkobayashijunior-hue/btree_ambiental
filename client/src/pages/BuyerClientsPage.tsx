@@ -280,8 +280,16 @@ function BuyerDetail({ id, onBack }: { id: number; onBack: () => void }) {
   const { data: buyer, refetch } = trpc.buyerClients.getById.useQuery({ id });
   const [priceOpen, setPriceOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [productPriceOpen, setProductPriceOpen] = useState(false);
+  const [productPriceForm, setProductPriceForm] = useState({ productName: "", unit: "ton" as 'ton'|'m3'|'unidade', pricePerUnit: "" });
+  const [editProductPriceId, setEditProductPriceId] = useState<number|null>(null);
   const [priceForm, setPriceForm] = useState({ product: "", pricePerUnit: "", unit: "ton", validFrom: "", validUntil: "", notes: "" });
   const [paymentForm, setPaymentForm] = useState({ amount: "", paymentDate: "", paymentMethod: "", invoiceNumber: "", notes: "", status: "pendente" as const });
+
+  const { data: productPrices = [], refetch: refetchProductPrices } = trpc.buyerClients.listProductPrices.useQuery({ buyerId: id });
+  const addProductPriceMut = trpc.buyerClients.addProductPrice.useMutation({ onSuccess: () => { refetchProductPrices(); setProductPriceOpen(false); setProductPriceForm({ productName: "", unit: "ton", pricePerUnit: "" }); setEditProductPriceId(null); toast.success("Produto/preço salvo!"); } });
+  const updateProductPriceMut = trpc.buyerClients.updateProductPrice.useMutation({ onSuccess: () => { refetchProductPrices(); setProductPriceOpen(false); setProductPriceForm({ productName: "", unit: "ton", pricePerUnit: "" }); setEditProductPriceId(null); toast.success("Produto/preço atualizado!"); } });
+  const deleteProductPriceMut = trpc.buyerClients.deleteProductPrice.useMutation({ onSuccess: () => { refetchProductPrices(); toast.success("Produto removido!"); } });
 
   const addPriceMut = trpc.buyerClients.addPrice.useMutation({ onSuccess: () => { refetch(); setPriceOpen(false); setPriceForm({ product: "", pricePerUnit: "", unit: "ton", validFrom: "", validUntil: "", notes: "" }); toast.success("Preço registrado!"); } });
   const deletePriceMut = trpc.buyerClients.deletePrice.useMutation({ onSuccess: () => { refetch(); toast.success("Preço removido!"); } });
@@ -314,6 +322,32 @@ function BuyerDetail({ id, onBack }: { id: number; onBack: () => void }) {
           {buyer.product && <div className="text-emerald-600 font-medium">Produto: {buyer.product}</div>}
           {buyer.paymentMethod && <div>Pagamento: {buyer.paymentMethod}</div>}
           {buyer.notes && <div className="col-span-full text-gray-500 italic">{buyer.notes}</div>}
+        </CardContent>
+      </Card>
+
+      {/* Produtos/Preços por Tipo */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2"><DollarSign className="h-5 w-5 text-emerald-600" /> Produtos e Preços por Tipo</CardTitle>
+            <Button size="sm" onClick={() => { setEditProductPriceId(null); setProductPriceForm({ productName: "", unit: "ton", pricePerUnit: "" }); setProductPriceOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4 mr-1" /> Produto</Button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Cadastre os tipos de produto e preços — eles aparecem na seleção ao registrar cargas.</p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {productPrices.length === 0 && <p className="text-sm text-gray-400 text-center py-4">Nenhum produto cadastrado. Adicione os tipos de produto com preço.</p>}
+          {(productPrices as any[]).map((p: any) => (
+            <div key={p.id} className="flex items-center justify-between border rounded-lg p-3 bg-emerald-50">
+              <div>
+                <p className="font-semibold text-sm text-emerald-800">{p.productName}</p>
+                <p className="text-lg font-bold text-emerald-700">R$ {parseFloat(p.pricePerUnit).toFixed(2)}<span className="text-sm font-normal text-gray-500">/{p.unit === 'm3' ? 'm³' : p.unit === 'unidade' ? 'un' : 'ton'}</span></p>
+              </div>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" onClick={() => { setEditProductPriceId(p.id); setProductPriceForm({ productName: p.productName, unit: p.unit, pricePerUnit: p.pricePerUnit }); setProductPriceOpen(true); }}><Edit className="h-4 w-4 text-blue-400" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => deleteProductPriceMut.mutate({ id: p.id })}><Trash2 className="h-4 w-4 text-red-400" /></Button>
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
@@ -376,6 +410,46 @@ function BuyerDetail({ id, onBack }: { id: number; onBack: () => void }) {
           ))}
         </CardContent>
       </Card>
+
+      {/* Product Price Sheet */}
+      <Sheet open={productPriceOpen} onOpenChange={setProductPriceOpen}>
+        <SheetContent className="overflow-y-auto">
+          <SheetHeader><SheetTitle>{editProductPriceId ? 'Editar Produto/Preço' : 'Novo Produto/Preço'}</SheetTitle></SheetHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium">Nome do Produto *</label>
+              <Input placeholder="Ex: Metrinho, Metrão, Lenha Eucalipto" value={productPriceForm.productName} onChange={e => setProductPriceForm(f => ({ ...f, productName: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">Preço (R$) *</label>
+                <Input type="number" step="0.01" placeholder="0.00" value={productPriceForm.pricePerUnit} onChange={e => setProductPriceForm(f => ({ ...f, pricePerUnit: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Unidade</label>
+                <Select value={productPriceForm.unit} onValueChange={v => setProductPriceForm(f => ({ ...f, unit: v as 'ton'|'m3'|'unidade' }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ton">Tonelada (ton)</SelectItem>
+                    <SelectItem value="m3">Metro Cúbico (m³)</SelectItem>
+                    <SelectItem value="unidade">Unidade</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button onClick={() => {
+              if (!productPriceForm.productName || !productPriceForm.pricePerUnit) return toast.error('Preencha nome e preço');
+              if (editProductPriceId) {
+                updateProductPriceMut.mutate({ id: editProductPriceId, ...productPriceForm });
+              } else {
+                addProductPriceMut.mutate({ buyerId: id, ...productPriceForm });
+              }
+            }} className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={addProductPriceMut.isPending || updateProductPriceMut.isPending}>
+              {editProductPriceId ? 'Salvar Alterações' : 'Adicionar Produto'}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Price Sheet */}
       <Sheet open={priceOpen} onOpenChange={setPriceOpen}>

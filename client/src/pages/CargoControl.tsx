@@ -1309,6 +1309,12 @@ export default function CargoControl() {
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
   const { data: buyersList = [] } = trpc.buyerClients.listActive.useQuery();
   const { data: contractorsList = [] } = trpc.thirdPartyContractors.listActive.useQuery();
+  // Buscar produtos/preços do comprador selecionado (quando destinationId >= 10000)
+  const selectedBuyerId = form.destinationId >= 10000 ? form.destinationId - 10000 : null;
+  const { data: buyerProductPrices = [] } = trpc.buyerClients.listActiveProductPricesByBuyer.useQuery(
+    { buyerId: selectedBuyerId! },
+    { enabled: selectedBuyerId !== null && selectedBuyerId > 0 }
+  );
   const { data: detailCargo } = trpc.cargoLoads.getById.useQuery(
     { id: detailId! }, { enabled: !!detailId }
   );
@@ -1761,7 +1767,18 @@ export default function CargoControl() {
                   {cargo.date ? safeDate(cargo.date).toLocaleDateString("pt-BR") : "-"}
                 </span>
                 {cargo.driverName && <span className="flex items-center gap-1"><User className="h-3 w-3" /><span translate="no">{cargo.driverName}</span></span>}
-                {cargo.destination && <span className="flex items-center gap-1 font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded"><MapPin className="h-3 w-3" /><span translate="no">{cargo.destination}</span></span>}
+                {(() => {
+                  // Buscar apelido pelo destinationId
+                  let displayDest = cargo.destination;
+                  if (cargo.destinationId) {
+                    const destId = Number(cargo.destinationId);
+                    const destObj = destinations.find((d: any) => d.id === destId) as any;
+                    const buyerObj = buyersList.find((b: any) => b.id === destId) as any;
+                    if (destObj) displayDest = destObj.nickname || destObj.name || cargo.destination;
+                    else if (buyerObj) displayDest = buyerObj.nickname || buyerObj.name || cargo.destination;
+                  }
+                  return displayDest ? <span className="flex items-center gap-1 font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded"><MapPin className="h-3 w-3" /><span translate="no">{displayDest}</span></span> : null;
+                })()}
                 <span className="flex items-center gap-1 font-semibold text-emerald-700">
                   <Package className="h-3 w-3" />{cargo.volumeM3 ? formatBR(parseFloat(cargo.volumeM3), 3) : '0'} m³{(cargo as any).weightNetKg ? ` · ${formatBR(parseFloat((cargo as any).weightNetKg), 0)} kg (líq.)` : cargo.weightKg ? ` · ${formatBR(parseFloat(cargo.weightKg), 0)} kg` : ""}
                 </span>
@@ -2410,8 +2427,41 @@ export default function CargoControl() {
             <div className="space-y-3 p-3 bg-emerald-50 rounded-xl">
               <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2"><Package className="h-4 w-4" /> Informações da Carga</p>
               <div>
-                <Label>Tipo de Madeira</Label>
-                <Input value={form.woodType} onChange={e => setForm(f => ({ ...f, woodType: e.target.value }))} placeholder="ex: Eucalipto, Pinus" />
+                <Label>Tipo de Madeira / Produto</Label>
+                {buyerProductPrices.length > 0 ? (
+                  <div className="space-y-1">
+                    <select
+                      value={form.woodType}
+                      onChange={e => {
+                        const selected = (buyerProductPrices as any[]).find(p => p.productName === e.target.value);
+                        setForm(f => ({ ...f, woodType: e.target.value }));
+                        // Futuramente: preencher preço automaticamente
+                      }}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                    >
+                      <option value="">-- Selecione o tipo de produto --</option>
+                      {(buyerProductPrices as any[]).map((p: any) => (
+                        <option key={p.id} value={p.productName}>
+                          {p.productName} — R$ {parseFloat(p.pricePerUnit).toFixed(2)}/{p.unit === 'm3' ? 'm³' : p.unit === 'unidade' ? 'un' : 'ton'}
+                        </option>
+                      ))}
+                    </select>
+                    {form.woodType && (() => {
+                      const sel = (buyerProductPrices as any[]).find(p => p.productName === form.woodType);
+                      if (!sel) return null;
+                      return (
+                        <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-md">
+                          <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
+                          <span className="text-sm text-emerald-700">
+                            Valor: <strong>R$ {parseFloat(sel.pricePerUnit).toFixed(2)}/{sel.unit === 'm3' ? 'm³' : sel.unit === 'unidade' ? 'un' : 'ton'}</strong>
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <Input value={form.woodType} onChange={e => setForm(f => ({ ...f, woodType: e.target.value }))} placeholder="ex: Eucalipto, Pinus" />
+                )}
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
@@ -2532,14 +2582,13 @@ export default function CargoControl() {
                       return countB - countA;
                     }).map(d => {
                       const dExt = d as typeof d & { pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null };
-                      const priceLabel = dExt.priceType === 'm3' && dExt.pricePerM3 ? ` (R$${dExt.pricePerM3}/m³)` : dExt.pricePerTon ? ` (R$${dExt.pricePerTon}/ton)` : '';
                       const dWithNick = d as typeof d & { nickname?: string | null };
-                      return <option key={`dest-${d.id}`} value={d.id}>{dWithNick.nickname || d.name}{priceLabel}</option>;
+                      return <option key={`dest-${d.id}`} value={d.id}>{dWithNick.nickname || d.name}</option>;
                     })}
                   </optgroup>}
                   {buyersList.length > 0 && <optgroup label="💰 Compradores">
                     {buyersList.map((b: any) => (
-                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.nickname || b.name}{b.pricePerUnit ? ` (R$${b.pricePerUnit}/${b.unit === 'm3' ? 'm³' : 'ton'})` : ''}</option>
+                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.nickname || b.name}</option>
                     ))}
                   </optgroup>}
                 </select>

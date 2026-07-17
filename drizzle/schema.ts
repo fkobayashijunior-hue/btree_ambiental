@@ -1567,3 +1567,19 @@ export const fuelSupplierPrices = mysqlTable("fuel_supplier_prices", {
 });
 export type FuelSupplierPrice = typeof fuelSupplierPrices.$inferSelect;
 export type InsertFuelSupplierPrice = typeof fuelSupplierPrices.$inferInsert;
+
+// Tabela de produtos/preços por comprador
+// Permite cadastrar múltiplos tipos de produto com preços diferentes para cada comprador
+// Ex: SONOCO → Metrinho (ton, R$280), Metrão (ton, R$320)
+export const buyerProductPrices = mysqlTable("buyer_product_prices", {
+  id: int().autoincrement().notNull(),
+  buyerId: int("buyer_id").notNull(), // ID do cargo_destinations (isBuyer=1)
+  productName: varchar("product_name", { length: 100 }).notNull(), // Ex: "Metrinho", "Metrão", "Lenha Eucalipto"
+  unit: mysqlEnum("unit", ['ton','m3','unidade']).default('ton').notNull(),
+  pricePerUnit: varchar("price_per_unit", { length: 20 }).notNull(), // Preço por unidade
+  isActive: tinyint("is_active").default(1).notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type BuyerProductPrice = typeof buyerProductPrices.$inferSelect;
+export type InsertBuyerProductPrice = typeof buyerProductPrices.$inferInsert;
