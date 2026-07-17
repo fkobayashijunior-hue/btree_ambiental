@@ -11927,6 +11927,29 @@ var fuelSuppliersRouter = router({
     return Object.values(groups).sort((a, b) => a.location.localeCompare(b.location));
   }),
   // ===== PREÇOS POR LOCAL/TIPO (nova tabela multi-preço) =====
+  getPriceBySupplierAndType: protectedProcedure.input(z29.object({
+    supplierId: z29.number(),
+    fuelType: z29.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
+    locationType: z29.enum(["simflor", "astorga", "postos"]).optional()
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    const conditions = [
+      eq28(fuelSupplierPrices.supplierId, input.supplierId),
+      eq28(fuelSupplierPrices.fuelType, input.fuelType),
+      eq28(fuelSupplierPrices.isActive, 1)
+    ];
+    if (input.locationType) {
+      conditions.push(eq28(fuelSupplierPrices.locationType, input.locationType));
+    }
+    const priceRows = await db.select().from(fuelSupplierPrices).where(and18(...conditions));
+    if (priceRows.length > 0) {
+      return { pricePerLiter: priceRows[0].pricePerLiter, source: "price_table" };
+    }
+    const [supplier] = await db.select().from(fuelSuppliers).where(eq28(fuelSuppliers.id, input.supplierId));
+    if (supplier) return { pricePerLiter: supplier.pricePerLiter, source: "supplier_default" };
+    return null;
+  }),
   listSupplierPrices: protectedProcedure.input(z29.object({ supplierId: z29.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });

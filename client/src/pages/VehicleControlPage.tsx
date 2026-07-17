@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,25 @@ export default function VehicleControlPage() {
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
   const { data: fuelSuppliersList = [] } = trpc.fuelSuppliers.listActive.useQuery();
   const { data: invoicesList = [] } = trpc.fuelSuppliers.listInvoices.useQuery();
+
+  // Buscar preço correto quando fornecedor + tipo + local mudam
+  const selectedSupplierId = useMemo(() => {
+    const s = (fuelSuppliersList as any[]).find((s: any) => s.name === form.supplier);
+    return s?.id ?? null;
+  }, [form.supplier, fuelSuppliersList]);
+  const { data: supplierPriceData } = trpc.fuelSuppliers.getPriceBySupplierAndType.useQuery(
+    { supplierId: selectedSupplierId!, fuelType: form.fuelType as any, locationType: form.fuelLocation as any },
+    { enabled: !!selectedSupplierId && form.recordType === 'abastecimento' }
+  );
+
+  // Atualizar pricePerLiter automaticamente quando supplierPriceData mudar (reativo a tipo+local+fornecedor)
+  useEffect(() => {
+    if (supplierPriceData?.pricePerLiter && form.supplier && form.fuelLocation !== 'postos') {
+      const price = supplierPriceData.pricePerLiter;
+      const total = (parseFloat(form.liters.replace(',', '.')) || 0) * (parseFloat(price) || 0);
+      setForm(f => ({ ...f, pricePerLiter: price, fuelCost: total > 0 ? total.toFixed(2) : f.fuelCost }));
+    }
+  }, [supplierPriceData, form.supplier, form.fuelLocation]);
 
   // Auto-selecionar local de trabalho padrão para usuários vinculados a um cliente
   const defaultWorkLocationId = useMemo(() => {
@@ -917,7 +936,8 @@ export default function VehicleControlPage() {
                       onChange={e => {
                         const selected = (fuelSuppliersList as any[]).find((s: any) => s.name === e.target.value);
                         if (selected) {
-                          setForm(f => ({ ...f, supplier: selected.name, pricePerLiter: selected.pricePerLiter }));
+                          // Preço será atualizado via supplierPriceData (useQuery reativo)
+                          setForm(f => ({ ...f, supplier: selected.name, pricePerLiter: '' }));
                         } else {
                           setForm(f => ({ ...f, supplier: e.target.value, pricePerLiter: '' }));
                         }
@@ -925,19 +945,12 @@ export default function VehicleControlPage() {
                       className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="">— Selecione o fornecedor —</option>
-                      {(fuelSuppliersList as any[]).filter((s: any) => {
-                        // Filtrar por local E por tipo de combustível
-                        // Fornecedores com locationType no cadastro principal
-                        if (s.locationType !== form.fuelLocation) return false;
-                        // Se o fornecedor tem fuelType definido, filtrar pelo tipo selecionado
-                        if (s.fuelType && s.fuelType !== form.fuelType) return false;
-                        return true;
-                      }).map((s: any) => (
-                        <option key={s.id} value={s.name}>{s.name} (R$ {parseFloat(s.pricePerLiter || '0').toFixed(2)}/L)</option>
+                      {(fuelSuppliersList as any[]).map((s: any) => (
+                        <option key={s.id} value={s.name}>{s.name}{s.tradeName ? ` (${s.tradeName})` : ''}</option>
                       ))}
                     </select>
-                    {(fuelSuppliersList as any[]).filter((s: any) => s.locationType === form.fuelLocation).length === 0 && (
-                      <p className="text-xs text-amber-600 mt-1">Nenhum fornecedor ativo cadastrado para este local. Cadastre em Fornecedores de Combustível.</p>
+                    {(fuelSuppliersList as any[]).length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">Nenhum fornecedor ativo cadastrado. Cadastre em Combustível → Fornecedores.</p>
                     )}
                   </div>
                 ) : (
@@ -959,8 +972,12 @@ export default function VehicleControlPage() {
                   }} placeholder="0,00" readOnly={form.fuelLocation !== 'postos' && form.supplier !== ''} className={form.fuelLocation !== 'postos' && form.supplier !== '' ? 'bg-green-50 font-semibold' : ''} /></div>
                   <div><Label>Total R$</Label><Input value={form.fuelCost} onChange={e => setForm(f => ({ ...f, fuelCost: e.target.value }))} placeholder="0,00" className="bg-gray-50 font-semibold" readOnly /></div>
                 </div>
-                {form.fuelLocation !== 'postos' && form.supplier && (
-                  <p className="text-xs text-green-700">Preço preenchido automaticamente pelo cadastro do fornecedor.</p>
+                {form.fuelLocation !== 'postos' && form.supplier && supplierPriceData && (
+                  <p className="text-xs text-green-700">
+                    {supplierPriceData.source === 'price_table'
+                      ? `Preço específico para ${form.fuelType === 'diesel_s10' ? 'S10' : 'S500'} em ${form.fuelLocation === 'simflor' ? 'SIMFLOR' : form.fuelLocation === 'astorga' ? 'Astorga' : 'Postos'}.`
+                      : 'Preço padrão do fornecedor (sem preço específico cadastrado para este tipo/local).'}
+                  </p>
                 )}
                 {/* Tipo de serviço e valor cobrado para terceirizados */}
                 <div>

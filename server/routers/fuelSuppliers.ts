@@ -109,6 +109,34 @@ export const fuelSuppliersRouter = router({
     }),
 
   // ===== PREÇOS POR LOCAL/TIPO (nova tabela multi-preço) =====
+  getPriceBySupplierAndType: protectedProcedure
+    .input(z.object({
+      supplierId: z.number(),
+      fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
+      locationType: z.enum(["simflor", "astorga", "postos"]).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Busca o preço na tabela fuel_supplier_prices filtrando por fornecedor + tipo + local (se informado)
+      const conditions: any[] = [
+        eq(fuelSupplierPrices.supplierId, input.supplierId),
+        eq(fuelSupplierPrices.fuelType, input.fuelType),
+        eq(fuelSupplierPrices.isActive, 1),
+      ];
+      if (input.locationType) {
+        conditions.push(eq(fuelSupplierPrices.locationType, input.locationType));
+      }
+      const priceRows = await db.select().from(fuelSupplierPrices).where(and(...conditions));
+      if (priceRows.length > 0) {
+        return { pricePerLiter: priceRows[0].pricePerLiter, source: 'price_table' };
+      }
+      // Fallback: preço do cadastro principal do fornecedor
+      const [supplier] = await db.select().from(fuelSuppliers).where(eq(fuelSuppliers.id, input.supplierId));
+      if (supplier) return { pricePerLiter: supplier.pricePerLiter, source: 'supplier_default' };
+      return null;
+    }),
+
   listSupplierPrices: protectedProcedure
     .input(z.object({ supplierId: z.number() }))
     .query(async ({ ctx, input }) => {
