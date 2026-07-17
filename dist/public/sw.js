@@ -106,7 +106,10 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "index.html",
-    "revision": "87573e25af3f2798c1147224440cf6e4"
+    "revision": "e23e02a1190425042929dda7a7d86aa7"
+  }, {
+    "url": "icon-btree-512v2.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
   }, {
     "url": "icon-btree-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
@@ -117,6 +120,18 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "url": "btree-logo-full.png",
     "revision": "34a190ddee9ab64ba00a5ddf6b4c4fc5"
   }, {
+    "url": "apple-touch-icon.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "apple-touch-icon-precomposed.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "apple-touch-icon-precomposed.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
+    "url": "apple-touch-icon.png",
+    "revision": "3f504e54ba9aa202f0bca871a50df851"
+  }, {
     "url": "btree-logo-full.png",
     "revision": "34a190ddee9ab64ba00a5ddf6b4c4fc5"
   }, {
@@ -124,6 +139,9 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "icon-btree-512.png",
+    "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
+  }, {
+    "url": "icon-btree-512v2.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
   }, {
     "url": "pwa-192-v3.png",
