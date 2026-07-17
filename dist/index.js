@@ -308,6 +308,9 @@ var init_schema = __esm({
     cargoDestinations = mysqlTable("cargo_destinations", {
       id: int().autoincrement().notNull(),
       name: varchar({ length: 255 }).notNull(),
+      // Nome/Razão Social
+      nickname: varchar({ length: 100 }),
+      // Apelido (nome curto para exibição)
       address: varchar({ length: 500 }),
       city: varchar({ length: 100 }),
       state: varchar({ length: 2 }),
@@ -1198,6 +1201,9 @@ var init_schema = __esm({
     buyerClients = mysqlTable("buyer_clients", {
       id: int().primaryKey().autoincrement(),
       name: varchar({ length: 255 }).notNull(),
+      // Nome/Razão Social
+      nickname: varchar({ length: 100 }),
+      // Apelido (nome curto para exibição)
       cnpjCpf: varchar("cnpj_cpf", { length: 30 }),
       inscricaoEstadual: varchar("inscricao_estadual", { length: 30 }),
       phone: varchar({ length: 30 }),
@@ -11128,6 +11134,9 @@ function destToBuyer(d) {
   return {
     id: d.id,
     name: d.name,
+    // Nome/Razão Social
+    nickname: d.nickname ?? null,
+    // Apelido (nome curto)
     cnpjCpf: d.cnpjCpf,
     inscricaoEstadual: d.inscricaoEstadual,
     phone: d.phone,
@@ -11178,6 +11187,8 @@ var buyerClientsRouter = router({
   }),
   create: protectedProcedure.input(z27.object({
     name: z27.string().min(1),
+    nickname: z27.string().optional(),
+    // Apelido
     cnpjCpf: z27.string().optional(),
     inscricaoEstadual: z27.string().optional(),
     phone: z27.string().optional(),
@@ -11205,9 +11216,9 @@ var buyerClientsRouter = router({
     const isBuyer = input.isBuyer ?? 0;
     await db.execute(sql15`
         INSERT INTO cargo_destinations 
-          (name, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, created_by, created_at)
+          (name, nickname, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, created_by, created_at)
         VALUES 
-          (${input.name}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.notes || null},
+          (${input.name}, ${input.nickname || null}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.notes || null},
            ${isBuyer}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null},
            ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null},
            ${input.pricePerUnit || null}, ${unit}, ${pricePerTon}, ${pricePerM3}, ${priceType}, ${ctx.user.id}, ${now})
@@ -11217,6 +11228,8 @@ var buyerClientsRouter = router({
   update: protectedProcedure.input(z27.object({
     id: z27.number(),
     name: z27.string().min(1),
+    nickname: z27.string().optional(),
+    // Apelido
     cnpjCpf: z27.string().optional(),
     inscricaoEstadual: z27.string().optional(),
     phone: z27.string().optional(),
@@ -11243,6 +11256,7 @@ var buyerClientsRouter = router({
     const priceType = unit === "m3" ? "m3" : "ton";
     await db.update(cargoDestinations).set({
       name: input.name,
+      nickname: input.nickname || null,
       cnpjCpf: input.cnpjCpf || null,
       inscricaoEstadual: input.inscricaoEstadual || null,
       phone: input.phone || null,

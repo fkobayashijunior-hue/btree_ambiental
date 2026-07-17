@@ -2508,7 +2508,7 @@ export default function CargoControl() {
                       setForm(f => ({
                         ...f,
                         destinationId: id,
-                        destination: buyer?.name || f.destination,
+                        destination: buyer?.nickname || buyer?.name || f.destination,
                       }));
                     } else {
                       const dest = destinations.find(d => d.id === id) as (typeof destinations[number] & { clientId?: number | null; pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null }) | undefined;
@@ -2533,12 +2533,13 @@ export default function CargoControl() {
                     }).map(d => {
                       const dExt = d as typeof d & { pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null };
                       const priceLabel = dExt.priceType === 'm3' && dExt.pricePerM3 ? ` (R$${dExt.pricePerM3}/m³)` : dExt.pricePerTon ? ` (R$${dExt.pricePerTon}/ton)` : '';
-                      return <option key={`dest-${d.id}`} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}{priceLabel}</option>;
+                      const dWithNick = d as typeof d & { nickname?: string | null };
+                      return <option key={`dest-${d.id}`} value={d.id}>{dWithNick.nickname || d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}{priceLabel}</option>;
                     })}
                   </optgroup>}
                   {buyersList.length > 0 && <optgroup label="💰 Compradores">
                     {buyersList.map((b: any) => (
-                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.name}{b.pricePerUnit ? ` (R$${b.pricePerUnit}/${b.unit === 'm3' ? 'm³' : 'ton'})` : ''}{b.city ? ` — ${b.city}/${b.state}` : ''}</option>
+                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.nickname || b.name}{b.pricePerUnit ? ` (R$${b.pricePerUnit}/${b.unit === 'm3' ? 'm³' : 'ton'})` : ''}{b.city ? ` — ${b.city}/${b.state}` : ''}</option>
                     ))}
                   </optgroup>}
                 </select>

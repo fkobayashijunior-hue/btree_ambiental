@@ -36,7 +36,8 @@ export const biometricAttendance = mysqlTable("biometric_attendance", {
 
 export const cargoDestinations = mysqlTable("cargo_destinations", {
 	id: int().autoincrement().notNull(),
-	name: varchar({ length: 255 }).notNull(),
+	name: varchar({ length: 255 }).notNull(), // Nome/Razão Social
+	nickname: varchar({ length: 100 }), // Apelido (nome curto para exibição)
 	address: varchar({ length: 500 }),
 	city: varchar({ length: 100 }),
 	state: varchar({ length: 2 }),
@@ -1034,7 +1035,8 @@ export type InsertClientDocument = typeof clientDocuments.$inferInsert;
 // ===== CLIENTES DESTINO (COMPRADORES DE LENHA/MADEIRA) =====
 export const buyerClients = mysqlTable("buyer_clients", {
   id: int().primaryKey().autoincrement(),
-  name: varchar({ length: 255 }).notNull(),
+  name: varchar({ length: 255 }).notNull(), // Nome/Razão Social
+  nickname: varchar({ length: 100 }), // Apelido (nome curto para exibição)
   cnpjCpf: varchar("cnpj_cpf", { length: 30 }),
   inscricaoEstadual: varchar("inscricao_estadual", { length: 30 }),
   phone: varchar({ length: 30 }),

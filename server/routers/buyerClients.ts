@@ -9,7 +9,8 @@ import { eq, desc, sql, and } from "drizzle-orm";
 function destToBuyer(d: typeof cargoDestinations.$inferSelect) {
   return {
     id: d.id,
-    name: d.name,
+    name: d.name, // Nome/Razão Social
+    nickname: d.nickname ?? null, // Apelido (nome curto)
     cnpjCpf: d.cnpjCpf,
     inscricaoEstadual: d.inscricaoEstadual,
     phone: d.phone,
@@ -74,6 +75,7 @@ export const buyerClientsRouter = router({
   create: protectedProcedure
     .input(z.object({
       name: z.string().min(1),
+      nickname: z.string().optional(), // Apelido
       cnpjCpf: z.string().optional(),
       inscricaoEstadual: z.string().optional(),
       phone: z.string().optional(),
@@ -102,9 +104,9 @@ export const buyerClientsRouter = router({
       const isBuyer = input.isBuyer ?? 0; // default: destino normal
       await db.execute(sql`
         INSERT INTO cargo_destinations 
-          (name, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, created_by, created_at)
+          (name, nickname, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, created_by, created_at)
         VALUES 
-          (${input.name}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.notes || null},
+          (${input.name}, ${input.nickname || null}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.notes || null},
            ${isBuyer}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null},
            ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null},
            ${input.pricePerUnit || null}, ${unit}, ${pricePerTon}, ${pricePerM3}, ${priceType}, ${ctx.user.id}, ${now})
@@ -116,6 +118,7 @@ export const buyerClientsRouter = router({
     .input(z.object({
       id: z.number(),
       name: z.string().min(1),
+      nickname: z.string().optional(), // Apelido
       cnpjCpf: z.string().optional(),
       inscricaoEstadual: z.string().optional(),
       phone: z.string().optional(),
@@ -142,6 +145,7 @@ export const buyerClientsRouter = router({
       const priceType = unit === 'm3' ? 'm3' : 'ton';
       await db.update(cargoDestinations).set({
         name: input.name,
+        nickname: input.nickname || null,
         cnpjCpf: input.cnpjCpf || null,
         inscricaoEstadual: input.inscricaoEstadual || null,
         phone: input.phone || null,

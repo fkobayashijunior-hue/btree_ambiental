@@ -18,7 +18,7 @@ export default function BuyerClientsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [form, setForm] = useState({
-    name: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "",
+    name: "", nickname: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "",
     address: "", city: "", state: "", cep: "", contactPerson: "",
     product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: ""
   });
@@ -46,14 +46,14 @@ export default function BuyerClientsPage() {
   });
 
   function resetForm() {
-    setForm({ name: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "", address: "", city: "", state: "", cep: "", contactPerson: "", product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "" });
+    setForm({ name: "", nickname: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "", address: "", city: "", state: "", cep: "", contactPerson: "", product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "" });
     setIsBuyerForm(false);
     setEditId(null);
   }
 
   function openEdit(b: any) {
     setForm({
-      name: b.name || "", cnpjCpf: b.cnpjCpf || "", inscricaoEstadual: b.inscricaoEstadual || "",
+      name: b.name || "", nickname: b.nickname || "", cnpjCpf: b.cnpjCpf || "", inscricaoEstadual: b.inscricaoEstadual || "",
       phone: b.phone || "", email: b.email || "", address: b.address || "",
       city: b.city || "", state: b.state || "", cep: b.cep || "",
       contactPerson: b.contactPerson || "", product: b.product || "",
@@ -110,10 +110,11 @@ export default function BuyerClientsPage() {
               <div className="flex items-start justify-between">
                 <div className="space-y-1 flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-gray-800 truncate">{b.name}</h3>
+                    <h3 className="font-semibold text-gray-800 truncate">{b.nickname || b.name}</h3>
                     {b.isBuyer === 1 && <Badge className="bg-emerald-100 text-emerald-800 text-xs">Comprador</Badge>}
                     {b.active === 0 && <Badge variant="secondary">Inativo</Badge>}
                   </div>
+                  {b.nickname && <p className="text-xs text-gray-400 truncate">{b.name}</p>}
                   {b.cnpjCpf && <p className="text-xs text-gray-500">{b.cnpjCpf}</p>}
                   <div className="flex flex-wrap gap-3 text-xs text-gray-500">
                     {b.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{b.phone}</span>}
@@ -177,7 +178,11 @@ export default function BuyerClientsPage() {
             </div>
             <div>
               <label className="text-sm font-medium">Nome / Razão Social *</label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+              <Input placeholder="Ex: Rebnic Mauá da Serra" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Apelido <span className="text-gray-400 font-normal">(nome curto para exibição nas cargas)</span></label>
+              <Input placeholder="Ex: Rebnic Mauá" value={form.nickname} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
