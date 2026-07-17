@@ -227,11 +227,34 @@ export default function FuelSuppliersPage() {
         {(filteredSuppliers as any[]).map((s: any) => (
           <Card key={s.id} className={`${!s.isActive ? 'opacity-60 border-dashed' : ''} transition-all`}>
             <CardContent className="py-4">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-2">
+                {/* Linha de nome + ações */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold text-base sm:text-lg break-words leading-tight">{s.name}</span>
+                  </div>
+                  {/* Ações - sempre visíveis no topo direito */}
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setPricesSupplierId(s.id); setPricesSupplierName(s.name); setPricesOpen(true); }} title="Gerenciar Preços por Local/Tipo">
+                      <DollarSign className="h-4 w-4 text-emerald-600" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setHistorySupplierId(s.id); setHistorySupplierName(s.name); setHistoryOpen(true); }} title="Histórico de Preços">
+                      <History className="h-4 w-4 text-blue-600" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleActive(s)} title={s.isActive ? "Desativar" : "Ativar"}>
+                      {s.isActive ? <ToggleRight className="h-5 w-5 text-green-600" /> : <ToggleLeft className="h-5 w-5 text-gray-400" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(s)} title="Editar">
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => { if (confirm("Remover fornecedor permanentemente?")) deleteMut.mutate({ id: s.id }); }} title="Excluir">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
                 <div className="flex-1 min-w-0">
-                  {/* Nome e badges */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-lg truncate">{s.name}</span>
+                  {/* Badges */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <Badge variant={s.isActive ? "default" : "secondary"} className={s.isActive ? "bg-green-600" : ""}>
                       {s.isActive ? "Ativo" : "Inativo"}
                     </Badge>
@@ -306,18 +329,18 @@ export default function FuelSuppliersPage() {
 
                   {/* Resumo de entregas expandido */}
                   {expandedSupplierId === s.id && (
-                    <div className="mt-2 border rounded-lg overflow-hidden">
+                    <div className="mt-2 border rounded-lg overflow-x-auto">
                       {supplierSummary.length === 0 ? (
                         <div className="px-3 py-2 text-xs text-muted-foreground italic">Nenhuma nota fiscal cadastrada ainda para este fornecedor.</div>
                       ) : (
-                        <table className="w-full text-xs">
+                        <table className="min-w-[480px] w-full text-xs">
                           <thead className="bg-gray-50">
                             <tr>
                               <th className="text-left px-3 py-1.5 font-semibold text-gray-600">Local de Entrega</th>
                               <th className="text-left px-3 py-1.5 font-semibold text-gray-600">Tipo</th>
                               <th className="text-right px-3 py-1.5 font-semibold text-gray-600">Total Litros</th>
                               <th className="text-right px-3 py-1.5 font-semibold text-gray-600">Total Valor</th>
-                              <th className="text-right px-3 py-1.5 font-semibold text-gray-600">Último Preço/L</th>
+                              <th className="text-right px-3 py-1.5 font-semibold text-gray-600">Último Valor/L</th>
                               <th className="text-right px-3 py-1.5 font-semibold text-gray-600">NFs</th>
                             </tr>
                           </thead>
@@ -347,24 +370,6 @@ export default function FuelSuppliersPage() {
                   )}
                 </div>
 
-                {/* Ações */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="icon" onClick={() => { setPricesSupplierId(s.id); setPricesSupplierName(s.name); setPricesOpen(true); }} title="Gerenciar Preços por Local/Tipo">
-                    <DollarSign className="h-4 w-4 text-emerald-600" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => { setHistorySupplierId(s.id); setHistorySupplierName(s.name); setHistoryOpen(true); }} title="Histórico de Preços">
-                    <History className="h-4 w-4 text-blue-600" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => toggleActive(s)} title={s.isActive ? "Desativar" : "Ativar"}>
-                    {s.isActive ? <ToggleRight className="h-5 w-5 text-green-600" /> : <ToggleLeft className="h-5 w-5 text-gray-400" />}
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(s)}>
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => { if (confirm("Remover fornecedor permanentemente?")) deleteMut.mutate({ id: s.id }); }}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
-                </div>
               </div>
             </CardContent>
           </Card>

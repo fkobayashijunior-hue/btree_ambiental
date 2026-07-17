@@ -11910,11 +11910,17 @@ var fuelSuppliersRouter = router({
       if (!groups[key]) {
         groups[key] = { location: loc, fuelType: fuel, totalLiters: 0, totalAmount: 0, invoiceCount: 0, lastPrice: null, lastInvoiceDate: null };
       }
-      groups[key].totalLiters += parseFloat(inv.liters || "0");
-      groups[key].totalAmount += parseFloat(inv.totalAmount || "0");
+      const liters = parseFloat(inv.liters || "0");
+      const amount = parseFloat(inv.totalAmount || "0");
+      groups[key].totalLiters += liters;
+      groups[key].totalAmount += amount;
       groups[key].invoiceCount += 1;
-      if (!groups[key].lastPrice && inv.pricePerLiter) {
-        groups[key].lastPrice = inv.pricePerLiter;
+      if (!groups[key].lastPrice) {
+        if (liters > 0 && amount > 0) {
+          groups[key].lastPrice = (amount / liters).toFixed(4);
+        } else if (inv.pricePerLiter) {
+          groups[key].lastPrice = inv.pricePerLiter;
+        }
         groups[key].lastInvoiceDate = inv.invoiceDate;
       }
     }

@@ -907,39 +907,44 @@ export default function AttendanceList() {
                     {expandedCollab[collab.id] && (
                       <div className="mt-3 pt-3 border-t space-y-2">
                         {collab.days.map((d: any) => (
-                          <div key={d.id} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
-                            <div>
-                              <span className="font-medium text-gray-700">{fmtDateFull(d.date)}</span>
-                              {d.activity && <span className="text-gray-400 ml-2 text-xs">· {d.activity}</span>}
-                              {d.locationName && (
-                                <span className="text-gray-400 ml-2 text-xs flex items-center gap-1 inline-flex">
-                                  <MapPin className="h-3 w-3" /> {d.locationName}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {canSeeFinancial && <span className="font-semibold text-emerald-700">R$ {parseFloat(d.dailyValue || "0").toFixed(2)}</span>}
-                              {canSeeFinancial && (
-                                <button
-                                  className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
-                                    d.paymentStatus === "pago"
-                                      ? "bg-green-100 text-green-700 hover:bg-yellow-100 hover:text-yellow-700"
-                                      : "bg-yellow-100 text-yellow-700 hover:bg-green-100 hover:text-green-700"
-                                  }`}
-                                  onClick={() => markPaidMutation.mutate({ id: d.id, paid: d.paymentStatus !== "pago" })}
-                                >
-                                  {d.paymentStatus === "pago" ? "✓ Pago" : "Pendente"}
-                                </button>
-                              )}
-                              {isAdmin && (
-                                <button
-                                  className="text-xs px-2 py-0.5 rounded-full font-medium text-red-500 hover:bg-red-50 border border-red-200 flex items-center gap-1 transition-colors"
-                                  onClick={() => handleDelete(d.id, collab.name)}
-                                  title="Excluir presença"
-                                >
-                                  <Trash2 className="h-3 w-3" /> Excluir
-                                </button>
-                              )}
+                          <div key={d.id} className="text-sm bg-gray-50 rounded-lg px-3 py-2">
+                            <div className="flex items-start justify-between gap-2">
+                              {/* Esquerda: data + local */}
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium text-gray-700">{fmtDateFull(d.date)}</span>
+                                {d.activity && <span className="text-gray-400 ml-1 text-xs">· {d.activity}</span>}
+                                {d.locationName && (
+                                  <div className="text-gray-400 text-xs flex items-center gap-1 mt-0.5">
+                                    <MapPin className="h-3 w-3 shrink-0" />
+                                    <span>{d.locationName}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Direita: valor + status + excluir */}
+                              <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                                {canSeeFinancial && <span className="font-semibold text-emerald-700 whitespace-nowrap">R$ {parseFloat(d.dailyValue || "0").toFixed(2)}</span>}
+                                {canSeeFinancial && (
+                                  <button
+                                    className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+                                      d.paymentStatus === "pago"
+                                        ? "bg-green-100 text-green-700 hover:bg-yellow-100 hover:text-yellow-700"
+                                        : "bg-yellow-100 text-yellow-700 hover:bg-green-100 hover:text-green-700"
+                                    }`}
+                                    onClick={() => markPaidMutation.mutate({ id: d.id, paid: d.paymentStatus !== "pago" })}
+                                  >
+                                    {d.paymentStatus === "pago" ? "✓ Pago" : "Pendente"}
+                                  </button>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    className="text-xs px-2 py-0.5 rounded-full font-medium text-red-500 hover:bg-red-50 border border-red-200 flex items-center gap-1 transition-colors whitespace-nowrap"
+                                    onClick={() => handleDelete(d.id, collab.name)}
+                                    title="Excluir presença"
+                                  >
+                                    <Trash2 className="h-3 w-3" /> Excluir
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}

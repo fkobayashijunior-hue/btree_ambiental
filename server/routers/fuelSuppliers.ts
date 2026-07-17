@@ -81,6 +81,7 @@ export const fuelSuppliersRouter = router({
         lastPrice: string | null;
         lastInvoiceDate: string | null;
       }> = {};
+      // invoices já vem ordenado por desc(id), então o primeiro de cada grupo é o mais recente
       for (const inv of invoices) {
         const loc = inv.deliveryLocation || 'Não informado';
         const fuel = inv.fuelType || 'diesel';
@@ -88,11 +89,19 @@ export const fuelSuppliersRouter = router({
         if (!groups[key]) {
           groups[key] = { location: loc, fuelType: fuel, totalLiters: 0, totalAmount: 0, invoiceCount: 0, lastPrice: null, lastInvoiceDate: null };
         }
-        groups[key].totalLiters += parseFloat(inv.liters || '0');
-        groups[key].totalAmount += parseFloat(inv.totalAmount || '0');
+        const liters = parseFloat(inv.liters || '0');
+        const amount = parseFloat(inv.totalAmount || '0');
+        groups[key].totalLiters += liters;
+        groups[key].totalAmount += amount;
         groups[key].invoiceCount += 1;
-        if (!groups[key].lastPrice && inv.pricePerLiter) {
-          groups[key].lastPrice = inv.pricePerLiter;
+        // Pegar o preço/L da NF mais recente (primeira do grupo, pois está em desc)
+        if (!groups[key].lastPrice) {
+          // Calcular preço desta NF: totalAmount / liters
+          if (liters > 0 && amount > 0) {
+            groups[key].lastPrice = (amount / liters).toFixed(4);
+          } else if (inv.pricePerLiter) {
+            groups[key].lastPrice = inv.pricePerLiter;
+          }
           groups[key].lastInvoiceDate = inv.invoiceDate;
         }
       }
