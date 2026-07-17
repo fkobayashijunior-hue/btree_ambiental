@@ -1761,7 +1761,7 @@ export default function CargoControl() {
                   {cargo.date ? safeDate(cargo.date).toLocaleDateString("pt-BR") : "-"}
                 </span>
                 {cargo.driverName && <span className="flex items-center gap-1"><User className="h-3 w-3" /><span translate="no">{cargo.driverName}</span></span>}
-                {cargo.destination && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /><span translate="no">{cargo.destination}</span></span>}
+                {cargo.destination && <span className="flex items-center gap-1 font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded"><MapPin className="h-3 w-3" /><span translate="no">{cargo.destination}</span></span>}
                 <span className="flex items-center gap-1 font-semibold text-emerald-700">
                   <Package className="h-3 w-3" />{cargo.volumeM3 ? formatBR(parseFloat(cargo.volumeM3), 3) : '0'} m³{(cargo as any).weightNetKg ? ` · ${formatBR(parseFloat((cargo as any).weightNetKg), 0)} kg (líq.)` : cargo.weightKg ? ` · ${formatBR(parseFloat(cargo.weightKg), 0)} kg` : ""}
                 </span>
@@ -2534,12 +2534,12 @@ export default function CargoControl() {
                       const dExt = d as typeof d & { pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null };
                       const priceLabel = dExt.priceType === 'm3' && dExt.pricePerM3 ? ` (R$${dExt.pricePerM3}/m³)` : dExt.pricePerTon ? ` (R$${dExt.pricePerTon}/ton)` : '';
                       const dWithNick = d as typeof d & { nickname?: string | null };
-                      return <option key={`dest-${d.id}`} value={d.id}>{dWithNick.nickname || d.name}{d.city ? ` — ${d.city}/${d.state}` : ""}{priceLabel}</option>;
+                      return <option key={`dest-${d.id}`} value={d.id}>{dWithNick.nickname || d.name}{priceLabel}</option>;
                     })}
                   </optgroup>}
                   {buyersList.length > 0 && <optgroup label="💰 Compradores">
                     {buyersList.map((b: any) => (
-                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.nickname || b.name}{b.pricePerUnit ? ` (R$${b.pricePerUnit}/${b.unit === 'm3' ? 'm³' : 'ton'})` : ''}{b.city ? ` — ${b.city}/${b.state}` : ''}</option>
+                      <option key={`buyer-${b.id}`} value={10000 + b.id}>{b.nickname || b.name}{b.pricePerUnit ? ` (R$${b.pricePerUnit}/${b.unit === 'm3' ? 'm³' : 'ton'})` : ''}</option>
                     ))}
                   </optgroup>}
                 </select>
