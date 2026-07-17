@@ -10,13 +10,28 @@ SetEnv LSNODE_CONSOLE_LOG /home/u629128033/domains/btreeambiental.com/logs/node_
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # Route /api/* to Passenger (Node.js) - MUST come before SPA fallback
+  # Serve static files directly (images, fonts, JS, CSS, manifests, sw) - bypass Passenger
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+
+  # Serve static directories directly - bypass Passenger
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Route /api/* to Passenger (Node.js)
   RewriteCond %{REQUEST_URI} ^/api/
   RewriteRule ^ - [L]
 
-  # SPA fallback: serve index.html for all non-file, non-api routes
-  RewriteCond %{REQUEST_URI} !^/api/
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
+  # SPA fallback: serve index.html for all other routes
   RewriteRule ^ /index.html [L]
+</IfModule>
+
+# Cache control for static assets
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/png "access plus 1 month"
+  ExpiresByType image/jpeg "access plus 1 month"
+  ExpiresByType image/svg+xml "access plus 1 month"
+  ExpiresByType text/css "access plus 1 week"
+  ExpiresByType application/javascript "access plus 1 week"
 </IfModule>
