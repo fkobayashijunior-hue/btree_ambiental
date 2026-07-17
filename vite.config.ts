@@ -178,7 +178,7 @@ const plugins = [
       orientation: "portrait",
       start_url: "/",
       scope: "/",
-      id: "btree-ambiental-v5",
+      id: "btree-ambiental-v6",
       icons: [
         { src: "/icon-btree-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
         { src: "/icon-btree-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },

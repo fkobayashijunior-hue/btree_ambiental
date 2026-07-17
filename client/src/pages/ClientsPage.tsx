@@ -485,22 +485,24 @@ export default function ClientsPage() {
           ) : (
             <div className="space-y-3">
               {clientsList.map((c: any) => (
-                <div key={c.id} className="flex items-start justify-between p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div key={c.id} className="flex flex-col p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors gap-3">
+                  {/* Linha principal: avatar + info + botões de ação */}
+                  <div className="flex items-start gap-3">
                     <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
                       <span className="text-sm font-bold text-emerald-700">{c.name[0].toUpperCase()}</span>
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-800 truncate">{c.name}</p>
-                      {c.document && <p className="text-xs text-gray-400">CPF/CNPJ: {c.document}</p>}
-                      <div className="flex gap-3 mt-1 flex-wrap">
-                        {c.phone && <span className="text-xs text-gray-500 flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
-                        {c.email && <span className="text-xs text-gray-500 flex items-center gap-1"><Mail className="h-3 w-3" />{c.email}</span>}
-                        {(c.city || c.state) && <span className="text-xs text-gray-500 flex items-center gap-1"><MapPin className="h-3 w-3" />{[c.city, c.state].filter(Boolean).join(" - ")}</span>}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-800 break-words">{c.name}</p>
+                      {c.document && <p className="text-xs text-gray-400 mt-0.5">CPF/CNPJ: {c.document}</p>}
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        {c.phone && <span className="text-xs text-gray-500 flex items-center gap-1"><Phone className="h-3 w-3 flex-shrink-0" />{c.phone}</span>}
+                        {c.email && <span className="text-xs text-gray-500 flex items-center gap-1"><Mail className="h-3 w-3 flex-shrink-0" /><span className="break-all">{c.email}</span></span>}
+                        {(c.city || c.state) && <span className="text-xs text-gray-500 flex items-center gap-1"><MapPin className="h-3 w-3 flex-shrink-0" />{[c.city, c.state].filter(Boolean).join(" - ")}</span>}
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                  {/* Linha de botões — sempre em linha horizontal */}
+                  <div className="flex gap-2 justify-end border-t border-gray-100 pt-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -508,26 +510,26 @@ export default function ClientsPage() {
                         if (!c.email) { toast.error("Cadastre um e-mail para este cliente antes de definir a senha do portal."); return; }
                         setPasswordDialog({ clientId: c.id, clientName: c.name }); setNewPassword(""); setShowPassword(false);
                       }}
-                      className={`text-xs gap-1 ${c.email ? 'text-blue-700 border-blue-200 hover:bg-blue-50' : 'text-gray-400 border-gray-200 hover:bg-gray-50'}`}
+                      className={`text-xs gap-1 flex-1 ${c.email ? 'text-blue-700 border-blue-200 hover:bg-blue-50' : 'text-gray-400 border-gray-200 hover:bg-gray-50'}`}
                       title={c.email ? "Definir senha do Portal do Cliente" : "Cadastre um e-mail primeiro"}
                     >
                       <Key className="h-3 w-3" />
-                      <span className="hidden sm:inline">Senha Portal</span>
+                      <span>Senha Portal</span>
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => { setAdvanceDialog({ clientId: c.id, clientName: c.name }); setAdvanceClientId(c.id); }}
-                      className="text-amber-700 border-amber-200 hover:bg-amber-50 text-xs gap-1"
+                      className="text-amber-700 border-amber-200 hover:bg-amber-50 text-xs gap-1 flex-1"
                       title="Gerenciar adiantamentos"
                     >
                       <DollarSign className="h-3 w-3" />
-                      <span className="hidden sm:inline">Adiant.</span>
+                      <span>Adiant.</span>
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="text-emerald-700 hover:bg-emerald-50">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="text-emerald-700 hover:bg-emerald-50 px-3">
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { setDeleteId(c.id); setDeleteName(c.name); }} className="text-red-600 hover:bg-red-50">
+                    <Button variant="ghost" size="sm" onClick={() => { setDeleteId(c.id); setDeleteName(c.name); }} className="text-red-600 hover:bg-red-50 px-3">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

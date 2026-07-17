@@ -106,7 +106,7 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "index.html",
-    "revision": "b7e09443a2fb21fdd5321487e210570c"
+    "revision": "64ace71d56606a5252886a5d5c5c7b3d"
   }, {
     "url": "icon-btree-512.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"
@@ -154,7 +154,7 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "revision": "79bedf5dc9d215d2fad2e8f1212e6f84"
   }, {
     "url": "manifest.webmanifest",
-    "revision": "2238bbb3cd6d35e97ddf4738c8b40657"
+    "revision": "50650fc8cb1d0ed3d2a25a02a18720da"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {

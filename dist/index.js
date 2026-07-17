@@ -6111,7 +6111,7 @@ var clientsRouter = router({
         (c) => c.name.toLowerCase().includes(s) || c.document?.toLowerCase().includes(s) || c.email?.toLowerCase().includes(s) || c.phone?.toLowerCase().includes(s)
       );
     }
-    return results.filter((c) => c.active === null || c.active === void 0 || c.active === 1);
+    return results;
   }),
   create: protectedProcedure.input(z10.object({
     name: z10.string().min(2),

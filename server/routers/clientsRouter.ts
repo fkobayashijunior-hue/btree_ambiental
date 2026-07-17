@@ -21,7 +21,8 @@ export const clientsRouter = router({
           c.phone?.toLowerCase().includes(s)
         );
       }
-      return results.filter(c => c.active === null || c.active === undefined || c.active === 1);
+      // Mostrar todos os clientes (active pode ser 0, 1, null — todos são válidos)
+      return results;
     }),
 
   create: protectedProcedure
