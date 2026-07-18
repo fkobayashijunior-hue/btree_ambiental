@@ -164,7 +164,7 @@ export default function FuelInvoicesPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('upload_preset', 'azaconnect');
+      formData.append('upload_preset', 'btree_ambiental');
       formData.append('folder', 'btree-invoices');
       const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/image/upload', {
         method: 'POST',

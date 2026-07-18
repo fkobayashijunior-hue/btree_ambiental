@@ -32,7 +32,7 @@ const PAYMENT_METHODS = [
 ];
 
 const CLOUDINARY_CLOUD_NAME = "djob7pxme";
-const CLOUDINARY_UPLOAD_PRESET = "azaconnect";
+const CLOUDINARY_UPLOAD_PRESET = "btree_ambiental";
 
 function getCategoryInfo(value: string) {
   return CATEGORIES.find(c => c.value === value) || { label: value, color: "bg-gray-100 text-gray-700" };

@@ -1097,7 +1097,7 @@ function WeeklyClosingsView({
                                 toast.info('Enviando comprovante...');
                                 const formData = new FormData();
                                 formData.append('file', file);
-                                formData.append('upload_preset', 'azaconnect');
+                                formData.append('upload_preset', 'btree_ambiental');
                                 formData.append('folder', 'btree-receipts');
                                 const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
                                   method: 'POST', body: formData
@@ -1140,7 +1140,7 @@ function WeeklyClosingsView({
                                 toast.info('Enviando comprovante...');
                                 const formData = new FormData();
                                 formData.append('file', file);
-                                formData.append('upload_preset', 'azaconnect');
+                                formData.append('upload_preset', 'btree_ambiental');
                                 formData.append('folder', 'btree-receipts');
                                 const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
                                   method: 'POST', body: formData
