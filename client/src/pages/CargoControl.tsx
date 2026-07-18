@@ -23,6 +23,7 @@ import {
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkLocations } from "@/hooks/useWorkLocations";
 import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 // ===== HELPERS =====
@@ -1226,6 +1227,7 @@ export default function CargoControl() {
   const utils = trpc.useUtils();
   const { isOnline, addToQueue } = useOfflineQueue();
   const { allowedClientIds, isAdmin } = usePermissions();
+  const { locations: workLocations } = useWorkLocations();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("")
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<"" | "pago" | "a_pagar" | "sem_boleto">("");
@@ -1444,7 +1446,9 @@ export default function CargoControl() {
       const c = clientsList.find((cl: { id: number; name: string }) => cl.id === autoClientId);
       autoClientName = c?.name || "";
     }
-    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: "", humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
+        // Auto-selecionar local de trabalho se há apenas 1 disponível
+    const autoWorkLocationId = workLocations.length === 1 ? String(workLocations[0].id) : "";
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
     setPendingPhotos([]);
   };
 

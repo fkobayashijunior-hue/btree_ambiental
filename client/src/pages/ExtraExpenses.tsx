@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useWorkLocations } from "@/hooks/useWorkLocations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +60,13 @@ const emptyForm = {
 export default function ExtraExpenses() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const { locations } = useWorkLocations();
+
+  // Auto-selecionar local padrão quando há apenas 1 local disponível
+  const defaultWorkLocationId = useMemo(() => {
+    if (locations.length === 1) return String(locations[0].id);
+    return "";
+  }, [locations]);
 
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -68,6 +76,13 @@ export default function ExtraExpenses() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const [form, setForm] = useState({ ...emptyForm });
+
+  // Aplicar local padrão quando disponível e formulário sem local
+  useEffect(() => {
+    if (defaultWorkLocationId && !form.workLocationId && !editingId) {
+      setForm(f => ({ ...f, workLocationId: defaultWorkLocationId }));
+    }
+  }, [defaultWorkLocationId]);
 
   const { data: equipmentList = [] } = trpc.sectors.listEquipment.useQuery({});
 
@@ -105,7 +120,7 @@ export default function ExtraExpenses() {
   });
 
   function resetForm() {
-    setForm({ ...emptyForm, date: new Date().toISOString().split("T")[0] });
+    setForm({ ...emptyForm, date: new Date().toISOString().split("T")[0], workLocationId: defaultWorkLocationId });
     setEditingId(null);
   }
 
