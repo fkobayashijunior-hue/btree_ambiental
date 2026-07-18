@@ -1158,7 +1158,8 @@ var init_schema = __esm({
       photoUrl: text("photo_url"),
       workLocationId: int("work_location_id"),
       fuelInvoiceId: int("fuel_invoice_id"),
-      chargedValue: varchar("charged_value", { length: 20 })
+      chargedValue: varchar("charged_value", { length: 20 }),
+      fuelLocation: mysqlEnum("fuel_location", ["simflor", "astorga", "postos"])
     });
     cargoTrackingPhotos = mysqlTable("cargo_tracking_photos", {
       id: int("id").autoincrement().primaryKey(),
@@ -5781,7 +5782,8 @@ var vehicleRecordsRouter = router({
     notes: z8.string().optional(),
     workLocationId: z8.number().optional(),
     fuelInvoiceId: z8.number().optional(),
-    chargedValue: z8.string().optional()
+    chargedValue: z8.string().optional(),
+    fuelLocation: z8.enum(["simflor", "astorga", "postos"]).optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -5896,7 +5898,8 @@ var vehicleRecordsRouter = router({
     notes: z8.string().optional().nullable(),
     workLocationId: z8.number().optional().nullable(),
     fuelInvoiceId: z8.number().optional().nullable(),
-    chargedValue: z8.string().optional().nullable()
+    chargedValue: z8.string().optional().nullable(),
+    fuelLocation: z8.enum(["simflor", "astorga", "postos"]).optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });

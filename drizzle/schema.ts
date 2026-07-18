@@ -928,6 +928,7 @@ export const vehicleRecords = mysqlTable("vehicle_records", {
 	workLocationId: int("work_location_id"),
 	fuelInvoiceId: int("fuel_invoice_id"),
 	chargedValue: varchar("charged_value", { length: 20 }),
+	fuelLocation: mysqlEnum("fuel_location", ['simflor','astorga','postos']),
 });
 
 

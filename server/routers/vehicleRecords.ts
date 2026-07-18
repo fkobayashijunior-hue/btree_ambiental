@@ -119,6 +119,7 @@ export const vehicleRecordsRouter = router({
       workLocationId: z.number().optional(),
       fuelInvoiceId: z.number().optional(),
       chargedValue: z.string().optional(),
+      fuelLocation: z.enum(['simflor','astorga','postos']).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -246,6 +247,7 @@ export const vehicleRecordsRouter = router({
       workLocationId: z.number().optional().nullable(),
       fuelInvoiceId: z.number().optional().nullable(),
       chargedValue: z.string().optional().nullable(),
+      fuelLocation: z.enum(['simflor','astorga','postos']).optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

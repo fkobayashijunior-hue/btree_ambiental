@@ -202,7 +202,7 @@ export default function VehicleControlPage() {
       fuelCost: r.fuelCost || "",
       pricePerLiter: r.pricePerLiter || "",
       supplier: r.supplier || "",
-      fuelLocation: "simflor",
+      fuelLocation: (r.fuelLocation as "simflor" | "astorga" | "postos") || "postos",
       odometer: r.odometer || "",
       kmDriven: r.kmDriven || "",
       maintenanceType: r.maintenanceType || "",
@@ -272,6 +272,7 @@ export default function VehicleControlPage() {
       workLocationId: form.workLocationId ? parseInt(form.workLocationId) : undefined,
       fuelInvoiceId: form.fuelInvoiceId ? parseInt(form.fuelInvoiceId) : undefined,
       chargedValue: (form.recordType === "abastecimento" && form.serviceType === "terceirizado") ? (form.chargedValue || undefined) : undefined,
+      fuelLocation: form.recordType === "abastecimento" ? form.fuelLocation : undefined,
     };
 
     if (editingId) {
