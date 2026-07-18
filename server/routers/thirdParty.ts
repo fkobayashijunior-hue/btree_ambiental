@@ -143,6 +143,8 @@ export const thirdPartyRouter = router({
             total: vehicleRecords.fuelCost,
             location: vehicleRecords.supplier,
             notes: vehicleRecords.odometer,
+            chargedValue: vehicleRecords.chargedValue,
+            fuelLocation: vehicleRecords.fuelLocation,
             createdAt: vehicleRecords.createdAt,
           })
           .from(vehicleRecords)

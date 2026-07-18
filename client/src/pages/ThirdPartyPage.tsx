@@ -682,6 +682,8 @@ function FuelTab() {
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  // Preço/L a cobrar do terceirizado (pode ser diferente do custo real)
+  const [customChargePrice, setCustomChargePrice] = useState<string>("");
 
   const { data: fuelList = [], isLoading } = trpc.thirdParty.listFuel.useQuery({
     startDate: dateFrom,
@@ -715,6 +717,21 @@ function FuelTab() {
   const totalGasto = filteredFuel.reduce((acc, f) => acc + parseFloat(f.total || "0"), 0);
   const totalLitros = filteredFuel.reduce((acc, f) => acc + parseFloat(f.liters || "0"), 0);
 
+  // Calcular valor a cobrar: usa customChargePrice se definido, senão chargedValue do registro
+  const chargePrice = customChargePrice ? parseFloat(customChargePrice.replace(',', '.')) : null;
+  const totalCobrado = filteredFuel.reduce((acc, f) => {
+    const litros = parseFloat(f.liters || '0');
+    if (chargePrice !== null && chargePrice > 0) return acc + litros * chargePrice;
+    if (f.chargedValue) return acc + parseFloat(f.chargedValue.replace(',', '.'));
+    return acc + parseFloat(f.total || '0'); // fallback: custo real
+  }, 0);
+  const getChargedForRecord = (f: any): number => {
+    const litros = parseFloat(f.liters || '0');
+    if (chargePrice !== null && chargePrice > 0) return litros * chargePrice;
+    if (f.chargedValue) return parseFloat(f.chargedValue.replace(',', '.'));
+    return parseFloat(f.total || '0');
+  };
+
   // ── Gerador de PDF ───────────────────────────────────────────────────────
   const generatePDF = () => {
     const owner = ownerFilter === "all" ? "Todos os Proprietários" : ownerFilter;
@@ -739,15 +756,27 @@ function FuelTab() {
         <td style="text-align:right; font-weight:bold; color:#166534">${fmtCurrency(c.netFreight || 0)}</td>
       </tr>`).join('');
 
-    const fuelRows = filteredFuel.map(f => `
+    const pdfChargePrice = chargePrice;
+    const fuelRows = filteredFuel.map(f => {
+      const litros = parseFloat(f.liters || '0');
+      const custoReal = parseFloat(f.total || '0');
+      let valorCobrado: number;
+      if (pdfChargePrice !== null && pdfChargePrice > 0) valorCobrado = litros * pdfChargePrice;
+      else if (f.chargedValue) valorCobrado = parseFloat(f.chargedValue.replace(',', '.'));
+      else valorCobrado = custoReal;
+      const precoLCobrado = litros > 0 ? valorCobrado / litros : 0;
+      return `
       <tr>
         <td>${fmtDate(f.date)}</td>
         <td>${f.equipmentName || '—'}</td>
         <td>${f.location || '—'}</td>
-        <td style="text-align:right">${parseFloat(f.liters || '0').toFixed(1)} L</td>
-        <td style="text-align:right">${f.pricePerLiter ? fmtCurrency(parseFloat(f.pricePerLiter)) + '/L' : '—'}</td>
-        <td style="text-align:right; font-weight:bold; color:#ea580c">${fmtCurrency(parseFloat(f.total || '0'))}</td>
-      </tr>`).join('');
+        <td style="text-align:right">${litros.toFixed(1)} L</td>
+        <td style="text-align:right; color:#6b7280">${f.pricePerLiter ? fmtCurrency(parseFloat(f.pricePerLiter)) + '/L' : '—'}</td>
+        <td style="text-align:right; color:#6b7280">${fmtCurrency(custoReal)}</td>
+        <td style="text-align:right; font-weight:bold; color:#166534">${fmtCurrency(precoLCobrado)}/L</td>
+        <td style="text-align:right; font-weight:bold; color:#166534">${fmtCurrency(valorCobrado)}</td>
+      </tr>`;
+    }).join('');
 
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
     <title>Relatório Terceirizado — ${owner}</title>
@@ -812,12 +841,16 @@ function FuelTab() {
         <div class="value">${fmtCurrency(totalLiquido)}</div>
       </div>
       <div class="summary-card red">
-        <label>Total Combustível</label>
+        <label>Custo Real Combustível</label>
         <div class="value">${fmtCurrency(totalGasto)}</div>
       </div>
       <div class="summary-card blue">
-        <label>Total Litros</label>
+        <label>Total Litros Abastecidos</label>
         <div class="value">${totalLitros.toFixed(1)} L</div>
+      </div>
+      <div class="summary-card dark">
+        <label>Total a Cobrar (Combustível)</label>
+        <div class="value">${fmtCurrency(totalCobrado)}</div>
       </div>
     </div>
 
@@ -842,15 +875,17 @@ function FuelTab() {
     <div class="section-title">⛽ Abastecimentos do Período</div>
     <table>
       <thead><tr>
-        <th>Data</th><th>Caminhão</th><th>Local / Posto</th><th>Litros</th><th>Preço/L</th><th>Total</th>
+        <th>Data</th><th>Caminhão</th><th>Local / Posto</th><th>Litros</th><th>Custo/L</th><th>Custo Total</th><th>Preço Cobrado/L</th><th>Total Cobrado</th>
       </tr></thead>
       <tbody>
-        ${fuelRows || '<tr><td colspan="6" style="text-align:center;padding:12px;color:#9ca3af">Nenhum abastecimento no período</td></tr>'}
+        ${fuelRows || '<tr><td colspan="8" style="text-align:center;padding:12px;color:#9ca3af">Nenhum abastecimento no período</td></tr>'}
         <tr class="total-row">
           <td colspan="3">TOTAL</td>
           <td style="text-align:right">${totalLitros.toFixed(1)} L</td>
           <td></td>
-          <td style="text-align:right; color:#ea580c">${fmtCurrency(totalGasto)}</td>
+          <td style="text-align:right; color:#6b7280">${fmtCurrency(totalGasto)}</td>
+          <td></td>
+          <td style="text-align:right; color:#166534; font-size:13px">${fmtCurrency(totalCobrado)}</td>
         </tr>
       </tbody>
     </table>
@@ -895,6 +930,25 @@ function FuelTab() {
             </SelectContent>
           </Select>
         </div>
+        {/* Campo de preço a cobrar */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-amber-700 font-semibold">Preço/L a Cobrar (R$)</label>
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={customChargePrice}
+              onChange={e => setCustomChargePrice(e.target.value)}
+              placeholder="ex: 6,40"
+              className="w-28 border-amber-300 focus:ring-amber-400"
+            />
+            {customChargePrice && (
+              <button onClick={() => setCustomChargePrice('')} className="text-xs text-gray-400 hover:text-gray-600 px-1">×</button>
+            )}
+          </div>
+          <span className="text-xs text-amber-600">{customChargePrice ? `Calculando com R$ ${customChargePrice}/L` : 'Usando valor do registro'}</span>
+        </div>
         <Button
           variant="outline"
           size="sm"
@@ -907,10 +961,10 @@ function FuelTab() {
       </div>
 
       {/* Resumo */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <Card className="bg-orange-50 border-orange-200">
           <CardContent className="p-3">
-            <p className="text-xs text-orange-700 font-medium">Total Combustível</p>
+            <p className="text-xs text-orange-700 font-medium">Custo Real Combustível</p>
             <p className="text-lg font-bold text-orange-600">{fmt(totalGasto)}</p>
             <p className="text-xs text-muted-foreground">{totalLitros.toFixed(1)} litros</p>
           </CardContent>
@@ -929,6 +983,13 @@ function FuelTab() {
             <p className="text-xs text-muted-foreground">
               {filteredFreights.reduce((a, c) => a + (c.weightTons || 0), 0).toFixed(1)} t
             </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-emerald-700 border-emerald-800">
+          <CardContent className="p-3">
+            <p className="text-xs text-emerald-100 font-semibold">Total a Cobrar</p>
+            <p className="text-lg font-bold text-white">{fmt(totalCobrado)}</p>
+            <p className="text-xs text-emerald-200">{totalLitros.toFixed(1)} L {chargePrice ? `× R$ ${chargePrice.toFixed(2)}/L` : '(preços do registro)'}</p>
           </CardContent>
         </Card>
       </div>
@@ -961,10 +1022,11 @@ function FuelTab() {
                   {f.date ? new Date(f.date).toLocaleDateString("pt-BR") : "—"}
                   {f.location ? ` · ${f.location}` : ""}
                 </p>
-                <div className="flex gap-3 text-sm">
+                <div className="flex gap-3 text-sm flex-wrap">
                   <span>{parseFloat(f.liters || '0').toFixed(1)}L</span>
-                  {f.pricePerLiter && <span className="text-muted-foreground">@ {fmt(f.pricePerLiter)}/L</span>}
-                  <span className="font-semibold text-orange-600">{fmt(f.total)}</span>
+                  {f.pricePerLiter && <span className="text-muted-foreground">@ {fmt(f.pricePerLiter)}/L (custo)</span>}
+                  <span className="text-muted-foreground line-through">{fmt(f.total)}</span>
+                  <span className="font-semibold text-green-700">⇒ {fmt(getChargedForRecord(f))} cobrado</span>
                 </div>
                 {f.notes && <p className="text-xs text-muted-foreground">{f.notes}</p>}
               </div>

@@ -14700,6 +14700,8 @@ var thirdPartyRouter = router({
         total: vehicleRecords.fuelCost,
         location: vehicleRecords.supplier,
         notes: vehicleRecords.odometer,
+        chargedValue: vehicleRecords.chargedValue,
+        fuelLocation: vehicleRecords.fuelLocation,
         createdAt: vehicleRecords.createdAt
       }).from(vehicleRecords).leftJoin(equipment, eq38(vehicleRecords.equipmentId, equipment.id)).where(and23(...vrConditions)).orderBy(desc32(vehicleRecords.date));
       vehicleRecordsRows = vrRows.map((r) => ({

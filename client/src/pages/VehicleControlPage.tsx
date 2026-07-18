@@ -280,7 +280,7 @@ export default function VehicleControlPage() {
       kmDriven: form.kmDriven || undefined,
       maintenanceType: form.maintenanceType || undefined,
       maintenanceCost: form.maintenanceCost || undefined,
-      serviceType: form.recordType === "manutencao" ? form.serviceType : undefined,
+      serviceType: form.serviceType || undefined,
       mechanicName: form.mechanicName || undefined,
       notes: form.notes || undefined,
       photosBase64: photos.length > 0 ? photos.map(p => p.base64 || p.preview) : undefined,
