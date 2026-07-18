@@ -302,8 +302,15 @@ export default function ExtraExpenses() {
                       <div className="flex items-center gap-2 shrink-0">
                         {expense.receiptImageUrl && (
                           <a href={expense.receiptImageUrl} target="_blank" rel="noopener noreferrer"
-                            className="w-10 h-10 rounded-md overflow-hidden border border-border hover:opacity-80 transition-opacity">
-                            <img src={expense.receiptImageUrl} alt="Nota" className="w-full h-full object-cover" />
+                            className="w-10 h-10 rounded-md overflow-hidden border border-border hover:opacity-80 transition-opacity flex items-center justify-center bg-gray-50">
+                            {expense.receiptImageUrl.toLowerCase().includes('.pdf') || expense.receiptImageUrl.toLowerCase().includes('/raw/') ? (
+                              <div className="flex flex-col items-center justify-center w-full h-full bg-red-50 rounded-md">
+                                <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>
+                                <span className="text-[8px] text-red-600 font-bold">PDF</span>
+                              </div>
+                            ) : (
+                              <img src={expense.receiptImageUrl} alt="Nota" className="w-full h-full object-cover" />
+                            )}
                           </a>
                         )}
                         {/* Botão editar — disponível para todos */}
@@ -381,7 +388,16 @@ export default function ExtraExpenses() {
               <Label>Foto da Nota Fiscal (opcional)</Label>
               {form.receiptImageUrl ? (
                 <div className="mt-2 relative inline-block">
-                  <img src={form.receiptImageUrl} alt="Nota" className="w-32 h-32 object-cover rounded-lg border" />
+                  {form.receiptImageUrl.toLowerCase().includes('.pdf') || form.receiptImageUrl.toLowerCase().includes('/raw/') ? (
+                    <a href={form.receiptImageUrl} target="_blank" rel="noopener noreferrer"
+                      className="w-32 h-32 flex flex-col items-center justify-center rounded-lg border bg-red-50 hover:bg-red-100 transition-colors gap-1">
+                      <svg className="w-10 h-10 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>
+                      <span className="text-xs text-red-600 font-semibold">PDF</span>
+                      <span className="text-[10px] text-red-400">Clique para abrir</span>
+                    </a>
+                  ) : (
+                    <img src={form.receiptImageUrl} alt="Nota" className="w-32 h-32 object-cover rounded-lg border" />
+                  )}
                   <button onClick={() => setForm(f => ({ ...f, receiptImageUrl: "" }))}
                     className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600">
                     <X className="w-3 h-3" />
