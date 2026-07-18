@@ -1883,7 +1883,7 @@ async function createPasswordResetToken(userId, token) {
   if (!db) throw new Error("Database not available");
   await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
   const expiresAt = new Date(Date.now() + 60 * 60 * 1e3);
-  await db.insert(passwordResetTokens).values({ userId, token, expiresAt });
+  await db.insert(passwordResetTokens).values({ userId, token, expiresAt: expiresAt.toISOString().slice(0, 19).replace("T", " ") });
 }
 async function getValidResetToken(token) {
   const db = await getDb();
@@ -5690,6 +5690,15 @@ Registrado por: ${payload.registeredBy}` : ""
   }
 }
 
+// server/utils/sanitize.ts
+function sanitizeNumeric(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const str = String(value).trim().replace(",", ".");
+  const num = parseFloat(str);
+  if (isNaN(num)) return null;
+  return String(num);
+}
+
 // server/routers/vehicleRecords.ts
 var vehicleRecordsRouter = router({
   list: protectedProcedure.input(z8.object({
@@ -5808,6 +5817,13 @@ var vehicleRecordsRouter = router({
     const { photoBase64, photosBase64, workLocationId, fuelInvoiceId, ...rest } = input;
     await db.insert(vehicleRecords).values({
       ...rest,
+      liters: sanitizeNumeric(input.liters) ?? void 0,
+      fuelCost: sanitizeNumeric(input.fuelCost) ?? void 0,
+      pricePerLiter: sanitizeNumeric(input.pricePerLiter) ?? void 0,
+      odometer: sanitizeNumeric(input.odometer) ?? void 0,
+      kmDriven: sanitizeNumeric(input.kmDriven) ?? void 0,
+      maintenanceCost: sanitizeNumeric(input.maintenanceCost) ?? void 0,
+      chargedValue: sanitizeNumeric(input.chargedValue) ?? void 0,
       date: input.date.length === 10 ? `${input.date} 00:00:00` : new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       photoUrl,
       photosJson,
@@ -5929,6 +5945,12 @@ var vehicleRecordsRouter = router({
       photosJson = JSON.stringify([photoUrl]);
     }
     const updateData = { ...rest };
+    const numericFields = ["liters", "fuelCost", "pricePerLiter", "odometer", "kmDriven", "maintenanceCost", "chargedValue"];
+    for (const field of numericFields) {
+      if (field in updateData && updateData[field] !== void 0 && updateData[field] !== null) {
+        updateData[field] = sanitizeNumeric(updateData[field]);
+      }
+    }
     if (date) updateData.date = new Date(date);
     if (photoUrl !== void 0) updateData.photoUrl = photoUrl;
     if (photosJson !== void 0) updateData.photosJson = photosJson;
@@ -7129,7 +7151,7 @@ var attendanceRouter = router({
       collaboratorId: input.collaboratorId,
       date: (/* @__PURE__ */ new Date(input.date + "T12:00:00")).toISOString().slice(0, 19).replace("T", " "),
       employmentTypeCa: input.employmentType,
-      dailyValue: input.dailyValue,
+      dailyValue: sanitizeNumeric(input.dailyValue) ?? input.dailyValue,
       pixKey: input.pixKey || null,
       activity: input.activity || null,
       observations: input.observations || null,
@@ -8841,7 +8863,7 @@ var extraExpensesRouter = router({
       date: input.date,
       category: input.category,
       description: input.description,
-      amount: input.amount,
+      amount: sanitizeNumeric(input.amount) ?? input.amount,
       paymentMethod: input.paymentMethod,
       receiptImageUrl: input.receiptImageUrl,
       notes: input.notes,
@@ -8908,7 +8930,7 @@ var extraExpensesRouter = router({
       ...fields.date !== void 0 && { date: fields.date },
       ...fields.category !== void 0 && { category: fields.category },
       ...fields.description !== void 0 && { description: fields.description },
-      ...fields.amount !== void 0 && { amount: fields.amount },
+      ...fields.amount !== void 0 && { amount: sanitizeNumeric(fields.amount) ?? fields.amount },
       ...fields.paymentMethod !== void 0 && { paymentMethod: fields.paymentMethod },
       ...fields.receiptImageUrl !== void 0 && { receiptImageUrl: fields.receiptImageUrl },
       ...fields.notes !== void 0 && { notes: fields.notes },
@@ -9205,7 +9227,7 @@ var financialRouter = router({
       type: input.type,
       category: input.category,
       description: input.description,
-      amount: input.amount,
+      amount: sanitizeNumeric(input.amount) ?? input.amount,
       date: dateObj.toISOString().slice(0, 10),
       referenceMonth: refMonth,
       paymentMethod: input.paymentMethod,
@@ -12052,7 +12074,7 @@ var fuelSuppliersRouter = router({
     ));
     if (existing) {
       await db.update(fuelSupplierPrices).set({
-        pricePerLiter: input.pricePerLiter,
+        pricePerLiter: sanitizeNumeric(input.pricePerLiter) ?? input.pricePerLiter,
         isActive: input.isActive ?? 1
       }).where(eq28(fuelSupplierPrices.id, existing.id));
       return { success: true, id: existing.id };
@@ -12061,7 +12083,7 @@ var fuelSuppliersRouter = router({
         supplierId: input.supplierId,
         fuelType: input.fuelType,
         locationType: input.locationType,
-        pricePerLiter: input.pricePerLiter,
+        pricePerLiter: sanitizeNumeric(input.pricePerLiter) ?? input.pricePerLiter,
         isActive: input.isActive ?? 1
       });
       return { success: true };
@@ -12107,7 +12129,7 @@ var fuelSuppliersRouter = router({
       city: input.city || null,
       state: input.state || null,
       fuelType: input.fuelType,
-      pricePerLiter: input.pricePerLiter,
+      pricePerLiter: sanitizeNumeric(input.pricePerLiter) ?? input.pricePerLiter,
       locationType: input.locationType,
       location: input.location || null,
       workLocationId: input.workLocationId || null,
@@ -12156,7 +12178,7 @@ var fuelSuppliersRouter = router({
     if (data.city !== void 0) updateData.city = data.city;
     if (data.state !== void 0) updateData.state = data.state;
     if (data.fuelType !== void 0) updateData.fuelType = data.fuelType;
-    if (data.pricePerLiter !== void 0) updateData.pricePerLiter = data.pricePerLiter;
+    if (data.pricePerLiter !== void 0) updateData.pricePerLiter = sanitizeNumeric(data.pricePerLiter) ?? data.pricePerLiter;
     if (data.locationType !== void 0) updateData.locationType = data.locationType;
     if (data.location !== void 0) updateData.location = data.location;
     if (data.workLocationId !== void 0) updateData.workLocationId = data.workLocationId;
@@ -12416,9 +12438,9 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
       invoiceNumber: input.invoiceNumber,
       invoiceDate: input.invoiceDate,
       dueDate: input.dueDate,
-      totalAmount: input.totalAmount,
-      liters: input.liters || null,
-      pricePerLiter: input.pricePerLiter || null,
+      totalAmount: sanitizeNumeric(input.totalAmount) ?? input.totalAmount,
+      liters: input.liters ? sanitizeNumeric(input.liters) ?? input.liters : null,
+      pricePerLiter: input.pricePerLiter ? sanitizeNumeric(input.pricePerLiter) ?? input.pricePerLiter : null,
       fuelType: input.fuelType,
       paymentMethod: input.paymentMethod || null,
       bankName: input.bankName || null,

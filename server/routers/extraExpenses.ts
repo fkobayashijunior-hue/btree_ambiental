@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { extraExpenses, gpsLocations, userPermissions, collaborators, financialEntries, equipment } from "../../drizzle/schema";
 import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
+import { sanitizeNumeric } from "../utils/sanitize";
 
 export const extraExpensesRouter = router({
   list: protectedProcedure
@@ -115,7 +116,7 @@ export const extraExpensesRouter = router({
         date: input.date,
         category: input.category,
         description: input.description,
-        amount: input.amount,
+        amount: sanitizeNumeric(input.amount) ?? input.amount,
         paymentMethod: input.paymentMethod,
         receiptImageUrl: input.receiptImageUrl,
         notes: input.notes,
@@ -188,7 +189,7 @@ export const extraExpensesRouter = router({
         ...(fields.date !== undefined && { date: fields.date }),
         ...(fields.category !== undefined && { category: fields.category }),
         ...(fields.description !== undefined && { description: fields.description }),
-        ...(fields.amount !== undefined && { amount: fields.amount }),
+        ...(fields.amount !== undefined && { amount: sanitizeNumeric(fields.amount) ?? fields.amount }),
         ...(fields.paymentMethod !== undefined && { paymentMethod: fields.paymentMethod as any }),
         ...(fields.receiptImageUrl !== undefined && { receiptImageUrl: fields.receiptImageUrl }),
         ...(fields.notes !== undefined && { notes: fields.notes }),

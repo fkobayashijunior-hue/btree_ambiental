@@ -4,7 +4,8 @@ import mysql from "mysql2/promise";
 import { InsertUser, users, passwordResetTokens } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
-let _db: ReturnType<typeof drizzle> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _db: any = null;
 
 // Build a connection string or config that properly handles special chars in password
 function getDbConnectionConfig() {
@@ -235,7 +236,7 @@ export async function createPasswordResetToken(userId: number, token: string): P
 
   // Criar novo token válido por 1 hora
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-  await db.insert(passwordResetTokens).values({ userId, token, expiresAt });
+  await db.insert(passwordResetTokens).values({ userId, token, expiresAt: expiresAt.toISOString().slice(0, 19).replace('T', ' ') });
 }
 
 export async function getValidResetToken(token: string) {

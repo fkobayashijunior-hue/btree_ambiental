@@ -6,6 +6,7 @@ import { collaboratorAttendance, collaborators, users, gpsLocations, userPermiss
 import { eq, desc, and, gte, lte, inArray, lt, sql } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { notifyTeam } from "../notifyTeam";
+import { sanitizeNumeric } from "../utils/sanitize";
 
 export const attendanceRouter = router({
   // Listar presenças com filtros
@@ -197,7 +198,7 @@ export const attendanceRouter = router({
         collaboratorId: input.collaboratorId,
         date: new Date(input.date + "T12:00:00").toISOString().slice(0, 19).replace("T", " "),
         employmentTypeCa: input.employmentType,
-        dailyValue: input.dailyValue,
+        dailyValue: sanitizeNumeric(input.dailyValue) ?? input.dailyValue,
         pixKey: input.pixKey || null,
         activity: input.activity || null,
         observations: input.observations || null,

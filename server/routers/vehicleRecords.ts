@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { vehicleRecords, users, gpsLocations, userPermissions, collaborators, fuelInvoices, financialEntries, equipment } from "../../drizzle/schema";
 import { eq, desc, inArray, sql } from "drizzle-orm";
 import { notifyTeam } from "../notifyTeam";
+import { sanitizeNumeric } from "../utils/sanitize";
 
 export const vehicleRecordsRouter = router({
   list: protectedProcedure
@@ -148,6 +149,13 @@ export const vehicleRecordsRouter = router({
       const { photoBase64, photosBase64, workLocationId, fuelInvoiceId, ...rest } = input;
       await db.insert(vehicleRecords).values({
         ...rest,
+        liters: sanitizeNumeric(input.liters) ?? undefined,
+        fuelCost: sanitizeNumeric(input.fuelCost) ?? undefined,
+        pricePerLiter: sanitizeNumeric(input.pricePerLiter) ?? undefined,
+        odometer: sanitizeNumeric(input.odometer) ?? undefined,
+        kmDriven: sanitizeNumeric(input.kmDriven) ?? undefined,
+        maintenanceCost: sanitizeNumeric(input.maintenanceCost) ?? undefined,
+        chargedValue: sanitizeNumeric(input.chargedValue) ?? undefined,
         date: input.date.length === 10 ? `${input.date} 00:00:00` : new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         photoUrl,
         photosJson,
@@ -282,6 +290,13 @@ export const vehicleRecordsRouter = router({
       }
 
       const updateData: Record<string, unknown> = { ...rest };
+      // Sanitizar campos numéricos antes de salvar
+      const numericFields = ['liters', 'fuelCost', 'pricePerLiter', 'odometer', 'kmDriven', 'maintenanceCost', 'chargedValue'] as const;
+      for (const field of numericFields) {
+        if (field in updateData && updateData[field] !== undefined && updateData[field] !== null) {
+          updateData[field] = sanitizeNumeric(updateData[field] as string);
+        }
+      }
       if (date) updateData.date = new Date(date);
       if (photoUrl !== undefined) updateData.photoUrl = photoUrl;
       if (photosJson !== undefined) updateData.photosJson = photosJson;

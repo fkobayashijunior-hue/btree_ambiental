@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { financialEntries, clients, collaboratorAttendance } from "../../drizzle/schema";
 import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
+import { sanitizeNumeric } from "../utils/sanitize";
 
 const INCOME_CATEGORIES = [
   "venda_madeira",
@@ -233,7 +234,7 @@ export const financialRouter = router({
         type: input.type,
         category: input.category,
         description: input.description,
-        amount: input.amount,
+        amount: sanitizeNumeric(input.amount) ?? input.amount,
         date: dateObj.toISOString().slice(0,10),
         referenceMonth: refMonth,
         paymentMethod: input.paymentMethod,

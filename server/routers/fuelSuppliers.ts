@@ -6,6 +6,7 @@ import { fuelSuppliers, fuelPriceHistory, fuelInvoices, fuelSupplierPrices } fro
 import { eq, desc, and, sql } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
+import { sanitizeNumeric } from "../utils/sanitize";
 
 export const fuelSuppliersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -167,7 +168,7 @@ export const fuelSuppliersRouter = router({
         ));
       if (existing) {
         await db.update(fuelSupplierPrices).set({
-          pricePerLiter: input.pricePerLiter,
+          pricePerLiter: sanitizeNumeric(input.pricePerLiter) ?? input.pricePerLiter,
           isActive: input.isActive ?? 1,
         }).where(eq(fuelSupplierPrices.id, existing.id));
         return { success: true, id: existing.id };
@@ -176,7 +177,7 @@ export const fuelSuppliersRouter = router({
           supplierId: input.supplierId,
           fuelType: input.fuelType,
           locationType: input.locationType,
-          pricePerLiter: input.pricePerLiter,
+          pricePerLiter: sanitizeNumeric(input.pricePerLiter) ?? input.pricePerLiter,
           isActive: input.isActive ?? 1,
         });
         return { success: true };
@@ -228,7 +229,7 @@ export const fuelSuppliersRouter = router({
         city: input.city || null,
         state: input.state || null,
         fuelType: input.fuelType,
-        pricePerLiter: input.pricePerLiter,
+        pricePerLiter: sanitizeNumeric(input.pricePerLiter) ?? input.pricePerLiter,
         locationType: input.locationType,
         location: input.location || null,
         workLocationId: input.workLocationId || null,
@@ -280,7 +281,7 @@ export const fuelSuppliersRouter = router({
       if (data.city !== undefined) updateData.city = data.city;
       if (data.state !== undefined) updateData.state = data.state;
       if (data.fuelType !== undefined) updateData.fuelType = data.fuelType;
-      if (data.pricePerLiter !== undefined) updateData.pricePerLiter = data.pricePerLiter;
+      if (data.pricePerLiter !== undefined) updateData.pricePerLiter = sanitizeNumeric(data.pricePerLiter) ?? data.pricePerLiter;
       if (data.locationType !== undefined) updateData.locationType = data.locationType;
       if (data.location !== undefined) updateData.location = data.location;
       if (data.workLocationId !== undefined) updateData.workLocationId = data.workLocationId;
@@ -581,9 +582,9 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
         invoiceNumber: input.invoiceNumber,
         invoiceDate: input.invoiceDate,
         dueDate: input.dueDate,
-        totalAmount: input.totalAmount,
-        liters: input.liters || null,
-        pricePerLiter: input.pricePerLiter || null,
+        totalAmount: sanitizeNumeric(input.totalAmount) ?? input.totalAmount,
+        liters: input.liters ? (sanitizeNumeric(input.liters) ?? input.liters) : null,
+        pricePerLiter: input.pricePerLiter ? (sanitizeNumeric(input.pricePerLiter) ?? input.pricePerLiter) : null,
         fuelType: input.fuelType,
         paymentMethod: input.paymentMethod || null,
         bankName: input.bankName || null,
