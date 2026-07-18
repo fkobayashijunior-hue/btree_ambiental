@@ -17,6 +17,21 @@ import { useWorkLocations } from "@/hooks/useWorkLocations";
 
 type RecordType = "abastecimento" | "manutencao" | "km";
 
+/**
+ * Converte URL do Cloudinary para exibição no browser.
+ * Adiciona f_auto,q_auto para converter HEIC/HEIF para JPEG automaticamente.
+ */
+function toDisplayUrl(url: string): string {
+  if (!url) return url;
+  // Se já tem transformações, não duplicar
+  if (url.includes('/f_auto') || url.includes('/q_auto')) return url;
+  // Inserir transformação após /upload/
+  if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+    return url.replace('/upload/', '/upload/f_auto,q_auto/');
+  }
+  return url;
+}
+
 const RECORD_LABELS: Record<RecordType, string> = {
   abastecimento: "Abastecimento",
   manutencao: "Manutenção",
@@ -760,7 +775,7 @@ export default function VehicleControlPage() {
                             onClick={() => setViewPhotoIndex(url as any)}
                             className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 hover:opacity-80 transition-opacity relative"
                           >
-                            <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                            <img src={toDisplayUrl(url)} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" onError={(e) => { const t = e.currentTarget; t.style.display='none'; const p = t.parentElement; if(p){ const ic = document.createElement('div'); ic.className='w-full h-full flex items-center justify-center bg-gray-100'; ic.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>'; p.appendChild(ic); } }} />
                             {idx === 2 && photoUrls.length > 3 && (
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-xs font-bold">
                                 +{photoUrls.length - 3}
@@ -859,7 +874,7 @@ export default function VehicleControlPage() {
       <Dialog open={viewPhotoIndex !== null} onOpenChange={() => setViewPhotoIndex(null)}>
         <DialogContent className="max-w-lg p-2">
           {viewPhotoIndex !== null && (
-            <img src={String(viewPhotoIndex)} alt="Foto do registro" className="w-full rounded-lg object-contain max-h-[80vh]" />
+            <img src={toDisplayUrl(String(viewPhotoIndex))} alt="Foto do registro" className="w-full rounded-lg object-contain max-h-[80vh]" />
           )}
         </DialogContent>
       </Dialog>
