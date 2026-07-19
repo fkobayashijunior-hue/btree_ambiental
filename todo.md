@@ -2364,3 +2364,10 @@
 - [x] Aba "Por Local / Operação" com gráfico de barras e tabela por local
 - [x] Gráfico de pizza para distribuição por categoria
 - [x] Item "Relatório Consolidado" adicionado ao menu Financeiro do DashboardLayout
+
+---
+
+## 🗑️ MÓDULOS REMOVIDOS DO MENU
+
+- [x] Remover "Pagamentos de Compradores" (/pagamentos-clientes) do menu Financeiro
+- [x] Remover "Lançamentos Financeiros" (/financeiro) do menu Financeiro

@@ -199,8 +199,6 @@ const menuGroups: MenuGroup[] = [
     icon: Wallet,
     items: [
       { label: "Gastos Extras", path: "/gastos-extras", slug: "gastos-extras", icon: Receipt },
-      { label: "Pagamentos de Compradores", path: "/pagamentos-clientes", slug: "pagamentos-clientes", icon: DollarSign },
-      { label: "Lançamentos Financeiros", path: "/financeiro", slug: "financeiro", icon: Wallet },
       { label: "Dashboard Financeiro", path: "/dashboard-financeiro", slug: "dashboard-financeiro", icon: TrendingUp },
       { label: "Relatório Consolidado", path: "/relatorio-consolidado", slug: "relatorio-consolidado", icon: BarChart3 },
       { label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec", icon: BarChart3 },
