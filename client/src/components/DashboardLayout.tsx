@@ -124,10 +124,10 @@ const menuGroups: MenuGroup[] = [
     icon: Wrench,
     items: [
       { label: "Setores e Máquinas", path: "/setores", slug: "equipamentos", icon: Layers },
-      { label: "Horímetro e Manutenção", path: "/maquinas", slug: "manutencao", icon: ClipboardList },
       { label: "Motosserras", path: "/motosserras", slug: "motosserras", icon: Scissors },
       { label: "Peças e Acessórios", path: "/pecas", slug: "pecas", icon: Package },
-      { label: "Abastecimento de Veículos", path: "/veiculos", slug: "abastecimento", icon: Car },
+      { label: "Controle de Abastecimento", path: "/veiculos", slug: "abastecimento", icon: Car },
+      { label: "Histórico de Equipamentos", path: "/historico-equipamentos", slug: "historico-equipamentos", icon: BarChart3 },
     ],
   },
   // ── Operações ──
@@ -699,15 +699,7 @@ function DashboardLayoutContent({
               <span className="text-xs font-medium hidden sm:inline">Abastec.</span>
             </button>
             <button
-              onClick={() => setLocation("/maquinas?tab=oleo")}
-              className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
-              title="Registrar Consumo de Óleo"
-            >
-              <Droplets className="h-4 w-4 text-cyan-600" />
-              <span className="text-xs font-medium hidden sm:inline">Óleo</span>
-            </button>
-            <button
-              onClick={() => setLocation("/maquinas?tab=manutencao")}
+              onClick={() => setLocation("/veiculos")}
               className="h-9 px-2 flex items-center gap-1.5 rounded-lg hover:bg-accent transition-colors flex-shrink-0 text-muted-foreground hover:text-foreground"
               title="Registrar Manutenção"
             >

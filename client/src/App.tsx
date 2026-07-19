@@ -21,6 +21,7 @@ import SectorsEquipment from "./pages/SectorsEquipment";
 import AccessControl from "./pages/AccessControl";
 import CargoControl from "./pages/CargoControl";
 import MachineHoursPage from "./pages/MachineHoursPage";
+import EquipmentHistoryPage from "./pages/EquipmentHistoryPage";
 import VehicleControlPage from "./pages/VehicleControlPage";
 import PartsPage from "./pages/PartsPage";
 import ClientsPage from "./pages/ClientsPage";
@@ -112,6 +113,9 @@ function Router() {
       </Route>
       <Route path={"/maquinas"}>
         {() => <WithLayout component={MachineHoursPage} />}
+      </Route>
+      <Route path={"/historico-equipamentos"}>
+        {() => <WithLayout component={EquipmentHistoryPage} />}
       </Route>
       <Route path={"/veiculos"}>
         {() => <WithLayout component={VehicleControlPage} />}

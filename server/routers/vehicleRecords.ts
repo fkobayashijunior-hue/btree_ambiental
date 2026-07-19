@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { vehicleRecords, users, gpsLocations, userPermissions, collaborators, fuelInvoices, financialEntries, equipment } from "../../drizzle/schema";
+import { vehicleRecords, users, gpsLocations, userPermissions, collaborators, fuelInvoices, financialEntries, equipment, chainsawParts } from "../../drizzle/schema";
 import { eq, desc, inArray, sql } from "drizzle-orm";
 import { notifyTeam } from "../notifyTeam";
 import { sanitizeNumeric } from "../utils/sanitize";
@@ -121,6 +121,8 @@ export const vehicleRecordsRouter = router({
       fuelInvoiceId: z.number().optional(),
       chargedValue: z.string().optional(),
       fuelLocation: z.enum(['simflor','astorga','postos']).optional(),
+      hourMeter: z.string().optional(),
+      oil2tMl: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -156,6 +158,8 @@ export const vehicleRecordsRouter = router({
         kmDriven: sanitizeNumeric(input.kmDriven) ?? undefined,
         maintenanceCost: sanitizeNumeric(input.maintenanceCost) ?? undefined,
         chargedValue: sanitizeNumeric(input.chargedValue) ?? undefined,
+        hourMeter: sanitizeNumeric(input.hourMeter) ?? undefined,
+        oil2tMl: sanitizeNumeric(input.oil2tMl) ?? undefined,
         date: input.date.length === 10 ? `${input.date} 00:00:00` : new Date(input.date).toISOString().slice(0, 19).replace('T', ' '),
         photoUrl,
         photosJson,
@@ -229,9 +233,25 @@ export const vehicleRecordsRouter = router({
         }).catch(() => {});
       }
 
+            // Baixa automática de óleo 2T no estoque quando motosserra é abastecida
+      if (input.oil2tMl && parseFloat(input.oil2tMl.replace(',', '.')) > 0) {
+        try {
+          const mlValue = parseFloat(input.oil2tMl.replace(',', '.'));
+          const litersValue = mlValue / 1000; // converter ml para litros
+          const [oilPart] = await db.select().from(chainsawParts).where(eq(chainsawParts.id, 2));
+          if (oilPart) {
+            const currentStock = parseFloat(oilPart.currentStock || '0');
+            const newStock = Math.max(0, currentStock - litersValue);
+            await db.update(chainsawParts)
+              .set({ currentStock: String(newStock.toFixed(3)) })
+              .where(eq(chainsawParts.id, 2));
+          }
+        } catch (e) {
+          console.error('Erro ao debitar óleo 2T do estoque:', e);
+        }
+      }
       return { success: true };
     }),
-
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
@@ -256,6 +276,8 @@ export const vehicleRecordsRouter = router({
       fuelInvoiceId: z.number().optional().nullable(),
       chargedValue: z.string().optional().nullable(),
       fuelLocation: z.enum(['simflor','astorga','postos']).optional().nullable(),
+      hourMeter: z.string().optional().nullable(),
+      oil2tMl: z.string().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -291,7 +313,7 @@ export const vehicleRecordsRouter = router({
 
       const updateData: Record<string, unknown> = { ...rest };
       // Sanitizar campos numéricos antes de salvar
-      const numericFields = ['liters', 'fuelCost', 'pricePerLiter', 'odometer', 'kmDriven', 'maintenanceCost', 'chargedValue'] as const;
+      const numericFields = ['liters', 'fuelCost', 'pricePerLiter', 'odometer', 'kmDriven', 'maintenanceCost', 'chargedValue', 'hourMeter', 'oil2tMl'] as const;
       for (const field of numericFields) {
         if (field in updateData && updateData[field] !== undefined && updateData[field] !== null) {
           updateData[field] = sanitizeNumeric(updateData[field] as string);

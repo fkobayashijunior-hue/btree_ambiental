@@ -64,7 +64,14 @@ const emptyForm = {
   workLocationId: "",
   fuelInvoiceId: "",
   chargedValue: "",
+  hourMeter: "",
+  oil2tMl: "",
 };
+
+// Tipos de equipamento que usam horímetro (em vez de odômetro)
+const HOUR_METER_TYPES = ["Trator", "Forwarder", "Pá Carregadeira", "Roçadeira", "Máquina"];
+// Tipos de equipamento que são motosserra
+const CHAINSAW_TYPES = ["Motosserra"];
 
 // Meses em português
 const MONTHS = [
@@ -228,6 +235,8 @@ export default function VehicleControlPage() {
       workLocationId: r.workLocationId ? String(r.workLocationId) : "",
       fuelInvoiceId: r.fuelInvoiceId ? String(r.fuelInvoiceId) : "",
       chargedValue: r.chargedValue || "",
+      hourMeter: r.hourMeter || "",
+      oil2tMl: r.oil2tMl || "",
     });
     // Carregar fotos existentes do registro
     let existingPhotos: Array<{ preview: string; base64: string | null }> = [];
@@ -288,6 +297,8 @@ export default function VehicleControlPage() {
       fuelInvoiceId: form.fuelInvoiceId ? parseInt(form.fuelInvoiceId) : undefined,
       chargedValue: (form.recordType === "abastecimento" && form.serviceType === "terceirizado") ? (form.chargedValue || undefined) : undefined,
       fuelLocation: form.recordType === "abastecimento" ? form.fuelLocation : undefined,
+      hourMeter: form.hourMeter || undefined,
+      oil2tMl: form.oil2tMl || undefined,
     };
 
     if (editingId) {
@@ -583,6 +594,24 @@ export default function VehicleControlPage() {
   };
 
   const equipMap = Object.fromEntries(equipmentList.map((eq: any) => [eq.id, eq.name]));
+  // Mapa de id -> typeName para detectar tipo do equipamento selecionado
+  const equipTypeMap = Object.fromEntries(equipmentList.map((eq: any) => [String(eq.id), eq.typeName || ""]));
+  const selectedTypeName = form.equipmentId ? (equipTypeMap[form.equipmentId] || "") : "";
+  const isHourMeterEquip = HOUR_METER_TYPES.some(t => selectedTypeName.toLowerCase().includes(t.toLowerCase()));
+  const isChainsawEquip = CHAINSAW_TYPES.some(t => selectedTypeName.toLowerCase().includes(t.toLowerCase()));
+  // Agrupar equipamentos por tipo para o seletor
+  const equipmentByType = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const eq of equipmentList as any[]) {
+      const type = eq.typeName || "Outros";
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(eq);
+    }
+    // Ordenar grupos e equipamentos dentro de cada grupo
+    return Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))
+      .map(([type, items]) => ({ type, items: items.sort((a: any, b: any) => a.name.localeCompare(b.name, 'pt-BR')) }));
+  }, [equipmentList]);
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   // Anos disponíveis (últimos 3 anos)
@@ -890,13 +919,25 @@ export default function VehicleControlPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4 pb-8">
             <div>
-              <Label>Veículo *</Label>
-              <select value={form.equipmentId} onChange={e => setForm(f => ({ ...f, equipmentId: e.target.value }))} required className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                <option value="">Selecione o veículo</option>
-                {equipmentList.map((eq: any) => (
-                  <option key={eq.id} value={eq.id}>{eq.name}</option>
+              <Label>Equipamento *</Label>
+              <select
+                value={form.equipmentId}
+                onChange={e => setForm(f => ({ ...f, equipmentId: e.target.value, odometer: "", hourMeter: "", oil2tMl: "" }))}
+                required
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">— Selecione o equipamento —</option>
+                {equipmentByType.map(({ type, items }) => (
+                  <optgroup key={type} label={`── ${type.toUpperCase()} ──`}>
+                    {items.map((eq: any) => (
+                      <option key={eq.id} value={eq.id}>{eq.name}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
+              {selectedTypeName && (
+                <p className="text-xs text-gray-400 mt-1">Tipo: {selectedTypeName}</p>
+              )}
             </div>
 
             <div>
@@ -913,10 +954,33 @@ export default function VehicleControlPage() {
               </select>
             </div>
 
-            <div>
-              <Label>Hodômetro (km)</Label>
-              <Input value={form.odometer} onChange={e => setForm(f => ({ ...f, odometer: e.target.value }))} placeholder="ex: 45230" />
-            </div>
+            {/* Campo odômetro/horímetro dinâmico baseado no tipo de equipamento */}
+            {!isChainsawEquip && (
+              <div>
+                <Label>{isHourMeterEquip ? "Horímetro (h)" : "Hodômetro (km)"}</Label>
+                <Input
+                  value={isHourMeterEquip ? form.hourMeter : form.odometer}
+                  onChange={e => isHourMeterEquip
+                    ? setForm(f => ({ ...f, hourMeter: e.target.value }))
+                    : setForm(f => ({ ...f, odometer: e.target.value }))
+                  }
+                  placeholder={isHourMeterEquip ? "ex: 1250,5" : "ex: 45230"}
+                />
+              </div>
+            )}
+            {/* Campo óleo 2T para motosserras */}
+            {isChainsawEquip && form.recordType === "abastecimento" && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <Label className="text-amber-800 font-semibold">Óleo 2T (ml)</Label>
+                <Input
+                  value={form.oil2tMl}
+                  onChange={e => setForm(f => ({ ...f, oil2tMl: e.target.value }))}
+                  placeholder="ex: 100"
+                  className="mt-1 border-amber-300"
+                />
+                <p className="text-xs text-amber-700 mt-1">Informe o volume de óleo 2T adicionado ao galão. O estoque será debitado automaticamente.</p>
+              </div>
+            )}
 
             {form.recordType === "abastecimento" && (
               <>
