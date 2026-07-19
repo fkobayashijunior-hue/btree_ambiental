@@ -1159,7 +1159,9 @@ var init_schema = __esm({
       workLocationId: int("work_location_id"),
       fuelInvoiceId: int("fuel_invoice_id"),
       chargedValue: varchar("charged_value", { length: 20 }),
-      fuelLocation: mysqlEnum("fuel_location", ["simflor", "astorga", "postos"])
+      fuelLocation: mysqlEnum("fuel_location", ["simflor", "astorga", "postos"]),
+      hourMeter: varchar("hour_meter", { length: 20 }),
+      oil2tMl: varchar("oil2t_ml", { length: 20 })
     });
     cargoTrackingPhotos = mysqlTable("cargo_tracking_photos", {
       id: int("id").autoincrement().primaryKey(),
@@ -5792,7 +5794,9 @@ var vehicleRecordsRouter = router({
     workLocationId: z8.number().optional(),
     fuelInvoiceId: z8.number().optional(),
     chargedValue: z8.string().optional(),
-    fuelLocation: z8.enum(["simflor", "astorga", "postos"]).optional()
+    fuelLocation: z8.enum(["simflor", "astorga", "postos"]).optional(),
+    hourMeter: z8.string().optional(),
+    oil2tMl: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -5824,6 +5828,8 @@ var vehicleRecordsRouter = router({
       kmDriven: sanitizeNumeric(input.kmDriven) ?? void 0,
       maintenanceCost: sanitizeNumeric(input.maintenanceCost) ?? void 0,
       chargedValue: sanitizeNumeric(input.chargedValue) ?? void 0,
+      hourMeter: sanitizeNumeric(input.hourMeter) ?? void 0,
+      oil2tMl: sanitizeNumeric(input.oil2tMl) ?? void 0,
       date: input.date.length === 10 ? `${input.date} 00:00:00` : new Date(input.date).toISOString().slice(0, 19).replace("T", " "),
       photoUrl,
       photosJson,
@@ -5890,6 +5896,20 @@ var vehicleRecordsRouter = router({
       }).catch(() => {
       });
     }
+    if (input.oil2tMl && parseFloat(input.oil2tMl.replace(",", ".")) > 0) {
+      try {
+        const mlValue = parseFloat(input.oil2tMl.replace(",", "."));
+        const litersValue = mlValue / 1e3;
+        const [oilPart] = await db.select().from(chainsawParts).where(eq8(chainsawParts.id, 2));
+        if (oilPart) {
+          const currentStock = parseFloat(oilPart.currentStock || "0");
+          const newStock = Math.max(0, currentStock - litersValue);
+          await db.update(chainsawParts).set({ currentStock: String(newStock.toFixed(3)) }).where(eq8(chainsawParts.id, 2));
+        }
+      } catch (e) {
+        console.error("Erro ao debitar \xF3leo 2T do estoque:", e);
+      }
+    }
     return { success: true };
   }),
   update: protectedProcedure.input(z8.object({
@@ -5915,7 +5935,9 @@ var vehicleRecordsRouter = router({
     workLocationId: z8.number().optional().nullable(),
     fuelInvoiceId: z8.number().optional().nullable(),
     chargedValue: z8.string().optional().nullable(),
-    fuelLocation: z8.enum(["simflor", "astorga", "postos"]).optional().nullable()
+    fuelLocation: z8.enum(["simflor", "astorga", "postos"]).optional().nullable(),
+    hourMeter: z8.string().optional().nullable(),
+    oil2tMl: z8.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -5945,7 +5967,7 @@ var vehicleRecordsRouter = router({
       photosJson = JSON.stringify([photoUrl]);
     }
     const updateData = { ...rest };
-    const numericFields = ["liters", "fuelCost", "pricePerLiter", "odometer", "kmDriven", "maintenanceCost", "chargedValue"];
+    const numericFields = ["liters", "fuelCost", "pricePerLiter", "odometer", "kmDriven", "maintenanceCost", "chargedValue", "hourMeter", "oil2tMl"];
     for (const field of numericFields) {
       if (field in updateData && updateData[field] !== void 0 && updateData[field] !== null) {
         updateData[field] = sanitizeNumeric(updateData[field]);
