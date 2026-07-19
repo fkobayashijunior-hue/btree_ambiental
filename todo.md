@@ -2352,3 +2352,15 @@
 - [ ] Configurar porteira SIMFLOR: lat/lng exatos + ID dispositivo Scania Julieta no Traccar
 - [ ] Habilitar permissões `porteiras-virtuais` e `fretes-gps` para usuários no controle de acesso
 - [ ] Testar abertura/fechamento automático de fretes com GPS real
+
+---
+
+## 📊 RELATÓRIO FINANCEIRO CONSOLIDADO
+
+- [x] Router `financialConsolidated` com endpoints: getSummary, getDetailByCategory, getByLocation
+- [x] Página `/relatorio-consolidado` com filtros por data e local de trabalho
+- [x] Breakdown por categoria: combustível, manutenção, óleos, peças, pedágio, refeição, serviços terceiros, compra de material, folha de pagamento, frete, financeiro
+- [x] Detalhe expandível por categoria com tabela paginada (50 registros/página)
+- [x] Aba "Por Local / Operação" com gráfico de barras e tabela por local
+- [x] Gráfico de pizza para distribuição por categoria
+- [x] Item "Relatório Consolidado" adicionado ao menu Financeiro do DashboardLayout

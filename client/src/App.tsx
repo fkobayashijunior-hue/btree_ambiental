@@ -58,6 +58,7 @@ import ThirdPartyPage from "./pages/ThirdPartyPage";
 import AuditDataPage from "./pages/AuditDataPage";
 import GeofencesPage from "./pages/GeofencesPage";
 import FreightTripsPage from "./pages/FreightTripsPage";
+import FinancialConsolidatedPage from "./pages/FinancialConsolidatedPage";
 import NotificationSettings from "./pages/NotificationSettings";
 import { registerAllOfflineHandlers } from "@/lib/offlineSync";
 
@@ -216,6 +217,9 @@ function Router() {
       </Route>
       <Route path={"/fretes-gps"}>
         {() => <WithLayout component={FreightTripsPage} />}
+      </Route>
+      <Route path={"/relatorio-consolidado"}>
+        {() => <WithLayout component={FinancialConsolidatedPage} />}
       </Route>
       {/* Rota pública para fornecedores revisarem/editarem sua resposta (DEVE vir antes de /orcamento/:token) */}
       <Route path={"/orcamento/resposta/:responseToken"} component={PublicResponseReviewPage} />
