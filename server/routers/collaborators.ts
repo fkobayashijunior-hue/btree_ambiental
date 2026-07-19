@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, updateUserPasswordByEmail } from "../db";

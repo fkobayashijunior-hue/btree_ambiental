@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from "react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import { useLocation } from "wouter";

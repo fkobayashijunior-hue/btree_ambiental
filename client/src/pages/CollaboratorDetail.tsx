@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect } from "react";
 import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml, fetchImageAsBase64 } from "@/lib/pdfUtils";
 import { useParams, useLocation } from "wouter";

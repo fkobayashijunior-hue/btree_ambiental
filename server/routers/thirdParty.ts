@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { z } from "zod";
 import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";

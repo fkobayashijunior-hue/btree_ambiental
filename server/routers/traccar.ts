@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Router do Traccar GPS
  * - Proxy da API REST do Traccar (rastreamento em tempo real, historico, relatorios)

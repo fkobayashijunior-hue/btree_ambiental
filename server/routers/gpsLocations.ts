@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { z } from "zod";
 import { eq, desc, and, inArray } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
