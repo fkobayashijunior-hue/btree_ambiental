@@ -2248,7 +2248,7 @@ var geofenceCheck_exports = {};
 __export(geofenceCheck_exports, {
   geofenceCheckHandler: () => geofenceCheckHandler
 });
-import { eq as eq41, and as and25, sql as sql25 } from "drizzle-orm";
+import { eq as eq41, and as and25, sql as sql26 } from "drizzle-orm";
 function traccarHeaders2() {
   if (TRACCAR_TOKEN2) {
     return {
@@ -2324,7 +2324,7 @@ async function geofenceCheckHandler(req, res) {
   const log = [];
   let processed = 0;
   try {
-    const activeGeofences = await db.select().from(geofences).where(and25(eq41(geofences.isActive, 1), sql25`${geofences.traccarDeviceId} IS NOT NULL`));
+    const activeGeofences = await db.select().from(geofences).where(and25(eq41(geofences.isActive, 1), sql26`${geofences.traccarDeviceId} IS NOT NULL`));
     for (const geo of activeGeofences) {
       if (!geo.traccarDeviceId) continue;
       const pos = await getDevicePosition2(geo.traccarDeviceId);
@@ -15251,11 +15251,824 @@ var freightTripsRouter = router({
   })
 });
 
-// server/routers/notificationSettings.ts
+// server/routers/financialConsolidated.ts
 init_trpc();
 init_db();
 import { z as z42 } from "zod";
 import { sql as sql24 } from "drizzle-orm";
+function toNum2(v) {
+  if (!v) return 0;
+  const s = String(v).replace(/R\$\s*/g, "").replace(/\./g, "").replace(",", ".").trim();
+  return parseFloat(s) || 0;
+}
+var LOCATION_NAMES = {
+  1: "Astorga / Sede",
+  2: "Fazenda GW",
+  3: "SIMFLOR"
+};
+function getLocationName(id) {
+  if (!id) return "Sem Local";
+  return LOCATION_NAMES[id] || `Local #${id}`;
+}
+var financialConsolidatedRouter = router({
+  // ─── RESUMO GERAL (cards de totais por categoria) ─────────────────────────
+  getSummary: protectedProcedure.input(z42.object({
+    dateFrom: z42.string().optional(),
+    dateTo: z42.string().optional(),
+    workLocationId: z42.number().optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
+    const { dateFrom, dateTo, workLocationId } = input;
+    const categories = {
+      combustivel: { category: "combustivel", label: "Combust\xEDvel", color: "#f97316", icon: "fuel", total: 0, count: 0, subcategories: {} },
+      manutencao: { category: "manutencao", label: "Manuten\xE7\xE3o", color: "#3b82f6", icon: "wrench", total: 0, count: 0, subcategories: {} },
+      oleos: { category: "oleos", label: "\xD3leos", color: "#8b5cf6", icon: "droplet", total: 0, count: 0, subcategories: {} },
+      pecas: { category: "pecas", label: "Pe\xE7as", color: "#ec4899", icon: "cog", total: 0, count: 0, subcategories: {} },
+      pedagio: { category: "pedagio", label: "Ped\xE1gio", color: "#14b8a6", icon: "road", total: 0, count: 0, subcategories: {} },
+      refeicao: { category: "refeicao", label: "Refei\xE7\xE3o", color: "#f59e0b", icon: "utensils", total: 0, count: 0, subcategories: {} },
+      servico_terceiro: { category: "servico_terceiro", label: "Servi\xE7os Terceiros", color: "#6366f1", icon: "users", total: 0, count: 0, subcategories: {} },
+      compra_material: { category: "compra_material", label: "Compra de Material", color: "#10b981", icon: "package", total: 0, count: 0, subcategories: {} },
+      folha: { category: "folha", label: "Folha de Pagamento", color: "#ef4444", icon: "users", total: 0, count: 0, subcategories: {} },
+      frete: { category: "frete", label: "Frete / Terceirizados", color: "#64748b", icon: "truck", total: 0, count: 0, subcategories: {} },
+      financeiro: { category: "financeiro", label: "Lan\xE7amentos Financeiros", color: "#0ea5e9", icon: "dollar", total: 0, count: 0, subcategories: {} },
+      outros: { category: "outros", label: "Outros", color: "#94a3b8", icon: "more", total: 0, count: 0, subcategories: {} }
+    };
+    function addToCategory(cat, subcat, amount) {
+      if (!categories[cat]) cat = "outros";
+      categories[cat].total += amount;
+      categories[cat].count++;
+      if (!categories[cat].subcategories[subcat]) {
+        categories[cat].subcategories[subcat] = { label: subcat, total: 0, count: 0 };
+      }
+      categories[cat].subcategories[subcat].total += amount;
+      categories[cat].subcategories[subcat].count++;
+    }
+    try {
+      let q = `SELECT vr.*, e.name as equipment_name, e.client_id as equip_client_id
+                 FROM vehicle_records vr
+                 LEFT JOIN equipment e ON vr.equipment_id = e.id
+                 WHERE vr.record_type = 'abastecimento'
+                   AND vr.fuel_cost IS NOT NULL AND vr.fuel_cost != '' AND vr.fuel_cost != '0'`;
+      if (dateFrom) q += ` AND vr.date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND vr.date <= '${dateTo} 23:59:59'`;
+      if (workLocationId) q += ` AND vr.work_location_id = ${workLocationId}`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        const fuelTypeLabel = {
+          diesel: "Diesel",
+          diesel_s10: "Diesel S10",
+          gasolina: "Gasolina",
+          etanol: "Etanol",
+          gnv: "GNV"
+        };
+        const subcat = fuelTypeLabel[r.fuel_type] || r.fuel_type || "Combust\xEDvel";
+        addToCategory("combustivel", subcat, toNum2(r.fuel_cost));
+      }
+    } catch (e) {
+      console.error("vehicle_records fuel:", e);
+    }
+    try {
+      let q = `SELECT mf.*, e.name as equipment_name FROM machine_fuel mf LEFT JOIN equipment e ON mf.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q += ` AND mf.date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND mf.date <= '${dateTo} 23:59:59'`;
+      if (workLocationId) q += ` AND mf.work_location_id = ${workLocationId}`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        const fuelTypeLabel = {
+          diesel: "Diesel",
+          diesel_s10: "Diesel S10",
+          gasolina: "Gasolina",
+          mistura_2t: "Mistura 2T",
+          arla: "Arla"
+        };
+        const subcat = fuelTypeLabel[r.fuel_type] || r.fuel_type || "Combust\xEDvel M\xE1quina";
+        addToCategory("combustivel", `M\xE1quinas - ${subcat}`, toNum2(r.total_value));
+      }
+    } catch (e) {
+      console.error("machine_fuel:", e);
+    }
+    try {
+      let q = `SELECT mm.*, e.name as equipment_name FROM machine_maintenance mm LEFT JOIN equipment e ON mm.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        const cost = toNum2(r.total_cost);
+        if (cost > 0) addToCategory("manutencao", "Manuten\xE7\xE3o M\xE1quinas", cost);
+      }
+    } catch (e) {
+      console.error("machine_maintenance:", e);
+    }
+    try {
+      let q = `SELECT em.*, e.name as equipment_name FROM equipment_maintenance em LEFT JOIN equipment e ON em.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q += ` AND em.performed_at >= '${dateFrom}'`;
+      if (dateTo) q += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        const cost = toNum2(r.cost) + toNum2(r.labor_cost);
+        if (cost > 0) addToCategory("manutencao", "Manuten\xE7\xE3o Equipamentos", cost);
+      }
+    } catch (e) {
+      console.error("equipment_maintenance:", e);
+    }
+    try {
+      const [rows] = await db.execute(sql24.raw(`SELECT mp.*, em.performed_at FROM maintenance_parts mp LEFT JOIN equipment_maintenance em ON mp.maintenance_id = em.id WHERE 1=1`));
+      for (const r of rows) {
+        const cost = toNum2(r.total_cost);
+        if (cost > 0) addToCategory("pecas", "Pe\xE7as de Manuten\xE7\xE3o", cost);
+      }
+    } catch (e) {
+      console.error("maintenance_parts:", e);
+    }
+    try {
+      let q = `SELECT cpm.*, cp.name as part_name FROM chainsaw_part_movements cpm LEFT JOIN chainsaw_parts cp ON cpm.part_id = cp.id WHERE cpm.type = 'saida'`;
+      if (dateFrom) q += ` AND cpm.created_at >= '${dateFrom}'`;
+      if (dateTo) q += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
+        const cost = toNum2(r.unit_cost) * qty;
+        if (cost > 0) addToCategory("pecas", "Pe\xE7as Motosserra", cost);
+      }
+    } catch (e) {
+      console.error("chainsaw_part_movements:", e);
+    }
+    try {
+      let q = `SELECT csp.* FROM chainsaw_service_parts csp WHERE 1=1`;
+      if (dateFrom) q += ` AND csp.created_at >= '${dateFrom}'`;
+      if (dateTo) q += ` AND csp.created_at <= '${dateTo} 23:59:59'`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
+        const cost = toNum2(r.unit_cost) * qty;
+        if (cost > 0) addToCategory("pecas", "Pe\xE7as OS Motosserra", cost);
+      }
+    } catch (e) {
+      console.error("chainsaw_service_parts:", e);
+    }
+    try {
+      let q = `SELECT eor.*, e.name as equipment_name FROM equipment_oil_records eor LEFT JOIN equipment e ON eor.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q += ` AND eor.date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND eor.date <= '${dateTo} 23:59:59'`;
+      const [rows] = await db.execute(sql24.raw(q));
+      const oilTypeLabel = {
+        hidraulico: "\xD3leo Hidr\xE1ulico",
+        motor: "\xD3leo Motor",
+        transmissao: "\xD3leo Transmiss\xE3o",
+        diferencial: "\xD3leo Diferencial",
+        outros: "Outros \xD3leos"
+      };
+      for (const r of rows) {
+        const cost = toNum2(r.total_value);
+        if (cost > 0) addToCategory("oleos", oilTypeLabel[r.oil_type] || r.oil_type, cost);
+      }
+    } catch (e) {
+      console.error("equipment_oil_records:", e);
+    }
+    try {
+      let q = `SELECT * FROM extra_expenses WHERE 1=1`;
+      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+      if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
+      const [rows] = await db.execute(sql24.raw(q));
+      const catMap = {
+        abastecimento: "combustivel",
+        refeicao: "refeicao",
+        compra_material: "compra_material",
+        servico_terceiro: "servico_terceiro",
+        pedagio: "pedagio",
+        outro: "outros"
+      };
+      const catLabel = {
+        abastecimento: "Abastecimento (Extra)",
+        refeicao: "Refei\xE7\xE3o",
+        compra_material: "Compra de Material",
+        servico_terceiro: "Servi\xE7o Terceiro",
+        pedagio: "Ped\xE1gio",
+        outro: "Outros"
+      };
+      for (const r of rows) {
+        const cat = catMap[r.category] || "outros";
+        const label = catLabel[r.category] || r.category;
+        addToCategory(cat, label, toNum2(r.amount));
+      }
+    } catch (e) {
+      console.error("extra_expenses:", e);
+    }
+    try {
+      let q = `SELECT ca.*, c.name as collaborator_name FROM collaborator_attendance ca LEFT JOIN collaborators c ON ca.collaborator_id = c.id WHERE 1=1`;
+      if (dateFrom) q += ` AND ca.date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND ca.date <= '${dateTo} 23:59:59'`;
+      if (workLocationId) q += ` AND ca.work_location_id = ${workLocationId}`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        const val = toNum2(r.daily_value);
+        if (val > 0) addToCategory("folha", "Di\xE1rias Colaboradores", val);
+      }
+    } catch (e) {
+      console.error("collaborator_attendance:", e);
+    }
+    try {
+      let q = `SELECT * FROM cargo_loads WHERE third_party_cost IS NOT NULL AND third_party_cost > 0`;
+      if (dateFrom) q += ` AND created_at >= '${dateFrom}'`;
+      if (dateTo) q += ` AND created_at <= '${dateTo} 23:59:59'`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        addToCategory("frete", "Frete Terceirizado", toNum2(r.third_party_cost));
+      }
+    } catch (e) {
+      console.error("cargo_loads third_party:", e);
+    }
+    try {
+      let q = `SELECT * FROM financial_entries WHERE type = 'despesa' AND status = 'confirmado' AND (auto_generated IS NULL OR auto_generated = 0)`;
+      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+      const [rows] = await db.execute(sql24.raw(q));
+      const catMap = {
+        combustivel: "combustivel",
+        manutencao: "manutencao",
+        material: "compra_material",
+        servico_terceiro: "servico_terceiro",
+        transporte: "frete",
+        folha_pagamento: "folha",
+        outro_despesa: "outros"
+      };
+      for (const r of rows) {
+        const cat = catMap[r.category] || "financeiro";
+        addToCategory(cat, `Financeiro: ${r.category}`, toNum2(r.amount));
+      }
+    } catch (e) {
+      console.error("financial_entries despesas:", e);
+    }
+    const totalGeral = Object.values(categories).reduce((s, c) => s + c.total, 0);
+    return {
+      categories: Object.values(categories).filter((c) => c.total > 0).sort((a, b) => b.total - a.total).map((c) => ({
+        ...c,
+        subcategories: Object.values(c.subcategories).sort((a, b) => b.total - a.total),
+        percentage: totalGeral > 0 ? c.total / totalGeral * 100 : 0
+      })),
+      totalGeral
+    };
+  }),
+  // ─── DETALHE POR CATEGORIA (listagem completa com paginação) ─────────────
+  getDetailByCategory: protectedProcedure.input(z42.object({
+    category: z42.string(),
+    dateFrom: z42.string().optional(),
+    dateTo: z42.string().optional(),
+    workLocationId: z42.number().optional(),
+    page: z42.number().default(1),
+    pageSize: z42.number().default(50)
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
+    const { category, dateFrom, dateTo, workLocationId, page, pageSize } = input;
+    const offset = (page - 1) * pageSize;
+    const rows = [];
+    if (category === "combustivel") {
+      try {
+        let q = `SELECT vr.id, vr.date, vr.fuel_type, vr.liters, vr.fuel_cost, vr.price_per_liter,
+                          vr.supplier, vr.fuel_location, vr.work_location_id, vr.notes,
+                          e.name as equipment_name
+                   FROM vehicle_records vr
+                   LEFT JOIN equipment e ON vr.equipment_id = e.id
+                   WHERE vr.record_type = 'abastecimento'
+                     AND vr.fuel_cost IS NOT NULL AND vr.fuel_cost != '' AND vr.fuel_cost != '0'`;
+        if (dateFrom) q += ` AND vr.date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND vr.date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q += ` AND vr.work_location_id = ${workLocationId}`;
+        q += ` ORDER BY vr.date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        const fuelTypeLabel = {
+          diesel: "Diesel",
+          diesel_s10: "Diesel S10",
+          gasolina: "Gasolina",
+          etanol: "Etanol",
+          gnv: "GNV"
+        };
+        for (const r of dbRows) {
+          rows.push({
+            id: `vr_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: `${r.equipment_name || "Ve\xEDculo"} \u2014 ${toNum2(r.liters).toFixed(1)}L @ R$ ${toNum2(r.price_per_liter).toFixed(3)}/L${r.supplier ? ` (${r.supplier})` : ""}`,
+            subcategory: fuelTypeLabel[r.fuel_type] || r.fuel_type || "Combust\xEDvel",
+            amount: toNum2(r.fuel_cost),
+            location: getLocationName(r.work_location_id),
+            equipmentName: r.equipment_name,
+            notes: r.notes,
+            source: "Abastecimento Ve\xEDculos"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      try {
+        let q = `SELECT mf.id, mf.date, mf.fuel_type, mf.liters, mf.total_value, mf.price_per_liter,
+                          mf.supplier, mf.work_location_id, mf.notes,
+                          e.name as equipment_name
+                   FROM machine_fuel mf
+                   LEFT JOIN equipment e ON mf.equipment_id = e.id
+                   WHERE 1=1`;
+        if (dateFrom) q += ` AND mf.date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND mf.date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q += ` AND mf.work_location_id = ${workLocationId}`;
+        q += ` ORDER BY mf.date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        const fuelTypeLabel = {
+          diesel: "Diesel",
+          diesel_s10: "Diesel S10",
+          gasolina: "Gasolina",
+          mistura_2t: "Mistura 2T",
+          arla: "Arla"
+        };
+        for (const r of dbRows) {
+          rows.push({
+            id: `mf_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: `${r.equipment_name || "M\xE1quina"} \u2014 ${toNum2(r.liters).toFixed(1)}L${r.supplier ? ` (${r.supplier})` : ""}`,
+            subcategory: `M\xE1quinas - ${fuelTypeLabel[r.fuel_type] || r.fuel_type}`,
+            amount: toNum2(r.total_value),
+            location: getLocationName(r.work_location_id),
+            equipmentName: r.equipment_name,
+            notes: r.notes,
+            source: "Abastecimento M\xE1quinas"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      try {
+        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'abastecimento'`;
+        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          rows.push({
+            id: `ee_fuel_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: r.description,
+            subcategory: "Abastecimento (Extra)",
+            amount: toNum2(r.amount),
+            location: getLocationName(r.work_location_id),
+            notes: r.notes,
+            source: "Gastos Extras"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "manutencao") {
+      try {
+        let q = `SELECT mm.id, mm.date, mm.description, mm.total_cost, mm.labor_cost,
+                          mm.type, mm.service_type, mm.mechanic_name, mm.third_party_company,
+                          e.name as equipment_name, e.client_id
+                   FROM machine_maintenance mm
+                   LEFT JOIN equipment e ON mm.equipment_id = e.id
+                   WHERE 1=1`;
+        if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
+        q += ` ORDER BY mm.date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        const typeLabel = { preventiva: "Preventiva", corretiva: "Corretiva", revisao: "Revis\xE3o" };
+        for (const r of dbRows) {
+          const cost = toNum2(r.total_cost);
+          if (cost > 0) {
+            rows.push({
+              id: `mm_${r.id}`,
+              date: String(r.date).slice(0, 10),
+              description: `${r.equipment_name || "M\xE1quina"} \u2014 ${typeLabel[r.type] || r.type}${r.mechanic_name ? ` (${r.mechanic_name})` : ""}${r.third_party_company ? ` / ${r.third_party_company}` : ""}`,
+              subcategory: "Manuten\xE7\xE3o M\xE1quinas",
+              amount: cost,
+              location: r.client_id ? LOCATION_NAMES[r.client_id] || `Local #${r.client_id}` : "Sem Local",
+              equipmentName: r.equipment_name,
+              notes: r.description,
+              source: "Manuten\xE7\xE3o M\xE1quinas"
+            });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      try {
+        let q = `SELECT em.id, em.performed_at as date, em.description, em.cost, em.labor_cost,
+                          em.type, em.mechanic_name, em.third_party_company,
+                          e.name as equipment_name, e.client_id
+                   FROM equipment_maintenance em
+                   LEFT JOIN equipment e ON em.equipment_id = e.id
+                   WHERE 1=1`;
+        if (dateFrom) q += ` AND em.performed_at >= '${dateFrom}'`;
+        if (dateTo) q += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
+        q += ` ORDER BY em.performed_at DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          const cost = toNum2(r.cost) + toNum2(r.labor_cost);
+          if (cost > 0) {
+            rows.push({
+              id: `em_${r.id}`,
+              date: String(r.date).slice(0, 10),
+              description: `${r.equipment_name || "Equipamento"} \u2014 ${r.type || "Manuten\xE7\xE3o"}${r.mechanic_name ? ` (${r.mechanic_name})` : ""}`,
+              subcategory: "Manuten\xE7\xE3o Equipamentos",
+              amount: cost,
+              location: r.client_id ? LOCATION_NAMES[r.client_id] || `Local #${r.client_id}` : "Sem Local",
+              equipmentName: r.equipment_name,
+              notes: r.description,
+              source: "Manuten\xE7\xE3o Equipamentos"
+            });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "oleos") {
+      try {
+        let q = `SELECT eor.id, eor.date, eor.oil_type, eor.quantity_liters, eor.total_value,
+                          eor.brand, eor.supplier, eor.price_per_liter, eor.notes,
+                          e.name as equipment_name
+                   FROM equipment_oil_records eor
+                   LEFT JOIN equipment e ON eor.equipment_id = e.id
+                   WHERE 1=1`;
+        if (dateFrom) q += ` AND eor.date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND eor.date <= '${dateTo} 23:59:59'`;
+        q += ` ORDER BY eor.date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        const oilTypeLabel = {
+          hidraulico: "\xD3leo Hidr\xE1ulico",
+          motor: "\xD3leo Motor",
+          transmissao: "\xD3leo Transmiss\xE3o",
+          diferencial: "\xD3leo Diferencial",
+          outros: "Outros \xD3leos"
+        };
+        for (const r of dbRows) {
+          const cost = toNum2(r.total_value);
+          if (cost > 0) {
+            rows.push({
+              id: `oil_${r.id}`,
+              date: String(r.date).slice(0, 10),
+              description: `${r.equipment_name || "Equipamento"} \u2014 ${oilTypeLabel[r.oil_type] || r.oil_type} ${toNum2(r.quantity_liters).toFixed(1)}L${r.brand ? ` (${r.brand})` : ""}${r.supplier ? ` / ${r.supplier}` : ""}`,
+              subcategory: oilTypeLabel[r.oil_type] || r.oil_type,
+              amount: cost,
+              location: "Geral",
+              equipmentName: r.equipment_name,
+              notes: r.notes,
+              source: "Controle de \xD3leos"
+            });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "pecas") {
+      try {
+        const [dbRows] = await db.execute(sql24.raw(
+          `SELECT mp.id, em.performed_at as date, mp.part_name, mp.quantity, mp.unit_cost, mp.total_cost,
+                    e.name as equipment_name
+             FROM maintenance_parts mp
+             LEFT JOIN equipment_maintenance em ON mp.maintenance_id = em.id
+             LEFT JOIN equipment e ON em.equipment_id = e.id
+             ORDER BY em.performed_at DESC`
+        ));
+        for (const r of dbRows) {
+          const cost = toNum2(r.total_cost);
+          if (cost > 0) {
+            rows.push({
+              id: `mp_${r.id}`,
+              date: r.date ? String(r.date).slice(0, 10) : "\u2014",
+              description: `${r.part_name} x${r.quantity} \u2014 ${r.equipment_name || "Equipamento"}`,
+              subcategory: "Pe\xE7as de Manuten\xE7\xE3o",
+              amount: cost,
+              location: "Geral",
+              equipmentName: r.equipment_name,
+              source: "Pe\xE7as Manuten\xE7\xE3o"
+            });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      try {
+        let q = `SELECT cpm.id, cpm.created_at as date, cpm.quantity, cpm.unit_cost, cpm.reason,
+                          cp.name as part_name
+                   FROM chainsaw_part_movements cpm
+                   LEFT JOIN chainsaw_parts cp ON cpm.part_id = cp.id
+                   WHERE cpm.type = 'saida'`;
+        if (dateFrom) q += ` AND cpm.created_at >= '${dateFrom}'`;
+        if (dateTo) q += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
+        q += ` ORDER BY cpm.created_at DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
+          const cost = toNum2(r.unit_cost) * qty;
+          if (cost > 0) {
+            rows.push({
+              id: `cpm_${r.id}`,
+              date: String(r.date).slice(0, 10),
+              description: `${r.part_name || "Pe\xE7a"} x${r.quantity}${r.reason ? ` \u2014 ${r.reason}` : ""}`,
+              subcategory: "Pe\xE7as Motosserra",
+              amount: cost,
+              location: "Geral",
+              source: "Pe\xE7as Motosserra"
+            });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "pedagio") {
+      try {
+        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'pedagio'`;
+        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
+        q += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          rows.push({
+            id: `ped_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: r.description,
+            subcategory: "Ped\xE1gio",
+            amount: toNum2(r.amount),
+            location: getLocationName(r.work_location_id),
+            notes: r.notes,
+            source: "Gastos Extras"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "refeicao") {
+      try {
+        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'refeicao'`;
+        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
+        q += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          rows.push({
+            id: `ref_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: r.description,
+            subcategory: "Refei\xE7\xE3o",
+            amount: toNum2(r.amount),
+            location: getLocationName(r.work_location_id),
+            notes: r.notes,
+            source: "Gastos Extras"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "servico_terceiro") {
+      try {
+        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'servico_terceiro'`;
+        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
+        q += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          rows.push({
+            id: `st_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: r.description,
+            subcategory: "Servi\xE7o Terceiro",
+            amount: toNum2(r.amount),
+            location: getLocationName(r.work_location_id),
+            notes: r.notes,
+            source: "Gastos Extras"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "compra_material") {
+      try {
+        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'compra_material'`;
+        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
+        q += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          rows.push({
+            id: `cm_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: r.description,
+            subcategory: "Compra de Material",
+            amount: toNum2(r.amount),
+            location: getLocationName(r.work_location_id),
+            notes: r.notes,
+            source: "Gastos Extras"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "folha") {
+      try {
+        let q = `SELECT ca.id, ca.date, ca.daily_value, ca.employment_type_ca, ca.activity,
+                          ca.work_location_id, ca.location_name, ca.payment_status_ca,
+                          c.name as collaborator_name
+                   FROM collaborator_attendance ca
+                   LEFT JOIN collaborators c ON ca.collaborator_id = c.id
+                   WHERE 1=1`;
+        if (dateFrom) q += ` AND ca.date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND ca.date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q += ` AND ca.work_location_id = ${workLocationId}`;
+        q += ` ORDER BY ca.date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          const val = toNum2(r.daily_value);
+          if (val > 0) {
+            rows.push({
+              id: `att_${r.id}`,
+              date: String(r.date).slice(0, 10),
+              description: `${r.collaborator_name || "Colaborador"} \u2014 ${r.activity || "Di\xE1ria"}`,
+              subcategory: `Di\xE1ria (${r.employment_type_ca || "diarista"})`,
+              amount: val,
+              location: r.location_name || getLocationName(r.work_location_id),
+              collaboratorName: r.collaborator_name,
+              source: "Presen\xE7as"
+            });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "frete") {
+      try {
+        let q = `SELECT cl.id, cl.created_at as date, cl.destination, cl.third_party_cost,
+                          cl.third_party_contractor, cl.client_name
+                   FROM cargo_loads cl
+                   WHERE cl.third_party_cost IS NOT NULL AND cl.third_party_cost > 0`;
+        if (dateFrom) q += ` AND cl.created_at >= '${dateFrom}'`;
+        if (dateTo) q += ` AND cl.created_at <= '${dateTo} 23:59:59'`;
+        q += ` ORDER BY cl.created_at DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          rows.push({
+            id: `frete_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: `Frete Carga #${r.id} \u2192 ${r.destination || "Destino"}${r.third_party_contractor ? ` (${r.third_party_contractor})` : ""}`,
+            subcategory: "Frete Terceirizado",
+            amount: toNum2(r.third_party_cost),
+            location: r.client_name || "Geral",
+            source: "Controle de Cargas"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (category === "financeiro" || category === "outros") {
+      try {
+        let q = `SELECT * FROM financial_entries WHERE type = 'despesa' AND status = 'confirmado' AND (auto_generated IS NULL OR auto_generated = 0)`;
+        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+        q += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql24.raw(q));
+        for (const r of dbRows) {
+          rows.push({
+            id: `fin_${r.id}`,
+            date: String(r.date).slice(0, 10),
+            description: r.description,
+            subcategory: r.category,
+            amount: toNum2(r.amount),
+            location: r.client_name || "Geral",
+            notes: r.notes,
+            source: "Financeiro Manual"
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    rows.sort((a, b) => b.date.localeCompare(a.date));
+    const total = rows.length;
+    const paginated = rows.slice(offset, offset + pageSize);
+    return {
+      rows: paginated,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+      totalAmount: rows.reduce((s, r) => s + r.amount, 0)
+    };
+  }),
+  // ─── BREAKDOWN POR LOCAL DE TRABALHO ─────────────────────────────────────
+  getByLocation: protectedProcedure.input(z42.object({
+    dateFrom: z42.string().optional(),
+    dateTo: z42.string().optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
+    const { dateFrom, dateTo } = input;
+    const locations = {};
+    function addToLocation(locId, locName, category, amount) {
+      const key = locId !== null ? String(locId) : "null";
+      if (!locations[key]) {
+        locations[key] = { locationId: locId, locationName: locName, categories: {}, total: 0 };
+      }
+      locations[key].total += amount;
+      if (!locations[key].categories[category]) locations[key].categories[category] = 0;
+      locations[key].categories[category] += amount;
+    }
+    try {
+      let q = `SELECT work_location_id, SUM(CAST(REPLACE(REPLACE(IFNULL(fuel_cost,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+                 FROM vehicle_records WHERE record_type='abastecimento' AND fuel_cost IS NOT NULL AND fuel_cost != '' AND fuel_cost != '0'`;
+      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+      q += ` GROUP BY work_location_id`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        addToLocation(r.work_location_id, getLocationName(r.work_location_id), "Combust\xEDvel", toNum2(String(r.total)));
+      }
+    } catch (e) {
+    }
+    try {
+      let q = `SELECT work_location_id, SUM(CAST(REPLACE(REPLACE(IFNULL(total_value,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+                 FROM machine_fuel WHERE 1=1`;
+      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+      q += ` GROUP BY work_location_id`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        addToLocation(r.work_location_id, getLocationName(r.work_location_id), "Combust\xEDvel", toNum2(String(r.total)));
+      }
+    } catch (e) {
+    }
+    try {
+      let q = `SELECT work_location_id, category, SUM(CAST(REPLACE(REPLACE(IFNULL(amount,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+                 FROM extra_expenses WHERE 1=1`;
+      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+      q += ` GROUP BY work_location_id, category`;
+      const [rows] = await db.execute(sql24.raw(q));
+      const catMap = {
+        abastecimento: "Combust\xEDvel",
+        refeicao: "Refei\xE7\xE3o",
+        compra_material: "Compra de Material",
+        servico_terceiro: "Servi\xE7os Terceiros",
+        pedagio: "Ped\xE1gio",
+        outro: "Outros"
+      };
+      for (const r of rows) {
+        const cat = catMap[r.category] || "Outros";
+        addToLocation(r.work_location_id, getLocationName(r.work_location_id), cat, toNum2(String(r.total)));
+      }
+    } catch (e) {
+    }
+    try {
+      let q = `SELECT work_location_id, location_name, SUM(CAST(REPLACE(REPLACE(IFNULL(daily_value,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+                 FROM collaborator_attendance WHERE 1=1`;
+      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
+      q += ` GROUP BY work_location_id, location_name`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        const locName = r.location_name || getLocationName(r.work_location_id);
+        addToLocation(r.work_location_id, locName, "Folha de Pagamento", toNum2(String(r.total)));
+      }
+    } catch (e) {
+    }
+    try {
+      let q = `SELECT e.client_id, SUM(CAST(REPLACE(REPLACE(IFNULL(mm.total_cost,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+                 FROM machine_maintenance mm LEFT JOIN equipment e ON mm.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
+      if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
+      q += ` GROUP BY e.client_id`;
+      const [rows] = await db.execute(sql24.raw(q));
+      for (const r of rows) {
+        addToLocation(r.client_id, getLocationName(r.client_id), "Manuten\xE7\xE3o", toNum2(String(r.total)));
+      }
+    } catch (e) {
+    }
+    return {
+      locations: Object.values(locations).sort((a, b) => b.total - a.total).map((loc) => ({
+        ...loc,
+        categories: Object.entries(loc.categories).map(([cat, total]) => ({ category: cat, total })).sort((a, b) => b.total - a.total)
+      })),
+      totalGeral: Object.values(locations).reduce((s, l) => s + l.total, 0)
+    };
+  })
+});
+
+// server/routers/notificationSettings.ts
+init_trpc();
+init_db();
+import { z as z43 } from "zod";
+import { sql as sql25 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
   pagamentosPendentes: {
@@ -15302,7 +16115,7 @@ var DEFAULT_CLIENT_CONFIG = Object.fromEntries(
   CLIENT_NOTIF_KEYS.map((k) => [k, { enabled: false, clientIds: [] }])
 );
 async function ensureTable(db) {
-  await db.execute(sql24`
+  await db.execute(sql25`
     CREATE TABLE IF NOT EXISTS notification_settings (
       \`key\` VARCHAR(100) PRIMARY KEY,
       value JSON NOT NULL,
@@ -15311,7 +16124,7 @@ async function ensureTable(db) {
   `);
 }
 async function getSetting(db, key) {
-  const rows = await db.execute(sql24`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
+  const rows = await db.execute(sql25`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
   const data = Array.isArray(rows[0]) ? rows[0] : rows;
   if (!data || data.length === 0) return null;
   const val = data[0]?.value;
@@ -15320,7 +16133,7 @@ async function getSetting(db, key) {
 }
 async function setSetting(db, key, value) {
   const json = JSON.stringify(value);
-  await db.execute(sql24`
+  await db.execute(sql25`
     INSERT INTO notification_settings (\`key\`, value) VALUES (${key}, ${json})
     ON DUPLICATE KEY UPDATE value = ${json}
   `);
@@ -15345,14 +16158,14 @@ var notificationSettingsRouter = router({
     const clientConfig = storedClientConfig ? { ...DEFAULT_CLIENT_CONFIG, ...storedClientConfig } : DEFAULT_CLIENT_CONFIG;
     let collaborators5 = [];
     try {
-      const rows = await db.execute(sql24`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
+      const rows = await db.execute(sql25`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
       const data = Array.isArray(rows[0]) ? rows[0] : rows;
       collaborators5 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
     }
     let clients3 = [];
     try {
-      const rows = await db.execute(sql24`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
+      const rows = await db.execute(sql25`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
       const data = Array.isArray(rows[0]) ? rows[0] : rows;
       clients3 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
@@ -15368,12 +16181,12 @@ var notificationSettingsRouter = router({
       clients: clients3
     };
   }),
-  update: protectedProcedure.input(z42.record(z42.string(), z42.object({
-    enabled: z42.boolean(),
-    hour: z42.number().int().min(0).max(23),
-    minute: z42.number().int().min(0).max(59),
-    weekday: z42.number().int().min(0).max(6).nullable(),
-    whatsappCollaboratorIds: z42.array(z42.number())
+  update: protectedProcedure.input(z43.record(z43.string(), z43.object({
+    enabled: z43.boolean(),
+    hour: z43.number().int().min(0).max(23),
+    minute: z43.number().int().min(0).max(59),
+    weekday: z43.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z43.array(z43.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -15381,9 +16194,9 @@ var notificationSettingsRouter = router({
     await setSetting(db, "jobConfig", input);
     return { ok: true };
   }),
-  updateClientConfig: protectedProcedure.input(z42.record(z42.string(), z42.object({
-    enabled: z42.boolean(),
-    clientIds: z42.array(z42.number())
+  updateClientConfig: protectedProcedure.input(z43.record(z43.string(), z43.object({
+    enabled: z43.boolean(),
+    clientIds: z43.array(z43.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -15394,7 +16207,7 @@ var notificationSettingsRouter = router({
 });
 
 // server/routers.ts
-import { z as z43 } from "zod";
+import { z as z44 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -15507,12 +16320,12 @@ var appRouter = router({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { error: "DB null" };
-        const { sql: sql26 } = await import("drizzle-orm");
-        const [permsRows] = await db.execute(sql26`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
-        const [collabRows] = await db.execute(sql26`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
-        const [countRows] = await db.execute(sql26`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
-        const [colsRows] = await db.execute(sql26`SHOW COLUMNS FROM collaborators`);
-        const [sampleRows] = await db.execute(sql26`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        const { sql: sql27 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql27`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql27`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql27`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql27`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql27`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -15576,10 +16389,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z43.object({
-      name: z43.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z43.string().email("Email inv\xE1lido"),
-      password: z43.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z44.object({
+      name: z44.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z44.string().email("Email inv\xE1lido"),
+      password: z44.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -15594,9 +16407,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z43.object({
-      email: z43.string().email("Email inv\xE1lido"),
-      password: z43.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z44.object({
+      email: z44.string().email("Email inv\xE1lido"),
+      password: z44.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -15615,11 +16428,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z43.object({
-      seedKey: z43.string(),
-      email: z43.string().email(),
-      name: z43.string(),
-      password: z43.string().min(4)
+    seedAdmin: publicProcedure.input(z44.object({
+      seedKey: z44.string(),
+      email: z44.string().email(),
+      name: z44.string(),
+      password: z44.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -15629,9 +16442,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z43.object({
-      email: z43.string().email("Email inv\xE1lido"),
-      origin: z43.string().url().optional()
+    forgotPassword: publicProcedure.input(z44.object({
+      email: z44.string().email("Email inv\xE1lido"),
+      origin: z44.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -15645,9 +16458,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z43.object({
-      token: z43.string().min(1),
-      password: z43.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z44.object({
+      token: z44.string().min(1),
+      password: z44.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -15713,7 +16526,7 @@ var appRouter = router({
   notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z43.object({ key: z43.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z44.object({ key: z44.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -15761,7 +16574,8 @@ var appRouter = router({
       }
       return { success: true, results };
     })
-  })
+  }),
+  financialConsolidated: financialConsolidatedRouter
   // TODO: add feature routers heree, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>
