@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { clients } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, ne } from "drizzle-orm";
 
 export const clientsRouter = router({
   list: protectedProcedure
@@ -12,7 +12,9 @@ export const clientsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      const results = await db.select().from(clients).orderBy(desc(clients.createdAt));
+      const results = await db.select().from(clients)
+        .where(ne(clients.active, 0))
+        .orderBy(desc(clients.createdAt));
       if (input?.search) {
         const s = input.search.toLowerCase();
         return results.filter(c =>
@@ -22,7 +24,7 @@ export const clientsRouter = router({
           c.phone?.toLowerCase().includes(s)
         );
       }
-      // Mostrar todos os clientes (active pode ser 0, 1, null — todos são válidos)
+      // Retorna apenas clientes ativos (active != 0)
       return results;
     }),
 

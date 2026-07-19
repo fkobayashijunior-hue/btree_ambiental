@@ -2091,13 +2091,8 @@ export default function CargoControl() {
                 <button
                   key={client.id}
                   onClick={() => {
-                    // Filtra pelo cliente no select (mantém a view atual)
+                    // Filtra pelo cliente no select (mantém a view atual, sem scroll)
                     setFilterClientId(client.id);
-                    // Rola para os filtros/lista
-                    setTimeout(() => {
-                      const el = document.getElementById('cargo-list-section');
-                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 80);
                   }}
                   className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-card border transition-all cursor-pointer group text-left ${
                     filterClientId === client.id
