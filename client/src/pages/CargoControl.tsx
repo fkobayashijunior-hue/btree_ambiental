@@ -1648,6 +1648,23 @@ export default function CargoControl() {
     });
   };
 
+  // Acesso rápido por cliente: rola para o grupo do cliente na view "Por Cliente"
+  const handleQuickAccessClient = (clientName: string) => {
+    // Garante que está na view de cliente
+    setViewMode("cliente");
+    // Expande o cliente (remove do set de colapsados)
+    setCollapsedClients(prev => {
+      const next = new Set(prev);
+      next.delete(clientName);
+      return next;
+    });
+    // Aguarda render e rola para o elemento
+    setTimeout(() => {
+      const el = document.getElementById(`client-group-${clientName.replace(/\s+/g, "-").toLowerCase()}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+
   // Estatísticas — quando há filtro de cliente ativo, usa as cargas filtradas
   const statsBase = useMemo(() => filterClientId ? filtered : loads, [filterClientId, filtered, loads]);
   const stats = useMemo(() => {
@@ -2026,6 +2043,39 @@ export default function CargoControl() {
         </div>
       </div>
 
+      {/* Acesso Rápido por Cliente */}
+      {clientsList.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido por Cliente</p>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+            {clientsList.map((client: { id: number; name: string }, idx: number) => {
+              const colors = CLIENT_COLORS[idx % CLIENT_COLORS.length];
+              // Conta cargas deste cliente no período filtrado
+              const clientGroup = groupedByClient.find(g => g.clientId === client.id);
+              const count = clientGroup?.totalCargas ?? 0;
+              const pendentes = clientGroup?.pendentes ?? 0;
+              return (
+                <button
+                  key={client.id}
+                  onClick={() => handleQuickAccessClient(client.name)}
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group text-left"
+                >
+                  <div className={`w-12 h-12 rounded-xl ${colors.headerBg} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
+                    <Building2 className="h-6 w-6 text-white" />
+                  </div>
+                  <span className="text-xs font-medium text-center text-foreground leading-tight line-clamp-2" translate="no">{client.name}</span>
+                  {count > 0 && (
+                    <span className="text-[10px] text-muted-foreground">
+                      {count} carga{count !== 1 ? "s" : ""}{pendentes > 0 ? ` · ${pendentes} pend.` : ""}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
@@ -2112,7 +2162,7 @@ export default function CargoControl() {
             const colors = CLIENT_COLORS[groupIdx % CLIENT_COLORS.length];
             const isCollapsed = collapsedClients.has(group.clientName);
             return (
-              <div key={group.clientName} className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+              <div key={group.clientName} id={`client-group-${group.clientName.replace(/\s+/g, "-").toLowerCase()}`} className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
                 {/* Header do grupo (cliente) */}
                 <button
                   onClick={() => toggleClientCollapse(group.clientName)}
