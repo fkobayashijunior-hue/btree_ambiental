@@ -1586,3 +1586,36 @@ export const buyerProductPrices = mysqlTable("buyer_product_prices", {
 });
 export type BuyerProductPrice = typeof buyerProductPrices.$inferSelect;
 export type InsertBuyerProductPrice = typeof buyerProductPrices.$inferInsert;
+
+// ===== CONTROLE DE NOTAS (Banco de Ações/NFs geradas pela BTREE) =====
+export const fiscalNotes = mysqlTable("fiscal_notes", {
+  id: int().autoincrement().notNull(),
+  // Código único sequencial: AC-00001, AC-00002, ...
+  actionCode: varchar("action_code", { length: 20 }).notNull(),
+  // Número da nota fiscal (opcional — quando não há nota, fica null)
+  invoiceNumber: varchar("invoice_number", { length: 100 }),
+  // Data de emissão da nota
+  issueDate: varchar("issue_date", { length: 10 }).notNull(), // YYYY-MM-DD
+  // Tipo de quantidade: m3 (metros cúbicos) ou ton (toneladas)
+  quantityType: mysqlEnum("quantity_type", ['m3', 'ton']).notNull(),
+  // Quantidade (ex: 30, 80 para m3; 30, 40 para ton)
+  quantity: varchar({ length: 20 }).notNull(),
+  // URL do arquivo (PDF ou imagem) no S3
+  fileUrl: text("file_url"),
+  // Status: available (disponível) ou used (utilizada em uma carga)
+  status: mysqlEnum("status", ['available', 'used']).default('available').notNull(),
+  // Quando usada: referência à carga
+  usedByCargoId: int("used_by_cargo_id"),
+  // Quando usada: cliente que recebeu
+  usedByClientId: int("used_by_client_id"),
+  usedByClientName: varchar("used_by_client_name", { length: 255 }),
+  // Data em que foi utilizada
+  usedAt: varchar("used_at", { length: 10 }),
+  // Observações gerais
+  notes: text(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type FiscalNote = typeof fiscalNotes.$inferSelect;
+export type InsertFiscalNote = typeof fiscalNotes.$inferInsert;

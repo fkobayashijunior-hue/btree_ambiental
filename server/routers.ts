@@ -43,6 +43,7 @@ import { thirdPartyRouter } from "./routers/thirdParty";
 import { geofencesRouter } from "./routers/geofences";
 import { freightTripsRouter } from "./routers/freightTrips";
 import { financialConsolidatedRouter } from "./routers/financialConsolidated";
+import { fiscalNotesRouter } from "./routers/fiscalNotes";
 import { notificationSettingsRouter } from "./routers/notificationSettings";
 import { z } from "zod";
 import { registerUser, loginUser, hashPassword } from "./auth";
@@ -384,6 +385,7 @@ export const appRouter = router({
       }),
   }),
   financialConsolidated: financialConsolidatedRouter,
+  fiscalNotes: fiscalNotesRouter,
   // TODO: add feature routers heree, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>

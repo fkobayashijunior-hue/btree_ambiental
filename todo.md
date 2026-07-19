@@ -2371,3 +2371,16 @@
 
 - [x] Remover "Pagamentos de Compradores" (/pagamentos-clientes) do menu Financeiro
 - [x] Remover "Lançamentos Financeiros" (/financeiro) do menu Financeiro
+
+---
+
+## 📋 NOVO MÓDULO: CONTROLE DE NOTAS (Banco de Ações/NFs) — 19/07/2026
+
+- [ ] Criar tabela `fiscal_notes` no schema Drizzle (id, actionCode AC-XXXXX, invoiceNumber, issueDate, quantityType: m3|ton, quantity, fileUrl, status: available|used, usedByCargoId, usedByClientId, usedByClientName, notes, createdAt)
+- [ ] Criar router `fiscalNotes` com procedures: create, list, getAvailable, markAsUsed, delete
+- [ ] Criar página `FiscalNotesPage.tsx` com lista separada por tipo (m³ / toneladas), upload de arquivo, formulário de cadastro
+- [ ] Adicionar rota `/controle-notas` no App.tsx
+- [ ] Adicionar item "Controle de Notas" no menu Operações do DashboardLayout
+- [ ] Integrar select de NF no Controle de Cargas usando as ações disponíveis do banco
+- [ ] Ao usar uma nota em uma carga, marcar como usada com clientId/clientName
+- [ ] Renomear "Controle de Notas" existente para "Conferência de Notas" no menu e na página

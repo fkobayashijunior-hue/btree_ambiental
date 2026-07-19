@@ -34,7 +34,7 @@ import {
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, Database, Settings, Bell, ChevronRight, Radio, Shirt
+  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -137,6 +137,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { label: "Controle de Cargas", path: "/cargas", slug: "cargas", icon: Truck },
       { label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas", icon: FileText },
+      { label: "Conferência de Notas", path: "/conferencia-notas", slug: "conferencia-notas", icon: FileCheck },
       { label: "Relatório de Destinos", path: "/relatorio-destinos", slug: "relatorio-destinos", icon: FileBarChart },
       { label: "Replantios", path: "/replantios", slug: "replantios", icon: Leaf },
     ],

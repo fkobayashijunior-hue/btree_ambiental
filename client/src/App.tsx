@@ -59,6 +59,7 @@ import AuditDataPage from "./pages/AuditDataPage";
 import GeofencesPage from "./pages/GeofencesPage";
 import FreightTripsPage from "./pages/FreightTripsPage";
 import FinancialConsolidatedPage from "./pages/FinancialConsolidatedPage";
+import FiscalNotesPage from "./pages/FiscalNotesPage";
 import NotificationSettings from "./pages/NotificationSettings";
 import { registerAllOfflineHandlers } from "@/lib/offlineSync";
 
@@ -199,8 +200,11 @@ function Router() {
       <Route path={"/ciclos-frete"}>
         {() => <WithLayout component={FreightCyclesPage} />}
       </Route>
-      <Route path={"/controle-notas"}>
+      <Route path={"/conferencia-notas"}>
         {() => <WithLayout component={InvoiceControlPage} />}
+      </Route>
+      <Route path={"/controle-notas"}>
+        {() => <WithLayout component={FiscalNotesPage} />}
       </Route>
 
       <Route path={"/caminhoes-terceirizados"}>

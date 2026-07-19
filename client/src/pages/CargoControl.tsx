@@ -1337,6 +1337,14 @@ export default function CargoControl() {
     { enabled: !!form.invoiceNumber && form.invoiceNumber.trim().length > 0 }
   );
 
+  // Banco de ações/notas disponíveis
+  const { data: availableNotes = [] } = trpc.fiscalNotes.getAvailable.useQuery();
+  const markNoteAsUsed = trpc.fiscalNotes.markAsUsed.useMutation({
+    onSuccess: () => utils.fiscalNotes.getAvailable.invalidate(),
+  });
+  // ID da nota selecionada no select (para marcar como usada ao salvar)
+  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
+
   // Mutations
   const createMutation = trpc.cargoLoads.create.useMutation({
     onSuccess: () => { toast.success("Carga registrada!"); utils.cargoLoads.list.invalidate(); setIsFormOpen(false); resetForm(); },
@@ -1491,6 +1499,8 @@ export default function CargoControl() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Ao criar carga, marcar a nota selecionada como usada
+    const noteIdToMark = !editId ? selectedNoteId : null;
     const data = {
       ...form,
       vehicleId: form.vehicleId || undefined,
@@ -1517,9 +1527,22 @@ export default function CargoControl() {
         setIsFormOpen(false);
         resetForm();
       } else {
-        createMutation.mutate(data);
+        createMutation.mutate(data, {
+          onSuccess: (result) => {
+            // Marcar nota como usada após criar a carga com sucesso
+            if (noteIdToMark) {
+              markNoteAsUsed.mutate({
+                id: noteIdToMark,
+                cargoId: (result as any)?.id,
+                clientId: form.clientId || undefined,
+                clientName: form.clientName || undefined,
+              });
+            }
+          },
+        });
       }
     }
+    setSelectedNoteId(null);
   };
 
   const handleAddPhoto = async (files: FileList) => {
@@ -2562,8 +2585,52 @@ export default function CargoControl() {
                 <p className="text-[10px] text-green-600">Entrada - Saída = Líquido (usado para cálculo de pagamento)</p>
               </div>
               <div>
-                <Label>Nº Nota Fiscal</Label>
-                <Input value={form.invoiceNumber} onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="ex: NF-001234" className={invoiceDuplicate?.exists ? 'border-red-500 ring-red-200' : ''} />
+                <Label>Ação / Nota Fiscal</Label>
+                {availableNotes.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <select
+                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      value={selectedNoteId ?? ""}
+                      onChange={e => {
+                        const id = e.target.value ? Number(e.target.value) : null;
+                        setSelectedNoteId(id);
+                        if (id) {
+                          const note = availableNotes.find((n: any) => n.id === id);
+                          if (note) {
+                            const label = note.invoiceNumber
+                              ? `${note.actionCode} — NF ${note.invoiceNumber}`
+                              : note.actionCode;
+                            setForm(f => ({ ...f, invoiceNumber: label }));
+                          }
+                        } else {
+                          setForm(f => ({ ...f, invoiceNumber: "" }));
+                        }
+                      }}
+                    >
+                      <option value="">— Selecionar ação/nota —</option>
+                      {(availableNotes as any[]).map((n: any) => (
+                        <option key={n.id} value={n.id}>
+                          {n.actionCode}{n.invoiceNumber ? ` — NF ${n.invoiceNumber}` : ""} · {n.quantityType === "m3" ? `${n.quantity} m³` : `${n.quantity} ton`}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground">Ou informe manualmente:</p>
+                    <Input
+                      value={selectedNoteId ? "" : form.invoiceNumber}
+                      disabled={!!selectedNoteId}
+                      onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))}
+                      placeholder="ex: NF-001234 (manual)"
+                      className={invoiceDuplicate?.exists ? 'border-red-500 ring-red-200' : ''}
+                    />
+                  </div>
+                ) : (
+                  <Input
+                    value={form.invoiceNumber}
+                    onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))}
+                    placeholder="ex: NF-001234"
+                    className={invoiceDuplicate?.exists ? 'border-red-500 ring-red-200' : ''}
+                  />
+                )}
                 {invoiceDuplicate?.exists && (
                   <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3" />
