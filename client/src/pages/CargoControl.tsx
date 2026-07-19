@@ -2069,7 +2069,17 @@ export default function CargoControl() {
       {/* Acesso Rápido por Cliente */}
       {clientsList.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido por Cliente</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Acesso Rápido por Cliente</p>
+            {filterClientId > 0 && (
+              <button
+                onClick={() => setFilterClientId(0)}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                <X className="h-3 w-3" /> Limpar filtro
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
             {clientsList.map((client: { id: number; name: string }, idx: number) => {
               const colors = CLIENT_COLORS[idx % CLIENT_COLORS.length];
@@ -2080,8 +2090,20 @@ export default function CargoControl() {
               return (
                 <button
                   key={client.id}
-                  onClick={() => handleQuickAccessClient(client.name)}
-                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group text-left"
+                  onClick={() => {
+                    // Filtra pelo cliente no select (mantém a view atual)
+                    setFilterClientId(client.id);
+                    // Rola para os filtros/lista
+                    setTimeout(() => {
+                      const el = document.getElementById('cargo-list-section');
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 80);
+                  }}
+                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-card border transition-all cursor-pointer group text-left ${
+                    filterClientId === client.id
+                      ? 'border-primary ring-2 ring-primary/30 shadow-md'
+                      : 'border-border hover:border-primary/40 hover:shadow-md'
+                  }`}
                 >
                   <div className={`w-12 h-12 rounded-xl ${colors.headerBg} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
                     <Building2 className="h-6 w-6 text-white" />
@@ -2100,7 +2122,7 @@ export default function CargoControl() {
       )}
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3">
+      <div id="cargo-list-section" className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="Buscar placa, cliente, destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
