@@ -5,9 +5,17 @@ import { getDb } from "../db";
 import { sql } from "drizzle-orm";
 
 // Helper: converte string monetária para número
+// Suporta ambos os formatos:
+//   Formato BR: "1.234,56" (ponto = milhar, vírgula = decimal)
+//   Formato EN: "1234.56" ou "946.03" (ponto = decimal)
 function toNum(v: string | null | undefined): number {
   if (!v) return 0;
-  const s = String(v).replace(/R\$\s*/g, "").replace(/\./g, "").replace(",", ".").trim();
+  const s = String(v).replace(/R\$\s*/g, "").trim();
+  // Se tem vírgula, é formato BR: remove pontos de milhar, troca vírgula por ponto
+  if (s.includes(",")) {
+    return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+  // Se tem ponto, é formato EN (ponto decimal) — não remover
   return parseFloat(s) || 0;
 }
 

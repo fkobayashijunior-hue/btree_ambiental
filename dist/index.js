@@ -15258,7 +15258,10 @@ import { z as z42 } from "zod";
 import { sql as sql24 } from "drizzle-orm";
 function toNum2(v) {
   if (!v) return 0;
-  const s = String(v).replace(/R\$\s*/g, "").replace(/\./g, "").replace(",", ".").trim();
+  const s = String(v).replace(/R\$\s*/g, "").trim();
+  if (s.includes(",")) {
+    return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+  }
   return parseFloat(s) || 0;
 }
 var LOCATION_NAMES = {
