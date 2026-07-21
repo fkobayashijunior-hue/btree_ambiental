@@ -1,12 +1,13 @@
 // @ts-nocheck
 import React, { useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileBarChart, Download, CheckCircle2, Clock, Package, Weight, Image as ImageIcon, X, DollarSign, FileText, FileImage, Loader2, CreditCard, PlusCircle, Trash2 } from "lucide-react";
+import { FileBarChart, Download, CheckCircle2, Clock, Package, Weight, Image as ImageIcon, X, DollarSign, FileText, FileImage, Loader2, CreditCard, PlusCircle, Trash2, Table2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBR, formatBRL } from "@/lib/formatBR";
 import { BTREE_LOGO_B64, fetchImageAsBase64, generatePDFFromHtml } from "@/lib/pdfUtils";
@@ -630,6 +631,91 @@ export default function DestinationReportPage() {
     }
   }
 
+  // ─── Excel Export ─────────────────────────────────────────────────────────
+  function generateExcel() {
+    if (loads.length === 0) { toast.error("Nenhuma carga para exportar"); return; }
+
+    const destName = selectedDest?.name || "Todos";
+    const effectivePrice = isBuyer ? pricePerUnit : destPricePerUnit;
+    const effectiveUnit = isBuyer ? unit : destUnit;
+
+    // Build rows
+    const dataRows = loads.map((l: any, i: number) => {
+      const weight = parseFloat(String(l.weightNetKg || l.weightKg || 0).replace(',', '.')) || 0;
+      const weightTon = weight / 1000;
+      const vol = parseFloat(String(l.volumeM3 || 0).replace(',', '.')) || 0;
+      const lineValue = effectivePrice > 0
+        ? (effectiveUnit === 'ton' ? effectivePrice * weightTon : effectivePrice * vol)
+        : null;
+
+      const row: Record<string, any> = {
+        '#': i + 1,
+        'Data Saída': l.date ? safeDate(l.date).toLocaleDateString('pt-BR') : '-',
+        'Data Entrega': l.deliveryDate ? safeDate(l.deliveryDate).toLocaleDateString('pt-BR') : '-',
+        'NF': l.invoiceNumber || '-',
+        'Placa': l.vehiclePlate || '-',
+        'Motorista': l.driverName || '-',
+        'Tipo Madeira': l.woodType || '-',
+        'Volume (m³)': vol > 0 ? vol : null,
+        'Peso Liq. (ton)': weightTon > 0 ? parseFloat(weightTon.toFixed(3)) : null,
+        'Peso Saída (kg)': l.weightOutKg ? parseFloat(String(l.weightOutKg).replace(',', '.')) : null,
+        'Peso Entrada (kg)': l.weightInKg ? parseFloat(String(l.weightInKg).replace(',', '.')) : null,
+        'Status': l.trackingStatus || '-',
+        'Recebido': l.receivedByBuyer === 1 ? 'Sim' : 'Não',
+        'Recebido Por': l.receiverName || '-',
+        'Obs': l.notes || '',
+      };
+
+      if (effectivePrice > 0) {
+        row[`Valor (R$)`] = lineValue ? parseFloat(lineValue.toFixed(2)) : null;
+      }
+
+      return row;
+    });
+
+    // Summary row
+    const summaryRow: Record<string, any> = {
+      '#': '',
+      'Data Saída': '',
+      'Data Entrega': '',
+      'NF': '',
+      'Placa': '',
+      'Motorista': `TOTAIS (${loads.length} cargas)`,
+      'Tipo Madeira': '',
+      'Volume (m³)': parseFloat(totalVolume.toFixed(3)),
+      'Peso Liq. (ton)': parseFloat((totalWeight / 1000).toFixed(3)),
+      'Peso Saída (kg)': null,
+      'Peso Entrada (kg)': null,
+      'Status': '',
+      'Recebido': '',
+      'Recebido Por': '',
+      'Obs': '',
+    };
+    if (effectivePrice > 0) {
+      const totalVal = isBuyer ? totalValue : destTotalValue;
+      summaryRow['Valor (R$)'] = parseFloat(totalVal.toFixed(2));
+    }
+
+    const ws = XLSX.utils.json_to_sheet([...dataRows, summaryRow]);
+
+    // Column widths
+    ws['!cols'] = [
+      { wch: 4 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+      { wch: 22 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
+      { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 20 }, { wch: 30 }, { wch: 12 },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Cargas');
+
+    const periodStr = startDate && endDate
+      ? `_${startDate}_${endDate}`
+      : '';
+    const fileName = `Relatorio_${destName.replace(/[^a-zA-Z0-9]/g, '_')}${periodStr}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    toast.success(`Excel gerado: ${fileName}`);
+  }
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-4 max-w-7xl mx-auto">
@@ -654,6 +740,10 @@ export default function DestinationReportPage() {
             <Button onClick={generatePDFCompleto} variant="outline" className="gap-2 text-xs" disabled={isGeneratingPDF !== null}>
               {isGeneratingPDF === 'completo' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileImage className="h-4 w-4" />}
               {isGeneratingPDF === 'completo' ? (pdfProgress || 'Gerando...') : 'PDF Completo'}
+            </Button>
+            <Button onClick={generateExcel} variant="outline" className="gap-2 text-xs border-green-600 text-green-700 hover:bg-green-50" disabled={isGeneratingPDF !== null}>
+              <Table2 className="h-4 w-4" />
+              Excel
             </Button>
           </div>
         )}

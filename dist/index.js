@@ -6177,12 +6177,12 @@ init_db();
 init_schema();
 import { z as z10 } from "zod";
 import { TRPCError as TRPCError8 } from "@trpc/server";
-import { eq as eq10, desc as desc7 } from "drizzle-orm";
+import { eq as eq10, desc as desc7, ne as ne2 } from "drizzle-orm";
 var clientsRouter = router({
   list: protectedProcedure.input(z10.object({ search: z10.string().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const results = await db.select().from(clients).orderBy(desc7(clients.createdAt));
+    const results = await db.select().from(clients).where(ne2(clients.active, 0)).orderBy(desc7(clients.createdAt));
     if (input?.search) {
       const s = input.search.toLowerCase();
       return results.filter(
