@@ -187,9 +187,28 @@ export const sectorsRouter = router({
         const result = await cloudinaryUpload(imageUrl, "btree/equipment");
         imageUrl = result.url;
       }
+      // Upload documentos base64 para Cloudinary
+      let invoiceUrl = input.invoiceUrl;
+      let documentUrl = input.documentUrl;
+      let insuranceUrl = input.insuranceUrl;
+      if (invoiceUrl && invoiceUrl.startsWith("data:")) {
+        const r = await cloudinaryUpload(invoiceUrl, "btree/docs");
+        invoiceUrl = r.url;
+      }
+      if (documentUrl && documentUrl.startsWith("data:")) {
+        const r = await cloudinaryUpload(documentUrl, "btree/docs");
+        documentUrl = r.url;
+      }
+      if (insuranceUrl && insuranceUrl.startsWith("data:")) {
+        const r = await cloudinaryUpload(insuranceUrl, "btree/docs");
+        insuranceUrl = r.url;
+      }
       const [result] = await db.insert(equipment).values({
         ...input,
         imageUrl,
+        invoiceUrl,
+        documentUrl,
+        insuranceUrl,
         status: input.status || "ativo",
       });
       return { id: (result as any).insertId };
@@ -221,10 +240,22 @@ export const sectorsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const { id, ...data } = input;
-      // Se for base64, fazer upload para S3
+      // Se for base64, fazer upload para Cloudinary
       if (data.imageUrl && data.imageUrl.startsWith("data:")) {
         const uploaded = await cloudinaryUpload(data.imageUrl, "btree/equipment");
         data.imageUrl = uploaded.url;
+      }
+      if (data.invoiceUrl && data.invoiceUrl.startsWith("data:")) {
+        const uploaded = await cloudinaryUpload(data.invoiceUrl, "btree/docs");
+        data.invoiceUrl = uploaded.url;
+      }
+      if (data.documentUrl && data.documentUrl.startsWith("data:")) {
+        const uploaded = await cloudinaryUpload(data.documentUrl, "btree/docs");
+        data.documentUrl = uploaded.url;
+      }
+      if (data.insuranceUrl && data.insuranceUrl.startsWith("data:")) {
+        const uploaded = await cloudinaryUpload(data.insuranceUrl, "btree/docs");
+        data.insuranceUrl = uploaded.url;
       }
       await db.update(equipment).set(data).where(eq(equipment.id, id));
       return { success: true };

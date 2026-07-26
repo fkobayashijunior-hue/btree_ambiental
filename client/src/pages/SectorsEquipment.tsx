@@ -13,7 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Building2, Plus, Pencil, Trash2, Wrench, Tractor, Search,
-  CheckCircle2, AlertTriangle, XCircle, Layers, FileText, Camera, X, ImageIcon
+  CheckCircle2, AlertTriangle, XCircle, Layers, FileText, Camera, X, ImageIcon,
+  User, AlertCircle, ChevronDown, ChevronRight
 } from "lucide-react";
 
 const STATUS_CONFIG = {
@@ -66,6 +67,19 @@ export default function SectorsEquipment() {
   // Tipo de equipamento state
   const [typeOpen, setTypeOpen] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
+  // Expandir/colapsar grupos de setor na lista
+  const [collapsedSectors, setCollapsedSectors] = useState<Set<number>>(new Set());
+
+  // Tipos simplificados (categorias fixas)
+  const FIXED_EQUIPMENT_TYPES = [
+    { id: -1, name: "CARROS" },
+    { id: -2, name: "CAMINHÕES" },
+    { id: -3, name: "TRATORES" },
+    { id: -4, name: "MOTOSSERRAS" },
+    { id: -5, name: "EQUIPAMENTOS" },
+    { id: -6, name: "MÁQUINAS" },
+    { id: -7, name: "OUTROS" },
+  ];
 
   // Queries
   const { data: sectorsList = [] } = trpc.sectors.listSectors.useQuery();
@@ -252,11 +266,17 @@ export default function SectorsEquipment() {
   };
 
   // Detectar se o tipo selecionado é veículo/caminhão (campo dinâmico)
-  const selectedTypeName = equipTypes.find(t => Number(t.id) === Number(equipForm.typeId))?.name?.toLowerCase() || "";
+  // Combina tipos fixos + tipos customizados do banco
+  const allEquipTypes = [
+    ...FIXED_EQUIPMENT_TYPES,
+    ...equipTypes.filter(t => !FIXED_EQUIPMENT_TYPES.some(f => f.name.toLowerCase() === t.name.toLowerCase())),
+  ];
+  const selectedTypeName = allEquipTypes.find(t => Number(t.id) === Number(equipForm.typeId))?.name?.toLowerCase() || "";
   // Normalizar removendo acentos para garantir match
   const normalizedTypeName = selectedTypeName.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const isVehicleType = normalizedTypeName.includes("caminhao") || normalizedTypeName.includes("veiculo") ||
-    normalizedTypeName.includes("carro") || normalizedTypeName.includes("moto") ||
+  const isVehicleType = normalizedTypeName.includes("caminhao") || normalizedTypeName.includes("caminhoes") ||
+    normalizedTypeName.includes("veiculo") || normalizedTypeName.includes("carro") ||
+    normalizedTypeName.includes("carros") || normalizedTypeName.includes("moto") ||
     normalizedTypeName.includes("van") || normalizedTypeName.includes("onibus") ||
     normalizedTypeName.includes("pickup") || normalizedTypeName.includes("utilitario") ||
     normalizedTypeName.includes("truck") || normalizedTypeName.includes("carreta") ||
@@ -528,8 +548,8 @@ export default function SectorsEquipment() {
                     <div>
                       <Label className="mb-2 block">Foto do Equipamento</Label>
                       {equipPhotoPreview ? (
-                        <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-200">
-                          <img src={equipPhotoPreview} alt="Preview" className="w-full h-full object-cover" />
+                        <div className="relative w-full rounded-xl overflow-hidden border border-gray-200 bg-black">
+                          <img src={equipPhotoPreview} alt="Preview" className="w-full h-auto max-h-64 object-contain" />
                           <button
                             type="button"
                             onClick={() => { setEquipPhotoPreview(null); setEquipPhotoBase64(null); setExistingImageUrl(null); }}
@@ -598,13 +618,10 @@ export default function SectorsEquipment() {
                           required
                         >
                           <option value={0}>Selecione o tipo...</option>
-                          {equipTypes.map(t => (
+                          {allEquipTypes.map(t => (
                             <option key={t.id} value={t.id}>{t.name}</option>
                           ))}
                         </select>
-                        {equipTypes.length === 0 && (
-                          <p className="text-xs text-amber-600 mt-1">Crie um tipo de equipamento primeiro usando o botão "Novo Tipo"</p>
-                        )}
                       </div>
                       <div>
                         <Label>Marca</Label>
@@ -735,15 +752,22 @@ export default function SectorsEquipment() {
                                 <button type="button" onClick={() => { setDocumentBase64(null); setExistingDocumentUrl(null); }} className="text-red-500 hover:text-red-700"><X className="h-3 w-3" /></button>
                               </div>
                             ) : (
-                              <button type="button" className="text-xs text-emerald-600 border border-dashed border-emerald-400 rounded px-2 py-1 hover:bg-emerald-50"
-                                onClick={() => openFilePicker({ accept: "image/*,application/pdf" }, (files) => {
-                                  const f = files[0]; if (!f) return;
-                                  const reader = new FileReader();
-                                  reader.onload = (ev) => setDocumentBase64(ev.target?.result as string);
-                                  reader.readAsDataURL(f);
-                                })}>
-                                + Anexar CRLV
-                              </button>
+                              <div className="flex items-center gap-2 flex-1">
+                                <button type="button" className="text-xs text-emerald-600 border border-dashed border-emerald-400 rounded px-2 py-1 hover:bg-emerald-50"
+                                  onClick={() => openFilePicker({ accept: "image/*,application/pdf" }, (files) => {
+                                    const f = files[0]; if (!f) return;
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => setDocumentBase64(ev.target?.result as string);
+                                    reader.readAsDataURL(f);
+                                  })}>
+                                  + Anexar CRLV
+                                </button>
+                                {isVehicleType && (
+                                  <span className="flex items-center gap-1 text-xs text-amber-600 font-medium">
+                                    <AlertCircle className="h-3 w-3" /> CRLV não anexado
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                           {/* Seguro */}
@@ -864,58 +888,133 @@ export default function SectorsEquipment() {
               (!filterSectorId || (e as any).sectorId === filterSectorId) &&
               (!filterClientId || (e as any).clientId === filterClientId)
             );
-            return filteredList.length === 0 ? (
+            if (filteredList.length === 0) return (
               <div className="text-center py-16 text-gray-400">
                 <Tractor className="h-16 w-16 mx-auto mb-4 opacity-30" />
                 <p className="text-lg font-medium">Nenhum equipamento encontrado</p>
                 <p className="text-sm mt-1">Tente ajustar os filtros de setor ou operação</p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredList.map(e => {
-                const sc = STATUS_CONFIG[e.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.ativo;
-                const Icon = sc.icon;
+            );
+
+            // Agrupar por setor
+            const grouped: { sectorId: number | null; sectorName: string; sectorColor: string; items: typeof filteredList }[] = [];
+            const sectorMap = new Map(sectorsList.map(s => [s.id, s]));
+            const seen = new Set<number | null>();
+            // Ordenar: primeiro por setor (nome), depois sem setor
+            const sorted = [...filteredList].sort((a, b) => {
+              const sA = sectorMap.get((a as any).sectorId)?.name || "ZZZ";
+              const sB = sectorMap.get((b as any).sectorId)?.name || "ZZZ";
+              if (sA !== sB) return sA.localeCompare(sB, "pt-BR");
+              return a.name.localeCompare(b.name, "pt-BR");
+            });
+            for (const e of sorted) {
+              const sid = (e as any).sectorId || null;
+              if (!seen.has(sid)) {
+                seen.add(sid);
+                const sec = sid ? sectorMap.get(sid) : null;
+                grouped.push({
+                  sectorId: sid,
+                  sectorName: sec?.name || "Sem Setor",
+                  sectorColor: sec?.color || "#6b7280",
+                  items: [],
+                });
+              }
+              grouped.find(g => g.sectorId === sid)!.items.push(e);
+            }
+
+            return (
+              <div className="space-y-4">
+              {grouped.map(group => {
+                const isCollapsed = collapsedSectors.has(group.sectorId ?? -1);
                 return (
-                  <Card key={e.id} className="hover:shadow-md transition-shadow overflow-hidden">
-                    {/* Foto do equipamento (se houver) */}
-                    {(e as any).imageUrl && (
-                      <div className="h-32 w-full overflow-hidden">
-                        <img src={(e as any).imageUrl} alt={e.name} className="w-full h-full object-cover" />
+                  <div key={group.sectorId ?? "none"}>
+                    {/* Cabeçalho do grupo de setor */}
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-white font-semibold text-sm mb-2 hover:opacity-90 transition-opacity"
+                      style={{ backgroundColor: group.sectorColor }}
+                      onClick={() => setCollapsedSectors(prev => {
+                        const next = new Set(prev);
+                        const key = group.sectorId ?? -1;
+                        if (next.has(key)) next.delete(key); else next.add(key);
+                        return next;
+                      })}
+                    >
+                      {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      <Building2 className="h-4 w-4" />
+                      {group.sectorName}
+                      <span className="ml-auto text-xs font-normal opacity-80">{group.items.length} equip.</span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {group.items.map(e => {
+                        const sc = STATUS_CONFIG[e.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.ativo;
+                        const Icon = sc.icon;
+                        const hasDoc = (e as any).documentUrl;
+                        const driverName = (e as any).responsibleDriverName;
+                        return (
+                          <Card key={e.id} className="hover:shadow-md transition-shadow overflow-hidden">
+                            {/* Foto do equipamento (se houver) - inteira, sem corte */}
+                            {(e as any).imageUrl && (
+                              <div className="w-full bg-black flex items-center justify-center overflow-hidden" style={{ maxHeight: '160px' }}>
+                                <img
+                                  src={(e as any).imageUrl}
+                                  alt={e.name}
+                                  className="w-full h-auto max-h-40 object-contain cursor-pointer"
+                                  onClick={() => window.open((e as any).imageUrl, '_blank')}
+                                />
+                              </div>
+                            )}
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-gray-800 truncate">{e.name}</p>
+                                  <p className="text-xs text-emerald-600 font-medium">{e.typeName}</p>
+                                  {(e.brand || e.model) && (
+                                    <p className="text-xs text-gray-500 mt-1">{[e.brand, e.model].filter(Boolean).join(" · ")}{e.year ? ` · ${e.year}` : ""}</p>
+                                  )}
+                                  {(e as any).licensePlate && <p className="text-xs text-blue-600 font-medium">🚗 {(e as any).licensePlate}</p>}
+                                  {e.serialNumber && <p className="text-xs text-gray-400">Série: {e.serialNumber}</p>}
+                                  {(e as any).clientName && <p className="text-xs text-blue-600 font-medium">📍 {(e as any).clientName}</p>}
+                                  {/* Motorista responsável */}
+                                  {driverName && (
+                                    <p className="text-xs text-emerald-700 font-medium flex items-center gap-1 mt-0.5">
+                                      <User className="h-3 w-3" /> {driverName}
+                                    </p>
+                                  )}
+                                  {/* Alerta CRLV ausente para veículos */}
+                                  {!hasDoc && (e as any).licensePlate && (
+                                    <p className="text-xs text-amber-600 font-medium flex items-center gap-1 mt-0.5">
+                                      <AlertCircle className="h-3 w-3" /> CRLV não anexado
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${sc.color}`}>
+                                    <Icon className="h-3 w-3" /> {sc.label}
+                                  </span>
+                                  <div className="flex gap-1">
+                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" onClick={() => openEditEquip(e)}>
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-500 hover:text-emerald-700" title="Ficha do Equipamento" onClick={() => setLocation(`/equipamento/${e.id}`)}>
+                                      <FileText className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
+                                      onClick={() => { if (confirm(`Remover "${e.name}"?`)) deleteEquip.mutate({ id: e.id }); }}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                       </div>
                     )}
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-800 truncate">{e.name}</p>
-                          <p className="text-xs text-emerald-600 font-medium">{e.typeName}</p>
-                          {(e.brand || e.model) && (
-                            <p className="text-xs text-gray-500 mt-1">{[e.brand, e.model].filter(Boolean).join(" · ")}{e.year ? ` · ${e.year}` : ""}</p>
-                          )}
-                          {(e as any).licensePlate && <p className="text-xs text-blue-600 font-medium">🚗 Placa: {(e as any).licensePlate}</p>}
-                          {e.serialNumber && <p className="text-xs text-gray-400">Série: {e.serialNumber}</p>}
-                          {(e as any).clientName && <p className="text-xs text-blue-600 font-medium">📍 {(e as any).clientName}</p>}
-                        </div>
-                        <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${sc.color}`}>
-                            <Icon className="h-3 w-3" /> {sc.label}
-                          </span>
-                          <div className="flex gap-1">
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" onClick={() => openEditEquip(e)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-500 hover:text-emerald-700" title="Ficha do Equipamento" onClick={() => setLocation(`/equipamento/${e.id}`)}>
-                              <FileText className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
-                              onClick={() => { if (confirm(`Remover "${e.name}"?`)) deleteEquip.mutate({ id: e.id }); }}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                                );
+                  </div>
+                );
               })}
               </div>
             );

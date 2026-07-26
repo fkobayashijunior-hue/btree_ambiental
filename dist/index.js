@@ -3157,9 +3157,27 @@ var sectorsRouter = router({
       const result2 = await cloudinaryUpload(imageUrl, "btree/equipment");
       imageUrl = result2.url;
     }
+    let invoiceUrl = input.invoiceUrl;
+    let documentUrl = input.documentUrl;
+    let insuranceUrl = input.insuranceUrl;
+    if (invoiceUrl && invoiceUrl.startsWith("data:")) {
+      const r = await cloudinaryUpload(invoiceUrl, "btree/docs");
+      invoiceUrl = r.url;
+    }
+    if (documentUrl && documentUrl.startsWith("data:")) {
+      const r = await cloudinaryUpload(documentUrl, "btree/docs");
+      documentUrl = r.url;
+    }
+    if (insuranceUrl && insuranceUrl.startsWith("data:")) {
+      const r = await cloudinaryUpload(insuranceUrl, "btree/docs");
+      insuranceUrl = r.url;
+    }
     const [result] = await db.insert(equipment).values({
       ...input,
       imageUrl,
+      invoiceUrl,
+      documentUrl,
+      insuranceUrl,
       status: input.status || "ativo"
     });
     return { id: result.insertId };
@@ -3191,6 +3209,18 @@ var sectorsRouter = router({
     if (data.imageUrl && data.imageUrl.startsWith("data:")) {
       const uploaded = await cloudinaryUpload(data.imageUrl, "btree/equipment");
       data.imageUrl = uploaded.url;
+    }
+    if (data.invoiceUrl && data.invoiceUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data.invoiceUrl, "btree/docs");
+      data.invoiceUrl = uploaded.url;
+    }
+    if (data.documentUrl && data.documentUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data.documentUrl, "btree/docs");
+      data.documentUrl = uploaded.url;
+    }
+    if (data.insuranceUrl && data.insuranceUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data.insuranceUrl, "btree/docs");
+      data.insuranceUrl = uploaded.url;
     }
     await db.update(equipment).set(data).where(eq3(equipment.id, id));
     return { success: true };

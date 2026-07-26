@@ -593,47 +593,103 @@ ${maintenances.length > 0 ? `<table><thead><tr><th>Data</th><th>Tipo</th><th>Des
       <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
         {/* Info Card */}
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex gap-4">
-              {equip.imageUrl && (
-                <img src={equip.imageUrl} alt={equip.name}
-                  className="w-24 h-24 rounded-lg object-cover flex-shrink-0 cursor-pointer"
-                  onClick={() => window.open(equip.imageUrl!, "_blank")} />
-              )}
-              <div className="grid grid-cols-2 gap-2 text-sm flex-1">
-                {equip.serialNumber && <div><span className="text-gray-500">Nº Série:</span> <span className="font-medium">{equip.serialNumber}</span></div>}
-                {equip.licensePlate && <div><span className="text-gray-500">Placa:</span> <span className="font-medium">{equip.licensePlate}</span></div>}
-                {equip.year && <div><span className="text-gray-500">Ano:</span> <span className="font-medium">{equip.year}</span></div>}
+          <CardContent className="pt-4 space-y-4">
+            {/* Foto inteira do equipamento */}
+            {equip.imageUrl && (
+              <div className="w-full bg-black rounded-xl overflow-hidden flex items-center justify-center">
+                <img
+                  src={equip.imageUrl}
+                  alt={equip.name}
+                  className="w-full h-auto max-h-72 object-contain cursor-pointer"
+                  onClick={() => window.open(equip.imageUrl!, "_blank")}
+                />
               </div>
+            )}
+            {/* Dados principais */}
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {equip.serialNumber && <div><span className="text-gray-500">Nº Série:</span> <span className="font-medium">{equip.serialNumber}</span></div>}
+              {equip.licensePlate && <div><span className="text-gray-500">Placa:</span> <span className="font-medium">{equip.licensePlate}</span></div>}
+              {equip.year && <div><span className="text-gray-500">Ano:</span> <span className="font-medium">{equip.year}</span></div>}
             </div>
-            {/* Motorista Responsável e Documentos */}
-            {((equip as any).responsibleDriverId || (equip as any).invoiceUrl || (equip as any).documentUrl || (equip as any).insuranceUrl) && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                {(equip as any).responsibleDriverId && (
-                  <div className="text-sm mb-2">
-                    <span className="text-gray-500">👤 Motorista Responsável:</span>{" "}
-                    <span className="font-medium text-emerald-700">{(equip as any).responsibleDriverName || `Colaborador #${(equip as any).responsibleDriverId}`}</span>
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {(equip as any).invoiceUrl && (
-                    <a href={(equip as any).invoiceUrl} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1 hover:bg-blue-100">
-                      📄 Nota Fiscal
+            {/* Motorista Responsável */}
+            {(equip as any).responsibleDriverName && (
+              <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
+                <span className="text-lg">👤</span>
+                <div>
+                  <p className="text-xs text-gray-500">Motorista Responsável</p>
+                  <p className="font-semibold text-emerald-800">{(equip as any).responsibleDriverName}</p>
+                </div>
+              </div>
+            )}
+            {/* Documentos - cards grandes e acessíveis */}
+            {((equip as any).invoiceUrl || (equip as any).documentUrl || (equip as any).insuranceUrl) && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">📂 Documentos</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {(equip as any).documentUrl && (
+                    <a
+                      href={(equip as any).documentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 hover:bg-green-100 active:bg-green-200 transition-colors"
+                    >
+                      <span className="text-2xl">📄</span>
+                      <div className="flex-1">
+                        <p className="font-semibold text-green-800 text-sm">CRLV — Documento do Veículo</p>
+                        <p className="text-xs text-green-600">Toque para visualizar</p>
+                      </div>
+                      <span className="text-green-500">➜</span>
                     </a>
                   )}
-                  {(equip as any).documentUrl && (
-                    <a href={(equip as any).documentUrl} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-1 hover:bg-green-100">
-                      📄 Documento (CRLV)
+                  {!(equip as any).documentUrl && (equip as any).licensePlate && (
+                    <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                      <span className="text-2xl">⚠️</span>
+                      <div className="flex-1">
+                        <p className="font-semibold text-amber-800 text-sm">CRLV não anexado</p>
+                        <p className="text-xs text-amber-600">Solicite ao responsável cadastrar o documento</p>
+                      </div>
+                    </div>
+                  )}
+                  {(equip as any).invoiceUrl && (
+                    <a
+                      href={(equip as any).invoiceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 hover:bg-blue-100 active:bg-blue-200 transition-colors"
+                    >
+                      <span className="text-2xl">📄</span>
+                      <div className="flex-1">
+                        <p className="font-semibold text-blue-800 text-sm">Nota Fiscal</p>
+                        <p className="text-xs text-blue-600">Toque para visualizar</p>
+                      </div>
+                      <span className="text-blue-500">➜</span>
                     </a>
                   )}
                   {(equip as any).insuranceUrl && (
-                    <a href={(equip as any).insuranceUrl} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 border border-orange-200 rounded px-2 py-1 hover:bg-orange-100">
-                      📄 Seguro
+                    <a
+                      href={(equip as any).insuranceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 hover:bg-orange-100 active:bg-orange-200 transition-colors"
+                    >
+                      <span className="text-2xl">📄</span>
+                      <div className="flex-1">
+                        <p className="font-semibold text-orange-800 text-sm">Seguro</p>
+                        <p className="text-xs text-orange-600">Toque para visualizar</p>
+                      </div>
+                      <span className="text-orange-500">➜</span>
                     </a>
                   )}
+                </div>
+              </div>
+            )}
+            {/* Alerta CRLV se não há nenhum documento */}
+            {!(equip as any).invoiceUrl && !(equip as any).documentUrl && !(equip as any).insuranceUrl && (equip as any).licensePlate && (
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <span className="text-2xl">⚠️</span>
+                <div>
+                  <p className="font-semibold text-amber-800 text-sm">CRLV não anexado</p>
+                  <p className="text-xs text-amber-600">Solicite ao responsável cadastrar o documento</p>
                 </div>
               </div>
             )}
