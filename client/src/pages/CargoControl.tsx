@@ -2509,14 +2509,17 @@ export default function CargoControl() {
                   value={form.vehicleId}
                   onChange={e => {
                     const id = parseInt(e.target.value);
-                    const truck = trucks.find(t => t.id === id);
+                    const truck = (trucks as any[]).find(t => t.id === id);
                     setForm(f => ({
                       ...f,
                       vehicleId: id,
                       vehiclePlate: truck?.licensePlate || f.vehiclePlate,
-                      heightM: (truck as any)?.defaultHeightM || f.heightM || "2.4",
-                      widthM: (truck as any)?.defaultWidthM || f.widthM || "2.4",
-                      lengthM: (truck as any)?.defaultLengthM || f.lengthM || "13.80",
+                      heightM: truck?.defaultHeightM || f.heightM || "2.4",
+                      widthM: truck?.defaultWidthM || f.widthM || "2.4",
+                      lengthM: truck?.defaultLengthM || f.lengthM || "13.80",
+                      // Auto-preencher motorista se o caminhão tiver motorista vinculado
+                      driverCollaboratorId: truck?.responsibleDriverId || f.driverCollaboratorId,
+                      driverName: truck?.responsibleDriverName || f.driverName,
                     }));
                   }}
                   className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"

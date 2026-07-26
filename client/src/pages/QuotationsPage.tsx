@@ -132,7 +132,8 @@ export default function QuotationsPage() {
   const { data: grouped, isLoading } = trpc.quotations.listByCategory.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery({ activeOnly: true });
   const { data: categories } = trpc.purchaseCategories.list.useQuery();
-  const { data: collaborators } = trpc.collaborators.list.useQuery({});
+  const { data: collaboratorsRaw } = trpc.collaborators.list.useQuery({ active: true });
+  const collaborators = collaboratorsRaw ? [...collaboratorsRaw].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) : undefined;
   const { data: quotRequests, refetch: refetchRequests } = trpc.quotationRequests.list.useQuery();
   const { data: requestDetail } = trpc.quotationRequests.getById.useQuery(
     { id: viewResponsesId! },

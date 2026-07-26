@@ -3,7 +3,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, updateUserPasswordByEmail } from "../db";
 import { collaborators, biometricAttendance, users, userPermissions } from "../../drizzle/schema";
-import { eq, desc, and, like, or, inArray, sql } from "drizzle-orm";
+import { eq, desc, asc, and, like, or, inArray, sql } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 import bcrypt from "bcryptjs";
 
@@ -84,11 +84,11 @@ export const collaboratorsRouter = router({
       if (conditions.length > 0) {
         return await db.select().from(collaborators)
           .where(conditions.length === 1 ? conditions[0] : and(...conditions))
-          .orderBy(desc(collaborators.createdAt));
+          .orderBy(asc(collaborators.name));
       }
 
       return await db.select().from(collaborators)
-        .orderBy(desc(collaborators.createdAt));
+        .orderBy(asc(collaborators.name));
     }),
 
   // Buscar colaborador por ID

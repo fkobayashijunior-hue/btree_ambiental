@@ -2664,7 +2664,7 @@ init_db();
 init_schema();
 init_cloudinary();
 import { z as z2 } from "zod";
-import { eq as eq2, desc, and as and2, like, or, inArray, sql } from "drizzle-orm";
+import { eq as eq2, desc, asc, and as and2, like, or, inArray, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 async function resolveAllowedClientIds(db, ctx) {
   if (ctx.user.role === "admin") return null;
@@ -2735,9 +2735,9 @@ var collaboratorsRouter = router({
       conditions.push(inArray(collaborators.clientId, allowedClientIds));
     }
     if (conditions.length > 0) {
-      return await db.select().from(collaborators).where(conditions.length === 1 ? conditions[0] : and2(...conditions)).orderBy(desc(collaborators.createdAt));
+      return await db.select().from(collaborators).where(conditions.length === 1 ? conditions[0] : and2(...conditions)).orderBy(asc(collaborators.name));
     }
-    return await db.select().from(collaborators).orderBy(desc(collaborators.createdAt));
+    return await db.select().from(collaborators).orderBy(asc(collaborators.name));
   }),
   // Buscar colaborador por ID
   getById: protectedProcedure.input(z2.object({ id: z2.number() })).query(async ({ input }) => {
@@ -3389,7 +3389,7 @@ init_schema();
 init_cloudinary();
 import { z as z6 } from "zod";
 import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq6, desc as desc3, asc, and as and3, sql as sql2, ne, or as or3 } from "drizzle-orm";
+import { eq as eq6, desc as desc3, asc as asc2, and as and3, sql as sql2, ne, or as or3 } from "drizzle-orm";
 import mysql3 from "mysql2/promise";
 async function getDirectConnection() {
   const connConfig = process.env.DB_HOST ? {
@@ -4327,6 +4327,7 @@ var cargoLoadsRouter = router({
   listTrucks: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const driverAlias3 = { id: collaborators.id, name: collaborators.name };
     const all = await db.select({
       id: equipment.id,
       name: equipment.name,
@@ -4336,11 +4337,13 @@ var cargoLoadsRouter = router({
       status: equipment.status,
       defaultHeightM: equipment.defaultHeightM,
       defaultWidthM: equipment.defaultWidthM,
-      defaultLengthM: equipment.defaultLengthM
-    }).from(equipment).orderBy(equipment.name);
-    return all.filter((e) => e.licensePlate || e.name.toLowerCase().includes("caminh") || e.name.toLowerCase().includes("ve\xEDculo") || e.name.toLowerCase().includes("veiculo") || e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van"));
+      defaultLengthM: equipment.defaultLengthM,
+      responsibleDriverId: equipment.responsibleDriverId,
+      responsibleDriverName: collaborators.name
+    }).from(equipment).leftJoin(collaborators, eq6(equipment.responsibleDriverId, collaborators.id)).orderBy(equipment.name);
+    return all.filter((e) => e.licensePlate || e.name.toLowerCase().includes("caminh") || e.name.toLowerCase().includes("ve\xEDculo") || e.name.toLowerCase().includes("veiculo") || e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van") || e.name.toLowerCase().includes("trator") || e.name.toLowerCase().includes("maquina") || e.name.toLowerCase().includes("m\xE1quina"));
   }),
-  // Listar motoristas (colaboradores)
+  // Listar motoristas (colaboradores ativos, ordem alfabética)
   listDrivers: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -4348,7 +4351,7 @@ var cargoLoadsRouter = router({
       id: collaborators.id,
       name: collaborators.name,
       role: collaborators.role
-    }).from(collaborators).orderBy(collaborators.name);
+    }).from(collaborators).where(eq6(collaborators.active, 1)).orderBy(asc2(collaborators.name));
   }),
   // ===== EXPERIÊNCIA DO MOTORISTA =====
   // Buscar informações do motorista logado (colaborador vinculado + caminhão)
@@ -4939,7 +4942,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       receiverName: cargoLoads.receiverName,
       thirdPartyContractor: cargoLoads.thirdPartyContractor,
       thirdPartyCost: cargoLoads.thirdPartyCost
-    }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
+    }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(asc2(cargoLoads.date), asc2(cargoLoads.id));
     let buyerInfo = null;
     let destInfo = null;
     if (input.destinationId && input.destinationId > 0) {
@@ -5004,7 +5007,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       thirdPartyPaidAt: cargoLoads.thirdPartyPaidAt,
       thirdPartyPaymentNotes: cargoLoads.thirdPartyPaymentNotes,
       notes: cargoLoads.notes
-    }).from(cargoLoads).where(and3(...conditions)).orderBy(asc(cargoLoads.date), asc(cargoLoads.id));
+    }).from(cargoLoads).where(and3(...conditions)).orderBy(asc2(cargoLoads.date), asc2(cargoLoads.id));
     return results;
   }),
   // Marcar carga de corte terceirizado como paga
@@ -12735,18 +12738,18 @@ init_db();
 init_schema();
 import { z as z30 } from "zod";
 import { TRPCError as TRPCError19 } from "@trpc/server";
-import { eq as eq29, asc as asc2 } from "drizzle-orm";
+import { eq as eq29, asc as asc3 } from "drizzle-orm";
 var thirdPartyContractorsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const rows = await db.select().from(thirdPartyContractors).orderBy(asc2(thirdPartyContractors.name));
+    const rows = await db.select().from(thirdPartyContractors).orderBy(asc3(thirdPartyContractors.name));
     return rows;
   }),
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const rows = await db.select().from(thirdPartyContractors).where(eq29(thirdPartyContractors.isActive, 1)).orderBy(asc2(thirdPartyContractors.name));
+    const rows = await db.select().from(thirdPartyContractors).where(eq29(thirdPartyContractors.isActive, 1)).orderBy(asc3(thirdPartyContractors.name));
     return rows;
   }),
   create: protectedProcedure.input(z30.object({
@@ -13430,7 +13433,7 @@ init_db();
 init_schema();
 import { z as z34 } from "zod";
 import { TRPCError as TRPCError23 } from "@trpc/server";
-import { eq as eq33, desc as desc27, asc as asc3, sql as sql20 } from "drizzle-orm";
+import { eq as eq33, desc as desc27, asc as asc4, sql as sql20 } from "drizzle-orm";
 var quotationsRouter = router({
   // List all quotations, optionally filtered by category or supplier
   list: protectedProcedure.input(z34.object({
@@ -13478,7 +13481,7 @@ var quotationsRouter = router({
       totalPrice: quotations.totalPrice,
       quotedAt: quotations.quotedAt,
       notes: quotations.notes
-    }).from(quotations).leftJoin(suppliers, eq33(quotations.supplierId, suppliers.id)).where(eq33(quotations.productName, input.productName)).orderBy(asc3(sql20`CAST(${quotations.unitPrice} AS DECIMAL(10,2))`), desc27(quotations.quotedAt));
+    }).from(quotations).leftJoin(suppliers, eq33(quotations.supplierId, suppliers.id)).where(eq33(quotations.productName, input.productName)).orderBy(asc4(sql20`CAST(${quotations.unitPrice} AS DECIMAL(10,2))`), desc27(quotations.quotedAt));
     return rows;
   }),
   // List grouped by category — returns categories with their products and price history
@@ -13504,7 +13507,7 @@ var quotationsRouter = router({
     }).from(quotations).leftJoin(suppliers, eq33(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq33(quotations.categoryId, purchaseCategories.id)).orderBy(
       purchaseCategories.name,
       quotations.productName,
-      asc3(sql20`CAST(${quotations.unitPrice} AS DECIMAL(10,2))`)
+      asc4(sql20`CAST(${quotations.unitPrice} AS DECIMAL(10,2))`)
     );
     const grouped = {};
     for (const row of rows) {

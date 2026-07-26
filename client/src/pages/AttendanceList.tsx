@@ -123,7 +123,8 @@ export default function AttendanceList() {
 
   const utils = trpc.useUtils();
   const { isOnline, addToQueue } = useOfflineQueue();
-   const { data: collaboratorsList = [] } = trpc.collaborators.list.useQuery({});
+  const { data: collaboratorsListRaw = [] } = trpc.collaborators.list.useQuery({ active: true });
+  const collaboratorsList = [...collaboratorsListRaw].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   // ── Locais GPS cadastrados ──────────────────────────────────────
   const { data: gpsLocationsList = [] } = trpc.gpsLocations.listActive.useQuery();
   // ── Dados da semana ──────────────────────────────────────────────────────

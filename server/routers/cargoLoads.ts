@@ -971,6 +971,7 @@ export const cargoLoadsRouter = router({
   listTrucks: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+    const driverAlias = { id: collaborators.id, name: collaborators.name };
     const all = await db.select({
       id: equipment.id,
       name: equipment.name,
@@ -981,12 +982,16 @@ export const cargoLoadsRouter = router({
       defaultHeightM: equipment.defaultHeightM,
       defaultWidthM: equipment.defaultWidthM,
       defaultLengthM: equipment.defaultLengthM,
-    }).from(equipment).orderBy(equipment.name);
+      responsibleDriverId: equipment.responsibleDriverId,
+      responsibleDriverName: collaborators.name,
+    }).from(equipment)
+      .leftJoin(collaborators, eq(equipment.responsibleDriverId, collaborators.id))
+      .orderBy(equipment.name);
     // Filtrar apenas veículos com placa ou que sejam do tipo veículo
-    return all.filter(e => e.licensePlate || e.name.toLowerCase().includes("caminh") || e.name.toLowerCase().includes("veículo") || e.name.toLowerCase().includes("veiculo") || e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van"));
+    return all.filter(e => e.licensePlate || e.name.toLowerCase().includes("caminh") || e.name.toLowerCase().includes("veículo") || e.name.toLowerCase().includes("veiculo") || e.name.toLowerCase().includes("carro") || e.name.toLowerCase().includes("van") || e.name.toLowerCase().includes("trator") || e.name.toLowerCase().includes("maquina") || e.name.toLowerCase().includes("máquina"));
   }),
 
-  // Listar motoristas (colaboradores)
+  // Listar motoristas (colaboradores ativos, ordem alfabética)
   listDrivers: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
@@ -994,7 +999,9 @@ export const cargoLoadsRouter = router({
       id: collaborators.id,
       name: collaborators.name,
       role: collaborators.role,
-    }).from(collaborators).orderBy(collaborators.name);
+    }).from(collaborators)
+      .where(eq(collaborators.active, 1))
+      .orderBy(asc(collaborators.name));
   }),
 
   // ===== EXPERIÊNCIA DO MOTORISTA =====

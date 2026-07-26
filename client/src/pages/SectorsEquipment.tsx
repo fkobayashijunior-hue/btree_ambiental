@@ -70,16 +70,7 @@ export default function SectorsEquipment() {
   // Expandir/colapsar grupos de setor na lista
   const [collapsedSectors, setCollapsedSectors] = useState<Set<number>>(new Set());
 
-  // Tipos simplificados (categorias fixas)
-  const FIXED_EQUIPMENT_TYPES = [
-    { id: -1, name: "CARROS" },
-    { id: -2, name: "CAMINHÕES" },
-    { id: -3, name: "TRATORES" },
-    { id: -4, name: "MOTOSSERRAS" },
-    { id: -5, name: "EQUIPAMENTOS" },
-    { id: -6, name: "MÁQUINAS" },
-    { id: -7, name: "OUTROS" },
-  ];
+  // Tipos fixos removidos - agora vêm do banco (IDs reais)
 
   // Queries
   const { data: sectorsList = [] } = trpc.sectors.listSectors.useQuery();
@@ -88,7 +79,8 @@ export default function SectorsEquipment() {
     search: equipSearch || undefined,
   });
   const { data: clientsList = [] } = trpc.permissions.listClients.useQuery();
-  const { data: driversList = [] } = trpc.collaborators.list.useQuery({});
+  const { data: driversListRaw = [] } = trpc.collaborators.list.useQuery({ active: true });
+  const driversList = [...driversListRaw].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
   // Gerar Ficha PDF de TODOS os equipamentos
   const handleGenerateAllEquipmentsPdf = async () => {
@@ -266,11 +258,14 @@ export default function SectorsEquipment() {
   };
 
   // Detectar se o tipo selecionado é veículo/caminhão (campo dinâmico)
-  // Combina tipos fixos + tipos customizados do banco
-  const allEquipTypes = [
-    ...FIXED_EQUIPMENT_TYPES,
-    ...equipTypes.filter(t => !FIXED_EQUIPMENT_TYPES.some(f => f.name.toLowerCase() === t.name.toLowerCase())),
-  ];
+  // Usar apenas tipos do banco (sem duplicatas por nome case-insensitive)
+  const seenNames = new Set<string>();
+  const allEquipTypes = equipTypes.filter(t => {
+    const key = t.name.trim().toLowerCase();
+    if (seenNames.has(key)) return false;
+    seenNames.add(key);
+    return true;
+  });
   const selectedTypeName = allEquipTypes.find(t => Number(t.id) === Number(equipForm.typeId))?.name?.toLowerCase() || "";
   // Normalizar removendo acentos para garantir match
   const normalizedTypeName = selectedTypeName.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -280,7 +275,9 @@ export default function SectorsEquipment() {
     normalizedTypeName.includes("van") || normalizedTypeName.includes("onibus") ||
     normalizedTypeName.includes("pickup") || normalizedTypeName.includes("utilitario") ||
     normalizedTypeName.includes("truck") || normalizedTypeName.includes("carreta") ||
-    normalizedTypeName.includes("bitrem") || normalizedTypeName.includes("rodotrem");
+    normalizedTypeName.includes("bitrem") || normalizedTypeName.includes("rodotrem") ||
+    normalizedTypeName.includes("trator") || normalizedTypeName.includes("tratores") ||
+    normalizedTypeName.includes("maquina") || normalizedTypeName.includes("maquinas");
 
   const openEditSector = (s: typeof sectorsList[number]) => {
     setEditSectorId(s.id);
@@ -548,8 +545,8 @@ export default function SectorsEquipment() {
                     <div>
                       <Label className="mb-2 block">Foto do Equipamento</Label>
                       {equipPhotoPreview ? (
-                        <div className="relative w-full rounded-xl overflow-hidden border border-gray-200 bg-black">
-                          <img src={equipPhotoPreview} alt="Preview" className="w-full h-auto max-h-64 object-contain" />
+                        <div className="relative w-full rounded-xl overflow-hidden border border-gray-200" style={{height: '200px'}}>
+                          <img src={equipPhotoPreview} alt="Preview" className="w-full h-full object-cover" />
                           <button
                             type="button"
                             onClick={() => { setEquipPhotoPreview(null); setEquipPhotoBase64(null); setExistingImageUrl(null); }}
@@ -954,13 +951,13 @@ export default function SectorsEquipment() {
                         const driverName = (e as any).responsibleDriverName;
                         return (
                           <Card key={e.id} className="hover:shadow-md transition-shadow overflow-hidden">
-                            {/* Foto do equipamento (se houver) - inteira, sem corte */}
+                            {/* Foto do equipamento */}
                             {(e as any).imageUrl && (
-                              <div className="w-full bg-black flex items-center justify-center overflow-hidden" style={{ maxHeight: '160px' }}>
+                              <div className="w-full overflow-hidden" style={{ height: '150px' }}>
                                 <img
                                   src={(e as any).imageUrl}
                                   alt={e.name}
-                                  className="w-full h-auto max-h-40 object-contain cursor-pointer"
+                                  className="w-full h-full object-cover cursor-pointer"
                                   onClick={() => window.open((e as any).imageUrl, '_blank')}
                                 />
                               </div>
