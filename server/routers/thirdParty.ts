@@ -336,27 +336,53 @@ export const thirdPartyRouter = router({
       const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
       const locationMap = new Map(locationRows.map(l => [l.id, l.name]));
 
-      // Para cada carga, calcular o frete
-      const result = await Promise.all(thirdPartyCargos.map(async (cargo) => {
+      // ── Pré-calcular combustível total por veículo no período (UMA única query por veículo) ──
+      // Isso evita o bug onde o total do período era repetido em cada carga individualmente.
+      // O combustível é distribuído proporcionalmente ao peso de cada carga.
+      const fuelByVehicle = new Map<number, number>();
+      for (const truckId of truckIds) {
+        const fuelConditions: ReturnType<typeof and>[] = [
+          eq(vehicleRecords.equipmentId, truckId),
+          eq(vehicleRecords.recordType, 'abastecimento'),
+        ];
+        if (input?.startDate) fuelConditions.push(gte(vehicleRecords.date, input.startDate + " 00:00:00"));
+        if (input?.endDate) fuelConditions.push(lte(vehicleRecords.date, input.endDate + " 23:59:59"));
+        const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost })
+          .from(vehicleRecords)
+          .where(and(...fuelConditions));
+        const totalFuel = vehicleFuel.reduce((acc, f) => acc + parseFloat(f.fuelCost || '0'), 0);
+        fuelByVehicle.set(truckId, totalFuel);
+      }
+
+      // Calcular peso total por veículo (para distribuição proporcional)
+      const totalWeightByVehicle = new Map<number, number>();
+      for (const cargo of thirdPartyCargos) {
+        if (!cargo.vehicleId) continue;
+        const w = parseFloat(cargo.weightNetKg || '0');
+        totalWeightByVehicle.set(cargo.vehicleId, (totalWeightByVehicle.get(cargo.vehicleId) ?? 0) + w);
+      }
+
+      // Helper: verifica se texto A contém todas as palavras-chave de texto B (ou vice-versa)
+      const fuzzyMatch = (a: string, b: string) => {
+        const aL = a.toLowerCase().trim();
+        const bL = b.toLowerCase().trim();
+        if (aL === bL) return true;
+        if (aL.includes(bL) || bL.includes(aL)) return true;
+        const bWords = bL.split(/\s+/).filter(w => w.length > 2);
+        return bWords.length > 0 && bWords.every(w => aL.includes(w));
+      };
+
+      // Para cada carga, calcular o frete com combustível proporcional
+      const result = thirdPartyCargos.map((cargo) => {
         const truck = cargo.vehicleId ? truckMap.get(cargo.vehicleId) : null;
-        const weightTons = parseFloat(cargo.weightNetKg || '0') / 1000;
+        const weightKg = parseFloat(cargo.weightNetKg || '0');
+        const weightTons = weightKg / 1000;
 
         // Nome do local de trabalho da carga
         const worksiteName = cargo.workLocationId ? (locationMap.get(cargo.workLocationId) ?? '') : '';
         const destName = cargo.destination ?? '';
 
         // Busca de tarifa com múltiplas estratégias:
-        // Helper: verifica se texto A contém todas as palavras-chave de texto B (ou vice-versa)
-        const fuzzyMatch = (a: string, b: string) => {
-          const aL = a.toLowerCase().trim();
-          const bL = b.toLowerCase().trim();
-          if (aL === bL) return true;
-          if (aL.includes(bL) || bL.includes(aL)) return true;
-          // Verifica se todas as palavras de b estão em a
-          const bWords = bL.split(/\s+/).filter(w => w.length > 2);
-          return bWords.length > 0 && bWords.every(w => aL.includes(w));
-        };
-
         // 1. Exata: worksite == worksiteName E destination == destName
         let matchingRate = rates.find(r =>
           r.worksite.toLowerCase() === worksiteName.toLowerCase() &&
@@ -380,20 +406,15 @@ export const thirdPartyRouter = router({
 
         const grossFreight = matchingRate ? parseFloat(matchingRate.ratePerTon) * weightTons : 0;
 
-        // Buscar combustível do terceirizado no período filtrado (vehicleRecords com recordType='abastecimento')
-        // O custo de combustível abate do valor a pagar: Frete Líquido = Frete Bruto - Combustível
+        // Distribuir combustível proporcionalmente ao peso desta carga
+        // fuelCost_carga = fuelTotal_veículo × (peso_carga / peso_total_veículo_no_período)
         let fuelCost = 0;
         if (cargo.vehicleId) {
-          const fuelConditions: ReturnType<typeof and>[] = [
-            eq(vehicleRecords.equipmentId, cargo.vehicleId),
-            eq(vehicleRecords.recordType, 'abastecimento'),
-          ];
-          if (input?.startDate) fuelConditions.push(gte(vehicleRecords.date, input.startDate + " 00:00:00"));
-          if (input?.endDate) fuelConditions.push(lte(vehicleRecords.date, input.endDate + " 23:59:59"));
-          const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost })
-            .from(vehicleRecords)
-            .where(and(...fuelConditions));
-          fuelCost = vehicleFuel.reduce((acc, f) => acc + parseFloat(f.fuelCost || '0'), 0);
+          const totalFuelForVehicle = fuelByVehicle.get(cargo.vehicleId) ?? 0;
+          const totalWeightForVehicle = totalWeightByVehicle.get(cargo.vehicleId) ?? 0;
+          if (totalWeightForVehicle > 0 && totalFuelForVehicle > 0) {
+            fuelCost = totalFuelForVehicle * (weightKg / totalWeightForVehicle);
+          }
         }
 
         const netFreight = grossFreight - fuelCost;
@@ -412,7 +433,7 @@ export const thirdPartyRouter = router({
           matchedRateWorksite: matchingRate?.worksite ?? null,
           matchedRateDestination: matchingRate?.destination ?? null,
         };
-      }));
+      });
 
       return result;
     }),

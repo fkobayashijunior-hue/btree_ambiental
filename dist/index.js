@@ -15019,19 +15019,38 @@ var thirdPartyRouter = router({
     const rates = await db.select().from(freightRates);
     const locationRows = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
     const locationMap = new Map(locationRows.map((l) => [l.id, l.name]));
-    const result = await Promise.all(thirdPartyCargos.map(async (cargo) => {
+    const fuelByVehicle = /* @__PURE__ */ new Map();
+    for (const truckId of truckIds) {
+      const fuelConditions = [
+        eq38(vehicleRecords.equipmentId, truckId),
+        eq38(vehicleRecords.recordType, "abastecimento")
+      ];
+      if (input?.startDate) fuelConditions.push(gte11(vehicleRecords.date, input.startDate + " 00:00:00"));
+      if (input?.endDate) fuelConditions.push(lte11(vehicleRecords.date, input.endDate + " 23:59:59"));
+      const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost }).from(vehicleRecords).where(and23(...fuelConditions));
+      const totalFuel = vehicleFuel.reduce((acc, f) => acc + parseFloat(f.fuelCost || "0"), 0);
+      fuelByVehicle.set(truckId, totalFuel);
+    }
+    const totalWeightByVehicle = /* @__PURE__ */ new Map();
+    for (const cargo of thirdPartyCargos) {
+      if (!cargo.vehicleId) continue;
+      const w = parseFloat(cargo.weightNetKg || "0");
+      totalWeightByVehicle.set(cargo.vehicleId, (totalWeightByVehicle.get(cargo.vehicleId) ?? 0) + w);
+    }
+    const fuzzyMatch = (a, b) => {
+      const aL = a.toLowerCase().trim();
+      const bL = b.toLowerCase().trim();
+      if (aL === bL) return true;
+      if (aL.includes(bL) || bL.includes(aL)) return true;
+      const bWords = bL.split(/\s+/).filter((w) => w.length > 2);
+      return bWords.length > 0 && bWords.every((w) => aL.includes(w));
+    };
+    const result = thirdPartyCargos.map((cargo) => {
       const truck = cargo.vehicleId ? truckMap.get(cargo.vehicleId) : null;
-      const weightTons = parseFloat(cargo.weightNetKg || "0") / 1e3;
+      const weightKg = parseFloat(cargo.weightNetKg || "0");
+      const weightTons = weightKg / 1e3;
       const worksiteName = cargo.workLocationId ? locationMap.get(cargo.workLocationId) ?? "" : "";
       const destName = cargo.destination ?? "";
-      const fuzzyMatch = (a, b) => {
-        const aL = a.toLowerCase().trim();
-        const bL = b.toLowerCase().trim();
-        if (aL === bL) return true;
-        if (aL.includes(bL) || bL.includes(aL)) return true;
-        const bWords = bL.split(/\s+/).filter((w) => w.length > 2);
-        return bWords.length > 0 && bWords.every((w) => aL.includes(w));
-      };
       let matchingRate = rates.find(
         (r) => r.worksite.toLowerCase() === worksiteName.toLowerCase() && r.destination.toLowerCase() === destName.toLowerCase()
       );
@@ -15049,14 +15068,11 @@ var thirdPartyRouter = router({
       const grossFreight = matchingRate ? parseFloat(matchingRate.ratePerTon) * weightTons : 0;
       let fuelCost = 0;
       if (cargo.vehicleId) {
-        const fuelConditions = [
-          eq38(vehicleRecords.equipmentId, cargo.vehicleId),
-          eq38(vehicleRecords.recordType, "abastecimento")
-        ];
-        if (input?.startDate) fuelConditions.push(gte11(vehicleRecords.date, input.startDate + " 00:00:00"));
-        if (input?.endDate) fuelConditions.push(lte11(vehicleRecords.date, input.endDate + " 23:59:59"));
-        const vehicleFuel = await db.select({ fuelCost: vehicleRecords.fuelCost }).from(vehicleRecords).where(and23(...fuelConditions));
-        fuelCost = vehicleFuel.reduce((acc, f) => acc + parseFloat(f.fuelCost || "0"), 0);
+        const totalFuelForVehicle = fuelByVehicle.get(cargo.vehicleId) ?? 0;
+        const totalWeightForVehicle = totalWeightByVehicle.get(cargo.vehicleId) ?? 0;
+        if (totalWeightForVehicle > 0 && totalFuelForVehicle > 0) {
+          fuelCost = totalFuelForVehicle * (weightKg / totalWeightForVehicle);
+        }
       }
       const netFreight = grossFreight - fuelCost;
       return {
@@ -15073,7 +15089,7 @@ var thirdPartyRouter = router({
         matchedRateWorksite: matchingRate?.worksite ?? null,
         matchedRateDestination: matchingRate?.destination ?? null
       };
-    }));
+    });
     return result;
   }),
   // ===== MARCAR FRETE COMO PAGO =====

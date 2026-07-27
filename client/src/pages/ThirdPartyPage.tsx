@@ -906,19 +906,19 @@ function FuelTab() {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 items-end">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 items-end">
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted-foreground font-medium">De</label>
-          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36" />
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full sm:w-36" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted-foreground font-medium">Até</label>
-          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36" />
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full sm:w-36" />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="col-span-2 flex flex-col gap-1">
           <label className="text-xs text-muted-foreground font-medium">Proprietário</label>
           <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-48">
               <User className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
@@ -931,7 +931,7 @@ function FuelTab() {
           </Select>
         </div>
         {/* Campo de preço a cobrar */}
-        <div className="flex flex-col gap-1">
+        <div className="col-span-2 flex flex-col gap-1">
           <label className="text-xs text-amber-700 font-semibold">Preço/L a Cobrar (R$)</label>
           <div className="flex items-center gap-1">
             <Input
@@ -941,7 +941,7 @@ function FuelTab() {
               value={customChargePrice}
               onChange={e => setCustomChargePrice(e.target.value)}
               placeholder="ex: 6,40"
-              className="w-28 border-amber-300 focus:ring-amber-400"
+              className="w-full sm:w-28 border-amber-300 focus:ring-amber-400"
             />
             {customChargePrice && (
               <button onClick={() => setCustomChargePrice('')} className="text-xs text-gray-400 hover:text-gray-600 px-1">×</button>
@@ -949,37 +949,39 @@ function FuelTab() {
           </div>
           <span className="text-xs text-amber-600">{customChargePrice ? `Calculando com R$ ${customChargePrice}/L` : 'Usando valor do registro'}</span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 border-green-700 text-green-700 hover:bg-green-50"
-          onClick={generatePDF}
-        >
-          <FileText className="h-4 w-4" />
-          Gerar Relatório PDF
-        </Button>
+        <div className="col-span-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full sm:w-auto gap-1.5 border-green-700 text-green-700 hover:bg-green-50"
+            onClick={generatePDF}
+          >
+            <FileText className="h-4 w-4" />
+            Gerar Relatório PDF
+          </Button>
+        </div>
       </div>
 
-      {/* Resumo */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* Resumo — 2 colunas no mobile, 4 no desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="bg-orange-50 border-orange-200">
           <CardContent className="p-3">
-            <p className="text-xs text-orange-700 font-medium">Custo Real Combustível</p>
-            <p className="text-lg font-bold text-orange-600">{fmt(totalGasto)}</p>
+            <p className="text-xs text-orange-700 font-medium leading-tight">Custo Real Combustível</p>
+            <p className="text-base font-bold text-orange-600 mt-1">{fmt(totalGasto)}</p>
             <p className="text-xs text-muted-foreground">{totalLitros.toFixed(1)} litros</p>
           </CardContent>
         </Card>
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-3">
-            <p className="text-xs text-blue-700 font-medium">Abastecimentos</p>
-            <p className="text-lg font-bold text-blue-600">{filteredFuel.length}</p>
+            <p className="text-xs text-blue-700 font-medium leading-tight">Abastecimentos</p>
+            <p className="text-2xl font-bold text-blue-600 mt-1">{filteredFuel.length}</p>
             <p className="text-xs text-muted-foreground">registros no período</p>
           </CardContent>
         </Card>
         <Card className="bg-green-50 border-green-200">
           <CardContent className="p-3">
-            <p className="text-xs text-green-700 font-medium">Cargas no Período</p>
-            <p className="text-lg font-bold text-green-600">{filteredFreights.length}</p>
+            <p className="text-xs text-green-700 font-medium leading-tight">Cargas no Período</p>
+            <p className="text-2xl font-bold text-green-600 mt-1">{filteredFreights.length}</p>
             <p className="text-xs text-muted-foreground">
               {filteredFreights.reduce((a, c) => a + (c.weightTons || 0), 0).toFixed(1)} t
             </p>
@@ -987,8 +989,8 @@ function FuelTab() {
         </Card>
         <Card className="bg-emerald-700 border-emerald-800">
           <CardContent className="p-3">
-            <p className="text-xs text-emerald-100 font-semibold">Total a Cobrar</p>
-            <p className="text-lg font-bold text-white">{fmt(totalCobrado)}</p>
+            <p className="text-xs text-emerald-100 font-semibold leading-tight">Total a Cobrar</p>
+            <p className="text-base font-bold text-white mt-1">{fmt(totalCobrado)}</p>
             <p className="text-xs text-emerald-200">{totalLitros.toFixed(1)} L {chargePrice ? `× R$ ${chargePrice.toFixed(2)}/L` : '(preços do registro)'}</p>
           </CardContent>
         </Card>
