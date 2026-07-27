@@ -121,6 +121,7 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 		invoiceCheckedAt: bigint("invoice_checked_at", { mode: 'number' }).notNull().default(0),
 		invoiceCheckedBy: int("invoice_checked_by"),
 		invoiceCheckedByName: varchar("invoice_checked_by_name", { length: 255 }),
+		fiscalNoteId: int("fiscal_note_id"),
 	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {

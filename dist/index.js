@@ -394,7 +394,8 @@ var init_schema = __esm({
       invoiceChecked: int("invoice_checked").default(0).notNull(),
       invoiceCheckedAt: bigint("invoice_checked_at", { mode: "number" }).notNull().default(0),
       invoiceCheckedBy: int("invoice_checked_by"),
-      invoiceCheckedByName: varchar("invoice_checked_by_name", { length: 255 })
+      invoiceCheckedByName: varchar("invoice_checked_by_name", { length: 255 }),
+      fiscalNoteId: int("fiscal_note_id")
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -17743,6 +17744,35 @@ async function runAutoMigrations() {
       console.log("[AutoMigration] Added diesel_s10 to fuel_invoices");
     } catch (e) {
       if (!e?.message?.includes("diesel_s10")) console.log("[AutoMigration] fuel_invoices fuel_type already updated or error:", e?.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_loads ADD COLUMN fiscal_note_id INT NULL`
+      );
+      console.log("[AutoMigration] Added fiscal_note_id to cargo_loads");
+    } catch (e) {
+      if (!e?.message?.includes("Duplicate")) console.log("[AutoMigration] fiscal_note_id already exists or error:", e?.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `
+        UPDATE fiscal_notes fn
+        INNER JOIN cargo_loads cl ON (
+          cl.invoice_number LIKE CONCAT('%', fn.action_code, '%')
+          OR (fn.invoice_number IS NOT NULL AND fn.invoice_number != '' AND cl.invoice_number LIKE CONCAT('%NF ', fn.invoice_number, '%'))
+          OR (fn.invoice_number IS NOT NULL AND fn.invoice_number != '' AND cl.invoice_number = fn.invoice_number)
+        )
+        SET fn.status = 'used',
+            fn.used_at = COALESCE(fn.used_at, cl.created_at),
+            fn.used_by_cargo_id = COALESCE(fn.used_by_cargo_id, cl.id)
+        WHERE fn.status = 'available'
+      `
+      );
+      console.log("[AutoMigration] Synced fiscal notes status from cargo_loads");
+    } catch (e) {
+      console.log("[AutoMigration] fiscal notes sync error:", e?.message);
     }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
