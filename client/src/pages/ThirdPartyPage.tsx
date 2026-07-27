@@ -739,11 +739,16 @@ function FuelTab() {
     const fmtCurrency = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
 
-    const totalBruto = filteredFreights.reduce((acc, c) => acc + (c.grossFreight || 0), 0);
-    const totalCombustivel = filteredFreights.reduce((acc, c) => acc + (c.fuelCost || 0), 0);
-    const totalLiquido = filteredFreights.reduce((acc, c) => acc + (c.netFreight || 0), 0);
+    // ── Totais reais ──
+    // Receita = soma dos fretes brutos (ton × tarifa cadastrada)
+    const totalReceita = filteredFreights.reduce((acc, c) => acc + (c.grossFreight || 0), 0);
     const totalTons = filteredFreights.reduce((acc, c) => acc + (c.weightTons || 0), 0);
+    // Custo = soma dos abastecimentos reais do período (custo efetivo pago no posto)
+    const totalCusto = filteredFuel.reduce((acc, f) => acc + parseFloat(f.total || '0'), 0);
+    // Líquido = Receita (frete) - Custo (combustível real)
+    const totalLiquido = totalReceita - totalCusto;
 
+    // ── Tabela de cargas: data, caminhão, destino, peso, tarifa, frete (receita) ──
     const cargosRows = filteredFreights.map(c => `
       <tr>
         <td>${fmtDate(c.date)}</td>
@@ -751,30 +756,22 @@ function FuelTab() {
         <td>${c.destination || '—'}</td>
         <td style="text-align:right">${c.weightTons?.toFixed(3) ?? '—'} t</td>
         <td style="text-align:right">${c.ratePerTon ? fmtCurrency(c.ratePerTon) + '/t' : '—'}</td>
-        <td style="text-align:right">${fmtCurrency(c.grossFreight || 0)}</td>
-        <td style="text-align:right; color:#dc2626">${fmtCurrency(c.fuelCost || 0)}</td>
-        <td style="text-align:right; font-weight:bold; color:#166534">${fmtCurrency(c.netFreight || 0)}</td>
+        <td style="text-align:right; font-weight:bold; color:#166534">${fmtCurrency(c.grossFreight || 0)}</td>
       </tr>`).join('');
 
-    const pdfChargePrice = chargePrice;
+    // ── Tabela de abastecimentos: data real, caminhão, local, litros, preço/L, custo total ──
     const fuelRows = filteredFuel.map(f => {
       const litros = parseFloat(f.liters || '0');
       const custoReal = parseFloat(f.total || '0');
-      let valorCobrado: number;
-      if (pdfChargePrice !== null && pdfChargePrice > 0) valorCobrado = litros * pdfChargePrice;
-      else if (f.chargedValue) valorCobrado = parseFloat(f.chargedValue.replace(',', '.'));
-      else valorCobrado = custoReal;
-      const precoLCobrado = litros > 0 ? valorCobrado / litros : 0;
+      const precoL = parseFloat(f.pricePerLiter || '0');
       return `
       <tr>
         <td>${fmtDate(f.date)}</td>
         <td>${f.equipmentName || '—'}</td>
         <td>${f.location || '—'}</td>
         <td style="text-align:right">${litros.toFixed(1)} L</td>
-        <td style="text-align:right; color:#6b7280">${f.pricePerLiter ? fmtCurrency(parseFloat(f.pricePerLiter)) + '/L' : '—'}</td>
-        <td style="text-align:right; color:#6b7280">${fmtCurrency(custoReal)}</td>
-        <td style="text-align:right; font-weight:bold; color:#166534">${fmtCurrency(precoLCobrado)}/L</td>
-        <td style="text-align:right; font-weight:bold; color:#166534">${fmtCurrency(valorCobrado)}</td>
+        <td style="text-align:right">${precoL > 0 ? fmtCurrency(precoL) + '/L' : '—'}</td>
+        <td style="text-align:right; font-weight:bold; color:#dc2626">${fmtCurrency(custoReal)}</td>
       </tr>`;
     }).join('');
 
@@ -789,19 +786,22 @@ function FuelTab() {
       .report-info { text-align: right; }
       .report-info h2 { font-size: 14px; color: #333; }
       .report-info p { font-size: 10px; color: #666; margin-top: 2px; }
-      .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
-      .summary-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; }
-      .summary-card.red { background: #fff7ed; border-color: #fed7aa; }
-      .summary-card.blue { background: #eff6ff; border-color: #bfdbfe; }
-      .summary-card.dark { background: #166534; border-color: #166534; color: white; }
-      .summary-card label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
-      .summary-card .value { font-size: 15px; font-weight: bold; margin-top: 2px; }
-      .section-title { font-size: 13px; font-weight: bold; color: #166534; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px; margin-bottom: 10px; margin-top: 20px; }
+      .section-title { font-size: 13px; font-weight: bold; color: #166534; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px; margin-bottom: 10px; margin-top: 24px; }
       table { width: 100%; border-collapse: collapse; font-size: 10px; }
       th { background: #166534; color: white; padding: 6px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
       td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; }
       tr:nth-child(even) td { background: #f9fafb; }
       .total-row td { font-weight: bold; background: #f0fdf4 !important; border-top: 2px solid #166534; }
+      .resumo-final { margin-top: 28px; border: 2px solid #166534; border-radius: 10px; overflow: hidden; }
+      .resumo-final .titulo { background: #166534; color: white; font-size: 13px; font-weight: bold; padding: 10px 16px; letter-spacing: 0.5px; }
+      .resumo-final .linha { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #e5e7eb; font-size: 12px; }
+      .resumo-final .linha:last-child { border-bottom: none; }
+      .resumo-final .linha.destaque { background: #f0fdf4; font-size: 14px; font-weight: bold; }
+      .resumo-final .linha.custo { background: #fff7ed; }
+      .resumo-final .label { color: #555; }
+      .resumo-final .valor-verde { color: #166534; font-weight: bold; font-size: 14px; }
+      .resumo-final .valor-vermelho { color: #dc2626; font-weight: bold; font-size: 14px; }
+      .resumo-final .valor-liquido { color: ${totalLiquido >= 0 ? '#166534' : '#dc2626'}; font-weight: bold; font-size: 16px; }
       .footer { margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9px; color: #9ca3af; }
       @media print { body { padding: 12px; } }
     </style></head><body>
@@ -819,76 +819,53 @@ function FuelTab() {
       </div>
     </div>
 
-    <div class="summary-grid">
-      <div class="summary-card">
-        <label>Total de Cargas</label>
-        <div class="value">${filteredFreights.length}</div>
-      </div>
-      <div class="summary-card blue">
-        <label>Peso Total</label>
-        <div class="value">${totalTons.toFixed(3)} t</div>
-      </div>
-      <div class="summary-card">
-        <label>Frete Bruto</label>
-        <div class="value">${fmtCurrency(totalBruto)}</div>
-      </div>
-      <div class="summary-card red">
-        <label>Combustível (abate)</label>
-        <div class="value">${fmtCurrency(totalCombustivel)}</div>
-      </div>
-      <div class="summary-card dark">
-        <label>Frete Líquido a Pagar</label>
-        <div class="value">${fmtCurrency(totalLiquido)}</div>
-      </div>
-      <div class="summary-card red">
-        <label>Custo Real Combustível</label>
-        <div class="value">${fmtCurrency(totalGasto)}</div>
-      </div>
-      <div class="summary-card blue">
-        <label>Total Litros Abastecidos</label>
-        <div class="value">${totalLitros.toFixed(1)} L</div>
-      </div>
-      <div class="summary-card dark">
-        <label>Total a Cobrar (Combustível)</label>
-        <div class="value">${fmtCurrency(totalCobrado)}</div>
-      </div>
-    </div>
-
-    <div class="section-title">📦 Cargas do Período</div>
+    <div class="section-title">📦 Cargas do Período — Receita de Frete</div>
     <table>
       <thead><tr>
-        <th>Data</th><th>Caminhão</th><th>Destino</th><th>Peso</th><th>Tarifa</th><th>Frete Bruto</th><th>Combustível</th><th>Frete Líquido</th>
+        <th>Data</th><th>Caminhão</th><th>Destino</th><th>Peso Líquido</th><th>Tarifa</th><th>Frete (Receita)</th>
       </tr></thead>
       <tbody>
-        ${cargosRows || '<tr><td colspan="8" style="text-align:center;padding:12px;color:#9ca3af">Nenhuma carga no período</td></tr>'}
+        ${cargosRows || '<tr><td colspan="6" style="text-align:center;padding:12px;color:#9ca3af">Nenhuma carga no período</td></tr>'}
         <tr class="total-row">
           <td colspan="3">TOTAL</td>
           <td style="text-align:right">${totalTons.toFixed(3)} t</td>
           <td></td>
-          <td style="text-align:right">${fmtCurrency(totalBruto)}</td>
-          <td style="text-align:right; color:#dc2626">${fmtCurrency(totalCombustivel)}</td>
-          <td style="text-align:right; color:#166534">${fmtCurrency(totalLiquido)}</td>
+          <td style="text-align:right; color:#166534">${fmtCurrency(totalReceita)}</td>
         </tr>
       </tbody>
     </table>
 
-    <div class="section-title">⛽ Abastecimentos do Período</div>
+    <div class="section-title">⛽ Abastecimentos do Período — Custo Real</div>
     <table>
       <thead><tr>
-        <th>Data</th><th>Caminhão</th><th>Local / Posto</th><th>Litros</th><th>Custo/L</th><th>Custo Total</th><th>Preço Cobrado/L</th><th>Total Cobrado</th>
+        <th>Data</th><th>Caminhão</th><th>Local / Posto</th><th>Litros</th><th>Preço/L</th><th>Custo Total</th>
       </tr></thead>
       <tbody>
-        ${fuelRows || '<tr><td colspan="8" style="text-align:center;padding:12px;color:#9ca3af">Nenhum abastecimento no período</td></tr>'}
+        ${fuelRows || '<tr><td colspan="6" style="text-align:center;padding:12px;color:#9ca3af">Sem abastecimentos no período</td></tr>'}
         <tr class="total-row">
           <td colspan="3">TOTAL</td>
           <td style="text-align:right">${totalLitros.toFixed(1)} L</td>
           <td></td>
-          <td style="text-align:right; color:#6b7280">${fmtCurrency(totalGasto)}</td>
-          <td></td>
-          <td style="text-align:right; color:#166534; font-size:13px">${fmtCurrency(totalCobrado)}</td>
+          <td style="text-align:right; color:#dc2626">${fmtCurrency(totalCusto)}</td>
         </tr>
       </tbody>
     </table>
+
+    <div class="resumo-final">
+      <div class="titulo">📊 Resumo Financeiro do Período</div>
+      <div class="linha destaque">
+        <span class="label">📦 Receita Total (Frete — ${filteredFreights.length} cargas · ${totalTons.toFixed(2)} t)</span>
+        <span class="valor-verde">${fmtCurrency(totalReceita)}</span>
+      </div>
+      <div class="linha custo">
+        <span class="label">⛽ Custo Total (Combustível — ${totalLitros.toFixed(1)} L abastecidos)</span>
+        <span class="valor-vermelho">− ${fmtCurrency(totalCusto)}</span>
+      </div>
+      <div class="linha destaque" style="background:#${totalLiquido >= 0 ? 'f0fdf4' : 'fef2f2'}; border-top: 2px solid #${totalLiquido >= 0 ? '166534' : 'dc2626'};">
+        <span class="label" style="font-size:13px; font-weight:bold">💰 Valor Líquido a Pagar ao Proprietário</span>
+        <span class="valor-liquido">${fmtCurrency(totalLiquido)}</span>
+      </div>
+    </div>
 
     <div class="footer">
       <span>BTREE Ambiental — Sistema de Gestão Interno</span>
