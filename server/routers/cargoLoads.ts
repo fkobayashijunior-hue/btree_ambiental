@@ -467,6 +467,7 @@ export const cargoLoadsRouter = router({
       receiverName: z.string().optional(),
       thirdPartyContractor: z.string().optional(),
       thirdPartyCost: z.string().optional(),
+      fiscalNoteId: z.number().optional(), // ID da nota/ação selecionada no Controle de Notas
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -506,9 +507,11 @@ export const cargoLoadsRouter = router({
 
       // Sanitize all numeric string fields: replace comma with dot for MySQL
       const sanitizeNum = (v: string | undefined) => v ? v.replace(',', '.') : v;
+      // Extrair fiscalNoteId do input para não incluir na inserção do banco
+      const { fiscalNoteId: _fiscalNoteId, ...inputWithoutNoteId } = input;
       try {
         await db.insert(cargoLoads).values({
-          ...input,
+          ...inputWithoutNoteId,
           photosJson: finalPhotosJson || null,
           heightM: sanitizeNum(input.heightM),
           widthM: sanitizeNum(input.widthM),
@@ -560,6 +563,40 @@ export const cargoLoadsRouter = router({
             await generateFinancialEntriesForCargo(newCargo as any, ctx.user.id, ctx.user.name);
           }
         } catch(e) { /* silent */ }
+      }
+
+      // Marcar nota fiscal como usada (se fornecida)
+      if (input.fiscalNoteId) {
+        try {
+          const { fiscalNotes } = await import('../../drizzle/schema');
+          // Buscar o ID da carga recém-inserida
+          const [newCargo] = await db.select({ id: cargoLoads.id })
+            .from(cargoLoads)
+            .orderBy(desc(cargoLoads.id))
+            .limit(1);
+          const newCargoId = newCargo?.id;
+          // Verificar se a nota já está em uso por outra carga
+          const [existingNote] = await db.select({ status: fiscalNotes.status, usedByCargoId: fiscalNotes.usedByCargoId })
+            .from(fiscalNotes)
+            .where(eq(fiscalNotes.id, input.fiscalNoteId))
+            .limit(1);
+          if (!existingNote || existingNote.status !== 'used') {
+            const today = new Date().toISOString().split('T')[0];
+            const usageNote = [input.workLocationId ? `Local ${input.workLocationId}` : '', input.destination || ''].filter(Boolean).join(' → ');
+            await db.update(fiscalNotes)
+              .set({
+                status: 'used',
+                usedByCargoId: newCargoId || null,
+                usedByClientId: input.clientId || null,
+                usedByClientName: input.clientName || null,
+                usedAt: today,
+                notes: usageNote || null,
+              })
+              .where(eq(fiscalNotes.id, input.fiscalNoteId));
+          }
+        } catch (e) {
+          console.error('[cargoLoads.create] Erro ao marcar nota como usada:', e);
+        }
       }
 
       return { success: true };

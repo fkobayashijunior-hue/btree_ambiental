@@ -119,11 +119,23 @@ export const fiscalNotesRouter = router({
       cargoId: z.number().optional(),
       clientId: z.number().optional(),
       clientName: z.string().optional(),
+      destination: z.string().optional(),
+      workLocation: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Banco indisponível");
+      // Verificar se a nota já está em uso por outra carga
+      const [existing] = await db.select({ id: fiscalNotes.id, status: fiscalNotes.status, usedByCargoId: fiscalNotes.usedByCargoId })
+        .from(fiscalNotes)
+        .where(eq(fiscalNotes.id, input.id))
+        .limit(1);
+      if (existing?.status === 'used' && existing?.usedByCargoId && existing.usedByCargoId !== input.cargoId) {
+        throw new Error(`Esta nota/ação já foi utilizada em outra carga (ID ${existing.usedByCargoId}). Não é possível usar a mesma nota em mais de uma carga.`);
+      }
       const today = new Date().toISOString().split("T")[0];
+      // Montar nota de uso com local e destino
+      const usageNote = [input.workLocation, input.destination].filter(Boolean).join(' → ');
       await db.update(fiscalNotes)
         .set({
           status: "used",
@@ -131,8 +143,49 @@ export const fiscalNotesRouter = router({
           usedByClientId: input.clientId || null,
           usedByClientName: input.clientName || null,
           usedAt: today,
+          notes: usageNote || null,
         })
         .where(eq(fiscalNotes.id, input.id));
+      return { success: true };
+    }),
+
+  // Editar nota/ação (data, quantidade, NF, observações, arquivo)
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      invoiceNumber: z.string().optional(),
+      issueDate: z.string().optional(),
+      quantityType: z.enum(["m3", "ton"]).optional(),
+      quantity: z.string().optional(),
+      fileBase64: z.string().optional(),
+      fileName: z.string().optional(),
+      fileMimeType: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco indisponível");
+      const { id, fileBase64, fileName, fileMimeType, ...fields } = input;
+      let fileUrl: string | undefined;
+      if (fileBase64 && fileName) {
+        try {
+          const buffer = Buffer.from(fileBase64, "base64");
+          const ext = fileName.split(".").pop() || "pdf";
+          const key = `fiscal-notes/edit-${id}-${Date.now()}.${ext}`;
+          const result = await storagePut(key, buffer, fileMimeType || "application/pdf");
+          fileUrl = result.url;
+        } catch (e) {
+          console.error("Erro upload fiscal note update:", e);
+        }
+      }
+      const updateData: any = {};
+      if (fields.invoiceNumber !== undefined) updateData.invoiceNumber = fields.invoiceNumber || null;
+      if (fields.issueDate) updateData.issueDate = fields.issueDate;
+      if (fields.quantityType) updateData.quantityType = fields.quantityType;
+      if (fields.quantity) updateData.quantity = fields.quantity;
+      if (fields.notes !== undefined) updateData.notes = fields.notes || null;
+      if (fileUrl) updateData.fileUrl = fileUrl;
+      await db.update(fiscalNotes).set(updateData).where(eq(fiscalNotes.id, id));
       return { success: true };
     }),
 

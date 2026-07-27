@@ -3891,7 +3891,9 @@ var cargoLoadsRouter = router({
     deliveryDate: z6.string().optional(),
     receiverName: z6.string().optional(),
     thirdPartyContractor: z6.string().optional(),
-    thirdPartyCost: z6.string().optional()
+    thirdPartyCost: z6.string().optional(),
+    fiscalNoteId: z6.number().optional()
+    // ID da nota/ação selecionada no Controle de Notas
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -3923,9 +3925,10 @@ var cargoLoadsRouter = router({
       }
     }
     const sanitizeNum = (v) => v ? v.replace(",", ".") : v;
+    const { fiscalNoteId: _fiscalNoteId, ...inputWithoutNoteId } = input;
     try {
       await db.insert(cargoLoads).values({
-        ...input,
+        ...inputWithoutNoteId,
         photosJson: finalPhotosJson || null,
         heightM: sanitizeNum(input.heightM),
         widthM: sanitizeNum(input.widthM),
@@ -3973,6 +3976,28 @@ var cargoLoadsRouter = router({
           await generateFinancialEntriesForCargo2(newCargo, ctx.user.id, ctx.user.name);
         }
       } catch (e) {
+      }
+    }
+    if (input.fiscalNoteId) {
+      try {
+        const { fiscalNotes: fiscalNotes2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+        const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc3(cargoLoads.id)).limit(1);
+        const newCargoId = newCargo?.id;
+        const [existingNote] = await db.select({ status: fiscalNotes2.status, usedByCargoId: fiscalNotes2.usedByCargoId }).from(fiscalNotes2).where(eq6(fiscalNotes2.id, input.fiscalNoteId)).limit(1);
+        if (!existingNote || existingNote.status !== "used") {
+          const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+          const usageNote = [input.workLocationId ? `Local ${input.workLocationId}` : "", input.destination || ""].filter(Boolean).join(" \u2192 ");
+          await db.update(fiscalNotes2).set({
+            status: "used",
+            usedByCargoId: newCargoId || null,
+            usedByClientId: input.clientId || null,
+            usedByClientName: input.clientName || null,
+            usedAt: today,
+            notes: usageNote || null
+          }).where(eq6(fiscalNotes2.id, input.fiscalNoteId));
+        }
+      } catch (e) {
+        console.error("[cargoLoads.create] Erro ao marcar nota como usada:", e);
       }
     }
     return { success: true };
@@ -16316,18 +16341,63 @@ var fiscalNotesRouter = router({
     id: z43.number(),
     cargoId: z43.number().optional(),
     clientId: z43.number().optional(),
-    clientName: z43.string().optional()
+    clientName: z43.string().optional(),
+    destination: z43.string().optional(),
+    workLocation: z43.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
+    const [existing] = await db.select({ id: fiscalNotes.id, status: fiscalNotes.status, usedByCargoId: fiscalNotes.usedByCargoId }).from(fiscalNotes).where(eq41(fiscalNotes.id, input.id)).limit(1);
+    if (existing?.status === "used" && existing?.usedByCargoId && existing.usedByCargoId !== input.cargoId) {
+      throw new Error(`Esta nota/a\xE7\xE3o j\xE1 foi utilizada em outra carga (ID ${existing.usedByCargoId}). N\xE3o \xE9 poss\xEDvel usar a mesma nota em mais de uma carga.`);
+    }
     const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const usageNote = [input.workLocation, input.destination].filter(Boolean).join(" \u2192 ");
     await db.update(fiscalNotes).set({
       status: "used",
       usedByCargoId: input.cargoId || null,
       usedByClientId: input.clientId || null,
       usedByClientName: input.clientName || null,
-      usedAt: today
+      usedAt: today,
+      notes: usageNote || null
     }).where(eq41(fiscalNotes.id, input.id));
+    return { success: true };
+  }),
+  // Editar nota/ação (data, quantidade, NF, observações, arquivo)
+  update: protectedProcedure.input(z43.object({
+    id: z43.number(),
+    invoiceNumber: z43.string().optional(),
+    issueDate: z43.string().optional(),
+    quantityType: z43.enum(["m3", "ton"]).optional(),
+    quantity: z43.string().optional(),
+    fileBase64: z43.string().optional(),
+    fileName: z43.string().optional(),
+    fileMimeType: z43.string().optional(),
+    notes: z43.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Banco indispon\xEDvel");
+    const { id, fileBase64, fileName, fileMimeType, ...fields } = input;
+    let fileUrl;
+    if (fileBase64 && fileName) {
+      try {
+        const buffer = Buffer.from(fileBase64, "base64");
+        const ext = fileName.split(".").pop() || "pdf";
+        const key = `fiscal-notes/edit-${id}-${Date.now()}.${ext}`;
+        const result = await storagePut(key, buffer, fileMimeType || "application/pdf");
+        fileUrl = result.url;
+      } catch (e) {
+        console.error("Erro upload fiscal note update:", e);
+      }
+    }
+    const updateData = {};
+    if (fields.invoiceNumber !== void 0) updateData.invoiceNumber = fields.invoiceNumber || null;
+    if (fields.issueDate) updateData.issueDate = fields.issueDate;
+    if (fields.quantityType) updateData.quantityType = fields.quantityType;
+    if (fields.quantity) updateData.quantity = fields.quantity;
+    if (fields.notes !== void 0) updateData.notes = fields.notes || null;
+    if (fileUrl) updateData.fileUrl = fileUrl;
+    await db.update(fiscalNotes).set(updateData).where(eq41(fiscalNotes.id, id));
     return { success: true };
   }),
   // Liberar nota (desfazer uso — admin)

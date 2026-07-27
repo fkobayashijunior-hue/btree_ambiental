@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Plus, FileText, Upload, Package, Weight, CheckCircle2,
-  Clock, Trash2, Unlock, Eye, RefreshCw, Search
+  Clock, Trash2, Unlock, Eye, RefreshCw, Search, Pencil
 } from "lucide-react";
 
 function fileToBase64(file: File): Promise<string> {
@@ -53,10 +53,11 @@ type FiscalNote = {
   notes: string | null;
 };
 
-function NoteCard({ note, onRelease, onDelete }: {
+function NoteCard({ note, onRelease, onDelete, onEdit }: {
   note: FiscalNote;
   onRelease: (id: number) => void;
   onDelete: (id: number) => void;
+  onEdit: (note: FiscalNote) => void;
 }) {
   const isUsed = note.status === "used";
   return (
@@ -91,6 +92,10 @@ function NoteCard({ note, onRelease, onDelete }: {
             </Button>
           </a>
         )}
+        {/* Botão de editar — disponível para todas as notas */}
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-700" title="Editar ação" onClick={() => onEdit(note)}>
+          <Pencil className="w-4 h-4" />
+        </Button>
         {isUsed && (
           <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700" title="Liberar nota" onClick={() => onRelease(note.id)}>
             <Unlock className="w-4 h-4" />
@@ -106,19 +111,24 @@ function NoteCard({ note, onRelease, onDelete }: {
   );
 }
 
+const emptyForm = {
+  invoiceNumber: "",
+  issueDate: new Date().toISOString().split("T")[0],
+  quantityType: "m3" as "m3" | "ton",
+  quantity: "",
+  notes: "",
+};
+
 export default function FiscalNotesPage() {
   const [open, setOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<FiscalNote | null>(null);
   const [tab, setTab] = useState<"all" | "m3" | "ton">("all");
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({
-    invoiceNumber: "",
-    issueDate: new Date().toISOString().split("T")[0],
-    quantityType: "m3" as "m3" | "ton",
-    quantity: "",
-    notes: "",
-  });
+  const [form, setForm] = useState(emptyForm);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const editFileRef = useRef<HTMLInputElement>(null);
+  const [editFile, setEditFile] = useState<File | null>(null);
 
   const utils = trpc.useUtils();
   const { data: notes = [], isLoading } = trpc.fiscalNotes.list.useQuery({ quantityType: tab === "all" ? "all" : tab });
@@ -131,10 +141,22 @@ export default function FiscalNotesPage() {
       utils.fiscalNotes.stats.invalidate();
       utils.fiscalNotes.getAvailable.invalidate();
       setOpen(false);
-      setForm({ invoiceNumber: "", issueDate: new Date().toISOString().split("T")[0], quantityType: "m3", quantity: "", notes: "" });
+      setForm(emptyForm);
       setSelectedFile(null);
     },
     onError: (e) => toast.error("Erro ao criar: " + e.message),
+  });
+
+  const updateMutation = trpc.fiscalNotes.update.useMutation({
+    onSuccess: () => {
+      toast.success("Ação atualizada com sucesso!");
+      utils.fiscalNotes.list.invalidate();
+      utils.fiscalNotes.stats.invalidate();
+      utils.fiscalNotes.getAvailable.invalidate();
+      setEditingNote(null);
+      setEditFile(null);
+    },
+    onError: (e) => toast.error("Erro ao atualizar: " + e.message),
   });
 
   const releaseMutation = trpc.fiscalNotes.release.useMutation({
@@ -174,6 +196,30 @@ export default function FiscalNotesPage() {
     createMutation.mutate({ ...form, fileBase64, fileName, fileMimeType });
   }
 
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingNote) return;
+    let fileBase64: string | undefined;
+    let fileName: string | undefined;
+    let fileMimeType: string | undefined;
+    if (editFile) {
+      fileBase64 = await fileToBase64(editFile);
+      fileName = editFile.name;
+      fileMimeType = editFile.type;
+    }
+    updateMutation.mutate({
+      id: editingNote.id,
+      invoiceNumber: editingNote.invoiceNumber || undefined,
+      issueDate: editingNote.issueDate,
+      quantityType: editingNote.quantityType,
+      quantity: editingNote.quantity,
+      notes: editingNote.notes || undefined,
+      fileBase64,
+      fileName,
+      fileMimeType,
+    });
+  }
+
   const filtered = (notes as FiscalNote[]).filter(n => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -187,6 +233,13 @@ export default function FiscalNotesPage() {
 
   const m3Notes = filtered.filter(n => n.quantityType === "m3");
   const tonNotes = filtered.filter(n => n.quantityType === "ton");
+
+  const noteCardProps = (n: FiscalNote) => ({
+    note: n,
+    onRelease: (id: number) => releaseMutation.mutate({ id }),
+    onDelete: (id: number) => deleteMutation.mutate({ id }),
+    onEdit: (note: FiscalNote) => setEditingNote({ ...note }),
+  });
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -287,7 +340,7 @@ export default function FiscalNotesPage() {
                 <Textarea
                   className="mt-1 resize-none"
                   rows={2}
-                  placeholder="Observações sobre esta nota..."
+                  placeholder="Ex: SIMFLOR → Líder"
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                 />
@@ -304,6 +357,111 @@ export default function FiscalNotesPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Dialog de Edição */}
+      <Dialog open={!!editingNote} onOpenChange={(v) => { if (!v) { setEditingNote(null); setEditFile(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Ação / Nota — {editingNote?.actionCode}</DialogTitle>
+          </DialogHeader>
+          {editingNote && (
+            <form onSubmit={handleEditSubmit} className="space-y-4 mt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Tipo de Quantidade *</Label>
+                  <Select value={editingNote.quantityType} onValueChange={v => setEditingNote(n => n ? { ...n, quantityType: v as "m3" | "ton" } : n)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="m3">Metro Cúbico (m³)</SelectItem>
+                      <SelectItem value="ton">Toneladas (ton)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Quantidade *</Label>
+                  <Input
+                    className="mt-1"
+                    placeholder={editingNote.quantityType === "m3" ? "ex: 30" : "ex: 40"}
+                    value={editingNote.quantity}
+                    onChange={e => setEditingNote(n => n ? { ...n, quantity: e.target.value } : n)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Data de Emissão *</Label>
+                  <Input
+                    type="date"
+                    className="mt-1"
+                    value={editingNote.issueDate}
+                    onChange={e => setEditingNote(n => n ? { ...n, issueDate: e.target.value } : n)}
+                  />
+                </div>
+                <div>
+                  <Label>Número da NF (opcional)</Label>
+                  <Input
+                    className="mt-1"
+                    placeholder="ex: 402"
+                    value={editingNote.invoiceNumber || ""}
+                    onChange={e => setEditingNote(n => n ? { ...n, invoiceNumber: e.target.value } : n)}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Substituir arquivo (opcional)</Label>
+                <div
+                  className="mt-1 border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:border-primary transition-colors"
+                  onClick={() => editFileRef.current?.click()}
+                >
+                  {editFile ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-green-600">
+                      <CheckCircle2 className="w-4 h-4" />
+                      {editFile.name}
+                    </div>
+                  ) : editingNote.fileUrl ? (
+                    <div className="text-sm text-muted-foreground flex items-center justify-center gap-2">
+                      <Eye className="w-4 h-4" />
+                      Arquivo atual salvo — clique para substituir
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground flex items-center justify-center gap-2">
+                      <Upload className="w-4 h-4" />
+                      Clique para selecionar arquivo
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={editFileRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onChange={e => setEditFile(e.target.files?.[0] || null)}
+                />
+              </div>
+              <div>
+                <Label>Observações</Label>
+                <Textarea
+                  className="mt-1 resize-none"
+                  rows={2}
+                  placeholder="Ex: SIMFLOR → Líder"
+                  value={editingNote.notes || ""}
+                  onChange={e => setEditingNote(n => n ? { ...n, notes: e.target.value } : n)}
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => { setEditingNote(null); setEditFile(null); }}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="flex-1" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? "Salvando..." : "Salvar Alterações"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
@@ -371,122 +529,50 @@ export default function FiscalNotesPage() {
           </div>
         ) : (
           <>
-            <TabsContent value="all">
-              {filtered.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p>Nenhuma nota encontrada.</p>
-                  <p className="text-sm mt-1">Clique em "Nova Ação / Nota" para registrar.</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {/* Disponíveis primeiro */}
-                  {filtered.filter(n => n.status === "available").length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        <span className="text-sm font-medium text-green-700">Disponíveis</span>
+            {[
+              { value: "all", notes: filtered },
+              { value: "m3", notes: m3Notes },
+              { value: "ton", notes: tonNotes },
+            ].map(({ value, notes: tabNotes }) => (
+              <TabsContent key={value} value={value}>
+                {tabNotes.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p>Nenhuma nota encontrada.</p>
+                    {value === "all" && <p className="text-sm mt-1">Clique em "Nova Ação / Nota" para registrar.</p>}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {tabNotes.filter(n => n.status === "available").length > 0 && (
+                      <div className="mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          <span className="text-sm font-medium text-green-700">Disponíveis</span>
+                        </div>
+                        <div className="space-y-2">
+                          {tabNotes.filter(n => n.status === "available").map(n => (
+                            <NoteCard key={n.id} {...noteCardProps(n)} />
+                          ))}
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        {filtered.filter(n => n.status === "available").map(n => (
-                          <NoteCard key={n.id} note={n} onRelease={id => releaseMutation.mutate({ id })} onDelete={id => deleteMutation.mutate({ id })} />
-                        ))}
+                    )}
+                    {tabNotes.filter(n => n.status === "used").length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-medium text-muted-foreground">Utilizadas</span>
+                        </div>
+                        <div className="space-y-2">
+                          {tabNotes.filter(n => n.status === "used").map(n => (
+                            <NoteCard key={n.id} {...noteCardProps(n)} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {/* Utilizadas */}
-                  {filtered.filter(n => n.status === "used").length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">Utilizadas</span>
-                      </div>
-                      <div className="space-y-2">
-                        {filtered.filter(n => n.status === "used").map(n => (
-                          <NoteCard key={n.id} note={n} onRelease={id => releaseMutation.mutate({ id })} onDelete={id => deleteMutation.mutate({ id })} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="m3">
-              {m3Notes.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p>Nenhuma nota de metro cúbico.</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {m3Notes.filter(n => n.status === "available").length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        <span className="text-sm font-medium text-green-700">Disponíveis</span>
-                      </div>
-                      <div className="space-y-2">
-                        {m3Notes.filter(n => n.status === "available").map(n => (
-                          <NoteCard key={n.id} note={n} onRelease={id => releaseMutation.mutate({ id })} onDelete={id => deleteMutation.mutate({ id })} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {m3Notes.filter(n => n.status === "used").length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">Utilizadas</span>
-                      </div>
-                      <div className="space-y-2">
-                        {m3Notes.filter(n => n.status === "used").map(n => (
-                          <NoteCard key={n.id} note={n} onRelease={id => releaseMutation.mutate({ id })} onDelete={id => deleteMutation.mutate({ id })} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="ton">
-              {tonNotes.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Weight className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p>Nenhuma nota de toneladas.</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {tonNotes.filter(n => n.status === "available").length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        <span className="text-sm font-medium text-green-700">Disponíveis</span>
-                      </div>
-                      <div className="space-y-2">
-                        {tonNotes.filter(n => n.status === "available").map(n => (
-                          <NoteCard key={n.id} note={n} onRelease={id => releaseMutation.mutate({ id })} onDelete={id => deleteMutation.mutate({ id })} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {tonNotes.filter(n => n.status === "used").length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">Utilizadas</span>
-                      </div>
-                      <div className="space-y-2">
-                        {tonNotes.filter(n => n.status === "used").map(n => (
-                          <NoteCard key={n.id} note={n} onRelease={id => releaseMutation.mutate({ id })} onDelete={id => deleteMutation.mutate({ id })} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            ))}
           </>
         )}
       </Tabs>

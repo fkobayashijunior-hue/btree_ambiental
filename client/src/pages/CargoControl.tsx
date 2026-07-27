@@ -1349,7 +1349,14 @@ export default function CargoControl() {
 
   // Mutations
   const createMutation = trpc.cargoLoads.create.useMutation({
-    onSuccess: () => { toast.success("Carga registrada!"); utils.cargoLoads.list.invalidate(); setIsFormOpen(false); resetForm(); },
+    onSuccess: () => {
+      toast.success("Carga registrada!");
+      utils.cargoLoads.list.invalidate();
+      utils.fiscalNotes.getAvailable.invalidate();
+      utils.fiscalNotes.list.invalidate();
+      setIsFormOpen(false);
+      resetForm();
+    },
     onError: (e) => toast.error(e.message),
   });
   const updateMutation = trpc.cargoLoads.update.useMutation({
@@ -1529,19 +1536,8 @@ export default function CargoControl() {
         setIsFormOpen(false);
         resetForm();
       } else {
-        createMutation.mutate(data, {
-          onSuccess: (result) => {
-            // Marcar nota como usada após criar a carga com sucesso
-            if (noteIdToMark) {
-              markNoteAsUsed.mutate({
-                id: noteIdToMark,
-                cargoId: (result as any)?.id,
-                clientId: form.clientId || undefined,
-                clientName: form.clientName || undefined,
-              });
-            }
-          },
-        });
+        // fiscalNoteId é passado diretamente no create — o backend marca a nota como usada atomicamente
+        createMutation.mutate({ ...data, fiscalNoteId: noteIdToMark || undefined });
       }
     }
     setSelectedNoteId(null);
