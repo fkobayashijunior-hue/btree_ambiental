@@ -138,12 +138,12 @@ export default function FiscalNotesPage() {
   // Modal de marcar como utilizada
   const [markUsedNote, setMarkUsedNote] = useState<FiscalNote | null>(null);
   const [markUsedClientId, setMarkUsedClientId] = useState("");
-  const [markUsedLocationId, setMarkUsedLocationId] = useState("");
+  const [markUsedBuyerId, setMarkUsedBuyerId] = useState("");
   const [markUsedNotes, setMarkUsedNotes] = useState("");
 
-  // Dados para os selects do modal
+  // Dados para os selects do modal (mesma lógica do Controle de Cargas)
   const { data: clientsList = [] } = trpc.clients.list.useQuery({});
-  const { data: locationsList = [] } = trpc.gpsLocations.list.useQuery();
+  const { data: buyersList = [] } = trpc.buyerClients.listActive.useQuery();
 
   const utils = trpc.useUtils();
   const { data: notes = [], isLoading } = trpc.fiscalNotes.list.useQuery({ quantityType: tab === "all" ? "all" : tab });
@@ -202,7 +202,7 @@ export default function FiscalNotesPage() {
       utils.fiscalNotes.getAvailable.invalidate();
       setMarkUsedNote(null);
       setMarkUsedClientId("");
-      setMarkUsedLocationId("");
+      setMarkUsedBuyerId("");
       setMarkUsedNotes("");
     },
     onError: (e) => toast.error("Erro: " + e.message),
@@ -271,7 +271,7 @@ export default function FiscalNotesPage() {
     onMarkUsed: (note: FiscalNote) => {
       setMarkUsedNote(note);
       setMarkUsedClientId("");
-      setMarkUsedLocationId("");
+      setMarkUsedBuyerId("");
       setMarkUsedNotes("");
     },
   });
@@ -410,10 +410,10 @@ export default function FiscalNotesPage() {
                 <div className="text-muted-foreground mt-1">{formatQty(markUsedNote.quantity, markUsedNote.quantityType)} · {formatDate(markUsedNote.issueDate)}</div>
               </div>
               <div>
-                <Label>Destino / Comprador (opcional)</Label>
+                <Label>Local de Carregamento / Cliente (opcional)</Label>
                 <Select value={markUsedClientId} onValueChange={setMarkUsedClientId}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Selecione o comprador..." />
+                    <SelectValue placeholder="Selecione o cliente..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">-- Nenhum --</SelectItem>
@@ -424,15 +424,15 @@ export default function FiscalNotesPage() {
                 </Select>
               </div>
               <div>
-                <Label>Local / Cliente (opcional)</Label>
-                <Select value={markUsedLocationId} onValueChange={setMarkUsedLocationId}>
+                <Label>Destino / Comprador (opcional)</Label>
+                <Select value={markUsedBuyerId} onValueChange={setMarkUsedBuyerId}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Selecione o local..." />
+                    <SelectValue placeholder="Selecione o comprador..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">-- Nenhum --</SelectItem>
-                    {(locationsList as any[]).map((l: any) => (
-                      <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
+                    {(buyersList as any[]).map((b: any) => (
+                      <SelectItem key={b.id} value={String(b.id)}>{b.nickname || b.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -458,14 +458,14 @@ export default function FiscalNotesPage() {
                     const selectedClient = markUsedClientId && markUsedClientId !== 'none'
                       ? (clientsList as any[]).find((c: any) => String(c.id) === markUsedClientId)
                       : null;
-                    const selectedLocation = markUsedLocationId && markUsedLocationId !== 'none'
-                      ? (locationsList as any[]).find((l: any) => String(l.id) === markUsedLocationId)
+                    const selectedBuyer = markUsedBuyerId && markUsedBuyerId !== 'none'
+                      ? (buyersList as any[]).find((b: any) => String(b.id) === markUsedBuyerId)
                       : null;
                     markAsUsedMutation.mutate({
                       id: markUsedNote.id,
                       clientName: selectedClient?.name || undefined,
-                      destination: selectedLocation
-                        ? (markUsedNotes ? `${selectedLocation.name} → ${markUsedNotes}` : selectedLocation.name)
+                      destination: selectedBuyer
+                        ? (markUsedNotes ? `${selectedBuyer.nickname || selectedBuyer.name} — ${markUsedNotes}` : (selectedBuyer.nickname || selectedBuyer.name))
                         : (markUsedNotes || undefined),
                     });
                   }}
