@@ -451,6 +451,14 @@ async function runAutoMigrations() {
     // Adicionar fiscal_note_id na tabela cargo_loads
     try { await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN fiscal_note_id INT NULL`); console.log('[AutoMigration] Added fiscal_note_id to cargo_loads'); } catch(e: any) { if (!e?.message?.includes('Duplicate')) console.log('[AutoMigration] fiscal_note_id already exists or error:', e?.message); }
 
+    // Garantir que a tabela fiscal_notes tem todas as colunas necessárias
+    try { await db.execute(/*sql*/`ALTER TABLE fiscal_notes ADD COLUMN used_by_cargo_id INT NULL`); } catch(e: any) { /* já existe */ }
+    try { await db.execute(/*sql*/`ALTER TABLE fiscal_notes ADD COLUMN used_by_client_id INT NULL`); } catch(e: any) { /* já existe */ }
+    try { await db.execute(/*sql*/`ALTER TABLE fiscal_notes ADD COLUMN used_by_client_name VARCHAR(255) NULL`); } catch(e: any) { /* já existe */ }
+    try { await db.execute(/*sql*/`ALTER TABLE fiscal_notes ADD COLUMN used_at VARCHAR(10) NULL`); } catch(e: any) { /* já existe */ }
+    try { await db.execute(/*sql*/`ALTER TABLE fiscal_notes ADD COLUMN notes TEXT NULL`); } catch(e: any) { /* já existe */ }
+    console.log('[AutoMigration] fiscal_notes columns ensured');
+
     // Sincronizar notas fiscais já usadas: marcar como 'used' as notas cujo action_code aparece no invoice_number das cargas
     try {
       await db.execute(/*sql*/`

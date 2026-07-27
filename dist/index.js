@@ -17757,6 +17757,42 @@ async function runAutoMigrations() {
     try {
       await db.execute(
         /*sql*/
+        `ALTER TABLE fiscal_notes ADD COLUMN used_by_cargo_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fiscal_notes ADD COLUMN used_by_client_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fiscal_notes ADD COLUMN used_by_client_name VARCHAR(255) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fiscal_notes ADD COLUMN used_at VARCHAR(10) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE fiscal_notes ADD COLUMN notes TEXT NULL`
+      );
+    } catch (e) {
+    }
+    console.log("[AutoMigration] fiscal_notes columns ensured");
+    try {
+      await db.execute(
+        /*sql*/
         `
         UPDATE fiscal_notes fn
         INNER JOIN cargo_loads cl ON (
