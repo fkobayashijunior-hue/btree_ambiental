@@ -1027,7 +1027,9 @@ function WeeklyClosingsView({
                         closing.status === 'fechado' ? 'bg-yellow-100 text-yellow-700' :
                         'bg-blue-100 text-blue-700'
                       }`}>
-                        {closing.status === 'pago' ? 'Pago' : isOverdue ? 'Atrasado' : closing.status === 'fechado' ? 'Aguardando' : 'Aberto'}
+                        {closing.status === 'pago'
+                          ? ((closing as any).paidViaAdvance ? 'Pago via adiantamento' : 'Pago')
+                          : isOverdue ? 'Atrasado' : closing.status === 'fechado' ? 'Aguardando' : 'Aberto'}
                       </span>
                     </div>
                     <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">

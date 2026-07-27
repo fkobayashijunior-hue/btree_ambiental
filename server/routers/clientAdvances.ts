@@ -3,7 +3,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { clientAdvances, clientAdvanceDeductions, clients, financialEntries, cargoLoads } from "../../drizzle/schema";
+import { clientAdvances, clientAdvanceDeductions, clients, financialEntries, cargoLoads, cargoWeeklyClosings } from "../../drizzle/schema";
 import { eq, desc, and, asc } from "drizzle-orm";
 import { storagePut } from "../storage";
 
@@ -181,6 +181,29 @@ export const clientAdvancesRouter = router({
             .where(eq(cargoLoads.id, input.cargoLoadId));
         } catch (e) { console.error('[clientAdvances] Erro ao marcar carga como paga:', e); }
       }
+
+      // Se vinculado a um fechamento semanal, verificar se o fechamento está totalmente coberto
+      if (input.weeklyClosingId && deductAmount > 0) {
+        try {
+          // Buscar o fechamento
+          const [closing] = await db.select().from(cargoWeeklyClosings)
+            .where(eq(cargoWeeklyClosings.id, input.weeklyClosingId)).limit(1);
+          if (closing && closing.status !== 'pago') {
+            // Calcular total já deduzido para este fechamento (incluindo a dedução recém criada)
+            const deductions = await db.select().from(clientAdvanceDeductions)
+              .where(eq(clientAdvanceDeductions.weeklyClosingId, input.weeklyClosingId));
+            const totalDeducted = deductions.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0) + deductAmount;
+            const totalAmount = parseFloat(closing.totalAmount || '0');
+            if (totalAmount > 0 && totalDeducted >= totalAmount * 0.99) {
+              const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+              await db.update(cargoWeeklyClosings)
+                .set({ status: 'pago', paidAt: now })
+                .where(eq(cargoWeeklyClosings.id, input.weeklyClosingId));
+            }
+          }
+        } catch (e) { console.error('[clientAdvances] Erro ao atualizar fechamento:', e); }
+      }
+
       // Atualizar saldo do adiantamento
       await db.update(clientAdvances)
         .set({

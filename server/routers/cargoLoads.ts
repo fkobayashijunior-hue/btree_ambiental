@@ -1235,8 +1235,77 @@ export const cargoLoadsRouter = router({
         .leftJoin(clients, eq(cargoWeeklyClosings.clientId, clients.id))
         .orderBy(desc(cargoWeeklyClosings.weekEnd));
       const results = await query;
-      if (input?.clientId) return results.filter(r => r.clientId === input.clientId);
-      return results;
+      const filtered = input?.clientId ? results.filter(r => r.clientId === input.clientId) : results;
+
+      // Para fechamentos ainda não marcados como pagos, verificar se as cargas do período
+      // já foram quitadas via adiantamento (payment_status = 'pago' em todas as cargas)
+      const conn = await getDirectConnection();
+      try {
+        const enriched = await Promise.all(filtered.map(async (closing) => {
+          // Só verificar fechamentos que ainda não estão marcados como pagos
+          if (closing.status === 'pago') return { ...closing, paidViaAdvance: false };
+
+          const weekStartStr = closing.weekStart ? new Date(closing.weekStart).toISOString().slice(0, 10) : null;
+          const weekEndStr = closing.weekEnd ? new Date(closing.weekEnd).toISOString().slice(0, 10) : null;
+          if (!weekStartStr || !weekEndStr || !closing.totalLoads || closing.totalLoads === 0) {
+            return { ...closing, paidViaAdvance: false };
+          }
+
+          // Verificar quantas cargas do período estão pagas
+          const [rows] = await conn.execute(
+            `SELECT 
+              COUNT(*) as total,
+              SUM(CASE WHEN payment_status = 'pago' THEN 1 ELSE 0 END) as paid
+            FROM cargo_loads 
+            WHERE client_id = ? 
+              AND DATE(COALESCE(delivery_date, date)) >= ? 
+              AND DATE(COALESCE(delivery_date, date)) <= ?`,
+            [closing.clientId, weekStartStr, weekEndStr]
+          ) as any;
+
+          const total = parseInt(rows[0]?.total || '0');
+          const paid = parseInt(rows[0]?.paid || '0');
+          const allPaidViaAdvance = total > 0 && paid === total;
+
+          // Se todas as cargas estão pagas mas o fechamento ainda não está marcado como pago,
+          // atualizar automaticamente o status no banco
+          if (allPaidViaAdvance) {
+            try {
+              const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+              await conn.execute(
+                `UPDATE cargo_weekly_closings SET status = 'pago', paid_at = COALESCE(paid_at, ?), updated_at = ? WHERE id = ?`,
+                [now, now, closing.id]
+              );
+            } catch (e) { /* silent */ }
+            return { ...closing, status: 'pago' as const, paidViaAdvance: true, paidAt: closing.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ') };
+          }
+
+          // Verificar também se há deduções de adiantamento vinculadas a este fechamento
+          const [dedRows] = await conn.execute(
+            `SELECT COALESCE(SUM(amount), 0) as total_deducted FROM client_advance_deductions WHERE weekly_closing_id = ? AND client_id = ?`,
+            [closing.id, closing.clientId]
+          ) as any;
+          const totalDeducted = parseFloat(dedRows[0]?.total_deducted || '0');
+          const totalAmount = parseFloat(closing.totalAmount || '0');
+
+          // Se o total deduzido via adiantamento cobre o valor total do fechamento
+          if (totalDeducted > 0 && totalAmount > 0 && totalDeducted >= totalAmount * 0.99) {
+            try {
+              const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+              await conn.execute(
+                `UPDATE cargo_weekly_closings SET status = 'pago', paid_at = COALESCE(paid_at, ?), updated_at = ? WHERE id = ?`,
+                [now, now, closing.id]
+              );
+            } catch (e) { /* silent */ }
+            return { ...closing, status: 'pago' as const, paidViaAdvance: true, paidAt: closing.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ') };
+          }
+
+          return { ...closing, paidViaAdvance: false };
+        }));
+        return enriched;
+      } finally {
+        await conn.end();
+      }
     }),
 
   createWeeklyClosing: protectedProcedure

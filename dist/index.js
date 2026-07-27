@@ -4533,8 +4533,63 @@ var cargoLoadsRouter = router({
       createdAt: cargoWeeklyClosings.createdAt
     }).from(cargoWeeklyClosings).leftJoin(clients, eq6(cargoWeeklyClosings.clientId, clients.id)).orderBy(desc3(cargoWeeklyClosings.weekEnd));
     const results = await query;
-    if (input?.clientId) return results.filter((r) => r.clientId === input.clientId);
-    return results;
+    const filtered = input?.clientId ? results.filter((r) => r.clientId === input.clientId) : results;
+    const conn = await getDirectConnection();
+    try {
+      const enriched = await Promise.all(filtered.map(async (closing) => {
+        if (closing.status === "pago") return { ...closing, paidViaAdvance: false };
+        const weekStartStr = closing.weekStart ? new Date(closing.weekStart).toISOString().slice(0, 10) : null;
+        const weekEndStr = closing.weekEnd ? new Date(closing.weekEnd).toISOString().slice(0, 10) : null;
+        if (!weekStartStr || !weekEndStr || !closing.totalLoads || closing.totalLoads === 0) {
+          return { ...closing, paidViaAdvance: false };
+        }
+        const [rows] = await conn.execute(
+          `SELECT 
+              COUNT(*) as total,
+              SUM(CASE WHEN payment_status = 'pago' THEN 1 ELSE 0 END) as paid
+            FROM cargo_loads 
+            WHERE client_id = ? 
+              AND DATE(COALESCE(delivery_date, date)) >= ? 
+              AND DATE(COALESCE(delivery_date, date)) <= ?`,
+          [closing.clientId, weekStartStr, weekEndStr]
+        );
+        const total = parseInt(rows[0]?.total || "0");
+        const paid = parseInt(rows[0]?.paid || "0");
+        const allPaidViaAdvance = total > 0 && paid === total;
+        if (allPaidViaAdvance) {
+          try {
+            const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+            await conn.execute(
+              `UPDATE cargo_weekly_closings SET status = 'pago', paid_at = COALESCE(paid_at, ?), updated_at = ? WHERE id = ?`,
+              [now, now, closing.id]
+            );
+          } catch (e) {
+          }
+          return { ...closing, status: "pago", paidViaAdvance: true, paidAt: closing.paidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") };
+        }
+        const [dedRows] = await conn.execute(
+          `SELECT COALESCE(SUM(amount), 0) as total_deducted FROM client_advance_deductions WHERE weekly_closing_id = ? AND client_id = ?`,
+          [closing.id, closing.clientId]
+        );
+        const totalDeducted = parseFloat(dedRows[0]?.total_deducted || "0");
+        const totalAmount = parseFloat(closing.totalAmount || "0");
+        if (totalDeducted > 0 && totalAmount > 0 && totalDeducted >= totalAmount * 0.99) {
+          try {
+            const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+            await conn.execute(
+              `UPDATE cargo_weekly_closings SET status = 'pago', paid_at = COALESCE(paid_at, ?), updated_at = ? WHERE id = ?`,
+              [now, now, closing.id]
+            );
+          } catch (e) {
+          }
+          return { ...closing, status: "pago", paidViaAdvance: true, paidAt: closing.paidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") };
+        }
+        return { ...closing, paidViaAdvance: false };
+      }));
+      return enriched;
+    } finally {
+      await conn.end();
+    }
   }),
   createWeeklyClosing: protectedProcedure.input(z6.object({
     clientId: z6.number(),
@@ -14547,6 +14602,22 @@ var clientAdvancesRouter = router({
         await db.update(cargoLoads).set({ paymentStatus: "pago", paidAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") }).where(eq37(cargoLoads.id, input.cargoLoadId));
       } catch (e) {
         console.error("[clientAdvances] Erro ao marcar carga como paga:", e);
+      }
+    }
+    if (input.weeklyClosingId && deductAmount > 0) {
+      try {
+        const [closing] = await db.select().from(cargoWeeklyClosings).where(eq37(cargoWeeklyClosings.id, input.weeklyClosingId)).limit(1);
+        if (closing && closing.status !== "pago") {
+          const deductions = await db.select().from(clientAdvanceDeductions).where(eq37(clientAdvanceDeductions.weeklyClosingId, input.weeklyClosingId));
+          const totalDeducted = deductions.reduce((sum, d) => sum + parseFloat(d.amount || "0"), 0) + deductAmount;
+          const totalAmount = parseFloat(closing.totalAmount || "0");
+          if (totalAmount > 0 && totalDeducted >= totalAmount * 0.99) {
+            const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+            await db.update(cargoWeeklyClosings).set({ status: "pago", paidAt: now }).where(eq37(cargoWeeklyClosings.id, input.weeklyClosingId));
+          }
+        }
+      } catch (e) {
+        console.error("[clientAdvances] Erro ao atualizar fechamento:", e);
       }
     }
     await db.update(clientAdvances).set({
