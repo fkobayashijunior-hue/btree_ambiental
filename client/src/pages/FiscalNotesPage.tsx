@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Plus, FileText, Upload, Package, Weight, CheckCircle2,
-  Clock, Trash2, Unlock, Eye, RefreshCw, Search, Pencil
+  Clock, Trash2, Unlock, Eye, RefreshCw, Search, Pencil, CheckCheck
 } from "lucide-react";
 
 function fileToBase64(file: File): Promise<string> {
@@ -53,11 +53,12 @@ type FiscalNote = {
   notes: string | null;
 };
 
-function NoteCard({ note, onRelease, onDelete, onEdit }: {
+function NoteCard({ note, onRelease, onDelete, onEdit, onMarkUsed }: {
   note: FiscalNote;
   onRelease: (id: number) => void;
   onDelete: (id: number) => void;
   onEdit: (note: FiscalNote) => void;
+  onMarkUsed: (note: FiscalNote) => void;
 }) {
   const isUsed = note.status === "used";
   return (
@@ -102,9 +103,14 @@ function NoteCard({ note, onRelease, onDelete, onEdit }: {
           </Button>
         )}
         {!isUsed && (
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" title="Excluir" onClick={() => onDelete(note.id)}>
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          <>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-800" title="Marcar como Utilizada" onClick={() => onMarkUsed(note)}>
+              <CheckCheck className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" title="Excluir" onClick={() => onDelete(note.id)}>
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </>
         )}
       </div>
     </div>
@@ -129,6 +135,10 @@ export default function FiscalNotesPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const editFileRef = useRef<HTMLInputElement>(null);
   const [editFile, setEditFile] = useState<File | null>(null);
+  // Modal de marcar como utilizada
+  const [markUsedNote, setMarkUsedNote] = useState<FiscalNote | null>(null);
+  const [markUsedClientName, setMarkUsedClientName] = useState("");
+  const [markUsedNotes, setMarkUsedNotes] = useState("");
 
   const utils = trpc.useUtils();
   const { data: notes = [], isLoading } = trpc.fiscalNotes.list.useQuery({ quantityType: tab === "all" ? "all" : tab });
@@ -175,6 +185,19 @@ export default function FiscalNotesPage() {
       utils.fiscalNotes.list.invalidate();
       utils.fiscalNotes.stats.invalidate();
       utils.fiscalNotes.getAvailable.invalidate();
+    },
+    onError: (e) => toast.error("Erro: " + e.message),
+  });
+
+  const markAsUsedMutation = trpc.fiscalNotes.markAsUsed.useMutation({
+    onSuccess: () => {
+      toast.success("Nota marcada como Utilizada!");
+      utils.fiscalNotes.list.invalidate();
+      utils.fiscalNotes.stats.invalidate();
+      utils.fiscalNotes.getAvailable.invalidate();
+      setMarkUsedNote(null);
+      setMarkUsedClientName("");
+      setMarkUsedNotes("");
     },
     onError: (e) => toast.error("Erro: " + e.message),
   });
@@ -239,6 +262,11 @@ export default function FiscalNotesPage() {
     onRelease: (id: number) => releaseMutation.mutate({ id }),
     onDelete: (id: number) => deleteMutation.mutate({ id }),
     onEdit: (note: FiscalNote) => setEditingNote({ ...note }),
+    onMarkUsed: (note: FiscalNote) => {
+      setMarkUsedNote(note);
+      setMarkUsedClientName("");
+      setMarkUsedNotes("");
+    },
   });
 
   return (
@@ -357,6 +385,62 @@ export default function FiscalNotesPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Dialog de Marcar como Utilizada */}
+      <Dialog open={!!markUsedNote} onOpenChange={(v) => { if (!v) setMarkUsedNote(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCheck className="w-5 h-5 text-green-600" />
+              Marcar como Utilizada
+            </DialogTitle>
+          </DialogHeader>
+          {markUsedNote && (
+            <div className="space-y-4 mt-2">
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <span className="font-mono font-semibold">{markUsedNote.actionCode}</span>
+                {markUsedNote.invoiceNumber && <span className="text-muted-foreground ml-2">NF {markUsedNote.invoiceNumber}</span>}
+                <div className="text-muted-foreground mt-1">{formatQty(markUsedNote.quantity, markUsedNote.quantityType)} · {formatDate(markUsedNote.issueDate)}</div>
+              </div>
+              <div>
+                <Label>Cliente / Destino (opcional)</Label>
+                <Input
+                  className="mt-1"
+                  placeholder="Ex: Rebinic, Líder, ENERBIO..."
+                  value={markUsedClientName}
+                  onChange={e => setMarkUsedClientName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Observações (opcional)</Label>
+                <Input
+                  className="mt-1"
+                  placeholder="Ex: Local → Destino"
+                  value={markUsedNotes}
+                  onChange={e => setMarkUsedNotes(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setMarkUsedNote(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  disabled={markAsUsedMutation.isPending}
+                  onClick={() => markAsUsedMutation.mutate({
+                    id: markUsedNote.id,
+                    clientName: markUsedClientName || undefined,
+                    destination: markUsedNotes || undefined,
+                  })}
+                >
+                  {markAsUsedMutation.isPending ? "Salvando..." : "Confirmar"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de Edição */}
       <Dialog open={!!editingNote} onOpenChange={(v) => { if (!v) { setEditingNote(null); setEditFile(null); } }}>
