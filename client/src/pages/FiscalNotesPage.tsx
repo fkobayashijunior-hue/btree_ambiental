@@ -137,8 +137,13 @@ export default function FiscalNotesPage() {
   const [editFile, setEditFile] = useState<File | null>(null);
   // Modal de marcar como utilizada
   const [markUsedNote, setMarkUsedNote] = useState<FiscalNote | null>(null);
-  const [markUsedClientName, setMarkUsedClientName] = useState("");
+  const [markUsedClientId, setMarkUsedClientId] = useState("");
+  const [markUsedLocationId, setMarkUsedLocationId] = useState("");
   const [markUsedNotes, setMarkUsedNotes] = useState("");
+
+  // Dados para os selects do modal
+  const { data: clientsList = [] } = trpc.clients.list.useQuery({});
+  const { data: locationsList = [] } = trpc.gpsLocations.list.useQuery();
 
   const utils = trpc.useUtils();
   const { data: notes = [], isLoading } = trpc.fiscalNotes.list.useQuery({ quantityType: tab === "all" ? "all" : tab });
@@ -196,7 +201,8 @@ export default function FiscalNotesPage() {
       utils.fiscalNotes.stats.invalidate();
       utils.fiscalNotes.getAvailable.invalidate();
       setMarkUsedNote(null);
-      setMarkUsedClientName("");
+      setMarkUsedClientId("");
+      setMarkUsedLocationId("");
       setMarkUsedNotes("");
     },
     onError: (e) => toast.error("Erro: " + e.message),
@@ -264,7 +270,8 @@ export default function FiscalNotesPage() {
     onEdit: (note: FiscalNote) => setEditingNote({ ...note }),
     onMarkUsed: (note: FiscalNote) => {
       setMarkUsedNote(note);
-      setMarkUsedClientName("");
+      setMarkUsedClientId("");
+      setMarkUsedLocationId("");
       setMarkUsedNotes("");
     },
   });
@@ -403,19 +410,38 @@ export default function FiscalNotesPage() {
                 <div className="text-muted-foreground mt-1">{formatQty(markUsedNote.quantity, markUsedNote.quantityType)} · {formatDate(markUsedNote.issueDate)}</div>
               </div>
               <div>
-                <Label>Cliente / Destino (opcional)</Label>
-                <Input
-                  className="mt-1"
-                  placeholder="Ex: Rebinic, Líder, ENERBIO..."
-                  value={markUsedClientName}
-                  onChange={e => setMarkUsedClientName(e.target.value)}
-                />
+                <Label>Destino / Comprador (opcional)</Label>
+                <Select value={markUsedClientId} onValueChange={setMarkUsedClientId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Selecione o comprador..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Nenhum --</SelectItem>
+                    {(clientsList as any[]).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Local / Cliente (opcional)</Label>
+                <Select value={markUsedLocationId} onValueChange={setMarkUsedLocationId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Selecione o local..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Nenhum --</SelectItem>
+                    {(locationsList as any[]).map((l: any) => (
+                      <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Observações (opcional)</Label>
                 <Input
                   className="mt-1"
-                  placeholder="Ex: Local → Destino"
+                  placeholder="Ex: Observações adicionais..."
                   value={markUsedNotes}
                   onChange={e => setMarkUsedNotes(e.target.value)}
                 />
@@ -428,11 +454,21 @@ export default function FiscalNotesPage() {
                   type="button"
                   className="flex-1 bg-green-600 hover:bg-green-700"
                   disabled={markAsUsedMutation.isPending}
-                  onClick={() => markAsUsedMutation.mutate({
-                    id: markUsedNote.id,
-                    clientName: markUsedClientName || undefined,
-                    destination: markUsedNotes || undefined,
-                  })}
+                  onClick={() => {
+                    const selectedClient = markUsedClientId && markUsedClientId !== 'none'
+                      ? (clientsList as any[]).find((c: any) => String(c.id) === markUsedClientId)
+                      : null;
+                    const selectedLocation = markUsedLocationId && markUsedLocationId !== 'none'
+                      ? (locationsList as any[]).find((l: any) => String(l.id) === markUsedLocationId)
+                      : null;
+                    markAsUsedMutation.mutate({
+                      id: markUsedNote.id,
+                      clientName: selectedClient?.name || undefined,
+                      destination: selectedLocation
+                        ? (markUsedNotes ? `${selectedLocation.name} → ${markUsedNotes}` : selectedLocation.name)
+                        : (markUsedNotes || undefined),
+                    });
+                  }}
                 >
                   {markAsUsedMutation.isPending ? "Salvando..." : "Confirmar"}
                 </Button>
