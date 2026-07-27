@@ -70,9 +70,17 @@ const emptyForm = {
 };
 
 // Tipos de equipamento que usam horímetro (em vez de odômetro)
-const HOUR_METER_TYPES = ["Trator", "Forwarder", "Pá Carregadeira", "Roçadeira", "Máquina"];
+// Inclui variantes em maiúsculas (banco de produção) e minúsculas (legado)
+const HOUR_METER_TYPES = [
+  "Trator", "TRATORES", "Tratores",
+  "Forwarder",
+  "Pá Carregadeira",
+  "Roçadeira",
+  "Máquina", "MÁQUINAS", "Maquinas", "MAQUINAS",
+  "Equipamento", "EQUIPAMENTOS", "Equipamentos",
+];
 // Tipos de equipamento que são motosserra
-const CHAINSAW_TYPES = ["Motosserra"];
+const CHAINSAW_TYPES = ["Motosserra", "MOTOSSERRAS", "Motosserras"];
 
 // Meses em português
 const MONTHS = [

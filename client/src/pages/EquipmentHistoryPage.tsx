@@ -41,7 +41,12 @@ const RECORD_TYPE_LABELS: Record<string, string> = {
 };
 
 // Tipos de equipamento que usam horímetro
-const HOUR_METER_TYPES = ["máquina", "maquina", "trator", "forwarder", "escavadeira", "retroescavadeira", "motoniveladora", "rolo compactador"];
+// Inclui variantes em maiúsculas (banco de produção) e minúsculas (legado)
+const HOUR_METER_TYPES = [
+  "máquina", "maquina", "trator", "forwarder", "escavadeira", "retroescavadeira", "motoniveladora", "rolo compactador",
+  // Nomes exatos do banco de produção (maiúsculas)
+  "tratores", "máquinas", "equipamentos", "motosserras",
+];
 
 function isHourMeterType(typeName: string) {
   if (!typeName) return false;
