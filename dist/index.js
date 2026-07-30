@@ -3732,8 +3732,11 @@ var cargoLoadsRouter = router({
       driverPhotoUrl: collaborators.photoUrl,
       receiverName: cargoLoads.receiverName,
       thirdPartyContractor: cargoLoads.thirdPartyContractor,
-      thirdPartyCost: cargoLoads.thirdPartyCost
-    }).from(cargoLoads).leftJoin(clients, eq6(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq6(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq6(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq6(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq6(cargoLoads.driverCollaboratorId, collaborators.id)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
+      thirdPartyCost: cargoLoads.thirdPartyCost,
+      fiscalNoteId: cargoLoads.fiscalNoteId,
+      fiscalNoteFileUrl: fiscalNotes.fileUrl,
+      fiscalNoteActionCode: fiscalNotes.actionCode
+    }).from(cargoLoads).leftJoin(clients, eq6(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq6(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq6(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq6(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq6(cargoLoads.driverCollaboratorId, collaborators.id)).leftJoin(fiscalNotes, eq6(cargoLoads.fiscalNoteId, fiscalNotes.id)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     let filtered = results;
     if (userAllowedClientIds && userAllowedClientIds.length > 0) {
       filtered = filtered.filter((r) => r.clientId && userAllowedClientIds.includes(r.clientId));
@@ -3814,8 +3817,11 @@ var cargoLoadsRouter = router({
       driverPhotoUrl: collaborators.photoUrl,
       receiverName: cargoLoads.receiverName,
       thirdPartyContractor: cargoLoads.thirdPartyContractor,
-      thirdPartyCost: cargoLoads.thirdPartyCost
-    }).from(cargoLoads).leftJoin(clients, eq6(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq6(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq6(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq6(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq6(cargoLoads.driverCollaboratorId, collaborators.id)).where(eq6(cargoLoads.id, input.id)).limit(1);
+      thirdPartyCost: cargoLoads.thirdPartyCost,
+      fiscalNoteId: cargoLoads.fiscalNoteId,
+      fiscalNoteFileUrl: fiscalNotes.fileUrl,
+      fiscalNoteActionCode: fiscalNotes.actionCode
+    }).from(cargoLoads).leftJoin(clients, eq6(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq6(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq6(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq6(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq6(cargoLoads.driverCollaboratorId, collaborators.id)).leftJoin(fiscalNotes, eq6(cargoLoads.fiscalNoteId, fiscalNotes.id)).where(eq6(cargoLoads.id, input.id)).limit(1);
     if (!result.length) throw new TRPCError4({ code: "NOT_FOUND" });
     const r = result[0];
     return {

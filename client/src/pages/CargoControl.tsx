@@ -3017,6 +3017,10 @@ export default function CargoControl() {
                           <a href={(detailCargo as any).invoiceUrl} target="_blank" rel="noopener" className="text-xs text-blue-600 hover:underline flex items-center gap-1 truncate">
                             <ExternalLink className="h-3 w-3 flex-shrink-0" /> Ver documento
                           </a>
+                        ) : (detailCargo as any).fiscalNoteFileUrl ? (
+                          <a href={(detailCargo as any).fiscalNoteFileUrl} target="_blank" rel="noopener" className="text-xs text-green-600 hover:underline flex items-center gap-1 truncate">
+                            <ExternalLink className="h-3 w-3 flex-shrink-0" /> Ver nota {(detailCargo as any).fiscalNoteActionCode || ''}
+                          </a>
                         ) : (
                           <p className="text-xs text-gray-400">Nenhum arquivo anexado</p>
                         )}

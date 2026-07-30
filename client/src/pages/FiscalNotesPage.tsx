@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Plus, FileText, Upload, Package, Weight, CheckCircle2,
-  Clock, Trash2, Unlock, Eye, RefreshCw, Search, Pencil, CheckCheck
+  Clock, Trash2, Unlock, Eye, RefreshCw, Search, Pencil, CheckCheck, ExternalLink
 } from "lucide-react";
 
 function fileToBase64(file: File): Promise<string> {
@@ -53,12 +53,13 @@ type FiscalNote = {
   notes: string | null;
 };
 
-function NoteCard({ note, onRelease, onDelete, onEdit, onMarkUsed }: {
+function NoteCard({ note, onRelease, onDelete, onEdit, onMarkUsed, onViewFile }: {
   note: FiscalNote;
   onRelease: (id: number) => void;
   onDelete: (id: number) => void;
   onEdit: (note: FiscalNote) => void;
   onMarkUsed: (note: FiscalNote) => void;
+  onViewFile: (url: string, title: string) => void;
 }) {
   const isUsed = note.status === "used";
   return (
@@ -87,11 +88,9 @@ function NoteCard({ note, onRelease, onDelete, onEdit, onMarkUsed }: {
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         {note.fileUrl && (
-          <a href={note.fileUrl} target="_blank" rel="noopener noreferrer">
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver arquivo">
-              <Eye className="w-4 h-4" />
-            </Button>
-          </a>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-700" title="Ver arquivo da nota" onClick={() => onViewFile(note.fileUrl!, `Nota ${note.actionCode}${note.invoiceNumber ? ' · NF ' + note.invoiceNumber : ''}`)}>
+            <Eye className="w-4 h-4" />
+          </Button>
         )}
         {/* Botão de editar — disponível para todas as notas */}
         <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-700" title="Editar ação" onClick={() => onEdit(note)}>
@@ -135,6 +134,9 @@ export default function FiscalNotesPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const editFileRef = useRef<HTMLInputElement>(null);
   const [editFile, setEditFile] = useState<File | null>(null);
+  // Modal de visualização de arquivo
+  const [viewFileUrl, setViewFileUrl] = useState<string | null>(null);
+  const [viewFileTitle, setViewFileTitle] = useState("");
   // Modal de marcar como utilizada
   const [markUsedNote, setMarkUsedNote] = useState<FiscalNote | null>(null);
   const [markUsedClientId, setMarkUsedClientId] = useState("");
@@ -273,6 +275,10 @@ export default function FiscalNotesPage() {
       setMarkUsedClientId("");
       setMarkUsedBuyerId("");
       setMarkUsedNotes("");
+    },
+    onViewFile: (url: string, title: string) => {
+      setViewFileUrl(url);
+      setViewFileTitle(title);
     },
   });
 
@@ -696,6 +702,47 @@ export default function FiscalNotesPage() {
           </>
         )}
       </Tabs>
+
+      {/* Modal de visualização de arquivo da nota */}
+      <Dialog open={!!viewFileUrl} onOpenChange={(v) => { if (!v) setViewFileUrl(null); }}>
+        <DialogContent className="max-w-3xl w-full p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2">
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5 text-blue-500" />
+              {viewFileTitle}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-4 pt-0">
+            {viewFileUrl && (() => {
+              const isPdf = viewFileUrl.toLowerCase().includes('.pdf') || viewFileUrl.toLowerCase().includes('application/pdf');
+              return isPdf ? (
+                <iframe
+                  src={viewFileUrl}
+                  className="w-full rounded-lg border"
+                  style={{ height: '70vh' }}
+                  title={viewFileTitle}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <img
+                    src={viewFileUrl}
+                    alt={viewFileTitle}
+                    className="max-w-full max-h-[65vh] object-contain rounded-lg border"
+                  />
+                  <a
+                    href={viewFileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Abrir em nova aba
+                  </a>
+                </div>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
