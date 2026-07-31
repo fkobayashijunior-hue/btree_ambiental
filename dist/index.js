@@ -16254,6 +16254,7 @@ var financialConsolidatedRouter = router({
 init_trpc();
 init_db();
 init_schema();
+init_cloudinary();
 import { z as z43 } from "zod";
 import { desc as desc34, eq as eq41, and as and25, sql as sql25 } from "drizzle-orm";
 async function getNextActionCode(db) {
@@ -16323,8 +16324,7 @@ var fiscalNotesRouter = router({
       try {
         const buffer = Buffer.from(input.fileBase64, "base64");
         const ext = input.fileName.split(".").pop() || "pdf";
-        const key = `fiscal-notes/${actionCode}-${Date.now()}.${ext}`;
-        const result = await storagePut(key, buffer, input.fileMimeType || "application/pdf");
+        const result = await cloudinaryUpload(buffer, "btree", `${actionCode}-${Date.now()}.${ext}`);
         fileUrl = result.url;
       } catch (e) {
         console.error("Erro upload fiscal note:", e);
@@ -16390,8 +16390,7 @@ var fiscalNotesRouter = router({
       try {
         const buffer = Buffer.from(fileBase64, "base64");
         const ext = fileName.split(".").pop() || "pdf";
-        const key = `fiscal-notes/edit-${id}-${Date.now()}.${ext}`;
-        const result = await storagePut(key, buffer, fileMimeType || "application/pdf");
+        const result = await cloudinaryUpload(buffer, "btree", `fiscal-note-edit-${id}-${Date.now()}.${ext}`);
         fileUrl = result.url;
       } catch (e) {
         console.error("Erro upload fiscal note update:", e);

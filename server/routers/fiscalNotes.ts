@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { fiscalNotes } from "../../drizzle/schema";
 import { desc, eq, and, sql } from "drizzle-orm";
-import { storagePut } from "../storage";
+import { cloudinaryUpload } from "../cloudinary";
 
 // Gera o próximo código de ação AC-XXXXX
 async function getNextActionCode(db: Awaited<ReturnType<typeof getDb>>): Promise<string> {
@@ -89,8 +89,7 @@ export const fiscalNotesRouter = router({
         try {
           const buffer = Buffer.from(input.fileBase64, "base64");
           const ext = input.fileName.split(".").pop() || "pdf";
-          const key = `fiscal-notes/${actionCode}-${Date.now()}.${ext}`;
-          const result = await storagePut(key, buffer, input.fileMimeType || "application/pdf");
+          const result = await cloudinaryUpload(buffer, "btree", `${actionCode}-${Date.now()}.${ext}`);
           fileUrl = result.url;
         } catch (e) {
           console.error("Erro upload fiscal note:", e);
@@ -171,8 +170,7 @@ export const fiscalNotesRouter = router({
         try {
           const buffer = Buffer.from(fileBase64, "base64");
           const ext = fileName.split(".").pop() || "pdf";
-          const key = `fiscal-notes/edit-${id}-${Date.now()}.${ext}`;
-          const result = await storagePut(key, buffer, fileMimeType || "application/pdf");
+          const result = await cloudinaryUpload(buffer, "btree", `fiscal-note-edit-${id}-${Date.now()}.${ext}`);
           fileUrl = result.url;
         } catch (e) {
           console.error("Erro upload fiscal note update:", e);
