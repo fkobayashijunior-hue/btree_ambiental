@@ -825,13 +825,9 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
         ) : (() => {
           // Calcular valor pago e saldo usando adiantamentos reais
           const allLoads = data?.loads || [];
-          // Valor pago = soma dos valores já abatidos nos adiantamentos (totalAmount - balanceRemaining)
-          const advances = data?.advances || [];
-          const valorPago = advances.reduce((sum: number, a: any) => {
-            const total = parseFloat(a.totalAmount || a.amount || '0');
-            const saldoAdiantamento = parseFloat(a.balanceRemaining || '0');
-            return sum + Math.max(0, total - saldoAdiantamento);
-          }, 0);
+          // Valor abatido = soma real de todas as deduções registradas
+          const deductions = data?.advanceDeductions || [];
+          const valorPago = deductions.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0);
           // Saldo a receber = saldo disponível nos adiantamentos ativos
           const saldo = data?.totalAdvanceBalance ?? 0;
           const totalValorCargas = valorPago + saldo; // para controle de exibição

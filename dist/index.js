@@ -3403,6 +3403,67 @@ async function getDirectConnection() {
   const conn = await mysql3.createConnection(connConfig);
   return conn;
 }
+async function autoDeductAdvanceForCargo(db, cargoId) {
+  if (!db) return;
+  try {
+    const [cargo] = await db.select({
+      id: cargoLoads.id,
+      clientId: cargoLoads.clientId,
+      date: cargoLoads.date,
+      weightNetKg: cargoLoads.weightNetKg,
+      weightOutKg: cargoLoads.weightOutKg,
+      paymentStatus: cargoLoads.paymentStatus
+    }).from(cargoLoads).where(eq6(cargoLoads.id, cargoId)).limit(1);
+    if (!cargo || !cargo.clientId) return;
+    const existingDeductions = await db.select({ id: clientAdvanceDeductions.id }).from(clientAdvanceDeductions).where(eq6(clientAdvanceDeductions.cargoLoadId, cargoId)).limit(1);
+    if (existingDeductions.length > 0) return;
+    if (cargo.paymentStatus === "pago") return;
+    const advances = await db.select().from(clientAdvances).where(and3(eq6(clientAdvances.clientId, cargo.clientId), eq6(clientAdvances.status, "ativo"))).orderBy(clientAdvances.date);
+    if (advances.length === 0) return;
+    const [client] = await db.select({ pricePerTon: clients.pricePerTon, pricePerM3: clients.pricePerM3, priceType: clients.priceType }).from(clients).where(eq6(clients.id, cargo.clientId)).limit(1);
+    const weightNet = parseFloat(cargo.weightNetKg || cargo.weightOutKg || "0");
+    const pricePerTon = parseFloat(client?.pricePerTon || "0");
+    const pricePerM3 = parseFloat(client?.pricePerM3 || "0");
+    let loadValue = 0;
+    if (weightNet > 0 && pricePerTon > 0) {
+      loadValue = weightNet / 1e3 * pricePerTon;
+    } else if (pricePerM3 > 0) {
+      loadValue = 0;
+    }
+    if (loadValue <= 0) return;
+    const cargoDateStr = typeof cargo.date === "string" ? cargo.date.slice(0, 10) : new Date(cargo.date).toISOString().slice(0, 10);
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    let remainingToDeduct = loadValue;
+    for (const advance of advances) {
+      if (remainingToDeduct <= 0) break;
+      let balanceRemaining = parseFloat(advance.balanceRemaining || "0");
+      if (balanceRemaining <= 0) continue;
+      const deducted = Math.min(remainingToDeduct, balanceRemaining);
+      const balanceBefore = balanceRemaining;
+      const balanceAfter = balanceRemaining - deducted;
+      await db.insert(clientAdvanceDeductions).values({
+        advanceId: advance.id,
+        clientId: cargo.clientId,
+        cargoLoadId: cargoId,
+        amount: String(deducted.toFixed(2)),
+        balanceBefore: String(balanceBefore.toFixed(2)),
+        balanceAfter: String(balanceAfter.toFixed(2)),
+        description: `Abatimento autom\xE1tico carga #${cargoId} - ${cargoDateStr}`,
+        date: cargoDateStr
+      });
+      await db.update(clientAdvances).set({
+        balanceRemaining: String(balanceAfter.toFixed(2)),
+        status: balanceAfter <= 0 ? "quitado" : "ativo"
+      }).where(eq6(clientAdvances.id, advance.id));
+      remainingToDeduct -= deducted;
+    }
+    if (remainingToDeduct <= 0.01) {
+      await db.update(cargoLoads).set({ paymentStatus: "pago", paidAt: now }).where(eq6(cargoLoads.id, cargoId));
+    }
+  } catch (e) {
+    console.error("[autoDeductAdvance] Erro:", e);
+  }
+}
 var cargoLoadsRouter = router({
   // ===== DESTINOS =====
   // Verificar se nota fiscal já existe (para validação em tempo real no frontend)
@@ -4145,6 +4206,10 @@ var cargoLoadsRouter = router({
         }
       } catch (e) {
       }
+      try {
+        await autoDeductAdvanceForCargo(db, id);
+      } catch (e) {
+      }
     }
     return { success: true };
   }),
@@ -4170,6 +4235,10 @@ var cargoLoadsRouter = router({
         if (cargo) {
           await generateFinancialEntriesForCargo2(cargo, ctx.user.id, ctx.user.name);
         }
+      } catch (e) {
+      }
+      try {
+        await autoDeductAdvanceForCargo(db, input.id);
       } catch (e) {
       }
     }
@@ -4528,6 +4597,12 @@ var cargoLoadsRouter = router({
       if (input.finalVolumeM3) updateData.finalVolumeM3 = input.finalVolumeM3;
     }
     await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, input.cargoId));
+    if (input.stage === "finalizado") {
+      try {
+        await autoDeductAdvanceForCargo(db, input.cargoId);
+      } catch (e) {
+      }
+    }
     let photoUrl = null;
     if (input.photoBase64) {
       const uploaded = await cloudinaryUpload(input.photoBase64, `btree/tracking/${input.cargoId}`);

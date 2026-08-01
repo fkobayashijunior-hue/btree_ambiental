@@ -5,7 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos, gpsLocations,
-  cargoWeeklyClosings, clientDocuments, buyerClients, fiscalNotes
+  cargoWeeklyClosings, clientDocuments, buyerClients, fiscalNotes, clientAdvances, clientAdvanceDeductions
 } from "../../drizzle/schema";
 import { eq, desc, asc, and, sql, ne, or } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
@@ -25,6 +25,90 @@ async function getDirectConnection() {
     : process.env.DATABASE_URL!;
   const conn = await mysql.createConnection(connConfig as any);
   return conn;
+}
+
+// ── Abatimento automático de adiantamento ao finalizar/pagar uma carga ──
+async function autoDeductAdvanceForCargo(
+  db: Awaited<ReturnType<typeof getDb>>,
+  cargoId: number
+): Promise<void> {
+  if (!db) return;
+  try {
+    // Buscar a carga para obter clientId, peso e data
+    const [cargo] = await db.select({
+      id: cargoLoads.id,
+      clientId: cargoLoads.clientId,
+      date: cargoLoads.date,
+      weightNetKg: cargoLoads.weightNetKg,
+      weightOutKg: cargoLoads.weightOutKg,
+      paymentStatus: cargoLoads.paymentStatus,
+    }).from(cargoLoads).where(eq(cargoLoads.id, cargoId)).limit(1);
+    if (!cargo || !cargo.clientId) return;
+    // Verificar se já existe dedução para esta carga (evitar duplicatas)
+    const existingDeductions = await db.select({ id: clientAdvanceDeductions.id })
+      .from(clientAdvanceDeductions)
+      .where(eq(clientAdvanceDeductions.cargoLoadId, cargoId))
+      .limit(1);
+    if (existingDeductions.length > 0) return; // já foi abatido
+    // Verificar se já está pago
+    if (cargo.paymentStatus === 'pago') return;
+    // Buscar adiantamentos ativos do cliente (ordenados por data — mais antigo primeiro)
+    const advances = await db.select()
+      .from(clientAdvances)
+      .where(and(eq(clientAdvances.clientId, cargo.clientId), eq(clientAdvances.status, 'ativo')))
+      .orderBy(clientAdvances.date);
+    if (advances.length === 0) return;
+    // Calcular valor da carga: buscar pricePerTon/pricePerM3 do cliente
+    const [client] = await db.select({ pricePerTon: clients.pricePerTon, pricePerM3: clients.pricePerM3, priceType: clients.priceType })
+      .from(clients).where(eq(clients.id, cargo.clientId)).limit(1);
+    const weightNet = parseFloat(cargo.weightNetKg || cargo.weightOutKg || '0');
+    const pricePerTon = parseFloat(client?.pricePerTon || '0');
+    const pricePerM3 = parseFloat(client?.pricePerM3 || '0');
+    let loadValue = 0;
+    if (weightNet > 0 && pricePerTon > 0) {
+      loadValue = (weightNet / 1000) * pricePerTon;
+    } else if (pricePerM3 > 0) {
+      // fallback para m3 se não tiver peso
+      loadValue = 0; // sem volume disponível aqui, pular
+    }
+    if (loadValue <= 0) return;
+    const cargoDateStr = typeof cargo.date === 'string' ? cargo.date.slice(0, 10) : new Date(cargo.date).toISOString().slice(0, 10);
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    let remainingToDeduct = loadValue;
+    for (const advance of advances) {
+      if (remainingToDeduct <= 0) break;
+      let balanceRemaining = parseFloat(advance.balanceRemaining || '0');
+      if (balanceRemaining <= 0) continue;
+      const deducted = Math.min(remainingToDeduct, balanceRemaining);
+      const balanceBefore = balanceRemaining;
+      const balanceAfter = balanceRemaining - deducted;
+      // Registrar dedução
+      await db.insert(clientAdvanceDeductions).values({
+        advanceId: advance.id,
+        clientId: cargo.clientId,
+        cargoLoadId: cargoId,
+        amount: String(deducted.toFixed(2)),
+        balanceBefore: String(balanceBefore.toFixed(2)),
+        balanceAfter: String(balanceAfter.toFixed(2)),
+        description: `Abatimento automático carga #${cargoId} - ${cargoDateStr}`,
+        date: cargoDateStr,
+      });
+      // Atualizar saldo do adiantamento
+      await db.update(clientAdvances).set({
+        balanceRemaining: String(balanceAfter.toFixed(2)),
+        status: balanceAfter <= 0 ? 'quitado' : 'ativo',
+      }).where(eq(clientAdvances.id, advance.id));
+      remainingToDeduct -= deducted;
+    }
+    // Se o valor total da carga foi coberto pelo adiantamento, marcar como pago
+    if (remainingToDeduct <= 0.01) {
+      await db.update(cargoLoads)
+        .set({ paymentStatus: 'pago', paidAt: now })
+        .where(eq(cargoLoads.id, cargoId));
+    }
+  } catch (e) {
+    console.error('[autoDeductAdvance] Erro:', e);
+  }
 }
 
 export const cargoLoadsRouter = router({
@@ -740,7 +824,7 @@ export const cargoLoadsRouter = router({
           message: `Erro DB [${realErr.code || 'UNKNOWN'}]: ${realErr.sqlMessage || realErr.message || dbErr.message}`,
         });
       }
-      // Auto-generate financial entries when status changes to 'entregue'
+            // Auto-generate financial entries when status changes to 'entregue'
       if (input.status === 'entregue') {
         try {
           const { generateFinancialEntriesForCargo } = await import('../autoFinancial');
@@ -749,8 +833,9 @@ export const cargoLoadsRouter = router({
             await generateFinancialEntriesForCargo(cargo as any, ctx.user.id, ctx.user.name);
           }
         } catch(e) { /* silent - don't block update */ }
+        // Abatimento automático de adiantamento
+        try { await autoDeductAdvanceForCargo(db, id); } catch(e) { /* silent */ }
       }
-
       return { success: true };
     }),
 
@@ -772,7 +857,7 @@ export const cargoLoadsRouter = router({
         status: input.trackingStatus === "finalizado" ? "entregue" : undefined,
       }).where(eq(cargoLoads.id, input.id));
 
-      // Auto-generate financial entries when tracking reaches 'finalizado'
+            // Auto-generate financial entries when tracking reaches 'finalizado'
       if (input.trackingStatus === 'finalizado') {
         try {
           const { generateFinancialEntriesForCargo } = await import('../autoFinancial');
@@ -781,11 +866,11 @@ export const cargoLoadsRouter = router({
             await generateFinancialEntriesForCargo(cargo as any, ctx.user.id, ctx.user.name);
           }
         } catch(e) { /* silent */ }
+        // Abatimento automático de adiantamento
+        try { await autoDeductAdvanceForCargo(db, input.id); } catch(e) { /* silent */ }
       }
-
       return { success: true };
     }),
-
   // Upload de documento (nota, boleto, comprovante) para uma carga
   uploadDocument: protectedProcedure
     .input(z.object({
@@ -1233,8 +1318,11 @@ export const cargoLoadsRouter = router({
         if (input.finalLengthM) updateData.finalLengthM = input.finalLengthM;
         if (input.finalVolumeM3) updateData.finalVolumeM3 = input.finalVolumeM3;
       }
-      await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
-      
+            await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
+      // Abatimento automático de adiantamento ao finalizar
+      if (input.stage === 'finalizado') {
+        try { await autoDeductAdvanceForCargo(db, input.cargoId); } catch(e) { /* silent */ }
+      }
       // Se tem foto, fazer upload e salvar na tabela de tracking photos
       let photoUrl: string | null = null;
       if (input.photoBase64) {
