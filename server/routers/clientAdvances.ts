@@ -431,4 +431,48 @@ export const clientAdvancesRouter = router({
       await db.delete(clientAdvances).where(eq(clientAdvances.id, input.id));
       return { success: true };
     }),
+
+  // Limpar deduções duplicadas de um adiantamento (manter apenas a mais antiga por cargo_load_id)
+  cleanDuplicateDeductions: protectedProcedure
+    .input(z.object({ advanceId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indisponível' });
+      // Buscar todas as deduções do adiantamento ordenadas por id (mais antiga primeiro)
+      const allDeductions = await db.select()
+        .from(clientAdvanceDeductions)
+        .where(eq(clientAdvanceDeductions.advanceId, input.advanceId))
+        .orderBy(asc(clientAdvanceDeductions.id));
+      // Agrupar por cargo_load_id e manter apenas a primeira (mais antiga)
+      const seen = new Map();
+      const toDelete = [];
+      for (const d of allDeductions) {
+        const key = d.cargoLoadId;
+        if (key === null || key === undefined) continue; // deduções manuais sem carga, manter
+        if (!seen.has(key)) {
+          seen.set(key, d.id);
+        } else {
+          toDelete.push(d.id); // duplicata
+        }
+      }
+      for (const id of toDelete) {
+        await db.delete(clientAdvanceDeductions).where(eq(clientAdvanceDeductions.id, id));
+      }
+      // Recalcular saldo do adiantamento com base nas deduções restantes
+      const remaining = await db.select()
+        .from(clientAdvanceDeductions)
+        .where(eq(clientAdvanceDeductions.advanceId, input.advanceId));
+      const totalDeducted = remaining.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0);
+      const [advance] = await db.select().from(clientAdvances).where(eq(clientAdvances.id, input.advanceId)).limit(1);
+      if (advance) {
+        const originalAmount = parseFloat(advance.amount || '0');
+        const newBalance = Math.max(0, originalAmount - totalDeducted);
+        await db.update(clientAdvances).set({
+          balanceRemaining: String(newBalance.toFixed(2)),
+          status: newBalance <= 0 ? 'quitado' : 'ativo',
+        }).where(eq(clientAdvances.id, input.advanceId));
+        return { success: true, deletedCount: toDelete.length, newBalance: newBalance.toFixed(2) };
+      }
+      return { success: true, deletedCount: toDelete.length, newBalance: null };
+    }),
 });

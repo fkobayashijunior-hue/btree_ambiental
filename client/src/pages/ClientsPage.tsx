@@ -267,6 +267,14 @@ export default function ClientsPage() {
     { enabled: !!autoDeductDialog && !!advanceClientId }
   );
 
+  const cleanDuplicateMutation = trpc.clientAdvances.cleanDuplicateDeductions.useMutation({
+    onSuccess: (result) => {
+      toast.success(`Limpeza concluída! ${result.deletedCount} deduções duplicadas removidas. Novo saldo: R$ ${parseFloat(result.newBalance || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+      utils.clientAdvances.list.invalidate();
+      utils.clientAdvances.listDeductions.invalidate();
+    },
+    onError: (e) => toast.error(e.message || 'Erro ao limpar duplicatas'),
+  });
   const applyAutoDeductMutation = trpc.clientAdvances.applyAutoDeductionByLoads.useMutation({
     onSuccess: (data) => {
       setAutoDeductResult(data.results);
@@ -915,6 +923,19 @@ export default function ClientsPage() {
                           <Zap className="h-3 w-3 mr-1" /> Abater Cargas
                         </Button>
                       )}
+                      {/* Botão limpar duplicatas */}
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Isso vai remover deduções duplicadas (mesma carga abatida mais de uma vez) e recalcular o saldo. Continuar?')) {
+                            cleanDuplicateMutation.mutate({ advanceId: adv.id });
+                          }
+                        }}
+                        className="text-orange-400 hover:text-orange-600"
+                        title="Corrigir deduções duplicadas"
+                        disabled={cleanDuplicateMutation.isPending}
+                      >
+                        <AlertCircle className="h-4 w-4" />
+                      </button>
                       {/* Botão excluir sempre visível (inclusive para adiantamentos quitados) */}
                       <button
                         onClick={() => {

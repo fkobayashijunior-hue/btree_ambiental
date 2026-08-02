@@ -14582,7 +14582,7 @@ init_db();
 init_schema();
 import { z as z38 } from "zod";
 import { TRPCError as TRPCError27 } from "@trpc/server";
-import { eq as eq37, desc as desc31, and as and22 } from "drizzle-orm";
+import { eq as eq37, desc as desc31, and as and22, asc as asc5 } from "drizzle-orm";
 var clientAdvancesRouter = router({
   // Listar adiantamentos de um cliente
   list: protectedProcedure.input(z38.object({ clientId: z38.number() })).query(async ({ input }) => {
@@ -14880,6 +14880,39 @@ var clientAdvancesRouter = router({
     }
     await db.delete(clientAdvances).where(eq37(clientAdvances.id, input.id));
     return { success: true };
+  }),
+  // Limpar deduções duplicadas de um adiantamento (manter apenas a mais antiga por cargo_load_id)
+  cleanDuplicateDeductions: protectedProcedure.input(z38.object({ advanceId: z38.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const allDeductions = await db.select().from(clientAdvanceDeductions).where(eq37(clientAdvanceDeductions.advanceId, input.advanceId)).orderBy(asc5(clientAdvanceDeductions.id));
+    const seen = /* @__PURE__ */ new Map();
+    const toDelete = [];
+    for (const d of allDeductions) {
+      const key = d.cargoLoadId;
+      if (key === null || key === void 0) continue;
+      if (!seen.has(key)) {
+        seen.set(key, d.id);
+      } else {
+        toDelete.push(d.id);
+      }
+    }
+    for (const id of toDelete) {
+      await db.delete(clientAdvanceDeductions).where(eq37(clientAdvanceDeductions.id, id));
+    }
+    const remaining = await db.select().from(clientAdvanceDeductions).where(eq37(clientAdvanceDeductions.advanceId, input.advanceId));
+    const totalDeducted = remaining.reduce((sum, d) => sum + parseFloat(d.amount || "0"), 0);
+    const [advance] = await db.select().from(clientAdvances).where(eq37(clientAdvances.id, input.advanceId)).limit(1);
+    if (advance) {
+      const originalAmount = parseFloat(advance.amount || "0");
+      const newBalance = Math.max(0, originalAmount - totalDeducted);
+      await db.update(clientAdvances).set({
+        balanceRemaining: String(newBalance.toFixed(2)),
+        status: newBalance <= 0 ? "quitado" : "ativo"
+      }).where(eq37(clientAdvances.id, input.advanceId));
+      return { success: true, deletedCount: toDelete.length, newBalance: newBalance.toFixed(2) };
+    }
+    return { success: true, deletedCount: toDelete.length, newBalance: null };
   })
 });
 
