@@ -871,8 +871,8 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               { id: "fechamentos" as const, label: "Fechamentos", badge: newItems.fechamentos },
               { id: "documentos" as const, label: "Docs", badge: newItems.docs },
               { id: "replantio" as const, label: "Replantio", badge: newItems.replantios },
-              // Ocultar aba Adiantamentos para SIMFLOR (sistema de pagamento diferente)
-              ...(!session.clientName?.toLowerCase().includes('simflor') ? [{ id: "adiantamentos" as const, label: "Adiantamentos", badge: 0 }] : []),
+              // Mostrar aba Adiantamentos apenas para clientes que têm adiantamentos cadastrados
+              ...((data?.advances?.length ?? 0) > 0 ? [{ id: "adiantamentos" as const, label: "Adiantamentos", badge: 0 }] : []),
             ].map(({ id, label, badge }) => (
               <button
                 key={id}
@@ -1211,72 +1211,136 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 )}
 
                 {/* ── ADIANTAMENTOS ── */}
-                {activeTab === "adiantamentos" && (
-                  <div className="space-y-3">
-                    {/* Saldo atual */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                      <p className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Saldo de Adiantamento</p>
-                      <p className="text-amber-900 text-2xl font-black">{formatCurrency(data?.totalAdvanceBalance ?? 0)}</p>
-                      <p className="text-amber-600 text-xs mt-1">
-                        {(data?.totalAdvanceBalance ?? 0) > 0 ? 'Valor disponível para abatimento nas próximas cargas' : 'Adiantamento quitado'}
-                      </p>
-                    </div>
-                    {/* Lista de adiantamentos com abatimentos */}
-                    {(data?.advances?.length ?? 0) === 0 ? (
-                      <EmptyState icon={<DollarSign />} text="Nenhum adiantamento registrado." />
-                    ) : (
-                      data?.advances?.map((adv: any) => {
-                        const deductions = (data?.advanceDeductions ?? []).filter((d: any) => d.advanceId === adv.id)
+                {activeTab === "adiantamentos" && (() => {
+                  const allAdvances = data?.advances ?? [];
+                  const allDeductions = data?.advanceDeductions ?? [];
+                  const totalAdiantado = allAdvances.reduce((s: number, a: any) => s + parseFloat(a.amount || '0'), 0);
+                  const totalAbatido = allDeductions.reduce((s: number, d: any) => s + parseFloat(d.amount || '0'), 0);
+                  const totalEntregue = (data?.loads ?? []).filter((l: any) => l.status === 'entregue' || l.trackingStatus === 'finalizado').length;
+                  const pricePerTon = parseFloat((data?.client as any)?.pricePerTon || '0');
+                  const valorEntregue = (data?.loads ?? []).reduce((s: number, l: any) => {
+                    const w = parseFloat(l.weightNetKg || l.weightOutKg || '0');
+                    return s + (w / 1000) * pricePerTon;
+                  }, 0);
+                  const saldoRestante = data?.totalAdvanceBalance ?? 0;
+                  return (
+                    <div className="space-y-4">
+                      {/* Resumo detalhado */}
+                      <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4">
+                        <p className="text-amber-800 text-xs font-bold uppercase tracking-wide mb-3">Resumo do Adiantamento</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-white rounded-xl p-3 border border-amber-100">
+                            <p className="text-[10px] text-gray-500 font-semibold uppercase">Valor Adiantado</p>
+                            <p className="text-base font-black text-amber-700 mt-0.5">{formatCurrency(totalAdiantado)}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">Total recebido antecipado</p>
+                          </div>
+                          <div className="bg-white rounded-xl p-3 border border-blue-100">
+                            <p className="text-[10px] text-gray-500 font-semibold uppercase">Valor Entregue</p>
+                            <p className="text-base font-black text-blue-700 mt-0.5">{formatCurrency(valorEntregue > 0 ? valorEntregue : totalAbatido)}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">Madeira já entregue</p>
+                          </div>
+                          <div className="bg-white rounded-xl p-3 border border-green-100">
+                            <p className="text-[10px] text-gray-500 font-semibold uppercase">Valor Abatido</p>
+                            <p className="text-base font-black text-green-700 mt-0.5">{formatCurrency(totalAbatido)}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">Descontado do adiantamento</p>
+                          </div>
+                          <div className={`bg-white rounded-xl p-3 border ${saldoRestante > 0 ? 'border-emerald-200' : 'border-gray-100'}`}>
+                            <p className="text-[10px] text-gray-500 font-semibold uppercase">Saldo a Receber</p>
+                            <p className={`text-base font-black mt-0.5 ${saldoRestante > 0 ? 'text-emerald-700' : 'text-gray-400'}`}>{formatCurrency(saldoRestante)}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{saldoRestante > 0 ? 'Disponível para próximas cargas' : 'Adiantamento quitado'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Lista de adiantamentos com histórico detalhado */}
+                      {allAdvances.map((adv: any) => {
+                        const deductions = allDeductions.filter((d: any) => d.advanceId === adv.id)
                           .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
                         const totalDeducted = parseFloat(adv.amount) - parseFloat(adv.balanceRemaining);
                         return (
-                          <div key={adv.id} className="border border-gray-100 rounded-xl p-4">
-                            <div className="flex items-start justify-between gap-2">
+                          <div key={adv.id} className="border border-gray-100 rounded-2xl overflow-hidden">
+                            {/* Cabeçalho do adiantamento */}
+                            <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
                               <div>
-                                <p className="font-semibold text-gray-900 text-sm">
-                                  Adiantamento de {formatCurrency(parseFloat(adv.amount))}
+                                <p className="font-bold text-gray-900 text-sm">{formatCurrency(parseFloat(adv.amount))}</p>
+                                <p className="text-gray-500 text-xs">
+                                  Adiantado em {adv.date ? safeDate(adv.date).toLocaleDateString('pt-BR') : '—'}
+                                  {adv.description ? ` · ${adv.description}` : ''}
                                 </p>
-                                <p className="text-gray-500 text-xs mt-0.5">
-                                  {adv.date ? safeDate(adv.date).toLocaleDateString('pt-BR') : '—'}
-                                </p>
-                                {adv.description && <p className="text-gray-400 text-xs mt-1 italic">{adv.description}</p>}
-                                {totalDeducted > 0 && (
-                                  <p className="text-blue-600 text-xs mt-1">Abatido: {formatCurrency(totalDeducted)}</p>
-                                )}
                               </div>
-                              <div className="text-right shrink-0">
-                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                                  adv.status === 'quitado' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
-                                }`}>
-                                  {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
-                                </span>
-                                <p className="text-xs text-gray-500 mt-1">Saldo: {formatCurrency(parseFloat(adv.balanceRemaining))}</p>
-                              </div>
+                              <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                                adv.status === 'quitado' ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-700'
+                              }`}>
+                                {adv.status === 'quitado' ? 'Quitado' : 'Ativo'}
+                              </span>
                             </div>
-                            {/* Histórico de abatimentos */}
+
+                            {/* Barra de progresso do abatimento */}
+                            {totalDeducted > 0 && (
+                              <div className="px-4 py-3 border-b border-gray-100">
+                                <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                                  <span>Abatido: {formatCurrency(totalDeducted)}</span>
+                                  <span>Saldo: {formatCurrency(parseFloat(adv.balanceRemaining))}</span>
+                                </div>
+                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all"
+                                    style={{ width: `${Math.min(100, (totalDeducted / parseFloat(adv.amount)) * 100)}%` }}
+                                  />
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-1 text-right">
+                                  {Math.round((totalDeducted / parseFloat(adv.amount)) * 100)}% abatido
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Histórico detalhado de abatimentos */}
                             {deductions.length > 0 && (
-                              <div className="mt-3 border-t pt-3">
-                                <p className="text-xs font-semibold text-gray-600 mb-2">Histórico de Abatimentos ({deductions.length})</p>
-                                <div className="space-y-1.5">
+                              <div className="px-4 py-3">
+                                <p className="text-xs font-bold text-gray-700 mb-2">Histórico de Abatimentos ({deductions.length})</p>
+                                <div className="space-y-2">
                                   {deductions.map((d: any, i: number) => (
-                                    <div key={i} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-green-600 font-bold">✓</span>
-                                        <span className="text-gray-600">{d.date ? safeDate(d.date).toLocaleDateString('pt-BR') : '—'}</span>
-                                        <span className="text-gray-500 truncate max-w-[120px]">{d.description || `Carga #${d.cargoLoadId || '-'}`}</span>
+                                    <div key={i} className="bg-gray-50 rounded-xl p-3">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-start gap-2">
+                                          <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                            <span className="text-green-600 text-[10px] font-bold">✓</span>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs font-semibold text-gray-800">
+                                              {d.date ? safeDate(d.date).toLocaleDateString('pt-BR') : '—'}
+                                              {d.cargoVehiclePlate ? ` · ${d.cargoVehiclePlate}` : ''}
+                                            </p>
+                                            {d.cargoDestination && (
+                                              <p className="text-[10px] text-gray-500 mt-0.5">➡ {d.cargoDestination}</p>
+                                            )}
+                                            {d.description && !d.cargoVehiclePlate && (
+                                              <p className="text-[10px] text-gray-500 mt-0.5">{d.description}</p>
+                                            )}
+                                            <p className="text-[10px] text-gray-400 mt-0.5">
+                                              Saldo antes: {formatCurrency(parseFloat(d.balanceBefore || '0'))} → depois: {formatCurrency(parseFloat(d.balanceAfter || '0'))}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <span className="text-sm font-black text-emerald-700 shrink-0">− {formatCurrency(parseFloat(d.amount))}</span>
                                       </div>
-                                      <span className="font-semibold text-emerald-700 shrink-0">{formatCurrency(parseFloat(d.amount))}</span>
                                     </div>
                                   ))}
                                 </div>
                               </div>
                             )}
+
+                            {deductions.length === 0 && (
+                              <div className="px-4 py-3 text-center text-xs text-gray-400">
+                                Nenhum abatimento realizado ainda
+                              </div>
+                            )}
                           </div>
                         );
-                      })
-                    )}
-                  </div>
-                )}
+                      })}
+                    </div>
+                  );
+                })()}
 
                 {/* ── REPLANTIO ── */}
                 {activeTab === "replantio" && (

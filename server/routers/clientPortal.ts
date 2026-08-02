@@ -207,13 +207,31 @@ export const clientPortalRouter = router({
         totalAdvanceBalance = advances
           .filter((a: any) => a.status === 'ativo')
           .reduce((sum: number, a: any) => sum + parseFloat(a.balanceRemaining || '0'), 0);
-        // Buscar deduções (abatimentos) do cliente
-        advanceDeductions = await db
-          .select()
+        // Buscar deduções (abatimentos) do cliente com dados da carga vinculada
+        const rawDeductions = await db
+          .select({
+            id: clientAdvanceDeductions.id,
+            advanceId: clientAdvanceDeductions.advanceId,
+            clientId: clientAdvanceDeductions.clientId,
+            cargoLoadId: clientAdvanceDeductions.cargoLoadId,
+            weeklyClosingId: clientAdvanceDeductions.weeklyClosingId,
+            amount: clientAdvanceDeductions.amount,
+            balanceBefore: clientAdvanceDeductions.balanceBefore,
+            balanceAfter: clientAdvanceDeductions.balanceAfter,
+            description: clientAdvanceDeductions.description,
+            date: clientAdvanceDeductions.date,
+            createdAt: clientAdvanceDeductions.createdAt,
+            cargoVehiclePlate: cargoLoads.vehiclePlate,
+            cargoDestination: cargoLoads.destination,
+            cargoWeightNetKg: cargoLoads.weightNetKg,
+            cargoDate: cargoLoads.date,
+          })
           .from(clientAdvanceDeductions)
+          .leftJoin(cargoLoads, eq(clientAdvanceDeductions.cargoLoadId, cargoLoads.id))
           .where(eq(clientAdvanceDeductions.clientId, input.clientId))
           .orderBy(desc(clientAdvanceDeductions.date))
           .limit(200);
+        advanceDeductions = rawDeductions;
       } catch (e) {
         console.error('[Portal] Erro ao buscar adiantamentos:', e);
       }

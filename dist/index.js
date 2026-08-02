@@ -6551,7 +6551,24 @@ var clientPortalRouter = router({
     try {
       advances = await db.select().from(clientAdvances).where(eq11(clientAdvances.clientId, input.clientId)).orderBy(desc8(clientAdvances.date)).limit(50);
       totalAdvanceBalance = advances.filter((a) => a.status === "ativo").reduce((sum, a) => sum + parseFloat(a.balanceRemaining || "0"), 0);
-      advanceDeductions = await db.select().from(clientAdvanceDeductions).where(eq11(clientAdvanceDeductions.clientId, input.clientId)).orderBy(desc8(clientAdvanceDeductions.date)).limit(200);
+      const rawDeductions = await db.select({
+        id: clientAdvanceDeductions.id,
+        advanceId: clientAdvanceDeductions.advanceId,
+        clientId: clientAdvanceDeductions.clientId,
+        cargoLoadId: clientAdvanceDeductions.cargoLoadId,
+        weeklyClosingId: clientAdvanceDeductions.weeklyClosingId,
+        amount: clientAdvanceDeductions.amount,
+        balanceBefore: clientAdvanceDeductions.balanceBefore,
+        balanceAfter: clientAdvanceDeductions.balanceAfter,
+        description: clientAdvanceDeductions.description,
+        date: clientAdvanceDeductions.date,
+        createdAt: clientAdvanceDeductions.createdAt,
+        cargoVehiclePlate: cargoLoads.vehiclePlate,
+        cargoDestination: cargoLoads.destination,
+        cargoWeightNetKg: cargoLoads.weightNetKg,
+        cargoDate: cargoLoads.date
+      }).from(clientAdvanceDeductions).leftJoin(cargoLoads, eq11(clientAdvanceDeductions.cargoLoadId, cargoLoads.id)).where(eq11(clientAdvanceDeductions.clientId, input.clientId)).orderBy(desc8(clientAdvanceDeductions.date)).limit(200);
+      advanceDeductions = rawDeductions;
     } catch (e) {
       console.error("[Portal] Erro ao buscar adiantamentos:", e);
     }
