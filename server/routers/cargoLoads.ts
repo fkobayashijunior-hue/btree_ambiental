@@ -655,6 +655,11 @@ export const cargoLoadsRouter = router({
             await generateFinancialEntriesForCargo(newCargo as any, ctx.user.id, ctx.user.name);
           }
         } catch(e) { /* silent */ }
+        // Abatimento automático de adiantamento ao criar carga já como entregue
+        try {
+          const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc(cargoLoads.id)).limit(1);
+          if (newCargo) await autoDeductAdvanceForCargo(db, newCargo.id);
+        } catch(e) { /* silent */ }
       }
 
       // Marcar nota fiscal como usada (se fornecida)

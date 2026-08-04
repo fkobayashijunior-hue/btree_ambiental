@@ -4045,6 +4045,11 @@ var cargoLoadsRouter = router({
         }
       } catch (e) {
       }
+      try {
+        const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc3(cargoLoads.id)).limit(1);
+        if (newCargo) await autoDeductAdvanceForCargo(db, newCargo.id);
+      } catch (e) {
+      }
     }
     if (input.fiscalNoteId) {
       try {
