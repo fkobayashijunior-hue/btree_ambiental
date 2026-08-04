@@ -1389,21 +1389,24 @@ export const cargoLoadsRouter = router({
             return { ...closing, paidViaAdvance: false };
           }
 
-          // Verificar quantas cargas do período estão pagas
+          // Verificar quantas cargas do período já foram abatidas pelo adiantamento
           const [rows] = await conn.execute(
             `SELECT 
               COUNT(*) as total,
-              SUM(CASE WHEN payment_status = 'pago' THEN 1 ELSE 0 END) as paid
+              SUM(CASE WHEN id IN (
+                SELECT cargo_load_id FROM client_advance_deductions
+                WHERE cargo_load_id IS NOT NULL AND client_id = ?
+              ) THEN 1 ELSE 0 END) as abatidas
             FROM cargo_loads 
             WHERE client_id = ? 
               AND DATE(COALESCE(delivery_date, date)) >= ? 
               AND DATE(COALESCE(delivery_date, date)) <= ?`,
-            [closing.clientId, weekStartStr, weekEndStr]
+            [closing.clientId, closing.clientId, weekStartStr, weekEndStr]
           ) as any;
 
           const total = parseInt(rows[0]?.total || '0');
-          const paid = parseInt(rows[0]?.paid || '0');
-          const allPaidViaAdvance = total > 0 && paid === total;
+          const abatidas = parseInt(rows[0]?.abatidas || '0');
+          const allPaidViaAdvance = total > 0 && abatidas === total;
 
           // Se todas as cargas estão pagas mas o fechamento ainda não está marcado como pago,
           // atualizar automaticamente o status no banco
@@ -1480,8 +1483,15 @@ export const cargoLoadsRouter = router({
       let loadsInPeriod: Array<{ id: number; weight_net_kg: string | null; weight_out_kg: string | null }> = [];
       try {
         const [rows] = await conn.execute(
-          `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
-          [input.clientId, weekStartStr, weekEndStr]
+          `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads
+           WHERE client_id = ?
+           AND DATE(COALESCE(delivery_date, date)) >= ?
+           AND DATE(COALESCE(delivery_date, date)) <= ?
+           AND id NOT IN (
+             SELECT cargo_load_id FROM client_advance_deductions
+             WHERE cargo_load_id IS NOT NULL AND client_id = ?
+           )`,
+          [input.clientId, weekStartStr, weekEndStr, input.clientId]
         ) as any;
         loadsInPeriod = rows;
       } finally {

@@ -680,6 +680,11 @@ function WeeklyClosingsView({
   const { data: closings = [], isLoading } = trpc.cargoLoads.listWeeklyClosings.useQuery(
     closingClientId ? { clientId: closingClientId } : undefined
   );
+  // Buscar deduções de adiantamento do cliente selecionado para filtrar cargas no preview
+  const { data: advanceDeductionsData = [] } = trpc.clientAdvances.listDeductions.useQuery(
+    closingClientId ? { clientId: closingClientId } : { clientId: 0 },
+    { enabled: closingClientId > 0 }
+  );
   const createClosing = trpc.cargoLoads.createWeeklyClosing.useMutation({
     onSuccess: (data) => {
       toast.success(`Fechamento criado! ${data.totalLoads} cargas, R$ ${data.totalAmount}`);
@@ -931,22 +936,43 @@ function WeeklyClosingsView({
               const weekStartDate = safeDate(closingWeekStart);
               const weekEndDate = safeDate(closingWeekEnd);
               weekEndDate.setHours(23, 59, 59, 999);
-              const loadsInPeriod = loads.filter((l: any) => {
+              const allLoadsInPeriod = loads.filter((l: any) => {
                 if (l.clientId !== closingClientId) return false;
                 const loadDate = safeDate(l.deliveryDate || l.date);
                 return loadDate >= weekStartDate && loadDate <= weekEndDate;
               });
+              // Separar cargas já abatidas pelo adiantamento das que ainda não foram
+              const abatidasIds = new Set(
+                (advanceDeductionsData || []).filter((d: any) => d.cargoLoadId).map((d: any) => d.cargoLoadId)
+              );
+              const loadsAbatidas = allLoadsInPeriod.filter((l: any) => abatidasIds.has(l.id));
+              const loadsInPeriod = allLoadsInPeriod.filter((l: any) => !abatidasIds.has(l.id));
               const totalWeight = loadsInPeriod.reduce((sum: number, l: any) => sum + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
               const totalValue = (totalWeight / 1000) * pricePerTon;
               const paymentTermDays = (client as any)?.paymentTermDays || 21;
               const dueDate = safeDate(closingWeekEnd);
               dueDate.setDate(dueDate.getDate() + paymentTermDays);
               return (
-                <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
-                  <p><strong>Preview:</strong> {loadsInPeriod.length} cargas no período</p>
-                  <p>Peso total: {formatBR(totalWeight / 1000)} toneladas ({formatBR(totalWeight, 0)} kg)</p>
-                  <p>Valor: <strong className="text-blue-700">R$ {formatBR(totalValue)}</strong> ({formatBR(totalWeight / 1000)} ton x R$ {formatBR(pricePerTon, 0)}/ton)</p>
-                  <p>Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong> ({paymentTermDays} dias após fechamento)</p>
+                <div className="space-y-2">
+                  {loadsAbatidas.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                      <p className="font-semibold text-amber-800">⚠️ {loadsAbatidas.length} carga{loadsAbatidas.length > 1 ? 's' : ''} já abatida{loadsAbatidas.length > 1 ? 's' : ''} pelo adiantamento</p>
+                      <p className="text-amber-700 text-xs mt-0.5">Essas cargas não entrarão no fechamento pois já foram pagas via adiantamento.</p>
+                    </div>
+                  )}
+                  {loadsInPeriod.length === 0 ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-600">
+                      <p className="font-semibold">ℹ️ Nenhuma carga pendente neste período</p>
+                      <p className="text-xs mt-0.5">Todas as cargas do período já foram abatidas pelo adiantamento. Não é necessário criar um fechamento.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
+                      <p><strong>Preview:</strong> {loadsInPeriod.length} carga{loadsInPeriod.length !== 1 ? 's' : ''} pendente{loadsInPeriod.length !== 1 ? 's' : ''} no período</p>
+                      <p>Peso total: {formatBR(totalWeight / 1000)} toneladas ({formatBR(totalWeight, 0)} kg)</p>
+                      <p>Valor: <strong className="text-blue-700">R$ {formatBR(totalValue)}</strong> ({formatBR(totalWeight / 1000)} ton x R$ {formatBR(pricePerTon, 0)}/ton)</p>
+                      <p>Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong> ({paymentTermDays} dias após fechamento)</p>
+                    </div>
+                  )}
                 </div>
               );
             })()}

@@ -4658,16 +4658,19 @@ var cargoLoadsRouter = router({
         const [rows] = await conn.execute(
           `SELECT 
               COUNT(*) as total,
-              SUM(CASE WHEN payment_status = 'pago' THEN 1 ELSE 0 END) as paid
+              SUM(CASE WHEN id IN (
+                SELECT cargo_load_id FROM client_advance_deductions
+                WHERE cargo_load_id IS NOT NULL AND client_id = ?
+              ) THEN 1 ELSE 0 END) as abatidas
             FROM cargo_loads 
             WHERE client_id = ? 
               AND DATE(COALESCE(delivery_date, date)) >= ? 
               AND DATE(COALESCE(delivery_date, date)) <= ?`,
-          [closing.clientId, weekStartStr, weekEndStr]
+          [closing.clientId, closing.clientId, weekStartStr, weekEndStr]
         );
         const total = parseInt(rows[0]?.total || "0");
-        const paid = parseInt(rows[0]?.paid || "0");
-        const allPaidViaAdvance = total > 0 && paid === total;
+        const abatidas = parseInt(rows[0]?.abatidas || "0");
+        const allPaidViaAdvance = total > 0 && abatidas === total;
         if (allPaidViaAdvance) {
           try {
             const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
@@ -4725,8 +4728,15 @@ var cargoLoadsRouter = router({
     let loadsInPeriod = [];
     try {
       const [rows] = await conn.execute(
-        `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
-        [input.clientId, weekStartStr, weekEndStr]
+        `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads
+           WHERE client_id = ?
+           AND DATE(COALESCE(delivery_date, date)) >= ?
+           AND DATE(COALESCE(delivery_date, date)) <= ?
+           AND id NOT IN (
+             SELECT cargo_load_id FROM client_advance_deductions
+             WHERE cargo_load_id IS NOT NULL AND client_id = ?
+           )`,
+        [input.clientId, weekStartStr, weekEndStr, input.clientId]
       );
       loadsInPeriod = rows;
     } finally {
