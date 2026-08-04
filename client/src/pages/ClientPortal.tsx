@@ -739,11 +739,16 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 const kg = parseFloat(l.weightNetKg || l.weightOutKg || '0');
                 return sum + (kg / 1000) * pricePerTon;
               }, 0);
-              // Valor pago = soma dos fechamentos semanais com status 'pago'
+              // Valor pago = adiantamentos abatidos + fechamentos pagos
               const weeklyClosings = data.weeklyClosings || [];
-              const valorPago = weeklyClosings
+              const advDeductions = data.advanceDeductions || [];
+              const valorAbatidoAdiantamento = advDeductions.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0);
+              const valorFechamentosPagos = weeklyClosings
                 .filter((c: any) => c.status === 'pago')
                 .reduce((sum: number, c: any) => sum + parseFloat(c.totalAmount || '0'), 0);
+              // Valor Pago = maior entre abatimentos por adiantamento e fechamentos pagos
+              // (evita dupla contagem: se há adiantamento, usamos ele; senão, fechamentos)
+              const valorPago = valorAbatidoAdiantamento > 0 ? valorAbatidoAdiantamento : valorFechamentosPagos;
               const valorAReceber = Math.max(0, valorTotalEntregues - valorPago);
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
