@@ -585,6 +585,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   const [showPaidLoads, setShowPaidLoads] = useState(true);
   const [showNotification, setShowNotification] = useState(false);
   const [newItems, setNewItems] = useState({ cargas: 0, docs: 0, fechamentos: 0, replantios: 0 });
+  const [generatingAdvancePdf, setGeneratingAdvancePdf] = useState(false);
 
   const { data, isLoading } = trpc.clientPortal.getPortalData.useQuery(
     { clientId: session.clientId, email: session.clientEmail ?? "" },
@@ -1274,7 +1275,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                         });
 
                         // Ordenar por número da carga (LR 001, LR 002...)
-                        const deductions = Array.from(grouped.values()).sort((a: any, b: any) => {
+                        const deductionsSorted = Array.from(grouped.values()).sort((a: any, b: any) => {
                           const codeA = a.cargoLoadId ? (deductionCodeMap.get(a.cargoLoadId) || '') : '';
                           const codeB = b.cargoLoadId ? (deductionCodeMap.get(b.cargoLoadId) || '') : '';
                           // Extrair número do código (ex: "LR 003" → 3)
@@ -1282,6 +1283,15 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                           const numB = parseInt(codeB.replace(/\D/g, '') || '0', 10);
                           if (numA !== numB) return numA - numB;
                           return new Date(a.date).getTime() - new Date(b.date).getTime();
+                        });
+                        // Recalcular saldos antes/depois na ordem correta das cargas
+                        let runningBalance = parseFloat(adv.amount);
+                        const deductions = deductionsSorted.map((d: any) => {
+                          const amount = parseFloat(d.amount || '0');
+                          const balBefore = runningBalance;
+                          const balAfter = Math.max(0, runningBalance - amount);
+                          runningBalance = balAfter;
+                          return { ...d, balanceBefore: balBefore.toFixed(2), balanceAfter: balAfter.toFixed(2) };
                         });
                         const totalDeducted = parseFloat(adv.amount) - parseFloat(adv.balanceRemaining);
                         return (
@@ -1324,7 +1334,124 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                             {/* Histórico detalhado de abatimentos */}
                             {deductions.length > 0 && (
                               <div className="px-4 py-3">
-                                <p className="text-xs font-bold text-gray-700 mb-2">Histórico de Abatimentos ({deductions.length} carga{deductions.length !== 1 ? 's' : ''})</p>
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-xs font-bold text-gray-700">Histórico de Abatimentos ({deductions.length} carga{deductions.length !== 1 ? 's' : ''})</p>
+                                  <button
+                                    onClick={async () => {
+                                      setGeneratingAdvancePdf(true);
+                                      try {
+                                        const [kobayashiB64] = await loadPdfAssets();
+                                        const clientName = clientNameForCode;
+                                        const advAmount = parseFloat(adv.amount || '0');
+                                        const advBalance = parseFloat(adv.balanceRemaining || '0');
+                                        const advDate = adv.date ? safeDate(adv.date).toLocaleDateString('pt-BR') : '-';
+                                        const statusLabel = advBalance <= 0 ? 'QUITADO' : 'EM ABERTO';
+                                        const statusColor = advBalance <= 0 ? '#166534' : '#854d0e';
+                                        const statusBg = advBalance <= 0 ? '#dcfce7' : '#fef9c3';
+                                        const pricePerTonVal = parseFloat((data?.client as any)?.pricePerTon || '130');
+                                        const deductRows = deductions.map((d: any, idx: number) => {
+                                          const cargoLoad = d.cargoLoadId ? allLoadsForCode.find((l: any) => l.id === d.cargoLoadId) : null;
+                                          const cargoTotalValue = cargoLoad ? (parseFloat(cargoLoad.weightNetKg || cargoLoad.weightOutKg || '0') / 1000) * pricePerTonVal : 0;
+                                          const abatidoAmount = parseFloat(d.amount || '0');
+                                          const isPartial = cargoTotalValue > 0 && abatidoAmount < cargoTotalValue * 0.999;
+                                          const code = d.cargoLoadId ? getClientCode(clientNameForCode, d.cargoLoadId, deductionCodeMap) : `#${idx+1}`;
+                                          const date = d.date ? safeDate(d.date).toLocaleDateString('pt-BR') : '-';
+                                          const balBefore = parseFloat(d.balanceBefore || '0');
+                                          const balAfter = parseFloat(d.balanceAfter || '0');
+                                          const destino = d.cargoDestination || '-';
+                                          const placa = d.cargoVehiclePlate || '-';
+                                          return `<tr>
+                                            <td style="text-align:center;font-weight:700;color:#0d4f2e;font-family:monospace">${code}</td>
+                                            <td>${date}</td>
+                                            <td>${placa}</td>
+                                            <td>${destino}</td>
+                                            <td style="text-align:right">${balBefore.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</td>
+                                            <td style="text-align:right;color:#166534;font-weight:600">${abatidoAmount.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}${isPartial ? ' <span style="background:#fef3c7;color:#92400e;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700">PARCIAL</span>' : ''}</td>
+                                            <td style="text-align:right;font-weight:700">${balAfter.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</td>
+                                          </tr>`;
+                                        }).join('');
+                                        const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Histórico de Abatimentos - ${clientName}</title>
+<style>
+* { margin:0;padding:0;box-sizing:border-box; }
+body { font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1a1a1a;background:#fff; }
+@page { size:A4;margin:0; }
+.page { min-height:100vh;display:flex;flex-direction:column; }
+.pdf-header { background:linear-gradient(135deg,#0d4f2e 0%,#1a5c3a 100%);color:white;padding:18px 32px;display:flex;align-items:center;gap:20px; }
+.pdf-header img { height:52px;filter:brightness(0) invert(1); }
+.pdf-header-text h1 { font-size:20px;font-weight:bold;margin:0; }
+.pdf-header-text p { font-size:11px;opacity:0.85;margin-top:3px; }
+.pdf-subheader { background:#f0fdf4;padding:12px 32px;border-bottom:2px solid #0d4f2e;display:flex;align-items:center;justify-content:space-between; }
+.pdf-content { padding:20px 32px;flex:1; }
+.summary-box { background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 24px;margin-bottom:20px;display:flex;gap:32px;flex-wrap:wrap; }
+.summary-item { text-align:center; }
+.summary-item .label { font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:600; }
+.summary-item .value { font-size:20px;font-weight:bold;color:#0d4f2e; }
+.summary-item .value.blue { color:#1d4ed8; }
+table { width:100%;border-collapse:collapse;font-size:11px;margin-top:16px; }
+table th { background:#0d4f2e;color:white;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.03em; }
+table td { padding:7px 10px;border-bottom:1px solid #e5e7eb; }
+table tr:nth-child(even) { background:#f9fafb; }
+.pdf-footer { padding:12px 32px;border-top:2px solid #0d4f2e;display:flex;align-items:center;justify-content:space-between;margin-top:auto; }
+.pdf-footer-left { display:flex;align-items:center;gap:10px; }
+.pdf-footer-left img { height:28px; }
+.pdf-footer-text { font-size:10px;color:#555; }
+.pdf-footer-text strong { color:#0d4f2e; }
+.status-badge { padding:4px 14px;border-radius:12px;font-size:12px;font-weight:bold; }
+@media print { body { -webkit-print-color-adjust:exact;print-color-adjust:exact; } }
+</style></head><body>
+<div class="page">
+  <div class="pdf-header">
+    <img src="${BTREE_LOGO_B64}" alt="BTREE Ambiental" onerror="this.style.display='none'" />
+    <div class="pdf-header-text">
+      <h1>Histórico de Abatimentos</h1>
+      <p>BTREE Empreendimentos LTDA &middot; btreeambiental.com &middot; Emitido em ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+  </div>
+  <div class="pdf-subheader">
+    <div>
+      <span style="font-size:15px;font-weight:700;color:#0d4f2e;">Cliente: ${clientName}</span><br/>
+      <span style="font-size:12px;color:#6b7280;">Adiantamento de ${advAmount.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} &middot; Data: ${advDate}</span>
+      ${adv.description ? `<br/><span style="font-size:11px;color:#6b7280;font-style:italic;">${adv.description}</span>` : ''}
+    </div>
+    <span class="status-badge" style="background:${statusBg};color:${statusColor}">${statusLabel}</span>
+  </div>
+  <div class="pdf-content">
+    <div class="summary-box">
+      <div class="summary-item"><div class="label">Valor do Adiantamento</div><div class="value">${advAmount.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div></div>
+      <div class="summary-item"><div class="label">Total Abatido</div><div class="value blue">${totalDeducted.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div></div>
+      <div class="summary-item"><div class="label">Saldo Restante</div><div class="value">${advBalance.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div></div>
+      <div class="summary-item"><div class="label">Cargas Abatidas</div><div class="value">${deductions.length}</div></div>
+    </div>
+    <h3 style="font-size:13px;color:#0d4f2e;margin-bottom:8px;">Detalhamento dos Abatimentos por Carga</h3>
+    <table>
+      <thead><tr>
+        <th>Carga</th><th>Data</th><th>Placa</th><th>Destino</th>
+        <th style="text-align:right">Saldo Antes</th>
+        <th style="text-align:right">Valor Abatido</th>
+        <th style="text-align:right">Saldo Após</th>
+      </tr></thead>
+      <tbody>${deductRows}</tbody>
+    </table>
+  </div>
+  <div class="pdf-footer">
+    <div class="pdf-footer-left">
+      <img src="${kobayashiB64}" alt="Kobayashi" />
+      <div class="pdf-footer-text">Desenvolvido por <strong>Kobayashi Desenvolvimento de Sistemas</strong><br/><a href="https://btreeambiental.com" style="color:#15803d">btreeambiental.com</a></div>
+    </div>
+    <div style="font-size:10px;color:#555;text-align:right">Documento gerado em ${new Date().toLocaleString('pt-BR')}</div>
+  </div>
+</div></body></html>`;
+                                        await generatePDFFromHtml(html, `abatimentos-${clientName.replace(/\s+/g,'-')}-${advDate.replace(/\//g,'-')}.pdf`);
+                                      } catch(e) { toast.error('Erro ao gerar PDF'); }
+                                      finally { setGeneratingAdvancePdf(false); }
+                                    }}
+                                    disabled={generatingAdvancePdf}
+                                    className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                    {generatingAdvancePdf ? 'Gerando...' : 'Exportar PDF'}
+                                  </button>
+                                </div>
                                 <div className="space-y-2">
                                   {deductions.map((d: any, i: number) => {
                                     // Calcular valor total da carga para detectar abatimento parcial
