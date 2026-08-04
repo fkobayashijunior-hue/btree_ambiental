@@ -1258,8 +1258,31 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
 
                       {/* Lista de adiantamentos com histórico detalhado */}
                       {allAdvances.map((adv: any) => {
-                        const deductions = allDeductions.filter((d: any) => d.advanceId === adv.id)
-                          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        const rawDeductions = allDeductions.filter((d: any) => d.advanceId === adv.id);
+
+                        // Agrupar deduções pela mesma carga (cargoLoadId), somando os valores
+                        const grouped = new Map<string, any>();
+                        rawDeductions.forEach((d: any) => {
+                          const key = d.cargoLoadId ? `cargo_${d.cargoLoadId}` : `manual_${d.id}`;
+                          if (grouped.has(key)) {
+                            const existing = grouped.get(key);
+                            existing.amount = (parseFloat(existing.amount) + parseFloat(d.amount || '0')).toFixed(2);
+                            existing.balanceAfter = d.balanceAfter; // usar o saldo mais recente
+                          } else {
+                            grouped.set(key, { ...d });
+                          }
+                        });
+
+                        // Ordenar por número da carga (LR 001, LR 002...)
+                        const deductions = Array.from(grouped.values()).sort((a: any, b: any) => {
+                          const codeA = a.cargoLoadId ? (deductionCodeMap.get(a.cargoLoadId) || '') : '';
+                          const codeB = b.cargoLoadId ? (deductionCodeMap.get(b.cargoLoadId) || '') : '';
+                          // Extrair número do código (ex: "LR 003" → 3)
+                          const numA = parseInt(codeA.replace(/\D/g, '') || '0', 10);
+                          const numB = parseInt(codeB.replace(/\D/g, '') || '0', 10);
+                          if (numA !== numB) return numA - numB;
+                          return new Date(a.date).getTime() - new Date(b.date).getTime();
+                        });
                         const totalDeducted = parseFloat(adv.amount) - parseFloat(adv.balanceRemaining);
                         return (
                           <div key={adv.id} className="border border-gray-100 rounded-2xl overflow-hidden">
@@ -1301,20 +1324,34 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                             {/* Histórico detalhado de abatimentos */}
                             {deductions.length > 0 && (
                               <div className="px-4 py-3">
-                                <p className="text-xs font-bold text-gray-700 mb-2">Histórico de Abatimentos ({deductions.length})</p>
+                                <p className="text-xs font-bold text-gray-700 mb-2">Histórico de Abatimentos ({deductions.length} carga{deductions.length !== 1 ? 's' : ''})</p>
                                 <div className="space-y-2">
-                                  {deductions.map((d: any, i: number) => (
+                                  {deductions.map((d: any, i: number) => {
+                                    // Calcular valor total da carga para detectar abatimento parcial
+                                    const pricePerTonVal = parseFloat((data?.client as any)?.pricePerTon || '130');
+                                    const cargoLoad = d.cargoLoadId ? allLoadsForCode.find((l: any) => l.id === d.cargoLoadId) : null;
+                                    const cargoTotalValue = cargoLoad
+                                      ? (parseFloat(cargoLoad.weightNetKg || cargoLoad.weightOutKg || '0') / 1000) * pricePerTonVal
+                                      : 0;
+                                    const abatidoAmount = parseFloat(d.amount || '0');
+                                    const isPartial = cargoTotalValue > 0 && abatidoAmount < cargoTotalValue * 0.999;
+                                    return (
                                     <div key={i} className="bg-gray-50 rounded-xl p-3">
                                       <div className="flex items-start justify-between gap-2">
                                         <div className="flex items-start gap-2">
-                                          <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                            <span className="text-green-600 text-[10px] font-bold">✓</span>
+                                          <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${isPartial ? 'bg-amber-100' : 'bg-green-100'}`}>
+                                            <span className={`text-[10px] font-bold ${isPartial ? 'text-amber-600' : 'text-green-600'}`}>{isPartial ? '½' : '✓'}</span>
                                           </div>
                                           <div>
                                             <div className="flex items-center gap-1.5 flex-wrap">
                                               {d.cargoLoadId && (
                                                 <span className="text-xs font-black text-[#0d4f2e] font-mono">
                                                   {getClientCode(clientNameForCode, d.cargoLoadId, deductionCodeMap)}
+                                                </span>
+                                              )}
+                                              {isPartial && (
+                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase tracking-wide">
+                                                  Parcial
                                                 </span>
                                               )}
                                               <p className="text-xs font-semibold text-gray-800">
@@ -1325,6 +1362,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                             {d.cargoDestination && (
                                               <p className="text-[10px] text-gray-500 mt-0.5">➡ {d.cargoDestination}</p>
                                             )}
+                                            {isPartial && cargoTotalValue > 0 && (
+                                              <p className="text-[10px] text-amber-600 mt-0.5 font-medium">
+                                                Abatido {formatCurrency(abatidoAmount)} de {formatCurrency(cargoTotalValue)} · restam {formatCurrency(cargoTotalValue - abatidoAmount)}
+                                              </p>
+                                            )}
                                             {d.description && !d.cargoVehiclePlate && (
                                               <p className="text-[10px] text-gray-500 mt-0.5">{d.description}</p>
                                             )}
@@ -1333,10 +1375,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                             </p>
                                           </div>
                                         </div>
-                                        <span className="text-sm font-black text-emerald-700 shrink-0">− {formatCurrency(parseFloat(d.amount))}</span>
+                                        <span className={`text-sm font-black shrink-0 ${isPartial ? 'text-amber-600' : 'text-emerald-700'}`}>− {formatCurrency(abatidoAmount)}</span>
                                       </div>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}
