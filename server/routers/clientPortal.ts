@@ -236,7 +236,36 @@ export const clientPortalRouter = router({
         console.error('[Portal] Erro ao buscar adiantamentos:', e);
       }
 
-      return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions };
+      // ── CÁLCULOS CENTRALIZADOS (fonte única de verdade) ──
+      // Todos os valores financeiros são calculados aqui no backend.
+      // Frontend deve exibir esses campos diretamente, sem recalcular.
+      const pricePerTon = parseFloat(client.pricePerTon || '0');
+
+      // Valor total = soma de todas as cargas entregues (peso líq. × preço/ton)
+      const entregues = loads.filter((l: any) => l.status === 'entregue');
+      const valorTotal = entregues.reduce((sum: number, l: any) => {
+        const kg = parseFloat(l.weightNetKg || l.weightOutKg || '0');
+        return sum + (kg / 1000) * pricePerTon;
+      }, 0);
+
+      // Valor abatido pelo adiantamento
+      const valorAbatidoAdiantamento = advanceDeductions.reduce(
+        (sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0
+      );
+
+      // Valor pago via fechamentos semanais
+      const valorFechamentosPagos = weeklyClosings
+        .filter((c: any) => c.status === 'pago')
+        .reduce((sum: number, c: any) => sum + parseFloat(c.totalAmount || '0'), 0);
+
+      // Valor Pago = adiantamento (se houver) + fechamentos pagos
+      // Evita dupla contagem: cargas abatidas pelo adiantamento não entram nos fechamentos
+      const valorPago = valorAbatidoAdiantamento + valorFechamentosPagos;
+
+      // A Receber = Valor Total - Valor Pago (nunca negativo)
+      const valorAReceber = Math.max(0, valorTotal - valorPago);
+
+      return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions, valorTotal, valorPago, valorAReceber, valorAbatidoAdiantamento };
     }),
 
   // ── LISTAR TODOS OS REPLANTIOS (admin) ──

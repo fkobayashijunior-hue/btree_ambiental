@@ -729,27 +729,13 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               <p className="font-bold text-sm leading-none">{session.clientName}</p>
               <p className="text-green-300 text-xs mt-0.5">Área do Cliente</p>
             </div>
-            {/* Resumo rápido */}
+            {/* Resumo rápido — valores calculados no backend (fonte única de verdade) */}
             {!isLoading && data && (() => {
-              const allLoads = data.loads || [];
-              const entregues = allLoads.filter((l: any) => l.status === 'entregue');
-              const totalEntregues = entregues.length;
-              const pricePerTon = parseFloat(data.client?.pricePerTon || '0');
-              const valorTotalEntregues = entregues.reduce((sum: number, l: any) => {
-                const kg = parseFloat(l.weightNetKg || l.weightOutKg || '0');
-                return sum + (kg / 1000) * pricePerTon;
-              }, 0);
-              // Valor pago = adiantamentos abatidos + fechamentos pagos
-              const weeklyClosings = data.weeklyClosings || [];
-              const advDeductions = data.advanceDeductions || [];
-              const valorAbatidoAdiantamento = advDeductions.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0);
-              const valorFechamentosPagos = weeklyClosings
-                .filter((c: any) => c.status === 'pago')
-                .reduce((sum: number, c: any) => sum + parseFloat(c.totalAmount || '0'), 0);
-              // Valor Pago = maior entre abatimentos por adiantamento e fechamentos pagos
-              // (evita dupla contagem: se há adiantamento, usamos ele; senão, fechamentos)
-              const valorPago = valorAbatidoAdiantamento > 0 ? valorAbatidoAdiantamento : valorFechamentosPagos;
-              const valorAReceber = Math.max(0, valorTotalEntregues - valorPago);
+              const totalEntregues = (data.loads || []).filter((l: any) => l.status === 'entregue').length;
+              // Usar campos calculados pelo backend — não recalcular aqui
+              const valorTotal = data.valorTotal ?? 0;
+              const valorPago = data.valorPago ?? 0;
+              const valorAReceber = data.valorAReceber ?? 0;
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
@@ -757,7 +743,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                     <p className="text-green-200 text-[10px] mt-0.5">Cargas Entregues</p>
                   </div>
                   <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
-                    <p className="text-white font-black text-sm leading-none">{valorTotalEntregues > 0 ? valorTotalEntregues.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</p>
+                    <p className="text-white font-black text-sm leading-none">{valorTotal > 0 ? valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</p>
                     <p className="text-green-200 text-[10px] mt-0.5">Valor Total</p>
                   </div>
                   <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
@@ -829,14 +815,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
             ))}
           </div>
         ) : (() => {
-          // Calcular valor pago e saldo usando adiantamentos reais
+          // Usar campos calculados pelo backend — não recalcular aqui
           const allLoads = data?.loads || [];
-          // Valor abatido = soma real de todas as deduções registradas
-          const deductions = data?.advanceDeductions || [];
-          const valorPago = deductions.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0);
-          // Saldo a receber = saldo disponível nos adiantamentos ativos
+          const valorAbatido = data?.valorAbatidoAdiantamento ?? 0;
           const saldo = data?.totalAdvanceBalance ?? 0;
-          const totalValorCargas = valorPago + saldo; // para controle de exibição
+          const totalValorCargas = valorAbatido + saldo; // para controle de exibição
           return (
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
@@ -849,10 +832,10 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 <div className="text-xl font-black text-gray-900">{data?.replanting.length ?? 0}</div>
                 <div className="text-gray-500 text-xs">Replantios</div>
               </div>
-              {valorPago > 0 && (
+              {valorAbatido > 0 && (
                 <div className="bg-green-50 border border-green-200 rounded-2xl p-4 shadow-sm text-center">
                   <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto mb-1" />
-                  <div className="text-base font-black text-green-700">{formatCurrency(valorPago)}</div>
+                  <div className="text-base font-black text-green-700">{formatCurrency(valorAbatido)}</div>
                   <div className="text-green-600 text-xs font-semibold">Valor Abatido</div>
                 </div>
               )}

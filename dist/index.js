@@ -6587,7 +6587,20 @@ var clientPortalRouter = router({
     } catch (e) {
       console.error("[Portal] Erro ao buscar adiantamentos:", e);
     }
-    return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions };
+    const pricePerTon = parseFloat(client.pricePerTon || "0");
+    const entregues = loads.filter((l) => l.status === "entregue");
+    const valorTotal = entregues.reduce((sum, l) => {
+      const kg = parseFloat(l.weightNetKg || l.weightOutKg || "0");
+      return sum + kg / 1e3 * pricePerTon;
+    }, 0);
+    const valorAbatidoAdiantamento = advanceDeductions.reduce(
+      (sum, d) => sum + parseFloat(d.amount || "0"),
+      0
+    );
+    const valorFechamentosPagos = weeklyClosings.filter((c) => c.status === "pago").reduce((sum, c) => sum + parseFloat(c.totalAmount || "0"), 0);
+    const valorPago = valorAbatidoAdiantamento + valorFechamentosPagos;
+    const valorAReceber = Math.max(0, valorTotal - valorPago);
+    return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions, valorTotal, valorPago, valorAReceber, valorAbatidoAdiantamento };
   }),
   // ── LISTAR TODOS OS REPLANTIOS (admin) ──
   listAllReplantings: protectedProcedure.query(async () => {
