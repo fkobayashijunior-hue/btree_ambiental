@@ -14957,7 +14957,6 @@ var clientAdvancesRouter = router({
     let processed = 0;
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     for (const cargo of deliveredCargos) {
-      if (cargo.paymentStatus === "pago") continue;
       const existing = await db.select({ id: clientAdvanceDeductions.id }).from(clientAdvanceDeductions).where(eq37(clientAdvanceDeductions.cargoLoadId, cargo.id)).limit(1);
       if (existing.length > 0) continue;
       const weightNet = parseFloat(cargo.weightNetKg || cargo.weightOutKg || "0");

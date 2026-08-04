@@ -1223,6 +1223,10 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                     return s + (w / 1000) * pricePerTon;
                   }, 0);
                   const saldoRestante = data?.totalAdvanceBalance ?? 0;
+                  // Mapa id → código sequencial para exibir no histórico de abatimentos
+                  const allLoadsForCode = data?.loads ?? [];
+                  const deductionCodeMap = buildClientCodeMap(allLoadsForCode);
+                  const clientNameForCode = (data?.client as any)?.name ?? '';
                   return (
                     <div className="space-y-4">
                       {/* Resumo detalhado */}
@@ -1307,10 +1311,17 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                             <span className="text-green-600 text-[10px] font-bold">✓</span>
                                           </div>
                                           <div>
-                                            <p className="text-xs font-semibold text-gray-800">
-                                              {d.date ? safeDate(d.date).toLocaleDateString('pt-BR') : '—'}
-                                              {d.cargoVehiclePlate ? ` · ${d.cargoVehiclePlate}` : ''}
-                                            </p>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              {d.cargoLoadId && (
+                                                <span className="text-xs font-black text-[#0d4f2e] font-mono">
+                                                  {getClientCode(clientNameForCode, d.cargoLoadId, deductionCodeMap)}
+                                                </span>
+                                              )}
+                                              <p className="text-xs font-semibold text-gray-800">
+                                                {d.date ? safeDate(d.date).toLocaleDateString('pt-BR') : '—'}
+                                                {d.cargoVehiclePlate ? ` · ${d.cargoVehiclePlate}` : ''}
+                                              </p>
+                                            </div>
                                             {d.cargoDestination && (
                                               <p className="text-[10px] text-gray-500 mt-0.5">➡ {d.cargoDestination}</p>
                                             )}

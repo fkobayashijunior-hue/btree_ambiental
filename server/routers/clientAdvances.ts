@@ -512,8 +512,7 @@ export const clientAdvancesRouter = router({
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
       for (const cargo of deliveredCargos) {
-        if (cargo.paymentStatus === 'pago') continue;
-        // Verificar se já tem dedução
+        // Verificar se já tem dedução (independente do paymentStatus)
         const existing = await db.select({ id: clientAdvanceDeductions.id })
           .from(clientAdvanceDeductions)
           .where(eq(clientAdvanceDeductions.cargoLoadId, cargo.id))
