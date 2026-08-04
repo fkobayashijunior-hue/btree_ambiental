@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink, DollarSign, ChevronDown, ChevronUp, Zap, CheckCircle, AlertCircle, Clock, FileDown } from "lucide-react";
+import { Users, Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Key, Globe, Eye, EyeOff, Lock, FileText, Upload, X, ExternalLink, DollarSign, ChevronDown, ChevronUp, Zap, CheckCircle, AlertCircle, Clock, FileDown, RefreshCw } from "lucide-react";
 import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml, safeDate as pdfSafeDate } from "@/lib/pdfUtils";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -266,6 +266,15 @@ export default function ClientsPage() {
     { clientId: advanceClientId ?? 0 },
     { enabled: !!autoDeductDialog && !!advanceClientId }
   );
+
+  const processRetroactiveMutation = trpc.clientAdvances.processRetroactiveDeductions.useMutation({
+    onSuccess: (result) => {
+      toast.success(`${result.processed} carga(s) abatida(s) retroativamente!`);
+      utils.clientAdvances.list.invalidate();
+      utils.clientAdvances.listDeductions.invalidate();
+    },
+    onError: (e) => toast.error(e.message || 'Erro ao processar abatimentos retroativos'),
+  });
 
   const cleanDuplicateMutation = trpc.clientAdvances.cleanDuplicateDeductions.useMutation({
     onSuccess: (result) => {
@@ -858,7 +867,20 @@ export default function ClientsPage() {
                         {adv.date ? new Date(adv.date).toLocaleDateString('pt-BR') : '—'}
                         {adv.description ? ` · ${adv.description}` : ''}
                       </p>
-                      <p className="text-xs text-gray-400">Saldo: {parseFloat(adv.balanceRemaining).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                      <p className="text-xs text-gray-400 flex items-center gap-1">
+                        Saldo: {parseFloat(adv.balanceRemaining).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        {(() => {
+                          const balance = parseFloat(adv.balanceRemaining || '0');
+                          const total = parseFloat(adv.amount || '0');
+                          const pct = total > 0 ? balance / total : 0;
+                          if (balance <= 0 || adv.status === 'quitado') return null;
+                          if (balance <= 5000 || pct <= 0.1)
+                            return <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold text-[10px] flex items-center gap-0.5"><AlertCircle className="h-3 w-3" /> Saldo crítico</span>;
+                          if (pct <= 0.2)
+                            return <span className="ml-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold text-[10px] flex items-center gap-0.5"><AlertCircle className="h-3 w-3" /> Saldo baixo</span>;
+                          return null;
+                        })()}
+                      </p>
                       {adv.receiptUrl && (
                         <a href={adv.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-amber-600 hover:underline flex items-center gap-1 mt-0.5">
                           <FileText className="h-3 w-3" /> Ver comprovante
@@ -923,6 +945,19 @@ export default function ClientsPage() {
                           <Zap className="h-3 w-3 mr-1" /> Abater Cargas
                         </Button>
                       )}
+                      {/* Botão abatimentos retroativos */}
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Processar abatimentos retroativos: vai abater automaticamente todas as cargas entregues deste cliente que ainda não foram abatidas. Continuar?')) {
+                            processRetroactiveMutation.mutate({ clientId: adv.clientId });
+                          }
+                        }}
+                        className="text-blue-400 hover:text-blue-600"
+                        title="Processar abatimentos retroativos"
+                        disabled={processRetroactiveMutation.isPending}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
                       {/* Botão limpar duplicatas */}
                       <button
                         onClick={() => {

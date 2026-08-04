@@ -14930,6 +14930,67 @@ var clientAdvancesRouter = router({
       return { success: true, deletedCount: toDelete.length, newBalance: newBalance.toFixed(2) };
     }
     return { success: true, deletedCount: toDelete.length, newBalance: null };
+  }),
+  // Processar abatimentos retroativos: abate automaticamente cargas entregues sem dedução
+  processRetroactiveDeductions: protectedProcedure.input(z38.object({ clientId: z38.number() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const advances = await db.select().from(clientAdvances).where(and22(eq37(clientAdvances.clientId, input.clientId), eq37(clientAdvances.status, "ativo"))).orderBy(asc5(clientAdvances.date));
+    if (advances.length === 0) return { success: true, processed: 0, message: "Nenhum adiantamento ativo" };
+    const deliveredCargos = await db.select({
+      id: cargoLoads.id,
+      date: cargoLoads.date,
+      weightNetKg: cargoLoads.weightNetKg,
+      weightOutKg: cargoLoads.weightOutKg,
+      paymentStatus: cargoLoads.paymentStatus
+    }).from(cargoLoads).where(and22(
+      eq37(cargoLoads.clientId, input.clientId),
+      eq37(cargoLoads.status, "entregue")
+    )).orderBy(cargoLoads.date);
+    const [client] = await db.select({ pricePerTon: clients.pricePerTon, pricePerM3: clients.pricePerM3 }).from(clients).where(eq37(clients.id, input.clientId)).limit(1);
+    const pricePerTon = parseFloat(client?.pricePerTon || "0");
+    let processed = 0;
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    for (const cargo of deliveredCargos) {
+      if (cargo.paymentStatus === "pago") continue;
+      const existing = await db.select({ id: clientAdvanceDeductions.id }).from(clientAdvanceDeductions).where(eq37(clientAdvanceDeductions.cargoLoadId, cargo.id)).limit(1);
+      if (existing.length > 0) continue;
+      const weightNet = parseFloat(cargo.weightNetKg || cargo.weightOutKg || "0");
+      if (weightNet <= 0 || pricePerTon <= 0) continue;
+      const loadValue = weightNet / 1e3 * pricePerTon;
+      if (loadValue <= 0) continue;
+      const cargoDateStr = typeof cargo.date === "string" ? cargo.date.slice(0, 10) : new Date(cargo.date).toISOString().slice(0, 10);
+      let remainingToDeduct = loadValue;
+      for (const advance of advances) {
+        if (remainingToDeduct <= 0) break;
+        let balanceRemaining = parseFloat(advance.balanceRemaining || "0");
+        if (balanceRemaining <= 0) continue;
+        const deducted = Math.min(remainingToDeduct, balanceRemaining);
+        const balanceBefore = balanceRemaining;
+        const balanceAfter = balanceRemaining - deducted;
+        await db.insert(clientAdvanceDeductions).values({
+          advanceId: advance.id,
+          clientId: input.clientId,
+          cargoLoadId: cargo.id,
+          amount: String(deducted.toFixed(2)),
+          balanceBefore: String(balanceBefore.toFixed(2)),
+          balanceAfter: String(balanceAfter.toFixed(2)),
+          description: `Abatimento retroativo carga #${cargo.id} - ${cargoDateStr}`,
+          date: cargoDateStr
+        });
+        await db.update(clientAdvances).set({
+          balanceRemaining: String(balanceAfter.toFixed(2)),
+          status: balanceAfter <= 0 ? "quitado" : "ativo"
+        }).where(eq37(clientAdvances.id, advance.id));
+        advance.balanceRemaining = String(balanceAfter.toFixed(2));
+        remainingToDeduct -= deducted;
+      }
+      if (remainingToDeduct <= 0.01) {
+        await db.update(cargoLoads).set({ paymentStatus: "pago", paidAt: now }).where(eq37(cargoLoads.id, cargo.id));
+      }
+      processed++;
+    }
+    return { success: true, processed };
   })
 });
 

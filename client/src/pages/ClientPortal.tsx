@@ -5,7 +5,7 @@ import { BTREE_LOGO_B64, loadPdfAssets, generatePDFFromHtml } from "@/lib/pdfUti
 import { formatBR, formatBRL } from "@/lib/formatBR";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone, FileCheck, Calendar, CheckCircle2, TrendingUp, Globe, MessageCircle } from "lucide-react";
+import { Truck, Leaf, DollarSign, LogOut, TreePine, Mail, Lock, Eye, EyeOff, Phone, X, Weight, MapPin, ChevronDown, ChevronUp, Image as ImageIcon, Download, Smartphone, FileCheck, Calendar, CheckCircle2, TrendingUp, Globe, MessageCircle, AlertCircle } from "lucide-react";
 
 // ── HELPERS ──
 // Fix timezone issue: date-only strings like "2026-05-08" are parsed as UTC midnight,
@@ -1223,8 +1223,30 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                     return s + (w / 1000) * pricePerTon;
                   }, 0);
                   const saldoRestante = data?.totalAdvanceBalance ?? 0;
+                  const pctSaldo = totalAdiantado > 0 ? saldoRestante / totalAdiantado : 0;
+                  const alertaSaldo = saldoRestante > 0 && (saldoRestante <= 5000 || pctSaldo <= 0.1);
+                  const avisoSaldo = saldoRestante > 0 && !alertaSaldo && pctSaldo <= 0.2;
                   return (
                     <div className="space-y-4">
+                      {/* Banner de alerta de saldo baixo */}
+                      {alertaSaldo && (
+                        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-3">
+                          <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-red-700">Saldo crítico de adiantamento</p>
+                            <p className="text-xs text-red-600 mt-0.5">Seu saldo de adiantamento está muito baixo ({formatCurrency(saldoRestante)}). Entre em contato com a BTREE Ambiental para regularização.</p>
+                          </div>
+                        </div>
+                      )}
+                      {avisoSaldo && (
+                        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl p-3">
+                          <AlertCircle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-orange-700">Saldo de adiantamento baixo</p>
+                            <p className="text-xs text-orange-600 mt-0.5">Seu saldo de adiantamento está abaixo de 20% ({formatCurrency(saldoRestante)} restantes). Fique atento ao próximo reabastecimento.</p>
+                          </div>
+                        </div>
+                      )}
                       {/* Resumo detalhado */}
                       <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4">
                         <p className="text-amber-800 text-xs font-bold uppercase tracking-wide mb-3">Resumo do Adiantamento</p>

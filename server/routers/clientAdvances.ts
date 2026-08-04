@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { clientAdvances, clientAdvanceDeductions, clients, financialEntries, cargoLoads, cargoWeeklyClosings } from "../../drizzle/schema";
-import { eq, desc, and, asc } from "drizzle-orm";
+import { eq, desc, and, asc, ne } from "drizzle-orm";
 import { storagePut } from "../storage";
 
 export const clientAdvancesRouter = router({
@@ -474,5 +474,92 @@ export const clientAdvancesRouter = router({
         return { success: true, deletedCount: toDelete.length, newBalance: newBalance.toFixed(2) };
       }
       return { success: true, deletedCount: toDelete.length, newBalance: null };
+    }),
+
+  // Processar abatimentos retroativos: abate automaticamente cargas entregues sem dedução
+  processRetroactiveDeductions: protectedProcedure
+    .input(z.object({ clientId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indisponível' });
+
+      // Buscar adiantamentos ativos do cliente
+      const advances = await db.select().from(clientAdvances)
+        .where(and(eq(clientAdvances.clientId, input.clientId), eq(clientAdvances.status, 'ativo')))
+        .orderBy(asc(clientAdvances.date));
+      if (advances.length === 0) return { success: true, processed: 0, message: 'Nenhum adiantamento ativo' };
+
+      // Buscar cargas entregues do cliente sem dedução
+      const deliveredCargos = await db.select({
+        id: cargoLoads.id,
+        date: cargoLoads.date,
+        weightNetKg: cargoLoads.weightNetKg,
+        weightOutKg: cargoLoads.weightOutKg,
+        paymentStatus: cargoLoads.paymentStatus,
+      }).from(cargoLoads)
+        .where(and(
+          eq(cargoLoads.clientId, input.clientId),
+          eq(cargoLoads.status, 'entregue'),
+        ))
+        .orderBy(cargoLoads.date);
+
+      // Buscar preço do cliente
+      const [client] = await db.select({ pricePerTon: clients.pricePerTon, pricePerM3: clients.pricePerM3 })
+        .from(clients).where(eq(clients.id, input.clientId)).limit(1);
+      const pricePerTon = parseFloat(client?.pricePerTon || '0');
+
+      let processed = 0;
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+      for (const cargo of deliveredCargos) {
+        if (cargo.paymentStatus === 'pago') continue;
+        // Verificar se já tem dedução
+        const existing = await db.select({ id: clientAdvanceDeductions.id })
+          .from(clientAdvanceDeductions)
+          .where(eq(clientAdvanceDeductions.cargoLoadId, cargo.id))
+          .limit(1);
+        if (existing.length > 0) continue;
+
+        // Calcular valor da carga
+        const weightNet = parseFloat(cargo.weightNetKg || cargo.weightOutKg || '0');
+        if (weightNet <= 0 || pricePerTon <= 0) continue;
+        const loadValue = (weightNet / 1000) * pricePerTon;
+        if (loadValue <= 0) continue;
+
+        const cargoDateStr = typeof cargo.date === 'string' ? cargo.date.slice(0, 10) : new Date(cargo.date).toISOString().slice(0, 10);
+        let remainingToDeduct = loadValue;
+
+        for (const advance of advances) {
+          if (remainingToDeduct <= 0) break;
+          let balanceRemaining = parseFloat(advance.balanceRemaining || '0');
+          if (balanceRemaining <= 0) continue;
+          const deducted = Math.min(remainingToDeduct, balanceRemaining);
+          const balanceBefore = balanceRemaining;
+          const balanceAfter = balanceRemaining - deducted;
+          await db.insert(clientAdvanceDeductions).values({
+            advanceId: advance.id,
+            clientId: input.clientId,
+            cargoLoadId: cargo.id,
+            amount: String(deducted.toFixed(2)),
+            balanceBefore: String(balanceBefore.toFixed(2)),
+            balanceAfter: String(balanceAfter.toFixed(2)),
+            description: `Abatimento retroativo carga #${cargo.id} - ${cargoDateStr}`,
+            date: cargoDateStr,
+          });
+          await db.update(clientAdvances).set({
+            balanceRemaining: String(balanceAfter.toFixed(2)),
+            status: balanceAfter <= 0 ? 'quitado' : 'ativo',
+          }).where(eq(clientAdvances.id, advance.id));
+          advance.balanceRemaining = String(balanceAfter.toFixed(2));
+          remainingToDeduct -= deducted;
+        }
+        if (remainingToDeduct <= 0.01) {
+          await db.update(cargoLoads)
+            .set({ paymentStatus: 'pago', paidAt: now })
+            .where(eq(cargoLoads.id, cargo.id));
+        }
+        processed++;
+      }
+      return { success: true, processed };
     }),
 });
