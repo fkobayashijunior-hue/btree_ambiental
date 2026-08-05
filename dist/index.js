@@ -6598,7 +6598,8 @@ var clientPortalRouter = router({
       0
     );
     const valorFechamentosPagos = weeklyClosings.filter((c) => c.status === "pago").reduce((sum, c) => sum + parseFloat(c.totalAmount || "0"), 0);
-    const valorPago = valorAbatidoAdiantamento + valorFechamentosPagos;
+    const temAdiantamentos = advances.length > 0;
+    const valorPago = temAdiantamentos ? valorAbatidoAdiantamento : valorFechamentosPagos;
     const valorAReceber = Math.max(0, valorTotal - valorPago);
     return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions, valorTotal, valorPago, valorAReceber, valorAbatidoAdiantamento };
   }),

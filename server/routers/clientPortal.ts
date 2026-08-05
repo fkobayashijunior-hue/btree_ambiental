@@ -258,9 +258,14 @@ export const clientPortalRouter = router({
         .filter((c: any) => c.status === 'pago')
         .reduce((sum: number, c: any) => sum + parseFloat(c.totalAmount || '0'), 0);
 
-      // Valor Pago = adiantamento (se houver) + fechamentos pagos
-      // Evita dupla contagem: cargas abatidas pelo adiantamento não entram nos fechamentos
-      const valorPago = valorAbatidoAdiantamento + valorFechamentosPagos;
+      // Valor Pago:
+      // Se o cliente tem adiantamentos, o valor pago é APENAS o que foi abatido pelo adiantamento.
+      // Os fechamentos semanais antigos podem incluir cargas já abatidas, gerando dupla contagem.
+      // Só somamos fechamentos pagos quando NÃO há adiantamentos cadastrados para o cliente.
+      const temAdiantamentos = advances.length > 0;
+      const valorPago = temAdiantamentos
+        ? valorAbatidoAdiantamento
+        : valorFechamentosPagos;
 
       // A Receber = Valor Total - Valor Pago (nunca negativo)
       const valorAReceber = Math.max(0, valorTotal - valorPago);
