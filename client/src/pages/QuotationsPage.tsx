@@ -25,6 +25,23 @@ function fmt(dateStr: string | null | undefined) {
   return new Date(dateStr).toLocaleDateString('pt-BR');
 }
 
+// Fuzzy match: verifica se dois nomes de item são equivalentes.
+// Estratégia: se um nome contém todas as palavras do outro (com ≥3 chars),
+// considera como o mesmo item. Ex: "15w40 motor primeira linha" ≈ "15w40 Valvoline motor primeira linha"
+function itemNamesMatch(a: string, b: string): boolean {
+  const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (na === nb) return true;
+  // Palavras significativas (≥3 chars)
+  const words = (s: string) => s.split(/\s+/).filter(w => w.length >= 3);
+  const wa = words(na);
+  const wb = words(nb);
+  // Verifica se todas as palavras do menor estão contidas no maior
+  const [shorter, longer] = wa.length <= wb.length ? [wa, nb] : [wb, na];
+  return shorter.every(w => longer.includes(w));
+}
+
 function fmtPrice(price: string | number) {
   const n = typeof price === 'number' ? price : parseFloat(price);
   if (isNaN(n)) return String(price);
@@ -852,13 +869,15 @@ export default function QuotationsPage() {
                 </div>
               ) : (() => {
                 // Calcular melhor preço por item (nome normalizado)
-                const bestPriceByItem: Record<string, { price: number; supplierId: number }> = {};
-                requestDetail.responses.forEach((resp: any, rIdx: number) => {
-                  resp.items.forEach((item: ResponseItem) => {
-                    const key = item.name.toLowerCase().trim();
-                    const price = parseFloat(item.price);
-                    if (!isNaN(price)) {
-                      if (!(key in bestPriceByItem) || price < bestPriceByItem[key].price) {
+               const bestPriceByItem: Record<string, { price: number; supplierId: number }> = {};
+               requestDetail.responses.forEach((resp: any, rIdx: number) => {
+                 resp.items.forEach((item: ResponseItem) => {
+                    // Tentar fazer match com algum item original da solicitação
+                    const reqMatch = requestDetail.items.find((ri: QuotItem) => itemNamesMatch(ri.name, item.name));
+                    const key = reqMatch ? reqMatch.name.toLowerCase().trim() : item.name.toLowerCase().trim();
+                   const price = parseFloat(item.price);
+                   if (!isNaN(price)) {
+                     if (!(key in bestPriceByItem) || price < bestPriceByItem[key].price) {
                         bestPriceByItem[key] = { price, supplierId: rIdx };
                       }
                     }
@@ -880,13 +899,13 @@ export default function QuotationsPage() {
                       </div>
                       <div className="space-y-1">
                         {requestDetail.items.map((reqItem: QuotItem, i: number) => {
-                          const key = reqItem.name.toLowerCase().trim();
-                          const best = bestPriceByItem[key];
-                          // Coletar todos os preços para este item
-                          const allPrices = requestDetail.responses
-                            .map((resp: any, rIdx: number) => {
-                              const found = resp.items.find((it: ResponseItem) => it.name.toLowerCase().trim() === key);
-                              if (!found) return null;
+                         const key = reqItem.name.toLowerCase().trim();
+                          const best = bestPriceByItem[key] ?? bestPriceByItem[Object.keys(bestPriceByItem).find(k => itemNamesMatch(k, reqItem.name)) ?? ''];
+                         // Coletar todos os preços para este item
+                         const allPrices = requestDetail.responses
+                           .map((resp: any, rIdx: number) => {
+                              const found = resp.items.find((it: ResponseItem) => itemNamesMatch(it.name, reqItem.name));
+                             if (!found) return null;
                               return { supplier: resp.supplierName, price: parseFloat(found.price), rIdx };
                             })
                             .filter(Boolean)
@@ -955,8 +974,10 @@ export default function QuotationsPage() {
                             )}
                             <div className="mt-3 space-y-2">
                               {resp.items.map((item: ResponseItem, i: number) => {
-                                const key = item.name.toLowerCase().trim();
-                                const isBest = bestPriceByItem[key]?.supplierId === rIdx;
+                               const key = item.name.toLowerCase().trim();
+                                // Usar fuzzy match para encontrar a chave correta no bestPriceByItem
+                                const matchedKey = Object.keys(bestPriceByItem).find(k => itemNamesMatch(k, item.name)) ?? key;
+                                const isBest = bestPriceByItem[matchedKey]?.supplierId === rIdx;
                                 const itemPrice = parseFloat(item.price);
                                 return (
                                   <div key={i} className={`flex items-center justify-between rounded p-2 text-sm ${isBest ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}>
