@@ -1903,8 +1903,9 @@ export const cargoLoadsRouter = router({
         const nameKeys = Array.from(new Set([destName, destNickname].filter((n): n is string => !!n && !!n.trim()).map(n => n.trim())));
         for (const k of nameKeys) {
           orClauses.push(eq(cargoLoads.destination, k));
-          orClauses.push(sql`${cargoLoads.destination} LIKE ${escapeLike(k) + ' — %'} ESCAPE '\\'`);
-          orClauses.push(sql`${cargoLoads.destination} LIKE ${escapeLike(k) + ' - %'} ESCAPE '\\'`);
+          // MySQL já usa '\\' como escape padrão no LIKE — não declarar ESCAPE (inválido)
+          orClauses.push(sql`${cargoLoads.destination} LIKE ${escapeLike(k) + ' — %'}`);
+          orClauses.push(sql`${cargoLoads.destination} LIKE ${escapeLike(k) + ' - %'}`);
         }
         conditions.push(or(...orClauses)!);
       }

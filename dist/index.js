@@ -5079,8 +5079,8 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       const nameKeys = Array.from(new Set([destName, destNickname].filter((n) => !!n && !!n.trim()).map((n) => n.trim())));
       for (const k of nameKeys) {
         orClauses.push(eq6(cargoLoads.destination, k));
-        orClauses.push(sql2`${cargoLoads.destination} LIKE ${escapeLike(k) + " \u2014 %"} ESCAPE '\\'`);
-        orClauses.push(sql2`${cargoLoads.destination} LIKE ${escapeLike(k) + " - %"} ESCAPE '\\'`);
+        orClauses.push(sql2`${cargoLoads.destination} LIKE ${escapeLike(k) + " \u2014 %"}`);
+        orClauses.push(sql2`${cargoLoads.destination} LIKE ${escapeLike(k) + " - %"}`);
       }
       conditions.push(or3(...orClauses));
     }
@@ -18112,8 +18112,8 @@ async function startServer() {
         const orClauses = [eq43(cargoLoads2.destinationId, destId)];
         for (const k of keys) {
           orClauses.push(eq43(cargoLoads2.destination, k));
-          orClauses.push(sql28`${cargoLoads2.destination} LIKE ${esc(k) + " \u2014 %"} ESCAPE '\\'`);
-          orClauses.push(sql28`${cargoLoads2.destination} LIKE ${esc(k) + " - %"} ESCAPE '\\'`);
+          orClauses.push(sql28`${cargoLoads2.destination} LIKE ${esc(k) + " \u2014 %"}`);
+          orClauses.push(sql28`${cargoLoads2.destination} LIKE ${esc(k) + " - %"}`);
         }
         const startDate = String(req.query.startDate || "2026-08-01");
         const endDate = String(req.query.endDate || "2026-08-31");

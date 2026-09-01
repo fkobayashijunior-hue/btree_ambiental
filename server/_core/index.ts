@@ -554,8 +554,8 @@ async function startServer() {
         const orClauses: any[] = [eq(cargoLoads.destinationId, destId)];
         for (const k of keys) {
           orClauses.push(eq(cargoLoads.destination, k));
-          orClauses.push(sql`${cargoLoads.destination} LIKE ${esc(k) + ' — %'} ESCAPE '\\'`);
-          orClauses.push(sql`${cargoLoads.destination} LIKE ${esc(k) + ' - %'} ESCAPE '\\'`);
+          orClauses.push(sql`${cargoLoads.destination} LIKE ${esc(k) + ' — %'}`);
+          orClauses.push(sql`${cargoLoads.destination} LIKE ${esc(k) + ' - %'}`);
         }
         const startDate = String(req.query.startDate || '2026-08-01');
         const endDate = String(req.query.endDate || '2026-08-31');
