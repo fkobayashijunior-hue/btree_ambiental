@@ -1881,11 +1881,12 @@ export const cargoLoadsRouter = router({
       if (input.destinationId) {
         // Support legacy offset (10000+) for backwards compatibility with old bookmarks/links
         const realDestId = input.destinationId >= 10000 ? input.destinationId - 10000 : input.destinationId;
-        const destResult = await db.select({ name: cargoDestinations.name, isBuyer: cargoDestinations.isBuyer })
+        const destResult = await db.select({ name: cargoDestinations.name, nickname: cargoDestinations.nickname, isBuyer: cargoDestinations.isBuyer })
           .from(cargoDestinations)
           .where(eq(cargoDestinations.id, realDestId))
           .limit(1);
         const destName = destResult.length > 0 ? destResult[0].name : null;
+        const destNickname = destResult.length > 0 ? destResult[0].nickname : null;
         // Build OR conditions: match by real destination_id, legacy offset id, and by name
         const orClauses: any[] = [
           eq(cargoLoads.destinationId, realDestId),
@@ -1894,7 +1895,17 @@ export const cargoLoadsRouter = router({
           // Also match the old offset id for legacy data
           orClauses.push(eq(cargoLoads.destinationId, input.destinationId));
         }
-        if (destName) orClauses.push(eq(cargoLoads.destination, destName));
+        // Match legacy text cargas by name AND nickname. Cargas antigas foram gravadas
+        // em 3 formatos: nome completo ("SONOCO Londrina"), apelido ("SONOCO") e
+        // "Nome — Cidade/UF". Match exato + prefixo seguido de separador cobre todos
+        // os formatos sem misturar destinos diferentes (ex.: "SONOCO" ≠ "SONOCOMA").
+        const escapeLike = (s: string) => s.replace(/[%_\\]/g, (ch) => '\\' + ch);
+        const nameKeys = Array.from(new Set([destName, destNickname].filter((n): n is string => !!n && !!n.trim()).map(n => n.trim())));
+        for (const k of nameKeys) {
+          orClauses.push(eq(cargoLoads.destination, k));
+          orClauses.push(sql`${cargoLoads.destination} LIKE ${escapeLike(k) + ' — %'} ESCAPE '\\'`);
+          orClauses.push(sql`${cargoLoads.destination} LIKE ${escapeLike(k) + ' - %'} ESCAPE '\\'`);
+        }
         conditions.push(or(...orClauses)!);
       }
       if (input.startDate) {

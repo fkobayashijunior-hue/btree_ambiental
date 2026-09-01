@@ -5066,15 +5066,22 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     }
     if (input.destinationId) {
       const realDestId = input.destinationId >= 1e4 ? input.destinationId - 1e4 : input.destinationId;
-      const destResult = await db.select({ name: cargoDestinations.name, isBuyer: cargoDestinations.isBuyer }).from(cargoDestinations).where(eq6(cargoDestinations.id, realDestId)).limit(1);
+      const destResult = await db.select({ name: cargoDestinations.name, nickname: cargoDestinations.nickname, isBuyer: cargoDestinations.isBuyer }).from(cargoDestinations).where(eq6(cargoDestinations.id, realDestId)).limit(1);
       const destName = destResult.length > 0 ? destResult[0].name : null;
+      const destNickname = destResult.length > 0 ? destResult[0].nickname : null;
       const orClauses = [
         eq6(cargoLoads.destinationId, realDestId)
       ];
       if (input.destinationId >= 1e4) {
         orClauses.push(eq6(cargoLoads.destinationId, input.destinationId));
       }
-      if (destName) orClauses.push(eq6(cargoLoads.destination, destName));
+      const escapeLike = (s) => s.replace(/[%_\\]/g, (ch) => "\\" + ch);
+      const nameKeys = Array.from(new Set([destName, destNickname].filter((n) => !!n && !!n.trim()).map((n) => n.trim())));
+      for (const k of nameKeys) {
+        orClauses.push(eq6(cargoLoads.destination, k));
+        orClauses.push(sql2`${cargoLoads.destination} LIKE ${escapeLike(k) + " \u2014 %"} ESCAPE '\\'`);
+        orClauses.push(sql2`${cargoLoads.destination} LIKE ${escapeLike(k) + " - %"} ESCAPE '\\'`);
+      }
       conditions.push(or3(...orClauses));
     }
     if (input.startDate) {

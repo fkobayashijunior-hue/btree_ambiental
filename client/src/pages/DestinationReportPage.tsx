@@ -118,7 +118,7 @@ export default function DestinationReportPage() {
   // buyersList already returns destinations with is_buyer=1 (same IDs, no offset)
   const allDestinations = useMemo(() => {
     const dests = destinations.map((d: any) => ({
-      id: d.id, name: d.name, city: d.city, state: d.state,
+      id: d.id, name: d.name, nickname: d.nickname ?? null, city: d.city, state: d.state,
       type: (d.isBuyer ? 'buyer' : 'destination') as 'buyer' | 'destination',
       pricePerTon: d.pricePerTon, pricePerM3: d.pricePerM3, priceType: d.priceType,
       isBuyer: !!d.isBuyer,
@@ -126,7 +126,7 @@ export default function DestinationReportPage() {
     // buyersList may include buyers not yet in destinations list (edge case)
     const buyerIds = new Set(dests.filter(d => d.isBuyer).map(d => d.id));
     const extraBuyers = (buyersList as any[]).filter(b => !buyerIds.has(b.id)).map(b => ({
-      id: b.id, name: b.name, city: b.city, state: b.state,
+      id: b.id, name: b.name, nickname: b.nickname ?? null, city: b.city, state: b.state,
       type: 'buyer' as const, pricePerTon: null, pricePerM3: null, priceType: null, isBuyer: true,
     }));
     return [...dests, ...extraBuyers];
@@ -765,7 +765,7 @@ export default function DestinationReportPage() {
                 {allDestinations.filter(d => !d.isBuyer).length > 0 && (
                   <optgroup label="Destinos">
                     {allDestinations.filter(d => !d.isBuyer).map(d => (
-                      <option key={`dest-${d.id}`} value={d.id}>{d.name}{d.city ? ` — ${d.city}/${d.state}` : ''}</option>
+                      <option key={`dest-${d.id}`} value={d.id}>{(d as any).nickname || d.name}</option>
                     ))}
                   </optgroup>
                 )}
@@ -773,7 +773,7 @@ export default function DestinationReportPage() {
                 {allDestinations.filter(d => d.isBuyer).length > 0 && (
                   <optgroup label="💰 Compradores">
                     {allDestinations.filter(d => d.isBuyer).map(b => (
-                      <option key={`buyer-${b.id}`} value={b.id}>{b.name}{b.city ? ` — ${b.city}/${b.state}` : ''}</option>
+                      <option key={`buyer-${b.id}`} value={b.id}>{(b as any).nickname || b.name}</option>
                     ))}
                   </optgroup>
                 )}
