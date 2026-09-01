@@ -321,7 +321,7 @@ function DashboardLayoutContent({
     const link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
     if (link) link.href = '/manifest-equipe.json';
     const appleIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement;
-    if (appleIcon) appleIcon.href = '/manus-storage/pwa-collaborator-192_835bec4b.png';
+    if (appleIcon) appleIcon.href = '/pwa-collaborator-192.png';
     return () => {
       if (link) link.href = '/manifest.json';
       if (appleIcon) appleIcon.href = '/icon-btree-192.png';

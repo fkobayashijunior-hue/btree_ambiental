@@ -213,7 +213,7 @@ const TRACKING_STEPS: { key: TrackingStatus; label: string; icon: string; desc: 
 ];
 
 const BTREE_LOGO = BTREE_LOGO_B64; // base64 embedded, no CORS
-const BTREE_LOGO_NEW = "/manus-storage/LOGO-BTREE-01_7a7571bc.jpeg";
+const BTREE_LOGO_NEW = "/btree-logo-full.png";
 const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 
 // ===== PDF FECHAMENTO SEMANAL =====
@@ -2132,7 +2132,7 @@ function useManifestSwitch(manifestPath: string) {
     // Also update apple-touch-icon for iOS
     const appleIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement;
     if (appleIcon && manifestPath === '/manifest-cliente.json') {
-      appleIcon.href = '/manus-storage/pwa-client-192_b5470888.png';
+      appleIcon.href = '/pwa-client-192.png';
     }
     return () => {
       // Restore default manifest when leaving

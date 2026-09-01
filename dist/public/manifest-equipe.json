@@ -11,25 +11,25 @@
   "version": "2.0",
   "icons": [
     {
-      "src": "/manus-storage/pwa-collaborator-192_c51ba8a0.png",
+      "src": "/pwa-collaborator-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/manus-storage/pwa-collaborator-192_c51ba8a0.png",
+      "src": "/pwa-collaborator-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/manus-storage/pwa-collaborator-512_29ff8973.png",
+      "src": "/pwa-collaborator-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/manus-storage/pwa-collaborator-512_29ff8973.png",
+      "src": "/pwa-collaborator-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
