@@ -3,7 +3,7 @@ name: Deploy para Hostinger
 on:
   push:
     branches:
-      - principal
+      - main
 
 jobs:
   build-and-deploy:
@@ -53,7 +53,7 @@ jobs:
             cd ~/domains/btreeambiental.com/nodejs
 
             # Fazer pull do repositório
-            git pull origin principal
+            git pull origin main
 
             # Instalar dependências de runtime (sem devDependencies)
             npm install --legacy-peer-deps --omit=dev
