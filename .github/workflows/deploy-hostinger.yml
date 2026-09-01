@@ -55,9 +55,6 @@ jobs:
             # Fazer pull do repositório
             git pull origin main
 
-            # Instalar dependências de runtime (sem devDependencies)
-            npm install --legacy-peer-deps --omit=dev
-
             # Copiar arquivos estáticos para public_html
             PUBLIC_HTML="$HOME/domains/btreeambiental.com/public_html"
             echo "Copiando assets para public_html..."
