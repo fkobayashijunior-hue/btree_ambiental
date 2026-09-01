@@ -2,5 +2,8 @@ allowBuilds:
   core-js: true
   esbuild: true
 
+minimumReleaseAgeExclude:
+  - nodemailer@9.1.0
+
 overrides:
   mysql2: "3.15.1"
