@@ -517,6 +517,33 @@ async function startServer() {
   // Storage proxy for serving uploaded assets
   registerStorageProxy(app);
 
+  // Diagnostic endpoint for destination report query (temporary)
+  app.get('/api/report-diagnostic', async (req, res) => {
+    try {
+      const { getDb } = await import('../db');
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: 'DB indisponível' });
+      const destId = parseInt(String(req.query.destinationId || '7'));
+      const [destRows] = await db.execute(/*sql*/`SELECT id, name, nickname, is_buyer FROM cargo_destinations WHERE id = ${destId} LIMIT 1`) as any;
+      const dest = Array.isArray(destRows) && destRows.length > 0 ? destRows[0] : null;
+      const [byId] = await db.execute(/*sql*/`SELECT COUNT(*) AS total FROM cargo_loads WHERE destination_id = ${destId}`) as any;
+      const nameKeys = dest ? [dest.name, dest.nickname].filter((n: any) => n && String(n).trim()).map((n: any) => String(n).trim()) : [];
+      let byName: any = [];
+      if (nameKeys.length > 0) {
+        const likes = nameKeys.flatMap((k: string) => [
+          `destination = '${k.replace(/'/g, "''")}'`,
+          `destination LIKE '${k.replace(/'/g, "''")} — %'`,
+          `destination LIKE '${k.replace(/'/g, "''")} - %'`,
+        ]).join(' OR ');
+        const [rows] = await db.execute(/*sql*/`SELECT destination, COUNT(*) AS total FROM cargo_loads WHERE ${likes} GROUP BY destination`) as any;
+        byName = rows;
+      }
+      const [sample] = await db.execute(/*sql*/`SELECT id, date, destination, destination_id, status FROM cargo_loads WHERE destination_id = ${destId} ORDER BY date DESC LIMIT 5`) as any;
+      return res.json({ timestamp: new Date().toISOString(), dest, byId, nameKeys, byName, sample });
+    } catch(e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
   // Diagnostic endpoint to debug DB issues on Hostinger
   app.get('/api/db-diagnostic', async (req, res) => {
     try {

@@ -18066,6 +18066,44 @@ async function startServer() {
   app.use(express2.json({ limit: "50mb" }));
   app.use(express2.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
+  app.get("/api/report-diagnostic", async (req, res) => {
+    try {
+      const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+      const db = await getDb2();
+      if (!db) return res.status(500).json({ error: "DB indispon\xEDvel" });
+      const destId = parseInt(String(req.query.destinationId || "7"));
+      const [destRows] = await db.execute(
+        /*sql*/
+        `SELECT id, name, nickname, is_buyer FROM cargo_destinations WHERE id = ${destId} LIMIT 1`
+      );
+      const dest = Array.isArray(destRows) && destRows.length > 0 ? destRows[0] : null;
+      const [byId] = await db.execute(
+        /*sql*/
+        `SELECT COUNT(*) AS total FROM cargo_loads WHERE destination_id = ${destId}`
+      );
+      const nameKeys = dest ? [dest.name, dest.nickname].filter((n) => n && String(n).trim()).map((n) => String(n).trim()) : [];
+      let byName = [];
+      if (nameKeys.length > 0) {
+        const likes = nameKeys.flatMap((k) => [
+          `destination = '${k.replace(/'/g, "''")}'`,
+          `destination LIKE '${k.replace(/'/g, "''")} \u2014 %'`,
+          `destination LIKE '${k.replace(/'/g, "''")} - %'`
+        ]).join(" OR ");
+        const [rows] = await db.execute(
+          /*sql*/
+          `SELECT destination, COUNT(*) AS total FROM cargo_loads WHERE ${likes} GROUP BY destination`
+        );
+        byName = rows;
+      }
+      const [sample] = await db.execute(
+        /*sql*/
+        `SELECT id, date, destination, destination_id, status FROM cargo_loads WHERE destination_id = ${destId} ORDER BY date DESC LIMIT 5`
+      );
+      return res.json({ timestamp: (/* @__PURE__ */ new Date()).toISOString(), dest, byId, nameKeys, byName, sample });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/db-diagnostic", async (req, res) => {
     try {
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
