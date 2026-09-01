@@ -562,9 +562,9 @@ async function startServer() {
         const conditions: any[] = [or(...orClauses)!];
         conditions.push(sql`${cargoLoads.date} >= ${startDate}`);
         conditions.push(sql`${cargoLoads.date} <= ${endDate + ' 23:59:59'}`);
-        const rows = await db.select({ id: cargoLoads.id, date: cargoLoads.date, destination: cargoLoads.destination, status: cargoLoads.status })
+        const rows = await db.select({ id: cargoLoads.id, date: cargoLoads.date, destination: cargoLoads.destination, status: cargoLoads.status, photosJson: cargoLoads.photosJson })
           .from(cargoLoads).where(and(...conditions)).orderBy(asc(cargoLoads.date)).limit(50);
-        drizzleSim = { keys, startDate, endDate, total: rows.length, rows: rows.slice(0, 10) };
+        drizzleSim = { keys, startDate, endDate, total: rows.length, rows: rows.slice(0, 10).map((r: any) => ({ ...r, photosJson: r.photosJson ? String(r.photosJson).slice(0, 80) : null })) };
       } catch (e: any) {
         drizzleSim = { error: e.message, stack: String(e.stack).slice(0, 500) };
       }
