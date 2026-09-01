@@ -1951,6 +1951,9 @@ export const cargoLoadsRouter = router({
         receiverName: cargoLoads.receiverName,
         thirdPartyContractor: cargoLoads.thirdPartyContractor,
         thirdPartyCost: cargoLoads.thirdPartyCost,
+        photosJson: cargoLoads.photosJson,
+        weightInPhotoUrl: cargoLoads.weightInPhotoUrl,
+        weightOutPhotoUrl: cargoLoads.weightOutPhotoUrl,
       }).from(cargoLoads)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(asc(cargoLoads.date), asc(cargoLoads.id));

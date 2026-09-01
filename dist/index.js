@@ -5125,7 +5125,10 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       notes: cargoLoads.notes,
       receiverName: cargoLoads.receiverName,
       thirdPartyContractor: cargoLoads.thirdPartyContractor,
-      thirdPartyCost: cargoLoads.thirdPartyCost
+      thirdPartyCost: cargoLoads.thirdPartyCost,
+      photosJson: cargoLoads.photosJson,
+      weightInPhotoUrl: cargoLoads.weightInPhotoUrl,
+      weightOutPhotoUrl: cargoLoads.weightOutPhotoUrl
     }).from(cargoLoads).where(conditions.length > 0 ? and3(...conditions) : void 0).orderBy(asc2(cargoLoads.date), asc2(cargoLoads.id));
     let buyerInfo = null;
     let destInfo = null;
