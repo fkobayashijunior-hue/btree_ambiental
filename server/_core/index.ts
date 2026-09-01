@@ -539,7 +539,36 @@ async function startServer() {
         byName = rows;
       }
       const [sample] = await db.execute(/*sql*/`SELECT id, date, destination, destination_id, status FROM cargo_loads WHERE destination_id = ${destId} ORDER BY date DESC LIMIT 5`) as any;
-      return res.json({ timestamp: new Date().toISOString(), dest, byId, nameKeys, byName, sample });
+      // Simular a query EXATA do listByDestination (drizzle) com os filtros do relatório
+      let drizzleSim: any = null;
+      try {
+        const schema = await import('../../drizzle/schema');
+        const { cargoLoads, cargoDestinations } = schema;
+        const { eq, and, or, sql, asc } = await import('drizzle-orm');
+        const destResult = await db.select({ name: cargoDestinations.name, nickname: cargoDestinations.nickname })
+          .from(cargoDestinations).where(eq(cargoDestinations.id, destId)).limit(1);
+        const dName = destResult[0]?.name ?? null;
+        const dNick = destResult[0]?.nickname ?? null;
+        const esc = (s: string) => s.replace(/[%_\\]/g, (ch) => '\\' + ch);
+        const keys = Array.from(new Set([dName, dNick].filter((n): n is string => !!n && !!n.trim()).map(n => n.trim())));
+        const orClauses: any[] = [eq(cargoLoads.destinationId, destId)];
+        for (const k of keys) {
+          orClauses.push(eq(cargoLoads.destination, k));
+          orClauses.push(sql`${cargoLoads.destination} LIKE ${esc(k) + ' — %'} ESCAPE '\\'`);
+          orClauses.push(sql`${cargoLoads.destination} LIKE ${esc(k) + ' - %'} ESCAPE '\\'`);
+        }
+        const startDate = String(req.query.startDate || '2026-08-01');
+        const endDate = String(req.query.endDate || '2026-08-31');
+        const conditions: any[] = [or(...orClauses)!];
+        conditions.push(sql`${cargoLoads.date} >= ${startDate}`);
+        conditions.push(sql`${cargoLoads.date} <= ${endDate + ' 23:59:59'}`);
+        const rows = await db.select({ id: cargoLoads.id, date: cargoLoads.date, destination: cargoLoads.destination, status: cargoLoads.status })
+          .from(cargoLoads).where(and(...conditions)).orderBy(asc(cargoLoads.date)).limit(50);
+        drizzleSim = { keys, startDate, endDate, total: rows.length, rows: rows.slice(0, 10) };
+      } catch (e: any) {
+        drizzleSim = { error: e.message, stack: String(e.stack).slice(0, 500) };
+      }
+      return res.json({ timestamp: new Date().toISOString(), dest, byId, nameKeys, byName, sample, drizzleSim });
     } catch(e: any) {
       return res.status(500).json({ error: e.message });
     }

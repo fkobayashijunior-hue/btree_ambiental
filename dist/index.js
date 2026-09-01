@@ -18099,7 +18099,33 @@ async function startServer() {
         /*sql*/
         `SELECT id, date, destination, destination_id, status FROM cargo_loads WHERE destination_id = ${destId} ORDER BY date DESC LIMIT 5`
       );
-      return res.json({ timestamp: (/* @__PURE__ */ new Date()).toISOString(), dest, byId, nameKeys, byName, sample });
+      let drizzleSim = null;
+      try {
+        const schema = await Promise.resolve().then(() => (init_schema(), schema_exports));
+        const { cargoLoads: cargoLoads2, cargoDestinations: cargoDestinations3 } = schema;
+        const { eq: eq43, and: and27, or: or5, sql: sql28, asc: asc6 } = await import("drizzle-orm");
+        const destResult = await db.select({ name: cargoDestinations3.name, nickname: cargoDestinations3.nickname }).from(cargoDestinations3).where(eq43(cargoDestinations3.id, destId)).limit(1);
+        const dName = destResult[0]?.name ?? null;
+        const dNick = destResult[0]?.nickname ?? null;
+        const esc = (s) => s.replace(/[%_\\]/g, (ch) => "\\" + ch);
+        const keys = Array.from(new Set([dName, dNick].filter((n) => !!n && !!n.trim()).map((n) => n.trim())));
+        const orClauses = [eq43(cargoLoads2.destinationId, destId)];
+        for (const k of keys) {
+          orClauses.push(eq43(cargoLoads2.destination, k));
+          orClauses.push(sql28`${cargoLoads2.destination} LIKE ${esc(k) + " \u2014 %"} ESCAPE '\\'`);
+          orClauses.push(sql28`${cargoLoads2.destination} LIKE ${esc(k) + " - %"} ESCAPE '\\'`);
+        }
+        const startDate = String(req.query.startDate || "2026-08-01");
+        const endDate = String(req.query.endDate || "2026-08-31");
+        const conditions = [or5(...orClauses)];
+        conditions.push(sql28`${cargoLoads2.date} >= ${startDate}`);
+        conditions.push(sql28`${cargoLoads2.date} <= ${endDate + " 23:59:59"}`);
+        const rows = await db.select({ id: cargoLoads2.id, date: cargoLoads2.date, destination: cargoLoads2.destination, status: cargoLoads2.status }).from(cargoLoads2).where(and27(...conditions)).orderBy(asc6(cargoLoads2.date)).limit(50);
+        drizzleSim = { keys, startDate, endDate, total: rows.length, rows: rows.slice(0, 10) };
+      } catch (e) {
+        drizzleSim = { error: e.message, stack: String(e.stack).slice(0, 500) };
+      }
+      return res.json({ timestamp: (/* @__PURE__ */ new Date()).toISOString(), dest, byId, nameKeys, byName, sample, drizzleSim });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
