@@ -1317,6 +1317,10 @@ export default function CargoControl() {
   });
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // Arquivo da NF (PDF/imagem) para upload junto com a carga
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  // Prévia da próxima ação gerada automaticamente
+  const { data: nextAction } = trpc.fiscalNotes.nextActionCode.useQuery();
 
   // Tracking state
   const [trackingStatus, setTrackingStatus] = useState<TrackingStatus>("aguardando");
@@ -1494,6 +1498,7 @@ export default function CargoControl() {
     const autoWorkLocationId = workLocations.length === 1 ? String(workLocations[0].id) : "";
     setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
     setPendingPhotos([]);
+    setInvoiceFile(null);
   };
 
   const openEdit = (cargo: typeof loads[number]) => {
@@ -1532,10 +1537,28 @@ export default function CargoControl() {
     setIsFormOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Ao criar carga, marcar a nota selecionada como usada
     const noteIdToMark = !editId ? selectedNoteId : null;
+    // Converter arquivo da NF para base64 (se selecionado)
+    let invoiceFileBase64: string | undefined;
+    let invoiceFileName: string | undefined;
+    let invoiceFileMimeType: string | undefined;
+    if (!editId && invoiceFile) {
+      try {
+        const buf = await invoiceFile.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        bytes.forEach(b => binary += String.fromCharCode(b));
+        invoiceFileBase64 = btoa(binary);
+        invoiceFileName = invoiceFile.name;
+        invoiceFileMimeType = invoiceFile.type || 'application/pdf';
+      } catch {
+        toast.error('Erro ao processar arquivo da NF');
+        return;
+      }
+    }
     const data = {
       ...form,
       vehicleId: form.vehicleId || undefined,
@@ -1563,10 +1586,11 @@ export default function CargoControl() {
         resetForm();
       } else {
         // fiscalNoteId é passado diretamente no create — o backend marca a nota como usada atomicamente
-        createMutation.mutate({ ...data, fiscalNoteId: noteIdToMark || undefined });
+        createMutation.mutate({ ...data, fiscalNoteId: noteIdToMark || undefined, invoiceFileBase64, invoiceFileName, invoiceFileMimeType });
       }
     }
     setSelectedNoteId(null);
+    setInvoiceFile(null);
   };
 
   const handleAddPhoto = async (files: FileList) => {
@@ -2628,52 +2652,53 @@ export default function CargoControl() {
                 <div className="text-lg font-bold text-green-700">{form.weightNetKg ? `${formatBR(Number(form.weightNetKg), 0)} kg` : '—'}</div>
                 <p className="text-[10px] text-green-600">Entrada - Saída = Líquido (usado para cálculo de pagamento)</p>
               </div>
-              <div>
-                <Label>Ação / Nota Fiscal</Label>
-                {availableNotes.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <select
-                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                      value={selectedNoteId ?? ""}
-                      onChange={e => {
-                        const id = e.target.value ? Number(e.target.value) : null;
-                        setSelectedNoteId(id);
-                        if (id) {
-                          const note = availableNotes.find((n: any) => n.id === id);
-                          if (note) {
-                            const label = note.invoiceNumber
-                              ? `${note.actionCode} — NF ${note.invoiceNumber}`
-                              : note.actionCode;
-                            setForm(f => ({ ...f, invoiceNumber: label }));
-                          }
-                        } else {
-                          setForm(f => ({ ...f, invoiceNumber: "" }));
-                        }
-                      }}
-                    >
-                      <option value="">— Selecionar ação/nota —</option>
-                      {(availableNotes as any[]).map((n: any) => (
-                        <option key={n.id} value={n.id}>
-                          {n.actionCode}{n.invoiceNumber ? ` — NF ${n.invoiceNumber}` : ""} · {n.quantityType === "m3" ? `${n.quantity} m³` : `${n.quantity} ton`}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[11px] text-muted-foreground">Ou informe manualmente:</p>
-                    <Input
-                      value={selectedNoteId ? "" : form.invoiceNumber}
-                      disabled={!!selectedNoteId}
-                      onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))}
-                      placeholder="ex: NF-001234 (manual)"
-                      className={invoiceDuplicate?.exists ? 'border-red-500 ring-red-200' : ''}
-                    />
+              <div className="space-y-3">
+                {/* Ação gerada automaticamente */}
+                {!editId && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-green-700 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-green-800">Ação gerada automaticamente ao salvar</p>
+                      <p className="text-sm font-bold text-green-700 font-mono">{nextAction?.actionCode || '...'}</p>
+                    </div>
                   </div>
-                ) : (
+                )}
+                <div>
+                  <Label>Número da NF (opcional)</Label>
                   <Input
                     value={form.invoiceNumber}
                     onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))}
-                    placeholder="ex: NF-001234"
+                    placeholder="ex: 402"
                     className={invoiceDuplicate?.exists ? 'border-red-500 ring-red-200' : ''}
                   />
+                </div>
+                {!editId && (
+                  <div>
+                    <Label>Upload da NF (PDF ou imagem, opcional)</Label>
+                    <div
+                      className="mt-1 border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:border-primary transition-colors"
+                      onClick={() => document.getElementById('invoice-file-input')?.click()}
+                    >
+                      {invoiceFile ? (
+                        <div className="flex items-center justify-center gap-2 text-sm text-green-600">
+                          <CheckCircle2 className="w-4 h-4" />
+                          {invoiceFile.name}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground flex items-center justify-center gap-2">
+                          <Upload className="w-4 h-4" />
+                          Clique para selecionar o arquivo da nota
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      id="invoice-file-input"
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={e => setInvoiceFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
                 )}
                 {invoiceDuplicate?.exists && (
                   <p className="text-xs text-red-600 mt-1 flex items-center gap-1">

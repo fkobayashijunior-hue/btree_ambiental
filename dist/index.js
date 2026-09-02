@@ -3960,8 +3960,14 @@ var cargoLoadsRouter = router({
     receiverName: z6.string().optional(),
     thirdPartyContractor: z6.string().optional(),
     thirdPartyCost: z6.string().optional(),
-    fiscalNoteId: z6.number().optional()
+    fiscalNoteId: z6.number().optional(),
     // ID da nota/ação selecionada no Controle de Notas
+    invoiceFileBase64: z6.string().optional(),
+    // PDF da NF em base64
+    invoiceFileName: z6.string().optional(),
+    // Nome do arquivo da NF
+    invoiceFileMimeType: z6.string().optional()
+    // MIME type do arquivo da NF
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -4051,27 +4057,75 @@ var cargoLoadsRouter = router({
       } catch (e) {
       }
     }
-    if (input.fiscalNoteId) {
+    try {
+      const { fiscalNotes: fiscalNotes2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+      const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc3(cargoLoads.id)).limit(1);
+      const newCargoId = newCargo?.id;
+      let actionCode = "AC-00001";
       try {
-        const { fiscalNotes: fiscalNotes2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc3(cargoLoads.id)).limit(1);
-        const newCargoId = newCargo?.id;
-        const [existingNote] = await db.select({ status: fiscalNotes2.status, usedByCargoId: fiscalNotes2.usedByCargoId }).from(fiscalNotes2).where(eq6(fiscalNotes2.id, input.fiscalNoteId)).limit(1);
-        if (!existingNote || existingNote.status !== "used") {
-          const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-          const usageNote = [input.workLocationId ? `Local ${input.workLocationId}` : "", input.destination || ""].filter(Boolean).join(" \u2192 ");
-          await db.update(fiscalNotes2).set({
-            status: "used",
-            usedByCargoId: newCargoId || null,
-            usedByClientId: input.clientId || null,
-            usedByClientName: input.clientName || null,
-            usedAt: today,
-            notes: usageNote || null
-          }).where(eq6(fiscalNotes2.id, input.fiscalNoteId));
+        const [row] = await db.execute(sql2`
+            SELECT action_code FROM fiscal_notes ORDER BY id DESC LIMIT 1
+          `);
+        const rows = row;
+        if (rows && rows.length > 0 && rows[0]?.action_code) {
+          const num = parseInt(String(rows[0].action_code).replace("AC-", ""), 10);
+          if (!isNaN(num)) actionCode = `AC-${String(num + 1).padStart(5, "0")}`;
         }
-      } catch (e) {
-        console.error("[cargoLoads.create] Erro ao marcar nota como usada:", e);
+      } catch {
       }
+      let invoiceFileUrl = null;
+      if (input.invoiceFileBase64) {
+        try {
+          const dataStr = input.invoiceFileBase64.startsWith("data:") ? input.invoiceFileBase64 : `data:${input.invoiceFileMimeType || "application/pdf"};base64,${input.invoiceFileBase64}`;
+          const uploaded = await cloudinaryUpload(dataStr, `btree/notas/${newCargoId || "new"}`, input.invoiceFileName || `nf-${actionCode}.pdf`);
+          invoiceFileUrl = uploaded.url;
+          if (newCargoId) {
+            await db.update(cargoLoads).set({ invoiceUrl: invoiceFileUrl }).where(eq6(cargoLoads.id, newCargoId));
+          }
+        } catch (e) {
+          console.error("[cargoLoads.create] Erro upload NF:", e);
+        }
+      }
+      const vol = parseFloat((input.volumeM3 || "0").replace(",", "."));
+      const pesoTon = input.weightNetKg ? parseFloat(input.weightNetKg.replace(",", ".")) / 1e3 : 0;
+      const quantityType = vol > 0 ? "m3" : "ton";
+      const quantity = vol > 0 ? String(vol) : String(pesoTon);
+      let locationName = "";
+      if (input.workLocationId) {
+        try {
+          const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq6(gpsLocations.id, input.workLocationId)).limit(1);
+          locationName = loc?.name || "";
+        } catch {
+        }
+      }
+      const usageNote = [locationName, input.destination || ""].filter(Boolean).join(" \u2192 ");
+      const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      await db.insert(fiscalNotes2).values({
+        actionCode,
+        invoiceNumber: input.invoiceNumber || null,
+        issueDate: (input.date || today).slice(0, 10),
+        quantityType,
+        quantity,
+        fileUrl: invoiceFileUrl,
+        status: "used",
+        usedByCargoId: newCargoId || null,
+        usedByClientId: input.clientId || null,
+        usedByClientName: input.clientName || null,
+        usedAt: today,
+        notes: usageNote || null,
+        createdBy: ctx.user.id
+      });
+      if (newCargoId) {
+        try {
+          const [newNote] = await db.select({ id: fiscalNotes2.id }).from(fiscalNotes2).orderBy(desc3(fiscalNotes2.id)).limit(1);
+          if (newNote) {
+            await db.update(cargoLoads).set({ fiscalNoteId: newNote.id }).where(eq6(cargoLoads.id, newCargoId));
+          }
+        } catch {
+        }
+      }
+    } catch (e) {
+      console.error("[cargoLoads.create] Erro ao gerar a\xE7\xE3o automaticamente:", e);
     }
     return { success: true };
   }),
@@ -16498,6 +16552,11 @@ async function getNextActionCode(db) {
   }
 }
 var fiscalNotesRouter = router({
+  // Prévia do próximo código de ação (para o formulário de Nova Carga)
+  nextActionCode: protectedProcedure.query(async () => {
+    const db = await getDb();
+    return { actionCode: await getNextActionCode(db) };
+  }),
   // Listar todas as notas com filtros
   list: protectedProcedure.input(z43.object({
     quantityType: z43.enum(["m3", "ton", "all"]).optional(),
@@ -16649,6 +16708,58 @@ var fiscalNotesRouter = router({
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.delete(fiscalNotes).where(eq41(fiscalNotes.id, input.id));
     return { success: true };
+  }),
+  // Relatório-planilha: notas com dados da carga, local e destino
+  report: protectedProcedure.input(z43.object({
+    workLocationId: z43.number().optional(),
+    dateFrom: z43.string().optional(),
+    dateTo: z43.string().optional(),
+    search: z43.string().optional(),
+    limit: z43.number().optional().default(500)
+  }).optional()).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db.select({
+      noteId: fiscalNotes.id,
+      actionCode: fiscalNotes.actionCode,
+      noteInvoiceNumber: fiscalNotes.invoiceNumber,
+      issueDate: fiscalNotes.issueDate,
+      quantityType: fiscalNotes.quantityType,
+      noteQuantity: fiscalNotes.quantity,
+      noteFileUrl: fiscalNotes.fileUrl,
+      noteStatus: fiscalNotes.status,
+      noteNotes: fiscalNotes.notes,
+      usedAt: fiscalNotes.usedAt,
+      // Carga vinculada
+      cargoId: cargoLoads.id,
+      cargoDate: cargoLoads.date,
+      cargoDeliveryDate: cargoLoads.deliveryDate,
+      cargoInvoiceNumber: cargoLoads.invoiceNumber,
+      cargoInvoiceUrl: cargoLoads.invoiceUrl,
+      cargoVolumeM3: cargoLoads.volumeM3,
+      cargoWeightNetKg: cargoLoads.weightNetKg,
+      cargoDestination: cargoLoads.destination,
+      cargoVehiclePlate: cargoLoads.vehiclePlate,
+      cargoDriverName: cargoLoads.driverName,
+      cargoStatus: cargoLoads.status,
+      cargoWorkLocationId: cargoLoads.workLocationId,
+      // Local (GPS)
+      workLocationName: gpsLocations.name,
+      // Destino cadastrado
+      destinationName: cargoDestinations.name,
+      destinationNickname: cargoDestinations.nickname
+    }).from(fiscalNotes).leftJoin(cargoLoads, eq41(fiscalNotes.usedByCargoId, cargoLoads.id)).leftJoin(gpsLocations, eq41(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(cargoDestinations, eq41(cargoLoads.destinationId, cargoDestinations.id)).orderBy(desc34(fiscalNotes.id)).limit(input?.limit ?? 500);
+    let filtered = rows;
+    if (input?.workLocationId) filtered = filtered.filter((r) => r.cargoWorkLocationId === input.workLocationId);
+    if (input?.dateFrom) filtered = filtered.filter((r) => (r.cargoDate || r.issueDate || "") >= input.dateFrom);
+    if (input?.dateTo) filtered = filtered.filter((r) => (r.cargoDate || r.issueDate || "") <= input.dateTo + "T23:59:59");
+    if (input?.search) {
+      const s = input.search.toLowerCase();
+      filtered = filtered.filter(
+        (r) => r.actionCode?.toLowerCase().includes(s) || (r.noteInvoiceNumber || "").toLowerCase().includes(s) || (r.cargoDestination || "").toLowerCase().includes(s) || (r.destinationName || "").toLowerCase().includes(s) || (r.destinationNickname || "").toLowerCase().includes(s) || (r.workLocationName || "").toLowerCase().includes(s) || (r.cargoVehiclePlate || "").toLowerCase().includes(s)
+      );
+    }
+    return filtered;
   }),
   // Estatísticas rápidas
   stats: protectedProcedure.query(async () => {

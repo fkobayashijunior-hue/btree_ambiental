@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { fiscalNotes } from "../../drizzle/schema";
+import { fiscalNotes, cargoLoads, gpsLocations, cargoDestinations } from "../../drizzle/schema";
 import { desc, eq, and, sql } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 
@@ -24,6 +24,12 @@ async function getNextActionCode(db: Awaited<ReturnType<typeof getDb>>): Promise
 }
 
 export const fiscalNotesRouter = router({
+  // Prévia do próximo código de ação (para o formulário de Nova Carga)
+  nextActionCode: protectedProcedure.query(async () => {
+    const db = await getDb();
+    return { actionCode: await getNextActionCode(db) };
+  }),
+
   // Listar todas as notas com filtros
   list: protectedProcedure
     .input(z.object({
@@ -213,6 +219,74 @@ export const fiscalNotesRouter = router({
       if (!db) throw new Error("Banco indisponível");
       await db.delete(fiscalNotes).where(eq(fiscalNotes.id, input.id));
       return { success: true };
+    }),
+
+  // Relatório-planilha: notas com dados da carga, local e destino
+  report: protectedProcedure
+    .input(z.object({
+      workLocationId: z.number().optional(),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      search: z.string().optional(),
+      limit: z.number().optional().default(500),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select({
+          noteId: fiscalNotes.id,
+          actionCode: fiscalNotes.actionCode,
+          noteInvoiceNumber: fiscalNotes.invoiceNumber,
+          issueDate: fiscalNotes.issueDate,
+          quantityType: fiscalNotes.quantityType,
+          noteQuantity: fiscalNotes.quantity,
+          noteFileUrl: fiscalNotes.fileUrl,
+          noteStatus: fiscalNotes.status,
+          noteNotes: fiscalNotes.notes,
+          usedAt: fiscalNotes.usedAt,
+          // Carga vinculada
+          cargoId: cargoLoads.id,
+          cargoDate: cargoLoads.date,
+          cargoDeliveryDate: cargoLoads.deliveryDate,
+          cargoInvoiceNumber: cargoLoads.invoiceNumber,
+          cargoInvoiceUrl: cargoLoads.invoiceUrl,
+          cargoVolumeM3: cargoLoads.volumeM3,
+          cargoWeightNetKg: cargoLoads.weightNetKg,
+          cargoDestination: cargoLoads.destination,
+          cargoVehiclePlate: cargoLoads.vehiclePlate,
+          cargoDriverName: cargoLoads.driverName,
+          cargoStatus: cargoLoads.status,
+          cargoWorkLocationId: cargoLoads.workLocationId,
+          // Local (GPS)
+          workLocationName: gpsLocations.name,
+          // Destino cadastrado
+          destinationName: cargoDestinations.name,
+          destinationNickname: cargoDestinations.nickname,
+        })
+        .from(fiscalNotes)
+        .leftJoin(cargoLoads, eq(fiscalNotes.usedByCargoId, cargoLoads.id))
+        .leftJoin(gpsLocations, eq(cargoLoads.workLocationId, gpsLocations.id))
+        .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
+        .orderBy(desc(fiscalNotes.id))
+        .limit(input?.limit ?? 500);
+      let filtered: any[] = rows;
+      if (input?.workLocationId) filtered = filtered.filter((r: any) => r.cargoWorkLocationId === input.workLocationId);
+      if (input?.dateFrom) filtered = filtered.filter((r: any) => (r.cargoDate || r.issueDate || '') >= input.dateFrom!);
+      if (input?.dateTo) filtered = filtered.filter((r: any) => (r.cargoDate || r.issueDate || '') <= input.dateTo! + 'T23:59:59');
+      if (input?.search) {
+        const s = input.search.toLowerCase();
+        filtered = filtered.filter((r: any) =>
+          r.actionCode?.toLowerCase().includes(s) ||
+          (r.noteInvoiceNumber || '').toLowerCase().includes(s) ||
+          (r.cargoDestination || '').toLowerCase().includes(s) ||
+          (r.destinationName || '').toLowerCase().includes(s) ||
+          (r.destinationNickname || '').toLowerCase().includes(s) ||
+          (r.workLocationName || '').toLowerCase().includes(s) ||
+          (r.cargoVehiclePlate || '').toLowerCase().includes(s)
+        );
+      }
+      return filtered;
     }),
 
   // Estatísticas rápidas

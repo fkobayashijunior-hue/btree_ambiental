@@ -560,6 +560,9 @@ export const cargoLoadsRouter = router({
       thirdPartyContractor: z.string().optional(),
       thirdPartyCost: z.string().optional(),
       fiscalNoteId: z.number().optional(), // ID da nota/ação selecionada no Controle de Notas
+      invoiceFileBase64: z.string().optional(), // PDF da NF em base64
+      invoiceFileName: z.string().optional(), // Nome do arquivo da NF
+      invoiceFileMimeType: z.string().optional(), // MIME type do arquivo da NF
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -662,40 +665,87 @@ export const cargoLoadsRouter = router({
         } catch(e) { /* silent */ }
       }
 
-      // Marcar nota fiscal como usada (se fornecida)
-      if (input.fiscalNoteId) {
+      // Gerar ação automaticamente ao salvar a carga (novo fluxo)
+      try {
+        const { fiscalNotes } = await import('../../drizzle/schema');
+        // Buscar o ID da carga recém-inserida
+        const [newCargo] = await db.select({ id: cargoLoads.id })
+          .from(cargoLoads)
+          .orderBy(desc(cargoLoads.id))
+          .limit(1);
+        const newCargoId = newCargo?.id;
+        // Gerar próximo código de ação AC-XXXXX
+        let actionCode = "AC-00001";
         try {
-          const { fiscalNotes } = await import('../../drizzle/schema');
-          // Buscar o ID da carga recém-inserida
-          const [newCargo] = await db.select({ id: cargoLoads.id })
-            .from(cargoLoads)
-            .orderBy(desc(cargoLoads.id))
-            .limit(1);
-          const newCargoId = newCargo?.id;
-          // Verificar se a nota já está em uso por outra carga
-          const [existingNote] = await db.select({ status: fiscalNotes.status, usedByCargoId: fiscalNotes.usedByCargoId })
-            .from(fiscalNotes)
-            .where(eq(fiscalNotes.id, input.fiscalNoteId))
-            .limit(1);
-          if (!existingNote || existingNote.status !== 'used') {
-            const today = new Date().toISOString().split('T')[0];
-            const usageNote = [input.workLocationId ? `Local ${input.workLocationId}` : '', input.destination || ''].filter(Boolean).join(' → ');
-            await db.update(fiscalNotes)
-              .set({
-                status: 'used',
-                usedByCargoId: newCargoId || null,
-                usedByClientId: input.clientId || null,
-                usedByClientName: input.clientName || null,
-                usedAt: today,
-                notes: usageNote || null,
-              })
-              .where(eq(fiscalNotes.id, input.fiscalNoteId));
+          const [row] = await db.execute(sql`
+            SELECT action_code FROM fiscal_notes ORDER BY id DESC LIMIT 1
+          `) as any;
+          const rows = row as any[];
+          if (rows && rows.length > 0 && rows[0]?.action_code) {
+            const num = parseInt(String(rows[0].action_code).replace("AC-", ""), 10);
+            if (!isNaN(num)) actionCode = `AC-${String(num + 1).padStart(5, "0")}`;
           }
-        } catch (e) {
-          console.error('[cargoLoads.create] Erro ao marcar nota como usada:', e);
+        } catch { /* usa AC-00001 */ }
+        // Upload do PDF da NF (se fornecido)
+        let invoiceFileUrl: string | null = null;
+        if (input.invoiceFileBase64) {
+          try {
+            const dataStr = input.invoiceFileBase64.startsWith('data:')
+              ? input.invoiceFileBase64
+              : `data:${input.invoiceFileMimeType || 'application/pdf'};base64,${input.invoiceFileBase64}`;
+            const uploaded = await cloudinaryUpload(dataStr, `btree/notas/${newCargoId || 'new'}`, input.invoiceFileName || `nf-${actionCode}.pdf`);
+            invoiceFileUrl = uploaded.url;
+            // Salvar também na carga (invoiceUrl)
+            if (newCargoId) {
+              await db.update(cargoLoads).set({ invoiceUrl: invoiceFileUrl }).where(eq(cargoLoads.id, newCargoId));
+            }
+          } catch (e) {
+            console.error('[cargoLoads.create] Erro upload NF:', e);
+          }
         }
+        // Determinar tipo e quantidade da nota a partir da carga
+        const vol = parseFloat((input.volumeM3 || '0').replace(',', '.'));
+        const pesoTon = input.weightNetKg ? parseFloat(input.weightNetKg.replace(',', '.')) / 1000 : 0;
+        const quantityType = vol > 0 ? 'm3' : 'ton';
+        const quantity = vol > 0 ? String(vol) : String(pesoTon);
+        // Montar observação com local e destino
+        let locationName = '';
+        if (input.workLocationId) {
+          try {
+            const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq(gpsLocations.id, input.workLocationId)).limit(1);
+            locationName = loc?.name || '';
+          } catch { /* silent */ }
+        }
+        const usageNote = [locationName, input.destination || ''].filter(Boolean).join(' → ');
+        const today = new Date().toISOString().split('T')[0];
+        // Inserir a ação já vinculada à carga
+        await db.insert(fiscalNotes).values({
+          actionCode,
+          invoiceNumber: input.invoiceNumber || null,
+          issueDate: (input.date || today).slice(0, 10),
+          quantityType,
+          quantity,
+          fileUrl: invoiceFileUrl,
+          status: 'used',
+          usedByCargoId: newCargoId || null,
+          usedByClientId: input.clientId || null,
+          usedByClientName: input.clientName || null,
+          usedAt: today,
+          notes: usageNote || null,
+          createdBy: ctx.user.id,
+        });
+        // Vincular a nota à carga (fiscalNoteId)
+        if (newCargoId) {
+          try {
+            const [newNote] = await db.select({ id: fiscalNotes.id }).from(fiscalNotes).orderBy(desc(fiscalNotes.id)).limit(1);
+            if (newNote) {
+              await db.update(cargoLoads).set({ fiscalNoteId: newNote.id }).where(eq(cargoLoads.id, newCargoId));
+            }
+          } catch { /* silent */ }
+        }
+      } catch (e) {
+        console.error('[cargoLoads.create] Erro ao gerar ação automaticamente:', e);
       }
-
       return { success: true };
     }),
 
