@@ -1547,11 +1547,13 @@ export default function CargoControl() {
     let invoiceFileMimeType: string | undefined;
     if (!editId && invoiceFile) {
       try {
-        const buf = await invoiceFile.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let binary = '';
-        bytes.forEach(b => binary += String.fromCharCode(b));
-        invoiceFileBase64 = btoa(binary);
+        // FileReader é mais rápido e confiável que byte-a-byte para PDFs grandes
+        invoiceFileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(invoiceFile);
+        });
         invoiceFileName = invoiceFile.name;
         invoiceFileMimeType = invoiceFile.type || 'application/pdf';
       } catch {
@@ -1942,6 +1944,25 @@ export default function CargoControl() {
                   {getClientCode(cargo.clientName, cargo.id, codeMap)}
                 </span>
                 {cargo.invoiceNumber && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{cargo.invoiceNumber}</span>}
+                {/* Ação (AC) gerada automaticamente + link para ver a nota */}
+                {(cargo as any).fiscalNoteActionCode && (
+                  (cargo as any).fiscalNoteFileUrl || (cargo as any).invoiceUrl ? (
+                    <a
+                      href={(cargo as any).fiscalNoteFileUrl || (cargo as any).invoiceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 font-mono font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded text-[10px] border border-blue-200"
+                      title="Ver nota fiscal"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <FileText className="h-3 w-3" />{(cargo as any).fiscalNoteActionCode}
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-1 font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded text-[10px] border border-gray-200" title="Ação gerada (sem arquivo)">
+                      <FileText className="h-3 w-3" />{(cargo as any).fiscalNoteActionCode}
+                    </span>
+                  )
+                )}
                 {(cargo as any).locationName && <span className="flex items-center gap-1 text-emerald-600"><MapPin className="h-3 w-3" /><span translate="no">{(cargo as any).locationName}</span></span>}
               </div>
             </div>

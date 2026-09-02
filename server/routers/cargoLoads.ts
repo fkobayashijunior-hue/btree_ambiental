@@ -703,11 +703,22 @@ export const cargoLoadsRouter = router({
             console.error('[cargoLoads.create] Erro upload NF:', e);
           }
         }
-        // Determinar tipo e quantidade da nota a partir da carga
+        // Determinar tipo e quantidade da nota a partir do priceType do destino
         const vol = parseFloat((input.volumeM3 || '0').replace(',', '.'));
         const pesoTon = input.weightNetKg ? parseFloat(input.weightNetKg.replace(',', '.')) / 1000 : 0;
-        const quantityType = vol > 0 ? 'm3' : 'ton';
-        const quantity = vol > 0 ? String(vol) : String(pesoTon);
+        // Buscar o priceType do destino cadastrado (ton para SONOCO, m3 para outros)
+        let destPriceType = 'ton';
+        if (input.destinationId) {
+          try {
+            const [dest] = await db.select({ priceType: cargoDestinations.priceType }).from(cargoDestinations).where(eq(cargoDestinations.id, input.destinationId)).limit(1);
+            if (dest?.priceType) destPriceType = dest.priceType;
+          } catch { /* usa ton */ }
+        }
+        const quantityType = destPriceType === 'm3' ? 'm3' : 'ton';
+        // Quantidade: usa o valor correspondente ao tipo, com fallback para o outro
+        const quantity = quantityType === 'm3'
+          ? String(vol > 0 ? vol : pesoTon)
+          : String(pesoTon > 0 ? pesoTon : vol);
         // Montar observação com local e destino
         let locationName = '';
         if (input.workLocationId) {

@@ -4088,8 +4088,16 @@ var cargoLoadsRouter = router({
       }
       const vol = parseFloat((input.volumeM3 || "0").replace(",", "."));
       const pesoTon = input.weightNetKg ? parseFloat(input.weightNetKg.replace(",", ".")) / 1e3 : 0;
-      const quantityType = vol > 0 ? "m3" : "ton";
-      const quantity = vol > 0 ? String(vol) : String(pesoTon);
+      let destPriceType = "ton";
+      if (input.destinationId) {
+        try {
+          const [dest] = await db.select({ priceType: cargoDestinations.priceType }).from(cargoDestinations).where(eq6(cargoDestinations.id, input.destinationId)).limit(1);
+          if (dest?.priceType) destPriceType = dest.priceType;
+        } catch {
+        }
+      }
+      const quantityType = destPriceType === "m3" ? "m3" : "ton";
+      const quantity = quantityType === "m3" ? String(vol > 0 ? vol : pesoTon) : String(pesoTon > 0 ? pesoTon : vol);
       let locationName = "";
       if (input.workLocationId) {
         try {
