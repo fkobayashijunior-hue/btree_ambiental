@@ -1304,6 +1304,7 @@ export default function CargoControl() {
     destinationId: 0,
     destination: "",
     invoiceNumber: "",
+    noteQuantity: "",
     clientId: 0,
     clientName: "",
     notes: "",
@@ -1496,7 +1497,7 @@ export default function CargoControl() {
     }
         // Auto-selecionar local de trabalho se há apenas 1 disponível
     const autoWorkLocationId = workLocations.length === 1 ? String(workLocations[0].id) : "";
-    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
     setPendingPhotos([]);
     setInvoiceFile(null);
   };
@@ -1588,7 +1589,7 @@ export default function CargoControl() {
         resetForm();
       } else {
         // fiscalNoteId é passado diretamente no create — o backend marca a nota como usada atomicamente
-        createMutation.mutate({ ...data, fiscalNoteId: noteIdToMark || undefined, invoiceFileBase64, invoiceFileName, invoiceFileMimeType });
+        createMutation.mutate({ ...data, fiscalNoteId: noteIdToMark || undefined, invoiceFileBase64, invoiceFileName, invoiceFileMimeType, noteQuantity: form.noteQuantity || undefined });
       }
     }
     setSelectedNoteId(null);
@@ -2692,6 +2693,15 @@ export default function CargoControl() {
                     placeholder="ex: 402"
                     className={invoiceDuplicate?.exists ? 'border-red-500 ring-red-200' : ''}
                   />
+                </div>
+                <div>
+                  <Label>Quantidade da Nota (opcional)</Label>
+                  <Input
+                    value={form.noteQuantity}
+                    onChange={e => setForm(f => ({ ...f, noteQuantity: e.target.value }))}
+                    placeholder="ex: 35 (se diferente da carga)"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Se a nota tiver quantidade diferente da carga, informe aqui. Deixe em branco para usar o valor da carga.</p>
                 </div>
                 {!editId && (
                   <div>

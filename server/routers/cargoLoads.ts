@@ -563,6 +563,7 @@ export const cargoLoadsRouter = router({
       invoiceFileBase64: z.string().optional(), // PDF da NF em base64
       invoiceFileName: z.string().optional(), // Nome do arquivo da NF
       invoiceFileMimeType: z.string().optional(), // MIME type do arquivo da NF
+      noteQuantity: z.string().optional(), // Quantidade da nota (se diferente da carga)
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -715,10 +716,13 @@ export const cargoLoadsRouter = router({
           } catch { /* usa ton */ }
         }
         const quantityType = destPriceType === 'm3' ? 'm3' : 'ton';
-        // Quantidade: usa o valor correspondente ao tipo, com fallback para o outro
-        const quantity = quantityType === 'm3'
-          ? String(vol > 0 ? vol : pesoTon)
-          : String(pesoTon > 0 ? pesoTon : vol);
+        // Quantidade: usa o valor da nota (se fornecido), senão o da carga
+        const noteQty = input.noteQuantity ? parseFloat(input.noteQuantity.replace(',', '.')) : 0;
+        const quantity = noteQty > 0
+          ? String(noteQty)
+          : (quantityType === 'm3'
+              ? String(vol > 0 ? vol : pesoTon)
+              : String(pesoTon > 0 ? pesoTon : vol));
         // Montar observação com local e destino
         let locationName = '';
         if (input.workLocationId) {

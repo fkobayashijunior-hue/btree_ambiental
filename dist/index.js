@@ -3966,8 +3966,10 @@ var cargoLoadsRouter = router({
     // PDF da NF em base64
     invoiceFileName: z6.string().optional(),
     // Nome do arquivo da NF
-    invoiceFileMimeType: z6.string().optional()
+    invoiceFileMimeType: z6.string().optional(),
     // MIME type do arquivo da NF
+    noteQuantity: z6.string().optional()
+    // Quantidade da nota (se diferente da carga)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -4097,7 +4099,8 @@ var cargoLoadsRouter = router({
         }
       }
       const quantityType = destPriceType === "m3" ? "m3" : "ton";
-      const quantity = quantityType === "m3" ? String(vol > 0 ? vol : pesoTon) : String(pesoTon > 0 ? pesoTon : vol);
+      const noteQty = input.noteQuantity ? parseFloat(input.noteQuantity.replace(",", ".")) : 0;
+      const quantity = noteQty > 0 ? String(noteQty) : quantityType === "m3" ? String(vol > 0 ? vol : pesoTon) : String(pesoTon > 0 ? pesoTon : vol);
       let locationName = "";
       if (input.workLocationId) {
         try {
