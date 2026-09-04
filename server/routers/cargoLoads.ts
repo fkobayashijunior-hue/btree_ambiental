@@ -351,6 +351,7 @@ export const cargoLoadsRouter = router({
           fiscalNoteId: cargoLoads.fiscalNoteId,
           fiscalNoteFileUrl: fiscalNotes.fileUrl,
           fiscalNoteActionCode: fiscalNotes.actionCode,
+          fiscalNoteQuantityType: fiscalNotes.quantityType,
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
@@ -459,6 +460,7 @@ export const cargoLoadsRouter = router({
           fiscalNoteId: cargoLoads.fiscalNoteId,
           fiscalNoteFileUrl: fiscalNotes.fileUrl,
           fiscalNoteActionCode: fiscalNotes.actionCode,
+          fiscalNoteQuantityType: fiscalNotes.quantityType,
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
@@ -566,6 +568,7 @@ export const cargoLoadsRouter = router({
       invoiceFileName: z.string().optional(), // Nome do arquivo da NF
       invoiceFileMimeType: z.string().optional(), // MIME type do arquivo da NF
       noteQuantity: z.string().optional(), // Quantidade da nota (se diferente da carga)
+      noteUnit: z.enum(['m3', 'ton']).optional(), // Unidade da nota (se diferente do destino)
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -717,7 +720,7 @@ export const cargoLoadsRouter = router({
             if (dest?.priceType) destPriceType = dest.priceType;
           } catch { /* usa ton */ }
         }
-        const quantityType = destPriceType === 'm3' ? 'm3' : 'ton';
+        const quantityType = input.noteUnit || (destPriceType === 'm3' ? 'm3' : 'ton');
         // Quantidade: usa o valor da nota (se fornecido), senão o da carga
         const noteQty = input.noteQuantity ? parseFloat(input.noteQuantity.replace(',', '.')) : 0;
         const quantity = noteQty > 0
@@ -807,6 +810,7 @@ export const cargoLoadsRouter = router({
       thirdPartyContractor: z.string().optional(),
       thirdPartyCost: z.string().optional(),
       noteQuantity: z.string().optional(),
+      noteUnit: z.enum(['m3', 'ton']).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -830,7 +834,7 @@ export const cargoLoadsRouter = router({
         }
       }
 
-      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity, ...rest } = input;
+      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity, noteUnit, ...rest } = input;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
       // These fields use snake_case column names - must be set explicitly via Drizzle schema fields
@@ -863,7 +867,22 @@ export const cargoLoadsRouter = router({
         } catch { /* keep original */ }
       }
 
-      // noteQuantity NÃO é coluna de cargo_loads: sincronizar com a ação (fiscal_notes) vinculada
+      // noteQuantity/noteUnit NÃO são colunas de cargo_loads: sincronizar com a ação (fiscal_notes) vinculada
+      if (noteUnit !== undefined && noteUnit !== '') {
+        try {
+          const connU = await getDirectConnection();
+          try {
+            await connU.execute(
+              `UPDATE cargo_loads cl JOIN fiscal_notes fn ON fn.used_by_cargo_id = cl.id SET cl.fiscal_note_id = fn.id WHERE cl.id = ? AND (cl.fiscal_note_id IS NULL OR cl.fiscal_note_id = 0)`,
+              [id]
+            );
+            await connU.execute(
+              `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity_type = ? WHERE cl.id = ?`,
+              [noteUnit, id]
+            );
+          } finally { await connU.end(); }
+        } catch (e) { console.error('[cargoLoads.update] sync noteUnit->fiscal_notes falhou:', e); }
+      }
       if (noteQuantity !== undefined) {
         try {
           const qtyNorm = String(noteQuantity || '').replace(',', '.').trim();

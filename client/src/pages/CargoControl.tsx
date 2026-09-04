@@ -1305,6 +1305,7 @@ export default function CargoControl() {
     destination: "",
     invoiceNumber: "",
     noteQuantity: "",
+    noteUnit: "" as "" | "m3" | "ton",
     clientId: 0,
     clientName: "",
     notes: "",
@@ -1499,7 +1500,7 @@ export default function CargoControl() {
     }
         // Auto-selecionar local de trabalho se há apenas 1 disponível
     const autoWorkLocationId = workLocations.length === 1 ? String(workLocations[0].id) : "";
-    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", invoiceUrl: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", noteUnit: "", invoiceUrl: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
     setPendingPhotos([]);
     setInvoiceFile(null);
   };
@@ -1524,6 +1525,7 @@ export default function CargoControl() {
       destination: cargo.destination || "",
       invoiceNumber: cargo.invoiceNumber || "",
       noteQuantity: (cargo as any).noteQuantity || "",
+      noteUnit: ((cargo as any).fiscalNoteQuantityType === 'm3' || (cargo as any).fiscalNoteQuantityType === 'ton') ? (cargo as any).fiscalNoteQuantityType : "",
       invoiceUrl: (cargo as any).invoiceUrl || "",
       clientId: cargo.clientId || 0,
       clientName: cargo.clientName || "",
@@ -1609,7 +1611,7 @@ export default function CargoControl() {
         resetForm();
       } else {
         // fiscalNoteId é passado diretamente no create — o backend marca a nota como usada atomicamente
-        createMutation.mutate({ ...data, fiscalNoteId: noteIdToMark || undefined, invoiceFileBase64, invoiceFileName, invoiceFileMimeType, noteQuantity: form.noteQuantity || undefined });
+        createMutation.mutate({ ...data, fiscalNoteId: noteIdToMark || undefined, invoiceFileBase64, invoiceFileName, invoiceFileMimeType, noteQuantity: form.noteQuantity || undefined, noteUnit: form.noteUnit || undefined });
       }
     }
     setSelectedNoteId(null);
@@ -2716,12 +2718,25 @@ export default function CargoControl() {
                 </div>
                 <div>
                   <Label>Quantidade da Nota (opcional)</Label>
-                  <Input
-                    value={form.noteQuantity}
-                    onChange={e => setForm(f => ({ ...f, noteQuantity: e.target.value }))}
-                    placeholder="ex: 35 (se diferente da carga)"
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Se a nota tiver quantidade diferente da carga, informe aqui. Deixe em branco para usar o valor da carga.</p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={form.noteQuantity}
+                      onChange={e => setForm(f => ({ ...f, noteQuantity: e.target.value }))}
+                      placeholder="ex: 35"
+                      className="flex-1"
+                    />
+                    <select
+                      value={form.noteUnit}
+                      onChange={e => setForm(f => ({ ...f, noteUnit: e.target.value as "m3" | "ton" }))}
+                      className="w-24 h-10 px-2 rounded-md border border-input bg-background text-sm"
+                      title="Unidade da nota"
+                    >
+                      <option value="">Auto</option>
+                      <option value="m3">m³</option>
+                      <option value="ton">ton</option>
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Se a nota tiver quantidade/unidade diferente da carga, informe aqui. "Auto" usa o tipo do destino.</p>
                 </div>
                 
                   <div>
@@ -2826,6 +2841,7 @@ export default function CargoControl() {
                         ...f,
                         destinationId: id,
                         destination: buyer?.nickname || buyer?.name || f.destination,
+                        noteUnit: (buyer?.unit === 'm3' || buyer?.unit === 'ton') ? buyer.unit : (buyer?.priceType === 'm3' || buyer?.priceType === 'ton') ? buyer.priceType : f.noteUnit,
                       }));
                     } else {
                       const dest = destinations.find(d => d.id === id) as (typeof destinations[number] & { clientId?: number | null; pricePerTon?: string | null; pricePerM3?: string | null; priceType?: string | null }) | undefined;
@@ -2835,6 +2851,7 @@ export default function CargoControl() {
                         ...f,
                         destinationId: id,
                         destination: dest?.name || f.destination,
+                        noteUnit: (dest?.priceType === 'm3' || dest?.priceType === 'ton') ? dest.priceType : f.noteUnit,
                         ...(linkedClientId ? { clientId: linkedClientId, clientName: linkedClient?.name || f.clientName } : {}),
                       }));
                     }

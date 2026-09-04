@@ -3797,7 +3797,8 @@ var cargoLoadsRouter = router({
       thirdPartyCost: cargoLoads.thirdPartyCost,
       fiscalNoteId: cargoLoads.fiscalNoteId,
       fiscalNoteFileUrl: fiscalNotes.fileUrl,
-      fiscalNoteActionCode: fiscalNotes.actionCode
+      fiscalNoteActionCode: fiscalNotes.actionCode,
+      fiscalNoteQuantityType: fiscalNotes.quantityType
     }).from(cargoLoads).leftJoin(clients, eq6(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq6(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq6(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq6(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq6(cargoLoads.driverCollaboratorId, collaborators.id)).leftJoin(fiscalNotes, eq6(cargoLoads.fiscalNoteId, fiscalNotes.id)).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     let filtered = results;
     if (userAllowedClientIds && userAllowedClientIds.length > 0) {
@@ -3883,7 +3884,8 @@ var cargoLoadsRouter = router({
       thirdPartyCost: cargoLoads.thirdPartyCost,
       fiscalNoteId: cargoLoads.fiscalNoteId,
       fiscalNoteFileUrl: fiscalNotes.fileUrl,
-      fiscalNoteActionCode: fiscalNotes.actionCode
+      fiscalNoteActionCode: fiscalNotes.actionCode,
+      fiscalNoteQuantityType: fiscalNotes.quantityType
     }).from(cargoLoads).leftJoin(clients, eq6(cargoLoads.clientId, clients.id)).leftJoin(cargoDestinations, eq6(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq6(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq6(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq6(cargoLoads.driverCollaboratorId, collaborators.id)).leftJoin(fiscalNotes, eq6(cargoLoads.fiscalNoteId, fiscalNotes.id)).where(eq6(cargoLoads.id, input.id)).limit(1);
     if (!result.length) throw new TRPCError4({ code: "NOT_FOUND" });
     const r = result[0];
@@ -3970,8 +3972,10 @@ var cargoLoadsRouter = router({
     // Nome do arquivo da NF
     invoiceFileMimeType: z6.string().optional(),
     // MIME type do arquivo da NF
-    noteQuantity: z6.string().optional()
+    noteQuantity: z6.string().optional(),
     // Quantidade da nota (se diferente da carga)
+    noteUnit: z6.enum(["m3", "ton"]).optional()
+    // Unidade da nota (se diferente do destino)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -4100,7 +4104,7 @@ var cargoLoadsRouter = router({
         } catch {
         }
       }
-      const quantityType = destPriceType === "m3" ? "m3" : "ton";
+      const quantityType = input.noteUnit || (destPriceType === "m3" ? "m3" : "ton");
       const noteQty = input.noteQuantity ? parseFloat(input.noteQuantity.replace(",", ".")) : 0;
       const quantity = noteQty > 0 ? String(noteQty) : quantityType === "m3" ? String(vol > 0 ? vol : pesoTon) : String(pesoTon > 0 ? pesoTon : vol);
       let locationName = "";
@@ -4181,7 +4185,8 @@ var cargoLoadsRouter = router({
     receiverName: z6.string().optional(),
     thirdPartyContractor: z6.string().optional(),
     thirdPartyCost: z6.string().optional(),
-    noteQuantity: z6.string().optional()
+    noteQuantity: z6.string().optional(),
+    noteUnit: z6.enum(["m3", "ton"]).optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -4198,7 +4203,7 @@ var cargoLoadsRouter = router({
         });
       }
     }
-    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity, ...rest } = input;
+    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity, noteUnit, ...rest } = input;
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = { ...rest, updatedAt: now };
     if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
@@ -4224,6 +4229,25 @@ var cargoLoadsRouter = router({
         }
         updateData.photosJson = JSON.stringify(uploadedUrls);
       } catch {
+      }
+    }
+    if (noteUnit !== void 0 && noteUnit !== "") {
+      try {
+        const connU = await getDirectConnection();
+        try {
+          await connU.execute(
+            `UPDATE cargo_loads cl JOIN fiscal_notes fn ON fn.used_by_cargo_id = cl.id SET cl.fiscal_note_id = fn.id WHERE cl.id = ? AND (cl.fiscal_note_id IS NULL OR cl.fiscal_note_id = 0)`,
+            [id]
+          );
+          await connU.execute(
+            `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity_type = ? WHERE cl.id = ?`,
+            [noteUnit, id]
+          );
+        } finally {
+          await connU.end();
+        }
+      } catch (e) {
+        console.error("[cargoLoads.update] sync noteUnit->fiscal_notes falhou:", e);
       }
     }
     if (noteQuantity !== void 0) {
