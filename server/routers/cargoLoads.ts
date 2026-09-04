@@ -804,6 +804,7 @@ export const cargoLoadsRouter = router({
       receiverName: z.string().optional(),
       thirdPartyContractor: z.string().optional(),
       thirdPartyCost: z.string().optional(),
+      noteQuantity: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -860,6 +861,7 @@ export const cargoLoadsRouter = router({
         } catch { /* keep original */ }
       }
 
+      if (input.noteQuantity !== undefined) { updateData.noteQuantity = input.noteQuantity; }
       // Remove undefined values from updateData to prevent Drizzle errors
       for (const key of Object.keys(updateData)) {
         if (updateData[key] === undefined) {

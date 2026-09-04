@@ -1521,6 +1521,7 @@ export default function CargoControl() {
       destinationId: cargo.destinationId || 0,
       destination: cargo.destination || "",
       invoiceNumber: cargo.invoiceNumber || "",
+      noteQuantity: (cargo as any).noteQuantity || "",
       clientId: cargo.clientId || 0,
       clientName: cargo.clientName || "",
       notes: cargo.notes || "",

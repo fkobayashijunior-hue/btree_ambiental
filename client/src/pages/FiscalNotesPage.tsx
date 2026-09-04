@@ -140,6 +140,10 @@ export default function FiscalNotesPage() {
     });
   }
 
+  const unitOf = (r: ReportRow): "m3" | "ton" => {
+    if (r.destinationPriceType === "m3" || r.destinationPriceType === "ton") return r.destinationPriceType;
+    return r.quantityType;
+  };
   // Filtrar por tipo (m3/ton) — os demais filtros já vão ao backend
   const filtered = useMemo(() => {
     let list = rows as ReportRow[];
@@ -166,10 +170,6 @@ export default function FiscalNotesPage() {
   }, [filtered]);
 
   // Unidade correta: usa o priceType do destino (ton para SONOCO, m3 para outros)
-  const unitOf = (r: ReportRow): "m3" | "ton" => {
-    if (r.destinationPriceType === "m3" || r.destinationPriceType === "ton") return r.destinationPriceType;
-    return r.quantityType;
-  };
   const realQtyOf = (r: ReportRow) => {
     if (unitOf(r) === "m3") return parseFloat(String(r.cargoVolumeM3 || "0").replace(",", ".")) || 0;
     return (parseFloat(String(r.cargoWeightNetKg || "0").replace(",", ".")) || 0) / 1000;

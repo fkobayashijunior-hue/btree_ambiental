@@ -4178,7 +4178,8 @@ var cargoLoadsRouter = router({
     paidAt: z6.string().optional(),
     receiverName: z6.string().optional(),
     thirdPartyContractor: z6.string().optional(),
-    thirdPartyCost: z6.string().optional()
+    thirdPartyCost: z6.string().optional(),
+    noteQuantity: z6.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -4222,6 +4223,9 @@ var cargoLoadsRouter = router({
         updateData.photosJson = JSON.stringify(uploadedUrls);
       } catch {
       }
+    }
+    if (input.noteQuantity !== void 0) {
+      updateData.noteQuantity = input.noteQuantity;
     }
     for (const key of Object.keys(updateData)) {
       if (updateData[key] === void 0) {
