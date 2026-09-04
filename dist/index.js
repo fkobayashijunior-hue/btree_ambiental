@@ -3776,7 +3776,7 @@ var cargoLoadsRouter = router({
       finalLengthM: cargoLoads.finalLengthM,
       finalVolumeM3: cargoLoads.finalVolumeM3,
       invoiceUrl: cargoLoads.invoiceUrl,
-      noteQuantity: cargoLoads.noteQuantity,
+      noteQuantity: fiscalNotes.quantity,
       boletoUrl: cargoLoads.boletoUrl,
       boletoAmount: cargoLoads.boletoAmount,
       boletoDueDate: cargoLoads.boletoDueDate,
@@ -3863,7 +3863,7 @@ var cargoLoadsRouter = router({
       finalVolumeM3: cargoLoads.finalVolumeM3,
       workLocationId: cargoLoads.workLocationId,
       invoiceUrl: cargoLoads.invoiceUrl,
-      noteQuantity: cargoLoads.noteQuantity,
+      noteQuantity: fiscalNotes.quantity,
       boletoUrl: cargoLoads.boletoUrl,
       boletoAmount: cargoLoads.boletoAmount,
       boletoDueDate: cargoLoads.boletoDueDate,
@@ -4198,7 +4198,7 @@ var cargoLoadsRouter = router({
         });
       }
     }
-    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, ...rest } = input;
+    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity, ...rest } = input;
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = { ...rest, updatedAt: now };
     if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
@@ -4226,8 +4226,25 @@ var cargoLoadsRouter = router({
       } catch {
       }
     }
-    if (input.noteQuantity !== void 0) {
-      updateData.noteQuantity = input.noteQuantity;
+    if (noteQuantity !== void 0) {
+      try {
+        const qtyNorm = String(noteQuantity || "").replace(",", ".").trim();
+        const conn0 = await getDirectConnection();
+        try {
+          await conn0.execute(
+            `UPDATE cargo_loads cl JOIN fiscal_notes fn ON fn.used_by_cargo_id = cl.id SET cl.fiscal_note_id = fn.id WHERE cl.id = ? AND (cl.fiscal_note_id IS NULL OR cl.fiscal_note_id = 0)`,
+            [id]
+          );
+          await conn0.execute(
+            `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity = ? WHERE cl.id = ?`,
+            [qtyNorm === "" ? null : qtyNorm, id]
+          );
+        } finally {
+          await conn0.end();
+        }
+      } catch (e) {
+        console.error("[cargoLoads.update] sync noteQuantity->fiscal_notes falhou:", e);
+      }
     }
     for (const key of Object.keys(updateData)) {
       if (updateData[key] === void 0) {

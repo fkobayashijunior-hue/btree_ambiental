@@ -329,7 +329,7 @@ export const cargoLoadsRouter = router({
           finalLengthM: cargoLoads.finalLengthM,
           finalVolumeM3: cargoLoads.finalVolumeM3,
           invoiceUrl: cargoLoads.invoiceUrl,
-          noteQuantity: cargoLoads.noteQuantity,
+          noteQuantity: fiscalNotes.quantity,
           boletoUrl: cargoLoads.boletoUrl,
           boletoAmount: cargoLoads.boletoAmount,
           boletoDueDate: cargoLoads.boletoDueDate,
@@ -438,7 +438,7 @@ export const cargoLoadsRouter = router({
           finalVolumeM3: cargoLoads.finalVolumeM3,
           workLocationId: cargoLoads.workLocationId,
           invoiceUrl: cargoLoads.invoiceUrl,
-          noteQuantity: cargoLoads.noteQuantity,
+          noteQuantity: fiscalNotes.quantity,
           boletoUrl: cargoLoads.boletoUrl,
           boletoAmount: cargoLoads.boletoAmount,
           boletoDueDate: cargoLoads.boletoDueDate,
@@ -830,7 +830,7 @@ export const cargoLoadsRouter = router({
         }
       }
 
-      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, ...rest } = input;
+      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity, ...rest } = input;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
       // These fields use snake_case column names - must be set explicitly via Drizzle schema fields
@@ -863,7 +863,25 @@ export const cargoLoadsRouter = router({
         } catch { /* keep original */ }
       }
 
-      if (input.noteQuantity !== undefined) { updateData.noteQuantity = input.noteQuantity; }
+      // noteQuantity NÃO é coluna de cargo_loads: sincronizar com a ação (fiscal_notes) vinculada
+      if (noteQuantity !== undefined) {
+        try {
+          const qtyNorm = String(noteQuantity || '').replace(',', '.').trim();
+          const conn0 = await getDirectConnection();
+          try {
+            // Garante vínculo: se a carga não tem fiscal_note_id, tenta vincular pela AC usada por esta carga
+            await conn0.execute(
+              `UPDATE cargo_loads cl JOIN fiscal_notes fn ON fn.used_by_cargo_id = cl.id SET cl.fiscal_note_id = fn.id WHERE cl.id = ? AND (cl.fiscal_note_id IS NULL OR cl.fiscal_note_id = 0)`,
+              [id]
+            );
+            // Atualiza a quantidade da nota na ação vinculada
+            await conn0.execute(
+              `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity = ? WHERE cl.id = ?`,
+              [qtyNorm === '' ? null : qtyNorm, id]
+            );
+          } finally { await conn0.end(); }
+        } catch (e) { console.error('[cargoLoads.update] sync noteQuantity->fiscal_notes falhou:', e); }
+      }
       // Remove undefined values from updateData to prevent Drizzle errors
       for (const key of Object.keys(updateData)) {
         if (updateData[key] === undefined) {
