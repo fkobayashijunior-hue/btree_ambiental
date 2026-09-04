@@ -1394,6 +1394,8 @@ export default function CargoControl() {
     onSuccess: () => { toast.success("Carga atualizada!"); utils.cargoLoads.list.invalidate(); setIsFormOpen(false); setEditId(null); resetForm(); },
     onError: (e) => toast.error(e.message),
   });
+  const updateAsync = trpc.cargoLoads.update.useMutation();
+  const uploadDocAsync = trpc.cargoLoads.uploadDocument.useMutation();
   const deleteMutation = trpc.cargoLoads.delete.useMutation({
     onSuccess: () => { toast.success("Carga removida!"); utils.cargoLoads.list.invalidate(); },
     onError: (e) => toast.error(e.message),
@@ -1583,11 +1585,23 @@ export default function CargoControl() {
       thirdPartyCost: form.thirdPartyCost || undefined,
     };
     if (editId) {
-      // Se houver arquivo de NF selecionado, faz upload antes de atualizar
-      if (invoiceFileBase64 && invoiceFileName) {
-        uploadDocMutation.mutate({ cargoId: editId, docBase64: invoiceFileBase64, docType: 'invoice' });
-      }
-      updateMutation.mutate({ id: editId, ...data });
+      // Edição: fazer upload da NF (se houver) e atualizar de forma sequencial
+      (async () => {
+        try {
+          if (invoiceFileBase64 && invoiceFileName) {
+            await uploadDocAsync.mutateAsync({ cargoId: editId, docBase64: invoiceFileBase64, docType: 'invoice' });
+          }
+          await updateAsync.mutateAsync({ id: editId, ...data });
+          toast.success("Carga atualizada!");
+          utils.cargoLoads.list.invalidate();
+          utils.cargoLoads.getById.invalidate();
+          setIsFormOpen(false);
+          setEditId(null);
+          resetForm();
+        } catch (err: any) {
+          toast.error(err?.message || 'Erro ao salvar carga');
+        }
+      })();
     } else {
       if (!isOnline) {
         addToQueue("cargo.create", data);
@@ -2722,11 +2736,20 @@ export default function CargoControl() {
                           {invoiceFile.name}
                         </div>
                       ) : form.invoiceUrl ? (
-                        <div className="flex items-center justify-center gap-2 text-sm text-blue-600">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <a href={form.invoiceUrl} target="_blank" rel="noopener noreferrer" className="underline">
-                            Nota anexada
+                        <div className="flex flex-col items-center justify-center gap-1 text-sm">
+                          <a
+                            href={form.invoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline flex items-center gap-2"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            Ver nota anexada
                           </a>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Upload className="w-3 h-3" /> Clique para substituir o arquivo
+                          </span>
                         </div>
                       ) : (
                         <div className="text-sm text-muted-foreground flex items-center justify-center gap-2">
