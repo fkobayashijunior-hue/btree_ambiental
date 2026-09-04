@@ -166,6 +166,7 @@ const plugins = [
   vitePluginManusDebugCollector(),
   VitePWA({
     registerType: "autoUpdate",
+      injectRegister: "inline",
     devOptions: { enabled: false },
     includeAssets: ["favicon.ico", "*.png", "*.svg"],
     manifest: {
