@@ -53,6 +53,27 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+
+// ── PWA: forçar atualização quando houver nova versão do service worker ──
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => {
+        // Verifica atualizações a cada 60s enquanto o app está aberto
+        setInterval(() => reg.update(), 60 * 1000);
+        reg.update();
+      });
+    });
+    // Quando um novo SW assumir o controle, recarregar para pegar a versão nova
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
