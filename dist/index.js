@@ -16770,6 +16770,7 @@ var fiscalNotesRouter = router({
   // Relatório-planilha: notas com dados da carga, local e destino
   report: protectedProcedure.input(z43.object({
     workLocationId: z43.number().optional(),
+    destinationId: z43.number().optional(),
     dateFrom: z43.string().optional(),
     dateTo: z43.string().optional(),
     search: z43.string().optional(),
@@ -16797,6 +16798,7 @@ var fiscalNotesRouter = router({
       cargoVolumeM3: cargoLoads.volumeM3,
       cargoWeightNetKg: cargoLoads.weightNetKg,
       cargoDestination: cargoLoads.destination,
+      cargoDestinationId: cargoLoads.destinationId,
       cargoVehiclePlate: cargoLoads.vehiclePlate,
       cargoDriverName: cargoLoads.driverName,
       cargoStatus: cargoLoads.status,
@@ -16810,6 +16812,7 @@ var fiscalNotesRouter = router({
     }).from(fiscalNotes).leftJoin(cargoLoads, eq41(fiscalNotes.usedByCargoId, cargoLoads.id)).leftJoin(gpsLocations, eq41(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(cargoDestinations, eq41(cargoLoads.destinationId, cargoDestinations.id)).orderBy(desc34(fiscalNotes.id)).limit(input?.limit ?? 500);
     let filtered = rows;
     if (input?.workLocationId) filtered = filtered.filter((r) => r.cargoWorkLocationId === input.workLocationId);
+    if (input?.destinationId) filtered = filtered.filter((r) => r.cargoDestinationId === input.destinationId);
     if (input?.dateFrom) filtered = filtered.filter((r) => (r.cargoDate || r.issueDate || "") >= input.dateFrom);
     if (input?.dateTo) filtered = filtered.filter((r) => (r.cargoDate || r.issueDate || "") <= input.dateTo + "T23:59:59");
     if (input?.search) {

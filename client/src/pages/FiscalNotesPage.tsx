@@ -58,6 +58,7 @@ type ReportRow = {
   cargoVolumeM3: string | null;
   cargoWeightNetKg: string | null;
   cargoDestination: string | null;
+  cargoDestinationId: number | null;
   cargoVehiclePlate: string | null;
   cargoDriverName: string | null;
   cargoStatus: string | null;
@@ -74,6 +75,7 @@ export default function FiscalNotesPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [filterType, setFilterType] = useState<"all" | "m3" | "ton">("all");
+  const [filterDestination, setFilterDestination] = useState("all");
   // Edição
   const [editingNote, setEditingNote] = useState<any | null>(null);
   const [editFile, setEditFile] = useState<File | null>(null);
@@ -84,8 +86,10 @@ export default function FiscalNotesPage() {
 
   const utils = trpc.useUtils();
   const { locations: workLocations } = useWorkLocations();
+  const { data: destinationsList = [] } = trpc.buyerClients.listActive.useQuery();
   const { data: rows = [], isLoading, refetch } = trpc.fiscalNotes.report.useQuery({
     workLocationId: filterLocation !== "all" ? Number(filterLocation) : undefined,
+    destinationId: filterDestination !== "all" ? Number(filterDestination) : undefined,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
     search: search || undefined,
@@ -205,7 +209,7 @@ export default function FiscalNotesPage() {
       </div>
 
       {/* Filtros */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
         <div className="col-span-2 md:col-span-1 relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -234,6 +238,17 @@ export default function FiscalNotesPage() {
             <SelectItem value="all">m³ e toneladas</SelectItem>
             <SelectItem value="m3">Metro Cúbico (m³)</SelectItem>
             <SelectItem value="ton">Toneladas (ton)</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterDestination} onValueChange={setFilterDestination}>
+          <SelectTrigger>
+            <SelectValue placeholder="Destino" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os destinos</SelectItem>
+            {(destinationsList as any[]).map((d: any) => (
+              <SelectItem key={d.id} value={String(d.id)}>{d.nickname || d.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="Data início" />

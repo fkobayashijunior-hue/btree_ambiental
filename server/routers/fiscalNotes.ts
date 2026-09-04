@@ -225,6 +225,7 @@ export const fiscalNotesRouter = router({
   report: protectedProcedure
     .input(z.object({
       workLocationId: z.number().optional(),
+      destinationId: z.number().optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
       search: z.string().optional(),
@@ -254,6 +255,7 @@ export const fiscalNotesRouter = router({
           cargoVolumeM3: cargoLoads.volumeM3,
           cargoWeightNetKg: cargoLoads.weightNetKg,
           cargoDestination: cargoLoads.destination,
+          cargoDestinationId: cargoLoads.destinationId,
           cargoVehiclePlate: cargoLoads.vehiclePlate,
           cargoDriverName: cargoLoads.driverName,
           cargoStatus: cargoLoads.status,
@@ -273,6 +275,7 @@ export const fiscalNotesRouter = router({
         .limit(input?.limit ?? 500);
       let filtered: any[] = rows;
       if (input?.workLocationId) filtered = filtered.filter((r: any) => r.cargoWorkLocationId === input.workLocationId);
+      if (input?.destinationId) filtered = filtered.filter((r: any) => r.cargoDestinationId === input.destinationId);
       if (input?.dateFrom) filtered = filtered.filter((r: any) => (r.cargoDate || r.issueDate || '') >= input.dateFrom!);
       if (input?.dateTo) filtered = filtered.filter((r: any) => (r.cargoDate || r.issueDate || '') <= input.dateTo! + 'T23:59:59');
       if (input?.search) {
