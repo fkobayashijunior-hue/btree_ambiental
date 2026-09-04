@@ -141,8 +141,15 @@ export default function FiscalNotesPage() {
   }
 
   const unitOf = (r: ReportRow): "m3" | "ton" => {
+    // 1) Unidade gravada na própria ação (definida no momento da criação da carga)
+    if (r.quantityType === "m3" || r.quantityType === "ton") return r.quantityType;
+    // 2) Tipo de preço do destino cadastrado (JOIN pelo destinationId da carga)
     if (r.destinationPriceType === "m3" || r.destinationPriceType === "ton") return r.destinationPriceType;
-    return r.quantityType;
+    // 3) Fallback por nome do destino (registros antigos sem vínculo com cadastro)
+    const dn = (r.destinationName || r.destinationNickname || r.cargoDestination || "").toUpperCase();
+    if (dn.includes("SONOCO")) return "ton";
+    if (dn) return "m3";
+    return "ton";
   };
   // Filtrar por tipo (m3/ton) — os demais filtros já vão ao backend
   const filtered = useMemo(() => {
