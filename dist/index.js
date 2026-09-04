@@ -16812,7 +16812,24 @@ var fiscalNotesRouter = router({
     }).from(fiscalNotes).leftJoin(cargoLoads, eq41(fiscalNotes.usedByCargoId, cargoLoads.id)).leftJoin(gpsLocations, eq41(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(cargoDestinations, eq41(cargoLoads.destinationId, cargoDestinations.id)).orderBy(desc34(fiscalNotes.id)).limit(input?.limit ?? 500);
     let filtered = rows;
     if (input?.workLocationId) filtered = filtered.filter((r) => r.cargoWorkLocationId === input.workLocationId);
-    if (input?.destinationId) filtered = filtered.filter((r) => r.cargoDestinationId === input.destinationId);
+    if (input?.destinationId) {
+      const rawId = input.destinationId;
+      const realId = rawId >= 1e4 ? rawId - 1e4 : rawId;
+      let destName = "", destNick = "";
+      try {
+        const [d] = await db.select({ name: cargoDestinations.name, nickname: cargoDestinations.nickname }).from(cargoDestinations).where(eq41(cargoDestinations.id, realId)).limit(1);
+        destName = (d?.name || "").toUpperCase();
+        destNick = (d?.nickname || "").toUpperCase();
+      } catch {
+      }
+      const keys = [destName, destNick].filter((k) => k && k.trim());
+      filtered = filtered.filter((r) => {
+        if (r.cargoDestinationId === rawId || r.cargoDestinationId === realId) return true;
+        const txt = (r.cargoDestination || r.destinationName || r.destinationNickname || "").toUpperCase();
+        if (!txt) return false;
+        return keys.some((k) => txt === k || txt.startsWith(k + " \u2014") || txt.startsWith(k + " -") || txt.includes(k));
+      });
+    }
     if (input?.dateFrom) filtered = filtered.filter((r) => (r.cargoDate || r.issueDate || "") >= input.dateFrom);
     if (input?.dateTo) filtered = filtered.filter((r) => (r.cargoDate || r.issueDate || "") <= input.dateTo + "T23:59:59");
     if (input?.search) {

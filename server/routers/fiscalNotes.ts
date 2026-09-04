@@ -275,7 +275,26 @@ export const fiscalNotesRouter = router({
         .limit(input?.limit ?? 500);
       let filtered: any[] = rows;
       if (input?.workLocationId) filtered = filtered.filter((r: any) => r.cargoWorkLocationId === input.workLocationId);
-      if (input?.destinationId) filtered = filtered.filter((r: any) => r.cargoDestinationId === input.destinationId);
+      if (input?.destinationId) {
+        // Destinos/compradores estão unificados em cargo_destinations; cargas novas gravam
+        // destination_id com offset 10000+, antigas gravam id puro ou apenas o nome no texto.
+        const rawId = input.destinationId;
+        const realId = rawId >= 10000 ? rawId - 10000 : rawId;
+        let destName = '', destNick = '';
+        try {
+          const [d] = await db.select({ name: cargoDestinations.name, nickname: cargoDestinations.nickname })
+            .from(cargoDestinations).where(eq(cargoDestinations.id, realId)).limit(1);
+          destName = (d?.name || '').toUpperCase();
+          destNick = (d?.nickname || '').toUpperCase();
+        } catch { /* silent */ }
+        const keys = [destName, destNick].filter(k => k && k.trim());
+        filtered = filtered.filter((r: any) => {
+          if (r.cargoDestinationId === rawId || r.cargoDestinationId === realId) return true;
+          const txt = (r.cargoDestination || r.destinationName || r.destinationNickname || '').toUpperCase();
+          if (!txt) return false;
+          return keys.some(k => txt === k || txt.startsWith(k + ' —') || txt.startsWith(k + ' -') || txt.includes(k));
+        });
+      }
       if (input?.dateFrom) filtered = filtered.filter((r: any) => (r.cargoDate || r.issueDate || '') >= input.dateFrom!);
       if (input?.dateTo) filtered = filtered.filter((r: any) => (r.cargoDate || r.issueDate || '') <= input.dateTo! + 'T23:59:59');
       if (input?.search) {
