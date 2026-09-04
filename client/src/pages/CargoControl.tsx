@@ -1497,7 +1497,7 @@ export default function CargoControl() {
     }
         // Auto-selecionar local de trabalho se há apenas 1 disponível
     const autoWorkLocationId = workLocations.length === 1 ? String(workLocations[0].id) : "";
-    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", invoiceUrl: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
     setPendingPhotos([]);
     setInvoiceFile(null);
   };
@@ -1522,6 +1522,7 @@ export default function CargoControl() {
       destination: cargo.destination || "",
       invoiceNumber: cargo.invoiceNumber || "",
       noteQuantity: (cargo as any).noteQuantity || "",
+      invoiceUrl: (cargo as any).invoiceUrl || "",
       clientId: cargo.clientId || 0,
       clientName: cargo.clientName || "",
       notes: cargo.notes || "",
@@ -2719,6 +2720,13 @@ export default function CargoControl() {
                         <div className="flex items-center justify-center gap-2 text-sm text-green-600">
                           <CheckCircle2 className="w-4 h-4" />
                           {invoiceFile.name}
+                        </div>
+                      ) : form.invoiceUrl ? (
+                        <div className="flex items-center justify-center gap-2 text-sm text-blue-600">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <a href={form.invoiceUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                            Nota anexada
+                          </a>
                         </div>
                       ) : (
                         <div className="text-sm text-muted-foreground flex items-center justify-center gap-2">
