@@ -1546,7 +1546,7 @@ export default function CargoControl() {
     let invoiceFileBase64: string | undefined;
     let invoiceFileName: string | undefined;
     let invoiceFileMimeType: string | undefined;
-    if (!editId && invoiceFile) {
+    if (invoiceFile) {
       try {
         // FileReader é mais rápido e confiável que byte-a-byte para PDFs grandes
         invoiceFileBase64 = await new Promise<string>((resolve, reject) => {
@@ -1581,6 +1581,10 @@ export default function CargoControl() {
       thirdPartyCost: form.thirdPartyCost || undefined,
     };
     if (editId) {
+      // Se houver arquivo de NF selecionado, faz upload antes de atualizar
+      if (invoiceFileBase64 && invoiceFileName) {
+        uploadDocMutation.mutate({ cargoId: editId, docBase64: invoiceFileBase64, docType: 'invoice' });
+      }
       updateMutation.mutate({ id: editId, ...data });
     } else {
       if (!isOnline) {
@@ -2703,7 +2707,7 @@ export default function CargoControl() {
                   />
                   <p className="text-[10px] text-muted-foreground mt-0.5">Se a nota tiver quantidade diferente da carga, informe aqui. Deixe em branco para usar o valor da carga.</p>
                 </div>
-                {!editId && (
+                
                   <div>
                     <Label>Upload da NF (PDF ou imagem, opcional)</Label>
                     <div
@@ -2730,7 +2734,7 @@ export default function CargoControl() {
                       onChange={e => setInvoiceFile(e.target.files?.[0] || null)}
                     />
                   </div>
-                )}
+                
                 {invoiceDuplicate?.exists && (
                   <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3" />

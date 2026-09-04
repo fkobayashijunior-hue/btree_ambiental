@@ -16758,7 +16758,8 @@ var fiscalNotesRouter = router({
       workLocationName: gpsLocations.name,
       // Destino cadastrado
       destinationName: cargoDestinations.name,
-      destinationNickname: cargoDestinations.nickname
+      destinationNickname: cargoDestinations.nickname,
+      destinationPriceType: cargoDestinations.priceType
     }).from(fiscalNotes).leftJoin(cargoLoads, eq41(fiscalNotes.usedByCargoId, cargoLoads.id)).leftJoin(gpsLocations, eq41(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(cargoDestinations, eq41(cargoLoads.destinationId, cargoDestinations.id)).orderBy(desc34(fiscalNotes.id)).limit(input?.limit ?? 500);
     let filtered = rows;
     if (input?.workLocationId) filtered = filtered.filter((r) => r.cargoWorkLocationId === input.workLocationId);

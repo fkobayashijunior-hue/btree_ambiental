@@ -263,6 +263,7 @@ export const fiscalNotesRouter = router({
           // Destino cadastrado
           destinationName: cargoDestinations.name,
           destinationNickname: cargoDestinations.nickname,
+          destinationPriceType: cargoDestinations.priceType,
         })
         .from(fiscalNotes)
         .leftJoin(cargoLoads, eq(fiscalNotes.usedByCargoId, cargoLoads.id))

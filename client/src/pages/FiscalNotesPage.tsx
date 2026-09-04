@@ -65,6 +65,7 @@ type ReportRow = {
   workLocationName: string | null;
   destinationName: string | null;
   destinationNickname: string | null;
+  destinationPriceType: string | null;
 };
 
 export default function FiscalNotesPage() {
@@ -142,7 +143,7 @@ export default function FiscalNotesPage() {
   // Filtrar por tipo (m3/ton) — os demais filtros já vão ao backend
   const filtered = useMemo(() => {
     let list = rows as ReportRow[];
-    if (filterType !== "all") list = list.filter(r => r.quantityType === filterType);
+    if (filterType !== "all") list = list.filter(r => unitOf(r) === filterType);
     return list;
   }, [rows, filterType]);
 
@@ -153,7 +154,7 @@ export default function FiscalNotesPage() {
       const noteQty = parseFloat(String(r.noteQuantity).replace(",", ".")) || 0;
       const vol = parseFloat(String(r.cargoVolumeM3 || "0").replace(",", ".")) || 0;
       const pesoTon = (parseFloat(String(r.cargoWeightNetKg || "0").replace(",", ".")) || 0) / 1000;
-      if (r.quantityType === "m3") {
+      if (unitOf(r) === "m3") {
         m3Note += noteQty;
         m3Real += vol;
       } else {
@@ -164,8 +165,13 @@ export default function FiscalNotesPage() {
     return { m3Note, m3Real, tonNote, tonReal, m3Diff: m3Real - m3Note, tonDiff: tonReal - tonNote };
   }, [filtered]);
 
+  // Unidade correta: usa o priceType do destino (ton para SONOCO, m3 para outros)
+  const unitOf = (r: ReportRow): "m3" | "ton" => {
+    if (r.destinationPriceType === "m3" || r.destinationPriceType === "ton") return r.destinationPriceType;
+    return r.quantityType;
+  };
   const realQtyOf = (r: ReportRow) => {
-    if (r.quantityType === "m3") return parseFloat(String(r.cargoVolumeM3 || "0").replace(",", ".")) || 0;
+    if (unitOf(r) === "m3") return parseFloat(String(r.cargoVolumeM3 || "0").replace(",", ".")) || 0;
     return (parseFloat(String(r.cargoWeightNetKg || "0").replace(",", ".")) || 0) / 1000;
   };
   const noteQtyOf = (r: ReportRow) => parseFloat(String(r.noteQuantity).replace(",", ".")) || 0;
@@ -299,7 +305,7 @@ export default function FiscalNotesPage() {
                 const noteQty = noteQtyOf(r);
                 const realQty = realQtyOf(r);
                 const diff = realQty - noteQty;
-                const unit = r.quantityType === "m3" ? "m³" : "ton";
+                const unit = unitOf(r) === "m3" ? "m³" : "ton";
                 const isUsed = r.noteStatus === "used";
                 return (
                   <tr key={r.noteId} className="border-b hover:bg-green-50/50">
@@ -327,10 +333,10 @@ export default function FiscalNotesPage() {
                       ) : "—"}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap max-w-[180px] truncate" title={destinoOf(r)}>{destinoOf(r)}</td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap font-medium">{fmtNum(noteQty, r.quantityType === "m3" ? 3 : 2)} {unit}</td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">{r.cargoId ? `${fmtNum(realQty, r.quantityType === "m3" ? 3 : 2)} ${unit}` : "—"}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap font-medium">{fmtNum(noteQty, unitOf(r) === "m3" ? 3 : 2)} {unit}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">{r.cargoId ? `${fmtNum(realQty, unitOf(r) === "m3" ? 3 : 2)} ${unit}` : "—"}</td>
                     <td className={`px-3 py-2 text-right whitespace-nowrap font-semibold ${diff > 0.001 ? "text-green-700" : diff < -0.001 ? "text-red-700" : "text-gray-500"}`}>
-                      {r.cargoId ? `${diff > 0 ? "+" : ""}${fmtNum(diff, r.quantityType === "m3" ? 3 : 2)} ${unit}` : "—"}
+                      {r.cargoId ? `${diff > 0 ? "+" : ""}${fmtNum(diff, unitOf(r) === "m3" ? 3 : 2)} ${unit}` : "—"}
                     </td>
                     <td className="px-3 py-2 text-center whitespace-nowrap">
                       <Badge variant={isUsed ? "secondary" : "default"} className={`text-xs ${!isUsed ? "bg-green-100 text-green-700 border-green-200" : ""}`}>
