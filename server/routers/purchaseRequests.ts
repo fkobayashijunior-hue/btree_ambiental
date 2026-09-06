@@ -112,7 +112,7 @@ export const purchaseRequestsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [rows] = await db.execute<any[]>(`
+      const [rows] = await db.execute(sql`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
           pr.link AS linkUrl,
@@ -141,9 +141,9 @@ export const purchaseRequestsRouter = router({
         LEFT JOIN equipment eqp ON pr.equipment_id = eqp.id
         LEFT JOIN users req_user ON pr.requested_by = req_user.id
         LEFT JOIN users resp_user ON pr.responded_by = resp_user.id
-        WHERE pr.id = ?
+        WHERE pr.id = ${input.id}
         LIMIT 1
-      `);
+      `) as any;
       const row = (rows as any[])[0];
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
       const normalized = normalizeRow(row);

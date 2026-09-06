@@ -14064,7 +14064,7 @@ var purchaseRequestsRouter = router({
   getById: protectedProcedure.input(z35.object({ id: z35.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.execute(`
+    const [rows] = await db.execute(sql21`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
           pr.link AS linkUrl,
@@ -14093,7 +14093,7 @@ var purchaseRequestsRouter = router({
         LEFT JOIN equipment eqp ON pr.equipment_id = eqp.id
         LEFT JOIN users req_user ON pr.requested_by = req_user.id
         LEFT JOIN users resp_user ON pr.responded_by = resp_user.id
-        WHERE pr.id = ?
+        WHERE pr.id = ${input.id}
         LIMIT 1
       `);
     const row = rows[0];
