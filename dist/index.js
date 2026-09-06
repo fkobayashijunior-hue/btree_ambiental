@@ -14059,6 +14059,15 @@ var purchaseRequestsRouter = router({
     if (input?.status) filtered = filtered.filter((r) => r.status === input.status);
     if (input?.urgency) filtered = filtered.filter((r) => r.urgency === input.urgency);
     if (input?.categoryId) filtered = filtered.filter((r) => r.categoryId === input.categoryId);
+    const allItems = await db.select().from(purchaseRequestItems);
+    const byReq = {};
+    for (const it of allItems) {
+      if (!byReq[it.requestId]) byReq[it.requestId] = [];
+      byReq[it.requestId].push(it);
+    }
+    for (const r of filtered) {
+      r.items = byReq[r.id] || [];
+    }
     return filtered;
   }),
   getById: protectedProcedure.input(z35.object({ id: z35.number() })).query(async ({ input }) => {

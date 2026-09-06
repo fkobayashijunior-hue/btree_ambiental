@@ -321,15 +321,22 @@ export default function PurchaseRequestsPage() {
             <table className="w-full text-sm min-w-[860px]">
               <thead>
                 <tr className="bg-green-700 text-white">
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Cód.</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold">Prioridade</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold">Solicitação</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Itens</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Fotos</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Link</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold">Equipamento</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold">Categoria</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold">Solicitante</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">Data</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Data solicitação</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold">Status</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold">Responsável</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Data compra</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold">Entrega prevista</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Recebido em</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Observações</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -342,6 +349,7 @@ export default function PurchaseRequestsPage() {
                       className="border-b hover:bg-green-50/60 cursor-pointer"
                       onClick={() => setLocation(`/compras/${req.id}`)}
                     >
+                      <td className="px-3 py-2 whitespace-nowrap font-mono font-bold text-green-700">#{req.id}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <Badge className={`text-xs px-2 py-0.5 flex items-center gap-1 w-fit ${URGENCY_COLORS[req.urgency]}`}>
                           {URGENCY_ICONS[req.urgency]}
@@ -352,6 +360,9 @@ export default function PurchaseRequestsPage() {
                         <div className="font-medium text-gray-900">{req.title}</div>
                         {req.description && <div className="text-xs text-gray-500 line-clamp-1">{req.description}</div>}
                       </td>
+                      <td className="px-3 py-2 text-xs text-gray-600">{(req.items && req.items.length > 0) ? req.items.map((it: any) => `${it.quantity} ${it.unit} ${it.name}`).join('; ') : '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{(() => { try { const imgs = req.images ? JSON.parse(req.images) : []; return imgs.length > 0 ? `${imgs.length} foto(s)` : '—'; } catch { return '—'; } })()}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{req.linkUrl ? <a href={req.linkUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-blue-600 hover:underline">Abrir</a> : '—'}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs">
                         {req.equipmentName ? `${req.equipmentName}${req.equipmentPlate ? ` (${req.equipmentPlate})` : ''}` : '—'}
                       </td>
@@ -364,7 +375,10 @@ export default function PurchaseRequestsPage() {
                         </Badge>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs">{req.respondedByName || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{req.purchaseDate ? new Date(req.purchaseDate).toLocaleDateString('pt-BR') : '—'}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs">{req.expectedArrival ? new Date(req.expectedArrival).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{req.receivedDate ? new Date(req.receivedDate).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px] truncate">{req.notes || '—'}</td>
                       <td className="px-3 py-2 text-right"><ChevronRight className="w-4 h-4 text-gray-300 inline" /></td>
                     </tr>
                   );

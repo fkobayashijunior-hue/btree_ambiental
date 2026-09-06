@@ -104,6 +104,16 @@ export const purchaseRequestsRouter = router({
       if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
       if (input?.urgency) filtered = filtered.filter((r: any) => r.urgency === input.urgency);
       if (input?.categoryId) filtered = filtered.filter((r: any) => r.categoryId === input.categoryId);
+      // Anexa itens de cada solicitação para exibição na planilha
+      const allItems = await db.select().from(purchaseRequestItems);
+      const byReq: Record<number, any[]> = {};
+      for (const it of allItems as any[]) {
+        if (!byReq[it.requestId]) byReq[it.requestId] = [];
+        byReq[it.requestId].push(it);
+      }
+      for (const r of filtered) {
+        (r as any).items = byReq[r.id] || [];
+      }
       return filtered;
     }),
 
