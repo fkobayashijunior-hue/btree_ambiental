@@ -2290,7 +2290,7 @@ var geofenceCheck_exports = {};
 __export(geofenceCheck_exports, {
   geofenceCheckHandler: () => geofenceCheckHandler
 });
-import { eq as eq42, and as and25, sql as sql27 } from "drizzle-orm";
+import { eq as eq42, and as and25, sql as sql28 } from "drizzle-orm";
 function traccarHeaders2() {
   if (TRACCAR_TOKEN2) {
     return {
@@ -2366,7 +2366,7 @@ async function geofenceCheckHandler(req, res) {
   const log = [];
   let processed = 0;
   try {
-    const activeGeofences = await db.select().from(geofences).where(and25(eq42(geofences.isActive, 1), sql27`${geofences.traccarDeviceId} IS NOT NULL`));
+    const activeGeofences = await db.select().from(geofences).where(and25(eq42(geofences.isActive, 1), sql28`${geofences.traccarDeviceId} IS NOT NULL`));
     for (const geo of activeGeofences) {
       if (!geo.traccarDeviceId) continue;
       const pos = await getDevicePosition2(geo.traccarDeviceId);
@@ -13949,7 +13949,7 @@ init_db();
 init_schema();
 import { z as z35 } from "zod";
 import { TRPCError as TRPCError24 } from "@trpc/server";
-import { eq as eq34 } from "drizzle-orm";
+import { eq as eq34, sql as sql21 } from "drizzle-orm";
 var statusEnum = z35.enum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
 var urgencyEnum = z35.enum(["baixa", "media", "alta", "critica"]);
 var URGENCY_TO_DB = {
@@ -14118,21 +14118,10 @@ var purchaseRequestsRouter = router({
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     let result;
     try {
-      [result] = await db.execute(
-        `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW(), NOW())`,
-        [
-          input.title,
-          input.description || null,
-          input.linkUrl || null,
-          input.categoryId || null,
-          input.equipmentId || null,
-          URGENCY_TO_DB[input.urgency || "media"] || "medium",
-          Date.now(),
-          ctx.user.id,
-          input.notes || null
-        ]
-      );
+      [result] = await db.execute(sql21`
+          INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+          VALUES (${input.title}, ${input.description || null}, ${input.linkUrl || null}, ${input.categoryId || null}, ${input.equipmentId || null}, 'pending', ${URGENCY_TO_DB[input.urgency || "media"] || "medium"}, ${Date.now()}, ${ctx.user.id}, ${input.notes || null}, NOW(), NOW())
+        `);
     } catch (err) {
       const cause = err?.cause?.message || err?.message || String(err);
       console.error("[purchaseRequests.create] ERRO:", cause);
@@ -14166,48 +14155,23 @@ var purchaseRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const sets = [];
-    const params = [];
-    if (input.title !== void 0) {
-      sets.push("title = ?");
-      params.push(input.title);
-    }
-    if (input.description !== void 0) {
-      sets.push("description = ?");
-      params.push(input.description);
-    }
-    if (input.linkUrl !== void 0) {
-      sets.push("link = ?");
-      params.push(input.linkUrl);
-    }
-    if (input.categoryId !== void 0) {
-      sets.push("category_id = ?");
-      params.push(input.categoryId);
-    }
-    if (input.equipmentId !== void 0) {
-      sets.push("equipment_id = ?");
-      params.push(input.equipmentId);
-    }
-    if (input.urgency !== void 0) {
-      sets.push("urgency = ?");
-      params.push(URGENCY_TO_DB[input.urgency] || "medium");
-    }
-    if (input.notes !== void 0) {
-      sets.push("notes = ?");
-      params.push(input.notes);
-    }
+    if (input.title !== void 0) sets.push(sql21`title = ${input.title}`);
+    if (input.description !== void 0) sets.push(sql21`description = ${input.description}`);
+    if (input.linkUrl !== void 0) sets.push(sql21`link = ${input.linkUrl}`);
+    if (input.categoryId !== void 0) sets.push(sql21`category_id = ${input.categoryId}`);
+    if (input.equipmentId !== void 0) sets.push(sql21`equipment_id = ${input.equipmentId}`);
+    if (input.urgency !== void 0) sets.push(sql21`urgency = ${URGENCY_TO_DB[input.urgency] || "medium"}`);
+    if (input.notes !== void 0) sets.push(sql21`notes = ${input.notes}`);
     if (sets.length === 0) return { success: true };
-    sets.push("updated_at = NOW()");
-    params.push(input.id);
-    await db.execute(`UPDATE purchase_requests SET ${sets.join(", ")} WHERE id = ?`, params);
+    sets.push(sql21`updated_at = NOW()`);
+    const setSql = sql21.join(sets, sql21`, `);
+    await db.execute(sql21`UPDATE purchase_requests SET ${setSql} WHERE id = ${input.id}`);
     return { success: true };
   }),
   markRead: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
-      `UPDATE purchase_requests SET read_at = ?, status = 'lida', responded_by = ?, responded_at = NOW(), updated_at = NOW() WHERE id = ?`,
-      [Date.now(), ctx.user.id, input.id]
-    );
+    await db.execute(sql21`UPDATE purchase_requests SET read_at = ${Date.now()}, status = 'lida', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   // Responsável responde a solicitação (parecer) — também marca como lida
@@ -14217,15 +14181,12 @@ var purchaseRequestsRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
-      `UPDATE purchase_requests
-         SET response_notes = ?, responded_by = ?, responded_at = NOW(),
-             read_at = COALESCE(read_at, ?),
+    await db.execute(sql21`UPDATE purchase_requests
+         SET response_notes = ${input.responseNotes}, responded_by = ${ctx.user.id}, responded_at = NOW(),
+             read_at = COALESCE(read_at, ${Date.now()}),
              status = CASE WHEN status IN ('pendente','pending') THEN 'lida' ELSE status END,
              updated_at = NOW()
-         WHERE id = ?`,
-      [input.responseNotes, ctx.user.id, Date.now(), input.id]
-    );
+         WHERE id = ${input.id}`);
     return { success: true };
   }),
   // Negar solicitação com motivo
@@ -14235,10 +14196,7 @@ var purchaseRequestsRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
-      `UPDATE purchase_requests SET status = 'negada', denial_reason = ?, responded_by = ?, responded_at = NOW(), updated_at = NOW() WHERE id = ?`,
-      [input.denialReason, ctx.user.id, input.id]
-    );
+    await db.execute(sql21`UPDATE purchase_requests SET status = 'negada', denial_reason = ${input.denialReason}, responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   markPurchased: protectedProcedure.input(z35.object({
@@ -14250,31 +14208,25 @@ var purchaseRequestsRouter = router({
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const purchaseMs = input.purchaseDate ? new Date(input.purchaseDate.replace(" ", "T")).getTime() : Date.now();
     const arrivalMs = input.expectedArrival ? new Date(input.expectedArrival.replace(" ", "T")).getTime() : null;
-    await db.execute(
-      `UPDATE purchase_requests SET purchased_at = ?, expected_arrival = ?, status = 'comprada', responded_by = ?, responded_at = NOW(), updated_at = NOW() WHERE id = ?`,
-      [purchaseMs, arrivalMs, ctx.user.id, input.id]
-    );
+    await db.execute(sql21`UPDATE purchase_requests SET purchased_at = ${purchaseMs}, expected_arrival = ${arrivalMs}, status = 'comprada', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   markReceived: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
-      `UPDATE purchase_requests SET received_at = ?, status = 'recebida', updated_at = NOW() WHERE id = ?`,
-      [Date.now(), input.id]
-    );
+    await db.execute(sql21`UPDATE purchase_requests SET received_at = ${Date.now()}, status = 'recebida', updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   confirmItems: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(`UPDATE purchase_request_items SET confirmed = 1 WHERE request_id = ?`, [input.id]);
+    await db.execute(sql21`UPDATE purchase_request_items SET confirmed = 1 WHERE request_id = ${input.id}`);
     return { success: true };
   }),
   toggleItemConfirm: protectedProcedure.input(z35.object({ itemId: z35.number(), confirmed: z35.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(`UPDATE purchase_request_items SET confirmed = ? WHERE id = ?`, [input.confirmed ? 1 : 0, input.itemId]);
+    await db.execute(sql21`UPDATE purchase_request_items SET confirmed = ${input.confirmed ? 1 : 0} WHERE id = ${input.itemId}`);
     return { success: true };
   }),
   uploadImage: protectedProcedure.input(z35.object({
@@ -14288,7 +14240,7 @@ var purchaseRequestsRouter = router({
     const ext = input.mimeType.split("/")[1] || "jpg";
     const key = `purchase-requests/${input.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { url } = await storagePut(key, buffer, input.mimeType);
-    const [rows] = await db.execute(`SELECT images FROM purchase_requests WHERE id = ?`, [input.id]);
+    const [rows] = await db.execute(sql21`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
     const current = rows[0]?.images;
     let images = [];
     try {
@@ -14297,13 +14249,13 @@ var purchaseRequestsRouter = router({
       images = [];
     }
     images.push(url);
-    await db.execute(`UPDATE purchase_requests SET images = ?, updated_at = NOW() WHERE id = ?`, [JSON.stringify(images), input.id]);
+    await db.execute(sql21`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { url, success: true };
   }),
   removeImage: protectedProcedure.input(z35.object({ id: z35.number(), imageUrl: z35.string() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.execute(`SELECT images FROM purchase_requests WHERE id = ?`, [input.id]);
+    const [rows] = await db.execute(sql21`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
     const current = rows[0]?.images;
     let images = [];
     try {
@@ -14312,14 +14264,14 @@ var purchaseRequestsRouter = router({
       images = [];
     }
     images = images.filter((u) => u !== input.imageUrl);
-    await db.execute(`UPDATE purchase_requests SET images = ?, updated_at = NOW() WHERE id = ?`, [JSON.stringify(images), input.id]);
+    await db.execute(sql21`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   delete: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(`DELETE FROM purchase_request_items WHERE request_id = ?`, [input.id]);
-    await db.execute(`DELETE FROM purchase_requests WHERE id = ?`, [input.id]);
+    await db.execute(sql21`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
+    await db.execute(sql21`DELETE FROM purchase_requests WHERE id = ${input.id}`);
     return { success: true };
   })
 });
@@ -14425,7 +14377,7 @@ init_db();
 init_schema();
 init_notification();
 import { z as z37 } from "zod";
-import { eq as eq36, desc as desc29, sql as sql22 } from "drizzle-orm";
+import { eq as eq36, desc as desc29, sql as sql23 } from "drizzle-orm";
 import { TRPCError as TRPCError26 } from "@trpc/server";
 import crypto from "crypto";
 var quotationRequestsRouter = router({
@@ -14531,7 +14483,7 @@ var quotationRequestsRouter = router({
       if (!resp.supplierName?.trim()) continue;
       const trimmedName = resp.supplierName.trim();
       const existingRows = await db.execute(
-        sql22`SELECT id, company_name, phone, whatsapp, email FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
+        sql23`SELECT id, company_name, phone, whatsapp, email FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
       );
       const existing = existingRows[0];
       if (existing.length === 0) {
@@ -14561,7 +14513,7 @@ var quotationRequestsRouter = router({
     }
     const catTitle = req.title.trim();
     const existingCatRows = await db.execute(
-      sql22`SELECT id, name FROM purchase_categories WHERE name = ${catTitle} LIMIT 1`
+      sql23`SELECT id, name FROM purchase_categories WHERE name = ${catTitle} LIMIT 1`
     );
     const existingCat = existingCatRows[0];
     let categoryId;
@@ -14574,12 +14526,12 @@ var quotationRequestsRouter = router({
       const catName = req.title.trim();
       const createdById = ctx.user.id;
       const catInsResult = await db.execute(
-        sql22`INSERT INTO purchase_categories (name, color, created_by, created_at) VALUES (${catName}, ${catColor}, ${createdById}, NOW())`
+        sql23`INSERT INTO purchase_categories (name, color, created_by, created_at) VALUES (${catName}, ${catColor}, ${createdById}, NOW())`
       );
       categoryId = catInsResult[0]?.insertId ?? catInsResult?.insertId ?? 0;
       if (!categoryId) {
         const fallbackRows = await db.execute(
-          sql22`SELECT id FROM purchase_categories WHERE name = ${catName} LIMIT 1`
+          sql23`SELECT id FROM purchase_categories WHERE name = ${catName} LIMIT 1`
         );
         categoryId = fallbackRows[0][0]?.id ?? 0;
       }
@@ -14598,7 +14550,7 @@ var quotationRequestsRouter = router({
         const qQuotedAt = Date.now();
         const qCreatedBy = ctx.user.id;
         await db.execute(
-          sql22`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by, created_at) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || "1"}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy}, NOW())`
+          sql23`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by, created_at) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || "1"}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy}, NOW())`
         );
         result.catalogEntriesCreated++;
       }
@@ -15917,7 +15869,7 @@ var freightTripsRouter = router({
 init_trpc();
 init_db();
 import { z as z42 } from "zod";
-import { sql as sql24 } from "drizzle-orm";
+import { sql as sql25 } from "drizzle-orm";
 function toNum2(v) {
   if (!v) return 0;
   const s = String(v).replace(/R\$\s*/g, "").trim();
@@ -15978,7 +15930,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND vr.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND vr.date <= '${dateTo} 23:59:59'`;
       if (workLocationId) q += ` AND vr.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         const fuelTypeLabel = {
           diesel: "Diesel",
@@ -15998,7 +15950,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND mf.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND mf.date <= '${dateTo} 23:59:59'`;
       if (workLocationId) q += ` AND mf.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         const fuelTypeLabel = {
           diesel: "Diesel",
@@ -16017,7 +15969,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT mm.*, e.name as equipment_name FROM machine_maintenance mm LEFT JOIN equipment e ON mm.equipment_id = e.id WHERE 1=1`;
       if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         const cost = toNum2(r.total_cost);
         if (cost > 0) addToCategory("manutencao", "Manuten\xE7\xE3o M\xE1quinas", cost);
@@ -16029,7 +15981,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT em.*, e.name as equipment_name FROM equipment_maintenance em LEFT JOIN equipment e ON em.equipment_id = e.id WHERE 1=1`;
       if (dateFrom) q += ` AND em.performed_at >= '${dateFrom}'`;
       if (dateTo) q += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         const cost = toNum2(r.cost) + toNum2(r.labor_cost);
         if (cost > 0) addToCategory("manutencao", "Manuten\xE7\xE3o Equipamentos", cost);
@@ -16038,7 +15990,7 @@ var financialConsolidatedRouter = router({
       console.error("equipment_maintenance:", e);
     }
     try {
-      const [rows] = await db.execute(sql24.raw(`SELECT mp.*, em.performed_at FROM maintenance_parts mp LEFT JOIN equipment_maintenance em ON mp.maintenance_id = em.id WHERE 1=1`));
+      const [rows] = await db.execute(sql25.raw(`SELECT mp.*, em.performed_at FROM maintenance_parts mp LEFT JOIN equipment_maintenance em ON mp.maintenance_id = em.id WHERE 1=1`));
       for (const r of rows) {
         const cost = toNum2(r.total_cost);
         if (cost > 0) addToCategory("pecas", "Pe\xE7as de Manuten\xE7\xE3o", cost);
@@ -16050,7 +16002,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT cpm.*, cp.name as part_name FROM chainsaw_part_movements cpm LEFT JOIN chainsaw_parts cp ON cpm.part_id = cp.id WHERE cpm.type = 'saida'`;
       if (dateFrom) q += ` AND cpm.created_at >= '${dateFrom}'`;
       if (dateTo) q += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
         const cost = toNum2(r.unit_cost) * qty;
@@ -16063,7 +16015,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT csp.* FROM chainsaw_service_parts csp WHERE 1=1`;
       if (dateFrom) q += ` AND csp.created_at >= '${dateFrom}'`;
       if (dateTo) q += ` AND csp.created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
         const cost = toNum2(r.unit_cost) * qty;
@@ -16076,7 +16028,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT eor.*, e.name as equipment_name FROM equipment_oil_records eor LEFT JOIN equipment e ON eor.equipment_id = e.id WHERE 1=1`;
       if (dateFrom) q += ` AND eor.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND eor.date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       const oilTypeLabel = {
         hidraulico: "\xD3leo Hidr\xE1ulico",
         motor: "\xD3leo Motor",
@@ -16096,7 +16048,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       const catMap = {
         abastecimento: "combustivel",
         refeicao: "refeicao",
@@ -16126,7 +16078,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND ca.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND ca.date <= '${dateTo} 23:59:59'`;
       if (workLocationId) q += ` AND ca.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         const val = toNum2(r.daily_value);
         if (val > 0) addToCategory("folha", "Di\xE1rias Colaboradores", val);
@@ -16138,7 +16090,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT * FROM cargo_loads WHERE third_party_cost IS NOT NULL AND third_party_cost > 0`;
       if (dateFrom) q += ` AND created_at >= '${dateFrom}'`;
       if (dateTo) q += ` AND created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         addToCategory("frete", "Frete Terceirizado", toNum2(r.third_party_cost));
       }
@@ -16149,7 +16101,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT * FROM financial_entries WHERE type = 'despesa' AND status = 'confirmado' AND (auto_generated IS NULL OR auto_generated = 0)`;
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       const catMap = {
         combustivel: "combustivel",
         manutencao: "manutencao",
@@ -16203,7 +16155,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND vr.date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND vr.work_location_id = ${workLocationId}`;
         q += ` ORDER BY vr.date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         const fuelTypeLabel = {
           diesel: "Diesel",
           diesel_s10: "Diesel S10",
@@ -16238,7 +16190,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND mf.date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND mf.work_location_id = ${workLocationId}`;
         q += ` ORDER BY mf.date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         const fuelTypeLabel = {
           diesel: "Diesel",
           diesel_s10: "Diesel S10",
@@ -16267,7 +16219,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND date >= '${dateFrom}'`;
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `ee_fuel_${r.id}`,
@@ -16295,7 +16247,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
         if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY mm.date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         const typeLabel = { preventiva: "Preventiva", corretiva: "Corretiva", revisao: "Revis\xE3o" };
         for (const r of dbRows) {
           const cost = toNum2(r.total_cost);
@@ -16326,7 +16278,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND em.performed_at >= '${dateFrom}'`;
         if (dateTo) q += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY em.performed_at DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           const cost = toNum2(r.cost) + toNum2(r.labor_cost);
           if (cost > 0) {
@@ -16358,7 +16310,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND eor.date >= '${dateFrom}'`;
         if (dateTo) q += ` AND eor.date <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY eor.date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         const oilTypeLabel = {
           hidraulico: "\xD3leo Hidr\xE1ulico",
           motor: "\xD3leo Motor",
@@ -16388,7 +16340,7 @@ var financialConsolidatedRouter = router({
     }
     if (category === "pecas") {
       try {
-        const [dbRows] = await db.execute(sql24.raw(
+        const [dbRows] = await db.execute(sql25.raw(
           `SELECT mp.id, em.performed_at as date, mp.part_name, mp.quantity, mp.unit_cost, mp.total_cost,
                     e.name as equipment_name
              FROM maintenance_parts mp
@@ -16423,7 +16375,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND cpm.created_at >= '${dateFrom}'`;
         if (dateTo) q += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY cpm.created_at DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
           const cost = toNum2(r.unit_cost) * qty;
@@ -16450,7 +16402,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `ped_${r.id}`,
@@ -16474,7 +16426,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `ref_${r.id}`,
@@ -16498,7 +16450,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `st_${r.id}`,
@@ -16522,7 +16474,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `cm_${r.id}`,
@@ -16551,7 +16503,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND ca.date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND ca.work_location_id = ${workLocationId}`;
         q += ` ORDER BY ca.date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           const val = toNum2(r.daily_value);
           if (val > 0) {
@@ -16580,7 +16532,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND cl.created_at >= '${dateFrom}'`;
         if (dateTo) q += ` AND cl.created_at <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY cl.created_at DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `frete_${r.id}`,
@@ -16602,7 +16554,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND date >= '${dateFrom}'`;
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql24.raw(q));
+        const [dbRows] = await db.execute(sql25.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `fin_${r.id}`,
@@ -16655,7 +16607,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY work_location_id`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         addToLocation(r.work_location_id, getLocationName(r.work_location_id), "Combust\xEDvel", toNum2(String(r.total)));
       }
@@ -16667,7 +16619,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY work_location_id`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         addToLocation(r.work_location_id, getLocationName(r.work_location_id), "Combust\xEDvel", toNum2(String(r.total)));
       }
@@ -16679,7 +16631,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY work_location_id, category`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       const catMap = {
         abastecimento: "Combust\xEDvel",
         refeicao: "Refei\xE7\xE3o",
@@ -16700,7 +16652,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY work_location_id, location_name`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         const locName = r.location_name || getLocationName(r.work_location_id);
         addToLocation(r.work_location_id, locName, "Folha de Pagamento", toNum2(String(r.total)));
@@ -16713,7 +16665,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY e.client_id`;
-      const [rows] = await db.execute(sql24.raw(q));
+      const [rows] = await db.execute(sql25.raw(q));
       for (const r of rows) {
         addToLocation(r.client_id, getLocationName(r.client_id), "Manuten\xE7\xE3o", toNum2(String(r.total)));
       }
@@ -16735,11 +16687,11 @@ init_db();
 init_schema();
 init_cloudinary();
 import { z as z43 } from "zod";
-import { desc as desc33, eq as eq41, and as and24, sql as sql25 } from "drizzle-orm";
+import { desc as desc33, eq as eq41, and as and24, sql as sql26 } from "drizzle-orm";
 async function getNextActionCode(db) {
   if (!db) return "AC-00001";
   try {
-    const [row] = await db.execute(sql25`
+    const [row] = await db.execute(sql26`
       SELECT action_code FROM fiscal_notes ORDER BY id DESC LIMIT 1
     `);
     const rows = row;
@@ -16988,7 +16940,7 @@ var fiscalNotesRouter = router({
     const db = await getDb();
     if (!db) return { total: 0, available: 0, used: 0, m3Available: 0, tonAvailable: 0 };
     try {
-      const [rows] = await db.execute(sql25`
+      const [rows] = await db.execute(sql26`
         SELECT
           COUNT(*) as total,
           SUM(status = 'available') as available,
@@ -17015,7 +16967,7 @@ var fiscalNotesRouter = router({
 init_trpc();
 init_db();
 import { z as z44 } from "zod";
-import { sql as sql26 } from "drizzle-orm";
+import { sql as sql27 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
   pagamentosPendentes: {
@@ -17062,7 +17014,7 @@ var DEFAULT_CLIENT_CONFIG = Object.fromEntries(
   CLIENT_NOTIF_KEYS.map((k) => [k, { enabled: false, clientIds: [] }])
 );
 async function ensureTable(db) {
-  await db.execute(sql26`
+  await db.execute(sql27`
     CREATE TABLE IF NOT EXISTS notification_settings (
       \`key\` VARCHAR(100) PRIMARY KEY,
       value JSON NOT NULL,
@@ -17071,7 +17023,7 @@ async function ensureTable(db) {
   `);
 }
 async function getSetting(db, key) {
-  const rows = await db.execute(sql26`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
+  const rows = await db.execute(sql27`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
   const data = Array.isArray(rows[0]) ? rows[0] : rows;
   if (!data || data.length === 0) return null;
   const val = data[0]?.value;
@@ -17080,7 +17032,7 @@ async function getSetting(db, key) {
 }
 async function setSetting(db, key, value) {
   const json = JSON.stringify(value);
-  await db.execute(sql26`
+  await db.execute(sql27`
     INSERT INTO notification_settings (\`key\`, value) VALUES (${key}, ${json})
     ON DUPLICATE KEY UPDATE value = ${json}
   `);
@@ -17105,14 +17057,14 @@ var notificationSettingsRouter = router({
     const clientConfig = storedClientConfig ? { ...DEFAULT_CLIENT_CONFIG, ...storedClientConfig } : DEFAULT_CLIENT_CONFIG;
     let collaborators5 = [];
     try {
-      const rows = await db.execute(sql26`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
+      const rows = await db.execute(sql27`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
       const data = Array.isArray(rows[0]) ? rows[0] : rows;
       collaborators5 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
     }
     let clients3 = [];
     try {
-      const rows = await db.execute(sql26`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
+      const rows = await db.execute(sql27`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
       const data = Array.isArray(rows[0]) ? rows[0] : rows;
       clients3 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
@@ -17267,12 +17219,12 @@ var appRouter = router({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { error: "DB null" };
-        const { sql: sql28 } = await import("drizzle-orm");
-        const [permsRows] = await db.execute(sql28`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
-        const [collabRows] = await db.execute(sql28`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
-        const [countRows] = await db.execute(sql28`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
-        const [colsRows] = await db.execute(sql28`SHOW COLUMNS FROM collaborators`);
-        const [sampleRows] = await db.execute(sql28`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        const { sql: sql29 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql29`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql29`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql29`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql29`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql29`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -18439,7 +18391,7 @@ async function startServer() {
       try {
         const schema = await Promise.resolve().then(() => (init_schema(), schema_exports));
         const { cargoLoads: cargoLoads2, cargoDestinations: cargoDestinations3 } = schema;
-        const { eq: eq43, and: and26, or: or5, sql: sql28, asc: asc6 } = await import("drizzle-orm");
+        const { eq: eq43, and: and26, or: or5, sql: sql29, asc: asc6 } = await import("drizzle-orm");
         const destResult = await db.select({ name: cargoDestinations3.name, nickname: cargoDestinations3.nickname }).from(cargoDestinations3).where(eq43(cargoDestinations3.id, destId)).limit(1);
         const dName = destResult[0]?.name ?? null;
         const dNick = destResult[0]?.nickname ?? null;
@@ -18448,14 +18400,14 @@ async function startServer() {
         const orClauses = [eq43(cargoLoads2.destinationId, destId)];
         for (const k of keys) {
           orClauses.push(eq43(cargoLoads2.destination, k));
-          orClauses.push(sql28`${cargoLoads2.destination} LIKE ${esc(k) + " \u2014 %"}`);
-          orClauses.push(sql28`${cargoLoads2.destination} LIKE ${esc(k) + " - %"}`);
+          orClauses.push(sql29`${cargoLoads2.destination} LIKE ${esc(k) + " \u2014 %"}`);
+          orClauses.push(sql29`${cargoLoads2.destination} LIKE ${esc(k) + " - %"}`);
         }
         const startDate = String(req.query.startDate || "2026-08-01");
         const endDate = String(req.query.endDate || "2026-08-31");
         const conditions = [or5(...orClauses)];
-        conditions.push(sql28`${cargoLoads2.date} >= ${startDate}`);
-        conditions.push(sql28`${cargoLoads2.date} <= ${endDate + " 23:59:59"}`);
+        conditions.push(sql29`${cargoLoads2.date} >= ${startDate}`);
+        conditions.push(sql29`${cargoLoads2.date} <= ${endDate + " 23:59:59"}`);
         const rows = await db.select({ id: cargoLoads2.id, date: cargoLoads2.date, destination: cargoLoads2.destination, status: cargoLoads2.status, photosJson: cargoLoads2.photosJson }).from(cargoLoads2).where(and26(...conditions)).orderBy(asc6(cargoLoads2.date)).limit(50);
         drizzleSim = { keys, startDate, endDate, total: rows.length, rows: rows.slice(0, 10).map((r) => ({ ...r, photosJson: r.photosJson ? String(r.photosJson).slice(0, 80) : null })) };
       } catch (e) {

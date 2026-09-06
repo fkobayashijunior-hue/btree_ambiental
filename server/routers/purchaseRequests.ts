@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { purchaseRequestItems } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { storagePut } from "../storage";
 
 const statusEnum = z.enum(['pendente', 'lida', 'aprovada', 'comprada', 'recebida', 'cancelada', 'negada']);
@@ -172,21 +172,10 @@ export const purchaseRequestsRouter = router({
       // INSERT direto no formato legado do banco (requested_at epoch ms, coluna link, ENUM inglês)
       let result: any;
       try {
-        [result] = await db.execute<any>(
-          `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW(), NOW())`,
-          [
-            input.title,
-            input.description || null,
-            input.linkUrl || null,
-            input.categoryId || null,
-            input.equipmentId || null,
-            URGENCY_TO_DB[input.urgency || 'media'] || 'medium',
-            Date.now(),
-            ctx.user.id,
-            input.notes || null,
-          ]
-        );
+        [result] = await db.execute(sql`
+          INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+          VALUES (${input.title}, ${input.description || null}, ${input.linkUrl || null}, ${input.categoryId || null}, ${input.equipmentId || null}, 'pending', ${URGENCY_TO_DB[input.urgency || 'media'] || 'medium'}, ${Date.now()}, ${ctx.user.id}, ${input.notes || null}, NOW(), NOW())
+        `) as any;
       } catch (err: any) {
         const cause = err?.cause?.message || err?.message || String(err);
         console.error('[purchaseRequests.create] ERRO:', cause);
@@ -222,19 +211,18 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const sets: string[] = [];
-      const params: any[] = [];
-      if (input.title !== undefined) { sets.push('title = ?'); params.push(input.title); }
-      if (input.description !== undefined) { sets.push('description = ?'); params.push(input.description); }
-      if (input.linkUrl !== undefined) { sets.push('link = ?'); params.push(input.linkUrl); }
-      if (input.categoryId !== undefined) { sets.push('category_id = ?'); params.push(input.categoryId); }
-      if (input.equipmentId !== undefined) { sets.push('equipment_id = ?'); params.push(input.equipmentId); }
-      if (input.urgency !== undefined) { sets.push('urgency = ?'); params.push(URGENCY_TO_DB[input.urgency] || 'medium'); }
-      if (input.notes !== undefined) { sets.push('notes = ?'); params.push(input.notes); }
+      const sets: any[] = [];
+      if (input.title !== undefined) sets.push(sql`title = ${input.title}`);
+      if (input.description !== undefined) sets.push(sql`description = ${input.description}`);
+      if (input.linkUrl !== undefined) sets.push(sql`link = ${input.linkUrl}`);
+      if (input.categoryId !== undefined) sets.push(sql`category_id = ${input.categoryId}`);
+      if (input.equipmentId !== undefined) sets.push(sql`equipment_id = ${input.equipmentId}`);
+      if (input.urgency !== undefined) sets.push(sql`urgency = ${URGENCY_TO_DB[input.urgency] || 'medium'}`);
+      if (input.notes !== undefined) sets.push(sql`notes = ${input.notes}`);
       if (sets.length === 0) return { success: true };
-      sets.push('updated_at = NOW()');
-      params.push(input.id);
-      await db.execute<any>(`UPDATE purchase_requests SET ${sets.join(', ')} WHERE id = ?`, params);
+      sets.push(sql`updated_at = NOW()`);
+      const setSql = sql.join(sets, sql`, `);
+      await db.execute(sql`UPDATE purchase_requests SET ${setSql} WHERE id = ${input.id}`);
       return { success: true };
     }),
 
@@ -243,10 +231,7 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.execute<any>(
-        `UPDATE purchase_requests SET read_at = ?, status = 'lida', responded_by = ?, responded_at = NOW(), updated_at = NOW() WHERE id = ?`,
-        [Date.now(), ctx.user.id, input.id]
-      );
+      await db.execute(sql`UPDATE purchase_requests SET read_at = ${Date.now()}, status = 'lida', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
       return { success: true };
     }),
 
@@ -259,15 +244,12 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.execute<any>(
-        `UPDATE purchase_requests
-         SET response_notes = ?, responded_by = ?, responded_at = NOW(),
-             read_at = COALESCE(read_at, ?),
+      await db.execute(sql`UPDATE purchase_requests
+         SET response_notes = ${input.responseNotes}, responded_by = ${ctx.user.id}, responded_at = NOW(),
+             read_at = COALESCE(read_at, ${Date.now()}),
              status = CASE WHEN status IN ('pendente','pending') THEN 'lida' ELSE status END,
              updated_at = NOW()
-         WHERE id = ?`,
-        [input.responseNotes, ctx.user.id, Date.now(), input.id]
-      );
+         WHERE id = ${input.id}`);
       return { success: true };
     }),
 
@@ -280,10 +262,7 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.execute<any>(
-        `UPDATE purchase_requests SET status = 'negada', denial_reason = ?, responded_by = ?, responded_at = NOW(), updated_at = NOW() WHERE id = ?`,
-        [input.denialReason, ctx.user.id, input.id]
-      );
+      await db.execute(sql`UPDATE purchase_requests SET status = 'negada', denial_reason = ${input.denialReason}, responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
       return { success: true };
     }),
 
@@ -298,10 +277,7 @@ export const purchaseRequestsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const purchaseMs = input.purchaseDate ? new Date(input.purchaseDate.replace(' ', 'T')).getTime() : Date.now();
       const arrivalMs = input.expectedArrival ? new Date(input.expectedArrival.replace(' ', 'T')).getTime() : null;
-      await db.execute<any>(
-        `UPDATE purchase_requests SET purchased_at = ?, expected_arrival = ?, status = 'comprada', responded_by = ?, responded_at = NOW(), updated_at = NOW() WHERE id = ?`,
-        [purchaseMs, arrivalMs, ctx.user.id, input.id]
-      );
+      await db.execute(sql`UPDATE purchase_requests SET purchased_at = ${purchaseMs}, expected_arrival = ${arrivalMs}, status = 'comprada', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
       return { success: true };
     }),
 
@@ -310,10 +286,7 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.execute<any>(
-        `UPDATE purchase_requests SET received_at = ?, status = 'recebida', updated_at = NOW() WHERE id = ?`,
-        [Date.now(), input.id]
-      );
+      await db.execute(sql`UPDATE purchase_requests SET received_at = ${Date.now()}, status = 'recebida', updated_at = NOW() WHERE id = ${input.id}`);
       return { success: true };
     }),
 
@@ -322,7 +295,7 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.execute<any>(`UPDATE purchase_request_items SET confirmed = 1 WHERE request_id = ?`, [input.id]);
+      await db.execute(sql`UPDATE purchase_request_items SET confirmed = 1 WHERE request_id = ${input.id}`);
       return { success: true };
     }),
 
@@ -331,7 +304,7 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.execute<any>(`UPDATE purchase_request_items SET confirmed = ? WHERE id = ?`, [input.confirmed ? 1 : 0, input.itemId]);
+      await db.execute(sql`UPDATE purchase_request_items SET confirmed = ${input.confirmed ? 1 : 0} WHERE id = ${input.itemId}`);
       return { success: true };
     }),
 
@@ -348,12 +321,12 @@ export const purchaseRequestsRouter = router({
       const ext = input.mimeType.split('/')[1] || 'jpg';
       const key = `purchase-requests/${input.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const { url } = await storagePut(key, buffer, input.mimeType);
-      const [rows] = await db.execute<any[]>(`SELECT images FROM purchase_requests WHERE id = ?`, [input.id]);
+      const [rows] = await db.execute(sql`SELECT images FROM purchase_requests WHERE id = ${input.id}`) as any;
       const current = (rows as any[])[0]?.images;
       let images: string[] = [];
       try { images = current ? JSON.parse(current) : []; } catch { images = []; }
       images.push(url);
-      await db.execute<any>(`UPDATE purchase_requests SET images = ?, updated_at = NOW() WHERE id = ?`, [JSON.stringify(images), input.id]);
+      await db.execute(sql`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
       return { url, success: true };
     }),
 
@@ -362,12 +335,12 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [rows] = await db.execute<any[]>(`SELECT images FROM purchase_requests WHERE id = ?`, [input.id]);
+      const [rows] = await db.execute(sql`SELECT images FROM purchase_requests WHERE id = ${input.id}`) as any;
       const current = (rows as any[])[0]?.images;
       let images: string[] = [];
       try { images = current ? JSON.parse(current) : []; } catch { images = []; }
       images = images.filter(u => u !== input.imageUrl);
-      await db.execute<any>(`UPDATE purchase_requests SET images = ?, updated_at = NOW() WHERE id = ?`, [JSON.stringify(images), input.id]);
+      await db.execute(sql`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
       return { success: true };
     }),
 
@@ -376,8 +349,8 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.execute<any>(`DELETE FROM purchase_request_items WHERE request_id = ?`, [input.id]);
-      await db.execute<any>(`DELETE FROM purchase_requests WHERE id = ?`, [input.id]);
+      await db.execute(sql`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
+      await db.execute(sql`DELETE FROM purchase_requests WHERE id = ${input.id}`);
       return { success: true };
     }),
 });
