@@ -18488,6 +18488,38 @@ async function startServer() {
       return res.status(500).json({ error: e.message, stack: e.stack });
     }
   });
+  app.get("/api/pr-schema-diagnostic", async (req, res) => {
+    try {
+      const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+      const db = await getDb2();
+      if (!db) return res.status(500).json({ error: "db indisponivel" });
+      const [cols] = await db.execute(
+        /*sql*/
+        `SHOW COLUMNS FROM purchase_requests`
+      );
+      const [itemsCols] = await db.execute(
+        /*sql*/
+        `SHOW COLUMNS FROM purchase_request_items`
+      );
+      let insertTest = null;
+      try {
+        await db.execute(
+          /*sql*/
+          `INSERT INTO purchase_requests (title, description, link, category_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at) VALUES ('__diag__', NULL, NULL, NULL, 'pending', 'medium', 0, 1, NULL, NOW(), NOW())`
+        );
+        insertTest = "ok";
+        await db.execute(
+          /*sql*/
+          `DELETE FROM purchase_requests WHERE title = '__diag__'`
+        );
+      } catch (e) {
+        insertTest = { error: e.message };
+      }
+      return res.json({ columns: cols, itemsColumns: itemsCols, insertTest });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/image-proxy", async (req, res) => {
     try {
       const url = req.query.url;

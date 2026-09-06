@@ -622,6 +622,27 @@ async function startServer() {
     }
   });
 
+  app.get('/api/pr-schema-diagnostic', async (req, res) => {
+    try {
+      const { getDb } = await import('../db');
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: 'db indisponivel' });
+      const [cols] = await db.execute(/*sql*/`SHOW COLUMNS FROM purchase_requests`);
+      const [itemsCols] = await db.execute(/*sql*/`SHOW COLUMNS FROM purchase_request_items`);
+      // Teste de insert simulado (rollback)
+      let insertTest: any = null;
+      try {
+        await db.execute(/*sql*/`INSERT INTO purchase_requests (title, description, link, category_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at) VALUES ('__diag__', NULL, NULL, NULL, 'pending', 'medium', 0, 1, NULL, NOW(), NOW())`);
+        insertTest = 'ok';
+        await db.execute(/*sql*/`DELETE FROM purchase_requests WHERE title = '__diag__'`);
+      } catch (e: any) {
+        insertTest = { error: e.message };
+      }
+      return res.json({ columns: cols, itemsColumns: itemsCols, insertTest });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
   // Image proxy endpoint - fetches external images and returns as base64 to avoid CORS issues in PDF generation
   app.get('/api/image-proxy', async (req, res) => {
     try {
