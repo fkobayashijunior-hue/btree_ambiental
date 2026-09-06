@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   ArrowLeft, ExternalLink, Image as ImageIcon, ShoppingCart, Package,
-  Truck, Eye, AlertTriangle, Calendar, Edit2, Table, LayoutGrid, Save, Ban
+  Truck, Eye, AlertTriangle, Calendar, Edit2, Table, LayoutGrid, Save, Ban, Trash2
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -59,6 +59,7 @@ export default function PurchaseRequestDetailPage() {
   const [responseNotes, setResponseNotes] = useState('');
   const [showDenyDialog, setShowDenyDialog] = useState(false);
   const [denialReason, setDenialReason] = useState('');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   // Editable grid state
   const [editStatus, setEditStatus] = useState('');
   const [editPurchaseDate, setEditPurchaseDate] = useState('');
@@ -89,6 +90,10 @@ export default function PurchaseRequestDetailPage() {
   });
   const denyMutation = trpc.purchaseRequests.deny.useMutation({
     onSuccess: () => { utils.purchaseRequests.getById.invalidate({ id }); utils.purchaseRequests.list.invalidate(); setShowDenyDialog(false); setDenialReason(''); toast.success("Solicitação rejeitada"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteMutation = trpc.purchaseRequests.delete.useMutation({
+    onSuccess: () => { utils.purchaseRequests.list.invalidate(); toast.success("Solicitação excluída"); navigate('/compras'); },
     onError: (e) => toast.error(e.message),
   });
   const toggleItemMutation = trpc.purchaseRequests.toggleItemConfirm.useMutation({
@@ -250,6 +255,9 @@ export default function PurchaseRequestDetailPage() {
                   <Ban className="w-3.5 h-3.5 mr-1" /> Rejeitar
                 </Button>
               )}
+              <Button size="sm" variant="outline" className="text-gray-500 border-gray-300 hover:bg-gray-50" onClick={() => setShowDeleteDialog(true)}>
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+              </Button>
             </div>
           )}
         </>
@@ -361,6 +369,9 @@ export default function PurchaseRequestDetailPage() {
                 <Ban className="w-3.5 h-3.5 mr-1" /> Rejeitar
               </Button>
             )}
+            <Button size="sm" variant="outline" className="text-gray-500 border-gray-300 hover:bg-gray-50" onClick={() => setShowDeleteDialog(true)}>
+              <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+            </Button>
           </div>
           <p className="text-xs text-gray-400">* Campos editáveis em destaque. Clique em Salvar para gravar.</p>
         </>
@@ -410,6 +421,22 @@ export default function PurchaseRequestDetailPage() {
             <Button variant="destructive" onClick={() => denyMutation.mutate({ id, denialReason })}
               disabled={!denialReason.trim() || denyMutation.isPending}>
               {denyMutation.isPending ? 'Rejeitando...' : 'Confirmar rejeição'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Excluir solicitação</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-600">
+            Tem certeza que deseja excluir <strong>{req.title}</strong>? Esta ação não pode ser desfeita e todos os itens e fotos vinculados serão removidos.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => deleteMutation.mutate({ id })} disabled={deleteMutation.isPending}>
+              {deleteMutation.isPending ? 'Excluindo...' : 'Excluir definitivamente'}
             </Button>
           </DialogFooter>
         </DialogContent>
