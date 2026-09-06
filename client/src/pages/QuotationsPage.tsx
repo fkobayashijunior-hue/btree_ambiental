@@ -80,7 +80,8 @@ const COMPANY = {
 };
 
 type QuotItem = { name: string; quantity: string; unit: string };
-type ResponseItem = { name: string; quantity: string; unit?: string; price: string; brand?: string; notes?: string };
+type ResponseItem = {
+  packaging?: string; name: string; quantity: string; unit?: string; price: string; brand?: string; notes?: string };
 
 type SummaryItem = {
   name: string;
@@ -985,6 +986,7 @@ export default function QuotationsPage() {
                                       <div className="flex items-center gap-1">
                                         <span className="font-medium text-gray-800">{item.name}</span>
                                         {item.brand && <span className="text-xs text-gray-400">({item.brand})</span>}
+                                        {(item as any).packaging && <Badge variant="outline" className="text-[10px] px-1 py-0">{(item as any).packaging}</Badge>}
                                         {isBest && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
                                       </div>
                                       <span className="text-xs text-gray-400">{item.quantity} {item.unit || 'un'}</span>

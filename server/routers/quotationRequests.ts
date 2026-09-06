@@ -344,6 +344,7 @@ export const quotationRequestsRouter = router({
         unit: z.string().optional(),
         price: z.string(),
         brand: z.string().optional(),
+        packaging: z.string().optional(),
         notes: z.string().optional(),
       })).min(1),
       notes: z.string().optional(),
@@ -429,6 +430,7 @@ export const quotationRequestsRouter = router({
             unit: z.string().optional(),
             price: z.string(),
             brand: z.string().optional(),
+            packaging: z.string().optional(),
             notes: z.string().optional(),
           })
         ).min(1),

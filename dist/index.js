@@ -14694,6 +14694,7 @@ var quotationRequestsRouter = router({
       unit: z37.string().optional(),
       price: z37.string(),
       brand: z37.string().optional(),
+      packaging: z37.string().optional(),
       notes: z37.string().optional()
     })).min(1),
     notes: z37.string().optional()
@@ -14766,6 +14767,7 @@ var quotationRequestsRouter = router({
           unit: z37.string().optional(),
           price: z37.string(),
           brand: z37.string().optional(),
+          packaging: z37.string().optional(),
           notes: z37.string().optional()
         })
       ).min(1),

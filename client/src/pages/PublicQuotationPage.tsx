@@ -30,6 +30,7 @@ type ResponseItem = {
   unit: string;
   price: string;
   brand: string;
+  packaging: string;
   notes: string;
 };
 
@@ -67,6 +68,7 @@ export default function PublicQuotationPage() {
         unit: item.unit || 'un',
         price: '',
         brand: '',
+        packaging: '',
         notes: '',
       }))
     );
@@ -97,7 +99,7 @@ export default function PublicQuotationPage() {
   );
 
   function addExtraItem() {
-    setResponseItems([...responseItems, { name: '', quantity: '1', unit: 'un', price: '', brand: '', notes: '' }]);
+    setResponseItems([...responseItems, { name: '', quantity: '1', unit: 'un', price: '', brand: '', packaging: '', notes: '' }]);
   }
 
   function removeItem(idx: number) {
@@ -127,6 +129,7 @@ export default function PublicQuotationPage() {
         unit: i.unit,
         price: i.price,
         brand: i.brand || undefined,
+        packaging: i.packaging || undefined,
         notes: i.notes || undefined,
       })),
       notes: notes || undefined,
@@ -158,6 +161,7 @@ export default function PublicQuotationPage() {
       unit: item.unit || 'un',
       price: item.price,
       brand: item.brand || '',
+      packaging: item.packaging || '',
       notes: item.notes || '',
     })));
     setSubmittedResponseId(resp.id);
@@ -494,14 +498,46 @@ export default function PublicQuotationPage() {
                       <Input
                         value={item.brand}
                         onChange={e => updateItem(idx, 'brand', e.target.value)}
-                        placeholder="Marca (opcional)"
+                        placeholder="Marca"
                       />
                     </div>
+                    <div>
+                      <select
+                        value={item.packaging}
+                        onChange={e => updateItem(idx, 'packaging', e.target.value)}
+                        className="w-full h-10 rounded-md border border-input bg-white px-3 text-sm"
+                      >
+                        <option value="">Embalagem/tamanho...</option>
+                        <option value="1L">1 L</option>
+                        <option value="5L">5 L</option>
+                        <option value="10L">10 L</option>
+                        <option value="20L">20 L (galão)</option>
+                        <option value="200L">200 L (tambor)</option>
+                        <option value="un">Unidade</option>
+                        <option value="kg">Kg</option>
+                        <option value="cx">Caixa</option>
+                        <option value="outro">Outro</option>
+                      </select>
+                    </div>
                     <div className="col-span-2">
-                      <Input
+                      <select
                         value={item.notes}
                         onChange={e => updateItem(idx, 'notes', e.target.value)}
-                        placeholder="Observações (prazo, condições...)"
+                        className="w-full h-10 rounded-md border border-input bg-white px-3 text-sm mb-1"
+                      >
+                        <option value="">Destaque (opcional)...</option>
+                        <option value="Melhor preço">Melhor preço</option>
+                        <option value="Primeira linha">Primeira linha</option>
+                        <option value="Segunda linha">Segunda linha</option>
+                        <option value="Original">Original</option>
+                        <option value="Similar">Similar</option>
+                        <option value="Pronta entrega">Pronta entrega</option>
+                        <option value="Sob encomenda">Sob encomenda</option>
+                      </select>
+                      <Input
+                        value={item.notes && ['Melhor preço','Primeira linha','Segunda linha','Original','Similar','Pronta entrega','Sob encomenda'].includes(item.notes) ? '' : item.notes}
+                        onChange={e => updateItem(idx, 'notes', e.target.value)}
+                        placeholder="Observações adicionais (prazo, condições...)"
                       />
                     </div>
                   </div>

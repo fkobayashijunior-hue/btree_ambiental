@@ -62,6 +62,7 @@ export default function PurchaseRequestDetailPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   // Editable grid state
   const [editStatus, setEditStatus] = useState('');
+  const [editUrgency, setEditUrgency] = useState('');
   const [editPurchaseDate, setEditPurchaseDate] = useState('');
   const [editArrival, setEditArrival] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -70,12 +71,17 @@ export default function PurchaseRequestDetailPage() {
     onSuccess: (d) => {
       if (!dirty) {
         setEditStatus(d.status);
+        setEditUrgency(d.urgency);
         setEditPurchaseDate(toInputDate(d.purchaseDate));
         setEditArrival(toInputDate(d.expectedArrival));
       }
     },
   });
 
+  const updateMutation = trpc.purchaseRequests.update.useMutation({
+    onSuccess: () => { utils.purchaseRequests.getById.invalidate({ id }); utils.purchaseRequests.list.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
   const updateStatusMutation = trpc.purchaseRequests.updateStatus.useMutation({
     onSuccess: () => { utils.purchaseRequests.getById.invalidate({ id }); utils.purchaseRequests.list.invalidate(); toast.success("Status atualizado"); setDirty(false); },
     onError: (e) => toast.error(e.message),
@@ -101,14 +107,10 @@ export default function PurchaseRequestDetailPage() {
   });
 
   function saveGrid() {
-    // salva datas + status juntos
-    updateDatesMutation.mutate({ id, purchaseDate: editPurchaseDate || null, expectedArrival: editArrival || null }, {
-      onSuccess: () => {
-        if (editStatus && editStatus !== req.status) {
-          updateStatusMutation.mutate({ id, status: editStatus as any });
-        }
-      },
-    });
+    updateDatesMutation.mutate({ id, purchaseDate: editPurchaseDate || null, expectedArrival: editArrival || null });
+    if (editUrgency && editUrgency !== req.urgency) {
+      updateMutation.mutate({ id, urgency: editUrgency as any });
+    }
     if (editStatus && editStatus !== req.status) {
       updateStatusMutation.mutate({ id, status: editStatus as any });
     }
@@ -280,7 +282,17 @@ export default function PurchaseRequestDetailPage() {
                   <tr className="border-b"><td className="px-3 py-2 text-gray-500">Data solicitação</td><td className="px-3 py-2">{fmtDate(req.requestDate) || '—'}</td></tr>
                   <tr className="border-b"><td className="px-3 py-2 text-gray-500">Equipamento</td><td className="px-3 py-2">{req.equipmentName ? `${req.equipmentName}${req.equipmentPlate ? ` (${req.equipmentPlate})` : ''}` : '—'}</td></tr>
                   <tr className="border-b"><td className="px-3 py-2 text-gray-500">Categoria</td><td className="px-3 py-2">{req.categoryName || '—'}</td></tr>
-                  <tr className="border-b"><td className="px-3 py-2 text-gray-500">Urgência</td><td className="px-3 py-2"><Badge className={`text-xs ${URGENCY_COLORS[req.urgency]}`}>{URGENCY_LABELS[req.urgency]}</Badge></td></tr>
+                  <tr className="border-b bg-green-50/50">
+                    <td className="px-3 py-2 text-gray-700 font-medium">Prioridade *</td>
+                    <td className="px-3 py-2">
+                      <Select value={editUrgency} onValueChange={v => { setEditUrgency(v); setDirty(true); }}>
+                        <SelectTrigger className="h-8 text-xs w-44"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(URGENCY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  </tr>
                   <tr className="border-b bg-green-50/50">
                     <td className="px-3 py-2 text-gray-700 font-medium">Status *</td>
                     <td className="px-3 py-2">

@@ -24,3 +24,16 @@
   4. Editar categorias do fornecedor.
   5. Resumo em planilha com melhores preços no topo + lista de fornecedores (nome fantasia) com valores e marcas; quantidade solicitada e valores totais no topo.
   6. Opção de mandar pelo WhatsApp só melhores preços com link para detalhamento.
+
+## v3 — Orçamentos (em andamento)
+- Tabelas: quotation_requests (items_json dos itens solicitados), quotation_responses (items_json com name,quantity,unit,price,brand,notes + supplierName,cnpj,sellerName,sellerPhone,sellerEmail,notes).
+- PublicQuotationPage.tsx (588 linhas) já tem: formulário do fornecedor com campos de empresa + itens com brand/notes, addExtraItem, edit via getMyResponse por supplierName.
+- submitResponse já aceita brand/notes por item e cria responseToken.
+- PENDENTE de implementar:
+  1. Edição de urgência na Grade do detalhe (FEITO no código, falta build/push).
+  2. Campo "packaging" (embalagem: 1L,5L,10L,20L,200L) por item de resposta — adicionar no zod schema do submitResponse/updateResponse e salvar no itemsJson (não precisa migration no banco pois itemsJson é JSON).
+  3. Nome fantasia (trade_name) — suppliers já tem tradeName; garantir exibição na página do fornecedor e no resumo interno.
+  4. Página de detalhamento de orçamento (QuotationsPage ou nova rota /orcamentos/:token/resumo) com: melhores preços no topo, lista de fornecedores (nome fantasia) com valores/marcas, quantidade solicitada e totais no topo; botão WhatsApp com resumo + link.
+  5. Fornecedor: link de resposta SEM recadastro — hoje getMyResponse exige supplierName; melhorar para carregar dados direto pelo token quando já houver resposta (responseToken) ou pré-preencher.
+  6. Pergunta "o que você vende" (categorias) — adicionar campo categories na resposta ou no supplier; permitir edição interna.
+- Padrão do projeto: driver mysql2 NÃO suporta db.execute(sql, params) com ?; SEMPRE usar sql`` template do drizzle.
