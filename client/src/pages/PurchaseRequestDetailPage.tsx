@@ -124,7 +124,12 @@ export default function PurchaseRequestDetailPage() {
     </div>
   );
 
-  const images: string[] = req.images ? JSON.parse(req.images) : [];
+  let images: string[] = [];
+  try {
+    if (req.images && typeof req.images === 'string' && req.images.trim().startsWith('[')) {
+      images = JSON.parse(req.images);
+    }
+  } catch { images = []; }
 
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-4">
