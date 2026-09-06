@@ -11,6 +11,13 @@ const statusEnum = z.enum(['pendente', 'lida', 'aprovada', 'comprada', 'recebida
 const urgencyEnum = z.enum(['baixa', 'media', 'alta', 'critica']);
 
 export const purchaseRequestsRouter = router({
+  // Diagnóstico: mostra as colunas reais da tabela no banco (para troubleshooting)
+  schemaInfo: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [cols] = await db.execute<any[]>(`SHOW COLUMNS FROM purchase_requests`);
+    return (cols as any[]).map((c: any) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
+  }),
   list: protectedProcedure
     .input(z.object({
       status: statusEnum.optional(),
@@ -167,21 +174,41 @@ export const purchaseRequestsRouter = router({
         // Fallback para schema legado da Hostinger (requested_at epoch ms, coluna link, ENUM inglês)
         console.warn('[purchaseRequests.create] insert Drizzle falhou, tentando SQL legado:', err?.message);
         const legacyUrgency: Record<string, string> = { baixa: 'low', media: 'medium', alta: 'high', critica: 'critical' };
-        const [rows] = await db.execute<any>(
-          `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), NOW())`,
-          [
-            input.title,
-            input.description || null,
-            input.linkUrl || null,
-            input.categoryId || null,
-            input.equipmentId || null,
-            legacyUrgency[input.urgency || 'media'] || 'medium',
-            Date.now(),
-            ctx.user.id,
-            input.notes || null,
-          ]
-        );
+        let rows: any;
+        try {
+          [rows] = await db.execute<any>(
+            `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW(), NOW())`,
+            [
+              input.title,
+              input.description || null,
+              input.linkUrl || null,
+              input.categoryId || null,
+              input.equipmentId || null,
+              legacyUrgency[input.urgency || 'media'] || 'medium',
+              Date.now(),
+              ctx.user.id,
+              input.notes || null,
+            ]
+          );
+        } catch (err2: any) {
+          // Segundo fallback: schema antigo sem coluna equipment_id
+          console.warn('[purchaseRequests.create] fallback c/ equipment_id falhou, tentando sem:', err2?.message);
+          [rows] = await db.execute<any>(
+            `INSERT INTO purchase_requests (title, description, link, category_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW(), NOW())`,
+            [
+              input.title,
+              input.description || null,
+              input.linkUrl || null,
+              input.categoryId || null,
+              legacyUrgency[input.urgency || 'media'] || 'medium',
+              Date.now(),
+              ctx.user.id,
+              input.notes || null,
+            ]
+          );
+        }
         requestId = (rows as any).insertId;
       }
 

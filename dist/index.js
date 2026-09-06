@@ -13953,6 +13953,13 @@ import { eq as eq34 } from "drizzle-orm";
 var statusEnum = z35.enum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
 var urgencyEnum = z35.enum(["baixa", "media", "alta", "critica"]);
 var purchaseRequestsRouter = router({
+  // Diagnóstico: mostra as colunas reais da tabela no banco (para troubleshooting)
+  schemaInfo: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    const [cols] = await db.execute(`SHOW COLUMNS FROM purchase_requests`);
+    return cols.map((c) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
+  }),
   list: protectedProcedure.input(z35.object({
     status: statusEnum.optional(),
     urgency: urgencyEnum.optional(),
@@ -14098,21 +14105,40 @@ var purchaseRequestsRouter = router({
     } catch (err) {
       console.warn("[purchaseRequests.create] insert Drizzle falhou, tentando SQL legado:", err?.message);
       const legacyUrgency = { baixa: "low", media: "medium", alta: "high", critica: "critical" };
-      const [rows] = await db.execute(
-        `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), NOW())`,
-        [
-          input.title,
-          input.description || null,
-          input.linkUrl || null,
-          input.categoryId || null,
-          input.equipmentId || null,
-          legacyUrgency[input.urgency || "media"] || "medium",
-          Date.now(),
-          ctx.user.id,
-          input.notes || null
-        ]
-      );
+      let rows;
+      try {
+        [rows] = await db.execute(
+          `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW(), NOW())`,
+          [
+            input.title,
+            input.description || null,
+            input.linkUrl || null,
+            input.categoryId || null,
+            input.equipmentId || null,
+            legacyUrgency[input.urgency || "media"] || "medium",
+            Date.now(),
+            ctx.user.id,
+            input.notes || null
+          ]
+        );
+      } catch (err2) {
+        console.warn("[purchaseRequests.create] fallback c/ equipment_id falhou, tentando sem:", err2?.message);
+        [rows] = await db.execute(
+          `INSERT INTO purchase_requests (title, description, link, category_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW(), NOW())`,
+          [
+            input.title,
+            input.description || null,
+            input.linkUrl || null,
+            input.categoryId || null,
+            legacyUrgency[input.urgency || "media"] || "medium",
+            Date.now(),
+            ctx.user.id,
+            input.notes || null
+          ]
+        );
+      }
       requestId = rows.insertId;
     }
     if (input.items.length > 0) {
