@@ -1264,7 +1264,8 @@ export const purchaseRequests = mysqlTable("purchase_requests", {
   images: text(), // JSON array of S3 URLs
   linkUrl: varchar("link_url", { length: 500 }),
   categoryId: int("category_id").references(() => purchaseCategories.id),
-  status: mysqlEnum(['pendente','lida','aprovada','comprada','recebida','cancelada']).default('pendente').notNull(),
+  equipmentId: int("equipment_id"), // equipamento vinculado (opcional)
+  status: mysqlEnum(['pendente','lida','aprovada','comprada','recebida','cancelada','negada']).default('pendente').notNull(),
   urgency: mysqlEnum(['baixa','media','alta','critica']).default('media').notNull(),
   requestDate: timestamp("request_date", { mode: 'string' }).defaultNow().notNull(),
   readDate: timestamp("read_date", { mode: 'string' }),
@@ -1274,6 +1275,10 @@ export const purchaseRequests = mysqlTable("purchase_requests", {
   itemsConfirmedDate: timestamp("items_confirmed_date", { mode: 'string' }),
   requestedBy: int("requested_by").references(() => users.id),
   approvedBy: int("approved_by").references(() => users.id),
+  respondedBy: int("responded_by").references(() => users.id), // responsável que atendeu
+  respondedAt: timestamp("responded_at", { mode: 'string' }), // data da resposta
+  responseNotes: text("response_notes"), // parecer/resposta do responsável
+  denialReason: text("denial_reason"), // motivo da negativa
   notes: text(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),

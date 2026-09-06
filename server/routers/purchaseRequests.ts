@@ -3,11 +3,11 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { purchaseRequests, purchaseRequestItems, purchaseCategories, users } from "../../drizzle/schema";
+import { purchaseRequests, purchaseRequestItems, purchaseCategories, users, equipment } from "../../drizzle/schema";
 import { eq, desc, and, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 
-const statusEnum = z.enum(['pendente', 'lida', 'aprovada', 'comprada', 'recebida', 'cancelada']);
+const statusEnum = z.enum(['pendente', 'lida', 'aprovada', 'comprada', 'recebida', 'cancelada', 'negada']);
 const urgencyEnum = z.enum(['baixa', 'media', 'alta', 'critica']);
 
 export const purchaseRequestsRouter = router({
@@ -29,6 +29,8 @@ export const purchaseRequestsRouter = router({
           COALESCE(pr.link_url, pr.link) AS linkUrl,
           pr.category_id AS categoryId,
           pc.name AS categoryName, pc.color AS categoryColor,
+          pr.equipment_id AS equipmentId,
+          eqp.name AS equipmentName, eqp.license_plate AS equipmentPlate,
           pr.status, pr.urgency,
           COALESCE(pr.request_date, FROM_UNIXTIME(pr.requested_at / 1000)) AS requestDate,
           pr.read_date AS readDate,
@@ -37,12 +39,24 @@ export const purchaseRequestsRouter = router({
           pr.received_date AS receivedDate,
           pr.items_confirmed_date AS itemsConfirmedDate,
           pr.requested_by AS requestedBy,
+          req_user.name AS requestedByName,
+          pr.responded_by AS respondedBy,
+          resp_user.name AS respondedByName,
+          pr.responded_at AS respondedAt,
+          pr.response_notes AS responseNotes,
+          pr.denial_reason AS denialReason,
           pr.notes,
           pr.created_at AS createdAt,
           pr.updated_at AS updatedAt
         FROM purchase_requests pr
         LEFT JOIN purchase_categories pc ON pr.category_id = pc.id
-        ORDER BY pr.created_at DESC
+        LEFT JOIN equipment eqp ON pr.equipment_id = eqp.id
+        LEFT JOIN users req_user ON pr.requested_by = req_user.id
+        LEFT JOIN users resp_user ON pr.responded_by = resp_user.id
+        ORDER BY
+          FIELD(pr.status, 'pendente','lida','aprovada','comprada','recebida','negada','cancelada'),
+          FIELD(pr.urgency, 'critica','alta','media','baixa'),
+          pr.created_at DESC
       `);
 
       console.log('[purchaseRequests.list] rows retornados:', (rows as unknown as any[]).length);
@@ -120,6 +134,7 @@ export const purchaseRequestsRouter = router({
       description: z.string().optional(),
       linkUrl: z.string().optional(),
       categoryId: z.number().optional(),
+      equipmentId: z.number().optional(),
       urgency: urgencyEnum.optional().default('media'),
       notes: z.string().optional(),
       items: z.array(z.object({
@@ -133,18 +148,42 @@ export const purchaseRequestsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      const [result] = await db.insert(purchaseRequests).values({
-        title: input.title,
-        description: input.description,
-        linkUrl: input.linkUrl,
-        categoryId: input.categoryId,
-        urgency: input.urgency,
-        status: 'pendente',
-        requestDate: now,
-        requestedBy: ctx.user.id,
-        notes: input.notes,
-      });
-      const requestId = (result as any).insertId;
+      let requestId: number;
+      try {
+        const [result] = await db.insert(purchaseRequests).values({
+          title: input.title,
+          description: input.description,
+          linkUrl: input.linkUrl,
+          categoryId: input.categoryId,
+          equipmentId: input.equipmentId || null,
+          urgency: input.urgency,
+          status: 'pendente',
+          requestDate: now,
+          requestedBy: ctx.user.id,
+          notes: input.notes,
+        });
+        requestId = (result as any).insertId;
+      } catch (err: any) {
+        // Fallback para schema legado da Hostinger (requested_at epoch ms, coluna link, ENUM inglês)
+        console.warn('[purchaseRequests.create] insert Drizzle falhou, tentando SQL legado:', err?.message);
+        const legacyUrgency: Record<string, string> = { baixa: 'low', media: 'medium', alta: 'high', critica: 'critical' };
+        const [rows] = await db.execute<any>(
+          `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), NOW())`,
+          [
+            input.title,
+            input.description || null,
+            input.linkUrl || null,
+            input.categoryId || null,
+            input.equipmentId || null,
+            legacyUrgency[input.urgency || 'media'] || 'medium',
+            Date.now(),
+            ctx.user.id,
+            input.notes || null,
+          ]
+        );
+        requestId = (rows as any).insertId;
+      }
 
       if (input.items.length > 0) {
         await db.insert(purchaseRequestItems).values(
@@ -183,12 +222,55 @@ export const purchaseRequestsRouter = router({
   // Mark as read by responsible
   markRead: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       await db.update(purchaseRequests)
-        .set({ readDate: now, status: 'lida' })
+        .set({ readDate: now, status: 'lida', respondedBy: ctx.user.id, respondedAt: now })
+        .where(eq(purchaseRequests.id, input.id));
+      return { success: true };
+    }),
+  // Responsável responde a solicitação (parecer) — também marca como lida
+  respond: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      responseNotes: z.string().min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const [cur] = await db.select({ status: purchaseRequests.status, readDate: purchaseRequests.readDate })
+        .from(purchaseRequests).where(eq(purchaseRequests.id, input.id)).limit(1);
+      await db.update(purchaseRequests)
+        .set({
+          responseNotes: input.responseNotes,
+          respondedBy: ctx.user.id,
+          respondedAt: now,
+          ...(cur?.readDate ? {} : { readDate: now }),
+          ...(cur?.status === 'pendente' ? { status: 'lida' as const } : {}),
+        })
+        .where(eq(purchaseRequests.id, input.id));
+      return { success: true };
+    }),
+  // Negar solicitação com motivo
+  deny: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      denialReason: z.string().min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      await db.update(purchaseRequests)
+        .set({
+          status: 'negada',
+          denialReason: input.denialReason,
+          respondedBy: ctx.user.id,
+          respondedAt: now,
+        })
         .where(eq(purchaseRequests.id, input.id));
       return { success: true };
     }),
@@ -200,7 +282,7 @@ export const purchaseRequestsRouter = router({
       purchaseDate: z.string().optional(),
       expectedArrival: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -209,6 +291,8 @@ export const purchaseRequestsRouter = router({
           purchaseDate: input.purchaseDate || now,
           expectedArrival: input.expectedArrival,
           status: 'comprada',
+          respondedBy: ctx.user.id,
+          respondedAt: now,
         })
         .where(eq(purchaseRequests.id, input.id));
       return { success: true };

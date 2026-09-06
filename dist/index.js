@@ -1394,7 +1394,9 @@ var init_schema = __esm({
       // JSON array of S3 URLs
       linkUrl: varchar("link_url", { length: 500 }),
       categoryId: int("category_id").references(() => purchaseCategories.id),
-      status: mysqlEnum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada"]).default("pendente").notNull(),
+      equipmentId: int("equipment_id"),
+      // equipamento vinculado (opcional)
+      status: mysqlEnum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada", "negada"]).default("pendente").notNull(),
       urgency: mysqlEnum(["baixa", "media", "alta", "critica"]).default("media").notNull(),
       requestDate: timestamp("request_date", { mode: "string" }).defaultNow().notNull(),
       readDate: timestamp("read_date", { mode: "string" }),
@@ -1404,6 +1406,14 @@ var init_schema = __esm({
       itemsConfirmedDate: timestamp("items_confirmed_date", { mode: "string" }),
       requestedBy: int("requested_by").references(() => users.id),
       approvedBy: int("approved_by").references(() => users.id),
+      respondedBy: int("responded_by").references(() => users.id),
+      // responsável que atendeu
+      respondedAt: timestamp("responded_at", { mode: "string" }),
+      // data da resposta
+      responseNotes: text("response_notes"),
+      // parecer/resposta do responsável
+      denialReason: text("denial_reason"),
+      // motivo da negativa
       notes: text(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
@@ -13940,7 +13950,7 @@ init_schema();
 import { z as z35 } from "zod";
 import { TRPCError as TRPCError24 } from "@trpc/server";
 import { eq as eq34 } from "drizzle-orm";
-var statusEnum = z35.enum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada"]);
+var statusEnum = z35.enum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
 var urgencyEnum = z35.enum(["baixa", "media", "alta", "critica"]);
 var purchaseRequestsRouter = router({
   list: protectedProcedure.input(z35.object({
@@ -13956,6 +13966,8 @@ var purchaseRequestsRouter = router({
           COALESCE(pr.link_url, pr.link) AS linkUrl,
           pr.category_id AS categoryId,
           pc.name AS categoryName, pc.color AS categoryColor,
+          pr.equipment_id AS equipmentId,
+          eqp.name AS equipmentName, eqp.license_plate AS equipmentPlate,
           pr.status, pr.urgency,
           COALESCE(pr.request_date, FROM_UNIXTIME(pr.requested_at / 1000)) AS requestDate,
           pr.read_date AS readDate,
@@ -13964,12 +13976,24 @@ var purchaseRequestsRouter = router({
           pr.received_date AS receivedDate,
           pr.items_confirmed_date AS itemsConfirmedDate,
           pr.requested_by AS requestedBy,
+          req_user.name AS requestedByName,
+          pr.responded_by AS respondedBy,
+          resp_user.name AS respondedByName,
+          pr.responded_at AS respondedAt,
+          pr.response_notes AS responseNotes,
+          pr.denial_reason AS denialReason,
           pr.notes,
           pr.created_at AS createdAt,
           pr.updated_at AS updatedAt
         FROM purchase_requests pr
         LEFT JOIN purchase_categories pc ON pr.category_id = pc.id
-        ORDER BY pr.created_at DESC
+        LEFT JOIN equipment eqp ON pr.equipment_id = eqp.id
+        LEFT JOIN users req_user ON pr.requested_by = req_user.id
+        LEFT JOIN users resp_user ON pr.responded_by = resp_user.id
+        ORDER BY
+          FIELD(pr.status, 'pendente','lida','aprovada','comprada','recebida','negada','cancelada'),
+          FIELD(pr.urgency, 'critica','alta','media','baixa'),
+          pr.created_at DESC
       `);
     console.log("[purchaseRequests.list] rows retornados:", rows.length);
     const statusMap = {
@@ -14043,6 +14067,7 @@ var purchaseRequestsRouter = router({
     description: z35.string().optional(),
     linkUrl: z35.string().optional(),
     categoryId: z35.number().optional(),
+    equipmentId: z35.number().optional(),
     urgency: urgencyEnum.optional().default("media"),
     notes: z35.string().optional(),
     items: z35.array(z35.object({
@@ -14055,18 +14080,41 @@ var purchaseRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    const [result] = await db.insert(purchaseRequests).values({
-      title: input.title,
-      description: input.description,
-      linkUrl: input.linkUrl,
-      categoryId: input.categoryId,
-      urgency: input.urgency,
-      status: "pendente",
-      requestDate: now,
-      requestedBy: ctx.user.id,
-      notes: input.notes
-    });
-    const requestId = result.insertId;
+    let requestId;
+    try {
+      const [result] = await db.insert(purchaseRequests).values({
+        title: input.title,
+        description: input.description,
+        linkUrl: input.linkUrl,
+        categoryId: input.categoryId,
+        equipmentId: input.equipmentId || null,
+        urgency: input.urgency,
+        status: "pendente",
+        requestDate: now,
+        requestedBy: ctx.user.id,
+        notes: input.notes
+      });
+      requestId = result.insertId;
+    } catch (err) {
+      console.warn("[purchaseRequests.create] insert Drizzle falhou, tentando SQL legado:", err?.message);
+      const legacyUrgency = { baixa: "low", media: "medium", alta: "high", critica: "critical" };
+      const [rows] = await db.execute(
+        `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), NOW())`,
+        [
+          input.title,
+          input.description || null,
+          input.linkUrl || null,
+          input.categoryId || null,
+          input.equipmentId || null,
+          legacyUrgency[input.urgency || "media"] || "medium",
+          Date.now(),
+          ctx.user.id,
+          input.notes || null
+        ]
+      );
+      requestId = rows.insertId;
+    }
     if (input.items.length > 0) {
       await db.insert(purchaseRequestItems).values(
         input.items.map((item) => ({
@@ -14097,11 +14145,45 @@ var purchaseRequestsRouter = router({
     return { success: true };
   }),
   // Mark as read by responsible
-  markRead: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
+  markRead: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-    await db.update(purchaseRequests).set({ readDate: now, status: "lida" }).where(eq34(purchaseRequests.id, input.id));
+    await db.update(purchaseRequests).set({ readDate: now, status: "lida", respondedBy: ctx.user.id, respondedAt: now }).where(eq34(purchaseRequests.id, input.id));
+    return { success: true };
+  }),
+  // Responsável responde a solicitação (parecer) — também marca como lida
+  respond: protectedProcedure.input(z35.object({
+    id: z35.number(),
+    responseNotes: z35.string().min(1)
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    const [cur] = await db.select({ status: purchaseRequests.status, readDate: purchaseRequests.readDate }).from(purchaseRequests).where(eq34(purchaseRequests.id, input.id)).limit(1);
+    await db.update(purchaseRequests).set({
+      responseNotes: input.responseNotes,
+      respondedBy: ctx.user.id,
+      respondedAt: now,
+      ...cur?.readDate ? {} : { readDate: now },
+      ...cur?.status === "pendente" ? { status: "lida" } : {}
+    }).where(eq34(purchaseRequests.id, input.id));
+    return { success: true };
+  }),
+  // Negar solicitação com motivo
+  deny: protectedProcedure.input(z35.object({
+    id: z35.number(),
+    denialReason: z35.string().min(1)
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
+    await db.update(purchaseRequests).set({
+      status: "negada",
+      denialReason: input.denialReason,
+      respondedBy: ctx.user.id,
+      respondedAt: now
+    }).where(eq34(purchaseRequests.id, input.id));
     return { success: true };
   }),
   // Mark as purchased
@@ -14109,14 +14191,16 @@ var purchaseRequestsRouter = router({
     id: z35.number(),
     purchaseDate: z35.string().optional(),
     expectedArrival: z35.string().optional()
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.update(purchaseRequests).set({
       purchaseDate: input.purchaseDate || now,
       expectedArrival: input.expectedArrival,
-      status: "comprada"
+      status: "comprada",
+      respondedBy: ctx.user.id,
+      respondedAt: now
     }).where(eq34(purchaseRequests.id, input.id));
     return { success: true };
   }),

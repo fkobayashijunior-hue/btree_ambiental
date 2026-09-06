@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -22,11 +23,12 @@ const STATUS_COLORS: Record<string, string> = {
   comprada: 'bg-purple-100 text-purple-800 border-purple-200',
   recebida: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   cancelada: 'bg-gray-100 text-gray-500 border-gray-200',
+  negada: 'bg-red-100 text-red-800 border-red-200',
 };
 
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Pendente', lida: 'Lida', aprovada: 'Aprovada',
-  comprada: 'Comprada', recebida: 'Recebida', cancelada: 'Cancelada',
+  comprada: 'Comprada', recebida: 'Recebida', cancelada: 'Cancelada', negada: 'Negada',
 };
 
 const URGENCY_COLORS: Record<string, string> = {
@@ -56,9 +58,21 @@ export default function PurchaseRequestDetailPage() {
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
   const [purchaseDate, setPurchaseDate] = useState('');
   const [expectedArrival, setExpectedArrival] = useState('');
+  const [showRespondDialog, setShowRespondDialog] = useState(false);
+  const [responseNotes, setResponseNotes] = useState('');
+  const [showDenyDialog, setShowDenyDialog] = useState(false);
+  const [denialReason, setDenialReason] = useState('');
 
   const { data: req, isLoading } = trpc.purchaseRequests.getById.useQuery({ id });
 
+  const respondMutation = trpc.purchaseRequests.respond.useMutation({
+    onSuccess: () => { utils.purchaseRequests.getById.invalidate({ id }); setShowRespondDialog(false); setResponseNotes(''); toast.success("Resposta registrada"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const denyMutation = trpc.purchaseRequests.deny.useMutation({
+    onSuccess: () => { utils.purchaseRequests.getById.invalidate({ id }); utils.purchaseRequests.list.invalidate(); setShowDenyDialog(false); setDenialReason(''); toast.success("Solicitação negada"); },
+    onError: (e) => toast.error(e.message),
+  });
   const markReadMutation = trpc.purchaseRequests.markRead.useMutation({
     onSuccess: () => { utils.purchaseRequests.getById.invalidate({ id }); toast.success("Marcado como lida"); },
   });
@@ -205,6 +219,34 @@ export default function PurchaseRequestDetailPage() {
               <span className="font-medium">Obs:</span> {req.notes}
             </div>
           )}
+          {(req as any).equipmentName && (
+            <div className="mt-3 p-2 bg-blue-50 rounded text-sm text-blue-800">
+              <span className="font-medium">Equipamento:</span> {(req as any).equipmentName}{(req as any).equipmentPlate ? ` (${(req as any).equipmentPlate})` : ''}
+            </div>
+          )}
+          {(req as any).responseNotes && (
+            <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-900">
+              <span className="font-medium">Resposta{(req as any).respondedByName ? ` de ${(req as any).respondedByName}` : ''}{(req as any).respondedAt ? ` em ${fmt((req as any).respondedAt)}` : ''}:</span> {(req as any).responseNotes}
+            </div>
+          )}
+          {(req as any).denialReason && (
+            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-900">
+              <span className="font-medium">Motivo da negativa:</span> {(req as any).denialReason}
+            </div>
+          )}
+          {/* Ações do responsável */}
+          {req.status !== 'negada' && req.status !== 'cancelada' && (
+            <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
+              <Button size="sm" variant="outline" onClick={() => setShowRespondDialog(true)}>
+                <Edit2 className="w-3.5 h-3.5 mr-1" /> Responder
+              </Button>
+              {req.status !== 'comprada' && req.status !== 'recebida' && (
+                <Button size="sm" variant="outline" className="text-red-600 border-red-300 hover:bg-red-50" onClick={() => setShowDenyDialog(true)}>
+                  <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Negar
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -347,6 +389,63 @@ export default function PurchaseRequestDetailPage() {
               className="bg-purple-600 hover:bg-purple-700"
             >
               {markPurchasedMutation.isPending ? 'Salvando...' : 'Confirmar Compra'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Respond Dialog */}
+      <Dialog open={showRespondDialog} onOpenChange={setShowRespondDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Responder solicitação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Resposta / parecer *</Label>
+              <Textarea
+                value={responseNotes}
+                onChange={e => setResponseNotes(e.target.value)}
+                placeholder="Ex: Verificando preço com fornecedor, compra aprovada, aguardando orçamento..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRespondDialog(false)}>Cancelar</Button>
+            <Button
+              onClick={() => respondMutation.mutate({ id, responseNotes })}
+              disabled={!responseNotes.trim() || respondMutation.isPending}
+            >
+              {respondMutation.isPending ? 'Enviando...' : 'Enviar resposta'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Deny Dialog */}
+      <Dialog open={showDenyDialog} onOpenChange={setShowDenyDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Negar solicitação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Motivo da negativa *</Label>
+              <Textarea
+                value={denialReason}
+                onChange={e => setDenialReason(e.target.value)}
+                placeholder="Ex: Item fora do orçamento, compra não autorizada, equipamento será substituído..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDenyDialog(false)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              onClick={() => denyMutation.mutate({ id, denialReason })}
+              disabled={!denialReason.trim() || denyMutation.isPending}
+            >
+              {denyMutation.isPending ? 'Negando...' : 'Confirmar negativa'}
             </Button>
           </DialogFooter>
         </DialogContent>

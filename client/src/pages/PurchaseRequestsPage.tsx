@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
   comprada: 'Comprada',
   recebida: 'Recebida',
   cancelada: 'Cancelada',
+  negada: 'Negada',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -32,6 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
   comprada: 'bg-purple-100 text-purple-800 border-purple-200',
   recebida: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   cancelada: 'bg-gray-100 text-gray-500 border-gray-200',
+  negada: 'bg-red-100 text-red-800 border-red-200',
 };
 
 const URGENCY_LABELS: Record<string, string> = {
@@ -72,12 +74,15 @@ export default function PurchaseRequestsPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterUrgency, setFilterUrgency] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterEquipment, setFilterEquipment] = useState<string>('all');
+  const [searchText, setSearchText] = useState<string>('');
 
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
+  const [equipmentId, setEquipmentId] = useState<string>('');
   const [urgency, setUrgency] = useState<'baixa' | 'media' | 'alta' | 'critica'>('media');
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<NewItem[]>([{ name: '', quantity: '1', unit: 'un', notes: '' }]);
@@ -85,6 +90,7 @@ export default function PurchaseRequestsPage() {
 
   const { data: requests, isLoading } = trpc.purchaseRequests.list.useQuery();
   const { data: categories } = trpc.purchaseCategories.list.useQuery();
+  const { data: equipmentList } = trpc.cargoLoads.listTrucks.useQuery();
 
   const createMutation = trpc.purchaseRequests.create.useMutation({
     onSuccess: async (data) => {
@@ -165,6 +171,7 @@ export default function PurchaseRequestsPage() {
       description: description || undefined,
       linkUrl: linkUrl || undefined,
       categoryId: categoryId ? parseInt(categoryId) : undefined,
+      equipmentId: equipmentId ? parseInt(equipmentId) : undefined,
       urgency,
       notes: notes || undefined,
       items: validItems,
@@ -175,6 +182,12 @@ export default function PurchaseRequestsPage() {
     if (filterStatus !== 'all' && r.status !== filterStatus) return false;
     if (filterUrgency !== 'all' && r.urgency !== filterUrgency) return false;
     if (filterCategory !== 'all' && String(r.categoryId) !== filterCategory) return false;
+    if (filterEquipment !== 'all' && String(r.equipmentId || '') !== filterEquipment) return false;
+    if (searchText.trim()) {
+      const s = searchText.toLowerCase();
+      const hay = `${r.title || ''} ${r.description || ''} ${r.equipmentName || ''} ${r.categoryName || ''} ${r.requestedByName || ''}`.toLowerCase();
+      if (!hay.includes(s)) return false;
+    }
     return true;
   });
 
@@ -257,9 +270,26 @@ export default function PurchaseRequestsPage() {
                 ))}
               </SelectContent>
             </Select>
-            {(filterStatus !== 'all' || filterUrgency !== 'all' || filterCategory !== 'all') && (
+            <Select value={filterEquipment} onValueChange={setFilterEquipment}>
+              <SelectTrigger className="w-44 h-8 text-xs">
+                <SelectValue placeholder="Equipamento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos equipamentos</SelectItem>
+                {(equipmentList || []).map((e: any) => (
+                  <SelectItem key={e.id} value={String(e.id)}>{e.name}{e.licensePlate ? ` (${e.licensePlate})` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              placeholder="Buscar..."
+              className="w-40 h-8 text-xs"
+            />
+            {(filterStatus !== 'all' || filterUrgency !== 'all' || filterCategory !== 'all' || filterEquipment !== 'all' || searchText.trim()) && (
               <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => {
-                setFilterStatus('all'); setFilterUrgency('all'); setFilterCategory('all');
+                setFilterStatus('all'); setFilterUrgency('all'); setFilterCategory('all'); setFilterEquipment('all'); setSearchText('');
               }}>
                 <X className="w-3 h-3 mr-1" /> Limpar
               </Button>
@@ -272,60 +302,74 @@ export default function PurchaseRequestsPage() {
       {isLoading ? (
         <div className="text-center py-8 text-gray-400">Carregando...</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>Nenhuma solicitação encontrada</p>
-          <Button variant="outline" className="mt-3" onClick={() => setShowForm(true)}>
-            <Plus className="w-4 h-4 mr-2" /> Criar primeira solicitação
-          </Button>
-        </div>
+        <Card>
+          <CardContent className="p-8 text-center">
+            <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 mb-4">Nenhuma solicitação encontrada</p>
+            <Button onClick={() => setShowForm(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Criar primeira solicitação
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(req => {
-            const imgs: string[] = req.images ? JSON.parse(req.images) : [];
-            return (
-              <Card
-                key={req.id}
-                className="cursor-pointer hover:shadow-md transition-shadow border-l-4"
-                style={{ borderLeftColor: req.urgency === 'critica' ? '#ef4444' : req.urgency === 'alta' ? '#f97316' : req.urgency === 'media' ? '#eab308' : '#9ca3af' }}
-                onClick={() => setLocation(`/compras/${req.id}`)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900 truncate">{req.title}</span>
-                        <Badge className={`text-xs px-2 py-0.5 border ${STATUS_COLORS[req.status]}`}>
-                          {STATUS_LABELS[req.status]}
-                        </Badge>
-                        <Badge className={`text-xs px-2 py-0.5 flex items-center gap-1 ${URGENCY_COLORS[req.urgency]}`}>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm min-w-[860px]">
+              <thead>
+                <tr className="bg-green-700 text-white">
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Prioridade</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Solicitação</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Equipamento</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Categoria</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Solicitante</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Data</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Status</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Responsável</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Entrega prevista</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(req => {
+                  const urgencyOrder: Record<string, number> = { critica: 0, alta: 1, media: 2, baixa: 3 };
+                  return (
+                    <tr
+                      key={req.id}
+                      className="border-b hover:bg-green-50/60 cursor-pointer"
+                      onClick={() => setLocation(`/compras/${req.id}`)}
+                    >
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <Badge className={`text-xs px-2 py-0.5 flex items-center gap-1 w-fit ${URGENCY_COLORS[req.urgency]}`}>
                           {URGENCY_ICONS[req.urgency]}
                           {URGENCY_LABELS[req.urgency]}
                         </Badge>
-                        {req.categoryName && (
-                          <Badge variant="outline" className="text-xs" style={{ borderColor: req.categoryColor || '#ccc', color: req.categoryColor || '#666' }}>
-                            {req.categoryName}
-                          </Badge>
-                        )}
-                      </div>
-                      {req.description && (
-                        <p className="text-sm text-gray-500 mt-1 line-clamp-1">{req.description}</p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-                        <span>Solicitado: {req.requestDate ? new Date(req.requestDate).toLocaleDateString('pt-BR') : '-'}</span>
-                        {req.linkUrl && <ExternalLink className="w-3 h-3" />}
-                        {imgs.length > 0 && <span className="flex items-center gap-1"><Image className="w-3 h-3" />{imgs.length}</span>}
-                      </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-300 flex-shrink-0 mt-1" />
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-gray-900">{req.title}</div>
+                        {req.description && <div className="text-xs text-gray-500 line-clamp-1">{req.description}</div>}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">
+                        {req.equipmentName ? `${req.equipmentName}${req.equipmentPlate ? ` (${req.equipmentPlate})` : ''}` : '—'}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{req.categoryName || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{req.requestedByName || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{req.requestDate ? new Date(req.requestDate).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <Badge className={`text-xs px-2 py-0.5 border ${STATUS_COLORS[req.status]}`}>
+                          {STATUS_LABELS[req.status]}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{req.respondedByName || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{req.expectedArrival ? new Date(req.expectedArrival).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 text-right"><ChevronRight className="w-4 h-4 text-gray-300 inline" /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       )}
-
       {/* New Request Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -374,6 +418,21 @@ export default function PurchaseRequestsPage() {
               </div>
             </div>
 
+            {/* Equipment (optional) */}
+            <div>
+              <Label>Equipamento (opcional)</Label>
+              <Select value={equipmentId} onValueChange={setEquipmentId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Vincular a um equipamento..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(equipmentList || []).map((e: any) => (
+                    <SelectItem key={e.id} value={String(e.id)}>{e.name}{e.licensePlate ? ` (${e.licensePlate})` : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Se a compra for para um equipamento específico (caminhão, trator, motosserra), selecione aqui.</p>
+            </div>
             {/* Description */}
             <div>
               <Label>Descrição</Label>
