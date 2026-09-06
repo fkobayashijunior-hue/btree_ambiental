@@ -7,7 +7,7 @@ import { purchaseRequestItems } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 
-const statusEnum = z.enum(['pendente', 'lida', 'aprovada', 'comprada', 'recebida', 'cancelada', 'negada']);
+const statusEnum = z.enum(['pendente', 'lida', 'analisando', 'comprando', 'aprovada', 'comprada', 'recebida', 'cancelada', 'negada']);
 const urgencyEnum = z.enum(['baixa', 'media', 'alta', 'critica']);
 
 // Mapeamentos entre o padrão do app (português) e o ENUM legado do banco (inglês)
@@ -19,6 +19,7 @@ const STATUS_FROM_DB: Record<string, string> = {
   received: 'recebida', cancelled: 'cancelada', canceled: 'cancelada', negada: 'negada',
   pendente: 'pendente', lida: 'lida', aprovada: 'aprovada', comprada: 'comprada',
   recebida: 'recebida', cancelada: 'cancelada',
+  analisando: 'analisando', comprando: 'comprando',
 };
 const URGENCY_FROM_DB: Record<string, string> = {
   low: 'baixa', medium: 'media', high: 'alta', critical: 'critica',
@@ -142,7 +143,7 @@ export const purchaseRequestsRouter = router({
         LEFT JOIN users resp_user ON pr.responded_by = resp_user.id
         WHERE pr.id = ?
         LIMIT 1
-      `, [input.id]);
+      `);
       const row = (rows as any[])[0];
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
       const normalized = normalizeRow(row);
@@ -232,6 +233,43 @@ export const purchaseRequestsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.execute(sql`UPDATE purchase_requests SET read_at = ${Date.now()}, status = 'lida', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+      return { success: true };
+    }),
+
+  // Atualizar status diretamente (para a grade de edição)
+  updateStatus: protectedProcedure
+    .input(z.object({ id: z.number(), status: statusEnum }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const nowMs = Date.now();
+      // Sincroniza colunas de data conforme o status
+      if (input.status === 'lida') {
+        await db.execute(sql`UPDATE purchase_requests SET status = 'lida', read_at = COALESCE(read_at, ${nowMs}), responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+      } else if (input.status === 'comprada') {
+        await db.execute(sql`UPDATE purchase_requests SET status = 'comprada', purchased_at = COALESCE(purchased_at, ${nowMs}), responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+      } else if (input.status === 'recebida') {
+        await db.execute(sql`UPDATE purchase_requests SET status = 'recebida', received_at = COALESCE(received_at, ${nowMs}), updated_at = NOW() WHERE id = ${input.id}`);
+      } else if (input.status === 'negada') {
+        await db.execute(sql`UPDATE purchase_requests SET status = 'negada', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+      } else {
+        await db.execute(sql`UPDATE purchase_requests SET status = ${input.status}, updated_at = NOW() WHERE id = ${input.id}`);
+      }
+      return { success: true };
+    }),
+
+  // Atualizar datas da compra/entrega (edição direta na grade)
+  updateDates: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      purchaseDate: z.string().optional().nullable(),   // 'YYYY-MM-DD' ou null
+      expectedArrival: z.string().optional().nullable(), // 'YYYY-MM-DD' ou null
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const toMs = (d?: string | null) => d ? new Date(d + 'T12:00:00').getTime() : null;
+      await db.execute(sql`UPDATE purchase_requests SET purchased_at = ${toMs(input.purchaseDate)}, expected_arrival = ${toMs(input.expectedArrival)}, updated_at = NOW() WHERE id = ${input.id}`);
       return { success: true };
     }),
 

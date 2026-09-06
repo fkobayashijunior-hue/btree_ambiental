@@ -13951,7 +13951,7 @@ init_cloudinary();
 import { z as z35 } from "zod";
 import { TRPCError as TRPCError24 } from "@trpc/server";
 import { eq as eq34, sql as sql21 } from "drizzle-orm";
-var statusEnum = z35.enum(["pendente", "lida", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
+var statusEnum = z35.enum(["pendente", "lida", "analisando", "comprando", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
 var urgencyEnum = z35.enum(["baixa", "media", "alta", "critica"]);
 var URGENCY_TO_DB = {
   baixa: "low",
@@ -13973,7 +13973,9 @@ var STATUS_FROM_DB = {
   aprovada: "aprovada",
   comprada: "comprada",
   recebida: "recebida",
-  cancelada: "cancelada"
+  cancelada: "cancelada",
+  analisando: "analisando",
+  comprando: "comprando"
 };
 var URGENCY_FROM_DB = {
   low: "baixa",
@@ -14093,7 +14095,7 @@ var purchaseRequestsRouter = router({
         LEFT JOIN users resp_user ON pr.responded_by = resp_user.id
         WHERE pr.id = ?
         LIMIT 1
-      `, [input.id]);
+      `);
     const row = rows[0];
     if (!row) throw new TRPCError24({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const normalized = normalizeRow(row);
@@ -14173,6 +14175,38 @@ var purchaseRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql21`UPDATE purchase_requests SET read_at = ${Date.now()}, status = 'lida', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+    return { success: true };
+  }),
+  // Atualizar status diretamente (para a grade de edição)
+  updateStatus: protectedProcedure.input(z35.object({ id: z35.number(), status: statusEnum })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    const nowMs = Date.now();
+    if (input.status === "lida") {
+      await db.execute(sql21`UPDATE purchase_requests SET status = 'lida', read_at = COALESCE(read_at, ${nowMs}), responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+    } else if (input.status === "comprada") {
+      await db.execute(sql21`UPDATE purchase_requests SET status = 'comprada', purchased_at = COALESCE(purchased_at, ${nowMs}), responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+    } else if (input.status === "recebida") {
+      await db.execute(sql21`UPDATE purchase_requests SET status = 'recebida', received_at = COALESCE(received_at, ${nowMs}), updated_at = NOW() WHERE id = ${input.id}`);
+    } else if (input.status === "negada") {
+      await db.execute(sql21`UPDATE purchase_requests SET status = 'negada', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+    } else {
+      await db.execute(sql21`UPDATE purchase_requests SET status = ${input.status}, updated_at = NOW() WHERE id = ${input.id}`);
+    }
+    return { success: true };
+  }),
+  // Atualizar datas da compra/entrega (edição direta na grade)
+  updateDates: protectedProcedure.input(z35.object({
+    id: z35.number(),
+    purchaseDate: z35.string().optional().nullable(),
+    // 'YYYY-MM-DD' ou null
+    expectedArrival: z35.string().optional().nullable()
+    // 'YYYY-MM-DD' ou null
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    const toMs = (d) => d ? (/* @__PURE__ */ new Date(d + "T12:00:00")).getTime() : null;
+    await db.execute(sql21`UPDATE purchase_requests SET purchased_at = ${toMs(input.purchaseDate)}, expected_arrival = ${toMs(input.expectedArrival)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   // Responsável responde a solicitação (parecer) — também marca como lida

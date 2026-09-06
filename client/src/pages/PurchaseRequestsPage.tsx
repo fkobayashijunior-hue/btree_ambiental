@@ -18,12 +18,14 @@ import {
 
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Pendente',
-  lida: 'Lida',
+  lida: 'Visualizado',
+  analisando: 'Analisando',
+  comprando: 'Comprando',
   aprovada: 'Aprovada',
   comprada: 'Comprada',
   recebida: 'Recebida',
   cancelada: 'Cancelada',
-  negada: 'Negada',
+  negada: 'Rejeitado',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -34,6 +36,8 @@ const STATUS_COLORS: Record<string, string> = {
   recebida: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   cancelada: 'bg-gray-100 text-gray-500 border-gray-200',
   negada: 'bg-red-100 text-red-800 border-red-200',
+  analisando: 'bg-amber-100 text-amber-800 border-amber-200',
+  comprando: 'bg-purple-100 text-purple-800 border-purple-200',
 };
 
 const URGENCY_LABELS: Record<string, string> = {
