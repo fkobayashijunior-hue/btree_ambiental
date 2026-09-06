@@ -170,21 +170,28 @@ export const purchaseRequestsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // INSERT direto no formato legado do banco (requested_at epoch ms, coluna link, ENUM inglês)
-      const [result] = await db.execute<any>(
-        `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW(), NOW())`,
-        [
-          input.title,
-          input.description || null,
-          input.linkUrl || null,
-          input.categoryId || null,
-          input.equipmentId || null,
-          URGENCY_TO_DB[input.urgency || 'media'] || 'medium',
-          Date.now(),
-          ctx.user.id,
-          input.notes || null,
-        ]
-      );
+      let result: any;
+      try {
+        [result] = await db.execute<any>(
+          `INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW(), NOW())`,
+          [
+            input.title,
+            input.description || null,
+            input.linkUrl || null,
+            input.categoryId || null,
+            input.equipmentId || null,
+            URGENCY_TO_DB[input.urgency || 'media'] || 'medium',
+            Date.now(),
+            ctx.user.id,
+            input.notes || null,
+          ]
+        );
+      } catch (err: any) {
+        const cause = err?.cause?.message || err?.message || String(err);
+        console.error('[purchaseRequests.create] ERRO:', cause);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Falha ao gravar: ${cause}` });
+      }
       const requestId = (result as any).insertId;
       if (input.items.length > 0) {
         await db.insert(purchaseRequestItems).values(
