@@ -5,7 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { purchaseRequestItems } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
-import { storagePut } from "../storage";
+import { cloudinaryUpload } from "../cloudinary";
 
 const statusEnum = z.enum(['pendente', 'lida', 'aprovada', 'comprada', 'recebida', 'cancelada', 'negada']);
 const urgencyEnum = z.enum(['baixa', 'media', 'alta', 'critica']);
@@ -317,10 +317,8 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const buffer = Buffer.from(input.imageBase64, 'base64');
-      const ext = input.mimeType.split('/')[1] || 'jpg';
-      const key = `purchase-requests/${input.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { url } = await storagePut(key, buffer, input.mimeType);
+      const dataUri = `data:${input.mimeType};base64,${input.imageBase64}`;
+      const { url } = await cloudinaryUpload(dataUri, `btree/purchase-requests/${input.id}`, `foto-${Date.now()}.jpg`);
       const [rows] = await db.execute(sql`SELECT images FROM purchase_requests WHERE id = ${input.id}`) as any;
       const current = (rows as any[])[0]?.images;
       let images: string[] = [];
