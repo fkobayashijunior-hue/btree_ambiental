@@ -895,6 +895,25 @@ async function startServer() {
       return res.status(500).json({ error: e.message });
     }
   });
+  app.get('/api/collab-diagnostic', async (req, res) => {
+    try {
+      const { getDb } = await import('../db');
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: 'db indisponivel' });
+      const [cols] = await db.execute(/*sql*/`SHOW COLUMNS FROM collaborators`);
+      let selectTest: any = null;
+      try {
+        const { collaborators } = await import('../../drizzle/schema');
+        const r = await db.select().from(collaborators).limit(3);
+        selectTest = { ok: true, count: r.length };
+      } catch (e: any) {
+        selectTest = { error: e.message };
+      }
+      return res.json({ columns: (cols as any[]).map((c: any) => c.Field), selectTest });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
   // Image proxy endpoint - fetches external images and returns as base64 to avoid CORS issues in PDF generation
   app.get('/api/image-proxy', async (req, res) => {
     try {

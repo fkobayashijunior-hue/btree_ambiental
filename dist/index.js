@@ -22055,6 +22055,28 @@ async function startServer() {
       return res.status(500).json({ error: e.message });
     }
   });
+  app.get("/api/collab-diagnostic", async (req, res) => {
+    try {
+      const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+      const db = await getDb2();
+      if (!db) return res.status(500).json({ error: "db indisponivel" });
+      const [cols] = await db.execute(
+        /*sql*/
+        `SHOW COLUMNS FROM collaborators`
+      );
+      let selectTest = null;
+      try {
+        const { collaborators: collaborators5 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+        const r = await db.select().from(collaborators5).limit(3);
+        selectTest = { ok: true, count: r.length };
+      } catch (e) {
+        selectTest = { error: e.message };
+      }
+      return res.json({ columns: cols.map((c) => c.Field), selectTest });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/image-proxy", async (req, res) => {
     try {
       const url = req.query.url;
