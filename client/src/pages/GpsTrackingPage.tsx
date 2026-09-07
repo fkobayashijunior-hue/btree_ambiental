@@ -192,32 +192,40 @@ function dateInputToISO(dateStr: string, endOfDay = false): string {
 }
 
 // Criar ícone de seta para marcador Leaflet
-function createArrowIcon(color: string, rotation: number) {
-  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-    <g transform="rotate(${rotation}, 14, 14)">
-      <polygon points="14,2 22,24 14,18 6,24" fill="${color}" stroke="#fff" stroke-width="1.5"/>
-    </g>
-  </svg>`;
+function createArrowIcon(color: string, rotation: number, label?: string) {
+  const safe = label ? String(label).replace(/[<>]/g, "") : "";
+  const svgStr = `<div style="display:flex;flex-direction:column;align-items:center">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+      <g transform="rotate(${rotation}, 14, 14)">
+        <polygon points="14,2 22,24 14,18 6,24" fill="${color}" stroke="#fff" stroke-width="1.5"/>
+      </g>
+    </svg>
+    ${safe ? `<span style="margin-top:2px;background:rgba(0,0,0,.72);color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:6px;white-space:nowrap">${safe}</span>` : ""}
+  </div>`;
   return L.divIcon({
     html: svgStr,
     className: "leaflet-arrow-icon",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14],
+    iconSize: [130, 52],
+    iconAnchor: [65, 20],
+    popupAnchor: [0, -22],
   });
 }
 
 // Criar ícone de círculo para dispositivo parado
-function createCircleIcon(color: string) {
-  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-    <circle cx="10" cy="10" r="8" fill="${color}" stroke="#fff" stroke-width="2"/>
-  </svg>`;
+function createCircleIcon(color: string, label?: string) {
+  const safe = label ? String(label).replace(/[<>]/g, "") : "";
+  const svgStr = `<div style="display:flex;flex-direction:column;align-items:center">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="8" fill="${color}" stroke="#fff" stroke-width="2"/>
+    </svg>
+    ${safe ? `<span style="margin-top:2px;background:rgba(0,0,0,.72);color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:6px;white-space:nowrap">${safe}</span>` : ""}
+  </div>`;
   return L.divIcon({
     html: svgStr,
     className: "leaflet-circle-icon",
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -10],
+    iconSize: [130, 46],
+    iconAnchor: [65, 16],
+    popupAnchor: [0, -18],
   });
 }
 
