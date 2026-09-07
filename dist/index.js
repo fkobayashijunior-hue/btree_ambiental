@@ -658,6 +658,7 @@ var init_schema = __esm({
       role: mysqlEnum(["administrativo", "encarregado", "mecanico", "motosserrista", "carregador", "operador", "motorista", "terceirizado"]).default("operador").notNull(),
       pixKey: varchar("pix_key", { length: 255 }),
       dailyRate: varchar("daily_rate", { length: 20 }),
+      monthlySalary: varchar("monthly_salary", { length: 20 }),
       employmentType: mysqlEnum("employment_type", ["clt", "terceirizado", "diarista", "pj", "semanal"]).default("diarista"),
       shirtSize: mysqlEnum("shirt_size", ["PP", "P", "M", "G", "GG", "XGG"]),
       pantsSize: varchar("pants_size", { length: 10 }),
@@ -5125,6 +5126,7 @@ var collaboratorsRouter = router({
     role: z2.enum(collaboratorRoles),
     pixKey: z2.string().optional(),
     dailyRate: z2.string().optional(),
+    monthlySalary: z2.string().optional(),
     employmentType: z2.enum(["clt", "terceirizado", "diarista", "pj", "semanal"]).optional(),
     shirtSize: z2.enum(["PP", "P", "M", "G", "GG", "XGG"]).optional(),
     pantsSize: z2.string().optional(),
@@ -5170,6 +5172,7 @@ var collaboratorsRouter = router({
       role: input.role,
       pixKey: input.pixKey,
       dailyRate: input.dailyRate,
+      monthlySalary: input.monthlySalary,
       employmentType: input.employmentType,
       shirtSize: input.shirtSize,
       pantsSize: input.pantsSize,
@@ -5218,6 +5221,7 @@ var collaboratorsRouter = router({
     role: z2.enum(collaboratorRoles).optional(),
     pixKey: z2.string().optional(),
     dailyRate: z2.string().optional(),
+    monthlySalary: z2.string().optional(),
     employmentType: z2.enum(["clt", "terceirizado", "diarista", "pj", "semanal"]).optional(),
     shirtSize: z2.enum(["PP", "P", "M", "G", "GG", "XGG"]).optional().nullable(),
     pantsSize: z2.string().optional(),
@@ -9924,8 +9928,13 @@ var attendanceRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const [collaborator] = await db.select({ name: collaborators.name }).from(collaborators).where(eq15(collaborators.id, input.collaboratorId));
+    const [collaborator] = await db.select({ name: collaborators.name, monthlySalary: collaborators.monthlySalary }).from(collaborators).where(eq15(collaborators.id, input.collaboratorId));
     const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
+    let finalDailyValue = input.dailyValue;
+    if (input.employmentType === "clt" && (!finalDailyValue || parseFloat(String(finalDailyValue).replace(",", ".")) === 0)) {
+      const sal = parseFloat(String(collaborator?.monthlySalary || "0").replace(",", "."));
+      if (sal > 0) finalDailyValue = (sal / 22).toFixed(2);
+    }
     let resolvedWorkLocationId = input.workLocationId || null;
     let resolvedLocationName = input.locationName || null;
     if (resolvedLocationName && !resolvedWorkLocationId) {
@@ -9940,7 +9949,7 @@ var attendanceRouter = router({
       collaboratorId: input.collaboratorId,
       date: (/* @__PURE__ */ new Date(input.date + "T12:00:00")).toISOString().slice(0, 19).replace("T", " "),
       employmentTypeCa: input.employmentType,
-      dailyValue: sanitizeNumeric(input.dailyValue) ?? input.dailyValue,
+      dailyValue: sanitizeNumeric(finalDailyValue) ?? finalDailyValue,
       pixKey: input.pixKey || null,
       activity: input.activity || null,
       observations: input.observations || null,

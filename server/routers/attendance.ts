@@ -178,9 +178,15 @@ export const attendanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      // Buscar nome do colaborador para a notificação
-      const [collaborator] = await db.select({ name: collaborators.name }).from(collaborators).where(eq(collaborators.id, input.collaboratorId));
+      // Buscar nome e salário do colaborador
+      const [collaborator] = await db.select({ name: collaborators.name, monthlySalary: collaborators.monthlySalary }).from(collaborators).where(eq(collaborators.id, input.collaboratorId));
       const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
+      // Para CLT sem diária informada, calcula custo do dia = salário / 22 dias úteis (apenas para custo do local, não pagamento semanal)
+      let finalDailyValue = input.dailyValue;
+      if (input.employmentType === "clt" && (!finalDailyValue || parseFloat(String(finalDailyValue).replace(",", ".")) === 0)) {
+        const sal = parseFloat(String(collaborator?.monthlySalary || "0").replace(",", "."));
+        if (sal > 0) finalDailyValue = (sal / 22).toFixed(2);
+      }
 
       // Resolver workLocationId a partir do locationName se não foi fornecido
       let resolvedWorkLocationId = input.workLocationId || null;
@@ -199,7 +205,7 @@ export const attendanceRouter = router({
         collaboratorId: input.collaboratorId,
         date: new Date(input.date + "T12:00:00").toISOString().slice(0, 19).replace("T", " "),
         employmentTypeCa: input.employmentType,
-        dailyValue: sanitizeNumeric(input.dailyValue) ?? input.dailyValue,
+        dailyValue: sanitizeNumeric(finalDailyValue) ?? finalDailyValue,
         pixKey: input.pixKey || null,
         activity: input.activity || null,
         observations: input.observations || null,
