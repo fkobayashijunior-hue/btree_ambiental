@@ -272,13 +272,14 @@ export default function AttendanceList() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.collaboratorId) { toast.error("Selecione o colaborador"); return; }
-    // Líder não precisa informar valor da diária
-    if (!isLider && !form.dailyValue) { toast.error("Informe o valor da diária"); return; }
+    // Diária obrigatória apenas para DIARISTA; CLT/terceirizado têm salário/valor próprio
+    const needDaily = !isLider && form.employmentType === "diarista";
+    if (needDaily && !form.dailyValue) { toast.error("Informe o valor da diária"); return; }
     const payload = {
       collaboratorId: parseInt(form.collaboratorId),
       date: form.date,
       employmentType: form.employmentType,
-      dailyValue: isLider ? "0" : form.dailyValue,
+      dailyValue: (isLider || form.employmentType !== "diarista") ? (form.dailyValue || "0") : form.dailyValue,
       pixKey: form.pixKey || undefined,
       activity: form.activity || undefined,
       observations: form.observations || undefined,
@@ -1305,12 +1306,11 @@ export default function AttendanceList() {
             {!isLider && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Valor da Diária (R$) *</Label>
+                  <Label>Valor da Diária (R$) {form.employmentType === "diarista" ? "*" : <span className="text-muted-foreground font-normal">(opcional)</span>}</Label>
                   <Input
                     value={form.dailyValue}
                     onChange={e => setForm(f => ({ ...f, dailyValue: e.target.value }))}
-                    placeholder="ex: 150,00"
-                    required
+                    placeholder={form.employmentType === "diarista" ? "ex: 150,00" : "CLT: não se aplica"}
                   />
                 </div>
                 <div>
