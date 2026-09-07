@@ -375,6 +375,7 @@ export const collaborators = mysqlTable("collaborators", {
 	role: mysqlEnum(['administrativo','encarregado','mecanico','motosserrista','carregador','operador','motorista','terceirizado']).default('operador').notNull(),
 	pixKey: varchar("pix_key", { length: 255 }),
 	dailyRate: varchar("daily_rate", { length: 20 }),
+	monthlySalary: varchar("monthly_salary", { length: 20 }),
 	employmentType: mysqlEnum("employment_type", ['clt','terceirizado','diarista']).default('diarista'),
 	shirtSize: mysqlEnum("shirt_size", ['PP','P','M','G','GG','XGG']),
 	pantsSize: varchar("pants_size", { length: 10 }),

@@ -76,7 +76,7 @@ const ROLE_COLORS: Record<string, string> = {
 type FormData = {
   name: string; email: string; phone: string; cpf: string;
   address: string; city: string; state: string; zipCode: string;
-  role: string; pixKey: string; dailyRate: string;
+  role: string; pixKey: string; dailyRate: string; monthlySalary: string;
   employmentType: string; shirtSize: string; pantsSize: string;
   shoeSize: string; bootSize: string; photoBase64: string;
   password: string; linkedUserId: number | null;
@@ -87,7 +87,7 @@ type FormData = {
 const emptyForm: FormData = {
   name: "", email: "", phone: "", cpf: "",
   address: "", city: "", state: "", zipCode: "",
-  role: "operador", pixKey: "", dailyRate: "",
+  role: "operador", pixKey: "", dailyRate: "", monthlySalary: "",
   employmentType: "diarista", shirtSize: "", pantsSize: "",
   shoeSize: "", bootSize: "", photoBase64: "", password: "",
   linkedUserId: null, clientId: null, active: true,
@@ -169,6 +169,7 @@ export default function Collaborators() {
       role: form.role as any,
       pixKey: form.pixKey || undefined,
       dailyRate: form.dailyRate || undefined,
+      monthlySalary: form.monthlySalary || undefined,
       employmentType: form.employmentType as any || undefined,
       shirtSize: form.shirtSize as any || undefined,
       pantsSize: form.pantsSize || undefined,
@@ -217,7 +218,7 @@ export default function Collaborators() {
       name: c.name || "", email: c.email || "", phone: c.phone || "",
       cpf: c.cpf || "", address: c.address || "",
       city: c.city || "", state: c.state || "", zipCode: c.zipCode || "",
-      role: c.role || "operador", pixKey: c.pixKey || "", dailyRate: c.dailyRate || "",
+      role: c.role || "operador", pixKey: c.pixKey || "", dailyRate: c.dailyRate || "", monthlySalary: c.monthlySalary || "",
       employmentType: c.employmentType || "diarista", shirtSize: c.shirtSize || "",
       pantsSize: c.pantsSize || "", shoeSize: c.shoeSize || "", bootSize: c.bootSize || "",
       photoBase64: "", password: "",
@@ -557,10 +558,17 @@ export default function Collaborators() {
                     <Input value={form.pixKey} onChange={e => setForm(f => ({ ...f, pixKey: e.target.value }))} placeholder="CPF, email ou telefone" />
                   </div>
                   <div>
-                    <Label>Diária (R$)</Label>
+                    <Label>Diária (R$) {form.employmentType === "diarista" ? "" : <span className="text-muted-foreground font-normal text-xs">(diarista)</span>}</Label>
                     <Input type="number" step="0.01" value={form.dailyRate} onChange={e => setForm(f => ({ ...f, dailyRate: e.target.value }))} placeholder="0,00" />
                   </div>
                 </div>
+                {form.employmentType === "clt" && (
+                  <div>
+                    <Label>Salário Mensal (R$) — para cálculo de custo do local</Label>
+                    <Input type="number" step="0.01" value={form.monthlySalary} onChange={e => setForm(f => ({ ...f, monthlySalary: e.target.value }))} placeholder="ex: 3000,00" />
+                    <p className="text-xs text-muted-foreground mt-1">Custo/dia = salário ÷ 22 dias úteis. CLT não entra em pagamentos semanais.</p>
+                  </div>
+                )}
                 <div>
                   <Label>Tipo de Vínculo</Label>
                   <select
