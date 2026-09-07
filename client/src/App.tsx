@@ -32,6 +32,7 @@ import GpsTrackingPage from "./pages/GpsTrackingPage";
 import ChainsawModule from "./pages/ChainsawModule";
 import ExtraExpenses from "./pages/ExtraExpenses";
 import FinancialModule from "./pages/FinancialModule";
+import PayrollPage from "./pages/PayrollPage";
 import GpsLocationsPage from "./pages/GpsLocationsPage";
 import ReplantingPage from "./pages/ReplantingPage";
 import ClientPaymentsPage from "./pages/ClientPaymentsPage";
@@ -60,6 +61,10 @@ import GeofencesPage from "./pages/GeofencesPage";
 import FreightTripsPage from "./pages/FreightTripsPage";
 import FinancialConsolidatedPage from "./pages/FinancialConsolidatedPage";
 import FiscalNotesPage from "./pages/FiscalNotesPage";
+import ContasAReceberPage from "./pages/ContasAReceberPage";
+import ContasAPagarPage from "./pages/ContasAPagarPage";
+import ExtratoMovimentacoesPage from "./pages/ExtratoMovimentacoesPage";
+import FluxoCaixaPage from "./pages/FluxoCaixaPage";
 import NotificationSettings from "./pages/NotificationSettings";
 import { registerAllOfflineHandlers } from "@/lib/offlineSync";
 
@@ -143,6 +148,9 @@ function Router() {
       <Route path={"/financeiro"}>
         {() => <WithLayout component={FinancialModule} />}
       </Route>
+      <Route path={"/folha-pagamento"}>
+        {() => <WithLayout component={PayrollPage} />}
+      </Route>
       <Route path={"/locais-gps"}>
         {() => <WithLayout component={GpsLocationsPage} />}
       </Route>
@@ -224,6 +232,18 @@ function Router() {
       </Route>
       <Route path={"/relatorio-consolidado"}>
         {() => <WithLayout component={FinancialConsolidatedPage} />}
+      </Route>
+      <Route path={"/contas-a-receber"}>
+        {() => <WithLayout component={ContasAReceberPage} />}
+      </Route>
+      <Route path={"/contas-a-pagar"}>
+        {() => <WithLayout component={ContasAPagarPage} />}
+      </Route>
+      <Route path={"/extrato-movimentacoes"}>
+        {() => <WithLayout component={ExtratoMovimentacoesPage} />}
+      </Route>
+      <Route path={"/fluxo-de-caixa"}>
+        {() => <WithLayout component={FluxoCaixaPage} />}
       </Route>
       {/* Rota pública para fornecedores revisarem/editarem sua resposta (DEVE vir antes de /orcamento/:token) */}
       <Route path={"/orcamento/resposta/:responseToken"} component={PublicResponseReviewPage} />

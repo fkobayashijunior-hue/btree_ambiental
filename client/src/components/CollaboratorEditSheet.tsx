@@ -1,0 +1,524 @@
+import { useEffect, useRef, useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "sonner";
+import { Camera, Eye, EyeOff, Lock, ChevronDown, ChevronUp, ImagePlus, X, Link2, Unlink, MapPin } from "lucide-react";
+
+// Formata CPF: 000.000.000-00
+function formatCPF(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+// Formata telefone: (00) 00000-0000
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+// Comprime imagem para máx 800px e qualidade 0.8 (reduz tamanho do base64)
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 800;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  administrativo: "Administrativo",
+  encarregado: "Encarregado",
+  mecanico: "Mecânico",
+  motosserrista: "Motosserrista",
+  carregador: "Carregador",
+  operador: "Operador",
+  motorista: "Motorista",
+  terceirizado: "Terceirizado",
+};
+
+type FormData = {
+  name: string; email: string; phone: string; cpf: string;
+  address: string; city: string; state: string; zipCode: string;
+  role: string; pixKey: string; dailyRate: string; monthlySalary: string;
+  employmentType: string; shirtSize: string; pantsSize: string;
+  shoeSize: string; bootSize: string; photoBase64: string;
+  password: string; linkedUserId: number | null;
+  clientId: number | null;
+  active: boolean;
+};
+
+const emptyForm: FormData = {
+  name: "", email: "", phone: "", cpf: "",
+  address: "", city: "", state: "", zipCode: "",
+  role: "operador", pixKey: "", dailyRate: "", monthlySalary: "",
+  employmentType: "diarista", shirtSize: "", pantsSize: "",
+  shoeSize: "", bootSize: "", photoBase64: "", password: "",
+  linkedUserId: null, clientId: null, active: true,
+};
+
+function SectionTitle({ icon, title, open, onToggle }: { icon: React.ReactNode; title: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors text-emerald-800 font-semibold text-sm"
+    >
+      <span className="flex items-center gap-2">{icon}{title}</span>
+      {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+    </button>
+  );
+}
+
+// Painel lateral (Sheet) de cadastro/edição de colaborador, reutilizável em qualquer tela.
+// collaboratorId null = criar novo. Passar um id existente = editar (busca os dados via getById).
+export default function CollaboratorEditSheet({
+  open,
+  onOpenChange,
+  collaboratorId,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  collaboratorId: number | null;
+  onSaved?: () => void;
+}) {
+  const [form, setForm] = useState<FormData>(emptyForm);
+  const [showPassword, setShowPassword] = useState(false);
+  const [openSections, setOpenSections] = useState({ pessoal: true, endereco: false, epi: false });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const utils = trpc.useUtils();
+
+  const { data: collaboratorData } = trpc.collaborators.getById.useQuery(
+    { id: collaboratorId as number },
+    { enabled: open && collaboratorId !== null }
+  );
+
+  const { data: availableUsers = [] } = trpc.collaborators.listAvailableUsers.useQuery(undefined, {
+    enabled: open && collaboratorId !== null,
+  });
+
+  const { data: clientsList = [] } = trpc.clients.list.useQuery();
+
+  const linkUserMutation = trpc.collaborators.linkUser.useMutation({
+    onSuccess: () => {
+      toast.success("Vínculo atualizado!");
+      utils.collaborators.list.invalidate();
+      utils.collaborators.listAvailableUsers.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const createMutation = trpc.collaborators.create.useMutation({
+    onSuccess: () => {
+      toast.success("Colaborador cadastrado com sucesso!");
+      utils.collaborators.list.invalidate();
+      onSaved?.();
+      onOpenChange(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const updateMutation = trpc.collaborators.update.useMutation({
+    onSuccess: () => {
+      toast.success("Colaborador atualizado com sucesso!");
+      utils.collaborators.list.invalidate();
+      utils.collaborators.getById.invalidate({ id: collaboratorId as number });
+      onSaved?.();
+      onOpenChange(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Popula o formulário quando o Sheet abre (edição carrega do getById, criação começa vazia)
+  useEffect(() => {
+    if (!open) return;
+    if (collaboratorId === null) {
+      setForm(emptyForm);
+      setOpenSections({ pessoal: true, endereco: false, epi: false });
+      return;
+    }
+    if (collaboratorData) {
+      const c: any = collaboratorData;
+      setForm({
+        name: c.name || "", email: c.email || "", phone: c.phone || "",
+        cpf: c.cpf || "", address: c.address || "",
+        city: c.city || "", state: c.state || "", zipCode: c.zipCode || "",
+        role: c.role || "operador", pixKey: c.pixKey || "", dailyRate: c.dailyRate || "", monthlySalary: c.monthlySalary || "",
+        employmentType: c.employmentType || "diarista", shirtSize: c.shirtSize || "",
+        pantsSize: c.pantsSize || "", shoeSize: c.shoeSize || "", bootSize: c.bootSize || "",
+        photoBase64: "", password: "",
+        linkedUserId: c.userId || null, clientId: c.clientId || null,
+        active: c.active === 1 || c.active === true,
+      });
+      setOpenSections({ pessoal: true, endereco: false, epi: false });
+    }
+  }, [open, collaboratorId, collaboratorData]);
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setForm(f => ({ ...f, photoBase64: compressed }));
+    } catch {
+      toast.error("Erro ao processar imagem");
+    }
+    e.target.value = "";
+  };
+
+  const toggleSection = (s: keyof typeof openSections) => {
+    setOpenSections(prev => ({ ...prev, [s]: !prev[s] }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const data = {
+      name: form.name,
+      email: form.email || undefined,
+      phone: form.phone || undefined,
+      cpf: form.cpf || undefined,
+      address: form.address || undefined,
+      city: form.city || undefined,
+      state: form.state || undefined,
+      zipCode: form.zipCode || undefined,
+      role: form.role as any,
+      pixKey: form.pixKey || undefined,
+      dailyRate: form.dailyRate || undefined,
+      monthlySalary: form.monthlySalary || undefined,
+      employmentType: form.employmentType as any || undefined,
+      shirtSize: form.shirtSize as any || undefined,
+      pantsSize: form.pantsSize || undefined,
+      shoeSize: form.shoeSize || undefined,
+      bootSize: form.bootSize || undefined,
+      photoBase64: form.photoBase64 || undefined,
+      password: form.password || undefined,
+      clientId: form.clientId,
+      active: form.active,
+    };
+    if (collaboratorId) {
+      updateMutation.mutate({ id: collaboratorId, ...data });
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { setForm(emptyForm); setShowPassword(false); } }}>
+      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="mb-4">
+          <SheetTitle className="text-emerald-800">
+            {collaboratorId ? "Editar Colaborador" : "Cadastrar Novo Colaborador"}
+          </SheetTitle>
+        </SheetHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4 pb-8">
+
+          {/* ===== DADOS PESSOAIS ===== */}
+          <SectionTitle
+            icon={<span>👤</span>}
+            title="Dados Pessoais"
+            open={openSections.pessoal}
+            onToggle={() => toggleSection("pessoal")}
+          />
+          {openSections.pessoal && (
+            <div className="space-y-4 px-1">
+              {/* Foto */}
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  <div className="w-20 h-20 rounded-full border-2 border-dashed border-emerald-300 flex items-center justify-center overflow-hidden bg-emerald-50">
+                    {form.photoBase64 ? (
+                      <img src={form.photoBase64} alt="Foto" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="text-center">
+                        <Camera className="h-7 w-7 text-emerald-400 mx-auto" />
+                        <span className="text-xs text-emerald-500 mt-0.5 block">Foto</span>
+                      </div>
+                    )}
+                  </div>
+                  {form.photoBase64 && (
+                    <button type="button" onClick={() => setForm(f => ({ ...f, photoBase64: "" }))} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button type="button" variant="outline" size="sm" className="gap-2 text-xs" onClick={() => cameraInputRef.current?.click()}>
+                    <Camera className="h-3.5 w-3.5" /> Tirar Foto
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="gap-2 text-xs" onClick={() => fileInputRef.current?.click()}>
+                    <ImagePlus className="h-3.5 w-3.5" /> Galeria
+                  </Button>
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
+              </div>
+
+              <div>
+                <Label>Nome Completo *</Label>
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required placeholder="Nome completo" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>CPF</Label>
+                  <Input value={form.cpf} onChange={e => setForm(f => ({ ...f, cpf: formatCPF(e.target.value) }))} placeholder="000.000.000-00" />
+                </div>
+                <div>
+                  <Label>Celular</Label>
+                  <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: formatPhone(e.target.value) }))} placeholder="(00) 00000-0000" />
+                </div>
+              </div>
+              <div>
+                <Label>E-mail</Label>
+                <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@exemplo.com" />
+              </div>
+              <div>
+                <Label className="flex items-center gap-1"><Lock className="h-3 w-3" /> Senha de Acesso ao Sistema</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder={collaboratorId ? "Deixe em branco para manter" : "Senha para login"}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <Label>Função</Label>
+                <select
+                  value={form.role}
+                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label className="flex items-center gap-1"><MapPin className="h-3 w-3" /> Local de Trabalho</Label>
+                <select
+                  value={form.clientId ?? 0}
+                  onChange={e => setForm(f => ({ ...f, clientId: parseInt(e.target.value) || null }))}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value={0}>Sem local definido</option>
+                  {clientsList.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Define a operação/cliente onde o colaborador trabalha</p>
+              </div>
+            </div>
+          )}
+
+          {/* ===== VINCULAR USUÁRIO (apenas na edição) ===== */}
+          {collaboratorId && (
+            <div className="space-y-3 px-1 py-3 border rounded-lg border-blue-200 bg-blue-50/50">
+              <div className="flex items-center gap-2 py-1 px-3 text-blue-800 font-semibold text-sm">
+                <Link2 className="h-4 w-4" />
+                Vincular Usuário do Sistema
+              </div>
+              <div className="px-3">
+                <p className="text-xs text-gray-500 mb-2">Vincule este colaborador a um usuário para que ele acesse o sistema (motorista, etc).</p>
+                <select
+                  value={form.linkedUserId ?? 0}
+                  onChange={e => {
+                    const uid = parseInt(e.target.value) || null;
+                    setForm(f => ({ ...f, linkedUserId: uid }));
+                    if (collaboratorId) {
+                      linkUserMutation.mutate({ collaboratorId, userId: uid });
+                    }
+                  }}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value={0}>Nenhum usuário vinculado</option>
+                  {availableUsers.map((u: any) => (
+                    <option key={u.id} value={u.id} disabled={u.isLinked && u.id !== form.linkedUserId}>
+                      {u.name} ({u.email}){u.isLinked && u.id !== form.linkedUserId ? " — já vinculado" : ""}
+                    </option>
+                  ))}
+                </select>
+                {form.linkedUserId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm(f => ({ ...f, linkedUserId: null }));
+                      if (collaboratorId) linkUserMutation.mutate({ collaboratorId, userId: null });
+                    }}
+                    className="mt-2 text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
+                  >
+                    <Unlink className="h-3 w-3" /> Desvincular usuário
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ===== ENDEREÇO ===== */}
+          <SectionTitle
+            icon={<span>📍</span>}
+            title="Endereço"
+            open={openSections.endereco}
+            onToggle={() => toggleSection("endereco")}
+          />
+          {openSections.endereco && (
+            <div className="space-y-4 px-1">
+              <div>
+                <Label>Endereço</Label>
+                <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Rua, número, bairro" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Cidade</Label>
+                  <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Cidade" />
+                </div>
+                <div>
+                  <Label>Estado</Label>
+                  <Input value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="SP" maxLength={2} />
+                </div>
+              </div>
+              <div>
+                <Label>CEP</Label>
+                <Input value={form.zipCode} onChange={e => setForm(f => ({ ...f, zipCode: e.target.value }))} placeholder="00000-000" />
+              </div>
+            </div>
+          )}
+
+          {/* ===== EPI & TRABALHO ===== */}
+          <SectionTitle
+            icon={<span>🦺</span>}
+            title="EPI & Trabalho"
+            open={openSections.epi}
+            onToggle={() => toggleSection("epi")}
+          />
+          {openSections.epi && (
+            <div className="space-y-4 px-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Chave PIX</Label>
+                  <Input value={form.pixKey} onChange={e => setForm(f => ({ ...f, pixKey: e.target.value }))} placeholder="CPF, email ou telefone" />
+                </div>
+                {form.employmentType === "clt" ? (
+                  <div>
+                    <Label>Salário Mensal (R$)</Label>
+                    <Input type="number" step="0.01" value={form.monthlySalary} onChange={e => setForm(f => ({ ...f, monthlySalary: e.target.value }))} placeholder="0,00" />
+                    <p className="text-[10px] text-gray-500 mt-0.5">Usado para calcular o custo/dia (salário ÷ 22) nos relatórios de custo do local — não entra no pagamento semanal.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <Label>{form.employmentType === "pj" ? "Salário (R$)" : form.employmentType === "semanal" ? "Valor Semanal (R$)" : "Diária (R$)"}</Label>
+                    <Input type="number" step="0.01" value={form.dailyRate} onChange={e => setForm(f => ({ ...f, dailyRate: e.target.value }))} placeholder="0,00" />
+                  </div>
+                )}
+              </div>
+              <div>
+                <Label>Tipo de Vínculo</Label>
+                <select
+                  value={form.employmentType}
+                  onChange={e => setForm(f => ({ ...f, employmentType: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="diarista">Diarista</option>
+                  <option value="semanal">Semanalmente</option>
+                  <option value="clt">CLT</option>
+                  <option value="pj">PJ</option>
+                  <option value="terceirizado">Terceirizado</option>
+                </select>
+              </div>
+              {/* Toggle Ativo/Inativo — apenas na edição */}
+              {collaboratorId && (
+                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">Status do Colaborador</p>
+                    <p className="text-xs text-gray-500">{form.active ? "Aparece nas listas e relatórios" : "Oculto nas listas e relatórios"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, active: !f.active }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                      form.active ? "bg-emerald-600" : "bg-gray-300"
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      form.active ? "translate-x-6" : "translate-x-1"
+                    }`} />
+                  </button>
+                </div>
+              )}
+              <div>
+                <Label className="text-sm font-semibold text-gray-700 mb-2 block">🦺 Tamanhos para EPI</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-gray-500">Camisa</Label>
+                    <select
+                      value={form.shirtSize}
+                      onChange={e => setForm(f => ({ ...f, shirtSize: e.target.value }))}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione</option>
+                      {["PP", "P", "M", "G", "GG", "XGG"].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Calça (nº)</Label>
+                    <Input value={form.pantsSize} onChange={e => setForm(f => ({ ...f, pantsSize: e.target.value }))} placeholder="ex: 42" />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Calçado (nº)</Label>
+                    <Input value={form.shoeSize} onChange={e => setForm(f => ({ ...f, shoeSize: e.target.value }))} placeholder="ex: 42" />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Bota (nº)</Label>
+                    <Input value={form.bootSize} onChange={e => setForm(f => ({ ...f, bootSize: e.target.value }))} placeholder="ex: 43" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Botões */}
+          <div className="flex gap-3 pt-4 border-t">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={isPending}>
+              {isPending ? "Salvando..." : collaboratorId ? "Salvar Alterações" : "Cadastrar Colaborador"}
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}

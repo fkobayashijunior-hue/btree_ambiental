@@ -19,7 +19,7 @@ import {
   CheckCircle2, Clock, AlertCircle, ChevronRight, Pencil, Trash2,
   BarChart3, Download, Eye, RefreshCw, Building2, ChevronDown, ChevronUp,
   Filter, Users, Receipt, CreditCard, FileCheck, Upload, ExternalLink,
-  DollarSign, CalendarClock, AlertTriangle, XCircle
+  DollarSign, CalendarClock, AlertTriangle, XCircle,
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
@@ -1735,6 +1735,199 @@ export default function CargoControl() {
     });
   }, [filtered]);
 
+  // ===== EXPORTAR EXCEL: cargas entregues (respeitando filtros de cliente/data ativos) =====
+  const handleExportDeliveredExcel = async () => {
+    const delivered = loads.filter(c => {
+      if (allowedClientIds && allowedClientIds.length > 0) {
+        if (!c.clientId || !allowedClientIds.includes(c.clientId)) return false;
+      }
+      if (c.status !== "entregue") return false;
+      if (filterClientId && c.clientId !== filterClientId) return false;
+      if (filterPaymentStatus && (c as any).paymentStatus !== filterPaymentStatus) return false;
+      if (filterDateFrom || filterDateTo) {
+        const d = c.date ? safeDate(c.date as string) : null;
+        if (!d) return false;
+        if (filterDateFrom && d < new Date(filterDateFrom + 'T00:00:00')) return false;
+        if (filterDateTo && d > new Date(filterDateTo + 'T23:59:59')) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      const dateA = a.date ? safeDate(a.date as string).getTime() : 0;
+      const dateB = b.date ? safeDate(b.date as string).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    if (delivered.length === 0) { toast.error("Nenhuma carga entregue para exportar"); return; }
+
+    try {
+      const ExcelJS = await import("exceljs");
+      const { saveAs } = await import("file-saver");
+      const now = new Date().toLocaleString("pt-BR");
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "BTREE Ambiental";
+      wb.created = new Date();
+      const ws = wb.addWorksheet("Cargas Entregues", {
+        properties: { defaultRowHeight: 18 },
+        pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
+        views: [{ state: "frozen", ySplit: 5 }],
+      });
+
+      const GREEN_DARK = "0D4F2E";
+      const GREEN_LIGHT = "F0FDF4";
+      const GREEN_BORDER = "BBF7D0";
+      const WHITE = "FFFFFF";
+      const GRAY_BORDER = "E5E7EB";
+      const GRAY_TEXT = "6B7280";
+
+      const headers = [
+        "Data Saída", "Data Entrega", "Cliente", "Placa", "Motorista",
+        "Tipo Madeira", "Destino", "Nota Fiscal",
+        "Altura (m)", "Largura (m)", "Comprimento (m)", "Volume (m³)",
+        "Peso Saída (kg)", "Peso Chegada (kg)", "Peso Líquido (kg)", "Peso Líquido (ton)", "Umidade (%)",
+        "Preço/ton (R$)", "Valor Total (R$)",
+        "Status Pagamento", "Valor Boleto (R$)", "Vencimento Boleto", "Data Pagamento",
+        "Recebido por", "Terceirizado", "Custo Terceirizado (R$)", "Terceirizado Pago",
+        "Observações", "Registrado em",
+      ];
+      const colWidths = [12, 12, 22, 10, 20, 14, 20, 14, 10, 10, 14, 12, 14, 14, 14, 14, 10, 12, 14, 16, 14, 16, 14, 20, 20, 16, 14, 28, 16];
+      ws.columns = colWidths.map((w, i) => ({ key: `c${i}`, width: w }));
+
+      // Mais de 26 colunas: usamos número de coluna (não letra) para merges
+      const lastColNum = headers.length;
+
+      // Linha 1: Título
+      ws.mergeCells(1, 1, 1, lastColNum);
+      const titleCell = ws.getCell(1, 1);
+      titleCell.value = "BTREE AMBIENTAL — RELATÓRIO DE CARGAS ENTREGUES";
+      titleCell.font = { name: "Arial", size: 16, bold: true, color: { argb: WHITE } };
+      titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_DARK } };
+      titleCell.alignment = { horizontal: "center", vertical: "middle" };
+      ws.getRow(1).height = 36;
+
+      // Linha 2: Subtítulo
+      ws.mergeCells(2, 1, 2, lastColNum);
+      const clientLabel = filterClientId ? (clientsList.find((c: any) => c.id === filterClientId) as any)?.name || "Cliente selecionado" : "Todos os clientes";
+      const periodLabel = (filterDateFrom || filterDateTo) ? `${filterDateFrom || "início"} até ${filterDateTo || "hoje"}` : "Todo o período";
+      const subtitleCell = ws.getCell(2, 1);
+      subtitleCell.value = `BTREE Empreendimentos LTDA  •  btreeambiental.com  •  Cliente: ${clientLabel}  •  Período: ${periodLabel}  •  Emitido em ${now}`;
+      subtitleCell.font = { name: "Arial", size: 9, italic: true, color: { argb: WHITE } };
+      subtitleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_DARK } };
+      subtitleCell.alignment = { horizontal: "center", vertical: "middle" };
+      ws.getRow(2).height = 22;
+
+      // Linha 3: Resumo
+      const totalVolumeSum = delivered.reduce((s, c) => s + parseFloat((c as any).volumeM3 || "0"), 0);
+      const totalWeightSum = delivered.reduce((s, c) => s + parseFloat((c as any).weightNetKg || (c as any).weightOutKg || "0"), 0);
+      ws.mergeCells(3, 1, 3, 7);
+      ws.getCell(3, 1).value = `Total de Cargas: ${delivered.length}`;
+      ws.mergeCells(3, 8, 3, 14);
+      ws.getCell(3, 8).value = `Volume Total: ${formatBR(totalVolumeSum)} m³`;
+      ws.mergeCells(3, 15, 3, lastColNum);
+      ws.getCell(3, 15).value = `Peso Total: ${formatBR(totalWeightSum / 1000)} ton`;
+      [[3, 1], [3, 8], [3, 15]].forEach(([r, c]) => {
+        const cell = ws.getCell(r, c);
+        cell.font = { name: "Arial", size: 11, bold: true, color: { argb: GREEN_DARK } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_LIGHT } };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = { top: { style: "thin", color: { argb: GREEN_BORDER } }, bottom: { style: "thin", color: { argb: GREEN_BORDER } }, left: { style: "thin", color: { argb: GREEN_BORDER } }, right: { style: "thin", color: { argb: GREEN_BORDER } } };
+      });
+      ws.getRow(3).height = 28;
+
+      ws.getRow(4).height = 8;
+
+      // Linha 5: cabeçalho da tabela
+      const headerRow = ws.getRow(5);
+      headers.forEach((h, i) => {
+        const cell = headerRow.getCell(i + 1);
+        cell.value = h;
+        cell.font = { name: "Arial", size: 10, bold: true, color: { argb: WHITE } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_DARK } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = { top: { style: "thin", color: { argb: GREEN_DARK } }, bottom: { style: "thin", color: { argb: GREEN_DARK } }, left: { style: "thin", color: { argb: GREEN_DARK } }, right: { style: "thin", color: { argb: GREEN_DARK } } };
+      });
+      headerRow.height = 32;
+
+      const paymentLabel = (s: string | null | undefined) => s === "pago" ? "Pago" : s === "a_pagar" ? "A Pagar" : "Sem Boleto";
+
+      delivered.forEach((c: any, idx: number) => {
+        const rowNum = 6 + idx;
+        const row = ws.getRow(rowNum);
+        const isEven = idx % 2 === 0;
+        const client = clientsList.find((cl: any) => cl.id === c.clientId) as any;
+        const pricePerTon = parseFloat(client?.pricePerTon || "0");
+        const weightNet = parseFloat(c.weightNetKg || c.weightOutKg || "0");
+        const weightTon = weightNet / 1000;
+        const valorTotal = pricePerTon > 0 && weightNet > 0 ? weightTon * pricePerTon : 0;
+
+        const values = [
+          c.date ? safeDate(c.date).toLocaleDateString("pt-BR") : "-",
+          c.deliveryDate ? safeDate(c.deliveryDate).toLocaleDateString("pt-BR") : "-",
+          c.clientName || "-",
+          c.vehiclePlate || "-",
+          c.driverName || "-",
+          c.woodType || "-",
+          c.destination || "-",
+          c.invoiceNumber || "-",
+          c.finalHeightM ? parseFloat(c.finalHeightM) : (c.heightM ? parseFloat(c.heightM) : "-"),
+          c.finalWidthM ? parseFloat(c.finalWidthM) : (c.widthM ? parseFloat(c.widthM) : "-"),
+          c.finalLengthM ? parseFloat(c.finalLengthM) : (c.lengthM ? parseFloat(c.lengthM) : "-"),
+          c.finalVolumeM3 ? parseFloat(c.finalVolumeM3) : (c.volumeM3 ? parseFloat(c.volumeM3) : "-"),
+          c.weightOutKg ? parseFloat(c.weightOutKg) : "-",
+          c.weightInKg ? parseFloat(c.weightInKg) : "-",
+          weightNet || "-",
+          weightNet ? weightTon : "-",
+          c.humidity ? parseFloat(c.humidity) : "-",
+          pricePerTon || "-",
+          valorTotal || "-",
+          paymentLabel(c.paymentStatus),
+          c.boletoAmount ? parseFloat(c.boletoAmount) : "-",
+          c.boletoDueDate ? safeDate(c.boletoDueDate).toLocaleDateString("pt-BR") : "-",
+          c.paidAt ? safeDate(c.paidAt).toLocaleDateString("pt-BR") : "-",
+          c.receiverName || "-",
+          c.thirdPartyContractor || "-",
+          c.thirdPartyCost ? parseFloat(c.thirdPartyCost) : "-",
+          c.thirdPartyPaid ? "Sim" : (c.thirdPartyContractor ? "Não" : "-"),
+          c.notes || "-",
+          c.createdAt ? safeDate(c.createdAt).toLocaleDateString("pt-BR") : "-",
+        ];
+
+        values.forEach((v, i) => {
+          const cell = row.getCell(i + 1);
+          cell.value = v;
+          cell.font = { name: "Arial", size: 9 };
+          cell.alignment = { horizontal: i >= 8 && i <= 24 ? "right" : "left", vertical: "middle", wrapText: false };
+          if (isEven) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_LIGHT } };
+          cell.border = { bottom: { style: "thin", color: { argb: GRAY_BORDER } } };
+          if (typeof v === "number") {
+            if ([8, 9, 10].includes(i)) cell.numFmt = '0.00';
+            else if ([11].includes(i)) cell.numFmt = '0.000';
+            else if ([12, 13, 14].includes(i)) cell.numFmt = '#,##0';
+            else if ([15].includes(i)) cell.numFmt = '#,##0.00';
+            else if ([17, 18, 20].includes(i)) cell.numFmt = '#,##0.00';
+            else if ([16].includes(i)) cell.numFmt = '0.0';
+          }
+        });
+        row.height = 18;
+      });
+
+      const footerRowNum = 6 + delivered.length + 1;
+      ws.mergeCells(footerRowNum, 1, footerRowNum, lastColNum);
+      const footerCell = ws.getCell(footerRowNum, 1);
+      footerCell.value = "Desenvolvido por Kobayashi Desenvolvimento de Sistemas  •  btreeambiental.com";
+      footerCell.font = { name: "Arial", size: 9, italic: true, color: { argb: GRAY_TEXT } };
+      footerCell.alignment = { horizontal: "center", vertical: "middle" };
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      saveAs(blob, `cargas-entregues-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(`Excel gerado: ${delivered.length} carga${delivered.length !== 1 ? "s" : ""} entregue${delivered.length !== 1 ? "s" : ""}`);
+    } catch (err) {
+      toast.error("Erro ao gerar Excel");
+      console.error(err);
+    }
+  };
+
   const toggleClientCollapse = (clientName: string) => {
     setCollapsedClients(prev => {
       const next = new Set(prev);
@@ -2274,6 +2467,14 @@ export default function CargoControl() {
             </Button>
           )}
         </div>
+        <Button
+          variant="outline"
+          className="h-10 gap-1.5 text-xs sm:text-sm bg-white hover:bg-emerald-50 border-emerald-300 text-emerald-700"
+          onClick={handleExportDeliveredExcel}
+          title="Exportar cargas entregues para Excel"
+        >
+          <Download className="h-4 w-4" /> Exportar Excel (Entregues)
+        </Button>
       </div>
 
       {/* Lista de Cargas */}

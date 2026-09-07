@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { getLoginUrl } from "@/const";
 
 // CDN Assets
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const BTREE_LOGO = "/icon-btree-512.png";
 const IMG_PARCEIRO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/btree-parceiro-eucalipto_db7a6c0f.jpeg";
 const IMG_JAPAO_PR = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/btree-japao-parana_34091df8.jpeg";
 const IMG_PAGAMENTO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/btree-pagamento-justo_bbae9d14.jpeg";
@@ -38,9 +38,7 @@ export default function Landing() {
               <img
                 src={BTREE_LOGO}
                 alt="BTREE Ambiental"
-                className={`h-10 md:h-12 w-auto object-contain transition-all duration-300 ${
-                  scrolled ? "" : "brightness-0 invert"
-                }`}
+                className="h-10 md:h-12 w-auto object-contain rounded-lg transition-all duration-300"
               />
             </button>
 
@@ -411,7 +409,7 @@ export default function Landing() {
       <footer className="bg-gray-900 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <img src={BTREE_LOGO} alt="BTREE Ambiental" className="h-12 w-auto object-contain brightness-0 invert opacity-90" />
+            <img src={BTREE_LOGO} alt="BTREE Ambiental" className="h-12 w-auto object-contain rounded-lg opacity-90" />
             <div className="text-center">
               <p className="text-gray-400 text-sm">Av. Pres. Epitácio, 278 — 1º Andar — Centro | Astorga - PR</p>
               <p className="text-gray-500 text-xs mt-1">BIOMASSA · TRATAMENTO · REFLORESTAMENTO · ESTRUTURA · EUCALIPTO</p>

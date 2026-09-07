@@ -47,22 +47,32 @@ else
   # ── Copiar arquivos estáticos para public_html ──
   # O LiteSpeed/Passenger da Hostinger serve arquivos estáticos de public_html
   # Sem isso, rotas SPA como /login retornam 403 Forbidden
-  # Detectar o caminho correto do public_html (varia conforme plano Hostinger)
+  #
+  # IMPORTANTE: NÃO usar um caminho fixo (com o domínio hardcoded) aqui. Numa
+  # conta Hostinger com produção e staging no mesmo $HOME (subdomínio/addon
+  # domain), isso faria o script sobrescrever o public_html de produção mesmo
+  # rodando dentro do app de staging.
+  #
+  # Layout confirmado da Hostinger para cada site: a pasta do app Node
+  # ("nodejs/", onde este script roda) e a pasta "public_html/" são IRMÃS,
+  # dentro da raiz daquele site específico (ex: .../<site>/nodejs e
+  # .../<site>/public_html). Por isso basta olhar um nível acima do diretório
+  # atual — nunca subimos mais que isso, então é impossível alcançar o
+  # public_html de outro site (ex: produção) por este caminho.
+  #
+  # Para forçar um caminho específico (ex: estrutura atípica), defina
+  # DEPLOY_PUBLIC_HTML antes de chamar este script.
   PUBLIC_HTML=""
-  for CANDIDATE in \
-    "$HOME/htdocs/btreeambiental.com/public_html" \
-    "$HOME/htdocs/btreeambiental.com" \
-    "$HOME/domains/btreeambiental.com/public_html" \
-    "$HOME/public_html"; do
-    if [ -d "$CANDIDATE" ]; then
-      PUBLIC_HTML="$CANDIDATE"
-      echo "Diretório public_html encontrado: $PUBLIC_HTML"
-      break
-    fi
-  done
-  if [ -z "$PUBLIC_HTML" ]; then
-    echo "AVISO: Nenhum diretório public_html encontrado. Listando $HOME:"
-    ls "$HOME" 2>/dev/null || true
+  if [ -n "$DEPLOY_PUBLIC_HTML" ]; then
+    PUBLIC_HTML="$DEPLOY_PUBLIC_HTML"
+    echo "Usando PUBLIC_HTML definido explicitamente via DEPLOY_PUBLIC_HTML: $PUBLIC_HTML"
+  elif [ -d "../public_html" ]; then
+    PUBLIC_HTML="$(cd ../public_html && pwd)"
+    echo "Diretório public_html encontrado (irmão de $(pwd)): $PUBLIC_HTML"
+  else
+    echo "AVISO: Não encontrei uma pasta 'public_html' irmã de $(pwd)."
+    echo "Pulando a cópia por segurança — nenhum outro site será tocado."
+    echo "Se necessário, rode novamente com DEPLOY_PUBLIC_HTML=/caminho/exato/public_html bash build.sh"
   fi
   if [ -n "$PUBLIC_HTML" ] && [ -d "dist/public" ]; then
     echo "Limpando assets antigos do public_html..."

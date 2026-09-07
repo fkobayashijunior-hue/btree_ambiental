@@ -68,7 +68,7 @@ export async function sendPasswordResetEmail(
         <body>
           <div class="container">
             <div class="logo">
-              <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree_2d00f2da.png" alt="BTREE Ambiental" />
+              <img src="https://btreeambiental.com/icon-btree-512.png" alt="BTREE Ambiental" />
             </div>
             <h2>Recuperação de Senha</h2>
             <p>Olá, <strong>${name}</strong>!</p>

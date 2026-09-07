@@ -8,7 +8,7 @@ import { BTREE_LOGO_B64 } from "@/lib/btreeLogo";
 
 // ─── External asset URLs (fetched via server proxy to avoid CORS) ─────────────
 export const KOBAYASHI_LOGO_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+  "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 export const BTREE_QR_URL =
   "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 

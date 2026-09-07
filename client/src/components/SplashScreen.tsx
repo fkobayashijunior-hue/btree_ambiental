@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const BTREE_LOGO = "/icon-btree-512.png";
 
 export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
   const [fadeOut, setFadeOut] = useState(false);

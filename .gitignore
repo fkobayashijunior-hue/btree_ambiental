@@ -110,3 +110,6 @@ temp/
 .webdev/
 .project-config.json
 .db_credentials
+
+# Scripts com credenciais reais preenchidas localmente (nunca commitar)
+scripts/sync-staging-db-from-prod.sh

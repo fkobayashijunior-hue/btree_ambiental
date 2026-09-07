@@ -384,6 +384,258 @@ async function runAutoMigrations() {
       }
     } catch(e: any) { console.log('[AutoMigration] Could not query remaining FKs:', e?.message); }
 
+    // Create sicoob_boletos table if not exists
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS sicoob_boletos (
+        id int AUTO_INCREMENT NOT NULL,
+        nosso_numero int NOT NULL,
+        seu_numero varchar(50),
+        codigo_especie_documento varchar(10),
+        cnpj_pagador varchar(30),
+        nome_pagador varchar(255),
+        valor varchar(20) NOT NULL DEFAULT '0',
+        data_vencimento varchar(10),
+        data_pagamento varchar(10),
+        situacao int NOT NULL DEFAULT 1,
+        sincronizado_em timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT sicoob_boletos_pk PRIMARY KEY(id),
+        UNIQUE KEY sicoob_boletos_nosso_numero_unique (nosso_numero)
+      )
+    `);
+    // Criar tabela sicoob_extrato se não existir
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS sicoob_extrato (
+        id int AUTO_INCREMENT NOT NULL,
+        numero_lancamento varchar(50) NOT NULL,
+        mes int NOT NULL,
+        ano int NOT NULL,
+        data_lancamento varchar(10),
+        descricao varchar(255),
+        complemento varchar(255),
+        valor varchar(20) NOT NULL DEFAULT '0',
+        saldo varchar(20) NOT NULL DEFAULT '0',
+        tipo_lancamento varchar(50),
+        sincronizado_em timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT sicoob_extrato_pk PRIMARY KEY(id),
+        UNIQUE KEY sicoob_extrato_lancamento_unique (numero_lancamento, mes, ano)
+      )
+    `);
+
+    // Criar tabela favorecido_categoria se não existir (memória de favorecidos do extrato)
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS favorecido_categoria (
+        id int AUTO_INCREMENT NOT NULL,
+        chave varchar(255) NOT NULL,
+        tipo_chave enum('cnpj','nome','cpf_fragmento') NOT NULL,
+        razao_social varchar(255),
+        cnae_codigo varchar(20),
+        cnae_descricao varchar(255),
+        grupo varchar(100),
+        centro_custo varchar(100),
+        natureza varchar(150),
+        classificacao varchar(150),
+        fixo_variavel varchar(30),
+        direto_indireto varchar(30),
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT favorecido_categoria_pk PRIMARY KEY(id),
+        UNIQUE KEY favorecido_categoria_chave_unique (chave)
+      )
+    `);
+    // Campo "categoria" (e a coluna "origem" que só existia pra protegê-lo) foi descontinuado —
+    // a classificação agora é feita pelos campos Grupo/Centro de Custo/Natureza/etc abaixo.
+    try { await db.execute(/*sql*/`ALTER TABLE favorecido_categoria DROP COLUMN categoria`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE favorecido_categoria DROP COLUMN origem`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE favorecido_categoria ADD COLUMN grupo varchar(100)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE favorecido_categoria ADD COLUMN centro_custo varchar(100)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE favorecido_categoria ADD COLUMN natureza varchar(150)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE favorecido_categoria ADD COLUMN classificacao varchar(150)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE favorecido_categoria ADD COLUMN fixo_variavel varchar(30)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE favorecido_categoria ADD COLUMN direto_indireto varchar(30)`); } catch {}
+
+    // Criar tabela contaazul_tokens se não existir
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS contaazul_tokens (
+        id int AUTO_INCREMENT NOT NULL,
+        refresh_token text NOT NULL,
+        access_token text,
+        expires_at bigint,
+        atualizado_em timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT contaazul_tokens_pk PRIMARY KEY(id)
+      )
+    `);
+
+    // Criar tabela notas_fiscais se não existir
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS notas_fiscais (
+        id int AUTO_INCREMENT NOT NULL,
+        chave_acesso varchar(50) NOT NULL,
+        numero_nota varchar(20),
+        data_emissao varchar(10),
+        nome_destinatario varchar(255),
+        cnpj_destinatario varchar(20),
+        valor_total varchar(20),
+        unidade varchar(20),
+        quantidade varchar(20),
+        cfop varchar(10),
+        status_fiscal_conta_azul varchar(50),
+        status_nf_interno enum('em_aberto','pago','cancelado') NOT NULL DEFAULT 'em_aberto',
+        data_pagamento_confirmado varchar(10),
+        data_previsao_pagamento varchar(10),
+        mes int,
+        ano int,
+        sincronizado_em timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT notas_fiscais_pk PRIMARY KEY(id),
+        UNIQUE KEY notas_fiscais_chave_unique (chave_acesso),
+        INDEX notas_fiscais_mes_ano_idx (mes, ano)
+      )
+    `);
+    // Migração de coluna antiga 'status' para os novos campos, se aplicável
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN status_fiscal_conta_azul varchar(50)`);
+    } catch {}
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN status_nf_interno enum('em_aberto','pago','cancelado') NOT NULL DEFAULT 'em_aberto'`);
+    } catch {}
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN data_pagamento_confirmado varchar(10)`);
+    } catch {}
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN data_previsao_pagamento varchar(10)`);
+    } catch {}
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN valor_editado tinyint NOT NULL DEFAULT 0`);
+    } catch {}
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN unidade varchar(20)`);
+    } catch {}
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN quantidade varchar(20)`);
+    } catch {}
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN cfop varchar(10)`);
+    } catch {}
+    try {
+      // Se a coluna antiga 'status' existir e status_fiscal_conta_azul estiver vazio, copiar os dados
+      await db.execute(/*sql*/`UPDATE notas_fiscais SET status_fiscal_conta_azul = status WHERE status_fiscal_conta_azul IS NULL AND status IS NOT NULL`);
+    } catch {}
+
+    // Criar tabela notas_fiscais_status_log se não existir
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS notas_fiscais_status_log (
+        id int AUTO_INCREMENT NOT NULL,
+        nota_fiscal_id int NOT NULL,
+        campo varchar(50) NOT NULL,
+        valor_anterior varchar(100),
+        valor_novo varchar(100),
+        usuario_id int,
+        usuario_nome varchar(255),
+        alterado_em timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT notas_fiscais_status_log_pk PRIMARY KEY(id),
+        INDEX notas_fiscais_status_log_nf_idx (nota_fiscal_id)
+      )
+    `);
+
+    // Criar tabela cliente_prazo_pagamento se não existir
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS cliente_prazo_pagamento (
+        id int AUTO_INCREMENT NOT NULL,
+        cnpj varchar(20) NOT NULL,
+        nome varchar(255) NOT NULL,
+        tipo_regra enum('dias_corridos','faixa_mensal','semanal_quarta') NOT NULL,
+        parametros text NOT NULL,
+        ativo tinyint NOT NULL DEFAULT 1,
+        criado_em timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT cliente_prazo_pagamento_pk PRIMARY KEY(id),
+        UNIQUE KEY cliente_prazo_pagamento_cnpj_unique (cnpj)
+      )
+    `);
+    try { await db.execute(/*sql*/`ALTER TABLE cliente_prazo_pagamento MODIFY COLUMN tipo_regra enum('dias_corridos','faixa_mensal','semanal_quarta') NOT NULL`); } catch {}
+    // Seed das regras conhecidas (Sonoco, Rebnic, Enerbio) — não sobrescreve tipo_regra/parametros
+    // de quem já existe, só o nome (evita reverter uma regra atualizada manualmente depois).
+    try {
+      await db.execute(/*sql*/`
+        INSERT INTO cliente_prazo_pagamento (cnpj, nome, tipo_regra, parametros)
+        VALUES
+          ('00496586000631', 'Sonoco', 'dias_corridos', '{"dias":7}'),
+          ('72274095000142', 'Rebnic', 'semanal_quarta', '{}'),
+          ('43328496000130', 'Enerbio', 'dias_corridos', '{"dias":1}'),
+          ('11609581000422', 'A. R. C. Logistica e Alimentos Ltda', 'dias_corridos', '{"dias":21}')
+        ON DUPLICATE KEY UPDATE nome = VALUES(nome)
+      `);
+    } catch (e: any) { console.log('[AutoMigration] Seed cliente_prazo_pagamento:', e?.message); }
+
+    // Backfill: recalcular Data Previsão de Pagamento das NFs da A.R.C. Logística que já
+    // haviam sido sincronizadas antes da regra existir (só quando não há boleto correspondente)
+    try {
+      await db.execute(/*sql*/`
+        UPDATE notas_fiscais nf
+        LEFT JOIN sicoob_boletos sb
+          ON sb.nf_referente = nf.numero_nota AND sb.cnpj_pagador = nf.cnpj_destinatario
+        SET nf.data_previsao_pagamento = DATE_ADD(nf.data_emissao, INTERVAL 21 DAY)
+        WHERE sb.id IS NULL
+          AND nf.cnpj_destinatario = '11609581000422'
+          AND nf.data_emissao IS NOT NULL AND nf.data_emissao != ''
+          AND nf.data_previsao_pagamento IS NULL
+      `);
+      console.log('[AutoMigration] Backfill data_previsao_pagamento ARC Logistica concluído');
+    } catch (e: any) { console.log('[AutoMigration] Backfill ARC Logistica:', e?.message); }
+
+    // Criar tabela sicoob_lancamentos_futuros se não existir
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS sicoob_lancamentos_futuros (
+        id int AUTO_INCREMENT NOT NULL,
+        data varchar(10) NOT NULL,
+        documento varchar(50),
+        historico varchar(255),
+        info_complementar varchar(500),
+        valor varchar(20) NOT NULL DEFAULT '0',
+        importado_em timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT sicoob_lancamentos_futuros_pk PRIMARY KEY(id),
+        INDEX sicoob_futuros_data_idx (data)
+      )
+    `);
+
+    // Criar tabela sicoob_saldo_mes se não existir
+    await db.execute(/*sql*/`
+      CREATE TABLE IF NOT EXISTS sicoob_saldo_mes (
+        id int AUTO_INCREMENT NOT NULL,
+        mes int NOT NULL,
+        ano int NOT NULL,
+        saldo_inicial varchar(20) NOT NULL DEFAULT '0',
+        saldo_final varchar(20) NOT NULL DEFAULT '0',
+        sincronizado_em timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT sicoob_saldo_mes_pk PRIMARY KEY(id),
+        UNIQUE KEY sicoob_saldo_mes_unique (mes, ano)
+      )
+    `);
+
+    // Campo "categoria" (financeiro) e a tabela categorias_financeiras foram descontinuados —
+    // a classificação agora é feita via favorecido_categoria (Grupo/Centro de Custo/etc).
+    try { await db.execute(/*sql*/`DROP TABLE IF EXISTS categorias_financeiras`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_extrato DROP COLUMN categoria`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_lancamentos_futuros DROP COLUMN categoria`); } catch {}
+
+    // Adicionar colunas novas se ainda não existirem
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_extrato ADD COLUMN numero_documento varchar(100)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_boletos ADD COLUMN seu_numero varchar(50)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_boletos ADD COLUMN codigo_especie_documento varchar(10)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_boletos ADD COLUMN data_emissao varchar(10)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_boletos ADD COLUMN nf_referente varchar(50)`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_boletos ADD COLUMN valor_editado tinyint NOT NULL DEFAULT 0`); } catch {}
+    // Garantir unique index e remover duplicatas de execuções anteriores
+    try {
+      await db.execute(/*sql*/`
+        DELETE s1 FROM sicoob_boletos s1
+        INNER JOIN sicoob_boletos s2
+        WHERE s1.id > s2.id AND s1.nosso_numero = s2.nosso_numero
+      `);
+      await db.execute(/*sql*/`
+        ALTER TABLE sicoob_boletos
+        ADD UNIQUE INDEX IF NOT EXISTS sicoob_boletos_nosso_numero_unique (nosso_numero)
+      `);
+    } catch(e: any) { console.log('[AutoMigration] sicoob unique index:', e?.message); }
+
     // Create third_party_contractors table if not exists
     try {
       await db.execute(/*sql*/`
@@ -984,7 +1236,10 @@ function scheduleWeeklyClosingCron() {
 
         let closedCount = 0;
         for (const client of clientRows) {
-          // Verificar se já existe fechamento para esta semana/cliente
+          // Verificação otimista (evita trabalho desnecessário); a garantia real contra
+          // duplicatas é o índice único (client_id, week_start) + INSERT IGNORE abaixo,
+          // que cobre o caso de dois processos (ex: staging Hostinger + ambiente local)
+          // rodando este cron ao mesmo tempo.
           const [existing] = await conn.execute(
             `SELECT id FROM cargo_weekly_closings WHERE client_id = ? AND DATE(week_start) = ?`,
             [client.id, weekStartStr]
@@ -1023,9 +1278,12 @@ function scheduleWeeklyClosingCron() {
 
           const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-          await conn.execute(
-            `INSERT INTO cargo_weekly_closings 
-             (client_id, week_start, week_end, total_loads, total_weight_kg, total_amount, price_per_ton, due_date, status, notes, created_at) 
+          // INSERT IGNORE: se outro processo já inseriu o mesmo (client_id, week_start)
+          // entre o SELECT acima e este INSERT, o índice único bloqueia a duplicata
+          // silenciosamente (affectedRows = 0) em vez de criar uma linha repetida.
+          const [insertResult] = await conn.execute(
+            `INSERT IGNORE INTO cargo_weekly_closings
+             (client_id, week_start, week_end, total_loads, total_weight_kg, total_amount, price_per_ton, due_date, status, notes, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'fechado', ?, ?)`,
             [
               client.id,
@@ -1039,7 +1297,12 @@ function scheduleWeeklyClosingCron() {
               'Fechamento automático (sexta-feira)',
               nowStr,
             ]
-          );
+          ) as any;
+
+          if (insertResult.affectedRows === 0) {
+            console.log(`[CronJob-WeeklyClosing] Cliente ${client.name}: fechamento da semana ${weekStartStr} já existia (corrida com outro processo). Ignorado.`);
+            continue;
+          }
 
           closedCount++;
           console.log(`[CronJob-WeeklyClosing] Fechamento criado: ${client.name} — ${totalLoads} cargas — ${totalWeightTon.toFixed(2)} ton — R$ ${totalAmount}`);
@@ -1082,3 +1345,43 @@ function scheduleWeeklyClosingCron() {
 }
 
 scheduleWeeklyClosingCron();
+
+// ── Cron job: sincronização de boletos Sicoob (07h, 12h, 18h) ────────────
+function scheduleSicoobSync() {
+  const SYNC_HOURS = [7, 12, 18];
+
+  const scheduleNext = () => {
+    const now = new Date();
+    const currentHour = now.getHours() * 60 + now.getMinutes();
+
+    let nextHour = SYNC_HOURS.find(h => h * 60 > currentHour);
+    let nextDay = false;
+    if (nextHour === undefined) {
+      nextHour = SYNC_HOURS[0];
+      nextDay = true;
+    }
+
+    const next = new Date(now);
+    if (nextDay) next.setDate(next.getDate() + 1);
+    next.setHours(nextHour, 0, 0, 0);
+    const msUntilNext = Math.max(next.getTime() - now.getTime(), 60_000);
+
+    setTimeout(async () => {
+      try {
+        console.log('[SicoobSync] Iniciando sincronização automática de boletos...');
+        const { syncSicoobBoletos } = await import('../routers/sicoob');
+        const result = await syncSicoobBoletos();
+        console.log(`[SicoobSync] Concluído: ${result.synced} boleto(s) sincronizados. Erros: ${result.errors.length}`);
+        if (result.errors.length) console.warn('[SicoobSync] Erros:', result.errors);
+      } catch (err) {
+        console.error('[SicoobSync] Erro na sincronização:', err);
+      }
+      scheduleNext();
+    }, msUntilNext);
+
+    console.log(`[SicoobSync] Próxima sincronização: ${next.toLocaleString('pt-BR')}`);
+  };
+
+  scheduleNext();
+}
+scheduleSicoobSync();

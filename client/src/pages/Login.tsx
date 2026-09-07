@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Leaf, Lock, ArrowRight, User, KeyRound } from "lucide-react";
 
 // Logo BTREE Ambiental — versão verde (fundo branco/transparente)
-const BTREE_LOGO_GREEN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
+const BTREE_LOGO_GREEN = "/icon-btree-512.png";
 // Logo Kobayashi
 const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 
@@ -70,7 +70,7 @@ export default function Login() {
           <img
             src={BTREE_LOGO_GREEN}
             alt="BTREE Ambiental"
-            className="h-14 object-contain brightness-0 invert mb-3"
+            className="h-14 object-contain rounded-xl mb-3"
           />
           <p className="text-emerald-200 text-sm font-medium">Sistema de Gestão</p>
         </div>
