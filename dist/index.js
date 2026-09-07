@@ -2662,6 +2662,10 @@ function computeTotal(employmentType, baseValue, unitCount, commission, discount
   }
   return baseValue * unitCount + commission - discount;
 }
+function baseRateOf(c) {
+  if (c.employmentType === "clt" && c.monthlySalary) return c.monthlySalary;
+  return c.dailyRate || "0";
+}
 function countFridaysInMonth(year, month) {
   return getFridaysInMonth(year, month).length;
 }
@@ -2939,7 +2943,7 @@ var init_payroll = __esm({
           const weeklyFixed = isWeeklyFixed(employmentType) || weeklyCommission;
           const daily = isDailyType(employmentType) && !weeklyFixed;
           const saved = savedMap.get(c.id);
-          const baseValue = saved ? parseFloat(saved.baseValue || "0") : parseFloat(c.dailyRate || "0");
+          const baseValue = saved ? parseFloat(saved.baseValue || "0") : parseFloat(baseRateOf(c));
           const daysWorked = daily ? saved ? saved.daysWorked : daysMap.get(c.id) || 0 : null;
           const hasAutoCommission = (c.role === "motorista" || c.role === "terceirizado" || c.role === "operador") && c.commissionAuto !== 0;
           const isPaid = saved?.status === "pago";
@@ -3043,7 +3047,7 @@ var init_payroll = __esm({
         const [collab] = await db.select().from(collaborators).where(eq21(collaborators.id, input.collaboratorId));
         if (!collab) throw new TRPCError13({ code: "NOT_FOUND", message: "Colaborador n\xE3o encontrado." });
         const employmentType = collab.employmentType || "diarista";
-        const baseValue = input.baseValueOverride !== void 0 ? parseFloat(input.baseValueOverride) : parseFloat(collab.dailyRate || "0");
+        const baseValue = input.baseValueOverride !== void 0 ? parseFloat(input.baseValueOverride) : parseFloat(baseRateOf(collab));
         const isDaily = employmentType === "diarista" || employmentType === "terceirizado";
         const isWeeklyFixed = employmentType === "semanal";
         const [year, month] = input.referenceMonth.split("-").map(Number);
@@ -3106,7 +3110,7 @@ var init_payroll = __esm({
         for (const c of activeCollaborators) {
           if (existingIds.has(c.id)) continue;
           const employmentType = c.employmentType || "diarista";
-          const baseValue = parseFloat(c.dailyRate || "0");
+          const baseValue = parseFloat(baseRateOf(c));
           const isDaily = employmentType === "diarista" || employmentType === "terceirizado";
           const isWeeklyFixed = employmentType === "semanal";
           const daysWorked = isDaily ? daysMap.get(c.id) || 0 : null;

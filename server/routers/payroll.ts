@@ -142,6 +142,15 @@ function computeTotal(employmentType: string, baseValue: number, unitCount: numb
   return baseValue * unitCount + commission - discount;
 }
 
+// CLT usa o Salário Mensal (monthlySalary) como base da Folha — dailyRate nesse vínculo só
+// alimenta o custo/dia em Presenças (salário ÷ 22), não o pagamento. Os demais vínculos
+// continuam usando dailyRate (diária/valor semanal/PJ). Cai de volta pra dailyRate se
+// monthlySalary não estiver preenchido, pra não zerar quem ainda não migrou o cadastro.
+function baseRateOf(c: { employmentType?: string | null; dailyRate?: string | null; monthlySalary?: string | null }): string {
+  if (c.employmentType === "clt" && c.monthlySalary) return c.monthlySalary;
+  return c.dailyRate || "0";
+}
+
 // Quantas sextas-feiras (dia de pagamento do "Semanalmente") caem no mês/ano informado
 function countFridaysInMonth(year: number, month: number): number {
   return getFridaysInMonth(year, month).length;
@@ -504,7 +513,7 @@ export const payrollRouter = router({
         const weeklyFixed = isWeeklyFixed(employmentType) || weeklyCommission;
         const daily = isDailyType(employmentType) && !weeklyFixed;
         const saved = savedMap.get(c.id);
-        const baseValue = saved ? parseFloat(saved.baseValue || "0") : parseFloat(c.dailyRate || "0");
+        const baseValue = saved ? parseFloat(saved.baseValue || "0") : parseFloat(baseRateOf(c));
         const daysWorked = daily ? (saved ? saved.daysWorked : (daysMap.get(c.id) || 0)) : null;
         // Comissão automática (Motorista/Terceirizado/Operador) continua sendo recalculada ao
         // vivo mesmo depois de "Salvar/Fechar" — cargas/abastecimentos do mês podem mudar
@@ -631,7 +640,7 @@ export const payrollRouter = router({
       if (!collab) throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado." });
 
       const employmentType = collab.employmentType || "diarista";
-      const baseValue = input.baseValueOverride !== undefined ? parseFloat(input.baseValueOverride) : parseFloat(collab.dailyRate || "0");
+      const baseValue = input.baseValueOverride !== undefined ? parseFloat(input.baseValueOverride) : parseFloat(baseRateOf(collab));
       const isDaily = employmentType === "diarista" || employmentType === "terceirizado";
       const isWeeklyFixed = employmentType === "semanal";
 
@@ -707,7 +716,7 @@ export const payrollRouter = router({
       for (const c of activeCollaborators as any[]) {
         if (existingIds.has(c.id)) continue;
         const employmentType = c.employmentType || "diarista";
-        const baseValue = parseFloat(c.dailyRate || "0");
+        const baseValue = parseFloat(baseRateOf(c));
         const isDaily = employmentType === "diarista" || employmentType === "terceirizado";
         const isWeeklyFixed = employmentType === "semanal";
         const daysWorked = isDaily ? (daysMap.get(c.id) || 0) : null;
