@@ -255,10 +255,24 @@ function LeafletMap({
       zoomControl: true,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
-    }).addTo(map);
+    });
+    const satLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+      maxZoom: 19,
+    });
+    const satLabels = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 19,
+    });
+    const hybridLayer = L.layerGroup([satLayer, satLabels]);
+    osmLayer.addTo(map);
+    L.control.layers(
+      { "Mapa": osmLayer, "Sat\u00e9lite": satLayer, "H\u00edbrido": hybridLayer },
+      {},
+      { position: "topright" }
+    ).addTo(map);
 
     mapRef.current = map;
 
@@ -290,8 +304,8 @@ function LeafletMap({
       const isMoving = pos.speed > 1;
 
       const icon = isMoving
-        ? createArrowIcon(color, pos.course)
-        : createCircleIcon(color);
+        ? createArrowIcon(color, pos.course, device.name)
+        : createCircleIcon(color, device.name);
 
       const popupContent = `
         <div style="font-family:sans-serif;min-width:180px">
@@ -686,7 +700,7 @@ export default function GpsTrackingPage() {
       {/* Conteúdo principal: lista + mapa */}
       <div className="flex gap-3 sm:gap-4 flex-1 min-h-0 flex-col lg:flex-row">
         {/* Lista de dispositivos */}
-        <div className="w-full lg:w-72 flex flex-col gap-1.5 sm:gap-2 overflow-y-auto max-h-[300px] sm:max-h-[500px] lg:max-h-none">
+        <div className="w-full lg:w-72 flex flex-col gap-1.5 sm:gap-2 overflow-y-auto max-h-[220px] sm:max-h-[500px] lg:max-h-none overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
             Dispositivos ({devices.length})
           </p>
