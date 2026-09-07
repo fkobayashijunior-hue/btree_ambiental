@@ -20,7 +20,9 @@ export default function BuyerClientsPage() {
   const [form, setForm] = useState({
     name: "", nickname: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "",
     address: "", city: "", state: "", cep: "", contactPerson: "",
-    product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: ""
+    product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "",
+    paymentTermDaysAfterDelivery: "",
+    commissionCategory: "nenhuma" as "nenhuma" | "enerbio" | "mabam" | "lider" | "sonoco",
   });
   const [isBuyerForm, setIsBuyerForm] = useState(false); // toggle comprador
   const [editId, setEditId] = useState<number | null>(null);
@@ -46,7 +48,7 @@ export default function BuyerClientsPage() {
   });
 
   function resetForm() {
-    setForm({ name: "", nickname: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "", address: "", city: "", state: "", cep: "", contactPerson: "", product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "" });
+    setForm({ name: "", nickname: "", cnpjCpf: "", inscricaoEstadual: "", phone: "", email: "", address: "", city: "", state: "", cep: "", contactPerson: "", product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "", paymentTermDaysAfterDelivery: "", commissionCategory: "nenhuma" });
     setIsBuyerForm(false);
     setEditId(null);
   }
@@ -57,7 +59,9 @@ export default function BuyerClientsPage() {
       phone: b.phone || "", email: b.email || "", address: b.address || "",
       city: b.city || "", state: b.state || "", cep: b.cep || "",
       contactPerson: b.contactPerson || "", product: b.product || "",
-      paymentMethod: b.paymentMethod || "", pricePerUnit: b.pricePerUnit || "", unit: b.unit || "ton", notes: b.notes || ""
+      paymentMethod: b.paymentMethod || "", pricePerUnit: b.pricePerUnit || "", unit: b.unit || "ton", notes: b.notes || "",
+      paymentTermDaysAfterDelivery: b.paymentTermDaysAfterDelivery != null ? String(b.paymentTermDaysAfterDelivery) : "",
+      commissionCategory: b.commissionCategory || "nenhuma",
     });
     setIsBuyerForm(b.isBuyer === 1);
     setEditId(b.id);
@@ -67,10 +71,15 @@ export default function BuyerClientsPage() {
   function handleSave() {
     if (!form.name.trim()) { toast.error("Nome é obrigatório"); return; }
     const isBuyerVal = isBuyerForm ? 1 : 0;
+    const { paymentTermDaysAfterDelivery, ...rest } = form;
+    const payload = {
+      ...rest,
+      paymentTermDaysAfterDelivery: paymentTermDaysAfterDelivery.trim() ? parseInt(paymentTermDaysAfterDelivery, 10) : null,
+    };
     if (editId) {
-      updateMut.mutate({ id: editId, ...form, isBuyer: isBuyerVal });
+      updateMut.mutate({ id: editId, ...payload, isBuyer: isBuyerVal });
     } else {
-      createMut.mutate({ ...form, isBuyer: isBuyerVal });
+      createMut.mutate({ ...payload, isBuyer: isBuyerVal });
     }
   }
 
@@ -259,6 +268,37 @@ export default function BuyerClientsPage() {
                   <Input type="number" step="0.01" placeholder="0.00" value={form.pricePerUnit} onChange={e => setForm(f => ({ ...f, pricePerUnit: e.target.value }))} />
                 </div>
               </div>
+            </div>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+              <label className="text-sm font-medium">Prazo de pagamento após entrega (dias)</label>
+              <Input
+                type="number"
+                min="0"
+                placeholder="Ex: 1"
+                value={form.paymentTermDaysAfterDelivery}
+                onChange={e => setForm(f => ({ ...f, paymentTermDaysAfterDelivery: e.target.value }))}
+              />
+              <p className="text-xs text-blue-700">
+                Preencha só se esse comprador <strong>não</strong> emitir boleto/NF (ex: Enerbio) — a carga entregue
+                passa a aparecer em Contas a Receber &gt; "Cargas Entregues a Receber", com vencimento = data da entrega + esses dias.
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2">
+              <label className="text-sm font-medium">Categoria de Comissão do Motorista</label>
+              <Select value={form.commissionCategory} onValueChange={v => setForm(f => ({ ...f, commissionCategory: v as any }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhuma">Nenhuma (não gera comissão)</SelectItem>
+                  <SelectItem value="enerbio">Enerbio</SelectItem>
+                  <SelectItem value="mabam">Mabam (Rebnic)</SelectItem>
+                  <SelectItem value="lider">Líder</SelectItem>
+                  <SelectItem value="sonoco">Sonoco</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-emerald-700">
+                Usado na Folha de Pagamento: cada carga entregue nesse destino soma R$ X (tarifa editável lá) na
+                comissão do motorista que fez a entrega.
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium">Observações</label>

@@ -1,11 +1,11 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, foreignKey, int, bigint, timestamp, mysqlEnum, varchar, text, index, tinyint, datetime, decimal } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, foreignKey, int, bigint, timestamp, mysqlEnum, varchar, text, index, uniqueIndex, tinyint, datetime, decimal } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const attendanceRecords = mysqlTable("attendance_records", {
 	id: int().autoincrement().notNull(),
 	userId: int("user_id").notNull().references(() => users.id),
 	date: timestamp({ mode: 'string' }).notNull(),
-	employmentType: mysqlEnum("employment_type", ['clt','terceirizado','diarista']).notNull(),
+	employmentType: mysqlEnum("employment_type", ['clt','terceirizado','diarista','pj']).notNull(),
 	dailyValue: varchar("daily_value", { length: 20 }).notNull(),
 	pixKey: varchar("pix_key", { length: 255 }).notNull(),
 	function: varchar({ length: 100 }).notNull(),
@@ -61,6 +61,12 @@ export const cargoDestinations = mysqlTable("cargo_destinations", {
 	paymentMethod: varchar("payment_method", { length: 100 }),
 	pricePerUnit: varchar("price_per_unit", { length: 20 }),
 	unit: varchar({ length: 20 }).default("ton"),
+	// Preenchido só para comprador sem boleto/NF (ex: Enerbio): dias após a entrega em que o
+	// pagamento é esperado. Usado pela aba "Cargas Entregues a Receber" em Contas a Receber.
+	paymentTermDaysAfterDelivery: int("payment_term_days_after_delivery"),
+	// Categoria usada para calcular a comissão do motorista por carga entregue nesse destino
+	// (Folha de Pagamento). 'nenhuma' = destino não gera comissão de motorista.
+	commissionCategory: mysqlEnum("commission_category", ['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco']).default('nenhuma'),
 });
 
 export const cargoLoads = mysqlTable("cargo_loads", {
@@ -122,6 +128,10 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 		invoiceCheckedBy: int("invoice_checked_by"),
 		invoiceCheckedByName: varchar("invoice_checked_by_name", { length: 255 }),
 		fiscalNoteId: int("fiscal_note_id"),
+		// Recebimento do COMPRADOR (destino) — usado só por "Cargas Entregues a Receber" em Contas
+		// a Receber, para compradores sem boleto/NF (ex: Enerbio). Não confundir com payment_status,
+		// que controla o pagamento da BTREE ao cliente/fornecedor (fluxo de dinheiro oposto).
+		buyerPaidAt: timestamp("buyer_paid_at", { mode: 'string' }),
 	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {
@@ -328,7 +338,7 @@ export const collaboratorAttendance = mysqlTable("collaborator_attendance", {
 	id: int().autoincrement().notNull(),
 	collaboratorId: int("collaborator_id").notNull(),
 	date: timestamp({ mode: 'string' }).notNull(),
-	employmentTypeCa: mysqlEnum("employment_type_ca", ['clt','terceirizado','diarista']).default('diarista').notNull(),
+	employmentTypeCa: mysqlEnum("employment_type_ca", ['clt','terceirizado','diarista','pj']).default('diarista').notNull(),
 	dailyValue: varchar("daily_value", { length: 20 }).default('0').notNull(),
 	pixKey: varchar("pix_key", { length: 255 }),
 	activity: varchar({ length: 255 }),
@@ -375,17 +385,77 @@ export const collaborators = mysqlTable("collaborators", {
 	role: mysqlEnum(['administrativo','encarregado','mecanico','motosserrista','carregador','operador','motorista','terceirizado']).default('operador').notNull(),
 	pixKey: varchar("pix_key", { length: 255 }),
 	dailyRate: varchar("daily_rate", { length: 20 }),
-	employmentType: mysqlEnum("employment_type", ['clt','terceirizado','diarista']).default('diarista'),
+	employmentType: mysqlEnum("employment_type", ['clt','terceirizado','diarista','pj','semanal']).default('diarista'),
 	shirtSize: mysqlEnum("shirt_size", ['PP','P','M','G','GG','XGG']),
 	pantsSize: varchar("pants_size", { length: 10 }),
 	shoeSize: varchar("shoe_size", { length: 5 }),
 	bootSize: varchar("boot_size", { length: 5 }),
 	active: int().default(1).notNull(),
 	clientId: int("client_id"),
+	commissionAuto: int("commission_auto").default(1).notNull(),
+	commissionUnit: mysqlEnum("commission_unit", ['carga', 'tonelada']).default('carga').notNull(), // motorista/terceirizado: comissão por carga entregue ou por tonelada líquida entregue
+	weeklyPeriodAnchor: mysqlEnum("weekly_period_anchor", ['domingo', 'sabado']).default('domingo').notNull(), // dia que inicia a semana de apuração (Ruan: sábado-sexta)
+	paymentLagDays: int("payment_lag_days").default(7).notNull(), // dias após o fim do período (sexta) em que o pagamento efetivamente ocorre (Ruan: 14)
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	createdBy: int("created_by").references(() => users.id),
 });
+
+// ===== FOLHA DE PAGAMENTO (snapshot mensal por colaborador) =====
+export const payrollEntries = mysqlTable("payroll_entries", {
+	id: int().autoincrement().notNull(),
+	collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
+	referenceMonth: varchar("reference_month", { length: 7 }).notNull(), // "YYYY-MM"
+	collaboratorName: varchar("collaborator_name", { length: 255 }).notNull(),
+	cpf: varchar({ length: 14 }),
+	employmentType: mysqlEnum("employment_type", ['clt', 'terceirizado', 'diarista', 'pj', 'semanal']).notNull(),
+	baseValue: varchar("base_value", { length: 20 }).notNull(), // salário (CLT/PJ) ou valor da diária/semanal (diarista/terceirizado/semanal)
+	daysWorked: int("days_worked"), // só diarista/terceirizado — snapshot da contagem de presenças do mês
+	commission: varchar({ length: 20 }).default('0').notNull(),
+	discount: varchar({ length: 20 }).default('0').notNull(), // desconto de combustível (Terceirizado)
+	totalAmount: varchar("total_amount", { length: 20 }).notNull(),
+	status: mysqlEnum(['fechado', 'pago']).default('fechado').notNull(),
+	paidAt: timestamp("paid_at", { mode: 'string' }),
+	notes: text(),
+	closedBy: int("closed_by").references(() => users.id),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	uniqueIndex("payroll_entries_collab_month_unique").on(table.collaboratorId, table.referenceMonth),
+]);
+export type PayrollEntry = typeof payrollEntries.$inferSelect;
+export type InsertPayrollEntry = typeof payrollEntries.$inferInsert;
+
+// Controle de pagamento por semana para colaboradores "Semanalmente" (pagos toda sexta,
+// valor fixo, sem dias trabalhados — diferente de diarista, que usa Presenças pra isso).
+export const payrollWeeklyPayments = mysqlTable("payroll_weekly_payments", {
+	id: int().autoincrement().notNull(),
+	collaboratorId: int("collaborator_id").notNull().references(() => collaborators.id),
+	weekFriday: varchar("week_friday", { length: 10 }).notNull(), // "YYYY-MM-DD" (sexta-feira da semana)
+	paid: tinyint().default(0).notNull(),
+	paidAt: timestamp("paid_at", { mode: 'string' }),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	uniqueIndex("payroll_weekly_payments_collab_friday_unique").on(table.collaboratorId, table.weekFriday),
+]);
+export type PayrollWeeklyPayment = typeof payrollWeeklyPayments.$inferSelect;
+
+// Tarifas de comissão editáveis (motorista por carga/destino, operador por tonelada).
+// Chave-valor simples: chave = "motorista_enerbio" | "motorista_mabam" | "motorista_lider" |
+// "motorista_sonoco" | "operador_por_tonelada".
+export const payrollCommissionRates = mysqlTable("payroll_commission_rates", {
+	id: int().autoincrement().notNull(),
+	chave: varchar({ length: 50 }).notNull(),
+	valor: varchar({ length: 20 }).notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	uniqueIndex("payroll_commission_rates_chave_unique").on(table.chave),
+]);
+export type PayrollCommissionRate = typeof payrollCommissionRates.$inferSelect;
 
 export const equipment = mysqlTable("equipment", {
 	id: int().autoincrement().notNull(),
@@ -935,6 +1005,173 @@ export const vehicleRecords = mysqlTable("vehicle_records", {
 });
 
 
+// ===== SICOOB BOLETOS (Contas a Receber) =====
+export const sicoobBoletos = mysqlTable("sicoob_boletos", {
+  id: int().autoincrement().notNull(),
+  nossoNumero: int("nosso_numero").notNull(),
+  seuNumero: varchar("seu_numero", { length: 50 }),
+  codigoEspecieDocumento: varchar("codigo_especie_documento", { length: 10 }),
+  dataEmissao: varchar("data_emissao", { length: 10 }),
+  nfReferente: varchar("nf_referente", { length: 50 }),
+  valorEditado: tinyint("valor_editado").notNull().default(0),
+  cnpjPagador: varchar("cnpj_pagador", { length: 30 }),
+  nomePagador: varchar("nome_pagador", { length: 255 }),
+  valor: varchar({ length: 20 }).notNull().default("0"),
+  dataVencimento: varchar("data_vencimento", { length: 10 }),
+  dataPagamento: varchar("data_pagamento", { length: 10 }),
+  situacao: int().notNull().default(1), // 1=em aberto, 2=baixado, 3=liquidado
+  sincronizadoEm: timestamp("sincronizado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  uniqueIndex("sicoob_boletos_nosso_numero_unique").on(table.nossoNumero),
+]);
+
+export type SicoobBoleto = typeof sicoobBoletos.$inferSelect;
+export type InsertSicoobBoleto = typeof sicoobBoletos.$inferInsert;
+
+// ===== SICOOB EXTRATO (Movimentações) =====
+export const sicoobExtrato = mysqlTable("sicoob_extrato", {
+  id: int().autoincrement().notNull(),
+  numeroLancamento: varchar("numero_lancamento", { length: 50 }).notNull(),
+  mes: int().notNull(),
+  ano: int().notNull(),
+  dataLancamento: varchar("data_lancamento", { length: 10 }),
+  descricao: varchar({ length: 255 }),
+  complemento: varchar({ length: 255 }),
+  valor: varchar({ length: 20 }).notNull().default("0"),
+  saldo: varchar({ length: 20 }).notNull().default("0"),
+  tipoLancamento: varchar("tipo_lancamento", { length: 50 }),
+  numeroDocumento: varchar("numero_documento", { length: 100 }),
+  sincronizadoEm: timestamp("sincronizado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  uniqueIndex("sicoob_extrato_lancamento_unique").on(table.numeroLancamento, table.mes, table.ano),
+]);
+export type SicoobExtrato = typeof sicoobExtrato.$inferSelect;
+
+// ===== MEMÓRIA DE FAVORECIDOS =====
+// Identifica um favorecido do extrato (CNPJ completo, nome, ou fragmento de CPF mascarado pelo
+// banco), guarda razão social/CNAE (descobertos via BrasilAPI) e a classificação contábil/gerencial
+// (Grupo, Centro de Custo, Natureza, etc) — reaplicada automaticamente em lançamentos futuros do
+// mesmo favorecido, e herdada por CNAE para favorecidos novos ainda não classificados manualmente.
+export const favorecidoCategoria = mysqlTable("favorecido_categoria", {
+  id: int().autoincrement().notNull(),
+  chave: varchar({ length: 255 }).notNull(),
+  tipoChave: mysqlEnum("tipo_chave", ['cnpj', 'nome', 'cpf_fragmento']).notNull(),
+  razaoSocial: varchar("razao_social", { length: 255 }),
+  cnaeCodigo: varchar("cnae_codigo", { length: 20 }),
+  cnaeDescricao: varchar("cnae_descricao", { length: 255 }),
+  // Classificação contábil/gerencial adicional (ex: planilha de rateio de custos) — livre,
+  // preenchida manualmente ou importada junto com a planilha de CNPJs.
+  grupo: varchar({ length: 100 }),
+  centroCusto: varchar("centro_custo", { length: 100 }),
+  natureza: varchar({ length: 150 }),
+  classificacao: varchar({ length: 150 }),
+  fixoVariavel: varchar("fixo_variavel", { length: 30 }),
+  diretoIndireto: varchar("direto_indireto", { length: 30 }),
+  createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  uniqueIndex("favorecido_categoria_chave_unique").on(table.chave),
+]);
+export type FavorecidoCategoria = typeof favorecidoCategoria.$inferSelect;
+
+// ===== SICOOB LANÇAMENTOS FUTUROS =====
+export const sicoobLancamentosFuturos = mysqlTable("sicoob_lancamentos_futuros", {
+  id: int().autoincrement().notNull(),
+  data: varchar({ length: 10 }).notNull(),
+  documento: varchar({ length: 50 }),
+  historico: varchar({ length: 255 }),
+  infoComplementar: varchar("info_complementar", { length: 500 }),
+  valor: varchar({ length: 20 }).notNull().default("0"),
+  importadoEm: timestamp("importado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  index("sicoob_futuros_data_idx").on(table.data),
+]);
+
+// ===== SICOOB SALDO MÊS =====
+// ===== CONTA AZUL TOKENS (refresh token rotativo) =====
+export const contaazulTokens = mysqlTable("contaazul_tokens", {
+  id: int().autoincrement().notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  accessToken: text("access_token"),
+  expiresAt: bigint("expires_at", { mode: "number" }),
+  atualizadoEm: timestamp("atualizado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  index("contaazul_tokens_id_idx").on(table.id),
+]);
+
+// ===== NOTAS FISCAIS (Conta Azul) =====
+export const notasFiscais = mysqlTable("notas_fiscais", {
+  id: int().autoincrement().notNull(),
+  chaveAcesso: varchar("chave_acesso", { length: 50 }).notNull(),
+  numeroNota: varchar("numero_nota", { length: 20 }),
+  dataEmissao: varchar("data_emissao", { length: 10 }),
+  nomeDestinatario: varchar("nome_destinatario", { length: 255 }),
+  cnpjDestinatario: varchar("cnpj_destinatario", { length: 20 }),
+  valorTotal: varchar("valor_total", { length: 20 }),
+  unidade: varchar("unidade", { length: 20 }),
+  quantidade: varchar("quantidade", { length: 20 }),
+  cfop: varchar("cfop", { length: 10 }),
+  valorEditado: tinyint("valor_editado").default(0).notNull(),
+  statusFiscalContaAzul: varchar("status_fiscal_conta_azul", { length: 50 }),
+  statusNfInterno: mysqlEnum("status_nf_interno", ['em_aberto', 'pago', 'cancelado']).default('em_aberto').notNull(),
+  dataPagamentoConfirmado: varchar("data_pagamento_confirmado", { length: 10 }),
+  dataPrevisaoPagamento: varchar("data_previsao_pagamento", { length: 10 }),
+  mes: int(),
+  ano: int(),
+  sincronizadoEm: timestamp("sincronizado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  uniqueIndex("notas_fiscais_chave_unique").on(table.chaveAcesso),
+  index("notas_fiscais_mes_ano_idx").on(table.mes, table.ano),
+]);
+export type NotaFiscal = typeof notasFiscais.$inferSelect;
+
+// ===== HISTÓRICO DE ALTERAÇÕES DE STATUS NF (auditoria) =====
+export const notasFiscaisStatusLog = mysqlTable("notas_fiscais_status_log", {
+  id: int().autoincrement().notNull(),
+  notaFiscalId: int("nota_fiscal_id").notNull(),
+  campo: varchar({ length: 50 }).notNull(),
+  valorAnterior: varchar("valor_anterior", { length: 100 }),
+  valorNovo: varchar("valor_novo", { length: 100 }),
+  usuarioId: int("usuario_id"),
+  usuarioNome: varchar("usuario_nome", { length: 255 }),
+  alteradoEm: timestamp("alterado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  index("notas_fiscais_status_log_nf_idx").on(table.notaFiscalId),
+]);
+
+// ===== REGRAS DE PRAZO DE PAGAMENTO POR CLIENTE (config) =====
+export const clientePrazoPagamento = mysqlTable("cliente_prazo_pagamento", {
+  id: int().autoincrement().notNull(),
+  cnpj: varchar({ length: 20 }).notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  tipoRegra: mysqlEnum("tipo_regra", ['dias_corridos', 'faixa_mensal', 'semanal_quarta']).notNull(),
+  parametros: text().notNull(), // JSON com os parâmetros da regra
+  ativo: tinyint().default(1).notNull(),
+  criadoEm: timestamp("criado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  uniqueIndex("cliente_prazo_pagamento_cnpj_unique").on(table.cnpj),
+]);
+
+export const sicoobSaldoMes = mysqlTable("sicoob_saldo_mes", {
+  id: int().autoincrement().notNull(),
+  mes: int().notNull(),
+  ano: int().notNull(),
+  saldoInicial: varchar("saldo_inicial", { length: 20 }).notNull().default("0"),
+  saldoFinal: varchar("saldo_final", { length: 20 }).notNull().default("0"),
+  sincronizadoEm: timestamp("sincronizado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+  uniqueIndex("sicoob_saldo_mes_unique").on(table.mes, table.ano),
+]);
+
 // ===== FOTOS DE TRACKING DE CARGAS =====
 export const cargoTrackingPhotos = mysqlTable("cargo_tracking_photos", {
   id: int("id").autoincrement().primaryKey(),
@@ -1016,7 +1253,10 @@ export const cargoWeeklyClosings = mysqlTable("cargo_weekly_closings", {
 	closedBy: int("closed_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-});
+},
+(table) => [
+	uniqueIndex("cargo_weekly_closings_client_week_unique").on(table.clientId, table.weekStart),
+]);
 
 export type CargoWeeklyClosing = typeof cargoWeeklyClosings.$inferSelect;
 export type InsertCargoWeeklyClosing = typeof cargoWeeklyClosings.$inferInsert;

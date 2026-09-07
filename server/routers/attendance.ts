@@ -164,7 +164,7 @@ export const attendanceRouter = router({
     .input(z.object({
       collaboratorId: z.number(),
       date: z.string(), // YYYY-MM-DD
-      employmentType: z.enum(["clt", "terceirizado", "diarista"]),
+      employmentType: z.enum(["clt", "terceirizado", "diarista", "pj"]),
       dailyValue: z.string(),
       pixKey: z.string().optional(),
       activity: z.string().optional(),

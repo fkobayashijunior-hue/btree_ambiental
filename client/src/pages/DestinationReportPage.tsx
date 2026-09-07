@@ -13,8 +13,8 @@ import { formatBR, formatBRL } from "@/lib/formatBR";
 import { BTREE_LOGO_B64, fetchImageAsBase64, generatePDFFromHtml } from "@/lib/pdfUtils";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const BTREE_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png";
-const KOBAYASHI_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png";
+const BTREE_LOGO = "/icon-btree-512.png";
+const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 const BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
 
 // ─── PDF Styles ───────────────────────────────────────────────────────────────

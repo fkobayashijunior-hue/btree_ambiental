@@ -196,7 +196,7 @@ export default function CollaboratorDetail() {
 <div class="section"><div class="section-title">Dados Profissionais</div><div class="grid">
 <div class="field"><label>Cargo</label>${collab.role || "-"}</div>
 <div class="field"><label>Tipo</label>${collab.employmentType || "-"}</div>
-<div class="field"><label>Diária</label>${collab.dailyRate ? `R$ ${collab.dailyRate}` : "-"}</div>
+<div class="field"><label>${collab.employmentType === "clt" || collab.employmentType === "pj" ? "Salário" : collab.employmentType === "semanal" ? "Valor Semanal" : "Diária"}</label>${collab.dailyRate ? `R$ ${collab.dailyRate}` : "-"}</div>
 <div class="field"><label>PIX</label>${collab.pixKey || "-"}</div>
 </div></div>
 <div class="section"><div class="section-title">Documentos</div>
@@ -317,7 +317,7 @@ ${documents.length > 0 ? `<table><thead><tr><th>Tipo</th><th>Título</th><th>Emi
                 {[
                   { label: "Cargo / Função", value: collab.role, icon: <Briefcase className="h-4 w-4" /> },
                   { label: "Cadastrado em", value: collab.createdAt ? new Date(collab.createdAt).toLocaleDateString("pt-BR") : null, icon: <Calendar className="h-4 w-4" /> },
-                  { label: "Diária", value: collab.dailyRate ? `R$ ${collab.dailyRate}` : null, icon: <FileText className="h-4 w-4" /> },
+                  { label: collab.employmentType === "clt" || collab.employmentType === "pj" ? "Salário" : collab.employmentType === "semanal" ? "Valor Semanal" : "Diária", value: collab.dailyRate ? `R$ ${collab.dailyRate}` : null, icon: <FileText className="h-4 w-4" /> },
                   { label: "Tipo de Emprego", value: collab.employmentType, icon: <FileText className="h-4 w-4" /> },
                   { label: "Chave PIX", value: collab.pixKey, icon: <FileText className="h-4 w-4" /> },
                 ].map(({ label, value, icon }) => (

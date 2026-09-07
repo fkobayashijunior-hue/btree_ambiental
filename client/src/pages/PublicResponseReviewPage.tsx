@@ -19,7 +19,7 @@ const COMPANY = {
   whatsapp: '5544988334679',
   instagram: '@btree_ambiental',
   site: 'btreeambiental.com',
-  logoUrl: 'https://storage.manus.space/webdev-static-assets/logo-btree-final_5d1c1c12.png',
+  logoUrl: '/icon-btree-512.png',
 };
 
 type ResponseItem = {

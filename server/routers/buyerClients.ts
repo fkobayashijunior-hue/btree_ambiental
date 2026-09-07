@@ -33,6 +33,11 @@ function destToBuyer(d: typeof cargoDestinations.$inferSelect) {
     pricePerTon: d.pricePerTon,
     pricePerM3: d.pricePerM3,
     priceType: d.priceType,
+    // Só preenchido quando o comprador não emite boleto/NF (ex: Enerbio) — dias após a
+    // entrega em que o pagamento é esperado. Usado em Contas a Receber > Cargas Entregues.
+    paymentTermDaysAfterDelivery: d.paymentTermDaysAfterDelivery ?? null,
+    // Categoria usada na comissão do motorista por carga entregue nesse destino (Folha de Pagamento)
+    commissionCategory: d.commissionCategory ?? "nenhuma",
   };
 }
 
@@ -92,6 +97,8 @@ export const buyerClientsRouter = router({
       unit: z.string().optional(),
       notes: z.string().optional(),
       isBuyer: z.number().optional(), // 0 = destino normal, 1 = comprador
+      paymentTermDaysAfterDelivery: z.number().nullable().optional(),
+      commissionCategory: z.enum(['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco']).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -104,13 +111,13 @@ export const buyerClientsRouter = router({
       const priceType = unit === 'm3' ? 'm3' : 'ton';
       const isBuyer = input.isBuyer ?? 0; // default: destino normal
       await db.execute(sql`
-        INSERT INTO cargo_destinations 
-          (name, nickname, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, created_by, created_at)
-        VALUES 
+        INSERT INTO cargo_destinations
+          (name, nickname, address, city, state, notes, is_buyer, cnpj_cpf, inscricao_estadual, phone, email, cep, contact_person, product, payment_method, price_per_unit, unit, price_per_ton, price_per_m3, price_type, payment_term_days_after_delivery, commission_category, created_by, created_at)
+        VALUES
           (${input.name}, ${input.nickname || null}, ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.notes || null},
            ${isBuyer}, ${input.cnpjCpf || null}, ${input.inscricaoEstadual || null}, ${input.phone || null}, ${input.email || null},
            ${input.cep || null}, ${input.contactPerson || null}, ${input.product || null}, ${input.paymentMethod || null},
-           ${input.pricePerUnit || null}, ${unit}, ${pricePerTon}, ${pricePerM3}, ${priceType}, ${ctx.user.id}, ${now})
+           ${input.pricePerUnit || null}, ${unit}, ${pricePerTon}, ${pricePerM3}, ${priceType}, ${input.paymentTermDaysAfterDelivery ?? null}, ${input.commissionCategory || 'nenhuma'}, ${ctx.user.id}, ${now})
       `);
       return { success: true };
     }),
@@ -136,6 +143,8 @@ export const buyerClientsRouter = router({
       notes: z.string().optional(),
       active: z.number().optional(),
       isBuyer: z.number().optional(), // 0 = destino normal, 1 = comprador
+      paymentTermDaysAfterDelivery: z.number().nullable().optional(),
+      commissionCategory: z.enum(['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco']).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -166,6 +175,8 @@ export const buyerClientsRouter = router({
         notes: input.notes || null,
         active: input.active ?? 1,
         ...(input.isBuyer !== undefined ? { isBuyer: input.isBuyer } : {}),
+        ...(input.paymentTermDaysAfterDelivery !== undefined ? { paymentTermDaysAfterDelivery: input.paymentTermDaysAfterDelivery } : {}),
+        ...(input.commissionCategory !== undefined ? { commissionCategory: input.commissionCategory } : {}),
       }).where(eq(cargoDestinations.id, input.id));
       return { success: true };
     }),
@@ -196,6 +207,105 @@ export const buyerClientsRouter = router({
       // Hard delete the destination record
       await db.execute(sql`DELETE FROM cargo_destinations WHERE id = ${input.id}`);
       return { success: true, loadCount, payCount };
+    }),
+
+  // === CARGAS ENTREGUES A RECEBER (compradores sem boleto/NF, ex: Enerbio) ===
+  // Vencimento = data de entrega + payment_term_days_after_delivery do comprador.
+  // Usa cargo_loads.buyer_paid_at (campo próprio) — NÃO usa payment_status, que controla o
+  // pagamento da BTREE ao cliente/fornecedor daquela carga (fluxo de dinheiro oposto).
+  listCargasAReceber: protectedProcedure
+    .input(z.object({ mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100), pesquisa: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [rows] = await db.$client.execute(
+        `SELECT cl.id, cl.date, cl.delivery_date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3,
+                cl.buyer_paid_at, cl.invoice_number,
+                cd.id AS destino_id, cd.name AS destino_nome, cd.cnpj_cpf, cd.price_per_unit, cd.unit,
+                cd.payment_term_days_after_delivery
+         FROM cargo_loads cl
+         JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+         WHERE cl.status = 'entregue' AND cd.payment_term_days_after_delivery IS NOT NULL`
+      ) as any;
+
+      // mysql2 devolve colunas DATE/TIMESTAMP como objeto Date (não string) em execute() cru —
+      // normaliza pra "YYYY-MM-DD" antes de usar (mesmo problema já corrigido em sicoob.ts).
+      const toDateStr = (v: any): string => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+
+      const hoje = new Date().toISOString().slice(0, 10);
+      const cargas = (rows ?? [])
+        .map((r: any) => {
+          const entrega = toDateStr(r.delivery_date || r.date);
+          const dueDate = new Date(entrega + "T12:00:00");
+          dueDate.setDate(dueDate.getDate() + Number(r.payment_term_days_after_delivery));
+          const vencimento = dueDate.toISOString().slice(0, 10);
+          const peso = parseFloat(r.weight_net_kg || r.weight_out_kg || "0");
+          const volume = parseFloat(r.volume_m3 || "0");
+          const preco = parseFloat(r.price_per_unit || "0");
+          const quantidade = r.unit === "m3" ? volume : peso / 1000;
+          const valor = quantidade * preco;
+          return {
+            id: r.id,
+            dataEntrega: entrega,
+            vencimento,
+            destinoId: r.destino_id,
+            destinoNome: r.destino_nome,
+            cnpj: r.cnpj_cpf,
+            pesoKg: peso,
+            volumeM3: volume,
+            unit: r.unit,
+            precoUnit: preco,
+            valor,
+            invoiceNumber: r.invoice_number,
+            recebido: !!r.buyer_paid_at,
+            buyerPaidAt: r.buyer_paid_at ? toDateStr(r.buyer_paid_at) : null,
+          };
+        })
+        .filter((c: any) => {
+          const [ay, am] = c.vencimento.split("-").map(Number);
+          if (ay !== input.ano || am !== input.mes) return false;
+          if (input.pesquisa) {
+            const s = input.pesquisa.toLowerCase();
+            if (!c.destinoNome?.toLowerCase().includes(s) && !c.cnpj?.includes(input.pesquisa)) return false;
+          }
+          return true;
+        })
+        .sort((a: any, b: any) => a.vencimento.localeCompare(b.vencimento));
+
+      let vencidos = 0, vencemHoje = 0, aVencer = 0, recebidos = 0;
+      for (const c of cargas) {
+        if (c.recebido) recebidos += c.valor;
+        else if (c.vencimento < hoje) vencidos += c.valor;
+        else if (c.vencimento === hoje) vencemHoje += c.valor;
+        else aVencer += c.valor;
+      }
+
+      return {
+        cargas,
+        summary: { vencidos, vencemHoje, aVencer, recebidos, total: vencidos + vencemHoje + aVencer + recebidos },
+      };
+    }),
+
+  // Marca/desmarca o recebimento do COMPRADOR para esta carga — campo próprio (buyer_paid_at),
+  // sem relação com payment_status (pagamento da BTREE ao cliente/fornecedor da carga).
+  markCargaRecebida: protectedProcedure
+    .input(z.object({ id: z.number(), buyerPaidAt: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const buyerPaidAt = input.buyerPaidAt || new Date().toISOString().slice(0, 10);
+      await db.$client.execute(`UPDATE cargo_loads SET buyer_paid_at = ? WHERE id = ?`, [buyerPaidAt, input.id]);
+      return { success: true };
+    }),
+
+  unmarkCargaRecebida: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.$client.execute(`UPDATE cargo_loads SET buyer_paid_at = NULL WHERE id = ?`, [input.id]);
+      return { success: true };
     }),
 
   // === PREÇOS ===

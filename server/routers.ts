@@ -21,6 +21,7 @@ import { chainsawModuleRouter } from "./routers/chainsaws";
 import { extraExpensesRouter } from "./routers/extraExpenses";
 import { dashboardRouter } from "./routers/dashboard";
 import { financialRouter } from "./routers/financial";
+import { payrollRouter } from "./routers/payroll";
 import { financialDashboardRouter } from "./routers/financialDashboard";
 import { gpsLocationsRouter } from "./routers/gpsLocations";
 import { reportsRouter } from "./routers/reports";
@@ -43,6 +44,8 @@ import { thirdPartyRouter } from "./routers/thirdParty";
 import { geofencesRouter } from "./routers/geofences";
 import { freightTripsRouter } from "./routers/freightTrips";
 import { financialConsolidatedRouter } from "./routers/financialConsolidated";
+import { sicoobRouter } from "./routers/sicoob";
+import { contaAzulRouter } from "./routers/contaAzul";
 import { fiscalNotesRouter } from "./routers/fiscalNotes";
 import { notificationSettingsRouter } from "./routers/notificationSettings";
 import { z } from "zod";
@@ -228,7 +231,7 @@ export const appRouter = router({
           throw new Error('Chave inválida');
         }
         const passwordHash = await hashPassword(input.password);
-        const result = await updateUserPasswordByEmail(input.email, passwordHash, 'admin');
+        const result = await updateUserPasswordByEmail(input.email, passwordHash, 'admin', { forceRole: true });
         return { success: true, message: `Admin ${input.email} ${result.action === 'updated' ? 'atualizado' : 'criado'} com sucesso` };
       }),
 
@@ -312,6 +315,7 @@ export const appRouter = router({
   chainsawModule: chainsawModuleRouter,
   extraExpenses: extraExpensesRouter,
   financial: financialRouter,
+  payroll: payrollRouter,
   financialDashboard: financialDashboardRouter,
   gpsLocations: gpsLocationsRouter,
   reports: reportsRouter,
@@ -386,6 +390,8 @@ export const appRouter = router({
   }),
   financialConsolidated: financialConsolidatedRouter,
   fiscalNotes: fiscalNotesRouter,
+  sicoob: sicoobRouter,
+  contaAzul: contaAzulRouter,
   // TODO: add feature routers heree, e.g.
   // todo: router({
   //   list: protectedProcedure.query(({ ctx }) =>

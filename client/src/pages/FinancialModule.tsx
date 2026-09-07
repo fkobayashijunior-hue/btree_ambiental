@@ -13,7 +13,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Plus, FileDown,
   Loader2, Trash2, Edit2, ChevronDown, ChevronUp,
   BarChart3, PieChart, Calendar, ArrowUpCircle, ArrowDownCircle,
-  Wallet, CheckCircle2, Clock, XCircle
+  Wallet, CheckCircle2, Clock, XCircle, Users
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -21,6 +21,7 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import PayrollSheet from "./PayrollSheet";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ const emptyForm = {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function FinancialModule() {
-  const [tab, setTab] = useState<"dashboard" | "lancamentos" | "boletos" | "relatorio">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "lancamentos" | "boletos" | "relatorio" | "folha">("dashboard");
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const [isOpen, setIsOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<any>(null);
@@ -402,7 +403,7 @@ export default function FinancialModule() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={v => setTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-4 max-w-lg">
+        <TabsList className="grid w-full grid-cols-5 max-w-2xl">
           <TabsTrigger value="dashboard" className="gap-1.5 text-xs sm:text-sm">
             <BarChart3 className="h-4 w-4" /> <span className="hidden sm:inline">Dashboard</span><span className="sm:hidden">Dash</span>
           </TabsTrigger>
@@ -412,10 +413,18 @@ export default function FinancialModule() {
           <TabsTrigger value="boletos" className="gap-1.5 text-xs sm:text-sm">
             <Clock className="h-4 w-4" /> <span className="hidden sm:inline">Boletos Cargas</span><span className="sm:hidden">Boletos</span>
           </TabsTrigger>
+          <TabsTrigger value="folha" className="gap-1.5 text-xs sm:text-sm">
+            <Users className="h-4 w-4" /> <span className="hidden sm:inline">Folha de Pagamento</span><span className="sm:hidden">Folha</span>
+          </TabsTrigger>
           <TabsTrigger value="relatorio" className="gap-1.5 text-xs sm:text-sm">
             <FileDown className="h-4 w-4" /> <span className="hidden sm:inline">Relatório</span><span className="sm:hidden">PDF</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* ─── ABA FOLHA DE PAGAMENTO ──────────────────────────────────── */}
+        <TabsContent value="folha" className="space-y-4 mt-4">
+          <PayrollSheet referenceMonth={selectedMonth} />
+        </TabsContent>
 
         {/* ─── ABA DASHBOARD ───────────────────────────────────────────── */}
         <TabsContent value="dashboard" className="space-y-5 mt-4">

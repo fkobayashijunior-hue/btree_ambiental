@@ -198,7 +198,7 @@ export async function createUser(user: InsertUser) {
   return result;
 }
 
-export async function updateUserPasswordByEmail(email: string, passwordHash: string, role: 'user' | 'admin' = 'admin') {
+export async function updateUserPasswordByEmail(email: string, passwordHash: string, role: 'user' | 'admin' = 'admin', options?: { forceRole?: boolean }) {
   const db = await getDb();
   if (!db) {
     throw new Error("Database not available");
@@ -206,11 +206,17 @@ export async function updateUserPasswordByEmail(email: string, passwordHash: str
 
   // Primeiro verifica se o usuário existe
   const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  
+
   if (existing.length > 0) {
-    // Atualizar usuário existente
+    // Atualizar usuário existente. Por padrão preserva o role atual (ex: admin) —
+    // só sobrescreve quando o chamador pede explicitamente (options.forceRole), como
+    // no fluxo de seed/promoção manual de admin. Sem isso, definir/trocar a senha de
+    // um colaborador (ex: em collaboratorsRouter.update) rebaixava silenciosamente
+    // qualquer usuário vinculado para 'user', mesmo que já fosse 'admin'.
+    const setData: any = { passwordHash, loginMethod: 'email', updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') };
+    if (options?.forceRole) setData.role = role;
     await db.update(users)
-      .set({ passwordHash, loginMethod: 'email', role, updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') } as any)
+      .set(setData)
       .where(eq(users.email, email));
     return { action: 'updated' };
   } else {

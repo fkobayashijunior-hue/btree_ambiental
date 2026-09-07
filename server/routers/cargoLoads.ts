@@ -1620,19 +1620,29 @@ export const cargoLoadsRouter = router({
       dueDate.setDate(dueDate.getDate() + paymentTermDays);
       const dueDateStr = dueDate.toISOString().slice(0, 10) + ' 12:00:00';
       
-      const result = await db.insert(cargoWeeklyClosings).values({
-        clientId: input.clientId,
-        weekStart: weekStartStr + ' 12:00:00',
-        weekEnd: weekEndStr + ' 12:00:00',
-        totalLoads,
-        totalWeightKg: totalWeightKg.toFixed(2),
-        totalAmount,
-        pricePerTon,
-        dueDate: dueDateStr,
-        status: 'fechado',
-        closedBy: ctx.user.id,
-        notes: input.notes,
-      });
+      let result: any;
+      try {
+        result = await db.insert(cargoWeeklyClosings).values({
+          clientId: input.clientId,
+          weekStart: weekStartStr + ' 12:00:00',
+          weekEnd: weekEndStr + ' 12:00:00',
+          totalLoads,
+          totalWeightKg: totalWeightKg.toFixed(2),
+          totalAmount,
+          pricePerTon,
+          dueDate: dueDateStr,
+          status: 'fechado',
+          closedBy: ctx.user.id,
+          notes: input.notes,
+        });
+      } catch (e: any) {
+        // Índice único (client_id, week_start) barra duplicata em caso de duplo clique
+        // ou de o cron automático já ter fechado essa mesma semana.
+        if (e?.code === 'ER_DUP_ENTRY' || e?.errno === 1062) {
+          throw new TRPCError({ code: "CONFLICT", message: "Já existe um fechamento para este cliente nesta semana." });
+        }
+        throw e;
+      }
 
       // Notificação interna para Fábio (ADM/Comercial) e admins
       try {

@@ -7,7 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
+    "dev": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "bash build.sh",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
@@ -120,6 +120,7 @@
     "@types/file-saver": "^2.0.7",
     "@types/google.maps": "^3.58.1",
     "@types/nodemailer": "^7.0.11",
+    "cross-env": "^10.1.0",
     "drizzle-kit": "0.30.0",
     "vite-plugin-pwa": "^1.2.0",
     "workbox-window": "^7.4.0"

@@ -34,7 +34,7 @@ import {
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt
+  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -203,6 +203,11 @@ const menuGroups: MenuGroup[] = [
       { label: "Dashboard Financeiro", path: "/dashboard-financeiro", slug: "dashboard-financeiro", icon: TrendingUp },
       { label: "Relatório Consolidado", path: "/relatorio-consolidado", slug: "relatorio-consolidado", icon: BarChart3 },
       { label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec", icon: BarChart3 },
+      { label: "Contas a Receber",       path: "/contas-a-receber",      slug: "contas-a-receber",      icon: Landmark },
+      { label: "Contas a Pagar",         path: "/contas-a-pagar",        slug: "contas-a-pagar",        icon: TrendingDown },
+      { label: "Extrato Movimentações",  path: "/extrato-movimentacoes", slug: "extrato-movimentacoes", icon: ArrowLeftRight },
+      { label: "Folha de Pagamento", path: "/folha-pagamento", slug: "folha-pagamento", icon: Users },
+      { label: "Fluxo de Caixa",         path: "/fluxo-de-caixa",        slug: "fluxo-de-caixa",        icon: TrendingUp },
     ],
   },
   // ── Administração (admin only) ──
@@ -437,9 +442,9 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <img
-                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png"
+                    src="/icon-btree-512.png"
                     alt="BTREE Ambiental"
-                    className="h-8 object-contain brightness-0 invert"
+                    className="h-8 object-contain rounded-md"
                   />
                 </div>
               ) : null}

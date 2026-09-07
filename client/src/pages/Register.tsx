@@ -46,7 +46,7 @@ export default function Register() {
         <CardHeader className="space-y-3 text-center">
           <div className="flex justify-center mb-4">
             <img 
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree-final_5d1c1c12.png" 
+              src="/icon-btree-512.png" 
               alt="BTREE Ambiental" 
               className="h-16 w-auto"
             />
@@ -148,7 +148,7 @@ export default function Register() {
         <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
           <span>Desenvolvido por</span>
           <img 
-            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-kobayashi_82aef6a5.png" 
+            src="https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png" 
             alt="Kobayashi" 
             className="h-10 w-auto"
           />

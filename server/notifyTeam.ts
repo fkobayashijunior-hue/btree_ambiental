@@ -78,7 +78,7 @@ function buildHtml(payload: NotifyPayload): string {
   <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1);">
     <!-- Header -->
     <div style="background:${meta.color};padding:24px 32px;">
-      <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/logo-btree_2d00f2da.png"
+      <img src="https://btreeambiental.com/icon-btree-512.png"
            alt="BTREE Ambiental" style="height:40px;margin-bottom:12px;display:block;" />
       <h2 style="margin:0;color:#fff;font-size:20px;">${meta.icon} ${meta.label}</h2>
     </div>
