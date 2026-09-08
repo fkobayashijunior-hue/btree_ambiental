@@ -98,6 +98,41 @@ export const quotationRequestsRouter = router({
       return { success: true };
     }),
 
+  // Editar resposta/fornecedor (protegido) — permite corrigir dados e condições
+  adminUpdateResponse: protectedProcedure
+    .input(z.object({
+      responseId: z.number(),
+      supplierName: z.string().optional(),
+      tradeName: z.string().optional(),
+      cnpj: z.string().optional(),
+      address: z.string().optional(),
+      sellerName: z.string().optional(),
+      sellerPhone: z.string().optional(),
+      sellerEmail: z.string().optional(),
+      paymentTerms: z.string().optional(),
+      deliveryTerms: z.string().optional(),
+      productsSold: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const set: any = {};
+      if (input.supplierName !== undefined) set.supplierName = input.supplierName;
+      if (input.tradeName !== undefined) set.tradeName = input.tradeName;
+      if (input.cnpj !== undefined) set.cnpj = input.cnpj;
+      if (input.address !== undefined) set.address = input.address;
+      if (input.sellerName !== undefined) set.sellerName = input.sellerName;
+      if (input.sellerPhone !== undefined) set.sellerPhone = input.sellerPhone;
+      if (input.sellerEmail !== undefined) set.sellerEmail = input.sellerEmail;
+      if (input.paymentTerms !== undefined) set.paymentTerms = input.paymentTerms;
+      if (input.deliveryTerms !== undefined) set.deliveryTerms = input.deliveryTerms;
+      if (input.productsSold !== undefined) set.productsSold = input.productsSold;
+      if (input.notes !== undefined) set.notes = input.notes;
+      await db.update(quotationResponses).set(set).where(eq(quotationResponses.id, input.responseId));
+      return { success: true };
+    }),
+
   // ===== AUTOMAÇÃO COMPLETA =====
   // Processa uma solicitação respondida:
   // 1. Cria/atualiza fornecedores de todas as respostas
@@ -338,6 +373,8 @@ export const quotationRequestsRouter = router({
       sellerName: z.string().optional(),
       sellerPhone: z.string().optional(),
       sellerEmail: z.string().optional(),
+      paymentTerms: z.string().optional(),
+      deliveryTerms: z.string().optional(),
       items: z.array(z.object({
         name: z.string(),
         quantity: z.string(),
@@ -368,6 +405,8 @@ export const quotationRequestsRouter = router({
         sellerName: input.sellerName ?? null,
         sellerPhone: input.sellerPhone ?? null,
         sellerEmail: input.sellerEmail ?? null,
+        paymentTerms: input.paymentTerms ?? null,
+        deliveryTerms: input.deliveryTerms ?? null,
         itemsJson: JSON.stringify(input.items),
         notes: input.notes ?? null,
       }).where(eq(quotationResponses.id, input.responseId));
@@ -378,6 +417,48 @@ export const quotationRequestsRouter = router({
         });
       } catch (_) { /* não bloquear */ }
       return { success: true };
+    }),
+
+  // Fornecedor: verificar se já existe cadastro por CNPJ ou nome (público)
+  findSupplier: publicProcedure
+    .input(z.object({
+      cnpj: z.string().optional(),
+      supplierName: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { found: false as const };
+      const normCnpj = (input.cnpj || '').replace(/\D/g, '');
+      const name = (input.supplierName || '').trim();
+      if (!normCnpj && !name) return { found: false as const };
+      let rows: any[] = [];
+      if (normCnpj) {
+        const [r] = await db.execute(sql`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`) as any;
+        rows = (r as any[]) || [];
+      }
+      if (rows.length === 0 && name) {
+        const [r] = await db.execute(sql`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`) as any;
+        rows = (r as any[]) || [];
+      }
+      const s = rows[0];
+      if (!s) return { found: false as const };
+      return {
+        found: true as const,
+        supplier: {
+          id: s.id,
+          companyName: s.company_name,
+          tradeName: s.trade_name,
+          cnpj: s.cnpj,
+          address: s.address,
+          city: s.city,
+          state: s.state,
+          phone: s.phone,
+          whatsapp: s.whatsapp,
+          email: s.email,
+          sellerName: s.seller_name,
+          productsSold: s.products_sold,
+        },
+      };
     }),
 
   // Buscar solicitação por token (fornecedor acessa)
@@ -423,6 +504,10 @@ export const quotationRequestsRouter = router({
         sellerName: z.string().optional(),
         sellerPhone: z.string().optional(),
         sellerEmail: z.string().optional(),
+        paymentTerms: z.string().optional(),
+        deliveryTerms: z.string().optional(),
+        tradeName: z.string().optional(),
+        productsSold: z.string().optional(),
         items: z.array(
           z.object({
             name: z.string(),
@@ -448,6 +533,34 @@ export const quotationRequestsRouter = router({
       if (!req) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
       if (req.status === "cancelada") throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação cancelada" });
 
+      // Anti-duplicação: localizar fornecedor já cadastrado por CNPJ (prioridade) ou nome fantasia/razão
+      let linkedSupplierId: number | null = null;
+      let linkedSupplier: { tradeName?: string | null; productsSold?: string | null } = {};
+      try {
+        const normCnpj = (input.cnpj || '').replace(/\D/g, '');
+        const name = (input.supplierName || '').trim();
+        let found: any[] = [];
+        if (normCnpj) {
+          const [r] = await db.execute(sql`SELECT id, trade_name, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`) as any;
+          found = (r as any[]) || [];
+        }
+        if (found.length === 0 && name) {
+          const [r] = await db.execute(sql`SELECT id, trade_name, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`) as any;
+          found = (r as any[]) || [];
+        }
+        if (found[0]) {
+          linkedSupplierId = found[0].id;
+          linkedSupplier = { tradeName: found[0].trade_name, productsSold: found[0].products_sold };
+          // Atualizar dados de contato do fornecedor se a resposta trouxe informações novas
+          await db.execute(sql`UPDATE suppliers SET
+            phone = COALESCE(NULLIF(phone,''), ${input.sellerPhone || ''}),
+            whatsapp = COALESCE(NULLIF(whatsapp,''), ${input.sellerPhone || ''}),
+            seller_name = COALESCE(NULLIF(seller_name,''), ${input.sellerName || ''}),
+            address = COALESCE(NULLIF(address,''), ${input.address || ''})
+            WHERE id = ${linkedSupplierId}`);
+        }
+      } catch (_) { /* vínculo é best-effort, não bloquear a resposta */ }
+
       const responseToken = crypto.randomBytes(32).toString("hex");
 
       const [insertResult] = await db.insert(quotationResponses).values({
@@ -458,10 +571,15 @@ export const quotationRequestsRouter = router({
         sellerName: input.sellerName,
         sellerPhone: input.sellerPhone,
         sellerEmail: input.sellerEmail,
+        paymentTerms: input.paymentTerms,
+        deliveryTerms: input.deliveryTerms,
         itemsJson: JSON.stringify(input.items),
         notes: input.notes,
         responseToken,
-      });
+        tradeName: (input.tradeName || linkedSupplier.tradeName || null) as any,
+        productsSold: (input.productsSold || linkedSupplier.productsSold || null) as any,
+        ...(linkedSupplierId ? { supplierId: linkedSupplierId } : {}),
+      } as any);
 
       const responseId = (insertResult as { insertId: number }).insertId;
 

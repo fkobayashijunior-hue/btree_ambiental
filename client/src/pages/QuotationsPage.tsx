@@ -48,6 +48,42 @@ function fmtPrice(price: string | number) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+// Capacidade em litros de cada embalagem (para normalizar preço por litro)
+const PACKAGING_LITERS: Record<string, number> = {
+  '1L': 1, '5L': 5, '10L': 10, '20L': 20, '200L': 200,
+};
+// Extrai capacidade da embalagem (ex: '20L' -> 20). Retorna null se não for volume.
+function packagingLiters(pack?: string): number | null {
+  if (!pack) return null;
+  const p = pack.trim().toUpperCase();
+  if (PACKAGING_LITERS[p]) return PACKAGING_LITERS[p];
+  const m = p.match(/(\d+(?:[\.,]\d+)?)\s*L/);
+  if (m) return parseFloat(m[1].replace(',', '.'));
+  return null;
+}
+// Preço normalizado: se o item tem embalagem em litros, retorna preço POR LITRO; senão, preço unitário.
+// Isso evita comparar "galão 5L" com "galão 20L" pelo preço bruto.
+function normalizedUnitPrice(item: ResponseItem): number {
+  const price = parseFloat(String(item.price).replace(',', '.'));
+  if (isNaN(price)) return NaN;
+  const qty = parseFloat(String(item.quantity || '1').replace(',', '.')) || 1;
+  const total = price * qty; // price é unitário; total da linha
+  const lit = packagingLiters((item as any).packaging);
+  if (lit && lit > 0) return total / (lit * qty); // R$ por litro
+  return price; // R$ por unidade
+}
+// Chave de agrupamento: nome do produto normalizado (sem marca/embalagem) + categoria de embalagem.
+function itemGroupKey(name: string, pack?: string): string {
+  const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\b(galao|galão|tambor|litro|litros|lt|balde)\b/g, '')
+    .replace(/\d+\s*l\b/g, '') // remove "20l", "5l" do nome
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  const lit = packagingLiters(pack);
+  const packCat = lit ? (lit >= 100 ? 'tambor' : 'galao') : 'un';
+  return n + '|' + packCat;
+}
+
 function fmtExpiry(expiresAt: number) {
   const diff = expiresAt - Date.now();
   if (diff <= 0) return 'Expirado';
@@ -217,6 +253,15 @@ export default function QuotationsPage() {
     },
   });
 
+  const [editResp, setEditResp] = useState<any>(null);
+  const adminUpdateRespMutation = trpc.quotationRequests.adminUpdateResponse.useMutation({
+    onSuccess: () => {
+      utils.quotationRequests.getById.invalidate();
+      setEditResp(null);
+      toast.success("Resposta atualizada!");
+    },
+    onError: (err) => toast.error("Erro ao atualizar: " + err.message),
+  });
   const autoProcessMutation = trpc.quotationRequests.autoProcess.useMutation({
     onSuccess: (data) => {
       setShowAutoProcessConfirm(false);
@@ -869,78 +914,114 @@ export default function QuotationsPage() {
                   <p className="text-xs mt-1">Compartilhe o link com os fornecedores</p>
                 </div>
               ) : (() => {
-                // Calcular melhor preço por item (nome normalizado)
-               const bestPriceByItem: Record<string, { price: number; supplierId: number }> = {};
-               requestDetail.responses.forEach((resp: any, rIdx: number) => {
-                 resp.items.forEach((item: ResponseItem) => {
-                    // Tentar fazer match com algum item original da solicitação
-                    const reqMatch = requestDetail.items.find((ri: QuotItem) => itemNamesMatch(ri.name, item.name));
-                    const key = reqMatch ? reqMatch.name.toLowerCase().trim() : item.name.toLowerCase().trim();
-                   const price = parseFloat(item.price);
-                   if (!isNaN(price)) {
-                     if (!(key in bestPriceByItem) || price < bestPriceByItem[key].price) {
-                        bestPriceByItem[key] = { price, supplierId: rIdx };
-                      }
+                // ===== COMPARATIVO EM PLANILHA (item × fornecedor) com preço normalizado por litro =====
+                // 1) Montar a lista de linhas (itens solicitados + itens extras) agrupados por nome+embalagem
+                type Cell = { price: number; norm: number; unit: string; pack?: string; brand?: string; supplier: string; rIdx: number };
+                const suppliersList: string[] = requestDetail.responses.map((r: any) => r.tradeName || r.supplierName);
+                // Mapa: groupKey -> { label, unit, cells: Cell[] }
+                const rowsMap: Record<string, { label: string; unit: string; packCat: string; cells: Cell[] }> = {};
+                const ensureRow = (label: string, unit: string, packCat: string, gk: string) => {
+                  if (!rowsMap[gk]) rowsMap[gk] = { label, unit, packCat, cells: [] };
+                  return rowsMap[gk];
+                };
+                // Itens solicitados (linhas base)
+                requestDetail.items.forEach((reqItem: QuotItem) => {
+                  const gk = itemGroupKey(reqItem.name);
+                  ensureRow(reqItem.name, reqItem.unit || 'un', 'un', gk);
+                });
+                // Respostas: preencher células
+                requestDetail.responses.forEach((resp: any, rIdx: number) => {
+                  const supplierName = resp.tradeName || resp.supplierName;
+                  (resp.items || []).forEach((item: ResponseItem) => {
+                    const price = parseFloat(String(item.price).replace(',', '.'));
+                    if (isNaN(price)) return;
+                    const norm = normalizedUnitPrice(item);
+                    if (isNaN(norm)) return;
+                    // Tentar casar com um item solicitado por nome (fuzzy) + mesma categoria de embalagem
+                    let gk = '';
+                    const matchedReq = requestDetail.items.find((ri: QuotItem) => itemNamesMatch(ri.name, item.name));
+                    if (matchedReq) {
+                      gk = itemGroupKey(matchedReq.name, (item as any).packaging);
+                      // garantir que a linha existe com a categoria de embalagem certa
+                      ensureRow(matchedReq.name, matchedReq.unit || 'un', gk.split('|')[1], gk);
+                    } else {
+                      gk = itemGroupKey(item.name, (item as any).packaging);
+                      ensureRow(item.name, item.unit || 'un', gk.split('|')[1], gk);
                     }
+                    rowsMap[gk].cells.push({
+                      price, norm,
+                      unit: packagingLiters((item as any).packaging) ? 'L' : (item.unit || 'un'),
+                      pack: (item as any).packaging, brand: item.brand,
+                      supplier: supplierName, rIdx,
+                    });
                   });
                 });
-                // Calcular total por fornecedor
+                const rowsArr = Object.entries(rowsMap).map(([gk, r]) => ({ gk, ...r }));
+                // Melhor (menor preço normalizado) por linha
+                rowsArr.forEach(r => {
+                  const vals = r.cells.map(c => c.norm);
+                  (r as any).best = vals.length ? Math.min(...vals) : null;
+                  (r as any).worst = vals.length ? Math.max(...vals) : null;
+                });
+                // Totais por fornecedor (soma do preço bruto de seus itens)
                 const totals = requestDetail.responses.map((resp: any) => ({
                   id: resp.id,
-                   total: (resp.items || []).reduce((sum: number, item: ResponseItem) => sum + (parseFloat(item.price) || 0), 0),
+                  total: (resp.items || []).reduce((sum: number, item: ResponseItem) => sum + (parseFloat(String(item.price).replace(',', '.')) || 0), 0),
                 }));
                 const minTotal = Math.min(...totals.map((t: any) => t.total));
                 return (
                   <div className="space-y-4">
-                    {/* Comparativo de melhor preço por item */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Trophy className="w-4 h-4 text-amber-600" />
-                        <span className="text-sm font-semibold text-amber-800">Comparativo — Melhor Preço por Item</span>
+                    {/* Planilha comparativa */}
+                    <div className="rounded-lg border border-emerald-200 overflow-hidden shadow-sm">
+                      <div className="bg-emerald-700 text-white px-3 py-2 flex items-center gap-2">
+                        <Trophy className="w-4 h-4" />
+                        <span className="text-sm font-semibold">Comparativo de Preços</span>
+                        <span className="text-[11px] text-emerald-100 ml-auto">menor valor por linha em destaque</span>
                       </div>
-                      <div className="space-y-1">
-                        {requestDetail.items.map((reqItem: QuotItem, i: number) => {
-                         const key = reqItem.name.toLowerCase().trim();
-                          const best = bestPriceByItem[key] ?? bestPriceByItem[Object.keys(bestPriceByItem).find(k => itemNamesMatch(k, reqItem.name)) ?? ''];
-                         // Coletar todos os preços para este item
-                         const allPrices = requestDetail.responses
-                           .map((resp: any, rIdx: number) => {
-                              const found = resp.items.find((it: ResponseItem) => itemNamesMatch(it.name, reqItem.name));
-                             if (!found) return null;
-                              return { supplier: resp.supplierName, price: parseFloat(found.price), rIdx };
-                            })
-                            .filter(Boolean)
-                            .sort((a: any, b: any) => a.price - b.price);
-                          if (allPrices.length === 0) return (
-                            <div key={i} className="bg-white rounded p-2 border border-amber-100">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-gray-700">{reqItem.name}</span>
-                                <span className="text-xs text-gray-400 italic">Não cotado</span>
-                              </div>
-                            </div>
-                          );
-                          const bestSupplier = allPrices[0]!;
-                          const worstPrice = allPrices[allPrices.length - 1]?.price || 0;
-                          const saving = worstPrice - bestSupplier.price;
-                          return (
-                            <div key={i} className="bg-white rounded p-2 border border-amber-100">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-gray-700">{reqItem.name}</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-green-700">{fmtPrice(String(bestSupplier.price))}</span>
-                                  <span className="text-xs text-green-600 font-medium">{bestSupplier.supplier}</span>
-                                  <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                                </div>
-                              </div>
-                              {saving > 0.01 && (
-                                <p className="text-xs text-gray-400 mt-0.5">Economia de {fmtPrice(String(saving))} vs. maior preço</p>
-                              )}
-                            </div>
-                          );
-                        })}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-emerald-50 text-emerald-900">
+                              <th className="text-left px-3 py-2 font-semibold sticky left-0 bg-emerald-50 z-10">Item</th>
+                              {suppliersList.map((s: string, i: number) => (
+                                <th key={i} className="text-right px-3 py-2 font-semibold whitespace-nowrap">{s}</th>
+                              ))}
+                              <th className="text-right px-3 py-2 font-semibold text-emerald-700 whitespace-nowrap">Melhor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rowsArr.map((r, ri) => (
+                              <tr key={ri} className={ri % 2 ? 'bg-gray-50/60' : 'bg-white'}>
+                                <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 bg-inherit whitespace-nowrap">
+                                  {r.label}
+                                  <span className="block text-[10px] text-gray-400 font-normal">{r.packCat === 'un' ? r.unit : r.packCat === 'galao' ? 'galão' : 'tambor'}</span>
+                                </td>
+                                {suppliersList.map((s: string, si: number) => {
+                                  const cell = r.cells.find(c => c.supplier === s);
+                                  if (!cell) return <td key={si} className="px-3 py-2 text-right text-gray-300">—</td>;
+                                  const isBest = (r as any).best !== null && Math.abs(cell.norm - (r as any).best) < 0.0001;
+                                  return (
+                                    <td key={si} className={`px-3 py-2 text-right whitespace-nowrap ${isBest ? 'bg-emerald-100/70 font-bold text-emerald-800' : 'text-gray-700'}`}>
+                                      {fmtPrice(String(cell.norm))}<span className="text-[10px] font-normal text-gray-400">/{cell.unit}</span>
+                                      {(cell.pack || cell.brand) && (
+                                        <span className="block text-[10px] font-normal text-gray-400">{[cell.brand, cell.pack].filter(Boolean).join(' · ')}</span>
+                                      )}
+                                      {isBest && <Star className="w-3 h-3 text-amber-500 fill-amber-500 inline ml-1" />}
+                                    </td>
+                                  );
+                                })}
+                                <td className="px-3 py-2 text-right whitespace-nowrap font-bold text-emerald-700">
+                                  {(r as any).best !== null ? fmtPrice(String((r as any).best)) : '—'}
+                                  {(r as any).best !== null && <span className="block text-[10px] font-normal text-gray-400">{rowsArr[ri].cells.find(c => Math.abs(c.norm - (r as any).best) < 0.0001)?.supplier}</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-
+                    {/* mapa de melhor preço por grupo (usado para destacar itens nos cards abaixo) */}
+                    {(() => { return null; })()}
                     <p className="text-sm font-medium text-gray-700">{requestDetail.responses.length} resposta(s) recebida(s)</p>
                     {requestDetail.responses.map((resp: any, rIdx: number) => {
                       const total = totals.find((t: any) => t.id === resp.id)?.total || 0;
@@ -951,13 +1032,14 @@ export default function QuotationsPage() {
                             <div className="flex items-start justify-between">
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-gray-800">{resp.supplierName}</p>
+                                  <p className="font-semibold text-gray-800">{resp.tradeName || resp.supplierName}</p>
                                   {isBestTotal && (
                                     <Badge className="bg-green-100 text-green-700 border-green-200 text-xs flex items-center gap-1">
                                       <Trophy className="w-3 h-3" /> Menor Total
                                     </Badge>
                                   )}
                                 </div>
+                                {resp.tradeName && resp.supplierName && resp.tradeName !== resp.supplierName && <p className="text-xs text-gray-400">{resp.supplierName}</p>}
                                 {resp.cnpj && <p className="text-xs text-gray-500">CNPJ: {resp.cnpj}</p>}
                                 {resp.address && <p className="text-xs text-gray-500">{resp.address}</p>}
                               </div>
@@ -973,13 +1055,20 @@ export default function QuotationsPage() {
                                 {resp.sellerEmail && <a href={`mailto:${resp.sellerEmail}`} className="flex items-center gap-1 text-blue-500 hover:underline"><Mail className="w-3 h-3" /> {resp.sellerEmail}</a>}
                               </div>
                             )}
+                            {(resp.paymentTerms || resp.deliveryTerms) && (
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                {resp.paymentTerms && <span className="bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-0.5">💳 {resp.paymentTerms}</span>}
+                                {resp.deliveryTerms && <span className="bg-purple-50 text-purple-700 border border-purple-200 rounded px-2 py-0.5">🚚 {resp.deliveryTerms}</span>}
+                              </div>
+                            )}
                             <div className="mt-3 space-y-2">
                               {resp.items.map((item: ResponseItem, i: number) => {
-                               const key = item.name.toLowerCase().trim();
-                                // Usar fuzzy match para encontrar a chave correta no bestPriceByItem
-                                const matchedKey = Object.keys(bestPriceByItem).find(k => itemNamesMatch(k, item.name)) ?? key;
-                                const isBest = bestPriceByItem[matchedKey]?.supplierId === rIdx;
-                                const itemPrice = parseFloat(item.price);
+                                // Melhor preço normalizado deste item (por grupo nome+embalagem)
+                                const gk = itemGroupKey(item.name, (item as any).packaging);
+                                const grp = rowsMap[gk];
+                                const itemNorm = normalizedUnitPrice(item);
+                                const isBest = !!grp && grp.cells.length > 0 && !isNaN(itemNorm) && Math.abs(itemNorm - Math.min(...grp.cells.map(c => c.norm))) < 0.0001;
+                                const itemPrice = parseFloat(String(item.price).replace(',', '.'));
                                 return (
                                   <div key={i} className={`flex items-center justify-between rounded p-2 text-sm ${isBest ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}>
                                     <div className="flex-1">
@@ -998,8 +1087,31 @@ export default function QuotationsPage() {
                               })}
                             </div>
                             {resp.notes && <p className="text-xs text-gray-500 mt-2 italic border-t pt-2">{resp.notes}</p>}
+                            <div className="mt-3 pt-2 border-t">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-xs text-blue-700 border-blue-300 hover:bg-blue-50 mb-2"
+                                onClick={() => setEditResp({
+                                  id: resp.id,
+                                  supplierName: resp.supplierName || '',
+                                  tradeName: resp.tradeName || '',
+                                  cnpj: resp.cnpj || '',
+                                  address: resp.address || '',
+                                  sellerName: resp.sellerName || '',
+                                  sellerPhone: resp.sellerPhone || '',
+                                  sellerEmail: resp.sellerEmail || '',
+                                  paymentTerms: resp.paymentTerms || '',
+                                  deliveryTerms: resp.deliveryTerms || '',
+                                  productsSold: resp.productsSold || '',
+                                  notes: resp.notes || '',
+                                })}
+                              >
+                                <Pencil className="w-3 h-3 mr-1" /> Editar dados do fornecedor
+                              </Button>
+                            </div>
                             {resp.responseToken && (
-                              <div className="mt-3 pt-2 border-t">
+                              <div className="mt-1">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1340,6 +1452,83 @@ export default function QuotationsPage() {
             <Button variant="outline" onClick={resetCatForm}>Cancelar</Button>
             <Button onClick={handleSubmitCat} disabled={createCatMutation.isPending || updateCatMutation.isPending}>
               {(createCatMutation.isPending || updateCatMutation.isPending) ? 'Salvando...' : editCatId ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Editar dados do fornecedor na resposta */}
+      <Dialog open={!!editResp} onOpenChange={() => setEditResp(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4" /> Editar fornecedor</DialogTitle>
+          </DialogHeader>
+          {editResp && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2">
+                  <Label className="text-xs">Nome Fantasia</Label>
+                  <Input value={editResp.tradeName} onChange={e => setEditResp((p: any) => ({ ...p, tradeName: e.target.value }))} placeholder="Como conhecemos a loja" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Razão Social</Label>
+                  <Input value={editResp.supplierName} onChange={e => setEditResp((p: any) => ({ ...p, supplierName: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">CNPJ</Label>
+                  <Input value={editResp.cnpj} onChange={e => setEditResp((p: any) => ({ ...p, cnpj: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Cidade/UF</Label>
+                  <Input value={editResp.address} onChange={e => setEditResp((p: any) => ({ ...p, address: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Vendedor</Label>
+                  <Input value={editResp.sellerName} onChange={e => setEditResp((p: any) => ({ ...p, sellerName: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Telefone/WhatsApp</Label>
+                  <Input value={editResp.sellerPhone} onChange={e => setEditResp((p: any) => ({ ...p, sellerPhone: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Formas de pagamento</Label>
+                  <Input value={editResp.paymentTerms} onChange={e => setEditResp((p: any) => ({ ...p, paymentTerms: e.target.value }))} placeholder="Ex: 28 dias, à vista, boleto" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Entrega / frete</Label>
+                  <Input value={editResp.deliveryTerms} onChange={e => setEditResp((p: any) => ({ ...p, deliveryTerms: e.target.value }))} placeholder="Ex: 3 dias, frete grátis" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">O que vende</Label>
+                  <Input value={editResp.productsSold} onChange={e => setEditResp((p: any) => ({ ...p, productsSold: e.target.value }))} placeholder="Ex: óleos, filtros, peças" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Observações</Label>
+                  <Textarea value={editResp.notes} onChange={e => setEditResp((p: any) => ({ ...p, notes: e.target.value }))} rows={2} />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditResp(null)}>Cancelar</Button>
+            <Button
+              disabled={adminUpdateRespMutation.isPending}
+              onClick={() => adminUpdateRespMutation.mutate({
+                responseId: editResp.id,
+                supplierName: editResp.supplierName,
+                tradeName: editResp.tradeName,
+                cnpj: editResp.cnpj,
+                address: editResp.address,
+                sellerName: editResp.sellerName,
+                sellerPhone: editResp.sellerPhone,
+                sellerEmail: editResp.sellerEmail,
+                paymentTerms: editResp.paymentTerms,
+                deliveryTerms: editResp.deliveryTerms,
+                productsSold: editResp.productsSold,
+                notes: editResp.notes,
+              })}
+            >
+              {adminUpdateRespMutation.isPending ? 'Salvando...' : 'Salvar'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1703,6 +1703,7 @@ var init_schema = __esm({
       email: varchar({ length: 255 }),
       website: varchar({ length: 500 }),
       notes: text(),
+      productsSold: varchar("products_sold", { length: 500 }),
       active: tinyint().default(1).notNull(),
       sellerName: varchar("seller_name", { length: 255 }),
       pixKey: varchar("pix_key", { length: 255 }),
@@ -1796,12 +1797,17 @@ var init_schema = __esm({
     quotationResponses = mysqlTable("quotation_responses", {
       id: int().autoincrement().primaryKey().notNull(),
       quotationRequestId: int("quotation_request_id").notNull().references(() => quotationRequests.id),
+      supplierId: int("supplier_id"),
       supplierName: varchar("supplier_name", { length: 255 }).notNull(),
+      tradeName: varchar("trade_name", { length: 255 }),
       cnpj: varchar({ length: 30 }),
       address: text(),
       sellerName: varchar("seller_name", { length: 255 }),
       sellerPhone: varchar("seller_phone", { length: 30 }),
       sellerEmail: varchar("seller_email", { length: 255 }),
+      paymentTerms: varchar("payment_terms", { length: 255 }),
+      deliveryTerms: varchar("delivery_terms", { length: 255 }),
+      productsSold: varchar("products_sold", { length: 500 }),
       itemsJson: text("items_json").notNull(),
       // JSON array: [{name, quantity, unit, price, brand, notes}]
       notes: text(),
@@ -16964,6 +16970,38 @@ var quotationRequestsRouter = router({
     await db.update(quotationRequests).set({ status: "cancelada" }).where(eq37(quotationRequests.id, input.id));
     return { success: true };
   }),
+  // Editar resposta/fornecedor (protegido) — permite corrigir dados e condições
+  adminUpdateResponse: protectedProcedure.input(z38.object({
+    responseId: z38.number(),
+    supplierName: z38.string().optional(),
+    tradeName: z38.string().optional(),
+    cnpj: z38.string().optional(),
+    address: z38.string().optional(),
+    sellerName: z38.string().optional(),
+    sellerPhone: z38.string().optional(),
+    sellerEmail: z38.string().optional(),
+    paymentTerms: z38.string().optional(),
+    deliveryTerms: z38.string().optional(),
+    productsSold: z38.string().optional(),
+    notes: z38.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    const set = {};
+    if (input.supplierName !== void 0) set.supplierName = input.supplierName;
+    if (input.tradeName !== void 0) set.tradeName = input.tradeName;
+    if (input.cnpj !== void 0) set.cnpj = input.cnpj;
+    if (input.address !== void 0) set.address = input.address;
+    if (input.sellerName !== void 0) set.sellerName = input.sellerName;
+    if (input.sellerPhone !== void 0) set.sellerPhone = input.sellerPhone;
+    if (input.sellerEmail !== void 0) set.sellerEmail = input.sellerEmail;
+    if (input.paymentTerms !== void 0) set.paymentTerms = input.paymentTerms;
+    if (input.deliveryTerms !== void 0) set.deliveryTerms = input.deliveryTerms;
+    if (input.productsSold !== void 0) set.productsSold = input.productsSold;
+    if (input.notes !== void 0) set.notes = input.notes;
+    await db.update(quotationResponses).set(set).where(eq37(quotationResponses.id, input.responseId));
+    return { success: true };
+  }),
   // ===== AUTOMAÇÃO COMPLETA =====
   // Processa uma solicitação respondida:
   // 1. Cria/atualiza fornecedores de todas as respostas
@@ -17158,6 +17196,8 @@ var quotationRequestsRouter = router({
     sellerName: z38.string().optional(),
     sellerPhone: z38.string().optional(),
     sellerEmail: z38.string().optional(),
+    paymentTerms: z38.string().optional(),
+    deliveryTerms: z38.string().optional(),
     items: z38.array(z38.object({
       name: z38.string(),
       quantity: z38.string(),
@@ -17185,6 +17225,8 @@ var quotationRequestsRouter = router({
       sellerName: input.sellerName ?? null,
       sellerPhone: input.sellerPhone ?? null,
       sellerEmail: input.sellerEmail ?? null,
+      paymentTerms: input.paymentTerms ?? null,
+      deliveryTerms: input.deliveryTerms ?? null,
       itemsJson: JSON.stringify(input.items),
       notes: input.notes ?? null
     }).where(eq37(quotationResponses.id, input.responseId));
@@ -17196,6 +17238,45 @@ var quotationRequestsRouter = router({
     } catch (_) {
     }
     return { success: true };
+  }),
+  // Fornecedor: verificar se já existe cadastro por CNPJ ou nome (público)
+  findSupplier: publicProcedure.input(z38.object({
+    cnpj: z38.string().optional(),
+    supplierName: z38.string().optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { found: false };
+    const normCnpj = (input.cnpj || "").replace(/\D/g, "");
+    const name = (input.supplierName || "").trim();
+    if (!normCnpj && !name) return { found: false };
+    let rows = [];
+    if (normCnpj) {
+      const [r] = await db.execute(sql24`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
+      rows = r || [];
+    }
+    if (rows.length === 0 && name) {
+      const [r] = await db.execute(sql24`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`);
+      rows = r || [];
+    }
+    const s = rows[0];
+    if (!s) return { found: false };
+    return {
+      found: true,
+      supplier: {
+        id: s.id,
+        companyName: s.company_name,
+        tradeName: s.trade_name,
+        cnpj: s.cnpj,
+        address: s.address,
+        city: s.city,
+        state: s.state,
+        phone: s.phone,
+        whatsapp: s.whatsapp,
+        email: s.email,
+        sellerName: s.seller_name,
+        productsSold: s.products_sold
+      }
+    };
   }),
   // Buscar solicitação por token (fornecedor acessa)
   getByToken: publicProcedure.input(z38.object({ token: z38.string() })).query(async ({ input }) => {
@@ -17230,6 +17311,10 @@ var quotationRequestsRouter = router({
       sellerName: z38.string().optional(),
       sellerPhone: z38.string().optional(),
       sellerEmail: z38.string().optional(),
+      paymentTerms: z38.string().optional(),
+      deliveryTerms: z38.string().optional(),
+      tradeName: z38.string().optional(),
+      productsSold: z38.string().optional(),
       items: z38.array(
         z38.object({
           name: z38.string(),
@@ -17249,6 +17334,32 @@ var quotationRequestsRouter = router({
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.token, input.token));
     if (!req) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     if (req.status === "cancelada") throw new TRPCError27({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    let linkedSupplierId = null;
+    let linkedSupplier = {};
+    try {
+      const normCnpj = (input.cnpj || "").replace(/\D/g, "");
+      const name = (input.supplierName || "").trim();
+      let found = [];
+      if (normCnpj) {
+        const [r] = await db.execute(sql24`SELECT id, trade_name, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
+        found = r || [];
+      }
+      if (found.length === 0 && name) {
+        const [r] = await db.execute(sql24`SELECT id, trade_name, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`);
+        found = r || [];
+      }
+      if (found[0]) {
+        linkedSupplierId = found[0].id;
+        linkedSupplier = { tradeName: found[0].trade_name, productsSold: found[0].products_sold };
+        await db.execute(sql24`UPDATE suppliers SET
+            phone = COALESCE(NULLIF(phone,''), ${input.sellerPhone || ""}),
+            whatsapp = COALESCE(NULLIF(whatsapp,''), ${input.sellerPhone || ""}),
+            seller_name = COALESCE(NULLIF(seller_name,''), ${input.sellerName || ""}),
+            address = COALESCE(NULLIF(address,''), ${input.address || ""})
+            WHERE id = ${linkedSupplierId}`);
+      }
+    } catch (_) {
+    }
     const responseToken = crypto.randomBytes(32).toString("hex");
     const [insertResult] = await db.insert(quotationResponses).values({
       quotationRequestId: req.id,
@@ -17258,9 +17369,14 @@ var quotationRequestsRouter = router({
       sellerName: input.sellerName,
       sellerPhone: input.sellerPhone,
       sellerEmail: input.sellerEmail,
+      paymentTerms: input.paymentTerms,
+      deliveryTerms: input.deliveryTerms,
       itemsJson: JSON.stringify(input.items),
       notes: input.notes,
-      responseToken
+      responseToken,
+      tradeName: input.tradeName || linkedSupplier.tradeName || null,
+      productsSold: input.productsSold || linkedSupplier.productsSold || null,
+      ...linkedSupplierId ? { supplierId: linkedSupplierId } : {}
     });
     const responseId = insertResult.insertId;
     await db.update(quotationRequests).set({ status: "respondida" }).where(eq37(quotationRequests.id, req.id));
