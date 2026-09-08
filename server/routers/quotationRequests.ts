@@ -133,6 +133,44 @@ export const quotationRequestsRouter = router({
       return { success: true };
     }),
 
+  // Editar itens de uma resposta (protegido) — corrige preço/embalagem/quantidade que o fornecedor esqueceu
+  adminUpdateResponseItems: protectedProcedure
+    .input(z.object({
+      responseId: z.number(),
+      items: z.array(z.object({
+        name: z.string(),
+        quantity: z.string(),
+        unit: z.string().optional(),
+        price: z.string(),
+        brand: z.string().optional(),
+        packaging: z.string().optional(),
+        notes: z.string().optional(),
+      })).min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(quotationResponses)
+        .set({ itemsJson: JSON.stringify(input.items) })
+        .where(eq(quotationResponses.id, input.responseId));
+      return { success: true };
+    }),
+
+  // Escolher manualmente o vencedor de cada item do comparativo (override do melhor preço)
+  adminSetBestChoice: protectedProcedure
+    .input(z.object({
+      quotationRequestId: z.number(),
+      choices: z.record(z.string(), z.object({ responseId: z.number(), itemIndex: z.number() })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [req] = await db.select().from(quotationRequests).where(eq(quotationRequests.id, input.quotationRequestId));
+      if (!req) throw new TRPCError({ code: "NOT_FOUND" });
+      await db.update(quotationRequests).set({ bestChoices: JSON.stringify(input.choices) }).where(eq(quotationRequests.id, input.quotationRequestId));
+      return { success: true };
+    }),
+
   // ===== AUTOMAÇÃO COMPLETA =====
   // Processa uma solicitação respondida:
   // 1. Cria/atualiza fornecedores de todas as respostas
@@ -273,29 +311,72 @@ export const quotationRequestsRouter = router({
         found: boolean;
       }> = [];
 
+      // Override manual salvo em best_choices: { "nome do item": { responseId, itemIndex } }
+      let manualChoices: Record<string, { responseId: number; itemIndex: number }> = {};
+      try { manualChoices = req.bestChoices ? JSON.parse(req.bestChoices as any) : {}; } catch (_) { manualChoices = {}; }
+      const normName = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\d+\s*l\b/gi, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      const fuzzy = (a: string, b: string) => {
+        const na = normName(a), nb = normName(b);
+        if (na === nb) return true;
+        const w = (s: string) => s.split(' ').filter(x => x.length >= 3);
+        const wa = w(na), wb = w(nb);
+        const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+        return shorter.length > 0 && shorter.every(x => longer.includes(x));
+      };
+      const litersOf = (pack?: string) => {
+        if (!pack) return null;
+        const p = pack.trim().toUpperCase();
+        const map: Record<string, number> = { '1L': 1, '5L': 5, '10L': 10, '20L': 20, '200L': 200 };
+        if (map[p]) return map[p]!;
+        const m = p.match(/(\d+(?:[\.,]\d+)?)\s*L/);
+        return m ? parseFloat(m[1]!.replace(',', '.')) : null;
+      };
+      // Preço comparável: óleos comparam por R$/litro; demais por R$/unidade
+      const comparablePrice = (it: { price: string; quantity: string; packaging?: string }) => {
+        const price = parseFloat(String(it.price).replace(',', '.'));
+        if (isNaN(price)) return NaN;
+        const lit = litersOf(it.packaging);
+        if (lit && lit > 0) return price / lit; // R$ por litro
+        return price; // R$ por unidade
+      };
       for (const reqItem of requestItems) {
-        const key = reqItem.name.toLowerCase().trim();
+        const manual = manualChoices[reqItem.name] || manualChoices[normName(reqItem.name)];
         let bestPrice = Infinity;
+        let bestCmp = Infinity;
         let bestSupplierName = '';
         let bestSupplierPhone: string | null = null;
         let found = false;
-
-        for (const resp of responses) {
-          const respItems = JSON.parse(resp.itemsJson || "[]") as Array<{
-            name: string; quantity: string; unit?: string; price: string;
-          }>;
-          const match = respItems.find(it => it.name.toLowerCase().trim() === key);
-          if (match) {
-            const price = parseFloat(match.price);
-            if (!isNaN(price) && price > 0 && price < bestPrice) {
-              bestPrice = price;
-              bestSupplierName = resp.supplierName || '';
-              bestSupplierPhone = resp.sellerPhone || null;
-              found = true;
+        // Se houver escolha manual, usar exatamente aquela resposta/item
+        if (manual) {
+          const resp = responses.find(r => r.id === manual.responseId);
+          if (resp) {
+            const respItems = JSON.parse(resp.itemsJson || "[]") as Array<{ name: string; quantity: string; unit?: string; price: string; packaging?: string }>;
+            const it = respItems[manual.itemIndex];
+            if (it) {
+              const p = parseFloat(String(it.price).replace(',', '.'));
+              if (!isNaN(p) && p > 0) {
+                bestPrice = p; bestSupplierName = (resp.tradeName || resp.supplierName) || ''; bestSupplierPhone = resp.sellerPhone || null; found = true;
+              }
             }
           }
         }
-
+        if (!found) {
+          for (const resp of responses) {
+            const respItems = JSON.parse(resp.itemsJson || "[]") as Array<{ name: string; quantity: string; unit?: string; price: string; packaging?: string }>;
+            const match = respItems.find(it => fuzzy(it.name, reqItem.name));
+            if (match) {
+              const price = parseFloat(String(match.price).replace(',', '.'));
+              const cmp = comparablePrice(match);
+              if (!isNaN(price) && price > 0 && !isNaN(cmp) && cmp < bestCmp) {
+                bestCmp = cmp;
+                bestPrice = price; // preço bruto para exibir/somar
+                bestSupplierName = (resp.tradeName || resp.supplierName) || '';
+                bestSupplierPhone = resp.sellerPhone || null;
+                found = true;
+              }
+            }
+          }
+        }
         const qty = parseFloat(reqItem.quantity) || 1;
         summaryItems.push({
           name: reqItem.name,

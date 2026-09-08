@@ -1791,6 +1791,7 @@ var init_schema = __esm({
       expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
       status: mysqlEnum(["ativa", "respondida", "expirada", "cancelada"]).default("ativa").notNull(),
       notes: text(),
+      bestChoices: text("best_choices"),
       createdBy: int("created_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
     });
@@ -17002,6 +17003,36 @@ var quotationRequestsRouter = router({
     await db.update(quotationResponses).set(set).where(eq37(quotationResponses.id, input.responseId));
     return { success: true };
   }),
+  // Editar itens de uma resposta (protegido) — corrige preço/embalagem/quantidade que o fornecedor esqueceu
+  adminUpdateResponseItems: protectedProcedure.input(z38.object({
+    responseId: z38.number(),
+    items: z38.array(z38.object({
+      name: z38.string(),
+      quantity: z38.string(),
+      unit: z38.string().optional(),
+      price: z38.string(),
+      brand: z38.string().optional(),
+      packaging: z38.string().optional(),
+      notes: z38.string().optional()
+    })).min(1)
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(quotationResponses).set({ itemsJson: JSON.stringify(input.items) }).where(eq37(quotationResponses.id, input.responseId));
+    return { success: true };
+  }),
+  // Escolher manualmente o vencedor de cada item do comparativo (override do melhor preço)
+  adminSetBestChoice: protectedProcedure.input(z38.object({
+    quotationRequestId: z38.number(),
+    choices: z38.record(z38.string(), z38.object({ responseId: z38.number(), itemIndex: z38.number() }))
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.id, input.quotationRequestId));
+    if (!req) throw new TRPCError27({ code: "NOT_FOUND" });
+    await db.update(quotationRequests).set({ bestChoices: JSON.stringify(input.choices) }).where(eq37(quotationRequests.id, input.quotationRequestId));
+    return { success: true };
+  }),
   // ===== AUTOMAÇÃO COMPLETA =====
   // Processa uma solicitação respondida:
   // 1. Cria/atualiza fornecedores de todas as respostas
@@ -17106,22 +17137,73 @@ var quotationRequestsRouter = router({
       }
     }
     const summaryItems = [];
+    let manualChoices = {};
+    try {
+      manualChoices = req.bestChoices ? JSON.parse(req.bestChoices) : {};
+    } catch (_) {
+      manualChoices = {};
+    }
+    const normName = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\d+\s*l\b/gi, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    const fuzzy = (a, b) => {
+      const na = normName(a), nb = normName(b);
+      if (na === nb) return true;
+      const w = (s) => s.split(" ").filter((x) => x.length >= 3);
+      const wa = w(na), wb = w(nb);
+      const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+      return shorter.length > 0 && shorter.every((x) => longer.includes(x));
+    };
+    const litersOf = (pack) => {
+      if (!pack) return null;
+      const p = pack.trim().toUpperCase();
+      const map = { "1L": 1, "5L": 5, "10L": 10, "20L": 20, "200L": 200 };
+      if (map[p]) return map[p];
+      const m = p.match(/(\d+(?:[\.,]\d+)?)\s*L/);
+      return m ? parseFloat(m[1].replace(",", ".")) : null;
+    };
+    const comparablePrice = (it) => {
+      const price = parseFloat(String(it.price).replace(",", "."));
+      if (isNaN(price)) return NaN;
+      const lit = litersOf(it.packaging);
+      if (lit && lit > 0) return price / lit;
+      return price;
+    };
     for (const reqItem of requestItems) {
-      const key = reqItem.name.toLowerCase().trim();
+      const manual = manualChoices[reqItem.name] || manualChoices[normName(reqItem.name)];
       let bestPrice = Infinity;
+      let bestCmp = Infinity;
       let bestSupplierName = "";
       let bestSupplierPhone = null;
       let found = false;
-      for (const resp of responses) {
-        const respItems = JSON.parse(resp.itemsJson || "[]");
-        const match = respItems.find((it) => it.name.toLowerCase().trim() === key);
-        if (match) {
-          const price = parseFloat(match.price);
-          if (!isNaN(price) && price > 0 && price < bestPrice) {
-            bestPrice = price;
-            bestSupplierName = resp.supplierName || "";
-            bestSupplierPhone = resp.sellerPhone || null;
-            found = true;
+      if (manual) {
+        const resp = responses.find((r) => r.id === manual.responseId);
+        if (resp) {
+          const respItems = JSON.parse(resp.itemsJson || "[]");
+          const it = respItems[manual.itemIndex];
+          if (it) {
+            const p = parseFloat(String(it.price).replace(",", "."));
+            if (!isNaN(p) && p > 0) {
+              bestPrice = p;
+              bestSupplierName = resp.tradeName || resp.supplierName || "";
+              bestSupplierPhone = resp.sellerPhone || null;
+              found = true;
+            }
+          }
+        }
+      }
+      if (!found) {
+        for (const resp of responses) {
+          const respItems = JSON.parse(resp.itemsJson || "[]");
+          const match = respItems.find((it) => fuzzy(it.name, reqItem.name));
+          if (match) {
+            const price = parseFloat(String(match.price).replace(",", "."));
+            const cmp = comparablePrice(match);
+            if (!isNaN(price) && price > 0 && !isNaN(cmp) && cmp < bestCmp) {
+              bestCmp = cmp;
+              bestPrice = price;
+              bestSupplierName = resp.tradeName || resp.supplierName || "";
+              bestSupplierPhone = resp.sellerPhone || null;
+              found = true;
+            }
           }
         }
       }

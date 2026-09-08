@@ -254,6 +254,23 @@ export default function QuotationsPage() {
   });
 
   const [editResp, setEditResp] = useState<any>(null);
+  const [editItemsResp, setEditItemsResp] = useState<any>(null);
+  const [editItemsList, setEditItemsList] = useState<any[]>([]);
+  const adminUpdateItemsMutation = trpc.quotationRequests.adminUpdateResponseItems.useMutation({
+    onSuccess: () => {
+      utils.quotationRequests.getById.invalidate();
+      setEditItemsResp(null);
+      toast.success("Itens da resposta atualizados!");
+    },
+    onError: (err) => toast.error("Erro ao atualizar itens: " + err.message),
+  });
+  const adminSetBestMutation = trpc.quotationRequests.adminSetBestChoice.useMutation({
+    onSuccess: () => {
+      utils.quotationRequests.getById.invalidate();
+      toast.success("Vencedor do item definido!");
+    },
+    onError: (err) => toast.error("Erro ao definir vencedor: " + err.message),
+  });
   const adminUpdateRespMutation = trpc.quotationRequests.adminUpdateResponse.useMutation({
     onSuccess: () => {
       utils.quotationRequests.getById.invalidate();
@@ -915,53 +932,61 @@ export default function QuotationsPage() {
                 </div>
               ) : (() => {
                 // ===== COMPARATIVO EM PLANILHA (item × fornecedor) com preço normalizado por litro =====
-                // 1) Montar a lista de linhas (itens solicitados + itens extras) agrupados por nome+embalagem
-                type Cell = { price: number; norm: number; unit: string; pack?: string; brand?: string; supplier: string; rIdx: number };
+                // Agrupar pelo NOME do produto (ignorando embalagem) e comparar por R$/litro para óleos.
+                // Assim, galão 5L e galão 20L do MESMO produto ficam na MESMA linha, e o vencedor é o menor R$/L.
+                type Cell = { price: number; norm: number; unit: string; pack?: string; brand?: string; supplier: string; rIdx: number; itemIndex: number };
                 const suppliersList: string[] = requestDetail.responses.map((r: any) => r.tradeName || r.supplierName);
-                // Mapa: groupKey -> { label, unit, cells: Cell[] }
-                const rowsMap: Record<string, { label: string; unit: string; packCat: string; cells: Cell[] }> = {};
-                const ensureRow = (label: string, unit: string, packCat: string, gk: string) => {
-                  if (!rowsMap[gk]) rowsMap[gk] = { label, unit, packCat, cells: [] };
+                const nameKey = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\d+\s*l\b/gi, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+                // Mapa: nameKey -> { label, unit, cells: Cell[] }
+                const rowsMap: Record<string, { label: string; unit: string; cells: Cell[] }> = {};
+                const ensureRow = (label: string, unit: string, gk: string) => {
+                  if (!rowsMap[gk]) rowsMap[gk] = { label, unit, cells: [] };
                   return rowsMap[gk];
                 };
                 // Itens solicitados (linhas base)
                 requestDetail.items.forEach((reqItem: QuotItem) => {
-                  const gk = itemGroupKey(reqItem.name);
-                  ensureRow(reqItem.name, reqItem.unit || 'un', 'un', gk);
+                  ensureRow(reqItem.name, reqItem.unit || 'un', nameKey(reqItem.name));
                 });
-                // Respostas: preencher células
+                // Respostas: preencher células (agrupando por nome do produto)
                 requestDetail.responses.forEach((resp: any, rIdx: number) => {
                   const supplierName = resp.tradeName || resp.supplierName;
-                  (resp.items || []).forEach((item: ResponseItem) => {
+                  (resp.items || []).forEach((item: ResponseItem, itemIndex: number) => {
                     const price = parseFloat(String(item.price).replace(',', '.'));
                     if (isNaN(price)) return;
                     const norm = normalizedUnitPrice(item);
                     if (isNaN(norm)) return;
-                    // Tentar casar com um item solicitado por nome (fuzzy) + mesma categoria de embalagem
-                    let gk = '';
+                    // Casar com um item solicitado pelo NOME (ignorando embalagem)
                     const matchedReq = requestDetail.items.find((ri: QuotItem) => itemNamesMatch(ri.name, item.name));
-                    if (matchedReq) {
-                      gk = itemGroupKey(matchedReq.name, (item as any).packaging);
-                      // garantir que a linha existe com a categoria de embalagem certa
-                      ensureRow(matchedReq.name, matchedReq.unit || 'un', gk.split('|')[1], gk);
-                    } else {
-                      gk = itemGroupKey(item.name, (item as any).packaging);
-                      ensureRow(item.name, item.unit || 'un', gk.split('|')[1], gk);
-                    }
+                    const gk = matchedReq ? nameKey(matchedReq.name) : nameKey(item.name);
+                    ensureRow(matchedReq ? matchedReq.name : item.name, item.unit || 'un', gk);
                     rowsMap[gk].cells.push({
                       price, norm,
                       unit: packagingLiters((item as any).packaging) ? 'L' : (item.unit || 'un'),
                       pack: (item as any).packaging, brand: item.brand,
-                      supplier: supplierName, rIdx,
+                      supplier: supplierName, rIdx, itemIndex,
                     });
                   });
                 });
                 const rowsArr = Object.entries(rowsMap).map(([gk, r]) => ({ gk, ...r }));
-                // Melhor (menor preço normalizado) por linha
+                // Escolha manual salva em bestChoices (por nome do item)
+                let manualChoices: Record<string, { responseId: number; itemIndex: number }> = {};
+                try { manualChoices = (requestDetail as any).bestChoices ? JSON.parse((requestDetail as any).bestChoices) : {}; } catch (_) { manualChoices = {}; }
+                // Melhor por linha: respeita escolha manual; senão, menor preço normalizado (R$/L para óleos)
                 rowsArr.forEach(r => {
-                  const vals = r.cells.map(c => c.norm);
-                  (r as any).best = vals.length ? Math.min(...vals) : null;
-                  (r as any).worst = vals.length ? Math.max(...vals) : null;
+                  const manual = manualChoices[r.label] || manualChoices[r.gk];
+                  let bestCell: Cell | null = null;
+                  if (manual) {
+                    const resp = requestDetail.responses.find((x: any) => x.id === manual.responseId);
+                    if (resp) {
+                      const sName = resp.tradeName || resp.supplierName;
+                      bestCell = r.cells.find(c => c.supplier === sName && c.itemIndex === manual.itemIndex) || null;
+                    }
+                  }
+                  if (!bestCell && r.cells.length) {
+                    bestCell = r.cells.reduce((a, b) => (b.norm < a.norm ? b : a));
+                  }
+                  (r as any).bestCell = bestCell;
+                  (r as any).best = bestCell ? bestCell.norm : null;
                 });
                 // Totais por fornecedor (soma do preço bruto de seus itens)
                 const totals = requestDetail.responses.map((resp: any) => ({
@@ -994,25 +1019,37 @@ export default function QuotationsPage() {
                               <tr key={ri} className={ri % 2 ? 'bg-gray-50/60' : 'bg-white'}>
                                 <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 bg-inherit whitespace-nowrap">
                                   {r.label}
-                                  <span className="block text-[10px] text-gray-400 font-normal">{r.packCat === 'un' ? r.unit : r.packCat === 'galao' ? 'galão' : 'tambor'}</span>
+                                  <span className="block text-[10px] text-gray-400 font-normal">{r.unit}</span>
                                 </td>
                                 {suppliersList.map((s: string, si: number) => {
                                   const cell = r.cells.find(c => c.supplier === s);
                                   if (!cell) return <td key={si} className="px-3 py-2 text-right text-gray-300">—</td>;
-                                  const isBest = (r as any).best !== null && Math.abs(cell.norm - (r as any).best) < 0.0001;
+                                  const isBest = (r as any).bestCell === cell;
                                   return (
                                     <td key={si} className={`px-3 py-2 text-right whitespace-nowrap ${isBest ? 'bg-emerald-100/70 font-bold text-emerald-800' : 'text-gray-700'}`}>
-                                      {fmtPrice(String(cell.norm))}<span className="text-[10px] font-normal text-gray-400">/{cell.unit}</span>
-                                      {(cell.pack || cell.brand) && (
-                                        <span className="block text-[10px] font-normal text-gray-400">{[cell.brand, cell.pack].filter(Boolean).join(' · ')}</span>
-                                      )}
+                                      <button
+                                        type="button"
+                                        title="Definir como vencedor deste item"
+                                        onClick={() => {
+                                          const choices: Record<string, { responseId: number; itemIndex: number }> = { ...(manualChoices || {}) };
+                                          choices[r.label] = { responseId: requestDetail.responses[cell.rIdx].id, itemIndex: cell.itemIndex };
+                                          adminSetBestMutation.mutate({ quotationRequestId: requestDetail.id, choices });
+                                        }}
+                                        className="text-left hover:opacity-80"
+                                      >
+                                        <span className="block font-bold">{fmtPrice(String(cell.price))}</span>
+                                        {cell.unit === 'L' && <span className="block text-[10px] font-normal text-gray-500">{fmtPrice(String(cell.norm))}/L</span>}
+                                        {(cell.pack || cell.brand) && (
+                                          <span className="block text-[10px] font-normal text-gray-400">{[cell.brand, cell.pack].filter(Boolean).join(' · ')}</span>
+                                        )}
+                                      </button>
                                       {isBest && <Star className="w-3 h-3 text-amber-500 fill-amber-500 inline ml-1" />}
                                     </td>
                                   );
                                 })}
                                 <td className="px-3 py-2 text-right whitespace-nowrap font-bold text-emerald-700">
-                                  {(r as any).best !== null ? fmtPrice(String((r as any).best)) : '—'}
-                                  {(r as any).best !== null && <span className="block text-[10px] font-normal text-gray-400">{rowsArr[ri].cells.find(c => Math.abs(c.norm - (r as any).best) < 0.0001)?.supplier}</span>}
+                                  {(r as any).bestCell ? fmtPrice(String((r as any).bestCell.price)) : '—'}
+                                  {(r as any).bestCell && <span className="block text-[10px] font-normal text-gray-400">{(r as any).bestCell.supplier}{(r as any).bestCell.pack ? ` · ${(r as any).bestCell.pack}` : ''}</span>}
                                 </td>
                               </tr>
                             ))}
@@ -1108,6 +1145,25 @@ export default function QuotationsPage() {
                                 })}
                               >
                                 <Pencil className="w-3 h-3 mr-1" /> Editar dados do fornecedor
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                onClick={() => {
+                                  setEditItemsResp(resp);
+                                  setEditItemsList((resp.items || []).map((it: any) => ({
+                                    name: it.name || '',
+                                    quantity: it.quantity || '1',
+                                    unit: it.unit || 'un',
+                                    price: it.price || '',
+                                    brand: it.brand || '',
+                                    packaging: it.packaging || '',
+                                    notes: it.notes || '',
+                                  })));
+                                }}
+                              >
+                                <Package className="w-3 h-3 mr-1" /> Editar itens / preços
                               </Button>
                             </div>
                             {resp.responseToken && (
@@ -1529,6 +1585,89 @@ export default function QuotationsPage() {
               })}
             >
               {adminUpdateRespMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Editar itens/preços de uma resposta */}
+      <Dialog open={!!editItemsResp} onOpenChange={() => setEditItemsResp(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Package className="w-4 h-4" /> Itens — {editItemsResp?.tradeName || editItemsResp?.supplierName}</DialogTitle>
+          </DialogHeader>
+          {editItemsResp && (
+            <div className="space-y-3">
+              {editItemsList.map((it: any, idx: number) => (
+                <div key={idx} className="border rounded-lg p-2 space-y-2 bg-gray-50/60">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="flex-1 h-8 text-xs"
+                      value={it.name}
+                      onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))}
+                      placeholder="Produto"
+                    />
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500" onClick={() => setEditItemsList(editItemsList.filter((_, i) => i !== idx))}>
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px]">Qtd</Label>
+                      <Input className="h-8 text-xs" value={it.quantity} onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Preço unit. (R$)</Label>
+                      <Input className="h-8 text-xs" value={it.price} onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, price: e.target.value } : x))} placeholder="0,00" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Embalagem</Label>
+                      <select
+                        className="h-8 w-full text-xs border rounded px-1 bg-white"
+                        value={it.packaging}
+                        onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, packaging: e.target.value } : x))}
+                      >
+                        <option value="">—</option>
+                        <option value="1L">1L</option>
+                        <option value="5L">5L</option>
+                        <option value="10L">10L</option>
+                        <option value="20L">20L (galão)</option>
+                        <option value="200L">200L (tambor)</option>
+                        <option value="Unidade">Unidade</option>
+                        <option value="Kg">Kg</option>
+                        <option value="Caixa">Caixa</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px]">Marca</Label>
+                      <Input className="h-8 text-xs" value={it.brand} onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, brand: e.target.value } : x))} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Obs.</Label>
+                      <Input className="h-8 text-xs" value={it.notes} onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, notes: e.target.value } : x))} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" className="w-full" onClick={() => setEditItemsList([...editItemsList, { name: '', quantity: '1', unit: 'un', price: '', brand: '', packaging: '', notes: '' }])}>
+                <Plus className="w-3 h-3 mr-1" /> Adicionar item
+              </Button>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditItemsResp(null)}>Cancelar</Button>
+            <Button
+              disabled={adminUpdateItemsMutation.isPending}
+              onClick={() => {
+                const valid = editItemsList.filter((i: any) => i.name.trim() && String(i.price).trim());
+                if (valid.length === 0) { toast.error('Informe ao menos um item com preço'); return; }
+                adminUpdateItemsMutation.mutate({ responseId: editItemsResp.id, items: valid });
+              }}
+            >
+              {adminUpdateItemsMutation.isPending ? 'Salvando...' : 'Salvar itens'}
             </Button>
           </DialogFooter>
         </DialogContent>

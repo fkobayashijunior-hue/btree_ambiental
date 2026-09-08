@@ -1660,6 +1660,7 @@ export const quotationRequests = mysqlTable("quotation_requests", {
   expiresAt: bigint("expires_at", { mode: 'number' }).notNull(),
   status: mysqlEnum(['ativa','respondida','expirada','cancelada']).default('ativa').notNull(),
   notes: text(),
+  bestChoices: text("best_choices"),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
