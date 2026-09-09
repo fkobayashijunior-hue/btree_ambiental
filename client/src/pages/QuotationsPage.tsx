@@ -1001,9 +1001,60 @@ export default function QuotationsPage() {
                       <div className="bg-emerald-700 text-white px-3 py-2 flex items-center gap-2">
                         <Trophy className="w-4 h-4" />
                         <span className="text-sm font-semibold">Comparativo de Preços</span>
-                        <span className="text-[11px] text-emerald-100 ml-auto">menor valor por linha em destaque</span>
+                        <span className="text-[11px] text-emerald-100 ml-auto hidden md:inline">menor valor por linha em destaque</span>
                       </div>
-                      <div className="overflow-x-auto">
+                      {/* ===== VISÃO MOBILE (cartões por item) ===== */}
+                      <div className="md:hidden space-y-3 p-2 bg-gray-50/50">
+                        {rowsArr.map((r, ri) => (
+                          <div key={ri} className="rounded-lg border border-emerald-200 bg-white shadow-sm overflow-hidden">
+                            <div className="bg-emerald-50 px-3 py-2 border-b border-emerald-100 flex items-center justify-between">
+                              <span className="font-semibold text-emerald-900 text-sm">{r.label}</span>
+                              <span className="text-[11px] text-gray-500">{r.unit}</span>
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                              {suppliersList.map((s: string, si: number) => {
+                                const cell = r.cells.find(c => c.supplier === s);
+                                if (!cell) return null;
+                                const isBest = (r as any).bestCell === cell;
+                                return (
+                                  <button
+                                    key={si}
+                                    type="button"
+                                    onClick={() => {
+                                      const choices: Record<string, { responseId: number; itemIndex: number }> = { ...(manualChoices || {}) };
+                                      choices[r.label] = { responseId: requestDetail.responses[cell.rIdx].id, itemIndex: cell.itemIndex };
+                                      adminSetBestMutation.mutate({ quotationRequestId: requestDetail.id, choices });
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 text-left ${isBest ? 'bg-emerald-100/70' : ''}`}
+                                  >
+                                    <div className="min-w-0">
+                                      <p className={`text-sm font-medium truncate ${isBest ? 'text-emerald-900' : 'text-gray-700'}`}>{cell.supplier}</p>
+                                      {(cell.pack || cell.brand) && (
+                                        <p className="text-[11px] text-gray-400">{[cell.brand, cell.pack].filter(Boolean).join(' · ')}</p>
+                                      )}
+                                    </div>
+                                    <div className="text-right shrink-0 ml-2">
+                                      <p className={`text-base font-bold ${isBest ? 'text-emerald-800' : 'text-gray-800'}`}>
+                                        {fmtPrice(String(cell.price))}
+                                        {isBest && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 inline ml-1 -mt-0.5" />}
+                                      </p>
+                                      {cell.unit === 'L' && <p className="text-[11px] text-gray-500">{fmtPrice(String(cell.norm))}/L</p>}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {(r as any).bestCell && (
+                              <div className="bg-emerald-700 text-white px-3 py-1.5 flex items-center justify-between text-xs">
+                                <span className="flex items-center gap-1"><Trophy className="w-3 h-3" /> Melhor</span>
+                                <span className="font-semibold">{fmtPrice(String((r as any).bestCell.price))} · {(r as any).bestCell.supplier}{(r as any).bestCell.pack ? ` · ${(r as any).bestCell.pack}` : ''}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {/* ===== VISÃO DESKTOP (tabela) ===== */}
+                      <div className="overflow-x-auto hidden md:block">
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="bg-emerald-50 text-emerald-900">
