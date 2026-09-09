@@ -74,4 +74,9 @@ export function registerAllOfflineHandlers() {
   registerOfflineSyncHandler("machineHours.createOilWithStock", async (op: QueuedOperation) => {
     await callTRPC("machineHours.createOilWithStock", op.payload);
   });
+
+  // Upload da NF da carga (anexada offline — sobe quando a internet voltar)
+  registerOfflineSyncHandler("cargo.uploadInvoice", async (op: QueuedOperation) => {
+    await callTRPC("cargoLoads.uploadDocument", op.payload);
+  });
 }

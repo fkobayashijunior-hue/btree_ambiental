@@ -1591,7 +1591,18 @@ export default function CargoControl() {
       (async () => {
         try {
           if (invoiceFileBase64 && invoiceFileName) {
-            await uploadDocAsync.mutateAsync({ cargoId: editId, docBase64: invoiceFileBase64, docType: 'invoice' });
+            if (isOnline) {
+              try {
+                await uploadDocAsync.mutateAsync({ cargoId: editId, docBase64: invoiceFileBase64, docType: 'invoice' });
+              } catch (uploadErr) {
+                // Upload falhou mesmo online — enfileirar para tentar de novo depois
+                addToQueue("cargo.uploadInvoice", { cargoId: editId, docBase64: invoiceFileBase64, docType: 'invoice' });
+                toast.warning('Nota será enviada quando a conexão estabilizar.');
+              }
+            } else {
+              // Sem internet — enfileirar a nota para subir quando o sinal voltar
+              addToQueue("cargo.uploadInvoice", { cargoId: editId, docBase64: invoiceFileBase64, docType: 'invoice' });
+            }
           }
           await updateAsync.mutateAsync({ id: editId, ...data });
           toast.success("Carga atualizada!");
@@ -1606,7 +1617,16 @@ export default function CargoControl() {
       })();
     } else {
       if (!isOnline) {
-        addToQueue("cargo.create", data);
+        // Sem internet: enfileirar a carga. Se houver NF anexada, salvar uma marcação
+        // para que, ao sincronizar, o usuário saiba que precisa reanexar o PDF (o arquivo
+        // não pode ir junto porque a carga ainda não tem ID no servidor).
+        const dataOffline = invoiceFileBase64
+          ? { ...data, notes: ((data as any).notes ? (data as any).notes + ' ' : '') + '[NF pendente: reanexar o PDF da nota ao sincronizar]' }
+          : data;
+        addToQueue("cargo.create", dataOffline);
+        if (invoiceFileBase64) {
+          toast.warning('Carga salva offline. Quando a internet voltar, reanexe o PDF da nota nesta carga para que ela fique fixa.', { duration: 6000 });
+        }
         setIsFormOpen(false);
         resetForm();
       } else {
