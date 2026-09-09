@@ -16112,12 +16112,16 @@ var suppliersRouter = router({
     website: z34.string().optional(),
     notes: z34.string().optional(),
     sellerName: z34.string().optional(),
-    pixKey: z34.string().optional()
+    pixKey: z34.string().optional(),
+    tradeName: z34.string().optional(),
+    productsSold: z34.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(suppliers).values({
       companyName: input.name,
+      tradeName: input.tradeName,
+      productsSold: input.productsSold,
       address: input.address,
       city: input.city,
       state: input.state,
@@ -16146,7 +16150,9 @@ var suppliersRouter = router({
     notes: z34.string().optional(),
     active: z34.number().optional(),
     sellerName: z34.string().optional(),
-    pixKey: z34.string().optional()
+    pixKey: z34.string().optional(),
+    tradeName: z34.string().optional(),
+    productsSold: z34.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
@@ -16905,10 +16911,19 @@ var quotationRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
+    const allResponses = await db.select({
+      id: quotationResponses.id,
+      quotationRequestId: quotationResponses.quotationRequestId
+    }).from(quotationResponses);
+    const countByRequest = /* @__PURE__ */ new Map();
+    for (const r of allResponses) {
+      countByRequest.set(r.quotationRequestId, (countByRequest.get(r.quotationRequestId) || 0) + 1);
+    }
     return rows.map((r) => ({
       ...r,
       items: JSON.parse(r.itemsJson || "[]"),
-      isExpired: Date.now() > r.expiresAt
+      isExpired: Date.now() > r.expiresAt,
+      responseCount: countByRequest.get(r.id) || 0
     }));
   }),
   // Buscar por ID com respostas (protegido)

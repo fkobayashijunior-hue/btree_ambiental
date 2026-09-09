@@ -13,10 +13,19 @@ export const quotationRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(quotationRequests).orderBy(desc(quotationRequests.createdAt));
+    const allResponses = await db.select({
+      id: quotationResponses.id,
+      quotationRequestId: quotationResponses.quotationRequestId,
+    }).from(quotationResponses);
+    const countByRequest = new Map<number, number>();
+    for (const r of allResponses) {
+      countByRequest.set(r.quotationRequestId, (countByRequest.get(r.quotationRequestId) || 0) + 1);
+    }
     return rows.map((r: typeof quotationRequests.$inferSelect) => ({
       ...r,
       items: JSON.parse(r.itemsJson || "[]") as Array<{ name: string; quantity: string; unit: string }>,
       isExpired: Date.now() > r.expiresAt,
+      responseCount: countByRequest.get(r.id) || 0,
     }));
   }),
 

@@ -154,7 +154,7 @@ type AutoProcessResult = {
 export default function QuotationsPage() {
   const utils = trpc.useUtils();
 
-  const [activeTab, setActiveTab] = useState('catalog');
+  const [activeTab, setActiveTab] = useState('last');
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [expandedProd, setExpandedProd] = useState<string | null>(null);
 
@@ -506,15 +506,65 @@ export default function QuotationsPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid grid-cols-3">
-          <TabsTrigger value="catalog">Catálogo de Preços</TabsTrigger>
+          <TabsTrigger value="last" className="flex items-center gap-1">
+            <FileText className="w-3 h-3" /> Orçamentos
+          </TabsTrigger>
           <TabsTrigger value="requests" className="flex items-center gap-1">
             <Send className="w-3 h-3" /> Solicitar
           </TabsTrigger>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
         </TabsList>
+        {/* ÚLTIMOS ORÇAMENTOS — lista que abre o detalhe completo */}
+        <TabsContent value="last" className="space-y-3 mt-3">
+          <p className="text-sm text-gray-500">Últimos orçamentos — toque para abrir o comparativo completo</p>
+          {!quotRequests || quotRequests.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>Nenhum orçamento ainda</p>
+              <p className="text-xs mt-1">Crie uma solicitação na aba Solicitar</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {quotRequests.map((req: any) => {
+                const expired = req.isExpired;
+                const statusKey = expired && req.status === 'ativa' ? 'expirada' : req.status;
+                const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS['ativa'];
+                const respCount = req.responseCount ?? req.responses?.length ?? null;
+                return (
+                  <button
+                    key={req.id}
+                    className="w-full text-left"
+                    onClick={() => { setAutoProcessResult(null); setViewResponsesId(req.id); }}
+                  >
+                    <Card className="hover:border-emerald-300 hover:shadow-sm transition-all">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-gray-800 truncate">{req.title}</p>
+                              <Badge className={`text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
+                            </div>
+                            <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
+                              <span className="flex items-center gap-1"><Package className="w-3 h-3" /> {req.items.length} item(s)</span>
+                              {respCount !== null && (
+                                <span className="flex items-center gap-1 text-emerald-700"><Building2 className="w-3 h-3" /> {respCount} resposta(s)</span>
+                              )}
+                              {req.requesterName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {req.requesterName}</span>}
+                            </div>
+                          </div>
+                          <ChevronDown className="w-5 h-5 text-gray-400 -rotate-90 flex-shrink-0" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
 
-        {/* CATALOG TAB */}
-        <TabsContent value="catalog" className="space-y-3 mt-3">
+        {/* CATALOG TAB (oculto — legado) */}
+        <TabsContent value="catalog" className="space-y-3 mt-3 hidden">
           {isLoading ? (
             <div className="text-center py-8 text-gray-400">Carregando...</div>
           ) : !grouped || grouped.length === 0 ? (
