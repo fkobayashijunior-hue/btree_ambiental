@@ -6767,6 +6767,16 @@ var cargoLoadsRouter = router({
       updateData.paidAt = now;
     }
     await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, input.cargoId));
+    if (input.docType === "invoice") {
+      try {
+        const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId }).from(cargoLoads).where(eq6(cargoLoads.id, input.cargoId)).limit(1);
+        if (cargo?.fiscalNoteId) {
+          await db.update(fiscalNotes).set({ fileUrl: uploaded.url }).where(eq6(fiscalNotes.id, cargo.fiscalNoteId));
+        }
+      } catch (e) {
+        console.error("[cargoLoads.uploadDocument] Erro ao sincronizar NF com a AC:", e);
+      }
+    }
     if (input.docType === "boleto") {
       try {
         const { notifyFinanceiro: notifyFinanceiro2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));

@@ -1011,6 +1011,18 @@ export const cargoLoadsRouter = router({
       }
       await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
 
+      // Se for NF, sincronizar o arquivo também na ação (AC) vinculada à carga
+      if (input.docType === 'invoice') {
+        try {
+          const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId }).from(cargoLoads).where(eq(cargoLoads.id, input.cargoId)).limit(1);
+          if (cargo?.fiscalNoteId) {
+            await db.update(fiscalNotes).set({ fileUrl: uploaded.url }).where(eq(fiscalNotes.id, cargo.fiscalNoteId));
+          }
+        } catch (e) {
+          console.error('[cargoLoads.uploadDocument] Erro ao sincronizar NF com a AC:', e);
+        }
+      }
+
       // Notificação interna para Julia (financeiro) quando boleto é cadastrado
       if (input.docType === 'boleto') {
         try {
