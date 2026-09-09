@@ -1526,7 +1526,7 @@ export default function CargoControl() {
       invoiceNumber: cargo.invoiceNumber || "",
       noteQuantity: (cargo as any).noteQuantity || "",
       noteUnit: ((cargo as any).fiscalNoteQuantityType === 'm3' || (cargo as any).fiscalNoteQuantityType === 'ton') ? (cargo as any).fiscalNoteQuantityType : "",
-      invoiceUrl: (cargo as any).invoiceUrl || "",
+      invoiceUrl: (cargo as any).invoiceUrl || (cargo as any).fiscalNoteFileUrl || "",
       clientId: cargo.clientId || 0,
       clientName: cargo.clientName || "",
       notes: cargo.notes || "",
