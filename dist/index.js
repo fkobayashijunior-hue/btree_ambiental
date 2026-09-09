@@ -17147,10 +17147,16 @@ var quotationRequestsRouter = router({
     const fuzzy = (a, b) => {
       const na = normName(a), nb = normName(b);
       if (na === nb) return true;
+      if (!na || !nb) return false;
+      const ca = na.replace(/\s+/g, "");
+      const cb = nb.replace(/\s+/g, "");
+      if (ca === cb) return true;
+      if (ca.length >= 4 && cb.length >= 4 && (ca.includes(cb) || cb.includes(ca))) return true;
       const w = (s) => s.split(" ").filter((x) => x.length >= 3);
       const wa = w(na), wb = w(nb);
+      if (wa.length === 0 || wb.length === 0) return false;
       const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
-      return shorter.length > 0 && shorter.every((x) => longer.includes(x));
+      return shorter.every((x) => longer.includes(x));
     };
     const litersOf = (pack) => {
       if (!pack) return null;

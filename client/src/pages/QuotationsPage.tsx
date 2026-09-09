@@ -33,12 +33,19 @@ function itemNamesMatch(a: string, b: string): boolean {
   const na = normalize(a);
   const nb = normalize(b);
   if (na === nb) return true;
+  if (!na || !nb) return false;
+  // Compacto (sem espaços): exato ou contenção de 4+ caracteres (evita '10w' casar com '15w40')
+  const ca = na.replace(/\s+/g, '');
+  const cb = nb.replace(/\s+/g, '');
+  if (ca === cb) return true;
+  if (ca.length >= 4 && cb.length >= 4 && (ca.includes(cb) || cb.includes(ca))) return true;
   // Palavras significativas (≥3 chars)
   const words = (s: string) => s.split(/\s+/).filter(w => w.length >= 3);
   const wa = words(na);
   const wb = words(nb);
-  // Verifica se todas as palavras do menor estão contidas no maior
-  const [shorter, longer] = wa.length <= wb.length ? [wa, nb] : [wb, na];
+  // Se algum lado não tem palavras significativas (nomes curtos tipo '10w', '68'), só casa por exato/compacto acima
+  if (wa.length === 0 || wb.length === 0) return false;
+  const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
   return shorter.every(w => longer.includes(w));
 }
 
