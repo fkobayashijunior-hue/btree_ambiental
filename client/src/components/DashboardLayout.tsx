@@ -264,7 +264,8 @@ export default function DashboardLayout({
   }
 
   if (!user) {
-    window.location.href = "/login";
+    const current = window.location.pathname + window.location.search;
+    window.location.href = "/login?redirect=" + encodeURIComponent(current);
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
