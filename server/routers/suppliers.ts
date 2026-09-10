@@ -66,12 +66,16 @@ export const suppliersRouter = router({
       notes: z.string().optional(),
       sellerName: z.string().optional(),
       pixKey: z.string().optional(),
+      tradeName: z.string().optional(),
+      productsSold: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [result] = await db.insert(suppliers).values({
         companyName: input.name,
+        tradeName: input.tradeName,
+        productsSold: input.productsSold,
         address: input.address,
         city: input.city,
         state: input.state,
@@ -103,6 +107,8 @@ export const suppliersRouter = router({
       active: z.number().optional(),
       sellerName: z.string().optional(),
       pixKey: z.string().optional(),
+      tradeName: z.string().optional(),
+      productsSold: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

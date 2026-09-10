@@ -1136,30 +1136,42 @@ export const cargoLoadsRouter = router({
       }
       await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
 
-      // Avisa o responsável POR AQUELA carga que a NF foi anexada — só na primeira vez
-      // (carga ainda não tinha invoiceUrl antes deste upload), mesmo padrão de uploadNfByToken.
-      if (input.docType === 'invoice' && !priorCargo?.invoiceUrl) {
+      if (input.docType === 'invoice') {
+        // Sincronizar o arquivo também na ação (AC) vinculada à carga
         try {
-          const { notifyResponsavelCargaNfAnexada } = await import('./notifications');
-          let anexadaWeightNetKg = priorCargo?.weightNetKg;
-          if (!anexadaWeightNetKg || parseFloat(anexadaWeightNetKg.replace(',', '.')) <= 0) {
-            const expectedTon = await getExpectedWeightTon(db, priorCargo?.vehicleId);
-            if (expectedTon > 0) anexadaWeightNetKg = String(expectedTon * 1000);
+          const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId }).from(cargoLoads).where(eq(cargoLoads.id, input.cargoId)).limit(1);
+          if (cargo?.fiscalNoteId) {
+            await db.update(fiscalNotes).set({ fileUrl: uploaded.url }).where(eq(fiscalNotes.id, cargo.fiscalNoteId));
           }
-          const anexadaUnit = await resolveDestinationUnit(db, priorCargo?.destinationId);
-          // Não aguarda o envio do WhatsApp (rede externa pra Meta) — roda em segundo plano
-          // pra não atrasar a resposta desta mutation.
-          notifyResponsavelCargaNfAnexada({
-            cargoId: input.cargoId,
-            responsavelCargaId: priorCargo?.responsavelCargaId ?? null,
-            invoiceUrl: uploaded.url,
-            vehiclePlate: priorCargo?.vehiclePlate,
-            volumeM3: priorCargo?.volumeM3,
-            weightNetKg: anexadaWeightNetKg,
-            destination: priorCargo?.destination,
-            unit: anexadaUnit,
-          }).catch((e) => console.error('[cargoLoads.uploadDocument] Erro ao notificar responsável:', e));
-        } catch (e) { console.error('[cargoLoads.uploadDocument] Erro ao notificar responsável:', e); }
+        } catch (e) {
+          console.error('[cargoLoads.uploadDocument] Erro ao sincronizar NF com a AC:', e);
+        }
+
+        // Avisa o responsável POR AQUELA carga que a NF foi anexada — só na primeira vez
+        // (carga ainda não tinha invoiceUrl antes deste upload), mesmo padrão de uploadNfByToken.
+        if (!priorCargo?.invoiceUrl) {
+          try {
+            const { notifyResponsavelCargaNfAnexada } = await import('./notifications');
+            let anexadaWeightNetKg = priorCargo?.weightNetKg;
+            if (!anexadaWeightNetKg || parseFloat(anexadaWeightNetKg.replace(',', '.')) <= 0) {
+              const expectedTon = await getExpectedWeightTon(db, priorCargo?.vehicleId);
+              if (expectedTon > 0) anexadaWeightNetKg = String(expectedTon * 1000);
+            }
+            const anexadaUnit = await resolveDestinationUnit(db, priorCargo?.destinationId);
+            // Não aguarda o envio do WhatsApp (rede externa pra Meta) — roda em segundo plano
+            // pra não atrasar a resposta desta mutation.
+            notifyResponsavelCargaNfAnexada({
+              cargoId: input.cargoId,
+              responsavelCargaId: priorCargo?.responsavelCargaId ?? null,
+              invoiceUrl: uploaded.url,
+              vehiclePlate: priorCargo?.vehiclePlate,
+              volumeM3: priorCargo?.volumeM3,
+              weightNetKg: anexadaWeightNetKg,
+              destination: priorCargo?.destination,
+              unit: anexadaUnit,
+            }).catch((e) => console.error('[cargoLoads.uploadDocument] Erro ao notificar responsável:', e));
+          } catch (e) { console.error('[cargoLoads.uploadDocument] Erro ao notificar responsável:', e); }
+        }
       }
 
       // Notificação interna para Julia (financeiro) quando boleto é cadastrado

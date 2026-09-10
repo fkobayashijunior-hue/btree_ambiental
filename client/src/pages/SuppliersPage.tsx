@@ -18,6 +18,8 @@ import {
 
 interface SupplierForm {
   name: string;
+  tradeName: string;
+  productsSold: string;
   address: string;
   city: string;
   state: string;
@@ -39,7 +41,7 @@ interface ContactForm {
 }
 
 const emptyForm: SupplierForm = {
-  name: '', address: '', city: '', state: '', phone: '',
+  name: '', tradeName: '', productsSold: '', address: '', city: '', state: '', phone: '',
   whatsapp: '', email: '', website: '', notes: '',
   sellerName: '', pixKey: '',
 };
@@ -55,6 +57,9 @@ export default function SuppliersPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<SupplierForm>(emptyForm);
   const [search, setSearch] = useState('');
+  const [cityFilter, setCityFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState('all');
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -139,6 +144,8 @@ export default function SuppliersPage() {
   function openEdit(s: any) {
     setForm({
       name: s.companyName || '',
+      tradeName: (s as any).tradeName || '',
+      productsSold: (s as any).productsSold || '',
       address: s.address || '',
       city: s.city || '',
       state: s.state || '',
@@ -215,10 +222,32 @@ export default function SuppliersPage() {
     }
   }
 
-  const filtered = (suppliers || []).filter(s =>
-    s.companyName.toLowerCase().includes(search.toLowerCase()) ||
-    (s.city || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const q = search.toLowerCase();
+  const filtered = (suppliers || []).filter(s => {
+    const matchSearch = s.companyName.toLowerCase().includes(q) ||
+      ((s as any).tradeName || '').toLowerCase().includes(q) ||
+      (s.city || '').toLowerCase().includes(q) ||
+      ((s as any).productsSold || '').toLowerCase().includes(q);
+    const matchCity = cityFilter === 'all' || (s.city || '').toLowerCase() === cityFilter.toLowerCase();
+    const matchGroup = groupFilter === 'all' || ((s as any).productsSold || '').toLowerCase().includes(groupFilter.toLowerCase());
+    return matchSearch && matchCity && matchGroup;
+  });
+  // Agrupar por tipo (products_sold). Primeiro token significativo como nome do grupo.
+  const groupName = (s: any) => {
+    const ps = ((s.productsSold || '') as string).split(/[,;/]/)[0].trim();
+    return ps || 'Outros';
+  };
+  const groups = (() => {
+    const map = new Map<string, any[]>();
+    for (const s of filtered) {
+      const g = groupName(s);
+      if (!map.has(g)) map.set(g, []);
+      map.get(g)!.push(s);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+  })();
+  const cities = Array.from(new Set((suppliers || []).map(s => (s.city || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const groupNames = Array.from(new Set((suppliers || []).map(s => groupName(s)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-4">
@@ -254,12 +283,32 @@ export default function SuppliersPage() {
         <Input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar por nome ou cidade..."
+          placeholder="Buscar por nome, fantasia, cidade ou tipo..."
           className="pl-9"
         />
       </div>
 
-      {/* List */}
+      {/* Filtros por grupo e cidade */}
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={groupFilter}
+          onChange={e => setGroupFilter(e.target.value)}
+          className="h-10 w-full text-sm border rounded-md px-3 bg-white"
+        >
+          <option value="all">Todos os tipos</option>
+          {groupNames.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <select
+          value={cityFilter}
+          onChange={e => setCityFilter(e.target.value)}
+          className="h-10 w-full text-sm border rounded-md px-3 bg-white"
+        >
+          <option value="all">Todas as cidades</option>
+          {cities.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {/* List agrupada por tipo */}
       {isLoading ? (
         <div className="text-center py-8 text-gray-400">Carregando...</div>
       ) : filtered.length === 0 ? (
@@ -270,7 +319,74 @@ export default function SuppliersPage() {
             <Plus className="w-4 h-4 mr-2" /> Cadastrar primeiro fornecedor
           </Button>
         </div>
+      ) : groupFilter === 'all' && cityFilter === 'all' && !q ? (
+        /* Visão agrupada por tipo (grupos expansíveis) */
+        <div className="space-y-2">
+          {groups.map(([gname, list]) => (
+            <Card key={gname} className="overflow-hidden">
+              <button
+                className="w-full text-left"
+                onClick={() => setExpandedGroup(expandedGroup === gname ? null : gname)}
+              >
+                <div className="flex items-center justify-between px-4 py-3 bg-emerald-50/60 border-b border-emerald-100">
+                  <span className="font-semibold text-emerald-900">{gname}</span>
+                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                    {list.length} fornecedor(es)
+                    {expandedGroup === gname ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </span>
+                </div>
+              </button>
+              {expandedGroup === gname && (
+                <div className="divide-y divide-gray-100">
+                  {list.map(s => (
+                    <div key={s.id} className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-gray-900">{(s as any).tradeName || s.companyName}</span>
+                            {(s as any).tradeName && (s as any).tradeName !== s.companyName && (
+                              <span className="text-xs text-gray-400">({s.companyName})</span>
+                            )}
+                            {s.active === 0 && <Badge variant="outline" className="text-xs text-gray-400">Inativo</Badge>}
+                          </div>
+                          {(s.city || s.state) && (
+                            <div className="flex items-center gap-1 text-sm text-gray-500 mt-0.5">
+                              <MapPin className="w-3 h-3" />
+                              {[s.city, s.state].filter(Boolean).join(' - ')}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                            {s.phone && (
+                              <a href={`tel:${s.phone}`} className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                                <Phone className="w-3 h-3" /> {s.phone}
+                                {s.sellerName && <span className="text-gray-500">· {s.sellerName}</span>}
+                              </a>
+                            )}
+                            {s.whatsapp && (
+                              <a href={`https://wa.me/55${s.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-green-600 hover:underline">
+                                <MessageCircle className="w-3 h-3" /> WhatsApp
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(s)} className="text-blue-500 hover:text-blue-700 p-1">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(s.id)} className="text-red-400 hover:text-red-600 p-1">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
       ) : (
+        /* Visão de lista plana (quando há filtro/busca) */
         <div className="space-y-2">
           {filtered.map(s => {
             const contacts = (s as any).contacts || [];
@@ -429,6 +545,23 @@ export default function SuppliersPage() {
                   {duplicateWarning}
                 </div>
               )}
+            </div>
+            <div>
+              <Label>Nome Fantasia</Label>
+              <Input
+                value={form.tradeName}
+                onChange={e => setForm(f => ({ ...f, tradeName: e.target.value }))}
+                placeholder="Ex: Geral Lubrificantes (como a loja é conhecida)"
+              />
+            </div>
+            <div>
+              <Label>O que vende (grupo/tipo)</Label>
+              <Input
+                value={form.productsSold}
+                onChange={e => setForm(f => ({ ...f, productsSold: e.target.value }))}
+                placeholder="Ex: Óleos, Filtros, Peças, Pneus"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Usado para agrupar fornecedores por tipo (ex: "Fornecedores de Óleo")</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2">

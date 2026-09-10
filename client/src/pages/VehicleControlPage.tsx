@@ -33,6 +33,29 @@ function toDisplayUrl(url: string): string {
   return url;
 }
 
+// Comprime a foto antes de enviar (reduz resolução e peso) para não estourar o limite do servidor
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1600;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 const RECORD_LABELS: Record<RecordType, string> = {
   abastecimento: "Abastecimento",
   manutencao: "Manutenção",
@@ -261,17 +284,24 @@ export default function VehicleControlPage() {
     setIsOpen(true);
   };
 
-  const handlePhotoAdd = (files: FileList) => {
+  const handlePhotoAdd = async (files: FileList) => {
     const file = files[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { toast.error("Foto muito grande. Máximo 10MB."); return; }
+    if (file.size > 15 * 1024 * 1024) { toast.error("Foto muito grande. Máximo 15MB."); return; }
     if (photos.length >= 5) { toast.error("Máximo de 5 fotos por registro."); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const b64 = e.target?.result as string;
-      setPhotos(prev => [...prev, { preview: b64, base64: b64 }]);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Comprime a imagem para reduzir o tamanho do envio (evita erro de servidor)
+      const compressed = await compressImage(file);
+      setPhotos(prev => [...prev, { preview: compressed, base64: compressed }]);
+    } catch {
+      // Se falhar a compressão (ex.: não é imagem), cai para leitura direta
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const b64 = e.target?.result as string;
+        setPhotos(prev => [...prev, { preview: b64, base64: b64 }]);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const removePhoto = (index: number) => {

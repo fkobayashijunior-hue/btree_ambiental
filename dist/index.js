@@ -7470,27 +7470,37 @@ var cargoLoadsRouter = router({
       updateData.paidAt = now;
     }
     await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, input.cargoId));
-    if (input.docType === "invoice" && !priorCargo?.invoiceUrl) {
+    if (input.docType === "invoice") {
       try {
-        const { notifyResponsavelCargaNfAnexada: notifyResponsavelCargaNfAnexada2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
-        let anexadaWeightNetKg = priorCargo?.weightNetKg;
-        if (!anexadaWeightNetKg || parseFloat(anexadaWeightNetKg.replace(",", ".")) <= 0) {
-          const expectedTon = await getExpectedWeightTon(db, priorCargo?.vehicleId);
-          if (expectedTon > 0) anexadaWeightNetKg = String(expectedTon * 1e3);
+        const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId }).from(cargoLoads).where(eq6(cargoLoads.id, input.cargoId)).limit(1);
+        if (cargo?.fiscalNoteId) {
+          await db.update(fiscalNotes).set({ fileUrl: uploaded.url }).where(eq6(fiscalNotes.id, cargo.fiscalNoteId));
         }
-        const anexadaUnit = await resolveDestinationUnit(db, priorCargo?.destinationId);
-        notifyResponsavelCargaNfAnexada2({
-          cargoId: input.cargoId,
-          responsavelCargaId: priorCargo?.responsavelCargaId ?? null,
-          invoiceUrl: uploaded.url,
-          vehiclePlate: priorCargo?.vehiclePlate,
-          volumeM3: priorCargo?.volumeM3,
-          weightNetKg: anexadaWeightNetKg,
-          destination: priorCargo?.destination,
-          unit: anexadaUnit
-        }).catch((e) => console.error("[cargoLoads.uploadDocument] Erro ao notificar respons\xE1vel:", e));
       } catch (e) {
-        console.error("[cargoLoads.uploadDocument] Erro ao notificar respons\xE1vel:", e);
+        console.error("[cargoLoads.uploadDocument] Erro ao sincronizar NF com a AC:", e);
+      }
+      if (!priorCargo?.invoiceUrl) {
+        try {
+          const { notifyResponsavelCargaNfAnexada: notifyResponsavelCargaNfAnexada2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+          let anexadaWeightNetKg = priorCargo?.weightNetKg;
+          if (!anexadaWeightNetKg || parseFloat(anexadaWeightNetKg.replace(",", ".")) <= 0) {
+            const expectedTon = await getExpectedWeightTon(db, priorCargo?.vehicleId);
+            if (expectedTon > 0) anexadaWeightNetKg = String(expectedTon * 1e3);
+          }
+          const anexadaUnit = await resolveDestinationUnit(db, priorCargo?.destinationId);
+          notifyResponsavelCargaNfAnexada2({
+            cargoId: input.cargoId,
+            responsavelCargaId: priorCargo?.responsavelCargaId ?? null,
+            invoiceUrl: uploaded.url,
+            vehiclePlate: priorCargo?.vehiclePlate,
+            volumeM3: priorCargo?.volumeM3,
+            weightNetKg: anexadaWeightNetKg,
+            destination: priorCargo?.destination,
+            unit: anexadaUnit
+          }).catch((e) => console.error("[cargoLoads.uploadDocument] Erro ao notificar respons\xE1vel:", e));
+        } catch (e) {
+          console.error("[cargoLoads.uploadDocument] Erro ao notificar respons\xE1vel:", e);
+        }
       }
     }
     if (input.docType === "boleto") {
@@ -16819,12 +16829,16 @@ var suppliersRouter = router({
     website: z34.string().optional(),
     notes: z34.string().optional(),
     sellerName: z34.string().optional(),
-    pixKey: z34.string().optional()
+    pixKey: z34.string().optional(),
+    tradeName: z34.string().optional(),
+    productsSold: z34.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(suppliers).values({
       companyName: input.name,
+      tradeName: input.tradeName,
+      productsSold: input.productsSold,
       address: input.address,
       city: input.city,
       state: input.state,
@@ -16853,7 +16867,9 @@ var suppliersRouter = router({
     notes: z34.string().optional(),
     active: z34.number().optional(),
     sellerName: z34.string().optional(),
-    pixKey: z34.string().optional()
+    pixKey: z34.string().optional(),
+    tradeName: z34.string().optional(),
+    productsSold: z34.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
