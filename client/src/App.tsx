@@ -54,6 +54,7 @@ import QuotationsPage from "./pages/QuotationsPage";
 import FreightCyclesPage from "./pages/FreightCyclesPage";
 import InvoiceControlPage from "./pages/InvoiceControlPage";
 import PublicQuotationPage from "./pages/PublicQuotationPage";
+import PublicCargoNFUpload from "./pages/PublicCargoNFUpload";
 import PublicResponseReviewPage from "./pages/PublicResponseReviewPage";
 import ThirdPartyPage from "./pages/ThirdPartyPage";
 import AuditDataPage from "./pages/AuditDataPage";
@@ -249,6 +250,8 @@ function Router() {
       <Route path={"/orcamento/resposta/:responseToken"} component={PublicResponseReviewPage} />
       {/* Rota pública para fornecedores preencherem orçamento */}
       <Route path={"/orcamento/:token"} component={PublicQuotationPage} />
+      {/* Rota pública para anexar a NF de uma carga específica (link enviado por WhatsApp) */}
+      <Route path={"/nf-upload/:token"} component={PublicCargoNFUpload} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

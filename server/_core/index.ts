@@ -669,6 +669,7 @@ async function runAutoMigrations() {
     try { await db.execute(/*sql*/`ALTER TABLE equipment ADD COLUMN document_url text`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE equipment ADD COLUMN insurance_url text`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE equipment ADD COLUMN responsible_driver_id int`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE equipment ADD COLUMN expected_weight_ton varchar(20)`); } catch(e) {}
 
     // Add debito to extra_expenses payment_method enum
     try { await db.execute(/*sql*/`ALTER TABLE extra_expenses MODIFY COLUMN payment_method enum('dinheiro','pix','credito','debito','transferencia','boleto','outros') NOT NULL DEFAULT 'pix'`); } catch(e) {}
@@ -703,6 +704,20 @@ async function runAutoMigrations() {
     // Adicionar fiscal_note_id na tabela cargo_loads
     try { await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN fiscal_note_id INT NULL`); console.log('[AutoMigration] Added fiscal_note_id to cargo_loads'); } catch(e: any) { if (!e?.message?.includes('Duplicate')) console.log('[AutoMigration] fiscal_note_id already exists or error:', e?.message); }
 
+    // Notificações WhatsApp de Controle de Cargas: token público de upload de NF + responsável pela carga
+    try { await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN nf_upload_token VARCHAR(64) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD UNIQUE INDEX cargo_loads_nf_upload_token_unique (nf_upload_token)`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN responsavel_carga_id INT NULL`); } catch(e) {}
+    try {
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS notification_settings (
+          \`key\` VARCHAR(100) PRIMARY KEY,
+          value JSON NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    } catch(e) {}
+
     // Garantir que a tabela fiscal_notes tem todas as colunas necessárias
     try { await db.execute(/*sql*/`ALTER TABLE fiscal_notes ADD COLUMN used_by_cargo_id INT NULL`); } catch(e: any) { /* já existe */ }
     try { await db.execute(/*sql*/`ALTER TABLE fiscal_notes ADD COLUMN used_by_client_id INT NULL`); } catch(e: any) { /* já existe */ }
@@ -728,6 +743,16 @@ async function runAutoMigrations() {
       console.log('[AutoMigration] Synced fiscal notes status from cargo_loads');
     } catch(e: any) { console.log('[AutoMigration] fiscal notes sync error:', e?.message); }
 
+    // Orçamentos: comparativo em planilha, edição de itens, escolha manual de vencedor,
+    // vínculo com fornecedor cadastrado (trazido do GitHub, aba de Orçamentos).
+    try { await db.execute(/*sql*/`ALTER TABLE quotation_requests ADD COLUMN best_choices TEXT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE quotation_responses ADD COLUMN supplier_id INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE quotation_responses ADD COLUMN trade_name VARCHAR(255) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE quotation_responses ADD COLUMN payment_terms VARCHAR(255) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE quotation_responses ADD COLUMN delivery_terms VARCHAR(255) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE quotation_responses ADD COLUMN products_sold VARCHAR(500) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE suppliers ADD COLUMN products_sold VARCHAR(500) NULL`); } catch(e) {}
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);
@@ -735,9 +760,6 @@ async function runAutoMigrations() {
 }
 
 async function startServer() {
-  // Run auto-migrations before starting
-  await runAutoMigrations();
-  
   const app = express();
   const server = createServer(app);
   
@@ -970,6 +992,12 @@ async function startServer() {
   server.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${port}/`);
   });
+
+  // Migrações rodam em segundo plano, DEPOIS do listen() — algumas hospedagens
+  // (ex: Hostinger) matam o processo se listen() não for chamado em poucos
+  // segundos, e essa função faz dezenas de ALTER TABLE sequenciais contra o
+  // banco remoto, o que facilmente estoura esse limite.
+  runAutoMigrations().catch((err) => console.error('[AutoMigration] Erro fatal:', err));
 }
 
 startServer().catch(console.error);

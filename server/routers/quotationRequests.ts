@@ -363,7 +363,7 @@ export const quotationRequestsRouter = router({
         let found = false;
         // Se houver escolha manual, usar exatamente aquela resposta/item
         if (manual) {
-          const resp = responses.find(r => r.id === manual.responseId);
+          const resp = responses.find((r: typeof responses[number]) => r.id === manual.responseId);
           if (resp) {
             const respItems = JSON.parse(resp.itemsJson || "[]") as Array<{ name: string; quantity: string; unit?: string; price: string; packaging?: string }>;
             const it = respItems[manual.itemIndex];

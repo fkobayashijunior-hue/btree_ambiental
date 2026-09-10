@@ -27,6 +27,38 @@ async function getDirectConnection() {
   return conn;
 }
 
+// Resolve se a cobrança daquele destino/comprador é por tonelada ou m³ — fonte de verdade
+// (cadastro), não deve ser sobrescrito por um "chute" da IA lendo a NF. O front codifica
+// compradores como destinationId + 10000 (mesma tabela cargo_destinations, isBuyer=1);
+// desfaz esse deslocamento antes de consultar.
+async function resolveDestinationUnit(db: any, destinationId: number | null | undefined): Promise<'ton' | 'm3' | null> {
+  if (!destinationId) return null;
+  const realId = destinationId >= 10000 ? destinationId - 10000 : destinationId;
+  try {
+    const [row] = await db.select({
+      isBuyer: cargoDestinations.isBuyer, unit: cargoDestinations.unit, priceType: cargoDestinations.priceType,
+    }).from(cargoDestinations).where(eq(cargoDestinations.id, realId)).limit(1);
+    if (!row) return null;
+    const value = row.isBuyer ? row.unit : row.priceType;
+    return value === 'm3' || value === 'ton' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+// Peso previsto (toneladas) cadastrado no caminhão (equipment.expectedWeightTon) — usado como
+// estimativa de peso antes da pesagem real, pra cargas em destinos que cobram por tonelada.
+async function getExpectedWeightTon(db: any, vehicleId: number | null | undefined): Promise<number> {
+  if (!vehicleId) return 0;
+  try {
+    const [truck] = await db.select({ expectedWeightTon: equipment.expectedWeightTon }).from(equipment).where(eq(equipment.id, vehicleId)).limit(1);
+    const val = truck?.expectedWeightTon ? parseFloat(String(truck.expectedWeightTon).replace(',', '.')) : 0;
+    return isNaN(val) ? 0 : val;
+  } catch {
+    return 0;
+  }
+}
+
 // ── Abatimento automático de adiantamento ao finalizar/pagar uma carga ──
 async function autoDeductAdvanceForCargo(
   db: Awaited<ReturnType<typeof getDb>>,
@@ -338,6 +370,7 @@ export const cargoLoadsRouter = router({
           paidAt: cargoLoads.paidAt,
           humidity: cargoLoads.humidity,
           deliveryDate: cargoLoads.deliveryDate,
+          responsavelCargaId: cargoLoads.responsavelCargaId,
           // Joins
           clientNameJoined: clients.name,
           destinationNameJoined: cargoDestinations.name,
@@ -569,6 +602,8 @@ export const cargoLoadsRouter = router({
       invoiceFileMimeType: z.string().optional(), // MIME type do arquivo da NF
       noteQuantity: z.string().optional(), // Quantidade da nota (se diferente da carga)
       noteUnit: z.enum(['m3', 'ton']).optional(), // Unidade da nota (se diferente do destino)
+      responsavelCargaId: z.number().nullable().optional(), // Colaborador responsável pela carga (padrão: quem registrou)
+      origin: z.string().optional(), // window.location.origin do cliente, pra montar o link de upload de NF certo (local/staging/produção)
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -711,16 +746,13 @@ export const cargoLoadsRouter = router({
         }
         // Determinar tipo e quantidade da nota a partir do priceType do destino
         const vol = parseFloat((input.volumeM3 || '0').replace(',', '.'));
-        const pesoTon = input.weightNetKg ? parseFloat(input.weightNetKg.replace(',', '.')) / 1000 : 0;
-        // Buscar o priceType do destino cadastrado (ton para SONOCO, m3 para outros)
-        let destPriceType = 'ton';
-        if (input.destinationId) {
-          try {
-            const [dest] = await db.select({ priceType: cargoDestinations.priceType }).from(cargoDestinations).where(eq(cargoDestinations.id, input.destinationId)).limit(1);
-            if (dest?.priceType) destPriceType = dest.priceType;
-          } catch { /* usa ton */ }
-        }
-        const quantityType = input.noteUnit || (destPriceType === 'm3' ? 'm3' : 'ton');
+        // Peso: usa o peso real (pesagem) se já disponível; senão, o peso previsto cadastrado
+        // no caminhão (equipment.expectedWeightTon) como estimativa antes da pesagem.
+        let pesoTon = input.weightNetKg ? parseFloat(input.weightNetKg.replace(',', '.')) / 1000 : 0;
+        if (pesoTon <= 0) pesoTon = await getExpectedWeightTon(db, input.vehicleId);
+        // Buscar a unidade cadastrada do destino/comprador (ton para SONOCO, m3 para outros)
+        const destUnit = await resolveDestinationUnit(db, input.destinationId);
+        const quantityType = input.noteUnit || destUnit || 'ton';
         // Quantidade: usa o valor da nota (se fornecido), senão o da carga
         const noteQty = input.noteQuantity ? parseFloat(input.noteQuantity.replace(',', '.')) : 0;
         const quantity = noteQty > 0
@@ -766,7 +798,53 @@ export const cargoLoadsRouter = router({
       } catch (e) {
         console.error('[cargoLoads.create] Erro ao gerar ação automaticamente:', e);
       }
-      return { success: true };
+
+      // Token público de upload de NF + responsável pela carga (pré-preenchido com quem
+      // registrou) + aviso via WhatsApp pro responsável pela emissão da NF, com o link.
+      let createdId: number | null = null;
+      try {
+        const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc(cargoLoads.id)).limit(1);
+        createdId = newCargo?.id ?? null;
+        if (createdId) {
+          const crypto = await import('crypto');
+          const token = crypto.randomBytes(24).toString('hex');
+          let responsavelCargaId = input.responsavelCargaId ?? null;
+          if (responsavelCargaId === null && input.responsavelCargaId === undefined) {
+            const [collab] = await db.select({ id: collaborators.id }).from(collaborators).where(eq(collaborators.userId, ctx.user.id)).limit(1);
+            responsavelCargaId = collab?.id ?? null;
+          }
+          await db.update(cargoLoads).set({
+            nfUploadToken: token,
+            responsavelCargaId,
+          }).where(eq(cargoLoads.id, createdId));
+
+          const { notifyNfResponsavelNovaCarga } = await import('./notifications');
+          const notifyUnit = input.noteUnit || await resolveDestinationUnit(db, input.destinationId);
+          // Peso ainda não medido (pesagem acontece depois) — usa o peso previsto do caminhão.
+          let notifyWeightNetKg = input.weightNetKg;
+          if (!notifyWeightNetKg || parseFloat(notifyWeightNetKg.replace(',', '.')) <= 0) {
+            const expectedTon = await getExpectedWeightTon(db, input.vehicleId);
+            if (expectedTon > 0) notifyWeightNetKg = String(expectedTon * 1000);
+          }
+          // Não aguarda o envio do WhatsApp — é uma chamada de rede externa pra API da Meta,
+          // com latência variável. Rodar em segundo plano evita que essa mutation demore
+          // demais e estoure o timeout do proxy da hospedagem (ex: Hostinger devolvendo uma
+          // página de erro HTML antes mesmo do Node terminar de processar).
+          notifyNfResponsavelNovaCarga({
+            db,
+            cargoId: createdId,
+            vehiclePlate: input.vehiclePlate || 'N/I',
+            volumeM3: input.volumeM3,
+            weightNetKg: notifyWeightNetKg,
+            unit: notifyUnit,
+            destination: input.destination || '',
+            uploadToken: token,
+            origin: input.origin,
+          }).catch((e) => console.error('[cargoLoads.create] Erro ao notificar responsável NF:', e));
+        }
+      } catch (e) { console.error('[cargoLoads.create] Erro ao gerar token/notificar NF:', e); }
+
+      return { success: true, id: createdId };
     }),
 
   update: protectedProcedure
@@ -777,6 +855,7 @@ export const cargoLoadsRouter = router({
       vehiclePlate: z.string().optional(),
       driverCollaboratorId: z.number().optional(),
       driverName: z.string().optional(),
+      responsavelCargaId: z.number().nullable().optional(),
       heightM: z.string().optional(),
       widthM: z.string().optional(),
       lengthM: z.string().optional(),
@@ -816,12 +895,37 @@ export const cargoLoadsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
+      // Estado atual da carga (já reflete um upload de NF feito via uploadDocument nesta mesma
+      // sequência de edição, já que o front chama uploadDocument antes de update).
+      const [existingCargo] = await db.select({
+        invoiceUrl: cargoLoads.invoiceUrl, responsavelCargaId: cargoLoads.responsavelCargaId,
+        vehiclePlate: cargoLoads.vehiclePlate, volumeM3: cargoLoads.volumeM3,
+        weightNetKg: cargoLoads.weightNetKg, destination: cargoLoads.destination,
+        destinationId: cargoLoads.destinationId,
+      }).from(cargoLoads).where(eq(cargoLoads.id, input.id)).limit(1);
+
+      // Se número da NF e/ou quantidade vieram em branco e já existe um arquivo de NF anexado,
+      // tenta extrair automaticamente via IA — nunca sobrescreve o que foi digitado. A unidade
+      // (ton/m³) prioriza o cadastro do destino/comprador sobre o "chute" da IA lendo a NF.
+      let effectiveInvoiceNumber = input.invoiceNumber?.trim() || undefined;
+      let effectiveNoteQuantity = input.noteQuantity;
+      let effectiveNoteUnit = input.noteUnit || await resolveDestinationUnit(db, input.destinationId ?? existingCargo?.destinationId);
+      if (existingCargo?.invoiceUrl && (!effectiveInvoiceNumber || !effectiveNoteQuantity)) {
+        try {
+          const { extractNfDataFromFile } = await import('../utils/nfExtraction');
+          const extracted = await extractNfDataFromFile(existingCargo.invoiceUrl);
+          if (!effectiveInvoiceNumber && extracted.invoiceNumber) effectiveInvoiceNumber = extracted.invoiceNumber;
+          if (!effectiveNoteQuantity && extracted.quantity) effectiveNoteQuantity = extracted.quantity;
+          if (!effectiveNoteUnit && extracted.unit) effectiveNoteUnit = extracted.unit;
+        } catch (e) { console.error('[cargoLoads.update] Erro na extração automática da NF:', e); }
+      }
+
       // Validação: nota fiscal duplicada (excluindo a própria carga)
-      if (input.invoiceNumber && input.invoiceNumber.trim() !== '') {
+      if (effectiveInvoiceNumber) {
         const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date })
           .from(cargoLoads)
           .where(and(
-            eq(cargoLoads.invoiceNumber, input.invoiceNumber.trim()),
+            eq(cargoLoads.invoiceNumber, effectiveInvoiceNumber),
             ne(cargoLoads.id, input.id)
           ))
           .limit(1);
@@ -829,12 +933,13 @@ export const cargoLoadsRouter = router({
           const dateFmt = existing[0].date ? new Date(existing[0].date).toLocaleDateString('pt-BR') : 'N/I';
           throw new TRPCError({
             code: "CONFLICT",
-            message: `Nota fiscal ${input.invoiceNumber} já está sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || 'N/I'}, Data: ${dateFmt}). Verifique o número da nota.`,
+            message: `Nota fiscal ${effectiveInvoiceNumber} já está sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || 'N/I'}, Data: ${dateFmt}). Verifique o número da nota.`,
           });
         }
       }
 
-      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity, noteUnit, ...rest } = input;
+      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity: _noteQuantityInput, noteUnit: _noteUnitInput, invoiceNumber: _invoiceNumberInput, ...rest } = input;
+      if (effectiveInvoiceNumber !== undefined || input.invoiceNumber !== undefined) (rest as any).invoiceNumber = effectiveInvoiceNumber || null;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
       // These fields use snake_case column names - must be set explicitly via Drizzle schema fields
@@ -868,7 +973,7 @@ export const cargoLoadsRouter = router({
       }
 
       // noteQuantity/noteUnit NÃO são colunas de cargo_loads: sincronizar com a ação (fiscal_notes) vinculada
-      if (noteUnit !== undefined && noteUnit !== '') {
+      if (effectiveNoteUnit !== undefined && effectiveNoteUnit !== '') {
         try {
           const connU = await getDirectConnection();
           try {
@@ -878,14 +983,14 @@ export const cargoLoadsRouter = router({
             );
             await connU.execute(
               `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity_type = ? WHERE cl.id = ?`,
-              [noteUnit, id]
+              [effectiveNoteUnit, id]
             );
           } finally { await connU.end(); }
         } catch (e) { console.error('[cargoLoads.update] sync noteUnit->fiscal_notes falhou:', e); }
       }
-      if (noteQuantity !== undefined) {
+      if (effectiveNoteQuantity !== undefined) {
         try {
-          const qtyNorm = String(noteQuantity || '').replace(',', '.').trim();
+          const qtyNorm = String(effectiveNoteQuantity || '').replace(',', '.').trim();
           const conn0 = await getDirectConnection();
           try {
             // Garante vínculo: se a carga não tem fiscal_note_id, tenta vincular pela AC usada por esta carga
@@ -925,6 +1030,9 @@ export const cargoLoadsRouter = router({
             await conn.execute(`UPDATE cargo_loads SET ${extraUpdates.join(', ')} WHERE id = ?`, extraParams);
           } finally { await conn.end(); }
         }
+        // OBS: o aviso de "NF anexada" pro responsável da carga é disparado em uploadDocument
+        // (docType 'invoice') — é lá que o arquivo realmente chega quando editado por
+        // CargoControl.tsx (upload e update são chamadas separadas, nessa ordem).
       } catch (dbErr: any) {
         // DrizzleQueryError wraps the real MySQL error in .cause
         const realErr = dbErr.cause || dbErr;
@@ -947,7 +1055,13 @@ export const cargoLoadsRouter = router({
         // Abatimento automático de adiantamento
         try { await autoDeductAdvanceForCargo(db, id); } catch(e) { /* silent */ }
       }
-      return { success: true };
+      return {
+        success: true,
+        autoExtracted: {
+          invoiceNumber: !input.invoiceNumber && !!effectiveInvoiceNumber,
+          noteQuantity: !input.noteQuantity && !!effectiveNoteQuantity,
+        },
+      };
     }),
 
   updateTracking: protectedProcedure
@@ -994,6 +1108,17 @@ export const cargoLoadsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indispon\u00edvel' });
+      // Estado anterior da carga (s\u00f3 pra NF, pra saber se \u00e9 o primeiro anexo e avisar o
+      // respons\u00e1vel pela carga s\u00f3 nesse caso).
+      let priorCargo: { invoiceUrl: string | null; responsavelCargaId: number | null; vehiclePlate: string | null; volumeM3: string | null; weightNetKg: string | null; destination: string | null; destinationId: number | null; vehicleId: number | null } | undefined;
+      if (input.docType === 'invoice') {
+        [priorCargo] = await db.select({
+          invoiceUrl: cargoLoads.invoiceUrl, responsavelCargaId: cargoLoads.responsavelCargaId,
+          vehiclePlate: cargoLoads.vehiclePlate, volumeM3: cargoLoads.volumeM3,
+          weightNetKg: cargoLoads.weightNetKg, destination: cargoLoads.destination, destinationId: cargoLoads.destinationId,
+          vehicleId: cargoLoads.vehicleId,
+        }).from(cargoLoads).where(eq(cargoLoads.id, input.cargoId)).limit(1);
+      }
       const uploaded = await cloudinaryUpload(input.docBase64, `btree/docs/${input.cargoId}`);
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const updateData: Record<string, unknown> = { updatedAt: now };
@@ -1011,8 +1136,8 @@ export const cargoLoadsRouter = router({
       }
       await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
 
-      // Se for NF, sincronizar o arquivo também na ação (AC) vinculada à carga
       if (input.docType === 'invoice') {
+        // Sincronizar o arquivo também na ação (AC) vinculada à carga
         try {
           const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId }).from(cargoLoads).where(eq(cargoLoads.id, input.cargoId)).limit(1);
           if (cargo?.fiscalNoteId) {
@@ -1020,6 +1145,32 @@ export const cargoLoadsRouter = router({
           }
         } catch (e) {
           console.error('[cargoLoads.uploadDocument] Erro ao sincronizar NF com a AC:', e);
+        }
+
+        // Avisa o responsável POR AQUELA carga que a NF foi anexada — só na primeira vez
+        // (carga ainda não tinha invoiceUrl antes deste upload), mesmo padrão de uploadNfByToken.
+        if (!priorCargo?.invoiceUrl) {
+          try {
+            const { notifyResponsavelCargaNfAnexada } = await import('./notifications');
+            let anexadaWeightNetKg = priorCargo?.weightNetKg;
+            if (!anexadaWeightNetKg || parseFloat(anexadaWeightNetKg.replace(',', '.')) <= 0) {
+              const expectedTon = await getExpectedWeightTon(db, priorCargo?.vehicleId);
+              if (expectedTon > 0) anexadaWeightNetKg = String(expectedTon * 1000);
+            }
+            const anexadaUnit = await resolveDestinationUnit(db, priorCargo?.destinationId);
+            // Não aguarda o envio do WhatsApp (rede externa pra Meta) — roda em segundo plano
+            // pra não atrasar a resposta desta mutation.
+            notifyResponsavelCargaNfAnexada({
+              cargoId: input.cargoId,
+              responsavelCargaId: priorCargo?.responsavelCargaId ?? null,
+              invoiceUrl: uploaded.url,
+              vehiclePlate: priorCargo?.vehiclePlate,
+              volumeM3: priorCargo?.volumeM3,
+              weightNetKg: anexadaWeightNetKg,
+              destination: priorCargo?.destination,
+              unit: anexadaUnit,
+            }).catch((e) => console.error('[cargoLoads.uploadDocument] Erro ao notificar responsável:', e));
+          } catch (e) { console.error('[cargoLoads.uploadDocument] Erro ao notificar responsável:', e); }
         }
       }
 
@@ -2225,5 +2376,163 @@ export const cargoLoadsRouter = router({
       } finally {
         await conn.end();
       }
+    }),
+
+  // ── Página pública de upload de NF (link enviado por WhatsApp) ──────────────
+  // Sem login: o token (aleatório, 48 bytes) é a única credencial. Só devolve os
+  // dados mínimos pra identificar a carga — nunca a carga inteira.
+  getByNfUploadToken: publicProcedure
+    .input(z.object({ token: z.string().min(10) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [cargo] = await db.select({
+        id: cargoLoads.id,
+        vehiclePlate: cargoLoads.vehiclePlate,
+        volumeM3: cargoLoads.volumeM3,
+        weightNetKg: cargoLoads.weightNetKg,
+        destination: cargoLoads.destination,
+        destinationId: cargoLoads.destinationId,
+        vehicleId: cargoLoads.vehicleId,
+        invoiceNumber: cargoLoads.invoiceNumber,
+        invoiceUrl: cargoLoads.invoiceUrl,
+      }).from(cargoLoads).where(eq(cargoLoads.nfUploadToken, input.token)).limit(1);
+      if (!cargo) throw new TRPCError({ code: "NOT_FOUND", message: "Link inválido ou expirado." });
+
+      const unit = await resolveDestinationUnit(db, cargo.destinationId);
+      let displayWeightNetKg = cargo.weightNetKg;
+      if (!displayWeightNetKg || parseFloat(displayWeightNetKg.replace(',', '.')) <= 0) {
+        const expectedTon = await getExpectedWeightTon(db, cargo.vehicleId);
+        if (expectedTon > 0) displayWeightNetKg = String(expectedTon * 1000);
+      }
+      const { formatPesoOuVolume } = await import('./notifications');
+      const pesoOuVolume = formatPesoOuVolume(displayWeightNetKg, cargo.volumeM3, unit);
+
+      return { ...cargo, pesoOuVolume };
+    }),
+
+  // Só altera invoiceNumber/invoiceUrl (+ quantidade/unidade da nota vinculada) DA CARGA
+  // daquele token — nunca outra coisa, nunca outra carga.
+  uploadNfByToken: publicProcedure
+    .input(z.object({
+      token: z.string().min(10),
+      invoiceNumber: z.string().optional(),
+      invoiceFileBase64: z.string().optional(),
+      invoiceFileName: z.string().optional(),
+      invoiceFileMimeType: z.string().optional(),
+      noteQuantity: z.string().optional(),
+      noteUnit: z.enum(['m3', 'ton']).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [cargo] = await db.select({
+        id: cargoLoads.id, responsavelCargaId: cargoLoads.responsavelCargaId, invoiceUrl: cargoLoads.invoiceUrl,
+        vehiclePlate: cargoLoads.vehiclePlate, volumeM3: cargoLoads.volumeM3,
+        weightNetKg: cargoLoads.weightNetKg, destination: cargoLoads.destination, destinationId: cargoLoads.destinationId,
+        vehicleId: cargoLoads.vehicleId,
+      }).from(cargoLoads).where(eq(cargoLoads.nfUploadToken, input.token)).limit(1);
+      if (!cargo) throw new TRPCError({ code: "NOT_FOUND", message: "Link inválido ou expirado." });
+
+      const updateData: Record<string, unknown> = {};
+      if (input.invoiceFileBase64) {
+        try {
+          const dataStr = input.invoiceFileBase64.startsWith('data:')
+            ? input.invoiceFileBase64
+            : `data:${input.invoiceFileMimeType || 'application/pdf'};base64,${input.invoiceFileBase64}`;
+          const uploaded = await cloudinaryUpload(dataStr, `btree/notas/${cargo.id}`, input.invoiceFileName || `nf-carga-${cargo.id}.pdf`);
+          updateData.invoiceUrl = uploaded.url;
+        } catch (e) {
+          console.error('[cargoLoads.uploadNfByToken] Erro upload NF:', e);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao enviar o arquivo. Tente novamente." });
+        }
+      }
+
+      // Se o responsável não preencheu número da NF e/ou quantidade, tenta extrair
+      // automaticamente do arquivo anexado (visão de IA) — nunca sobrescreve o que foi digitado.
+      let effectiveInvoiceNumber = input.invoiceNumber?.trim() || undefined;
+      let effectiveNoteQuantity = input.noteQuantity;
+      let effectiveNoteUnit = input.noteUnit || await resolveDestinationUnit(db, cargo.destinationId);
+      const invoiceUrlForExtraction = updateData.invoiceUrl as string | undefined;
+      if (invoiceUrlForExtraction && (!effectiveInvoiceNumber || !effectiveNoteQuantity)) {
+        try {
+          const { extractNfDataFromFile } = await import('../utils/nfExtraction');
+          const extracted = await extractNfDataFromFile(invoiceUrlForExtraction, input.invoiceFileMimeType);
+          if (!effectiveInvoiceNumber && extracted.invoiceNumber) effectiveInvoiceNumber = extracted.invoiceNumber;
+          if (!effectiveNoteQuantity && extracted.quantity) effectiveNoteQuantity = extracted.quantity;
+          if (!effectiveNoteUnit && extracted.unit) effectiveNoteUnit = extracted.unit;
+        } catch (e) { console.error('[cargoLoads.uploadNfByToken] Erro na extração automática da NF:', e); }
+      }
+
+      if (effectiveInvoiceNumber) {
+        const existing = await db.select({ id: cargoLoads.id })
+          .from(cargoLoads)
+          .where(and(eq(cargoLoads.invoiceNumber, effectiveInvoiceNumber), ne(cargoLoads.id, cargo.id)))
+          .limit(1);
+        if (existing.length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: `Nota fiscal ${effectiveInvoiceNumber} já está sendo usada em outra carga.` });
+        }
+      }
+      if (input.invoiceNumber !== undefined || effectiveInvoiceNumber) updateData.invoiceNumber = effectiveInvoiceNumber || null;
+
+      if (Object.keys(updateData).length > 0) {
+        await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, cargo.id));
+      }
+
+      // noteQuantity/noteUnit não são colunas de cargo_loads — sincroniza com a ação (fiscal_notes)
+      // vinculada, mesmo padrão usado em cargoLoads.update.
+      if (effectiveNoteUnit || effectiveNoteQuantity !== undefined) {
+        try {
+          const conn = await getDirectConnection();
+          try {
+            if (effectiveNoteUnit) {
+              await conn.execute(
+                `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity_type = ? WHERE cl.id = ?`,
+                [effectiveNoteUnit, cargo.id]
+              );
+            }
+            if (effectiveNoteQuantity !== undefined) {
+              const qtyNorm = String(effectiveNoteQuantity || '').replace(',', '.').trim();
+              await conn.execute(
+                `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity = ? WHERE cl.id = ?`,
+                [qtyNorm === '' ? null : qtyNorm, cargo.id]
+              );
+            }
+          } finally { await conn.end(); }
+        } catch (e) { console.error('[cargoLoads.uploadNfByToken] sync noteQuantity/noteUnit falhou:', e); }
+      }
+
+      // Avisa o responsável POR AQUELA carga que a NF foi anexada — só na primeira vez
+      // (carga ainda não tinha invoiceUrl antes desta chamada).
+      if (updateData.invoiceUrl && !cargo.invoiceUrl) {
+        try {
+          const { notifyResponsavelCargaNfAnexada } = await import('./notifications');
+          let tokenWeightNetKg = cargo.weightNetKg;
+          if (!tokenWeightNetKg || parseFloat(tokenWeightNetKg.replace(',', '.')) <= 0) {
+            const expectedTon = await getExpectedWeightTon(db, cargo.vehicleId);
+            if (expectedTon > 0) tokenWeightNetKg = String(expectedTon * 1000);
+          }
+          // Não aguarda o envio do WhatsApp (rede externa pra Meta) — roda em segundo plano
+          // pra não atrasar a resposta desta mutation.
+          notifyResponsavelCargaNfAnexada({
+            cargoId: cargo.id,
+            responsavelCargaId: cargo.responsavelCargaId ?? null,
+            invoiceUrl: (updateData.invoiceUrl as string) ?? null,
+            vehiclePlate: cargo.vehiclePlate,
+            volumeM3: cargo.volumeM3,
+            weightNetKg: tokenWeightNetKg,
+            destination: cargo.destination,
+            unit: effectiveNoteUnit,
+          }).catch((e) => console.error('[cargoLoads.uploadNfByToken] Erro ao notificar responsável:', e));
+        } catch (e) { console.error('[cargoLoads.uploadNfByToken] Erro ao notificar responsável:', e); }
+      }
+
+      return {
+        success: true,
+        autoExtracted: {
+          invoiceNumber: !input.invoiceNumber && !!effectiveInvoiceNumber,
+          noteQuantity: !input.noteQuantity && !!effectiveNoteQuantity,
+        },
+      };
     }),
 });
