@@ -45,7 +45,14 @@ export default function Login() {
         localStorage.removeItem(SAVED_EMAIL_KEY);
         localStorage.removeItem(SAVED_PASSWORD_KEY);
       }
-      setLocation("/app");
+      // Redirecionar para a página que o usuário tentava acessar (ex: /orcamentos) ou /app
+      const params = new URLSearchParams(window.location.search);
+      const redirectTo = params.get("redirect");
+      if (redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")) {
+        setLocation(redirectTo);
+      } else {
+        setLocation("/app");
+      }
     },
     onError: (error) => {
       toast.error(error.message || "E-mail ou senha incorretos");

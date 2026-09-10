@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Bell, Clock, Users, Save, MessageCircle, UserCheck } from "lucide-react";
+import { Bell, Clock, Users, Save, MessageCircle, UserCheck, Truck } from "lucide-react";
 
 type JobConfig = {
   enabled: boolean;
@@ -18,6 +18,12 @@ type JobConfig = {
 type ClientNotifConfig = {
   enabled: boolean;
   clientIds: number[];
+};
+
+type CargoNfRecipient = {
+  collaboratorId: number | null;
+  manualName: string;
+  manualPhone: string;
 };
 
 const WEEKDAYS = [
@@ -38,10 +44,17 @@ export default function NotificationSettings() {
 
   const [config, setConfig] = useState<Record<string, JobConfig> | null>(null);
   const [clientConfig, setClientConfig] = useState<Record<string, ClientNotifConfig>>({});
+  const [cargoNfRecipients, setCargoNfRecipients] = useState<CargoNfRecipient[]>([]);
 
   useEffect(() => {
     if (data?.config) setConfig(JSON.parse(JSON.stringify(data.config)));
     setClientConfig(JSON.parse(JSON.stringify((data as any)?.clientConfig ?? {})));
+    const recipients = (data as any)?.cargoNfResponsible?.recipients ?? [];
+    setCargoNfRecipients(recipients.map((r: any) => ({
+      collaboratorId: r.collaboratorId ?? null,
+      manualName: r.manualName ?? "",
+      manualPhone: r.manualPhone ?? "",
+    })));
   }, [data]);
 
   const updateMutation = trpc.notificationSettings.update.useMutation({
@@ -56,6 +69,14 @@ export default function NotificationSettings() {
     onSuccess: () => {
       utils.notificationSettings.get.invalidate();
       toast.success("Notificações de clientes salvas!");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const updateCargoNfResponsibleMutation = trpc.notificationSettings.updateCargoNfResponsible.useMutation({
+    onSuccess: () => {
+      utils.notificationSettings.get.invalidate();
+      toast.success("Responsável pela emissão de NF salvo!");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -130,6 +151,112 @@ export default function NotificationSettings() {
         entregues dentro da janela de 24h da Meta; para envios proativos fora dela é necessário um
         template aprovado.
       </p>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Truck className="h-4 w-4 text-emerald-600" />
+            Responsável pela emissão de NF (Controle de Cargas)
+          </CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Recebe um aviso por WhatsApp com placa, peso/volume, destino e o link para anexar a
+            Nota Fiscal sempre que uma nova carga for registrada.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {cargoNfRecipients.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nenhum responsável configurado ainda.</p>
+          )}
+          {cargoNfRecipients.map((r, idx) => (
+            <div key={idx} className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-2.5">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Colaborador cadastrado</Label>
+                <select
+                  value={r.collaboratorId ?? ""}
+                  onChange={(e) => {
+                    const id = e.target.value ? parseInt(e.target.value, 10) : null;
+                    setCargoNfRecipients((prev) => prev.map((x, i) => i === idx
+                      ? { collaboratorId: id, manualName: id !== null ? "" : x.manualName, manualPhone: id !== null ? "" : x.manualPhone }
+                      : x));
+                  }}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm min-w-52"
+                >
+                  <option value="">Nenhum selecionado</option>
+                  {collaborators.map((c: any) => (
+                    <option key={c.id} value={c.id} disabled={!c.phone}>
+                      {c.name}{!c.phone ? " (sem telefone)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <span className="text-xs text-muted-foreground pb-2">ou</span>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nome (manual)</Label>
+                <input
+                  value={r.manualName}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCargoNfRecipients((prev) => prev.map((x, i) => i === idx
+                      ? { collaboratorId: value ? null : x.collaboratorId, manualName: value, manualPhone: x.manualPhone }
+                      : x));
+                  }}
+                  placeholder="Nome da pessoa"
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm w-40"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Telefone (manual)</Label>
+                <input
+                  value={r.manualPhone}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCargoNfRecipients((prev) => prev.map((x, i) => i === idx
+                      ? { collaboratorId: value ? null : x.collaboratorId, manualName: x.manualName, manualPhone: value }
+                      : x));
+                  }}
+                  placeholder="(44) 99999-9999"
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm w-36"
+                />
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:text-red-600"
+                onClick={() => setCargoNfRecipients((prev) => prev.filter((_, i) => i !== idx))}
+              >
+                Remover
+              </Button>
+            </div>
+          ))}
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setCargoNfRecipients((prev) => [...prev, { collaboratorId: null, manualName: "", manualPhone: "" }])}
+            >
+              + Adicionar responsável
+            </Button>
+            <Button
+              onClick={() => updateCargoNfResponsibleMutation.mutate({
+                recipients: cargoNfRecipients
+                  .filter((r) => r.collaboratorId || r.manualPhone.trim())
+                  .map((r) => ({
+                    collaboratorId: r.collaboratorId,
+                    manualName: r.collaboratorId ? null : (r.manualName || null),
+                    manualPhone: r.collaboratorId ? null : (r.manualPhone || null),
+                  })),
+              })}
+              disabled={updateCargoNfResponsibleMutation.isPending}
+              variant="outline"
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {updateCargoNfResponsibleMutation.isPending ? "Salvando…" : "Salvar"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {jobKeys.map((key: string) => {
         const cfg = config[key];

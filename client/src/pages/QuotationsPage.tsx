@@ -33,12 +33,19 @@ function itemNamesMatch(a: string, b: string): boolean {
   const na = normalize(a);
   const nb = normalize(b);
   if (na === nb) return true;
+  if (!na || !nb) return false;
+  // Compacto (sem espaços): exato ou contenção de 4+ caracteres (evita '10w' casar com '15w40')
+  const ca = na.replace(/\s+/g, '');
+  const cb = nb.replace(/\s+/g, '');
+  if (ca === cb) return true;
+  if (ca.length >= 4 && cb.length >= 4 && (ca.includes(cb) || cb.includes(ca))) return true;
   // Palavras significativas (≥3 chars)
   const words = (s: string) => s.split(/\s+/).filter(w => w.length >= 3);
   const wa = words(na);
   const wb = words(nb);
-  // Verifica se todas as palavras do menor estão contidas no maior
-  const [shorter, longer] = wa.length <= wb.length ? [wa, nb] : [wb, na];
+  // Se algum lado não tem palavras significativas (nomes curtos tipo '10w', '68'), só casa por exato/compacto acima
+  if (wa.length === 0 || wb.length === 0) return false;
+  const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
   return shorter.every(w => longer.includes(w));
 }
 
@@ -46,6 +53,42 @@ function fmtPrice(price: string | number) {
   const n = typeof price === 'number' ? price : parseFloat(price);
   if (isNaN(n)) return String(price);
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// Capacidade em litros de cada embalagem (para normalizar preço por litro)
+const PACKAGING_LITERS: Record<string, number> = {
+  '1L': 1, '5L': 5, '10L': 10, '20L': 20, '200L': 200,
+};
+// Extrai capacidade da embalagem (ex: '20L' -> 20). Retorna null se não for volume.
+function packagingLiters(pack?: string): number | null {
+  if (!pack) return null;
+  const p = pack.trim().toUpperCase();
+  if (PACKAGING_LITERS[p]) return PACKAGING_LITERS[p];
+  const m = p.match(/(\d+(?:[\.,]\d+)?)\s*L/);
+  if (m) return parseFloat(m[1].replace(',', '.'));
+  return null;
+}
+// Preço normalizado: se o item tem embalagem em litros, retorna preço POR LITRO; senão, preço unitário.
+// Isso evita comparar "galão 5L" com "galão 20L" pelo preço bruto.
+function normalizedUnitPrice(item: ResponseItem): number {
+  const price = parseFloat(String(item.price).replace(',', '.'));
+  if (isNaN(price)) return NaN;
+  const qty = parseFloat(String(item.quantity || '1').replace(',', '.')) || 1;
+  const total = price * qty; // price é unitário; total da linha
+  const lit = packagingLiters((item as any).packaging);
+  if (lit && lit > 0) return total / (lit * qty); // R$ por litro
+  return price; // R$ por unidade
+}
+// Chave de agrupamento: nome do produto normalizado (sem marca/embalagem) + categoria de embalagem.
+function itemGroupKey(name: string, pack?: string): string {
+  const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\b(galao|galão|tambor|litro|litros|lt|balde)\b/g, '')
+    .replace(/\d+\s*l\b/g, '') // remove "20l", "5l" do nome
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  const lit = packagingLiters(pack);
+  const packCat = lit ? (lit >= 100 ? 'tambor' : 'galao') : 'un';
+  return n + '|' + packCat;
 }
 
 function fmtExpiry(expiresAt: number) {
@@ -111,7 +154,7 @@ type AutoProcessResult = {
 export default function QuotationsPage() {
   const utils = trpc.useUtils();
 
-  const [activeTab, setActiveTab] = useState('catalog');
+  const [activeTab, setActiveTab] = useState('last');
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [expandedProd, setExpandedProd] = useState<string | null>(null);
 
@@ -217,6 +260,32 @@ export default function QuotationsPage() {
     },
   });
 
+  const [editResp, setEditResp] = useState<any>(null);
+  const [editItemsResp, setEditItemsResp] = useState<any>(null);
+  const [editItemsList, setEditItemsList] = useState<any[]>([]);
+  const adminUpdateItemsMutation = trpc.quotationRequests.adminUpdateResponseItems.useMutation({
+    onSuccess: () => {
+      utils.quotationRequests.getById.invalidate();
+      setEditItemsResp(null);
+      toast.success("Itens da resposta atualizados!");
+    },
+    onError: (err) => toast.error("Erro ao atualizar itens: " + err.message),
+  });
+  const adminSetBestMutation = trpc.quotationRequests.adminSetBestChoice.useMutation({
+    onSuccess: () => {
+      utils.quotationRequests.getById.invalidate();
+      toast.success("Vencedor do item definido!");
+    },
+    onError: (err) => toast.error("Erro ao definir vencedor: " + err.message),
+  });
+  const adminUpdateRespMutation = trpc.quotationRequests.adminUpdateResponse.useMutation({
+    onSuccess: () => {
+      utils.quotationRequests.getById.invalidate();
+      setEditResp(null);
+      toast.success("Resposta atualizada!");
+    },
+    onError: (err) => toast.error("Erro ao atualizar: " + err.message),
+  });
   const autoProcessMutation = trpc.quotationRequests.autoProcess.useMutation({
     onSuccess: (data) => {
       setShowAutoProcessConfirm(false);
@@ -437,15 +506,65 @@ export default function QuotationsPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid grid-cols-3">
-          <TabsTrigger value="catalog">Catálogo de Preços</TabsTrigger>
+          <TabsTrigger value="last" className="flex items-center gap-1">
+            <FileText className="w-3 h-3" /> Orçamentos
+          </TabsTrigger>
           <TabsTrigger value="requests" className="flex items-center gap-1">
             <Send className="w-3 h-3" /> Solicitar
           </TabsTrigger>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
         </TabsList>
+        {/* ÚLTIMOS ORÇAMENTOS — lista que abre o detalhe completo */}
+        <TabsContent value="last" className="space-y-3 mt-3">
+          <p className="text-sm text-gray-500">Últimos orçamentos — toque para abrir o comparativo completo</p>
+          {!quotRequests || quotRequests.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>Nenhum orçamento ainda</p>
+              <p className="text-xs mt-1">Crie uma solicitação na aba Solicitar</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {quotRequests.map((req: any) => {
+                const expired = req.isExpired;
+                const statusKey = expired && req.status === 'ativa' ? 'expirada' : req.status;
+                const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS['ativa'];
+                const respCount = req.responseCount ?? req.responses?.length ?? null;
+                return (
+                  <button
+                    key={req.id}
+                    className="w-full text-left"
+                    onClick={() => { setAutoProcessResult(null); setViewResponsesId(req.id); }}
+                  >
+                    <Card className="hover:border-emerald-300 hover:shadow-sm transition-all">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-gray-800 truncate">{req.title}</p>
+                              <Badge className={`text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
+                            </div>
+                            <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
+                              <span className="flex items-center gap-1"><Package className="w-3 h-3" /> {req.items.length} item(s)</span>
+                              {respCount !== null && (
+                                <span className="flex items-center gap-1 text-emerald-700"><Building2 className="w-3 h-3" /> {respCount} resposta(s)</span>
+                              )}
+                              {req.requesterName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {req.requesterName}</span>}
+                            </div>
+                          </div>
+                          <ChevronDown className="w-5 h-5 text-gray-400 -rotate-90 flex-shrink-0" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
 
-        {/* CATALOG TAB */}
-        <TabsContent value="catalog" className="space-y-3 mt-3">
+        {/* CATALOG TAB (oculto — legado) */}
+        <TabsContent value="catalog" className="space-y-3 mt-3 hidden">
           {isLoading ? (
             <div className="text-center py-8 text-gray-400">Carregando...</div>
           ) : !grouped || grouped.length === 0 ? (
@@ -869,78 +988,185 @@ export default function QuotationsPage() {
                   <p className="text-xs mt-1">Compartilhe o link com os fornecedores</p>
                 </div>
               ) : (() => {
-                // Calcular melhor preço por item (nome normalizado)
-               const bestPriceByItem: Record<string, { price: number; supplierId: number }> = {};
-               requestDetail.responses.forEach((resp: any, rIdx: number) => {
-                 resp.items.forEach((item: ResponseItem) => {
-                    // Tentar fazer match com algum item original da solicitação
-                    const reqMatch = requestDetail.items.find((ri: QuotItem) => itemNamesMatch(ri.name, item.name));
-                    const key = reqMatch ? reqMatch.name.toLowerCase().trim() : item.name.toLowerCase().trim();
-                   const price = parseFloat(item.price);
-                   if (!isNaN(price)) {
-                     if (!(key in bestPriceByItem) || price < bestPriceByItem[key].price) {
-                        bestPriceByItem[key] = { price, supplierId: rIdx };
-                      }
-                    }
+                // ===== COMPARATIVO EM PLANILHA (item × fornecedor) com preço normalizado por litro =====
+                // Agrupar pelo NOME do produto (ignorando embalagem) e comparar por R$/litro para óleos.
+                // Assim, galão 5L e galão 20L do MESMO produto ficam na MESMA linha, e o vencedor é o menor R$/L.
+                type Cell = { price: number; norm: number; unit: string; pack?: string; brand?: string; supplier: string; rIdx: number; itemIndex: number };
+                const suppliersList: string[] = requestDetail.responses.map((r: any) => r.tradeName || r.supplierName);
+                const nameKey = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\d+\s*l\b/gi, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+                // Mapa: nameKey -> { label, unit, cells: Cell[] }
+                const rowsMap: Record<string, { label: string; unit: string; cells: Cell[] }> = {};
+                const ensureRow = (label: string, unit: string, gk: string) => {
+                  if (!rowsMap[gk]) rowsMap[gk] = { label, unit, cells: [] };
+                  return rowsMap[gk];
+                };
+                // Itens solicitados (linhas base)
+                requestDetail.items.forEach((reqItem: QuotItem) => {
+                  ensureRow(reqItem.name, reqItem.unit || 'un', nameKey(reqItem.name));
+                });
+                // Respostas: preencher células (agrupando por nome do produto)
+                requestDetail.responses.forEach((resp: any, rIdx: number) => {
+                  const supplierName = resp.tradeName || resp.supplierName;
+                  (resp.items || []).forEach((item: ResponseItem, itemIndex: number) => {
+                    const price = parseFloat(String(item.price).replace(',', '.'));
+                    if (isNaN(price)) return;
+                    const norm = normalizedUnitPrice(item);
+                    if (isNaN(norm)) return;
+                    // Casar com um item solicitado pelo NOME (ignorando embalagem)
+                    const matchedReq = requestDetail.items.find((ri: QuotItem) => itemNamesMatch(ri.name, item.name));
+                    const gk = matchedReq ? nameKey(matchedReq.name) : nameKey(item.name);
+                    ensureRow(matchedReq ? matchedReq.name : item.name, item.unit || 'un', gk);
+                    rowsMap[gk].cells.push({
+                      price, norm,
+                      unit: packagingLiters((item as any).packaging) ? 'L' : (item.unit || 'un'),
+                      pack: (item as any).packaging, brand: item.brand,
+                      supplier: supplierName, rIdx, itemIndex,
+                    });
                   });
                 });
-                // Calcular total por fornecedor
+                const rowsArr = Object.entries(rowsMap).map(([gk, r]) => ({ gk, ...r }));
+                // Escolha manual salva em bestChoices (por nome do item)
+                let manualChoices: Record<string, { responseId: number; itemIndex: number }> = {};
+                try { manualChoices = (requestDetail as any).bestChoices ? JSON.parse((requestDetail as any).bestChoices) : {}; } catch (_) { manualChoices = {}; }
+                // Melhor por linha: respeita escolha manual; senão, menor preço normalizado (R$/L para óleos)
+                rowsArr.forEach(r => {
+                  const manual = manualChoices[r.label] || manualChoices[r.gk];
+                  let bestCell: Cell | null = null;
+                  if (manual) {
+                    const resp = requestDetail.responses.find((x: any) => x.id === manual.responseId);
+                    if (resp) {
+                      const sName = resp.tradeName || resp.supplierName;
+                      bestCell = r.cells.find(c => c.supplier === sName && c.itemIndex === manual.itemIndex) || null;
+                    }
+                  }
+                  if (!bestCell && r.cells.length) {
+                    bestCell = r.cells.reduce((a, b) => (b.norm < a.norm ? b : a));
+                  }
+                  (r as any).bestCell = bestCell;
+                  (r as any).best = bestCell ? bestCell.norm : null;
+                });
+                // Totais por fornecedor (soma do preço bruto de seus itens)
                 const totals = requestDetail.responses.map((resp: any) => ({
                   id: resp.id,
-                   total: (resp.items || []).reduce((sum: number, item: ResponseItem) => sum + (parseFloat(item.price) || 0), 0),
+                  total: (resp.items || []).reduce((sum: number, item: ResponseItem) => sum + (parseFloat(String(item.price).replace(',', '.')) || 0), 0),
                 }));
                 const minTotal = Math.min(...totals.map((t: any) => t.total));
                 return (
                   <div className="space-y-4">
-                    {/* Comparativo de melhor preço por item */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Trophy className="w-4 h-4 text-amber-600" />
-                        <span className="text-sm font-semibold text-amber-800">Comparativo — Melhor Preço por Item</span>
+                    {/* Planilha comparativa */}
+                    <div className="rounded-lg border border-emerald-200 overflow-hidden shadow-sm">
+                      <div className="bg-emerald-700 text-white px-3 py-2 flex items-center gap-2">
+                        <Trophy className="w-4 h-4" />
+                        <span className="text-sm font-semibold">Comparativo de Preços</span>
+                        <span className="text-[11px] text-emerald-100 ml-auto hidden md:inline">menor valor por linha em destaque</span>
                       </div>
-                      <div className="space-y-1">
-                        {requestDetail.items.map((reqItem: QuotItem, i: number) => {
-                         const key = reqItem.name.toLowerCase().trim();
-                          const best = bestPriceByItem[key] ?? bestPriceByItem[Object.keys(bestPriceByItem).find(k => itemNamesMatch(k, reqItem.name)) ?? ''];
-                         // Coletar todos os preços para este item
-                         const allPrices = requestDetail.responses
-                           .map((resp: any, rIdx: number) => {
-                              const found = resp.items.find((it: ResponseItem) => itemNamesMatch(it.name, reqItem.name));
-                             if (!found) return null;
-                              return { supplier: resp.supplierName, price: parseFloat(found.price), rIdx };
-                            })
-                            .filter(Boolean)
-                            .sort((a: any, b: any) => a.price - b.price);
-                          if (allPrices.length === 0) return (
-                            <div key={i} className="bg-white rounded p-2 border border-amber-100">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-gray-700">{reqItem.name}</span>
-                                <span className="text-xs text-gray-400 italic">Não cotado</span>
-                              </div>
+                      {/* ===== VISÃO MOBILE (cartões por item) ===== */}
+                      <div className="md:hidden space-y-3 p-2 bg-gray-50/50">
+                        {rowsArr.map((r, ri) => (
+                          <div key={ri} className="rounded-lg border border-emerald-200 bg-white shadow-sm overflow-hidden">
+                            <div className="bg-emerald-50 px-3 py-2 border-b border-emerald-100 flex items-center justify-between">
+                              <span className="font-semibold text-emerald-900 text-sm">{r.label}</span>
+                              <span className="text-[11px] text-gray-500">{r.unit}</span>
                             </div>
-                          );
-                          const bestSupplier = allPrices[0]!;
-                          const worstPrice = allPrices[allPrices.length - 1]?.price || 0;
-                          const saving = worstPrice - bestSupplier.price;
-                          return (
-                            <div key={i} className="bg-white rounded p-2 border border-amber-100">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-gray-700">{reqItem.name}</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-green-700">{fmtPrice(String(bestSupplier.price))}</span>
-                                  <span className="text-xs text-green-600 font-medium">{bestSupplier.supplier}</span>
-                                  <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                                </div>
-                              </div>
-                              {saving > 0.01 && (
-                                <p className="text-xs text-gray-400 mt-0.5">Economia de {fmtPrice(String(saving))} vs. maior preço</p>
-                              )}
+                            <div className="divide-y divide-gray-100">
+                              {suppliersList.map((s: string, si: number) => {
+                                const cell = r.cells.find(c => c.supplier === s);
+                                if (!cell) return null;
+                                const isBest = (r as any).bestCell === cell;
+                                return (
+                                  <button
+                                    key={si}
+                                    type="button"
+                                    onClick={() => {
+                                      const choices: Record<string, { responseId: number; itemIndex: number }> = { ...(manualChoices || {}) };
+                                      choices[r.label] = { responseId: requestDetail.responses[cell.rIdx].id, itemIndex: cell.itemIndex };
+                                      adminSetBestMutation.mutate({ quotationRequestId: requestDetail.id, choices });
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 text-left ${isBest ? 'bg-emerald-100/70' : ''}`}
+                                  >
+                                    <div className="min-w-0">
+                                      <p className={`text-sm font-medium truncate ${isBest ? 'text-emerald-900' : 'text-gray-700'}`}>{cell.supplier}</p>
+                                      {(cell.pack || cell.brand) && (
+                                        <p className="text-[11px] text-gray-400">{[cell.brand, cell.pack].filter(Boolean).join(' · ')}</p>
+                                      )}
+                                    </div>
+                                    <div className="text-right shrink-0 ml-2">
+                                      <p className={`text-base font-bold ${isBest ? 'text-emerald-800' : 'text-gray-800'}`}>
+                                        {fmtPrice(String(cell.price))}
+                                        {isBest && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 inline ml-1 -mt-0.5" />}
+                                      </p>
+                                      {cell.unit === 'L' && <p className="text-[11px] text-gray-500">{fmtPrice(String(cell.norm))}/L</p>}
+                                    </div>
+                                  </button>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
+                            {(r as any).bestCell && (
+                              <div className="bg-emerald-700 text-white px-3 py-1.5 flex items-center justify-between text-xs">
+                                <span className="flex items-center gap-1"><Trophy className="w-3 h-3" /> Melhor</span>
+                                <span className="font-semibold">{fmtPrice(String((r as any).bestCell.price))} · {(r as any).bestCell.supplier}{(r as any).bestCell.pack ? ` · ${(r as any).bestCell.pack}` : ''}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {/* ===== VISÃO DESKTOP (tabela) ===== */}
+                      <div className="overflow-x-auto hidden md:block">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-emerald-50 text-emerald-900">
+                              <th className="text-left px-3 py-2 font-semibold sticky left-0 bg-emerald-50 z-10">Item</th>
+                              {suppliersList.map((s: string, i: number) => (
+                                <th key={i} className="text-right px-3 py-2 font-semibold whitespace-nowrap">{s}</th>
+                              ))}
+                              <th className="text-right px-3 py-2 font-semibold text-emerald-700 whitespace-nowrap">Melhor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rowsArr.map((r, ri) => (
+                              <tr key={ri} className={ri % 2 ? 'bg-gray-50/60' : 'bg-white'}>
+                                <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 bg-inherit whitespace-nowrap">
+                                  {r.label}
+                                  <span className="block text-[10px] text-gray-400 font-normal">{r.unit}</span>
+                                </td>
+                                {suppliersList.map((s: string, si: number) => {
+                                  const cell = r.cells.find(c => c.supplier === s);
+                                  if (!cell) return <td key={si} className="px-3 py-2 text-right text-gray-300">—</td>;
+                                  const isBest = (r as any).bestCell === cell;
+                                  return (
+                                    <td key={si} className={`px-3 py-2 text-right whitespace-nowrap ${isBest ? 'bg-emerald-100/70 font-bold text-emerald-800' : 'text-gray-700'}`}>
+                                      <button
+                                        type="button"
+                                        title="Definir como vencedor deste item"
+                                        onClick={() => {
+                                          const choices: Record<string, { responseId: number; itemIndex: number }> = { ...(manualChoices || {}) };
+                                          choices[r.label] = { responseId: requestDetail.responses[cell.rIdx].id, itemIndex: cell.itemIndex };
+                                          adminSetBestMutation.mutate({ quotationRequestId: requestDetail.id, choices });
+                                        }}
+                                        className="text-left hover:opacity-80"
+                                      >
+                                        <span className="block font-bold">{fmtPrice(String(cell.price))}</span>
+                                        {cell.unit === 'L' && <span className="block text-[10px] font-normal text-gray-500">{fmtPrice(String(cell.norm))}/L</span>}
+                                        {(cell.pack || cell.brand) && (
+                                          <span className="block text-[10px] font-normal text-gray-400">{[cell.brand, cell.pack].filter(Boolean).join(' · ')}</span>
+                                        )}
+                                      </button>
+                                      {isBest && <Star className="w-3 h-3 text-amber-500 fill-amber-500 inline ml-1" />}
+                                    </td>
+                                  );
+                                })}
+                                <td className="px-3 py-2 text-right whitespace-nowrap font-bold text-emerald-700">
+                                  {(r as any).bestCell ? fmtPrice(String((r as any).bestCell.price)) : '—'}
+                                  {(r as any).bestCell && <span className="block text-[10px] font-normal text-gray-400">{(r as any).bestCell.supplier}{(r as any).bestCell.pack ? ` · ${(r as any).bestCell.pack}` : ''}</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-
+                    {/* mapa de melhor preço por grupo (usado para destacar itens nos cards abaixo) */}
+                    {(() => { return null; })()}
                     <p className="text-sm font-medium text-gray-700">{requestDetail.responses.length} resposta(s) recebida(s)</p>
                     {requestDetail.responses.map((resp: any, rIdx: number) => {
                       const total = totals.find((t: any) => t.id === resp.id)?.total || 0;
@@ -951,13 +1177,14 @@ export default function QuotationsPage() {
                             <div className="flex items-start justify-between">
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-gray-800">{resp.supplierName}</p>
+                                  <p className="font-semibold text-gray-800">{resp.tradeName || resp.supplierName}</p>
                                   {isBestTotal && (
                                     <Badge className="bg-green-100 text-green-700 border-green-200 text-xs flex items-center gap-1">
                                       <Trophy className="w-3 h-3" /> Menor Total
                                     </Badge>
                                   )}
                                 </div>
+                                {resp.tradeName && resp.supplierName && resp.tradeName !== resp.supplierName && <p className="text-xs text-gray-400">{resp.supplierName}</p>}
                                 {resp.cnpj && <p className="text-xs text-gray-500">CNPJ: {resp.cnpj}</p>}
                                 {resp.address && <p className="text-xs text-gray-500">{resp.address}</p>}
                               </div>
@@ -973,13 +1200,20 @@ export default function QuotationsPage() {
                                 {resp.sellerEmail && <a href={`mailto:${resp.sellerEmail}`} className="flex items-center gap-1 text-blue-500 hover:underline"><Mail className="w-3 h-3" /> {resp.sellerEmail}</a>}
                               </div>
                             )}
+                            {(resp.paymentTerms || resp.deliveryTerms) && (
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                {resp.paymentTerms && <span className="bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-0.5">💳 {resp.paymentTerms}</span>}
+                                {resp.deliveryTerms && <span className="bg-purple-50 text-purple-700 border border-purple-200 rounded px-2 py-0.5">🚚 {resp.deliveryTerms}</span>}
+                              </div>
+                            )}
                             <div className="mt-3 space-y-2">
                               {resp.items.map((item: ResponseItem, i: number) => {
-                               const key = item.name.toLowerCase().trim();
-                                // Usar fuzzy match para encontrar a chave correta no bestPriceByItem
-                                const matchedKey = Object.keys(bestPriceByItem).find(k => itemNamesMatch(k, item.name)) ?? key;
-                                const isBest = bestPriceByItem[matchedKey]?.supplierId === rIdx;
-                                const itemPrice = parseFloat(item.price);
+                                // Melhor preço normalizado deste item (por grupo nome+embalagem)
+                                const gk = itemGroupKey(item.name, (item as any).packaging);
+                                const grp = rowsMap[gk];
+                                const itemNorm = normalizedUnitPrice(item);
+                                const isBest = !!grp && grp.cells.length > 0 && !isNaN(itemNorm) && Math.abs(itemNorm - Math.min(...grp.cells.map(c => c.norm))) < 0.0001;
+                                const itemPrice = parseFloat(String(item.price).replace(',', '.'));
                                 return (
                                   <div key={i} className={`flex items-center justify-between rounded p-2 text-sm ${isBest ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}>
                                     <div className="flex-1">
@@ -998,8 +1232,50 @@ export default function QuotationsPage() {
                               })}
                             </div>
                             {resp.notes && <p className="text-xs text-gray-500 mt-2 italic border-t pt-2">{resp.notes}</p>}
+                            <div className="mt-3 pt-2 border-t">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-xs text-blue-700 border-blue-300 hover:bg-blue-50 mb-2"
+                                onClick={() => setEditResp({
+                                  id: resp.id,
+                                  supplierName: resp.supplierName || '',
+                                  tradeName: resp.tradeName || '',
+                                  cnpj: resp.cnpj || '',
+                                  address: resp.address || '',
+                                  sellerName: resp.sellerName || '',
+                                  sellerPhone: resp.sellerPhone || '',
+                                  sellerEmail: resp.sellerEmail || '',
+                                  paymentTerms: resp.paymentTerms || '',
+                                  deliveryTerms: resp.deliveryTerms || '',
+                                  productsSold: resp.productsSold || '',
+                                  notes: resp.notes || '',
+                                })}
+                              >
+                                <Pencil className="w-3 h-3 mr-1" /> Editar dados do fornecedor
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                onClick={() => {
+                                  setEditItemsResp(resp);
+                                  setEditItemsList((resp.items || []).map((it: any) => ({
+                                    name: it.name || '',
+                                    quantity: it.quantity || '1',
+                                    unit: it.unit || 'un',
+                                    price: it.price || '',
+                                    brand: it.brand || '',
+                                    packaging: it.packaging || '',
+                                    notes: it.notes || '',
+                                  })));
+                                }}
+                              >
+                                <Package className="w-3 h-3 mr-1" /> Editar itens / preços
+                              </Button>
+                            </div>
                             {resp.responseToken && (
-                              <div className="mt-3 pt-2 border-t">
+                              <div className="mt-1">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1340,6 +1616,166 @@ export default function QuotationsPage() {
             <Button variant="outline" onClick={resetCatForm}>Cancelar</Button>
             <Button onClick={handleSubmitCat} disabled={createCatMutation.isPending || updateCatMutation.isPending}>
               {(createCatMutation.isPending || updateCatMutation.isPending) ? 'Salvando...' : editCatId ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Editar dados do fornecedor na resposta */}
+      <Dialog open={!!editResp} onOpenChange={() => setEditResp(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4" /> Editar fornecedor</DialogTitle>
+          </DialogHeader>
+          {editResp && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2">
+                  <Label className="text-xs">Nome Fantasia</Label>
+                  <Input value={editResp.tradeName} onChange={e => setEditResp((p: any) => ({ ...p, tradeName: e.target.value }))} placeholder="Como conhecemos a loja" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Razão Social</Label>
+                  <Input value={editResp.supplierName} onChange={e => setEditResp((p: any) => ({ ...p, supplierName: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">CNPJ</Label>
+                  <Input value={editResp.cnpj} onChange={e => setEditResp((p: any) => ({ ...p, cnpj: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Cidade/UF</Label>
+                  <Input value={editResp.address} onChange={e => setEditResp((p: any) => ({ ...p, address: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Vendedor</Label>
+                  <Input value={editResp.sellerName} onChange={e => setEditResp((p: any) => ({ ...p, sellerName: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Telefone/WhatsApp</Label>
+                  <Input value={editResp.sellerPhone} onChange={e => setEditResp((p: any) => ({ ...p, sellerPhone: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Formas de pagamento</Label>
+                  <Input value={editResp.paymentTerms} onChange={e => setEditResp((p: any) => ({ ...p, paymentTerms: e.target.value }))} placeholder="Ex: 28 dias, à vista, boleto" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Entrega / frete</Label>
+                  <Input value={editResp.deliveryTerms} onChange={e => setEditResp((p: any) => ({ ...p, deliveryTerms: e.target.value }))} placeholder="Ex: 3 dias, frete grátis" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">O que vende</Label>
+                  <Input value={editResp.productsSold} onChange={e => setEditResp((p: any) => ({ ...p, productsSold: e.target.value }))} placeholder="Ex: óleos, filtros, peças" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Observações</Label>
+                  <Textarea value={editResp.notes} onChange={e => setEditResp((p: any) => ({ ...p, notes: e.target.value }))} rows={2} />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditResp(null)}>Cancelar</Button>
+            <Button
+              disabled={adminUpdateRespMutation.isPending}
+              onClick={() => adminUpdateRespMutation.mutate({
+                responseId: editResp.id,
+                supplierName: editResp.supplierName,
+                tradeName: editResp.tradeName,
+                cnpj: editResp.cnpj,
+                address: editResp.address,
+                sellerName: editResp.sellerName,
+                sellerPhone: editResp.sellerPhone,
+                sellerEmail: editResp.sellerEmail,
+                paymentTerms: editResp.paymentTerms,
+                deliveryTerms: editResp.deliveryTerms,
+                productsSold: editResp.productsSold,
+                notes: editResp.notes,
+              })}
+            >
+              {adminUpdateRespMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Editar itens/preços de uma resposta */}
+      <Dialog open={!!editItemsResp} onOpenChange={() => setEditItemsResp(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Package className="w-4 h-4" /> Itens — {editItemsResp?.tradeName || editItemsResp?.supplierName}</DialogTitle>
+          </DialogHeader>
+          {editItemsResp && (
+            <div className="space-y-3">
+              {editItemsList.map((it: any, idx: number) => (
+                <div key={idx} className="border rounded-lg p-2 space-y-2 bg-gray-50/60">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="flex-1 h-8 text-xs"
+                      value={it.name}
+                      onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))}
+                      placeholder="Produto"
+                    />
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500" onClick={() => setEditItemsList(editItemsList.filter((_, i) => i !== idx))}>
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px]">Qtd</Label>
+                      <Input className="h-8 text-xs" value={it.quantity} onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Preço unit. (R$)</Label>
+                      <Input className="h-8 text-xs" value={it.price} onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, price: e.target.value } : x))} placeholder="0,00" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Embalagem</Label>
+                      <select
+                        className="h-8 w-full text-xs border rounded px-1 bg-white"
+                        value={it.packaging}
+                        onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, packaging: e.target.value } : x))}
+                      >
+                        <option value="">—</option>
+                        <option value="1L">1L</option>
+                        <option value="5L">5L</option>
+                        <option value="10L">10L</option>
+                        <option value="20L">20L (galão)</option>
+                        <option value="200L">200L (tambor)</option>
+                        <option value="Unidade">Unidade</option>
+                        <option value="Kg">Kg</option>
+                        <option value="Caixa">Caixa</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px]">Marca</Label>
+                      <Input className="h-8 text-xs" value={it.brand} onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, brand: e.target.value } : x))} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Obs.</Label>
+                      <Input className="h-8 text-xs" value={it.notes} onChange={e => setEditItemsList(editItemsList.map((x, i) => i === idx ? { ...x, notes: e.target.value } : x))} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" className="w-full" onClick={() => setEditItemsList([...editItemsList, { name: '', quantity: '1', unit: 'un', price: '', brand: '', packaging: '', notes: '' }])}>
+                <Plus className="w-3 h-3 mr-1" /> Adicionar item
+              </Button>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditItemsResp(null)}>Cancelar</Button>
+            <Button
+              disabled={adminUpdateItemsMutation.isPending}
+              onClick={() => {
+                const valid = editItemsList.filter((i: any) => i.name.trim() && String(i.price).trim());
+                if (valid.length === 0) { toast.error('Informe ao menos um item com preço'); return; }
+                adminUpdateItemsMutation.mutate({ responseId: editItemsResp.id, items: valid });
+              }}
+            >
+              {adminUpdateItemsMutation.isPending ? 'Salvando...' : 'Salvar itens'}
             </Button>
           </DialogFooter>
         </DialogContent>

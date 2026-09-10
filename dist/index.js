@@ -417,7 +417,13 @@ var init_schema = __esm({
       // Recebimento do COMPRADOR (destino) — usado só por "Cargas Entregues a Receber" em Contas
       // a Receber, para compradores sem boleto/NF (ex: Enerbio). Não confundir com payment_status,
       // que controla o pagamento da BTREE ao cliente/fornecedor (fluxo de dinheiro oposto).
-      buyerPaidAt: timestamp("buyer_paid_at", { mode: "string" })
+      buyerPaidAt: timestamp("buyer_paid_at", { mode: "string" }),
+      // Token único e imprevisível pra página pública de upload de NF (link enviado por WhatsApp
+      // ao responsável pela emissão) — sem login, só enxerga/altera esta carga específica.
+      nfUploadToken: varchar("nf_upload_token", { length: 64 }),
+      // Colaborador responsável por esta carga (recebe o aviso via WhatsApp quando a NF é
+      // anexada) — pré-preenchido com quem registrou a carga, mas editável.
+      responsavelCargaId: int("responsavel_carga_id")
     });
     cargoShipments = mysqlTable("cargo_shipments", {
       id: int().autoincrement().notNull(),
@@ -752,6 +758,9 @@ var init_schema = __esm({
       defaultHeightM: varchar("default_height_m", { length: 20 }),
       defaultWidthM: varchar("default_width_m", { length: 20 }),
       defaultLengthM: varchar("default_length_m", { length: 20 }),
+      // Peso previsto (toneladas) — só relevante pra equipamentos do tipo Caminhões, usado como
+      // referência ao registrar cargas (peso esperado antes da pesagem real).
+      expectedWeightTon: varchar("expected_weight_ton", { length: 20 }),
       category: mysqlEnum(["maquina", "veiculo", "caminhao"]).default("maquina"),
       accumulatedHours: varchar("accumulated_hours", { length: 20 }).default("0"),
       accumulatedKm: varchar("accumulated_km", { length: 20 }).default("0"),
@@ -1703,6 +1712,7 @@ var init_schema = __esm({
       email: varchar({ length: 255 }),
       website: varchar({ length: 500 }),
       notes: text(),
+      productsSold: varchar("products_sold", { length: 500 }),
       active: tinyint().default(1).notNull(),
       sellerName: varchar("seller_name", { length: 255 }),
       pixKey: varchar("pix_key", { length: 255 }),
@@ -1790,18 +1800,24 @@ var init_schema = __esm({
       expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
       status: mysqlEnum(["ativa", "respondida", "expirada", "cancelada"]).default("ativa").notNull(),
       notes: text(),
+      bestChoices: text("best_choices"),
       createdBy: int("created_by").references(() => users.id),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
     });
     quotationResponses = mysqlTable("quotation_responses", {
       id: int().autoincrement().primaryKey().notNull(),
       quotationRequestId: int("quotation_request_id").notNull().references(() => quotationRequests.id),
+      supplierId: int("supplier_id"),
       supplierName: varchar("supplier_name", { length: 255 }).notNull(),
+      tradeName: varchar("trade_name", { length: 255 }),
       cnpj: varchar({ length: 30 }),
       address: text(),
       sellerName: varchar("seller_name", { length: 255 }),
       sellerPhone: varchar("seller_phone", { length: 30 }),
       sellerEmail: varchar("seller_email", { length: 255 }),
+      paymentTerms: varchar("payment_terms", { length: 255 }),
+      deliveryTerms: varchar("delivery_terms", { length: 255 }),
+      productsSold: varchar("products_sold", { length: 500 }),
       itemsJson: text("items_json").notNull(),
       // JSON array: [{name, quantity, unit, price, brand, notes}]
       notes: text(),
@@ -2289,15 +2305,84 @@ var init_cloudinary = __esm({
   }
 });
 
+// server/utils/whatsapp.ts
+function normalizePhone(raw) {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("55")) return digits;
+  return `55${digits}`;
+}
+async function sendWhatsAppTemplate(params) {
+  try {
+    const token = process.env.META_WA_TOKEN;
+    const phoneNumberId = process.env.META_WA_PHONE_ID;
+    const to = normalizePhone(params.toPhone);
+    if (!token || !phoneNumberId) {
+      console.log("[WhatsApp] META_WA_TOKEN/META_WA_PHONE_ID n\xE3o configurados \u2014 envio pulado.");
+      return;
+    }
+    if (!to) {
+      console.log("[WhatsApp] Destinat\xE1rio sem telefone cadastrado \u2014 envio pulado.");
+      return;
+    }
+    if (!params.templateName) {
+      console.log("[WhatsApp] Nome do template n\xE3o configurado (vari\xE1vel de ambiente ausente) \u2014 envio pulado.");
+      return;
+    }
+    const body = {
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name: params.templateName,
+        language: { code: params.languageCode || "pt_BR" },
+        components: params.bodyParams.length > 0 ? [
+          {
+            type: "body",
+            parameters: params.bodyParams.map((p) => ({ type: "text", text: String(p) }))
+          }
+        ] : void 0
+      }
+    };
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error(`[WhatsApp] Falha ao enviar (HTTP ${res.status}): ${errText}`);
+      return;
+    }
+    console.log(`[WhatsApp] Mensagem enviada (template ${params.templateName}) para ${to}.`);
+  } catch (err) {
+    console.error("[WhatsApp] Erro ao enviar mensagem:", err);
+  }
+}
+var GRAPH_API_VERSION;
+var init_whatsapp = __esm({
+  "server/utils/whatsapp.ts"() {
+    "use strict";
+    GRAPH_API_VERSION = "v21.0";
+  }
+});
+
 // server/routers/notifications.ts
 var notifications_exports = {};
 __export(notifications_exports, {
   createNotification: () => createNotification,
   findUserByName: () => findUserByName,
   findUsersByRole: () => findUsersByRole,
+  formatPesoOuVolume: () => formatPesoOuVolume,
   notificationsRouter: () => notificationsRouter,
   notifyAdmComercial: () => notifyAdmComercial,
   notifyFinanceiro: () => notifyFinanceiro,
+  notifyNfResponsavelNovaCarga: () => notifyNfResponsavelNovaCarga,
+  notifyResponsavelCargaNfAnexada: () => notifyResponsavelCargaNfAnexada,
   notifyUsers: () => notifyUsers
 });
 import { z as z5 } from "zod";
@@ -2387,11 +2472,85 @@ async function notifyAdmComercial(params) {
     });
   }
 }
+async function getNfResponsavelRecipients() {
+  const conn = await getConnection();
+  try {
+    const [rows] = await conn.execute(`SELECT value FROM notification_settings WHERE \`key\` = 'cargoNfResponsible'`);
+    const raw = rows?.[0]?.value;
+    if (!raw) return [];
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const rawRecipients = Array.isArray(parsed?.recipients) ? parsed.recipients : parsed?.collaboratorId || parsed?.manualPhone ? [parsed] : [];
+    if (rawRecipients.length === 0) return [];
+    const result = [];
+    for (const r of rawRecipients) {
+      if (r?.collaboratorId) {
+        const [collabRows] = await conn.execute(`SELECT name, phone FROM collaborators WHERE id = ? LIMIT 1`, [r.collaboratorId]);
+        const collab = collabRows?.[0];
+        if (collab?.phone) result.push({ name: collab.name, phone: collab.phone });
+      } else if (r?.manualPhone) {
+        result.push({ name: r.manualName || "Respons\xE1vel", phone: r.manualPhone });
+      }
+    }
+    return result;
+  } catch {
+    return [];
+  } finally {
+    await conn.end();
+  }
+}
+function formatPesoOuVolume(weightNetKg, volumeM3, unit) {
+  const peso = weightNetKg ? parseFloat(weightNetKg) : 0;
+  const vol = volumeM3 ? parseFloat(volumeM3) : 0;
+  if (unit === "ton") return `${(peso > 0 ? peso / 1e3 : vol).toFixed(2)} ton`;
+  if (unit === "m3") return `${(vol > 0 ? vol : peso / 1e3).toFixed(2)} m\xB3`;
+  return peso > 0 ? `${(peso / 1e3).toFixed(2)} ton` : `${vol.toFixed(2)} m\xB3`;
+}
+async function notifyNfResponsavelNovaCarga(params) {
+  const recipients = await getNfResponsavelRecipients();
+  if (recipients.length === 0) {
+    console.log("[notifyNfResponsavelNovaCarga] Nenhum respons\xE1vel pela emiss\xE3o de NF configurado (ou sem telefone) \u2014 aviso pulado.");
+    return;
+  }
+  const pesoOuVolume = formatPesoOuVolume(params.weightNetKg, params.volumeM3, params.unit);
+  const baseUrl = params.origin || "https://btreeambiental.com";
+  const link = `${baseUrl}/nf-upload/${params.uploadToken}`;
+  for (const recipient of recipients) {
+    await sendWhatsAppTemplate({
+      toPhone: recipient.phone,
+      templateName: process.env.WHATSAPP_TEMPLATE_NOVA_CARGA,
+      bodyParams: [params.vehiclePlate, pesoOuVolume, params.destination || "N/I", String(params.cargoId), link]
+    });
+  }
+}
+async function notifyResponsavelCargaNfAnexada(params) {
+  if (!params.responsavelCargaId) return;
+  const conn = await getConnection();
+  let phone = null;
+  let name = "";
+  try {
+    const [rows] = await conn.execute(`SELECT phone, name FROM collaborators WHERE id = ? LIMIT 1`, [params.responsavelCargaId]);
+    phone = rows?.[0]?.phone ?? null;
+    name = rows?.[0]?.name ?? "";
+  } finally {
+    await conn.end();
+  }
+  if (!phone) {
+    console.log(`[notifyResponsavelCargaNfAnexada] Respons\xE1vel (${name || params.responsavelCargaId}) sem telefone \u2014 aviso pulado.`);
+    return;
+  }
+  const pesoOuVolume = formatPesoOuVolume(params.weightNetKg, params.volumeM3, params.unit);
+  await sendWhatsAppTemplate({
+    toPhone: phone,
+    templateName: process.env.WHATSAPP_TEMPLATE_NF_ANEXADA,
+    bodyParams: [String(params.cargoId), params.vehiclePlate || "N/I", pesoOuVolume, params.destination || "N/I", params.invoiceUrl || "N/D"]
+  });
+}
 var notificationsRouter;
 var init_notifications = __esm({
   "server/routers/notifications.ts"() {
     "use strict";
     init_trpc();
+    init_whatsapp();
     notificationsRouter = router({
       // List notifications for current user
       list: protectedProcedure.input(z5.object({
@@ -2545,6 +2704,447 @@ var init_autoFinancial = __esm({
     "use strict";
     init_db();
     init_schema();
+  }
+});
+
+// server/_core/llm.ts
+async function invokeLLM(params) {
+  assertApiKey();
+  const {
+    messages,
+    tools,
+    toolChoice,
+    tool_choice,
+    outputSchema,
+    output_schema,
+    responseFormat,
+    response_format
+  } = params;
+  const payload = {
+    model: "gemini-2.5-flash",
+    messages: messages.map(normalizeMessage)
+  };
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+  const normalizedToolChoice = normalizeToolChoice(
+    toolChoice || tool_choice,
+    tools
+  );
+  if (normalizedToolChoice) {
+    payload.tool_choice = normalizedToolChoice;
+  }
+  payload.max_tokens = 32768;
+  payload.thinking = {
+    "budget_tokens": 128
+  };
+  const normalizedResponseFormat = normalizeResponseFormat({
+    responseFormat,
+    response_format,
+    outputSchema,
+    output_schema
+  });
+  if (normalizedResponseFormat) {
+    payload.response_format = normalizedResponseFormat;
+  }
+  const response = await fetch(resolveApiUrl(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${ENV.forgeApiKey}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `LLM invoke failed: ${response.status} ${response.statusText} \u2013 ${errorText}`
+    );
+  }
+  return await response.json();
+}
+var ensureArray, normalizeContentPart, normalizeMessage, normalizeToolChoice, resolveApiUrl, assertApiKey, normalizeResponseFormat;
+var init_llm = __esm({
+  "server/_core/llm.ts"() {
+    "use strict";
+    init_env();
+    ensureArray = (value) => Array.isArray(value) ? value : [value];
+    normalizeContentPart = (part) => {
+      if (typeof part === "string") {
+        return { type: "text", text: part };
+      }
+      if (part.type === "text") {
+        return part;
+      }
+      if (part.type === "image_url") {
+        return part;
+      }
+      if (part.type === "file_url") {
+        return part;
+      }
+      throw new Error("Unsupported message content part");
+    };
+    normalizeMessage = (message) => {
+      const { role, name, tool_call_id } = message;
+      if (role === "tool" || role === "function") {
+        const content = ensureArray(message.content).map((part) => typeof part === "string" ? part : JSON.stringify(part)).join("\n");
+        return {
+          role,
+          name,
+          tool_call_id,
+          content
+        };
+      }
+      const contentParts = ensureArray(message.content).map(normalizeContentPart);
+      if (contentParts.length === 1 && contentParts[0].type === "text") {
+        return {
+          role,
+          name,
+          content: contentParts[0].text
+        };
+      }
+      return {
+        role,
+        name,
+        content: contentParts
+      };
+    };
+    normalizeToolChoice = (toolChoice, tools) => {
+      if (!toolChoice) return void 0;
+      if (toolChoice === "none" || toolChoice === "auto") {
+        return toolChoice;
+      }
+      if (toolChoice === "required") {
+        if (!tools || tools.length === 0) {
+          throw new Error(
+            "tool_choice 'required' was provided but no tools were configured"
+          );
+        }
+        if (tools.length > 1) {
+          throw new Error(
+            "tool_choice 'required' needs a single tool or specify the tool name explicitly"
+          );
+        }
+        return {
+          type: "function",
+          function: { name: tools[0].function.name }
+        };
+      }
+      if ("name" in toolChoice) {
+        return {
+          type: "function",
+          function: { name: toolChoice.name }
+        };
+      }
+      return toolChoice;
+    };
+    resolveApiUrl = () => ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0 ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions` : "https://forge.manus.im/v1/chat/completions";
+    assertApiKey = () => {
+      if (!ENV.forgeApiKey) {
+        throw new Error("OPENAI_API_KEY is not configured");
+      }
+    };
+    normalizeResponseFormat = ({
+      responseFormat,
+      response_format,
+      outputSchema,
+      output_schema
+    }) => {
+      const explicitFormat = responseFormat || response_format;
+      if (explicitFormat) {
+        if (explicitFormat.type === "json_schema" && !explicitFormat.json_schema?.schema) {
+          throw new Error(
+            "responseFormat json_schema requires a defined schema object"
+          );
+        }
+        return explicitFormat;
+      }
+      const schema = outputSchema || output_schema;
+      if (!schema) return void 0;
+      if (!schema.name || !schema.schema) {
+        throw new Error("outputSchema requires both name and schema");
+      }
+      return {
+        type: "json_schema",
+        json_schema: {
+          name: schema.name,
+          schema: schema.schema,
+          ...typeof schema.strict === "boolean" ? { strict: schema.strict } : {}
+        }
+      };
+    };
+  }
+});
+
+// server/utils/nfeXmlExtraction.ts
+import { XMLParser } from "fast-xml-parser";
+function extractNfDataFromXml(xml) {
+  const fallback = { invoiceNumber: null, quantity: null, unit: null };
+  try {
+    const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
+    const parsed = parser.parse(xml);
+    const nNF = findFirstTag(parsed, "nNF");
+    const invoiceNumber = nNF ? String(nNF).trim() : null;
+    const det = findFirstTag(parsed, "det");
+    const prod = det ? Array.isArray(det) ? det[0]?.prod : det.prod : null;
+    const qCom = prod?.qCom ?? findFirstTag(parsed, "qCom");
+    const uComRaw = prod?.uCom ?? findFirstTag(parsed, "uCom");
+    const uCom = uComRaw ? String(uComRaw).toUpperCase().trim() : null;
+    let quantity = null;
+    let unit = null;
+    if (qCom !== null && qCom !== void 0 && uCom) {
+      const qtyNum = parseFloat(String(qCom));
+      if (!isNaN(qtyNum)) {
+        if (uCom === "TON" || uCom === "T" || uCom === "TN") {
+          quantity = String(qtyNum);
+          unit = "ton";
+        } else if (uCom === "KG") {
+          quantity = String(qtyNum / 1e3);
+          unit = "ton";
+        } else if (uCom === "M3" || uCom === "M\xB3" || uCom === "MC") {
+          quantity = String(qtyNum);
+          unit = "m3";
+        }
+      }
+    }
+    if (!quantity) {
+      const pesoL = findFirstTag(parsed, "pesoL");
+      if (pesoL !== null && pesoL !== void 0) {
+        const pesoNum = parseFloat(String(pesoL));
+        if (!isNaN(pesoNum) && pesoNum > 0) {
+          quantity = String(pesoNum / 1e3);
+          unit = "ton";
+        }
+      }
+    }
+    return { invoiceNumber, quantity, unit };
+  } catch (e) {
+    console.error("[extractNfDataFromXml] Falha ao interpretar o XML:", e);
+    return fallback;
+  }
+}
+function findFirstTag(obj, tagName) {
+  if (obj === null || obj === void 0 || typeof obj !== "object") return void 0;
+  if (tagName in obj) return obj[tagName];
+  for (const key of Object.keys(obj)) {
+    const value = obj[key];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = findFirstTag(item, tagName);
+        if (found !== void 0) return found;
+      }
+    } else if (typeof value === "object") {
+      const found = findFirstTag(value, tagName);
+      if (found !== void 0) return found;
+    }
+  }
+  return void 0;
+}
+var init_nfeXmlExtraction = __esm({
+  "server/utils/nfeXmlExtraction.ts"() {
+    "use strict";
+  }
+});
+
+// server/utils/nfePdfTextExtraction.ts
+import { PDFParse } from "pdf-parse";
+async function extractNfDataFromPdfText(buffer) {
+  const fallback = { invoiceNumber: null, quantity: null, unit: null };
+  try {
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    await parser.destroy();
+    const text2 = result.text || "";
+    if (!text2.trim()) return fallback;
+    let invoiceNumber = null;
+    const candidates = [
+      ...(text2.match(/\d{4}(?:[ \t]\d{4}){10}/g) || []).map((m) => m.replace(/[ \t]/g, "")),
+      ...text2.match(/\d{44}/g) || []
+    ];
+    for (const digits of candidates) {
+      if (digits.length === 44 && validateNfeAccessKey(digits)) {
+        invoiceNumber = digits.slice(25, 34).replace(/^0+/, "") || "0";
+        break;
+      }
+    }
+    if (!invoiceNumber) {
+      const labelMatch = text2.match(/N[ºo°]\.?\s*[:.]?\s*(\d{1,3}(?:[.\s]\d{3}){0,2})/i);
+      if (labelMatch) {
+        const digits = labelMatch[1].replace(/\D/g, "").replace(/^0+/, "") || "0";
+        if (digits.length > 0 && digits.length <= 9) invoiceNumber = digits;
+      }
+    }
+    let quantity = null;
+    let unit = null;
+    const itemMatch = text2.match(/\b(TON|M3|M³|KG)\b\s+(\d+(?:[.,]\d+)?)/i);
+    if (itemMatch) {
+      const rawUnit = itemMatch[1].toUpperCase();
+      const num = parseFloat(itemMatch[2].replace(",", "."));
+      if (!isNaN(num) && num > 0) {
+        if (rawUnit === "TON") {
+          quantity = String(num);
+          unit = "ton";
+        } else if (rawUnit === "KG") {
+          quantity = String(num / 1e3);
+          unit = "ton";
+        } else if (rawUnit === "M3" || rawUnit === "M\xB3") {
+          quantity = String(num);
+          unit = "m3";
+        }
+      }
+    }
+    if (!quantity) {
+      const pesoMatch = text2.match(/PESO\s*L[IÍ]QUIDO[^\d]{0,15}([\d.,]+)/i);
+      if (pesoMatch) {
+        const num = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
+        if (!isNaN(num) && num > 0) {
+          quantity = num > 100 ? String(num / 1e3) : String(num);
+          unit = "ton";
+        }
+      }
+    }
+    return { invoiceNumber, quantity, unit };
+  } catch (e) {
+    console.error("[extractNfDataFromPdfText] Falha ao ler texto do PDF:", e);
+    return fallback;
+  }
+}
+function validateNfeAccessKey(key44) {
+  if (!/^\d{44}$/.test(key44)) return false;
+  const digits = key44.slice(0, 43).split("").map(Number);
+  const weights = [2, 3, 4, 5, 6, 7, 8, 9];
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    sum += digits[digits.length - 1 - i] * weights[i % weights.length];
+  }
+  const remainder = sum % 11;
+  const expectedDv = remainder < 2 ? 0 : 11 - remainder;
+  return expectedDv === Number(key44[43]);
+}
+var init_nfePdfTextExtraction = __esm({
+  "server/utils/nfePdfTextExtraction.ts"() {
+    "use strict";
+  }
+});
+
+// server/utils/nfExtraction.ts
+var nfExtraction_exports = {};
+__export(nfExtraction_exports, {
+  extractNfDataFromFile: () => extractNfDataFromFile
+});
+function isComplete(data) {
+  return !!data.invoiceNumber && !!data.quantity && !!data.unit;
+}
+async function extractNfDataFromFile(fileUrl, mimeType) {
+  const fallback = { invoiceNumber: null, quantity: null, unit: null };
+  const isXml = (mimeType || "").includes("xml") || fileUrl.toLowerCase().endsWith(".xml");
+  if (isXml) {
+    try {
+      const res = await fetch(fileUrl);
+      if (res.ok) {
+        const xmlText = await res.text();
+        return extractNfDataFromXml(xmlText);
+      }
+      console.error("[extractNfDataFromFile] Falha ao baixar XML da NF:", res.status);
+    } catch (e) {
+      console.error("[extractNfDataFromFile] Erro ao baixar/ler XML da NF:", e);
+    }
+    return fallback;
+  }
+  const isPdf = (mimeType || "").includes("pdf") || fileUrl.toLowerCase().endsWith(".pdf");
+  if (isPdf) {
+    try {
+      const res = await fetch(fileUrl);
+      if (res.ok) {
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const fromText = await extractNfDataFromPdfText(buffer);
+        if (isComplete(fromText)) return fromText;
+        const fromAi = await extractNfDataFromAi(fileUrl, mimeType);
+        return {
+          invoiceNumber: fromText.invoiceNumber || fromAi.invoiceNumber,
+          quantity: fromText.quantity || fromAi.quantity,
+          unit: fromText.unit || fromAi.unit
+        };
+      }
+      console.error("[extractNfDataFromFile] Falha ao baixar PDF da NF:", res.status);
+    } catch (e) {
+      console.error("[extractNfDataFromFile] Erro ao ler texto do PDF da NF:", e);
+    }
+  }
+  return extractNfDataFromAi(fileUrl, mimeType);
+}
+async function extractNfDataFromAi(fileUrl, mimeType) {
+  const fallback = { invoiceNumber: null, quantity: null, unit: null };
+  try {
+    const isPdf = (mimeType || "").includes("pdf") || fileUrl.toLowerCase().endsWith(".pdf");
+    const fileContent = isPdf ? { type: "file_url", file_url: { url: fileUrl, mime_type: "application/pdf" } } : { type: "image_url", image_url: { url: fileUrl, detail: "high" } };
+    const result = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `Voc\xEA \xE9 um assistente especializado em extrair dados de notas fiscais brasileiras de venda de madeira/biomassa.
+Analise o documento e extraia:
+- invoiceNumber: n\xFAmero da nota fiscal (apenas n\xFAmeros)
+- quantity: quantidade/peso l\xEDquido da mercadoria (apenas n\xFAmeros, use ponto decimal, ex: 63.36)
+- unit: "ton" se a quantidade estiver em toneladas/kg (converta kg para toneladas dividindo por 1000), ou "m3" se estiver em metros c\xFAbicos/est\xE9reos
+Retorne APENAS o JSON. Se um campo n\xE3o for encontrado com certeza, use null.`
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extraia os dados desta nota fiscal:" },
+            fileContent
+          ]
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "nf_data",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              invoiceNumber: { type: ["string", "null"] },
+              quantity: { type: ["string", "null"] },
+              unit: { type: ["string", "null"], enum: ["ton", "m3", null] }
+            },
+            required: ["invoiceNumber", "quantity", "unit"],
+            additionalProperties: false
+          }
+        }
+      }
+    });
+    const content = result.choices?.[0]?.message?.content;
+    let extracted = null;
+    try {
+      extracted = typeof content === "string" ? JSON.parse(content) : null;
+    } catch {
+      const jsonMatch = typeof content === "string" ? content.match(/\{[\s\S]*\}/) : null;
+      if (jsonMatch) {
+        try {
+          extracted = JSON.parse(jsonMatch[0]);
+        } catch {
+        }
+      }
+    }
+    if (!extracted) return fallback;
+    return {
+      invoiceNumber: extracted.invoiceNumber || null,
+      quantity: extracted.quantity || null,
+      unit: extracted.unit === "ton" || extracted.unit === "m3" ? extracted.unit : null
+    };
+  } catch (e) {
+    console.error("[extractNfDataFromFile] Falha na extra\xE7\xE3o via IA:", e);
+    return fallback;
+  }
+}
+var init_nfExtraction = __esm({
+  "server/utils/nfExtraction.ts"() {
+    "use strict";
+    init_llm();
+    init_nfeXmlExtraction();
+    init_nfePdfTextExtraction();
   }
 });
 
@@ -5482,6 +6082,7 @@ var sectorsRouter = router({
       defaultHeightM: equipment.defaultHeightM,
       defaultWidthM: equipment.defaultWidthM,
       defaultLengthM: equipment.defaultLengthM,
+      expectedWeightTon: equipment.expectedWeightTon,
       category: equipment.category,
       isThirdParty: equipment.isThirdParty,
       thirdPartyOwner: equipment.thirdPartyOwner,
@@ -5519,6 +6120,7 @@ var sectorsRouter = router({
     defaultHeightM: z3.string().optional(),
     defaultWidthM: z3.string().optional(),
     defaultLengthM: z3.string().optional(),
+    expectedWeightTon: z3.string().optional(),
     invoiceUrl: z3.string().optional(),
     documentUrl: z3.string().optional(),
     insuranceUrl: z3.string().optional(),
@@ -5572,6 +6174,7 @@ var sectorsRouter = router({
     defaultHeightM: z3.string().optional().nullable(),
     defaultWidthM: z3.string().optional().nullable(),
     defaultLengthM: z3.string().optional().nullable(),
+    expectedWeightTon: z3.string().optional().nullable(),
     invoiceUrl: z3.string().optional().nullable(),
     documentUrl: z3.string().optional().nullable(),
     insuranceUrl: z3.string().optional().nullable(),
@@ -5775,6 +6378,32 @@ async function getDirectConnection() {
   } : process.env.DATABASE_URL;
   const conn = await mysql3.createConnection(connConfig);
   return conn;
+}
+async function resolveDestinationUnit(db, destinationId) {
+  if (!destinationId) return null;
+  const realId = destinationId >= 1e4 ? destinationId - 1e4 : destinationId;
+  try {
+    const [row] = await db.select({
+      isBuyer: cargoDestinations.isBuyer,
+      unit: cargoDestinations.unit,
+      priceType: cargoDestinations.priceType
+    }).from(cargoDestinations).where(eq6(cargoDestinations.id, realId)).limit(1);
+    if (!row) return null;
+    const value = row.isBuyer ? row.unit : row.priceType;
+    return value === "m3" || value === "ton" ? value : null;
+  } catch {
+    return null;
+  }
+}
+async function getExpectedWeightTon(db, vehicleId) {
+  if (!vehicleId) return 0;
+  try {
+    const [truck] = await db.select({ expectedWeightTon: equipment.expectedWeightTon }).from(equipment).where(eq6(equipment.id, vehicleId)).limit(1);
+    const val = truck?.expectedWeightTon ? parseFloat(String(truck.expectedWeightTon).replace(",", ".")) : 0;
+    return isNaN(val) ? 0 : val;
+  } catch {
+    return 0;
+  }
 }
 async function autoDeductAdvanceForCargo(db, cargoId) {
   if (!db) return;
@@ -6158,6 +6787,7 @@ var cargoLoadsRouter = router({
       paidAt: cargoLoads.paidAt,
       humidity: cargoLoads.humidity,
       deliveryDate: cargoLoads.deliveryDate,
+      responsavelCargaId: cargoLoads.responsavelCargaId,
       // Joins
       clientNameJoined: clients.name,
       destinationNameJoined: cargoDestinations.name,
@@ -6347,8 +6977,12 @@ var cargoLoadsRouter = router({
     // MIME type do arquivo da NF
     noteQuantity: z6.string().optional(),
     // Quantidade da nota (se diferente da carga)
-    noteUnit: z6.enum(["m3", "ton"]).optional()
+    noteUnit: z6.enum(["m3", "ton"]).optional(),
     // Unidade da nota (se diferente do destino)
+    responsavelCargaId: z6.number().nullable().optional(),
+    // Colaborador responsável pela carga (padrão: quem registrou)
+    origin: z6.string().optional()
+    // window.location.origin do cliente, pra montar o link de upload de NF certo (local/staging/produção)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -6468,16 +7102,10 @@ var cargoLoadsRouter = router({
         }
       }
       const vol = parseFloat((input.volumeM3 || "0").replace(",", "."));
-      const pesoTon = input.weightNetKg ? parseFloat(input.weightNetKg.replace(",", ".")) / 1e3 : 0;
-      let destPriceType = "ton";
-      if (input.destinationId) {
-        try {
-          const [dest] = await db.select({ priceType: cargoDestinations.priceType }).from(cargoDestinations).where(eq6(cargoDestinations.id, input.destinationId)).limit(1);
-          if (dest?.priceType) destPriceType = dest.priceType;
-        } catch {
-        }
-      }
-      const quantityType = input.noteUnit || (destPriceType === "m3" ? "m3" : "ton");
+      let pesoTon = input.weightNetKg ? parseFloat(input.weightNetKg.replace(",", ".")) / 1e3 : 0;
+      if (pesoTon <= 0) pesoTon = await getExpectedWeightTon(db, input.vehicleId);
+      const destUnit = await resolveDestinationUnit(db, input.destinationId);
+      const quantityType = input.noteUnit || destUnit || "ton";
       const noteQty = input.noteQuantity ? parseFloat(input.noteQuantity.replace(",", ".")) : 0;
       const quantity = noteQty > 0 ? String(noteQty) : quantityType === "m3" ? String(vol > 0 ? vol : pesoTon) : String(pesoTon > 0 ? pesoTon : vol);
       let locationName = "";
@@ -6517,7 +7145,45 @@ var cargoLoadsRouter = router({
     } catch (e) {
       console.error("[cargoLoads.create] Erro ao gerar a\xE7\xE3o automaticamente:", e);
     }
-    return { success: true };
+    let createdId = null;
+    try {
+      const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc3(cargoLoads.id)).limit(1);
+      createdId = newCargo?.id ?? null;
+      if (createdId) {
+        const crypto3 = await import("crypto");
+        const token = crypto3.randomBytes(24).toString("hex");
+        let responsavelCargaId = input.responsavelCargaId ?? null;
+        if (responsavelCargaId === null && input.responsavelCargaId === void 0) {
+          const [collab] = await db.select({ id: collaborators.id }).from(collaborators).where(eq6(collaborators.userId, ctx.user.id)).limit(1);
+          responsavelCargaId = collab?.id ?? null;
+        }
+        await db.update(cargoLoads).set({
+          nfUploadToken: token,
+          responsavelCargaId
+        }).where(eq6(cargoLoads.id, createdId));
+        const { notifyNfResponsavelNovaCarga: notifyNfResponsavelNovaCarga2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+        const notifyUnit = input.noteUnit || await resolveDestinationUnit(db, input.destinationId);
+        let notifyWeightNetKg = input.weightNetKg;
+        if (!notifyWeightNetKg || parseFloat(notifyWeightNetKg.replace(",", ".")) <= 0) {
+          const expectedTon = await getExpectedWeightTon(db, input.vehicleId);
+          if (expectedTon > 0) notifyWeightNetKg = String(expectedTon * 1e3);
+        }
+        notifyNfResponsavelNovaCarga2({
+          db,
+          cargoId: createdId,
+          vehiclePlate: input.vehiclePlate || "N/I",
+          volumeM3: input.volumeM3,
+          weightNetKg: notifyWeightNetKg,
+          unit: notifyUnit,
+          destination: input.destination || "",
+          uploadToken: token,
+          origin: input.origin
+        }).catch((e) => console.error("[cargoLoads.create] Erro ao notificar respons\xE1vel NF:", e));
+      }
+    } catch (e) {
+      console.error("[cargoLoads.create] Erro ao gerar token/notificar NF:", e);
+    }
+    return { success: true, id: createdId };
   }),
   update: protectedProcedure.input(z6.object({
     id: z6.number(),
@@ -6526,6 +7192,7 @@ var cargoLoadsRouter = router({
     vehiclePlate: z6.string().optional(),
     driverCollaboratorId: z6.number().optional(),
     driverName: z6.string().optional(),
+    responsavelCargaId: z6.number().nullable().optional(),
     heightM: z6.string().optional(),
     widthM: z6.string().optional(),
     lengthM: z6.string().optional(),
@@ -6563,20 +7230,44 @@ var cargoLoadsRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    if (input.invoiceNumber && input.invoiceNumber.trim() !== "") {
+    const [existingCargo] = await db.select({
+      invoiceUrl: cargoLoads.invoiceUrl,
+      responsavelCargaId: cargoLoads.responsavelCargaId,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      volumeM3: cargoLoads.volumeM3,
+      weightNetKg: cargoLoads.weightNetKg,
+      destination: cargoLoads.destination,
+      destinationId: cargoLoads.destinationId
+    }).from(cargoLoads).where(eq6(cargoLoads.id, input.id)).limit(1);
+    let effectiveInvoiceNumber = input.invoiceNumber?.trim() || void 0;
+    let effectiveNoteQuantity = input.noteQuantity;
+    let effectiveNoteUnit = input.noteUnit || await resolveDestinationUnit(db, input.destinationId ?? existingCargo?.destinationId);
+    if (existingCargo?.invoiceUrl && (!effectiveInvoiceNumber || !effectiveNoteQuantity)) {
+      try {
+        const { extractNfDataFromFile: extractNfDataFromFile2 } = await Promise.resolve().then(() => (init_nfExtraction(), nfExtraction_exports));
+        const extracted = await extractNfDataFromFile2(existingCargo.invoiceUrl);
+        if (!effectiveInvoiceNumber && extracted.invoiceNumber) effectiveInvoiceNumber = extracted.invoiceNumber;
+        if (!effectiveNoteQuantity && extracted.quantity) effectiveNoteQuantity = extracted.quantity;
+        if (!effectiveNoteUnit && extracted.unit) effectiveNoteUnit = extracted.unit;
+      } catch (e) {
+        console.error("[cargoLoads.update] Erro na extra\xE7\xE3o autom\xE1tica da NF:", e);
+      }
+    }
+    if (effectiveInvoiceNumber) {
       const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date }).from(cargoLoads).where(and3(
-        eq6(cargoLoads.invoiceNumber, input.invoiceNumber.trim()),
+        eq6(cargoLoads.invoiceNumber, effectiveInvoiceNumber),
         ne(cargoLoads.id, input.id)
       )).limit(1);
       if (existing.length > 0) {
         const dateFmt = existing[0].date ? new Date(existing[0].date).toLocaleDateString("pt-BR") : "N/I";
         throw new TRPCError4({
           code: "CONFLICT",
-          message: `Nota fiscal ${input.invoiceNumber} j\xE1 est\xE1 sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || "N/I"}, Data: ${dateFmt}). Verifique o n\xFAmero da nota.`
+          message: `Nota fiscal ${effectiveInvoiceNumber} j\xE1 est\xE1 sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || "N/I"}, Data: ${dateFmt}). Verifique o n\xFAmero da nota.`
         });
       }
     }
-    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity, noteUnit, ...rest } = input;
+    const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity: _noteQuantityInput, noteUnit: _noteUnitInput, invoiceNumber: _invoiceNumberInput, ...rest } = input;
+    if (effectiveInvoiceNumber !== void 0 || input.invoiceNumber !== void 0) rest.invoiceNumber = effectiveInvoiceNumber || null;
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = { ...rest, updatedAt: now };
     if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace("T", " ");
@@ -6604,7 +7295,7 @@ var cargoLoadsRouter = router({
       } catch {
       }
     }
-    if (noteUnit !== void 0 && noteUnit !== "") {
+    if (effectiveNoteUnit !== void 0 && effectiveNoteUnit !== "") {
       try {
         const connU = await getDirectConnection();
         try {
@@ -6614,7 +7305,7 @@ var cargoLoadsRouter = router({
           );
           await connU.execute(
             `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity_type = ? WHERE cl.id = ?`,
-            [noteUnit, id]
+            [effectiveNoteUnit, id]
           );
         } finally {
           await connU.end();
@@ -6623,9 +7314,9 @@ var cargoLoadsRouter = router({
         console.error("[cargoLoads.update] sync noteUnit->fiscal_notes falhou:", e);
       }
     }
-    if (noteQuantity !== void 0) {
+    if (effectiveNoteQuantity !== void 0) {
       try {
-        const qtyNorm = String(noteQuantity || "").replace(",", ".").trim();
+        const qtyNorm = String(effectiveNoteQuantity || "").replace(",", ".").trim();
         const conn0 = await getDirectConnection();
         try {
           await conn0.execute(
@@ -6701,7 +7392,13 @@ var cargoLoadsRouter = router({
       } catch (e) {
       }
     }
-    return { success: true };
+    return {
+      success: true,
+      autoExtracted: {
+        invoiceNumber: !input.invoiceNumber && !!effectiveInvoiceNumber,
+        noteQuantity: !input.noteQuantity && !!effectiveNoteQuantity
+      }
+    };
   }),
   updateTracking: protectedProcedure.input(z6.object({
     id: z6.number(),
@@ -6744,6 +7441,19 @@ var cargoLoadsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    let priorCargo;
+    if (input.docType === "invoice") {
+      [priorCargo] = await db.select({
+        invoiceUrl: cargoLoads.invoiceUrl,
+        responsavelCargaId: cargoLoads.responsavelCargaId,
+        vehiclePlate: cargoLoads.vehiclePlate,
+        volumeM3: cargoLoads.volumeM3,
+        weightNetKg: cargoLoads.weightNetKg,
+        destination: cargoLoads.destination,
+        destinationId: cargoLoads.destinationId,
+        vehicleId: cargoLoads.vehicleId
+      }).from(cargoLoads).where(eq6(cargoLoads.id, input.cargoId)).limit(1);
+    }
     const uploaded = await cloudinaryUpload(input.docBase64, `btree/docs/${input.cargoId}`);
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = { updatedAt: now };
@@ -6760,6 +7470,29 @@ var cargoLoadsRouter = router({
       updateData.paidAt = now;
     }
     await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, input.cargoId));
+    if (input.docType === "invoice" && !priorCargo?.invoiceUrl) {
+      try {
+        const { notifyResponsavelCargaNfAnexada: notifyResponsavelCargaNfAnexada2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+        let anexadaWeightNetKg = priorCargo?.weightNetKg;
+        if (!anexadaWeightNetKg || parseFloat(anexadaWeightNetKg.replace(",", ".")) <= 0) {
+          const expectedTon = await getExpectedWeightTon(db, priorCargo?.vehicleId);
+          if (expectedTon > 0) anexadaWeightNetKg = String(expectedTon * 1e3);
+        }
+        const anexadaUnit = await resolveDestinationUnit(db, priorCargo?.destinationId);
+        notifyResponsavelCargaNfAnexada2({
+          cargoId: input.cargoId,
+          responsavelCargaId: priorCargo?.responsavelCargaId ?? null,
+          invoiceUrl: uploaded.url,
+          vehiclePlate: priorCargo?.vehiclePlate,
+          volumeM3: priorCargo?.volumeM3,
+          weightNetKg: anexadaWeightNetKg,
+          destination: priorCargo?.destination,
+          unit: anexadaUnit
+        }).catch((e) => console.error("[cargoLoads.uploadDocument] Erro ao notificar respons\xE1vel:", e));
+      } catch (e) {
+        console.error("[cargoLoads.uploadDocument] Erro ao notificar respons\xE1vel:", e);
+      }
+    }
     if (input.docType === "boleto") {
       try {
         const { notifyFinanceiro: notifyFinanceiro2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
@@ -7745,6 +8478,149 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     } finally {
       await conn.end();
     }
+  }),
+  // ── Página pública de upload de NF (link enviado por WhatsApp) ──────────────
+  // Sem login: o token (aleatório, 48 bytes) é a única credencial. Só devolve os
+  // dados mínimos pra identificar a carga — nunca a carga inteira.
+  getByNfUploadToken: publicProcedure.input(z6.object({ token: z6.string().min(10) })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    const [cargo] = await db.select({
+      id: cargoLoads.id,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      volumeM3: cargoLoads.volumeM3,
+      weightNetKg: cargoLoads.weightNetKg,
+      destination: cargoLoads.destination,
+      destinationId: cargoLoads.destinationId,
+      vehicleId: cargoLoads.vehicleId,
+      invoiceNumber: cargoLoads.invoiceNumber,
+      invoiceUrl: cargoLoads.invoiceUrl
+    }).from(cargoLoads).where(eq6(cargoLoads.nfUploadToken, input.token)).limit(1);
+    if (!cargo) throw new TRPCError4({ code: "NOT_FOUND", message: "Link inv\xE1lido ou expirado." });
+    const unit = await resolveDestinationUnit(db, cargo.destinationId);
+    let displayWeightNetKg = cargo.weightNetKg;
+    if (!displayWeightNetKg || parseFloat(displayWeightNetKg.replace(",", ".")) <= 0) {
+      const expectedTon = await getExpectedWeightTon(db, cargo.vehicleId);
+      if (expectedTon > 0) displayWeightNetKg = String(expectedTon * 1e3);
+    }
+    const { formatPesoOuVolume: formatPesoOuVolume2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+    const pesoOuVolume = formatPesoOuVolume2(displayWeightNetKg, cargo.volumeM3, unit);
+    return { ...cargo, pesoOuVolume };
+  }),
+  // Só altera invoiceNumber/invoiceUrl (+ quantidade/unidade da nota vinculada) DA CARGA
+  // daquele token — nunca outra coisa, nunca outra carga.
+  uploadNfByToken: publicProcedure.input(z6.object({
+    token: z6.string().min(10),
+    invoiceNumber: z6.string().optional(),
+    invoiceFileBase64: z6.string().optional(),
+    invoiceFileName: z6.string().optional(),
+    invoiceFileMimeType: z6.string().optional(),
+    noteQuantity: z6.string().optional(),
+    noteUnit: z6.enum(["m3", "ton"]).optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR" });
+    const [cargo] = await db.select({
+      id: cargoLoads.id,
+      responsavelCargaId: cargoLoads.responsavelCargaId,
+      invoiceUrl: cargoLoads.invoiceUrl,
+      vehiclePlate: cargoLoads.vehiclePlate,
+      volumeM3: cargoLoads.volumeM3,
+      weightNetKg: cargoLoads.weightNetKg,
+      destination: cargoLoads.destination,
+      destinationId: cargoLoads.destinationId,
+      vehicleId: cargoLoads.vehicleId
+    }).from(cargoLoads).where(eq6(cargoLoads.nfUploadToken, input.token)).limit(1);
+    if (!cargo) throw new TRPCError4({ code: "NOT_FOUND", message: "Link inv\xE1lido ou expirado." });
+    const updateData = {};
+    if (input.invoiceFileBase64) {
+      try {
+        const dataStr = input.invoiceFileBase64.startsWith("data:") ? input.invoiceFileBase64 : `data:${input.invoiceFileMimeType || "application/pdf"};base64,${input.invoiceFileBase64}`;
+        const uploaded = await cloudinaryUpload(dataStr, `btree/notas/${cargo.id}`, input.invoiceFileName || `nf-carga-${cargo.id}.pdf`);
+        updateData.invoiceUrl = uploaded.url;
+      } catch (e) {
+        console.error("[cargoLoads.uploadNfByToken] Erro upload NF:", e);
+        throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao enviar o arquivo. Tente novamente." });
+      }
+    }
+    let effectiveInvoiceNumber = input.invoiceNumber?.trim() || void 0;
+    let effectiveNoteQuantity = input.noteQuantity;
+    let effectiveNoteUnit = input.noteUnit || await resolveDestinationUnit(db, cargo.destinationId);
+    const invoiceUrlForExtraction = updateData.invoiceUrl;
+    if (invoiceUrlForExtraction && (!effectiveInvoiceNumber || !effectiveNoteQuantity)) {
+      try {
+        const { extractNfDataFromFile: extractNfDataFromFile2 } = await Promise.resolve().then(() => (init_nfExtraction(), nfExtraction_exports));
+        const extracted = await extractNfDataFromFile2(invoiceUrlForExtraction, input.invoiceFileMimeType);
+        if (!effectiveInvoiceNumber && extracted.invoiceNumber) effectiveInvoiceNumber = extracted.invoiceNumber;
+        if (!effectiveNoteQuantity && extracted.quantity) effectiveNoteQuantity = extracted.quantity;
+        if (!effectiveNoteUnit && extracted.unit) effectiveNoteUnit = extracted.unit;
+      } catch (e) {
+        console.error("[cargoLoads.uploadNfByToken] Erro na extra\xE7\xE3o autom\xE1tica da NF:", e);
+      }
+    }
+    if (effectiveInvoiceNumber) {
+      const existing = await db.select({ id: cargoLoads.id }).from(cargoLoads).where(and3(eq6(cargoLoads.invoiceNumber, effectiveInvoiceNumber), ne(cargoLoads.id, cargo.id))).limit(1);
+      if (existing.length > 0) {
+        throw new TRPCError4({ code: "CONFLICT", message: `Nota fiscal ${effectiveInvoiceNumber} j\xE1 est\xE1 sendo usada em outra carga.` });
+      }
+    }
+    if (input.invoiceNumber !== void 0 || effectiveInvoiceNumber) updateData.invoiceNumber = effectiveInvoiceNumber || null;
+    if (Object.keys(updateData).length > 0) {
+      await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, cargo.id));
+    }
+    if (effectiveNoteUnit || effectiveNoteQuantity !== void 0) {
+      try {
+        const conn = await getDirectConnection();
+        try {
+          if (effectiveNoteUnit) {
+            await conn.execute(
+              `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity_type = ? WHERE cl.id = ?`,
+              [effectiveNoteUnit, cargo.id]
+            );
+          }
+          if (effectiveNoteQuantity !== void 0) {
+            const qtyNorm = String(effectiveNoteQuantity || "").replace(",", ".").trim();
+            await conn.execute(
+              `UPDATE fiscal_notes fn JOIN cargo_loads cl ON cl.fiscal_note_id = fn.id SET fn.quantity = ? WHERE cl.id = ?`,
+              [qtyNorm === "" ? null : qtyNorm, cargo.id]
+            );
+          }
+        } finally {
+          await conn.end();
+        }
+      } catch (e) {
+        console.error("[cargoLoads.uploadNfByToken] sync noteQuantity/noteUnit falhou:", e);
+      }
+    }
+    if (updateData.invoiceUrl && !cargo.invoiceUrl) {
+      try {
+        const { notifyResponsavelCargaNfAnexada: notifyResponsavelCargaNfAnexada2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+        let tokenWeightNetKg = cargo.weightNetKg;
+        if (!tokenWeightNetKg || parseFloat(tokenWeightNetKg.replace(",", ".")) <= 0) {
+          const expectedTon = await getExpectedWeightTon(db, cargo.vehicleId);
+          if (expectedTon > 0) tokenWeightNetKg = String(expectedTon * 1e3);
+        }
+        notifyResponsavelCargaNfAnexada2({
+          cargoId: cargo.id,
+          responsavelCargaId: cargo.responsavelCargaId ?? null,
+          invoiceUrl: updateData.invoiceUrl ?? null,
+          vehiclePlate: cargo.vehiclePlate,
+          volumeM3: cargo.volumeM3,
+          weightNetKg: tokenWeightNetKg,
+          destination: cargo.destination,
+          unit: effectiveNoteUnit
+        }).catch((e) => console.error("[cargoLoads.uploadNfByToken] Erro ao notificar respons\xE1vel:", e));
+      } catch (e) {
+        console.error("[cargoLoads.uploadNfByToken] Erro ao notificar respons\xE1vel:", e);
+      }
+    }
+    return {
+      success: true,
+      autoExtracted: {
+        invoiceNumber: !input.invoiceNumber && !!effectiveInvoiceNumber,
+        noteQuantity: !input.noteQuantity && !!effectiveNoteQuantity
+      }
+    };
   })
 });
 
@@ -14634,172 +15510,10 @@ init_notifications();
 init_trpc();
 init_db();
 init_schema();
+init_llm();
 import { z as z30 } from "zod";
 import { TRPCError as TRPCError19 } from "@trpc/server";
 import { eq as eq29, desc as desc23, and as and18 } from "drizzle-orm";
-
-// server/_core/llm.ts
-init_env();
-var ensureArray = (value) => Array.isArray(value) ? value : [value];
-var normalizeContentPart = (part) => {
-  if (typeof part === "string") {
-    return { type: "text", text: part };
-  }
-  if (part.type === "text") {
-    return part;
-  }
-  if (part.type === "image_url") {
-    return part;
-  }
-  if (part.type === "file_url") {
-    return part;
-  }
-  throw new Error("Unsupported message content part");
-};
-var normalizeMessage = (message) => {
-  const { role, name, tool_call_id } = message;
-  if (role === "tool" || role === "function") {
-    const content = ensureArray(message.content).map((part) => typeof part === "string" ? part : JSON.stringify(part)).join("\n");
-    return {
-      role,
-      name,
-      tool_call_id,
-      content
-    };
-  }
-  const contentParts = ensureArray(message.content).map(normalizeContentPart);
-  if (contentParts.length === 1 && contentParts[0].type === "text") {
-    return {
-      role,
-      name,
-      content: contentParts[0].text
-    };
-  }
-  return {
-    role,
-    name,
-    content: contentParts
-  };
-};
-var normalizeToolChoice = (toolChoice, tools) => {
-  if (!toolChoice) return void 0;
-  if (toolChoice === "none" || toolChoice === "auto") {
-    return toolChoice;
-  }
-  if (toolChoice === "required") {
-    if (!tools || tools.length === 0) {
-      throw new Error(
-        "tool_choice 'required' was provided but no tools were configured"
-      );
-    }
-    if (tools.length > 1) {
-      throw new Error(
-        "tool_choice 'required' needs a single tool or specify the tool name explicitly"
-      );
-    }
-    return {
-      type: "function",
-      function: { name: tools[0].function.name }
-    };
-  }
-  if ("name" in toolChoice) {
-    return {
-      type: "function",
-      function: { name: toolChoice.name }
-    };
-  }
-  return toolChoice;
-};
-var resolveApiUrl = () => ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0 ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions` : "https://forge.manus.im/v1/chat/completions";
-var assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-};
-var normalizeResponseFormat = ({
-  responseFormat,
-  response_format,
-  outputSchema,
-  output_schema
-}) => {
-  const explicitFormat = responseFormat || response_format;
-  if (explicitFormat) {
-    if (explicitFormat.type === "json_schema" && !explicitFormat.json_schema?.schema) {
-      throw new Error(
-        "responseFormat json_schema requires a defined schema object"
-      );
-    }
-    return explicitFormat;
-  }
-  const schema = outputSchema || output_schema;
-  if (!schema) return void 0;
-  if (!schema.name || !schema.schema) {
-    throw new Error("outputSchema requires both name and schema");
-  }
-  return {
-    type: "json_schema",
-    json_schema: {
-      name: schema.name,
-      schema: schema.schema,
-      ...typeof schema.strict === "boolean" ? { strict: schema.strict } : {}
-    }
-  };
-};
-async function invokeLLM(params) {
-  assertApiKey();
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format
-  } = params;
-  const payload = {
-    model: "gemini-2.5-flash",
-    messages: messages.map(normalizeMessage)
-  };
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
-  }
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
-  payload.max_tokens = 32768;
-  payload.thinking = {
-    "budget_tokens": 128
-  };
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema
-  });
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-  const response = await fetch(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`
-    },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} \u2013 ${errorText}`
-    );
-  }
-  return await response.json();
-}
 
 // server/storage.ts
 init_env();
@@ -16898,10 +17612,19 @@ var quotationRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
+    const allResponses = await db.select({
+      id: quotationResponses.id,
+      quotationRequestId: quotationResponses.quotationRequestId
+    }).from(quotationResponses);
+    const countByRequest = /* @__PURE__ */ new Map();
+    for (const r of allResponses) {
+      countByRequest.set(r.quotationRequestId, (countByRequest.get(r.quotationRequestId) || 0) + 1);
+    }
     return rows.map((r) => ({
       ...r,
       items: JSON.parse(r.itemsJson || "[]"),
-      isExpired: Date.now() > r.expiresAt
+      isExpired: Date.now() > r.expiresAt,
+      responseCount: countByRequest.get(r.id) || 0
     }));
   }),
   // Buscar por ID com respostas (protegido)
@@ -16962,6 +17685,68 @@ var quotationRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(quotationRequests).set({ status: "cancelada" }).where(eq37(quotationRequests.id, input.id));
+    return { success: true };
+  }),
+  // Editar resposta/fornecedor (protegido) — permite corrigir dados e condições
+  adminUpdateResponse: protectedProcedure.input(z38.object({
+    responseId: z38.number(),
+    supplierName: z38.string().optional(),
+    tradeName: z38.string().optional(),
+    cnpj: z38.string().optional(),
+    address: z38.string().optional(),
+    sellerName: z38.string().optional(),
+    sellerPhone: z38.string().optional(),
+    sellerEmail: z38.string().optional(),
+    paymentTerms: z38.string().optional(),
+    deliveryTerms: z38.string().optional(),
+    productsSold: z38.string().optional(),
+    notes: z38.string().optional()
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    const set = {};
+    if (input.supplierName !== void 0) set.supplierName = input.supplierName;
+    if (input.tradeName !== void 0) set.tradeName = input.tradeName;
+    if (input.cnpj !== void 0) set.cnpj = input.cnpj;
+    if (input.address !== void 0) set.address = input.address;
+    if (input.sellerName !== void 0) set.sellerName = input.sellerName;
+    if (input.sellerPhone !== void 0) set.sellerPhone = input.sellerPhone;
+    if (input.sellerEmail !== void 0) set.sellerEmail = input.sellerEmail;
+    if (input.paymentTerms !== void 0) set.paymentTerms = input.paymentTerms;
+    if (input.deliveryTerms !== void 0) set.deliveryTerms = input.deliveryTerms;
+    if (input.productsSold !== void 0) set.productsSold = input.productsSold;
+    if (input.notes !== void 0) set.notes = input.notes;
+    await db.update(quotationResponses).set(set).where(eq37(quotationResponses.id, input.responseId));
+    return { success: true };
+  }),
+  // Editar itens de uma resposta (protegido) — corrige preço/embalagem/quantidade que o fornecedor esqueceu
+  adminUpdateResponseItems: protectedProcedure.input(z38.object({
+    responseId: z38.number(),
+    items: z38.array(z38.object({
+      name: z38.string(),
+      quantity: z38.string(),
+      unit: z38.string().optional(),
+      price: z38.string(),
+      brand: z38.string().optional(),
+      packaging: z38.string().optional(),
+      notes: z38.string().optional()
+    })).min(1)
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(quotationResponses).set({ itemsJson: JSON.stringify(input.items) }).where(eq37(quotationResponses.id, input.responseId));
+    return { success: true };
+  }),
+  // Escolher manualmente o vencedor de cada item do comparativo (override do melhor preço)
+  adminSetBestChoice: protectedProcedure.input(z38.object({
+    quotationRequestId: z38.number(),
+    choices: z38.record(z38.string(), z38.object({ responseId: z38.number(), itemIndex: z38.number() }))
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.id, input.quotationRequestId));
+    if (!req) throw new TRPCError27({ code: "NOT_FOUND" });
+    await db.update(quotationRequests).set({ bestChoices: JSON.stringify(input.choices) }).where(eq37(quotationRequests.id, input.quotationRequestId));
     return { success: true };
   }),
   // ===== AUTOMAÇÃO COMPLETA =====
@@ -17068,22 +17853,79 @@ var quotationRequestsRouter = router({
       }
     }
     const summaryItems = [];
+    let manualChoices = {};
+    try {
+      manualChoices = req.bestChoices ? JSON.parse(req.bestChoices) : {};
+    } catch (_) {
+      manualChoices = {};
+    }
+    const normName = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\d+\s*l\b/gi, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    const fuzzy = (a, b) => {
+      const na = normName(a), nb = normName(b);
+      if (na === nb) return true;
+      if (!na || !nb) return false;
+      const ca = na.replace(/\s+/g, "");
+      const cb = nb.replace(/\s+/g, "");
+      if (ca === cb) return true;
+      if (ca.length >= 4 && cb.length >= 4 && (ca.includes(cb) || cb.includes(ca))) return true;
+      const w = (s) => s.split(" ").filter((x) => x.length >= 3);
+      const wa = w(na), wb = w(nb);
+      if (wa.length === 0 || wb.length === 0) return false;
+      const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+      return shorter.every((x) => longer.includes(x));
+    };
+    const litersOf = (pack) => {
+      if (!pack) return null;
+      const p = pack.trim().toUpperCase();
+      const map = { "1L": 1, "5L": 5, "10L": 10, "20L": 20, "200L": 200 };
+      if (map[p]) return map[p];
+      const m = p.match(/(\d+(?:[\.,]\d+)?)\s*L/);
+      return m ? parseFloat(m[1].replace(",", ".")) : null;
+    };
+    const comparablePrice = (it) => {
+      const price = parseFloat(String(it.price).replace(",", "."));
+      if (isNaN(price)) return NaN;
+      const lit = litersOf(it.packaging);
+      if (lit && lit > 0) return price / lit;
+      return price;
+    };
     for (const reqItem of requestItems) {
-      const key = reqItem.name.toLowerCase().trim();
+      const manual = manualChoices[reqItem.name] || manualChoices[normName(reqItem.name)];
       let bestPrice = Infinity;
+      let bestCmp = Infinity;
       let bestSupplierName = "";
       let bestSupplierPhone = null;
       let found = false;
-      for (const resp of responses) {
-        const respItems = JSON.parse(resp.itemsJson || "[]");
-        const match = respItems.find((it) => it.name.toLowerCase().trim() === key);
-        if (match) {
-          const price = parseFloat(match.price);
-          if (!isNaN(price) && price > 0 && price < bestPrice) {
-            bestPrice = price;
-            bestSupplierName = resp.supplierName || "";
-            bestSupplierPhone = resp.sellerPhone || null;
-            found = true;
+      if (manual) {
+        const resp = responses.find((r) => r.id === manual.responseId);
+        if (resp) {
+          const respItems = JSON.parse(resp.itemsJson || "[]");
+          const it = respItems[manual.itemIndex];
+          if (it) {
+            const p = parseFloat(String(it.price).replace(",", "."));
+            if (!isNaN(p) && p > 0) {
+              bestPrice = p;
+              bestSupplierName = resp.tradeName || resp.supplierName || "";
+              bestSupplierPhone = resp.sellerPhone || null;
+              found = true;
+            }
+          }
+        }
+      }
+      if (!found) {
+        for (const resp of responses) {
+          const respItems = JSON.parse(resp.itemsJson || "[]");
+          const match = respItems.find((it) => fuzzy(it.name, reqItem.name));
+          if (match) {
+            const price = parseFloat(String(match.price).replace(",", "."));
+            const cmp = comparablePrice(match);
+            if (!isNaN(price) && price > 0 && !isNaN(cmp) && cmp < bestCmp) {
+              bestCmp = cmp;
+              bestPrice = price;
+              bestSupplierName = resp.tradeName || resp.supplierName || "";
+              bestSupplierPhone = resp.sellerPhone || null;
+              found = true;
+            }
           }
         }
       }
@@ -17158,6 +18000,8 @@ var quotationRequestsRouter = router({
     sellerName: z38.string().optional(),
     sellerPhone: z38.string().optional(),
     sellerEmail: z38.string().optional(),
+    paymentTerms: z38.string().optional(),
+    deliveryTerms: z38.string().optional(),
     items: z38.array(z38.object({
       name: z38.string(),
       quantity: z38.string(),
@@ -17185,6 +18029,8 @@ var quotationRequestsRouter = router({
       sellerName: input.sellerName ?? null,
       sellerPhone: input.sellerPhone ?? null,
       sellerEmail: input.sellerEmail ?? null,
+      paymentTerms: input.paymentTerms ?? null,
+      deliveryTerms: input.deliveryTerms ?? null,
       itemsJson: JSON.stringify(input.items),
       notes: input.notes ?? null
     }).where(eq37(quotationResponses.id, input.responseId));
@@ -17196,6 +18042,45 @@ var quotationRequestsRouter = router({
     } catch (_) {
     }
     return { success: true };
+  }),
+  // Fornecedor: verificar se já existe cadastro por CNPJ ou nome (público)
+  findSupplier: publicProcedure.input(z38.object({
+    cnpj: z38.string().optional(),
+    supplierName: z38.string().optional()
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { found: false };
+    const normCnpj = (input.cnpj || "").replace(/\D/g, "");
+    const name = (input.supplierName || "").trim();
+    if (!normCnpj && !name) return { found: false };
+    let rows = [];
+    if (normCnpj) {
+      const [r] = await db.execute(sql24`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
+      rows = r || [];
+    }
+    if (rows.length === 0 && name) {
+      const [r] = await db.execute(sql24`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`);
+      rows = r || [];
+    }
+    const s = rows[0];
+    if (!s) return { found: false };
+    return {
+      found: true,
+      supplier: {
+        id: s.id,
+        companyName: s.company_name,
+        tradeName: s.trade_name,
+        cnpj: s.cnpj,
+        address: s.address,
+        city: s.city,
+        state: s.state,
+        phone: s.phone,
+        whatsapp: s.whatsapp,
+        email: s.email,
+        sellerName: s.seller_name,
+        productsSold: s.products_sold
+      }
+    };
   }),
   // Buscar solicitação por token (fornecedor acessa)
   getByToken: publicProcedure.input(z38.object({ token: z38.string() })).query(async ({ input }) => {
@@ -17230,6 +18115,10 @@ var quotationRequestsRouter = router({
       sellerName: z38.string().optional(),
       sellerPhone: z38.string().optional(),
       sellerEmail: z38.string().optional(),
+      paymentTerms: z38.string().optional(),
+      deliveryTerms: z38.string().optional(),
+      tradeName: z38.string().optional(),
+      productsSold: z38.string().optional(),
       items: z38.array(
         z38.object({
           name: z38.string(),
@@ -17249,6 +18138,32 @@ var quotationRequestsRouter = router({
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.token, input.token));
     if (!req) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     if (req.status === "cancelada") throw new TRPCError27({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    let linkedSupplierId = null;
+    let linkedSupplier = {};
+    try {
+      const normCnpj = (input.cnpj || "").replace(/\D/g, "");
+      const name = (input.supplierName || "").trim();
+      let found = [];
+      if (normCnpj) {
+        const [r] = await db.execute(sql24`SELECT id, trade_name, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
+        found = r || [];
+      }
+      if (found.length === 0 && name) {
+        const [r] = await db.execute(sql24`SELECT id, trade_name, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`);
+        found = r || [];
+      }
+      if (found[0]) {
+        linkedSupplierId = found[0].id;
+        linkedSupplier = { tradeName: found[0].trade_name, productsSold: found[0].products_sold };
+        await db.execute(sql24`UPDATE suppliers SET
+            phone = COALESCE(NULLIF(phone,''), ${input.sellerPhone || ""}),
+            whatsapp = COALESCE(NULLIF(whatsapp,''), ${input.sellerPhone || ""}),
+            seller_name = COALESCE(NULLIF(seller_name,''), ${input.sellerName || ""}),
+            address = COALESCE(NULLIF(address,''), ${input.address || ""})
+            WHERE id = ${linkedSupplierId}`);
+      }
+    } catch (_) {
+    }
     const responseToken = crypto.randomBytes(32).toString("hex");
     const [insertResult] = await db.insert(quotationResponses).values({
       quotationRequestId: req.id,
@@ -17258,9 +18173,14 @@ var quotationRequestsRouter = router({
       sellerName: input.sellerName,
       sellerPhone: input.sellerPhone,
       sellerEmail: input.sellerEmail,
+      paymentTerms: input.paymentTerms,
+      deliveryTerms: input.deliveryTerms,
       itemsJson: JSON.stringify(input.items),
       notes: input.notes,
-      responseToken
+      responseToken,
+      tradeName: input.tradeName || linkedSupplier.tradeName || null,
+      productsSold: input.productsSold || linkedSupplier.productsSold || null,
+      ...linkedSupplierId ? { supplierId: linkedSupplierId } : {}
     });
     const responseId = insertResult.insertId;
     await db.update(quotationRequests).set({ status: "respondida" }).where(eq37(quotationRequests.id, req.id));
@@ -20195,8 +21115,23 @@ var notificationSettingsRouter = router({
     await ensureTable(db);
     const storedConfig = await getSetting(db, "jobConfig");
     const storedClientConfig = await getSetting(db, "clientConfig");
+    const storedCargoNfResponsible = await getSetting(db, "cargoNfResponsible");
     const config = storedConfig ? { ...DEFAULT_JOB_CONFIG, ...storedConfig } : DEFAULT_JOB_CONFIG;
     const clientConfig = storedClientConfig ? { ...DEFAULT_CLIENT_CONFIG, ...storedClientConfig } : DEFAULT_CLIENT_CONFIG;
+    let cargoNfResponsible;
+    if (storedCargoNfResponsible?.recipients) {
+      cargoNfResponsible = storedCargoNfResponsible;
+    } else if (storedCargoNfResponsible?.collaboratorId || storedCargoNfResponsible?.manualPhone) {
+      cargoNfResponsible = {
+        recipients: [{
+          collaboratorId: storedCargoNfResponsible.collaboratorId ?? null,
+          manualName: storedCargoNfResponsible.manualName ?? null,
+          manualPhone: storedCargoNfResponsible.manualPhone ?? null
+        }]
+      };
+    } else {
+      cargoNfResponsible = { recipients: [] };
+    }
     let collaborators5 = [];
     try {
       const rows = await db.execute(sql29`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
@@ -20219,8 +21154,25 @@ var notificationSettingsRouter = router({
       collaborators: collaborators5,
       clientNotifKeys: CLIENT_NOTIF_KEYS,
       clientMeta: CLIENT_META,
-      clients: clients3
+      clients: clients3,
+      cargoNfResponsible
     };
+  }),
+  // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
+  // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
+  // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
+  updateCargoNfResponsible: protectedProcedure.input(z47.object({
+    recipients: z47.array(z47.object({
+      collaboratorId: z47.number().nullable(),
+      manualName: z47.string().nullable().optional(),
+      manualPhone: z47.string().nullable().optional()
+    }))
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Banco de dados indispon\xEDvel");
+    await ensureTable(db);
+    await setSetting(db, "cargoNfResponsible", input);
+    return { ok: true };
   }),
   update: protectedProcedure.input(z47.record(z47.string(), z47.object({
     enabled: z47.boolean(),
@@ -21743,6 +22695,13 @@ async function runAutoMigrations() {
     try {
       await db.execute(
         /*sql*/
+        `ALTER TABLE equipment ADD COLUMN expected_weight_ton varchar(20)`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
         `ALTER TABLE extra_expenses MODIFY COLUMN payment_method enum('dinheiro','pix','credito','debito','transferencia','boleto','outros') NOT NULL DEFAULT 'pix'`
       );
     } catch (e) {
@@ -21825,6 +22784,40 @@ async function runAutoMigrations() {
     try {
       await db.execute(
         /*sql*/
+        `ALTER TABLE cargo_loads ADD COLUMN nf_upload_token VARCHAR(64) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_loads ADD UNIQUE INDEX cargo_loads_nf_upload_token_unique (nf_upload_token)`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_loads ADD COLUMN responsavel_carga_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS notification_settings (
+          \`key\` VARCHAR(100) PRIMARY KEY,
+          value JSON NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
         `ALTER TABLE fiscal_notes ADD COLUMN used_by_cargo_id INT NULL`
       );
     } catch (e) {
@@ -21878,13 +22871,61 @@ async function runAutoMigrations() {
     } catch (e) {
       console.log("[AutoMigration] fiscal notes sync error:", e?.message);
     }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE quotation_requests ADD COLUMN best_choices TEXT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE quotation_responses ADD COLUMN supplier_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE quotation_responses ADD COLUMN trade_name VARCHAR(255) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE quotation_responses ADD COLUMN payment_terms VARCHAR(255) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE quotation_responses ADD COLUMN delivery_terms VARCHAR(255) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE quotation_responses ADD COLUMN products_sold VARCHAR(500) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE suppliers ADD COLUMN products_sold VARCHAR(500) NULL`
+      );
+    } catch (e) {
+    }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
     console.error("[AutoMigration] Error:", err);
   }
 }
 async function startServer() {
-  await runAutoMigrations();
   const app = express2();
   const server = createServer(app);
   app.use(cors({
@@ -22124,6 +23165,7 @@ async function startServer() {
   server.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${port}/`);
   });
+  runAutoMigrations().catch((err) => console.error("[AutoMigration] Erro fatal:", err));
 }
 startServer().catch(console.error);
 async function setupGeofenceHeartbeatJob() {

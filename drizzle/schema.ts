@@ -132,6 +132,12 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 		// a Receber, para compradores sem boleto/NF (ex: Enerbio). Não confundir com payment_status,
 		// que controla o pagamento da BTREE ao cliente/fornecedor (fluxo de dinheiro oposto).
 		buyerPaidAt: timestamp("buyer_paid_at", { mode: 'string' }),
+		// Token único e imprevisível pra página pública de upload de NF (link enviado por WhatsApp
+		// ao responsável pela emissão) — sem login, só enxerga/altera esta carga específica.
+		nfUploadToken: varchar("nf_upload_token", { length: 64 }),
+		// Colaborador responsável por esta carga (recebe o aviso via WhatsApp quando a NF é
+		// anexada) — pré-preenchido com quem registrou a carga, mas editável.
+		responsavelCargaId: int("responsavel_carga_id"),
 	});
 
 export const cargoShipments = mysqlTable("cargo_shipments", {
@@ -476,6 +482,9 @@ export const equipment = mysqlTable("equipment", {
 	defaultHeightM: varchar("default_height_m", { length: 20 }),
 	defaultWidthM: varchar("default_width_m", { length: 20 }),
 	defaultLengthM: varchar("default_length_m", { length: 20 }),
+	// Peso previsto (toneladas) — só relevante pra equipamentos do tipo Caminhões, usado como
+	// referência ao registrar cargas (peso esperado antes da pesagem real).
+	expectedWeightTon: varchar("expected_weight_ton", { length: 20 }),
 	category: mysqlEnum(['maquina','veiculo','caminhao']).default('maquina'),
 	accumulatedHours: varchar("accumulated_hours", { length: 20 }).default('0'),
 	accumulatedKm: varchar("accumulated_km", { length: 20 }).default('0'),
@@ -1554,6 +1563,7 @@ export const suppliers = mysqlTable("suppliers", {
   email: varchar({ length: 255 }),
   website: varchar({ length: 500 }),
   notes: text(),
+  productsSold: varchar("products_sold", { length: 500 }),
   active: tinyint().default(1).notNull(),
   sellerName: varchar("seller_name", { length: 255 }),
   pixKey: varchar("pix_key", { length: 255 }),
@@ -1659,6 +1669,7 @@ export const quotationRequests = mysqlTable("quotation_requests", {
   expiresAt: bigint("expires_at", { mode: 'number' }).notNull(),
   status: mysqlEnum(['ativa','respondida','expirada','cancelada']).default('ativa').notNull(),
   notes: text(),
+  bestChoices: text("best_choices"),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
@@ -1668,12 +1679,17 @@ export type InsertQuotationRequest = typeof quotationRequests.$inferInsert;
 export const quotationResponses = mysqlTable("quotation_responses", {
   id: int().autoincrement().primaryKey().notNull(),
   quotationRequestId: int("quotation_request_id").notNull().references(() => quotationRequests.id),
+  supplierId: int("supplier_id"),
   supplierName: varchar("supplier_name", { length: 255 }).notNull(),
+  tradeName: varchar("trade_name", { length: 255 }),
   cnpj: varchar({ length: 30 }),
   address: text(),
   sellerName: varchar("seller_name", { length: 255 }),
   sellerPhone: varchar("seller_phone", { length: 30 }),
   sellerEmail: varchar("seller_email", { length: 255 }),
+  paymentTerms: varchar("payment_terms", { length: 255 }),
+  deliveryTerms: varchar("delivery_terms", { length: 255 }),
+  productsSold: varchar("products_sold", { length: 500 }),
   itemsJson: text("items_json").notNull(), // JSON array: [{name, quantity, unit, price, brand, notes}]
   notes: text(),
   responseToken: varchar("response_token", { length: 64 }),

@@ -14,9 +14,44 @@ echo "Nó: $(node --version)"
 # MANUS / LOCAL (desenvolvimento):
 #   - Usa pnpm para instalar tudo e compilar normalmente
 #
+# ─── Detecção de ambiente ──────────────────────────────────────────────────────
+#
+# NÃO usar só "o pnpm existe no PATH" pra decidir — isso já causou builds de
+# produção quebrados (a Hostinger passou a expor pnpm via Corepack em algum
+# momento, fazendo esse branch de dev rodar lá, tentar compilar tudo do zero e
+# quebrar no esbuild/lockfile). Prioridade, da mais confiável pra mais fraca:
+#
+#   1. Variável de ambiente explícita FORCE_BUILD_ENV=production|dev — sempre
+#      vence. Use isso se a detecção automática abaixo falhar num ambiente novo:
+#      FORCE_BUILD_ENV=production bash build.sh
+#   2. Caminho característico da Hostinger: todo site hospedado lá roda dentro
+#      de ".../domains/<site>/..." — praticamente impossível de acontecer por
+#      acidente num ambiente de dev local ou na Manus.
+#   3. Fallback (comportamento antigo, só usado se nada acima decidir):
+#      presença do pnpm no PATH.
+#
 # ─────────────────────────────────────────────────────────────────────────────
 
-if command -v pnpm &> /dev/null; then
+IS_PRODUCTION=false
+DETECTED_BY=""
+if [ "$FORCE_BUILD_ENV" = "production" ]; then
+  IS_PRODUCTION=true
+  DETECTED_BY="FORCE_BUILD_ENV=production"
+elif [ "$FORCE_BUILD_ENV" = "dev" ]; then
+  IS_PRODUCTION=false
+  DETECTED_BY="FORCE_BUILD_ENV=dev"
+elif [[ "$PWD" == *"/domains/"* ]]; then
+  IS_PRODUCTION=true
+  DETECTED_BY="caminho contém /domains/ (Hostinger)"
+elif ! command -v pnpm &> /dev/null; then
+  IS_PRODUCTION=true
+  DETECTED_BY="pnpm não encontrado no PATH"
+else
+  DETECTED_BY="pnpm encontrado no PATH"
+fi
+echo "Ambiente detectado: $([ "$IS_PRODUCTION" = true ] && echo "produção" || echo "dev") (motivo: $DETECTED_BY)"
+
+if [ "$IS_PRODUCTION" = false ]; then
   # ── Ambiente de desenvolvimento (Manus / local) ──
   echo "Dev environment (pnpm). Full build..."
   pnpm install --frozen-lockfile 2>/dev/null || pnpm install

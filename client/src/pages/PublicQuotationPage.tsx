@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
   Building2, Phone, Mail, Globe, Instagram, Package, Plus, X,
-  CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp, Send, Edit2
+  CheckCircle, CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp, Send, Edit2
 } from "lucide-react";
 
 // Dados fixos da empresa
@@ -36,7 +36,7 @@ type ResponseItem = {
 
 export default function PublicQuotationPage() {
   const { token } = useParams<{ token: string }>();
-
+  const utils = trpc.useUtils();
   const { data, isLoading } = trpc.quotationRequests.getByToken.useQuery(
     { token: token || '' },
     { enabled: !!token }
@@ -44,11 +44,16 @@ export default function PublicQuotationPage() {
 
   // Dados da empresa fornecedora
   const [supplierName, setSupplierName] = useState('');
+  const [tradeName, setTradeName] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [address, setAddress] = useState('');
   const [sellerName, setSellerName] = useState('');
   const [sellerPhone, setSellerPhone] = useState('');
   const [sellerEmail, setSellerEmail] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('');
+  const [deliveryTerms, setDeliveryTerms] = useState('');
+  const [productsSold, setProductsSold] = useState('');
+  const [existingSupplier, setExistingSupplier] = useState<any>(null);
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [submittedResponseId, setSubmittedResponseId] = useState<number | null>(null);
@@ -117,12 +122,16 @@ export default function PublicQuotationPage() {
 
     submitMutation.mutate({
       token: token || '',
-      supplierName,
+      supplierName: (existingSupplier?.companyName) || supplierName,
       cnpj: cnpj || undefined,
       address: address || undefined,
       sellerName: sellerName || undefined,
       sellerPhone: sellerPhone || undefined,
       sellerEmail: sellerEmail || undefined,
+      paymentTerms: paymentTerms || undefined,
+      deliveryTerms: deliveryTerms || undefined,
+      tradeName: tradeName || undefined,
+      productsSold: productsSold || undefined,
       items: validItems.map(i => ({
         name: i.name,
         quantity: i.quantity,
@@ -178,12 +187,14 @@ export default function PublicQuotationPage() {
     updateMutation.mutate({
       token: token || '',
       responseId: submittedResponseId,
-      supplierName,
+      supplierName: (existingSupplier?.companyName) || supplierName,
       cnpj: cnpj || undefined,
       address: address || undefined,
       sellerName: sellerName || undefined,
       sellerPhone: sellerPhone || undefined,
       sellerEmail: sellerEmail || undefined,
+      paymentTerms: paymentTerms || undefined,
+      deliveryTerms: deliveryTerms || undefined,
       items: validItems.map(i => ({
         name: i.name,
         quantity: i.quantity,
@@ -424,18 +435,51 @@ export default function PublicQuotationPage() {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <div>
-              <Label>Nome da Empresa *</Label>
-              <Input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Razão Social ou Nome Fantasia" />
+              <Label>CNPJ / CPF</Label>
+              <Input
+                value={cnpj}
+                onChange={e => setCnpj(e.target.value)}
+                onBlur={async () => {
+                  const digits = cnpj.replace(/\D/g, '');
+                  if (digits.length < 11) return;
+                  try {
+                    const r = await utils.quotationRequests.findSupplier.fetch({ cnpj });
+                    if (r.found && r.supplier) {
+                      setExistingSupplier(r.supplier);
+                      setSupplierName(r.supplier.companyName || '');
+                      setTradeName(r.supplier.tradeName || '');
+                      setAddress(r.supplier.address || [r.supplier.city, r.supplier.state].filter(Boolean).join(' - '));
+                      setSellerName(r.supplier.sellerName || '');
+                      setSellerPhone(r.supplier.whatsapp || r.supplier.phone || '');
+                      toast.success('Empresa já cadastrada! Dados preenchidos automaticamente.');
+                    } else setExistingSupplier(null);
+                  } catch { /* silencioso */ }
+                }}
+                placeholder="00.000.000/0001-00"
+              />
+              {existingSupplier && (
+                <p className="text-xs text-emerald-700 mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Cadastro encontrado — dados preenchidos
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Razão Social *</Label>
+              <Input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Razão social da empresa" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>CNPJ / CPF</Label>
-                <Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                <Label>Nome Fantasia <span className="text-emerald-600">(como conhecemos a loja)</span></Label>
+                <Input value={tradeName} onChange={e => setTradeName(e.target.value)} placeholder="Ex: Geral Lubrificantes" />
               </div>
               <div>
                 <Label>Cidade / Estado</Label>
                 <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Ex: Maringá - PR" />
               </div>
+            </div>
+            <div>
+              <Label>O que vocês vendem? <span className="text-muted-foreground font-normal text-xs">(ex.: óleos, filtros, peças, pneus...)</span></Label>
+              <Input value={productsSold} onChange={e => setProductsSold(e.target.value)} placeholder="Ex: Óleos lubrificantes, filtros, graxas, peças" />
             </div>
             <div className="border-t pt-3">
               <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Contato do Vendedor</p>
@@ -444,6 +488,19 @@ export default function PublicQuotationPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} placeholder="Telefone / WhatsApp" type="tel" />
                   <Input value={sellerEmail} onChange={e => setSellerEmail(e.target.value)} placeholder="E-mail" type="email" />
+                </div>
+              </div>
+            </div>
+            <div className="border-t pt-3">
+              <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Condições Comerciais</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Formas de pagamento</Label>
+                  <Input value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)} placeholder="Ex: 28 dias, à vista, boleto" />
+                </div>
+                <div>
+                  <Label className="text-xs">Entrega / frete</Label>
+                  <Input value={deliveryTerms} onChange={e => setDeliveryTerms(e.target.value)} placeholder="Ex: 3 dias, frete grátis, retira" />
                 </div>
               </div>
             </div>

@@ -94,9 +94,28 @@ export const notificationSettingsRouter = router({
 
     const storedConfig = await getSetting(db, "jobConfig");
     const storedClientConfig = await getSetting(db, "clientConfig");
+    const storedCargoNfResponsible = await getSetting(db, "cargoNfResponsible");
 
     const config = storedConfig ? { ...DEFAULT_JOB_CONFIG, ...storedConfig } : DEFAULT_JOB_CONFIG;
     const clientConfig = storedClientConfig ? { ...DEFAULT_CLIENT_CONFIG, ...storedClientConfig } : DEFAULT_CLIENT_CONFIG;
+    // Responsáveis (global, pode ser mais de um) pela emissão de NF — recebem o aviso via
+    // WhatsApp quando uma carga é criada, pedindo a emissão com placa/peso-m³/destino e o link
+    // pra anexar o arquivo. Formato antigo (um único collaboratorId/manualPhone direto, sem
+    // "recipients") é convertido aqui pra manter compatibilidade com o que já foi salvo.
+    let cargoNfResponsible: { recipients: Array<{ collaboratorId: number | null; manualName: string | null; manualPhone: string | null }> };
+    if (storedCargoNfResponsible?.recipients) {
+      cargoNfResponsible = storedCargoNfResponsible;
+    } else if (storedCargoNfResponsible?.collaboratorId || storedCargoNfResponsible?.manualPhone) {
+      cargoNfResponsible = {
+        recipients: [{
+          collaboratorId: storedCargoNfResponsible.collaboratorId ?? null,
+          manualName: storedCargoNfResponsible.manualName ?? null,
+          manualPhone: storedCargoNfResponsible.manualPhone ?? null,
+        }],
+      };
+    } else {
+      cargoNfResponsible = { recipients: [] };
+    }
 
     // Buscar colaboradores ativos com telefone
     let collaborators: { id: number; name: string; phone: string | null }[] = [];
@@ -123,8 +142,28 @@ export const notificationSettingsRouter = router({
       clientNotifKeys: CLIENT_NOTIF_KEYS,
       clientMeta: CLIENT_META,
       clients,
+      cargoNfResponsible,
     };
   }),
+
+  // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
+  // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
+  // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
+  updateCargoNfResponsible: protectedProcedure
+    .input(z.object({
+      recipients: z.array(z.object({
+        collaboratorId: z.number().nullable(),
+        manualName: z.string().nullable().optional(),
+        manualPhone: z.string().nullable().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível");
+      await ensureTable(db);
+      await setSetting(db, "cargoNfResponsible", input);
+      return { ok: true };
+    }),
 
   update: protectedProcedure
     .input(z.record(z.string(), z.object({

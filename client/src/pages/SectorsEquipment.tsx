@@ -44,7 +44,7 @@ export default function SectorsEquipment() {
   const [equipForm, setEquipForm] = useState({
     name: "", typeId: 0, sectorId: 0, clientId: 0, brand: "", model: "",
     year: "", serialNumber: "", licensePlate: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
-    defaultHeightM: "", defaultWidthM: "", defaultLengthM: "",
+    defaultHeightM: "", defaultWidthM: "", defaultLengthM: "", expectedWeightTon: "",
   });
   const [filterSectorId, setFilterSectorId] = useState(0);
   const [filterClientId, setFilterClientId] = useState(0);
@@ -248,7 +248,7 @@ export default function SectorsEquipment() {
   });
 
   const resetEquipForm = () => {
-    setEquipForm({ name: "", typeId: 0, sectorId: 0, clientId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", status: "ativo", defaultHeightM: "", defaultWidthM: "", defaultLengthM: "" });
+    setEquipForm({ name: "", typeId: 0, sectorId: 0, clientId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", status: "ativo", defaultHeightM: "", defaultWidthM: "", defaultLengthM: "", expectedWeightTon: "" });
     setEquipPhotoPreview(null);
     setEquipPhotoBase64(null);
     setExistingImageUrl(null);
@@ -278,6 +278,9 @@ export default function SectorsEquipment() {
     normalizedTypeName.includes("bitrem") || normalizedTypeName.includes("rodotrem") ||
     normalizedTypeName.includes("trator") || normalizedTypeName.includes("tratores") ||
     normalizedTypeName.includes("maquina") || normalizedTypeName.includes("maquinas");
+  // Mais restrito que isVehicleType — só caminhões (não carros/motos/tratores/etc.), pro campo
+  // de peso previsto, que só faz sentido pra quem carrega madeira.
+  const isTruckType = normalizedTypeName.includes("caminhao") || normalizedTypeName.includes("caminhoes");
 
   const openEditSector = (s: typeof sectorsList[number]) => {
     setEditSectorId(s.id);
@@ -292,6 +295,7 @@ export default function SectorsEquipment() {
       model: e.model || "", year: e.year?.toString() || "",
       serialNumber: e.serialNumber || "", licensePlate: (e as any).licensePlate || "", status: e.status as any,
       defaultHeightM: (e as any).defaultHeightM || "", defaultWidthM: (e as any).defaultWidthM || "", defaultLengthM: (e as any).defaultLengthM || "",
+      expectedWeightTon: (e as any).expectedWeightTon || "",
     });
     // Carregar imagem existente
     const imgUrl = (e as any).imageUrl;
@@ -356,6 +360,7 @@ export default function SectorsEquipment() {
       defaultHeightM: isVehicleType ? (equipForm.defaultHeightM || undefined) : undefined,
       defaultWidthM: isVehicleType ? (equipForm.defaultWidthM || undefined) : undefined,
       defaultLengthM: isVehicleType ? (equipForm.defaultLengthM || undefined) : undefined,
+      expectedWeightTon: isTruckType ? (equipForm.expectedWeightTon || undefined) : undefined,
       invoiceUrl: invoiceBase64 || existingInvoiceUrl || undefined,
       documentUrl: documentBase64 || existingDocumentUrl || undefined,
       insuranceUrl: insuranceBase64 || existingInsuranceUrl || undefined,
@@ -685,6 +690,17 @@ export default function SectorsEquipment() {
                               />
                             </div>
                           </div>
+                        </div>
+                      )}
+                      {isTruckType && (
+                        <div className="col-span-2">
+                          <Label>Peso Previsto (toneladas)</Label>
+                          <Input
+                            value={equipForm.expectedWeightTon}
+                            onChange={e => setEquipForm(f => ({ ...f, expectedWeightTon: e.target.value }))}
+                            placeholder="ex: 40"
+                            inputMode="decimal"
+                          />
                         </div>
                       )}
                       <div className="col-span-2">

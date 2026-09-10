@@ -26,6 +26,7 @@ import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useWorkLocations } from "@/hooks/useWorkLocations";
 import { useOfflineQueue } from "@/hooks/useOfflineQueue";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 // ===== HELPERS =====
 // Fix timezone issue: date-only strings like "2026-05-08" are parsed as UTC midnight,
@@ -1316,6 +1317,7 @@ export default function CargoControl() {
     receiverName: "",
     thirdPartyContractor: "",
     thirdPartyCost: "",
+    responsavelCargaId: 0,
   });
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -1333,6 +1335,9 @@ export default function CargoControl() {
   const { data: loads = [], isLoading } = trpc.cargoLoads.list.useQuery({ search: search || undefined });
   const { data: trucks = [] } = trpc.cargoLoads.listTrucks.useQuery();
   const { data: drivers = [] } = trpc.cargoLoads.listDrivers.useQuery();
+  const { data: allCollaborators = [] } = trpc.collaborators.list.useQuery({ active: true });
+  const { user: loggedUser } = useAuth();
+  const myCollaboratorId = (allCollaborators as any[]).find(c => c.userId === loggedUser?.id)?.id || 0;
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
   // Deduções de adiantamento para exibir resumo financeiro por carga (todas, sem filtro)
   const { data: allDeductions = [] } = trpc.clientAdvances.listAllDeductions.useQuery();
@@ -1500,7 +1505,7 @@ export default function CargoControl() {
     }
         // Auto-selecionar local de trabalho se há apenas 1 disponível
     const autoWorkLocationId = workLocations.length === 1 ? String(workLocations[0].id) : "";
-    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", noteUnit: "", invoiceUrl: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "" });
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", noteUnit: "", invoiceUrl: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "", responsavelCargaId: myCollaboratorId });
     setPendingPhotos([]);
     setInvoiceFile(null);
   };
@@ -1537,6 +1542,7 @@ export default function CargoControl() {
       receiverName: (cargo as any).receiverName || "",
       thirdPartyContractor: (cargo as any).thirdPartyContractor || "",
       thirdPartyCost: (cargo as any).thirdPartyCost || "",
+      responsavelCargaId: (cargo as any).responsavelCargaId || 0,
     });
     // Load existing photos when editing
     const existingPhotos: string[] = cargo.photosJson ? (() => { try { return JSON.parse(cargo.photosJson); } catch { return []; } })() : [];
@@ -1585,6 +1591,8 @@ export default function CargoControl() {
       receiverName: form.receiverName || undefined,
       thirdPartyContractor: form.thirdPartyContractor || undefined,
       thirdPartyCost: form.thirdPartyCost || undefined,
+      responsavelCargaId: form.responsavelCargaId || undefined,
+      origin: window.location.origin,
     };
     if (editId) {
       // Edição: fazer upload da NF (se houver) e atualizar de forma sequencial
@@ -1593,7 +1601,10 @@ export default function CargoControl() {
           if (invoiceFileBase64 && invoiceFileName) {
             await uploadDocAsync.mutateAsync({ cargoId: editId, docBase64: invoiceFileBase64, docType: 'invoice' });
           }
-          await updateAsync.mutateAsync({ id: editId, ...data });
+          const updateResult = await updateAsync.mutateAsync({ id: editId, ...data });
+          if (updateResult?.autoExtracted?.invoiceNumber || updateResult?.autoExtracted?.noteQuantity) {
+            toast.info("Número da NF e/ou quantidade preenchidos automaticamente a partir do arquivo anexado.");
+          }
           toast.success("Carga atualizada!");
           utils.cargoLoads.list.invalidate();
           utils.cargoLoads.getById.invalidate();
@@ -2909,6 +2920,20 @@ export default function CargoControl() {
                   </div>
                 )}
                 <div>
+                  <Label>Responsável pela Carga</Label>
+                  <select
+                    value={form.responsavelCargaId}
+                    onChange={e => setForm(f => ({ ...f, responsavelCargaId: parseInt(e.target.value) }))}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                  >
+                    <option value={0}>Nenhum selecionado</option>
+                    {(allCollaborators as any[]).map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Recebe o aviso via WhatsApp quando a NF desta carga for anexada. Pré-preenchido com quem está cadastrando.</p>
+                </div>
+                <div>
                   <Label>Número da NF (opcional)</Label>
                   <Input
                     value={form.invoiceNumber}
@@ -2941,7 +2966,7 @@ export default function CargoControl() {
                 </div>
                 
                   <div>
-                    <Label>Upload da NF (PDF ou imagem, opcional)</Label>
+                    <Label>Upload da NF (XML, PDF ou imagem, opcional)</Label>
                     <div
                       className="mt-1 border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:border-primary transition-colors"
                       onClick={() => document.getElementById('invoice-file-input')?.click()}
@@ -2978,9 +3003,10 @@ export default function CargoControl() {
                       id="invoice-file-input"
                       type="file"
                       className="hidden"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.xml"
                       onChange={e => setInvoiceFile(e.target.files?.[0] || null)}
                     />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Número, quantidade e unidade são preenchidos automaticamente a partir do XML ou do PDF da NFe (quando tiver texto selecionável).</p>
                   </div>
                 
                 {invoiceDuplicate?.exists && (
