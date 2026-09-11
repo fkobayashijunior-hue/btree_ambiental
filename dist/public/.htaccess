@@ -7,6 +7,14 @@ PassengerRestartDir /home/u629128033/domains/btreeambiental.com/nodejs/tmp
 
 SetEnv LSNODE_CONSOLE_LOG /home/u629128033/domains/btreeambiental.com/logs/node_console.log
 
+# Limitar processos do app para não estourar o limite de 120 da Hostinger
+# (o app é single-process; mais instâncias não ajudam, só consomem recursos e travam)
+PassengerMaxProcesses 2
+PassengerMinInstances 1
+PassengerMaxPoolSize 2
+PassengerPoolIdleTime 300
+PassengerMaxRequests 2000
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
