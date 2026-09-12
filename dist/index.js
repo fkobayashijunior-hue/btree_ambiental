@@ -7472,9 +7472,14 @@ var cargoLoadsRouter = router({
     await db.update(cargoLoads).set(updateData).where(eq6(cargoLoads.id, input.cargoId));
     if (input.docType === "invoice") {
       try {
-        const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId }).from(cargoLoads).where(eq6(cargoLoads.id, input.cargoId)).limit(1);
+        const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId, invoiceNumber: cargoLoads.invoiceNumber }).from(cargoLoads).where(eq6(cargoLoads.id, input.cargoId)).limit(1);
         if (cargo?.fiscalNoteId) {
-          await db.update(fiscalNotes).set({ fileUrl: uploaded.url }).where(eq6(fiscalNotes.id, cargo.fiscalNoteId));
+          const fnUpdate = { fileUrl: uploaded.url };
+          const [fn] = await db.select({ invoiceNumber: fiscalNotes.invoiceNumber }).from(fiscalNotes).where(eq6(fiscalNotes.id, cargo.fiscalNoteId)).limit(1);
+          if ((!fn?.invoiceNumber || String(fn.invoiceNumber).trim() === "") && cargo.invoiceNumber) {
+            fnUpdate.invoiceNumber = cargo.invoiceNumber;
+          }
+          await db.update(fiscalNotes).set(fnUpdate).where(eq6(fiscalNotes.id, cargo.fiscalNoteId));
         }
       } catch (e) {
         console.error("[cargoLoads.uploadDocument] Erro ao sincronizar NF com a AC:", e);
