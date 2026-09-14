@@ -34,8 +34,15 @@ export default function CommissionModal({
     { collaboratorId: collaboratorId as number, referenceMonth },
     { enabled: open && collaboratorId !== null }
   );
+  const utils = trpc.useUtils();
   const updateRates = trpc.payroll.updateCommissionRates.useMutation({
     onError: (e) => toast.error(e.message || "Erro ao salvar tarifas"),
+  });
+  const updateUnit = trpc.payroll.updateCommissionUnit.useMutation({
+    onSuccess: () => {
+      utils.payroll.getCommissionBreakdown.invalidate({ collaboratorId: collaboratorId as number, referenceMonth });
+    },
+    onError: (e) => toast.error(e.message || "Erro ao salvar unidade de comissão"),
   });
 
   // Tarifas editáveis localmente (inicializadas com o que veio do servidor)
@@ -104,6 +111,29 @@ export default function CommissionModal({
               Baseado nas cargas entregues em <strong>{data.periodoBase}</strong>. As tarifas
               abaixo são próprias deste motorista — alterá-las não afeta outros motoristas.
             </p>
+            <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 bg-gray-50">
+              <span className="text-xs text-gray-500">Comissão calculada por</span>
+              <div className="flex gap-1">
+                <Button
+                  type="button" size="sm"
+                  variant={data.unidade === "carga" ? "default" : "outline"}
+                  className={data.unidade === "carga" ? "bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" : "h-7 text-xs"}
+                  disabled={updateUnit.isPending}
+                  onClick={() => data.unidade !== "carga" && updateUnit.mutate({ collaboratorId: collaboratorId as number, unit: "carga" })}
+                >
+                  Carga
+                </Button>
+                <Button
+                  type="button" size="sm"
+                  variant={data.unidade === "tonelada" ? "default" : "outline"}
+                  className={data.unidade === "tonelada" ? "bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" : "h-7 text-xs"}
+                  disabled={updateUnit.isPending}
+                  onClick={() => data.unidade !== "tonelada" && updateUnit.mutate({ collaboratorId: collaboratorId as number, unit: "tonelada" })}
+                >
+                  Tonelada
+                </Button>
+              </div>
+            </div>
             {data.items.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-4">Nenhuma carga entregue em destinos com comissão nesse período.</p>
             ) : (

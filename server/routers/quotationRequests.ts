@@ -29,6 +29,49 @@ export const quotationRequestsRouter = router({
     }));
   }),
 
+  // Tabela de consulta de itens já orçados: uma linha por item cotado por um fornecedor
+  // (nome do item, preço, data do orçamento, fornecedor, CNPJ).
+  listItemCatalog: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const requests = await db.select().from(quotationRequests);
+    const requestTitleById = new Map<number, string>(requests.map((r: typeof quotationRequests.$inferSelect) => [r.id, r.title]));
+
+    const responses = await db.select().from(quotationResponses).orderBy(desc(quotationResponses.createdAt));
+
+    const rows: Array<{
+      itemName: string;
+      price: number;
+      unit: string;
+      quotationDate: string;
+      supplierName: string;
+      cnpj: string | null;
+      requestTitle: string;
+    }> = [];
+
+    for (const resp of responses) {
+      let items: Array<{ name: string; price?: string; unit?: string }> = [];
+      try { items = JSON.parse(resp.itemsJson || "[]"); } catch { items = []; }
+      for (const it of items) {
+        const rawName = it?.name?.trim();
+        if (!rawName || !it?.price) continue;
+        const priceNum = parseFloat(String(it.price).replace(',', '.'));
+        if (isNaN(priceNum)) continue;
+        rows.push({
+          itemName: rawName,
+          price: priceNum,
+          unit: it.unit || '',
+          quotationDate: resp.createdAt,
+          supplierName: resp.tradeName || resp.supplierName,
+          cnpj: resp.cnpj || null,
+          requestTitle: requestTitleById.get(resp.quotationRequestId) || '',
+        });
+      }
+    }
+
+    return rows.sort((a, b) => new Date(b.quotationDate).getTime() - new Date(a.quotationDate).getTime());
+  }),
+
   // Buscar por ID com respostas (protegido)
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))

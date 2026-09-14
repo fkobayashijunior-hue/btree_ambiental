@@ -6,6 +6,10 @@ import { getDb } from "../db";
 import { suppliers, supplierContacts, quotations, quotationResponses } from "../../drizzle/schema";
 import { eq, desc, sql } from "drizzle-orm";
 
+// Normaliza CNPJ pra comparação (remove pontuação) — evita duplicidade por causa de
+// formatação diferente ("12.345.678/0001-90" vs "12345678000190").
+const normalizeCnpj = (cnpj: string) => cnpj.replace(/\D/g, '');
+
 export const suppliersRouter = router({
   list: protectedProcedure
     .input(z.object({ activeOnly: z.boolean().optional().default(true) }).optional())
@@ -56,6 +60,7 @@ export const suppliersRouter = router({
   create: protectedProcedure
     .input(z.object({
       name: z.string().min(1).max(255),
+      cnpj: z.string().optional(),
       address: z.string().optional(),
       city: z.string().optional(),
       state: z.string().max(2).optional(),
@@ -72,8 +77,19 @@ export const suppliersRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.cnpj && normalizeCnpj(input.cnpj)) {
+        const normCnpj = normalizeCnpj(input.cnpj);
+        const existing = await db.select({ id: suppliers.id, companyName: suppliers.companyName })
+          .from(suppliers)
+          .where(sql`REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(${suppliers.cnpj}, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ${normCnpj}`)
+          .limit(1);
+        if (existing.length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: `Já existe um fornecedor com esse CNPJ: "${existing[0].companyName}". Edite o cadastro existente em vez de criar um novo.` });
+        }
+      }
       const [result] = await db.insert(suppliers).values({
         companyName: input.name,
+        cnpj: input.cnpj || undefined,
         tradeName: input.tradeName,
         productsSold: input.productsSold,
         address: input.address,
@@ -96,6 +112,7 @@ export const suppliersRouter = router({
     .input(z.object({
       id: z.number(),
       name: z.string().min(1).max(255),
+      cnpj: z.string().optional(),
       address: z.string().optional(),
       city: z.string().optional(),
       state: z.string().max(2).optional(),
@@ -113,6 +130,16 @@ export const suppliersRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.cnpj && normalizeCnpj(input.cnpj)) {
+        const normCnpj = normalizeCnpj(input.cnpj);
+        const existing = await db.select({ id: suppliers.id, companyName: suppliers.companyName })
+          .from(suppliers)
+          .where(sql`REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(${suppliers.cnpj}, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ${normCnpj} AND ${suppliers.id} != ${input.id}`)
+          .limit(1);
+        if (existing.length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: `Já existe outro fornecedor com esse CNPJ: "${existing[0].companyName}".` });
+        }
+      }
       const { id, name, active, ...rest } = input;
       await db.update(suppliers).set({
         companyName: name,
@@ -199,13 +226,35 @@ export const suppliersRouter = router({
       for (const resp of responses) {
         if (!resp.supplierName?.trim()) continue;
         const trimmedName = resp.supplierName.trim();
-        const rows = await db.execute(
-          sql`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
-        );
-        const existing = (rows as any)[0] as Array<{ id: number }>;
+        const normCnpj = normalizeCnpj(resp.cnpj || '');
+        const normPhone = (resp.sellerPhone || '').replace(/\D/g, '');
+
+        // Duplicidade: CNPJ (prioridade) → telefone/whatsapp → nome exato (como antes).
+        let existing: Array<{ id: number }> = [];
+        if (normCnpj) {
+          const rows = await db.execute(
+            sql`SELECT id FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`
+          );
+          existing = ((rows as any)[0] || []) as Array<{ id: number }>;
+        }
+        if (existing.length === 0 && normPhone.length >= 8) {
+          const rows = await db.execute(
+            sql`SELECT id FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''),' ',''),'-',''),'(',''),')',''),'.','') = ${normPhone}
+                   OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),' ',''),'-',''),'(',''),')',''),'.','') = ${normPhone}
+                 LIMIT 1`
+          );
+          existing = ((rows as any)[0] || []) as Array<{ id: number }>;
+        }
+        if (existing.length === 0) {
+          const rows = await db.execute(
+            sql`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
+          );
+          existing = ((rows as any)[0] || []) as Array<{ id: number }>;
+        }
         if (existing.length > 0) { skipped++; continue; }
         await db.insert(suppliers).values({
           companyName: trimmedName,
+          cnpj: resp.cnpj || undefined,
           address: resp.address ?? null,
           phone: resp.sellerPhone ?? null,
           whatsapp: resp.sellerPhone ?? null,

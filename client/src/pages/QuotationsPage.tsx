@@ -196,6 +196,8 @@ export default function QuotationsPage() {
   const { data: collaboratorsRaw } = trpc.collaborators.list.useQuery({ active: true });
   const collaborators = collaboratorsRaw ? [...collaboratorsRaw].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) : undefined;
   const { data: quotRequests, refetch: refetchRequests } = trpc.quotationRequests.list.useQuery();
+  const { data: itemCatalog } = trpc.quotationRequests.listItemCatalog.useQuery();
+  const [catalogSearch, setCatalogSearch] = useState('');
   const { data: requestDetail } = trpc.quotationRequests.getById.useQuery(
     { id: viewResponsesId! },
     { enabled: viewResponsesId !== null }
@@ -505,12 +507,15 @@ export default function QuotationsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-3">
+        <TabsList className="grid grid-cols-4">
           <TabsTrigger value="last" className="flex items-center gap-1">
             <FileText className="w-3 h-3" /> Orçamentos
           </TabsTrigger>
           <TabsTrigger value="requests" className="flex items-center gap-1">
             <Send className="w-3 h-3" /> Solicitar
+          </TabsTrigger>
+          <TabsTrigger value="catalog" className="flex items-center gap-1">
+            <FileText className="w-3 h-3" /> Itens
           </TabsTrigger>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
         </TabsList>
@@ -761,7 +766,52 @@ export default function QuotationsPage() {
           )}
         </TabsContent>
 
-        {/* CATEGORIES TAB */}
+        {/* CATÁLOGO DE ITENS — tabela de consulta com todo item já orçado */}
+        <TabsContent value="catalog" className="space-y-3 mt-3">
+          <Input
+            placeholder="Buscar item..."
+            value={catalogSearch}
+            onChange={(e) => setCatalogSearch(e.target.value)}
+          />
+          {!itemCatalog || itemCatalog.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>Nenhum item orçado ainda</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto border rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium">Item</th>
+                    <th className="text-right px-3 py-2 font-medium">Preço</th>
+                    <th className="text-left px-3 py-2 font-medium">Data do Orçamento</th>
+                    <th className="text-left px-3 py-2 font-medium">Fornecedor</th>
+                    <th className="text-left px-3 py-2 font-medium">CNPJ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {itemCatalog
+                    .filter((row) => row.itemName.toLowerCase().includes(catalogSearch.toLowerCase()))
+                    .map((row, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-800">{row.itemName}</td>
+                        <td className="px-3 py-2 text-right font-medium text-purple-700 whitespace-nowrap">
+                          R$ {row.price.toFixed(2)}{row.unit ? `/${row.unit}` : ''}
+                        </td>
+                        <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                          {new Date(row.quotationDate).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="px-3 py-2 text-gray-700">{row.supplierName}</td>
+                        <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{row.cnpj || '—'}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
         <TabsContent value="categories" className="space-y-3 mt-3">
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-500">Gerencie os tipos de produtos</p>

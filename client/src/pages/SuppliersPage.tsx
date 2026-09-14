@@ -18,6 +18,7 @@ import {
 
 interface SupplierForm {
   name: string;
+  cnpj: string;
   tradeName: string;
   productsSold: string;
   address: string;
@@ -41,7 +42,7 @@ interface ContactForm {
 }
 
 const emptyForm: SupplierForm = {
-  name: '', tradeName: '', productsSold: '', address: '', city: '', state: '', phone: '',
+  name: '', cnpj: '', tradeName: '', productsSold: '', address: '', city: '', state: '', phone: '',
   whatsapp: '', email: '', website: '', notes: '',
   sellerName: '', pixKey: '',
 };
@@ -87,6 +88,7 @@ export default function SuppliersPage() {
       toast.success("Fornecedor atualizado!");
       resetForm();
     },
+    onError: (err) => toast.error("Erro: " + err.message),
   });
 
   const syncMutation = trpc.suppliers.syncFromQuotationResponses.useMutation({
@@ -144,6 +146,7 @@ export default function SuppliersPage() {
   function openEdit(s: any) {
     setForm({
       name: s.companyName || '',
+      cnpj: (s as any).cnpj || '',
       tradeName: (s as any).tradeName || '',
       productsSold: (s as any).productsSold || '',
       address: s.address || '',
@@ -553,6 +556,15 @@ export default function SuppliersPage() {
                 onChange={e => setForm(f => ({ ...f, tradeName: e.target.value }))}
                 placeholder="Ex: Geral Lubrificantes (como a loja é conhecida)"
               />
+            </div>
+            <div>
+              <Label>CNPJ</Label>
+              <Input
+                value={form.cnpj}
+                onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))}
+                placeholder="00.000.000/0001-00"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Usado para evitar fornecedores duplicados — se já existir um com esse CNPJ, o sistema avisa.</p>
             </div>
             <div>
               <Label>O que vende (grupo/tipo)</Label>

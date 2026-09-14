@@ -837,6 +837,19 @@ export const payrollRouter = router({
       return { success: true };
     }),
 
+  // Define se a comissão desse motorista/terceirizado é calculada por carga entregue ou por
+  // tonelada líquida entregue. Fica salvo por colaborador (não afeta os outros) — assim, quando
+  // um motorista novo entrar, basta trocar aqui em vez de mexer em código.
+  updateCommissionUnit: protectedProcedure
+    .input(z.object({ collaboratorId: z.number(), unit: z.enum(["carga", "tonelada"]) }))
+    .mutation(async ({ ctx, input }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(collaborators).set({ commissionUnit: input.unit }).where(eq(collaborators.id, input.collaboratorId));
+      return { success: true };
+    }),
+
   // Detalhamento da comissão de Motorista (por carga entregue no destino, no próprio mês da
   // Folha) ou Operador (toneladas líquidas do cliente no mês ÷ nº de operadores daquele cliente).
   getCommissionBreakdown: protectedProcedure
