@@ -1137,11 +1137,17 @@ export const cargoLoadsRouter = router({
       await db.update(cargoLoads).set(updateData as any).where(eq(cargoLoads.id, input.cargoId));
 
       if (input.docType === 'invoice') {
-        // Sincronizar o arquivo também na ação (AC) vinculada à carga
+        // Sincronizar o arquivo E o número da nota também na ação (AC) vinculada à carga
         try {
-          const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId }).from(cargoLoads).where(eq(cargoLoads.id, input.cargoId)).limit(1);
+          const [cargo] = await db.select({ fiscalNoteId: cargoLoads.fiscalNoteId, invoiceNumber: cargoLoads.invoiceNumber }).from(cargoLoads).where(eq(cargoLoads.id, input.cargoId)).limit(1);
           if (cargo?.fiscalNoteId) {
-            await db.update(fiscalNotes).set({ fileUrl: uploaded.url }).where(eq(fiscalNotes.id, cargo.fiscalNoteId));
+            const fnUpdate: Record<string, unknown> = { fileUrl: uploaded.url };
+            // Se a AC ainda não tem número de NF, copia o da carga (para o Controle de Notas exibir)
+            const [fn] = await db.select({ invoiceNumber: fiscalNotes.invoiceNumber }).from(fiscalNotes).where(eq(fiscalNotes.id, cargo.fiscalNoteId)).limit(1);
+            if ((!fn?.invoiceNumber || String(fn.invoiceNumber).trim() === '') && cargo.invoiceNumber) {
+              fnUpdate.invoiceNumber = cargo.invoiceNumber;
+            }
+            await db.update(fiscalNotes).set(fnUpdate as any).where(eq(fiscalNotes.id, cargo.fiscalNoteId));
           }
         } catch (e) {
           console.error('[cargoLoads.uploadDocument] Erro ao sincronizar NF com a AC:', e);
