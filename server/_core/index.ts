@@ -43,8 +43,32 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+// Guard: rodar as migrações no MÁXIMO 1x a cada 6 horas. Antes rodavam a CADA
+// boot/restart do processo — 130 comandos DDL (CREATE/ALTER) sequenciais contra o
+// MySQL remoto, deixando o processo ocupado por muitos segundos. Sob tráfego, o
+// Passenger subia novos processos enquanto os antigos ainda migravam → acúmulo
+// de processos até o limite de 120 da Hostinger. A marca fica em arquivo em /tmp.
+const MIGRATION_MARK = '/tmp/btree_last_migration';
+const MIGRATION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
+function migrationDueRecently(): boolean {
+  try {
+    const fs = require('fs');
+    if (!fs.existsSync(MIGRATION_MARK)) return false;
+    const ts = parseInt(fs.readFileSync(MIGRATION_MARK, 'utf8').trim() || '0', 10);
+    return (Date.now() - ts) < MIGRATION_INTERVAL_MS;
+  } catch { return false; }
+}
+function markMigrationRun(): void {
+  try { const fs = require('fs'); fs.writeFileSync(MIGRATION_MARK, String(Date.now())); } catch { /* silent */ }
+}
+
 async function runAutoMigrations() {
   try {
+    if (migrationDueRecently()) {
+      console.log('[AutoMigration] Pulando — já rodou nas últimas 6h');
+      return;
+    }
+    markMigrationRun();
     const { getDb } = await import('../db');
     const db = await getDb();
     if (!db) return;

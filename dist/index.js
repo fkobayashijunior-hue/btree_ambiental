@@ -21744,8 +21744,32 @@ try {
 } catch (e) {
   console.log("[ENV] No .env override:", e);
 }
+var MIGRATION_MARK = "/tmp/btree_last_migration";
+var MIGRATION_INTERVAL_MS = 6 * 60 * 60 * 1e3;
+function migrationDueRecently() {
+  try {
+    const fs3 = __require("fs");
+    if (!fs3.existsSync(MIGRATION_MARK)) return false;
+    const ts = parseInt(fs3.readFileSync(MIGRATION_MARK, "utf8").trim() || "0", 10);
+    return Date.now() - ts < MIGRATION_INTERVAL_MS;
+  } catch {
+    return false;
+  }
+}
+function markMigrationRun() {
+  try {
+    const fs3 = __require("fs");
+    fs3.writeFileSync(MIGRATION_MARK, String(Date.now()));
+  } catch {
+  }
+}
 async function runAutoMigrations() {
   try {
+    if (migrationDueRecently()) {
+      console.log("[AutoMigration] Pulando \u2014 j\xE1 rodou nas \xFAltimas 6h");
+      return;
+    }
+    markMigrationRun();
     const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
     const db = await getDb2();
     if (!db) return;
