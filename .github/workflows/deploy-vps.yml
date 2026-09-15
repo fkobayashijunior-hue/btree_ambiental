@@ -1,0 +1,29 @@
+name: Deploy para VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy-vps:
+    name: Implantar no VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH para o VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            echo "=== Deploy BTREE no VPS ==="
+            cd /root/btree_ambiental
+            git fetch origin main
+            git reset --hard origin/main
+            echo "Commit atual: $(git log --oneline -1)"
+            pm2 restart btree --update-env
+            echo "=== Deploy concluido ==="
