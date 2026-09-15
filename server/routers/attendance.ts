@@ -214,6 +214,10 @@ export const attendanceRouter = router({
         longitude: input.longitude || null,
         locationName: resolvedLocationName,
         workLocationId: resolvedWorkLocationId,
+        // CLT recebe salário mensal (não diária semanal): a presença serve apenas para
+        // custo/rateio por local, então nasce como 'pago' para não aparecer como valor
+        // pendente em Pagamentos. Diarista/terceirizado continuam 'pendente' por padrão.
+        paymentStatusCa: input.employmentType === "clt" ? "pago" : "pendente",
       });
 
       // Notificar o administrador
