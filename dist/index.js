@@ -7138,6 +7138,14 @@ var cargoLoadsRouter = router({
           const [newNote] = await db.select({ id: fiscalNotes2.id }).from(fiscalNotes2).orderBy(desc3(fiscalNotes2.id)).limit(1);
           if (newNote) {
             await db.update(cargoLoads).set({ fiscalNoteId: newNote.id }).where(eq6(cargoLoads.id, newCargoId));
+            const [c] = await db.select({ invoiceNumber: cargoLoads.invoiceNumber, invoiceUrl: cargoLoads.invoiceUrl }).from(cargoLoads).where(eq6(cargoLoads.id, newCargoId)).limit(1);
+            const [n] = await db.select({ invoiceNumber: fiscalNotes2.invoiceNumber, fileUrl: fiscalNotes2.fileUrl }).from(fiscalNotes2).where(eq6(fiscalNotes2.id, newNote.id)).limit(1);
+            const fix = {};
+            if ((!n?.invoiceNumber || String(n.invoiceNumber).trim() === "") && c?.invoiceNumber) fix.invoiceNumber = c.invoiceNumber;
+            if ((!n?.fileUrl || String(n.fileUrl).trim() === "") && (invoiceFileUrl || c?.invoiceUrl)) fix.fileUrl = invoiceFileUrl || c?.invoiceUrl;
+            if (Object.keys(fix).length > 0) {
+              await db.update(fiscalNotes2).set(fix).where(eq6(fiscalNotes2.id, newNote.id));
+            }
           }
         } catch {
         }

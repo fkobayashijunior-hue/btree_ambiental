@@ -792,6 +792,16 @@ export const cargoLoadsRouter = router({
             const [newNote] = await db.select({ id: fiscalNotes.id }).from(fiscalNotes).orderBy(desc(fiscalNotes.id)).limit(1);
             if (newNote) {
               await db.update(cargoLoads).set({ fiscalNoteId: newNote.id }).where(eq(cargoLoads.id, newCargoId));
+              // Fallback: garantir que a AC tenha o número e o arquivo da NF.
+              // Se o INSERT acima perdeu campos (ex.: conexão instável), copia da carga.
+              const [c] = await db.select({ invoiceNumber: cargoLoads.invoiceNumber, invoiceUrl: cargoLoads.invoiceUrl }).from(cargoLoads).where(eq(cargoLoads.id, newCargoId)).limit(1);
+              const [n] = await db.select({ invoiceNumber: fiscalNotes.invoiceNumber, fileUrl: fiscalNotes.fileUrl }).from(fiscalNotes).where(eq(fiscalNotes.id, newNote.id)).limit(1);
+              const fix: Record<string, unknown> = {};
+              if ((!n?.invoiceNumber || String(n.invoiceNumber).trim() === '') && c?.invoiceNumber) fix.invoiceNumber = c.invoiceNumber;
+              if ((!n?.fileUrl || String(n.fileUrl).trim() === '') && (invoiceFileUrl || c?.invoiceUrl)) fix.fileUrl = invoiceFileUrl || c?.invoiceUrl;
+              if (Object.keys(fix).length > 0) {
+                await db.update(fiscalNotes).set(fix as any).where(eq(fiscalNotes.id, newNote.id));
+              }
             }
           } catch { /* silent */ }
         }
