@@ -1,29 +1,21 @@
-name: Deploy para VPS
+name: VPS - status do mecanismo de deploy
 
+# A produção usa o atualizador instalado no VPS, que busca origin/main.
+# Não disparar SSH em pushes enquanto os secrets de Actions não estiverem
+# configurados e essa migração de deploy não tiver sido validada.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  deploy-vps:
-    name: Implantar no VPS
+  deployment-info:
+    name: Informar fluxo atual (sem implantar)
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH para o VPS
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          script: |
-            set -e
-            echo "=== Deploy BTREE no VPS ==="
-            cd /root/btree_ambiental
-            git fetch origin main
-            git reset --hard origin/main
-            echo "Commit atual: $(git log --oneline -1)"
-            pm2 restart btree --update-env
-            echo "=== Deploy concluido ==="
+      - name: Mecanismo de produção
+        run: |
+          echo 'Este workflow não executa deploy.'
+          echo 'O VPS consulta origin/main a cada 2 minutos e reinicia o BTREE quando há uma nova versão.'
+          echo 'Mudanças devem incluir dist/ compilado; migrações de banco exigem aplicação controlada antes do push.'

@@ -5,11 +5,25 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   cargoLoads, cargoDestinations, clients, equipment, collaborators, users, cargoTrackingPhotos, gpsLocations,
-  cargoWeeklyClosings, clientDocuments, buyerClients, fiscalNotes, clientAdvances, clientAdvanceDeductions
+  cargoWeeklyClosings, clientDocuments, buyerClients, fiscalNotes, clientAdvances, clientAdvanceDeductions, clientAreas
 } from "../../drizzle/schema";
 import { eq, desc, asc, and, sql, ne, or } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
 import mysql from "mysql2/promise";
+import { areaScopeCondition, getAreaPriceTerms, getCargoFinancialValue, getClientArea, normalizeAreaId, requireConfirmedArea, sameArea } from "../lib/clientAreaScope";
+
+const cargoAreaId = (cargoLoads as any).areaId;
+const closingAreaId = (cargoWeeklyClosings as any).areaId;
+const closingAreaScopeKey = (cargoWeeklyClosings as any).areaScopeKey;
+const closingPriceUnit = (cargoWeeklyClosings as any).priceUnit;
+const closingTotalVolumeM3 = (cargoWeeklyClosings as any).totalVolumeM3;
+const advanceAreaId = (clientAdvances as any).areaId;
+const hasField = (value: unknown, key: string) => !!value && Object.prototype.hasOwnProperty.call(value, key);
+const inputArea = (value: any) => normalizeAreaId(value?.areaId);
+const listArea = (input: any) => hasField(input, "areaId") ? areaScopeCondition(cargoAreaId, inputArea(input)) : sql`1 = 1`;
+async function checkedArea(db: any, clientId: number, areaId: number | null, confirmed = false) { const area = await getClientArea(db, clientId, areaId); if (confirmed && areaId !== null) requireConfirmedArea(area); return area; }
+function assertCargoArea(cargo: any, clientId?: number | null, areaId?: number | null) { if (clientId != null && cargo.clientId != null && cargo.clientId !== clientId) throw new TRPCError({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." }); if (!sameArea(cargo.areaId, areaId)) throw new TRPCError({ code: "BAD_REQUEST", message: "A carga pertence a outra área financeira." }); }
+export function cargoAreaIsolationInvariant(left: unknown, right: unknown) { return sameArea(left, right); }
 
 // Direct mysql2 connection for client_documents (bypasses Drizzle pool issues)
 async function getDirectConnection() {
@@ -60,87 +74,23 @@ async function getExpectedWeightTon(db: any, vehicleId: number | null | undefine
 }
 
 // ── Abatimento automático de adiantamento ao finalizar/pagar uma carga ──
-async function autoDeductAdvanceForCargo(
-  db: Awaited<ReturnType<typeof getDb>>,
-  cargoId: number
-): Promise<void> {
+async function autoDeductAdvanceForCargo(db: Awaited<ReturnType<typeof getDb>>, cargoId: number): Promise<void> {
   if (!db) return;
   try {
-    // Buscar a carga para obter clientId, peso e data
-    const [cargo] = await db.select({
-      id: cargoLoads.id,
-      clientId: cargoLoads.clientId,
-      date: cargoLoads.date,
-      weightNetKg: cargoLoads.weightNetKg,
-      weightOutKg: cargoLoads.weightOutKg,
-      paymentStatus: cargoLoads.paymentStatus,
-    }).from(cargoLoads).where(eq(cargoLoads.id, cargoId)).limit(1);
-    if (!cargo || !cargo.clientId) return;
-    // Verificar se já existe dedução para esta carga (evitar duplicatas)
-    const existingDeductions = await db.select({ id: clientAdvanceDeductions.id })
-      .from(clientAdvanceDeductions)
-      .where(eq(clientAdvanceDeductions.cargoLoadId, cargoId))
-      .limit(1);
-    if (existingDeductions.length > 0) return; // já foi abatido
-    // Verificar se já está pago
-    if (cargo.paymentStatus === 'pago') return;
-    // Buscar adiantamentos ativos do cliente (ordenados por data — mais antigo primeiro)
-    const advances = await db.select()
-      .from(clientAdvances)
-      .where(and(eq(clientAdvances.clientId, cargo.clientId), eq(clientAdvances.status, 'ativo')))
-      .orderBy(clientAdvances.date);
-    if (advances.length === 0) return;
-    // Calcular valor da carga: buscar pricePerTon/pricePerM3 do cliente
-    const [client] = await db.select({ pricePerTon: clients.pricePerTon, pricePerM3: clients.pricePerM3, priceType: clients.priceType })
-      .from(clients).where(eq(clients.id, cargo.clientId)).limit(1);
-    const weightNet = parseFloat(cargo.weightNetKg || cargo.weightOutKg || '0');
-    const pricePerTon = parseFloat(client?.pricePerTon || '0');
-    const pricePerM3 = parseFloat(client?.pricePerM3 || '0');
-    let loadValue = 0;
-    if (weightNet > 0 && pricePerTon > 0) {
-      loadValue = (weightNet / 1000) * pricePerTon;
-    } else if (pricePerM3 > 0) {
-      // fallback para m3 se não tiver peso
-      loadValue = 0; // sem volume disponível aqui, pular
+    const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId, date: cargoLoads.date, weightNetKg: cargoLoads.weightNetKg, weightOutKg: cargoLoads.weightOutKg, volumeM3: cargoLoads.volumeM3, finalVolumeM3: cargoLoads.finalVolumeM3, agreedUnit: (cargoLoads as any).agreedUnit, agreedUnitPrice: (cargoLoads as any).agreedUnitPrice, paymentStatus: cargoLoads.paymentStatus }).from(cargoLoads).where(eq(cargoLoads.id, cargoId)).limit(1);
+    if (!cargo?.clientId || cargo.paymentStatus === 'pago') return;
+    const areaId = normalizeAreaId(cargo.areaId); const [client] = await db.select().from(clients).where(eq(clients.id, cargo.clientId)).limit(1); if (!client) return;
+    const area = areaId === null ? null : await checkedArea(db, cargo.clientId, areaId, true);
+    const value = getCargoFinancialValue(cargo as any, client as any, area as any); if (value == null || value <= 0) return;
+    if ((await db.select({ id: clientAdvanceDeductions.id }).from(clientAdvanceDeductions).where(eq(clientAdvanceDeductions.cargoLoadId, cargoId)).limit(1)).length) return;
+    const advances = await db.select().from(clientAdvances).where(and(eq(clientAdvances.clientId, cargo.clientId), eq(clientAdvances.status, 'ativo'), areaScopeCondition(advanceAreaId, areaId))).orderBy(clientAdvances.date, clientAdvances.id);
+    let remaining = value; const date = String(cargo.date).slice(0, 10);
+    for (const advance of advances) { if (remaining <= 0.01) break; const before = parseFloat(advance.balanceRemaining || '0'); if (before <= 0) continue; const amount = Math.min(remaining, before); const after = before - amount;
+      await db.insert(clientAdvanceDeductions).values({ advanceId: advance.id, clientId: cargo.clientId, cargoLoadId: cargoId, amount: amount.toFixed(2), balanceBefore: before.toFixed(2), balanceAfter: after.toFixed(2), description: `Abatimento automático carga #${cargoId} - ${date}`, date });
+      await db.update(clientAdvances).set({ balanceRemaining: after.toFixed(2), status: after <= 0.01 ? 'quitado' : 'ativo' }).where(and(eq(clientAdvances.id, advance.id), eq(clientAdvances.clientId, cargo.clientId), areaScopeCondition(advanceAreaId, areaId))); remaining -= amount;
     }
-    if (loadValue <= 0) return;
-    const cargoDateStr = typeof cargo.date === 'string' ? cargo.date.slice(0, 10) : new Date(cargo.date).toISOString().slice(0, 10);
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    let remainingToDeduct = loadValue;
-    for (const advance of advances) {
-      if (remainingToDeduct <= 0) break;
-      let balanceRemaining = parseFloat(advance.balanceRemaining || '0');
-      if (balanceRemaining <= 0) continue;
-      const deducted = Math.min(remainingToDeduct, balanceRemaining);
-      const balanceBefore = balanceRemaining;
-      const balanceAfter = balanceRemaining - deducted;
-      // Registrar dedução
-      await db.insert(clientAdvanceDeductions).values({
-        advanceId: advance.id,
-        clientId: cargo.clientId,
-        cargoLoadId: cargoId,
-        amount: String(deducted.toFixed(2)),
-        balanceBefore: String(balanceBefore.toFixed(2)),
-        balanceAfter: String(balanceAfter.toFixed(2)),
-        description: `Abatimento automático carga #${cargoId} - ${cargoDateStr}`,
-        date: cargoDateStr,
-      });
-      // Atualizar saldo do adiantamento
-      await db.update(clientAdvances).set({
-        balanceRemaining: String(balanceAfter.toFixed(2)),
-        status: balanceAfter <= 0 ? 'quitado' : 'ativo',
-      }).where(eq(clientAdvances.id, advance.id));
-      remainingToDeduct -= deducted;
-    }
-    // Se o valor total da carga foi coberto pelo adiantamento, marcar como pago
-    if (remainingToDeduct <= 0.01) {
-      await db.update(cargoLoads)
-        .set({ paymentStatus: 'pago', paidAt: now })
-        .where(eq(cargoLoads.id, cargoId));
-    }
-  } catch (e) {
-    console.error('[autoDeductAdvance] Erro:', e);
-  }
+    if (remaining <= 0.01) await db.update(cargoLoads).set({ paymentStatus: 'pago', paidAt: new Date().toISOString().slice(0, 19).replace('T', ' ') }).where(and(eq(cargoLoads.id, cargoId), eq(cargoLoads.clientId, cargo.clientId), areaScopeCondition(cargoAreaId, areaId)));
+  } catch (e) { console.error('[autoDeductAdvance] Erro:', e); }
 }
 
 export const cargoLoadsRouter = router({
@@ -296,6 +246,7 @@ export const cargoLoadsRouter = router({
       status: z.enum(["pendente", "entregue", "cancelado"]).optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
+      areaId: z.number().nullable().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -340,6 +291,13 @@ export const cargoLoadsRouter = router({
           weightKg: cargoLoads.weightKg,
           invoiceNumber: cargoLoads.invoiceNumber,
           clientId: cargoLoads.clientId,
+          areaId: cargoAreaId,
+          area: clientAreas,
+          clientPricePerTon: clients.pricePerTon,
+          agreedUnit: (cargoLoads as any).agreedUnit,
+          agreedUnitPrice: (cargoLoads as any).agreedUnitPrice,
+          agreedPaymentMethod: (cargoLoads as any).agreedPaymentMethod,
+          agreedPaymentTermDays: (cargoLoads as any).agreedPaymentTermDays,
           clientName: cargoLoads.clientName,
           photosJson: cargoLoads.photosJson,
           notes: cargoLoads.notes,
@@ -388,11 +346,13 @@ export const cargoLoadsRouter = router({
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
+        .leftJoin(clientAreas, eq(cargoLoads.areaId, clientAreas.id))
         .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
         .leftJoin(equipment, eq(cargoLoads.vehicleId, equipment.id))
         .leftJoin(gpsLocations, eq(cargoLoads.workLocationId, gpsLocations.id))
         .leftJoin(collaborators, eq(cargoLoads.driverCollaboratorId, collaborators.id))
         .leftJoin(fiscalNotes, eq(cargoLoads.fiscalNoteId, fiscalNotes.id))
+        .where(listArea(input))
         .orderBy(desc(cargoLoads.date), desc(cargoLoads.createdAt));
 
       let filtered = results;
@@ -420,6 +380,9 @@ export const cargoLoadsRouter = router({
 
       return filtered.map(r => ({
         ...r,
+        areaName: r.area ? `${r.area.fieldName ? r.area.fieldName+' — ' : ''}${r.area.name}` : 'Área atual (Área 1)',
+        financialValue: getCargoFinancialValue(r, {pricePerTon:r.clientPricePerTon}, r.area),
+        areaAgreementPending: r.areaId != null && r.area?.agreementStatus !== 'confirmed',
         clientName: r.clientNameJoined || r.clientName,
         destination: r.destinationNameJoined || r.destination,
         vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
@@ -429,7 +392,7 @@ export const cargoLoadsRouter = router({
     }),
 
   getById: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), areaId: z.number().nullable().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
@@ -451,6 +414,13 @@ export const cargoLoadsRouter = router({
           weightKg: cargoLoads.weightKg,
           invoiceNumber: cargoLoads.invoiceNumber,
           clientId: cargoLoads.clientId,
+          areaId: cargoAreaId,
+          area: clientAreas,
+          clientPricePerTon: clients.pricePerTon,
+          agreedUnit: (cargoLoads as any).agreedUnit,
+          agreedUnitPrice: (cargoLoads as any).agreedUnitPrice,
+          agreedPaymentMethod: (cargoLoads as any).agreedPaymentMethod,
+          agreedPaymentTermDays: (cargoLoads as any).agreedPaymentTermDays,
           clientName: cargoLoads.clientName,
           photosJson: cargoLoads.photosJson,
           notes: cargoLoads.notes,
@@ -497,17 +467,21 @@ export const cargoLoadsRouter = router({
         })
         .from(cargoLoads)
         .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
+        .leftJoin(clientAreas, eq(cargoLoads.areaId, clientAreas.id))
         .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
         .leftJoin(equipment, eq(cargoLoads.vehicleId, equipment.id))
         .leftJoin(gpsLocations, eq(cargoLoads.workLocationId, gpsLocations.id))
         .leftJoin(collaborators, eq(cargoLoads.driverCollaboratorId, collaborators.id))
         .leftJoin(fiscalNotes, eq(cargoLoads.fiscalNoteId, fiscalNotes.id))
-        .where(eq(cargoLoads.id, input.id))
+        .where(and(eq(cargoLoads.id, input.id), listArea(input)))
         .limit(1);
       if (!result.length) throw new TRPCError({ code: "NOT_FOUND" });
       const r = result[0];
       return {
         ...r,
+        areaName: r.area ? `${r.area.fieldName ? r.area.fieldName+' — ' : ''}${r.area.name}` : 'Área atual (Área 1)',
+        financialValue: getCargoFinancialValue(r, {pricePerTon:r.clientPricePerTon}, r.area),
+        areaAgreementPending: r.areaId != null && r.area?.agreementStatus !== 'confirmed',
         clientName: r.clientNameJoined || r.clientName,
         destination: r.destinationNameJoined || r.destination,
         vehiclePlate: r.vehiclePlateJoined || r.vehiclePlate,
@@ -518,7 +492,7 @@ export const cargoLoadsRouter = router({
 
   // Listagem pública para portal do cliente (por token)
   getByClientToken: publicProcedure
-    .input(z.object({ clientId: z.number(), token: z.string() }))
+    .input(z.object({ clientId: z.number(), token: z.string(), areaId: z.number().nullable().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -527,7 +501,7 @@ export const cargoLoadsRouter = router({
       if (!client.length) throw new TRPCError({ code: "NOT_FOUND" });
       // Retornar cargas do cliente
       const loads = await db.select().from(cargoLoads)
-        .where(eq(cargoLoads.clientId, input.clientId))
+        .where(and(eq(cargoLoads.clientId, input.clientId), listArea(input)))
         .orderBy(desc(cargoLoads.date), desc(cargoLoads.createdAt));
       return loads;
     }),
@@ -587,6 +561,11 @@ export const cargoLoadsRouter = router({
       invoiceNumber: z.string().optional(),
       clientId: z.number().optional(),
       clientName: z.string().optional(),
+      areaId: z.number().nullable().optional(),
+      agreedUnit: z.enum(['ton', 'm3']).nullable().optional(),
+      agreedUnitPrice: z.string().nullable().optional(),
+      agreedPaymentMethod: z.string().nullable().optional(),
+      agreedPaymentTermDays: z.number().nullable().optional(),
       photosJson: z.string().optional(),
       notes: z.string().optional(),
       status: z.enum(["pendente", "entregue", "cancelado"]).optional(),
@@ -608,6 +587,19 @@ export const cargoLoadsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const areaId = inputArea(input);
+      let verifiedClient: any = null; let area: any = null;
+      if (input.clientId != null) {
+        [verifiedClient] = await db.select().from(clients).where(eq(clients.id, input.clientId)).limit(1);
+        if (!verifiedClient) throw new TRPCError({ code: "BAD_REQUEST", message: "Cliente inválido." });
+        area = await checkedArea(db, input.clientId, areaId, false);
+      } else if (areaId !== null) throw new TRPCError({ code: "BAD_REQUEST", message: "Área exige cliente." });
+      const areaTerms = areaId === null ? null : getAreaPriceTerms(verifiedClient, area);
+      const effectiveWorkLocationId = areaId !== null ? area.workLocationId : (input.workLocationId || null);
+      if (areaId === null && effectiveWorkLocationId && input.clientId != null) {
+        const [ownedAreaLocation] = await db.select({ id: clientAreas.id }).from(clientAreas).where(eq(clientAreas.workLocationId, effectiveWorkLocationId)).limit(1);
+        if (ownedAreaLocation) throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a área correspondente ao local de trabalho." });
+      }
       // Validação: nota fiscal duplicada
       if (input.invoiceNumber && input.invoiceNumber.trim() !== '') {
         const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date })
@@ -644,10 +636,13 @@ export const cargoLoadsRouter = router({
       // Sanitize all numeric string fields: replace comma with dot for MySQL
       const sanitizeNum = (v: string | undefined) => v ? v.replace(',', '.') : v;
       // Extrair fiscalNoteId do input para não incluir na inserção do banco
-      const { fiscalNoteId: _fiscalNoteId, ...inputWithoutNoteId } = input;
+      const { fiscalNoteId: _fiscalNoteId, areaId: _areaId, agreedUnit: _agreedUnit, agreedUnitPrice: _agreedUnitPrice, agreedPaymentMethod: _agreedPaymentMethod, agreedPaymentTermDays: _agreedPaymentTermDays, workLocationId: _workLocationId, clientName: _clientName, ...inputWithoutNoteId } = input;
       try {
         await db.insert(cargoLoads).values({
           ...inputWithoutNoteId,
+          clientId: input.clientId ?? null, clientName: verifiedClient?.name || input.clientName || null, areaId,
+          agreedUnit: areaTerms?.unit || null, agreedUnitPrice: areaTerms?.unitPrice == null ? null : String(areaTerms.unitPrice),
+          agreedPaymentMethod: areaTerms?.paymentMethod || null, agreedPaymentTermDays: areaTerms?.paymentTermDays ?? null,
           photosJson: finalPhotosJson || null,
           heightM: sanitizeNum(input.heightM),
           widthM: sanitizeNum(input.widthM),
@@ -663,7 +658,7 @@ export const cargoLoadsRouter = router({
           status: input.status || "pendente",
           trackingStatus: "aguardando",
           registeredBy: ctx.user.id,
-          workLocationId: input.workLocationId || null,
+          workLocationId: effectiveWorkLocationId,
         });
       } catch (dbErr: any) {
         const realErr = dbErr.cause || dbErr;
@@ -694,14 +689,14 @@ export const cargoLoadsRouter = router({
         try {
           const { generateFinancialEntriesForCargo } = await import('../autoFinancial');
           // Get the just-inserted cargo to have the ID
-          const [newCargo] = await db.select().from(cargoLoads).orderBy(desc(cargoLoads.id)).limit(1);
+          const [newCargo] = await db.select().from(cargoLoads).where(and(eq(cargoLoads.clientId, input.clientId ?? null), areaScopeCondition(cargoAreaId, areaId))).orderBy(desc(cargoLoads.id)).limit(1);
           if (newCargo) {
             await generateFinancialEntriesForCargo(newCargo as any, ctx.user.id, ctx.user.name);
           }
         } catch(e) { /* silent */ }
         // Abatimento automático de adiantamento ao criar carga já como entregue
         try {
-          const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc(cargoLoads.id)).limit(1);
+          const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).where(and(eq(cargoLoads.clientId, input.clientId ?? null), areaScopeCondition(cargoAreaId, areaId))).orderBy(desc(cargoLoads.id)).limit(1);
           if (newCargo) await autoDeductAdvanceForCargo(db, newCargo.id);
         } catch(e) { /* silent */ }
       }
@@ -878,6 +873,7 @@ export const cargoLoadsRouter = router({
       invoiceNumber: z.string().optional(),
       clientId: z.number().optional(),
       clientName: z.string().optional(),
+      areaId: z.number().nullable().optional(),
       photosJson: z.string().optional(),
       notes: z.string().optional(),
       status: z.enum(["pendente", "entregue", "cancelado"]).optional(),
@@ -904,6 +900,35 @@ export const cargoLoadsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const [scopeCargo] = await db.select({
+        id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId, clientName: cargoLoads.clientName, paymentStatus: cargoLoads.paymentStatus, date: cargoLoads.date, deliveryDate: cargoLoads.deliveryDate,
+        agreedUnit: (cargoLoads as any).agreedUnit, agreedUnitPrice: (cargoLoads as any).agreedUnitPrice,
+        agreedPaymentMethod: (cargoLoads as any).agreedPaymentMethod, agreedPaymentTermDays: (cargoLoads as any).agreedPaymentTermDays,
+      }).from(cargoLoads).where(eq(cargoLoads.id, input.id)).limit(1);
+      if (!scopeCargo) throw new TRPCError({ code: "NOT_FOUND", message: "Carga não encontrada." });
+      const nextAreaId = hasField(input, "areaId") ? inputArea(input) : normalizeAreaId(scopeCargo.areaId);
+      const nextClientId = hasField(input, "clientId") ? (input.clientId ?? null) : scopeCargo.clientId;
+      if (nextClientId == null && nextAreaId !== null) throw new TRPCError({ code: "BAD_REQUEST", message: "Área exige cliente cadastrado." });
+      const nextClient = nextClientId == null ? {id:null,name: input.clientName || scopeCargo.clientName} : (await db.select().from(clients).where(eq(clients.id, nextClientId)).limit(1))[0];
+      if (!nextClient) throw new TRPCError({code:'BAD_REQUEST',message:'Cliente inválido.'});
+      const linked = await db.select({ id: clientAdvanceDeductions.id }).from(clientAdvanceDeductions).where(eq(clientAdvanceDeductions.cargoLoadId, input.id)).limit(1);
+      if ((scopeCargo.paymentStatus === 'pago' || linked.length) && (scopeCargo.clientId !== nextClientId || !sameArea(scopeCargo.areaId, nextAreaId))) throw new TRPCError({ code: "CONFLICT", message: "Não é permitido mudar cliente/área de carga já vinculada financeiramente." });
+      if (scopeCargo.clientId !== nextClientId || !sameArea(scopeCargo.areaId, nextAreaId)) {
+        const [closingLink] = await db.select({id: cargoWeeklyClosings.id}).from(cargoWeeklyClosings).where(and(
+          eq(cargoWeeklyClosings.clientId, scopeCargo.clientId), areaScopeCondition(closingAreaId, normalizeAreaId(scopeCargo.areaId)),
+          sql`DATE(${scopeCargo.deliveryDate || scopeCargo.date}) BETWEEN DATE(${cargoWeeklyClosings.weekStart}) AND DATE(${cargoWeeklyClosings.weekEnd})`
+        )).limit(1);
+        if (closingLink) throw new TRPCError({code: 'CONFLICT', message: 'Esta carga já faz parte de um fechamento. Cliente e área devem ser preservados.'});
+      }
+      const nextArea = nextAreaId === null ? null : await checkedArea(db, nextClientId, nextAreaId, false);
+      if (nextArea && input.paymentStatus === 'pago' && scopeCargo.paymentStatus !== 'pago') requireConfirmedArea(nextArea);
+      const requestedWorkLocationId = hasField(input, "workLocationId") ? (input.workLocationId || null) : null;
+      if (nextAreaId === null && requestedWorkLocationId && nextClientId != null) {
+        const [ownedAreaLocation] = await db.select({ id: clientAreas.id }).from(clientAreas).where(eq(clientAreas.workLocationId, requestedWorkLocationId)).limit(1);
+        if (ownedAreaLocation) throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a área correspondente ao local de trabalho." });
+      }
+      const nextTerms = nextAreaId === null ? null : getAreaPriceTerms(nextClient, nextArea);
+      const areaChanged = !sameArea(scopeCargo.areaId, nextAreaId);
 
       // Estado atual da carga (já reflete um upload de NF feito via uploadDocument nesta mesma
       // sequência de edição, já que o front chama uploadDocument antes de update).
@@ -948,10 +973,22 @@ export const cargoLoadsRouter = router({
         }
       }
 
-      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity: _noteQuantityInput, noteUnit: _noteUnitInput, invoiceNumber: _invoiceNumberInput, ...rest } = input;
+      const { id, date, deliveryDate, receiverName, thirdPartyContractor, thirdPartyCost, notes, noteQuantity: _noteQuantityInput, noteUnit: _noteUnitInput, invoiceNumber: _invoiceNumberInput, areaId: _inputAreaId, clientName: _inputClientName, ...rest } = input;
       if (effectiveInvoiceNumber !== undefined || input.invoiceNumber !== undefined) (rest as any).invoiceNumber = effectiveInvoiceNumber || null;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      const updateData: Record<string, unknown> = { ...rest, updatedAt: now };
+      const updateData: Record<string, unknown> = { ...rest, updatedAt: now, clientId: nextClientId, clientName: nextClient.name, areaId: nextAreaId };
+      if (hasField(input, "areaId") && nextAreaId === null) updateData.workLocationId = requestedWorkLocationId;
+      if (nextAreaId !== null) updateData.workLocationId = nextArea.workLocationId;
+      // Preserve historical agreement snapshots on ordinary edits; refresh only on an area change.
+      if (areaChanged || (nextTerms && !scopeCargo.agreedUnitPrice)) {
+        updateData.agreedUnit = nextTerms?.unit || null;
+        updateData.agreedUnitPrice = nextTerms?.unitPrice == null ? null : String(nextTerms.unitPrice);
+        updateData.agreedPaymentMethod = nextTerms?.paymentMethod || null;
+        updateData.agreedPaymentTermDays = nextTerms?.paymentTermDays ?? null;
+      } else {
+        delete updateData.agreedUnit; delete updateData.agreedUnitPrice;
+        delete updateData.agreedPaymentMethod; delete updateData.agreedPaymentTermDays;
+      }
       // These fields use snake_case column names - must be set explicitly via Drizzle schema fields
       // They are handled separately at the db.update() call below
       if (date) updateData.date = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
@@ -1213,6 +1250,7 @@ export const cargoLoadsRouter = router({
   listBoletos: protectedProcedure
     .input(z.object({
       status: z.enum(['a_pagar', 'pago']).optional(),
+      areaId: z.number().nullable().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1229,6 +1267,7 @@ export const cargoLoadsRouter = router({
         boletoDueDate: cargoLoads.boletoDueDate,
         paymentReceiptUrl: cargoLoads.paymentReceiptUrl,
         paymentStatus: cargoLoads.paymentStatus,
+        areaId: cargoAreaId,
         paidAt: cargoLoads.paidAt,
         volumeM3: cargoLoads.volumeM3,
         weightNetKg: cargoLoads.weightNetKg,
@@ -1238,6 +1277,7 @@ export const cargoLoadsRouter = router({
       .from(cargoLoads)
       .leftJoin(clients, eq(cargoLoads.clientId, clients.id))
       .leftJoin(cargoDestinations, eq(cargoLoads.destinationId, cargoDestinations.id))
+      .where(listArea(input))
       .orderBy(desc(cargoLoads.boletoDueDate), desc(cargoLoads.date));
       let filtered = results.filter(r => r.boletoUrl);
       if (input?.status) filtered = filtered.filter(r => r.paymentStatus === input.status);
@@ -1254,8 +1294,15 @@ export const cargoLoadsRouter = router({
       id: z.number(),
       paidAt: z.string().optional(), // formato YYYY-MM-DD
       notes: z.string().optional(),
+      clientId: z.number().optional(), areaId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId }).from(cargoLoads).where(eq(cargoLoads.id, input.id)).limit(1);
+      if (!cargo) throw new TRPCError({ code: "NOT_FOUND", message: "Carga não encontrada." });
+      if (input.clientId !== undefined && cargo.clientId !== input.clientId) throw new TRPCError({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
+      if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError({ code: "BAD_REQUEST", message: "A carga pertence a outra área financeira." });
+      if (normalizeAreaId(cargo.areaId) !== null) await checkedArea(db, cargo.clientId, normalizeAreaId(cargo.areaId), true);
       const conn = await getDirectConnection();
       try {
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -1275,8 +1322,13 @@ export const cargoLoadsRouter = router({
 
   // Desfazer pagamento de uma carga (reverter para sem_boleto)
   unmarkAsPaid: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), clientId: z.number().optional(), areaId: z.number().nullable().optional() }))
     .mutation(async ({ input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId }).from(cargoLoads).where(eq(cargoLoads.id, input.id)).limit(1);
+      if (!cargo) throw new TRPCError({ code: "NOT_FOUND", message: "Carga não encontrada." });
+      if (input.clientId !== undefined && cargo.clientId !== input.clientId) throw new TRPCError({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
+      if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError({ code: "BAD_REQUEST", message: "A carga pertence a outra área financeira." });
       const conn = await getDirectConnection();
       try {
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -1295,8 +1347,14 @@ export const cargoLoadsRouter = router({
     .input(z.object({
       id: z.number(),
       paidAt: z.string(), // formato YYYY-MM-DD
+      clientId: z.number().optional(), areaId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId }).from(cargoLoads).where(eq(cargoLoads.id, input.id)).limit(1);
+      if (!cargo) throw new TRPCError({ code: "NOT_FOUND", message: "Carga não encontrada." });
+      if (input.clientId !== undefined && cargo.clientId !== input.clientId) throw new TRPCError({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
+      if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError({ code: "BAD_REQUEST", message: "A carga pertence a outra área financeira." });
       const conn = await getDirectConnection();
       try {
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -1634,13 +1692,14 @@ export const cargoLoadsRouter = router({
 
   // ===== FECHAMENTOS SEMANAIS =====
   listWeeklyClosings: protectedProcedure
-    .input(z.object({ clientId: z.number() }).optional())
+    .input(z.object({ clientId: z.number().optional(), areaId: z.number().nullable().optional() }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       let query = db.select({
         id: cargoWeeklyClosings.id,
         clientId: cargoWeeklyClosings.clientId,
+        areaId: closingAreaId, areaScopeKey: (cargoWeeklyClosings as any).areaScopeKey, priceUnit: (cargoWeeklyClosings as any).priceUnit, totalVolumeM3: (cargoWeeklyClosings as any).totalVolumeM3,
         clientName: clients.name,
         weekStart: cargoWeeklyClosings.weekStart,
         weekEnd: cargoWeeklyClosings.weekEnd,
@@ -1658,7 +1717,7 @@ export const cargoLoadsRouter = router({
         .leftJoin(clients, eq(cargoWeeklyClosings.clientId, clients.id))
         .orderBy(desc(cargoWeeklyClosings.weekEnd));
       const results = await query;
-      const filtered = input?.clientId ? results.filter(r => r.clientId === input.clientId) : results;
+      const filtered = results.filter(r => (!input?.clientId || r.clientId === input.clientId) && (!hasField(input, "areaId") || sameArea(r.areaId, inputArea(input))));
 
       // Para fechamentos ainda não marcados como pagos, verificar se as cargas do período
       // já foram quitadas via adiantamento (payment_status = 'pago' em todas as cargas)
@@ -1666,7 +1725,7 @@ export const cargoLoadsRouter = router({
       try {
         const enriched = await Promise.all(filtered.map(async (closing) => {
           // Só verificar fechamentos que ainda não estão marcados como pagos
-          if (closing.status === 'pago') return { ...closing, paidViaAdvance: false };
+          if (closing.status === 'pago' || normalizeAreaId(closing.areaId) !== null) return { ...closing, paidViaAdvance: false };
 
           const weekStartStr = closing.weekStart ? new Date(closing.weekStart).toISOString().slice(0, 10) : null;
           const weekEndStr = closing.weekEnd ? new Date(closing.weekEnd).toISOString().slice(0, 10) : null;
@@ -1683,10 +1742,10 @@ export const cargoLoadsRouter = router({
                 WHERE cargo_load_id IS NOT NULL AND client_id = ?
               ) THEN 1 ELSE 0 END) as abatidas
             FROM cargo_loads 
-            WHERE client_id = ? 
+            WHERE client_id = ? AND area_id <=> ?
               AND DATE(COALESCE(delivery_date, date)) >= ? 
               AND DATE(COALESCE(delivery_date, date)) <= ?`,
-            [closing.clientId, closing.clientId, weekStartStr, weekEndStr]
+            [closing.clientId, closing.clientId, normalizeAreaId(closing.areaId), weekStartStr, weekEndStr]
           ) as any;
 
           const total = parseInt(rows[0]?.total || '0');
@@ -1699,8 +1758,8 @@ export const cargoLoadsRouter = router({
             try {
               const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
               await conn.execute(
-                `UPDATE cargo_weekly_closings SET status = 'pago', paid_at = COALESCE(paid_at, ?), updated_at = ? WHERE id = ?`,
-                [now, now, closing.id]
+                `UPDATE cargo_weekly_closings SET status = 'pago', paid_at = COALESCE(paid_at, ?), updated_at = ? WHERE id = ? AND area_id <=> ?`,
+                [now, now, closing.id, normalizeAreaId(closing.areaId)]
               );
             } catch (e) { /* silent */ }
             return { ...closing, status: 'pago' as const, paidViaAdvance: true, paidAt: closing.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ') };
@@ -1719,8 +1778,8 @@ export const cargoLoadsRouter = router({
             try {
               const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
               await conn.execute(
-                `UPDATE cargo_weekly_closings SET status = 'pago', paid_at = COALESCE(paid_at, ?), updated_at = ? WHERE id = ?`,
-                [now, now, closing.id]
+                `UPDATE cargo_weekly_closings SET status = 'pago', paid_at = COALESCE(paid_at, ?), updated_at = ? WHERE id = ? AND area_id <=> ?`,
+                [now, now, closing.id, normalizeAreaId(closing.areaId)]
               );
             } catch (e) { /* silent */ }
             return { ...closing, status: 'pago' as const, paidViaAdvance: true, paidAt: closing.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ') };
@@ -1741,88 +1800,33 @@ export const cargoLoadsRouter = router({
       weekEnd: z.string(),
       pricePerTon: z.string().optional(),
       notes: z.string().optional(),
+      areaId: z.number().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       
-      // Normalize date strings to avoid timezone issues (add T12:00:00 to date-only strings)
       const normalizeDate = (d: string) => d.length === 10 ? d + 'T12:00:00' : d;
-      const weekStartStr = input.weekStart.slice(0, 10); // Keep as YYYY-MM-DD for storage
-      const weekEndStr = input.weekEnd.slice(0, 10);
-      
-      // Get client data (needed for price and payment terms)
-      const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId));
-      
-      // Get price per ton: prefer input > client config > default 130
-      let pricePerTon = input.pricePerTon;
-      if (!pricePerTon || parseFloat(pricePerTon) === 0) {
-        const clientPrice = client?.pricePerTon;
-        pricePerTon = (clientPrice && parseFloat(String(clientPrice)) > 0) ? String(clientPrice) : '130';
-      }
-      
-      // Calculate totals from cargo loads in this period
-      // Use SQL-based date comparison to avoid JavaScript timezone issues
-      // DATE(date) extracts just the date part, ignoring time/timezone
-      const conn = await getDirectConnection();
-      let loadsInPeriod: Array<{ id: number; weight_net_kg: string | null; weight_out_kg: string | null }> = [];
-      try {
-        const [rows] = await conn.execute(
-          `SELECT id, weight_net_kg, weight_out_kg FROM cargo_loads
-           WHERE client_id = ?
-           AND DATE(COALESCE(delivery_date, date)) >= ?
-           AND DATE(COALESCE(delivery_date, date)) <= ?
-           AND id NOT IN (
-             SELECT cargo_load_id FROM client_advance_deductions
-             WHERE cargo_load_id IS NOT NULL AND client_id = ?
-           )`,
-          [input.clientId, weekStartStr, weekEndStr, input.clientId]
-        ) as any;
-        loadsInPeriod = rows;
-      } finally {
-        await conn.end();
-      }
-      
-      const totalLoads = loadsInPeriod.length;
-      const totalWeightKg = loadsInPeriod.reduce((sum, l) => {
-        // MySQL returns column names in snake_case (weight_net_kg, not weightNetKg)
-        const weight = parseFloat((l as any).weight_net_kg || (l as any).weight_out_kg || '0');
-        return sum + weight;
-      }, 0);
-      
+      const weekStartStr = input.weekStart.slice(0, 10); const weekEndStr = input.weekEnd.slice(0, 10); const areaId = inputArea(input);
+      const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId)).limit(1); if (!client) throw new TRPCError({ code: "BAD_REQUEST", message: "Cliente inválido." });
+      const area = areaId === null ? null : await checkedArea(db, input.clientId, areaId, true);
+      const terms: any = areaId === null ? { unit: 'ton', unitPrice: input.pricePerTon || client.pricePerTon, paymentTermDays: client.paymentTermDays || 21 } : getAreaPriceTerms(client, area);
+      if (!terms || !terms.unitPrice) throw new TRPCError({ code: "BAD_REQUEST", message: "Acordo da área pendente ou sem preço." });
+      const loads = await db.select().from(cargoLoads).where(and(eq(cargoLoads.clientId, input.clientId), eq(cargoLoads.status, 'entregue'), areaScopeCondition(cargoAreaId, areaId), sql`DATE(COALESCE(${cargoLoads.deliveryDate}, ${cargoLoads.date})) >= ${weekStartStr}`, sql`DATE(COALESCE(${cargoLoads.deliveryDate}, ${cargoLoads.date})) <= ${weekEndStr}`));
+      const deductions = await db.select({ cargoLoadId: clientAdvanceDeductions.cargoLoadId, amount: clientAdvanceDeductions.amount }).from(clientAdvanceDeductions).innerJoin(clientAdvances, eq(clientAdvanceDeductions.advanceId, clientAdvances.id)).where(and(eq(clientAdvanceDeductions.clientId, input.clientId), areaScopeCondition(advanceAreaId, areaId)));
+      const deducted = new Set(deductions.map((row: any) => row.cargoLoadId));
+      const deductedByLoad = new Map<number, number>();
+      for (const d of deductions) if (d.cargoLoadId) deductedByLoad.set(d.cargoLoadId, (deductedByLoad.get(d.cargoLoadId) || 0) + Number(d.amount || 0));
+      const remainingValue = (load: any) => Math.max(0, (getCargoFinancialValue(load, areaId === null ? {...client, pricePerTon: terms.unitPrice} : client, area) || 0) - (deductedByLoad.get(load.id) || 0));
+      const eligible = loads.filter((load: any) => areaId === null ? !deducted.has(load.id) : load.paymentStatus !== 'pago' && remainingValue(load) > 0.005);
+      if (!eligible.length) throw new TRPCError({code: 'BAD_REQUEST', message: 'Não há cargas entregues com saldo a fechar nesta área e período.'});
+      const totalWeightKg = eligible.reduce((sum: number, load: any) => sum + (parseFloat(String(load.weightNetKg || load.weightOutKg || '0').replace(',', '.')) || 0), 0);
+      const totalVolumeM3 = eligible.reduce((sum: number, load: any) => sum + (parseFloat(String(load.finalVolumeM3 || load.volumeM3 || '0').replace(',', '.')) || 0), 0);
+      const totalAmount = eligible.reduce((sum: number, load: any) => sum + remainingValue(load), 0).toFixed(2);
+      const dueDate = new Date(normalizeDate(input.weekEnd)); dueDate.setDate(dueDate.getDate() + (terms.paymentTermDays ?? 21));
+      let result: any; try { [result] = await db.insert(cargoWeeklyClosings).values({ clientId: input.clientId, areaId, areaScopeKey: areaId ?? 0, weekStart: weekStartStr + ' 12:00:00', weekEnd: weekEndStr + ' 12:00:00', totalLoads: eligible.length, totalWeightKg: totalWeightKg.toFixed(2), totalVolumeM3: totalVolumeM3.toFixed(3), totalAmount, pricePerTon: String(areaId === null ? (input.pricePerTon || terms.unitPrice) : terms.unitPrice), priceUnit: terms.unit, dueDate: dueDate.toISOString().slice(0, 10) + ' 12:00:00', status: 'fechado', closedBy: ctx.user.id, notes: input.notes } as any); } catch (e: any) { if (e?.code === 'ER_DUP_ENTRY' || e?.errno === 1062) throw new TRPCError({ code: 'CONFLICT', message: 'Já existe um fechamento para este cliente, área e semana.' }); throw e; }
+      const totalLoads = eligible.length;
       const totalWeightTon = totalWeightKg / 1000;
-      const totalAmount = (totalWeightTon * parseFloat(pricePerTon)).toFixed(2);
-      
-      // Due date = weekEnd + paymentTermDays
-      const paymentTermDays = client?.paymentTermDays || 21;
-      const dueDate = new Date(normalizeDate(input.weekEnd));
-      dueDate.setDate(dueDate.getDate() + paymentTermDays);
-      const dueDateStr = dueDate.toISOString().slice(0, 10) + ' 12:00:00';
-      
-      let result: any;
-      try {
-        result = await db.insert(cargoWeeklyClosings).values({
-          clientId: input.clientId,
-          weekStart: weekStartStr + ' 12:00:00',
-          weekEnd: weekEndStr + ' 12:00:00',
-          totalLoads,
-          totalWeightKg: totalWeightKg.toFixed(2),
-          totalAmount,
-          pricePerTon,
-          dueDate: dueDateStr,
-          status: 'fechado',
-          closedBy: ctx.user.id,
-          notes: input.notes,
-        });
-      } catch (e: any) {
-        // Índice único (client_id, week_start) barra duplicata em caso de duplo clique
-        // ou de o cron automático já ter fechado essa mesma semana.
-        if (e?.code === 'ER_DUP_ENTRY' || e?.errno === 1062) {
-          throw new TRPCError({ code: "CONFLICT", message: "Já existe um fechamento para este cliente nesta semana." });
-        }
-        throw e;
-      }
-
       // Notificação interna para Fábio (ADM/Comercial) e admins
       try {
         const { notifyAdmComercial } = await import('./notifications');
@@ -1846,11 +1850,15 @@ export const cargoLoadsRouter = router({
       id: z.number(),
       status: z.enum(['aberto', 'fechado', 'pago', 'atrasado']),
       paidAt: z.string().optional(),
-      receiptUrl: z.string().optional(),
+      receiptUrl: z.string().optional(), areaId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [scopeClosing] = await db.select().from(cargoWeeklyClosings).where(eq(cargoWeeklyClosings.id, input.id)).limit(1);
+      if (!scopeClosing) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+      if (hasField(input, "areaId") && !sameArea(scopeClosing.areaId, inputArea(input))) throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento pertence a outra área." });
+      if (normalizeAreaId(scopeClosing.areaId) !== null) await checkedArea(db, scopeClosing.clientId, normalizeAreaId(scopeClosing.areaId), true);
       const updateData: any = { status: input.status };
       if (input.status === 'pago') updateData.paidAt = input.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ');
       if (input.receiptUrl) updateData.receiptUrl = input.receiptUrl;
@@ -1867,8 +1875,8 @@ export const cargoLoadsRouter = router({
               const weekEndStr = closing.weekEnd ? new Date(closing.weekEnd).toISOString().slice(0, 10) : null;
               if (weekStartStr && weekEndStr) {
                 await conn2.execute(
-                  `UPDATE cargo_loads SET payment_status = 'pago', updated_at = NOW() WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ? AND payment_status != 'pago'`,
-                  [closing.clientId, weekStartStr, weekEndStr]
+                  `UPDATE cargo_loads SET payment_status = 'pago', updated_at = NOW() WHERE client_id = ? AND area_id <=> ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ? AND payment_status != 'pago'`,
+                  [closing.clientId, normalizeAreaId(closing.areaId), weekStartStr, weekEndStr]
                 );
               }
             } finally {
@@ -1918,11 +1926,14 @@ export const cargoLoadsRouter = router({
     }),
 
   deleteWeeklyClosing: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), areaId: z.number().nullable().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(cargoWeeklyClosings).where(eq(cargoWeeklyClosings.id, input.id));
+      const [closing] = await db.select().from(cargoWeeklyClosings).where(eq(cargoWeeklyClosings.id, input.id)).limit(1);
+      if (!closing) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+      if (hasField(input, "areaId") && !sameArea(closing.areaId, inputArea(input))) throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento pertence a outra área." });
+      await db.delete(cargoWeeklyClosings).where(and(eq(cargoWeeklyClosings.id, closing.id), areaScopeCondition(closingAreaId, normalizeAreaId(closing.areaId))));
       return { success: true };
     }),
 
@@ -1931,15 +1942,20 @@ export const cargoLoadsRouter = router({
     .input(z.object({
       id: z.number(),
       paidAt: z.string(), // formato YYYY-MM-DD
+      areaId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [closing] = await db.select().from(cargoWeeklyClosings).where(eq(cargoWeeklyClosings.id, input.id)).limit(1);
+      if (!closing) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+      if (hasField(input, "areaId") && !sameArea(closing.areaId, inputArea(input))) throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento pertence a outra área." });
       const conn = await getDirectConnection();
       try {
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
         const paidAtDatetime = input.paidAt + ' 12:00:00';
         await conn.execute(
-          'UPDATE cargo_weekly_closings SET paid_at = ?, updated_at = ? WHERE id = ?',
-          [paidAtDatetime, now, input.id]
+          'UPDATE cargo_weekly_closings SET paid_at = ?, updated_at = ? WHERE id = ? AND area_id <=> ?',
+          [paidAtDatetime, now, input.id, normalizeAreaId(closing.areaId)]
         );
         return { success: true };
       } finally {
@@ -1949,8 +1965,11 @@ export const cargoLoadsRouter = router({
 
   // ===== DOCUMENTOS DO CLIENTE =====
   listClientDocuments: protectedProcedure
-    .input(z.object({ clientId: z.number() }))
+    .input(z.object({ clientId: z.number(), areaId: z.number().nullable().optional() }))
     .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await checkedArea(db, input.clientId, inputArea(input), false);
       let conn: any = null;
       try {
         conn = await getDirectConnection();
@@ -1965,13 +1984,16 @@ export const cargoLoadsRouter = router({
             file_type varchar(50),
             notes text,
             uploaded_by int,
+            area_id int NULL,
             created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY(id)
           )
         `);
+        const documentAreaClause = hasField(input, "areaId") ? ' AND area_id <=> ?' : '';
+        const documentParams = hasField(input, "areaId") ? [input.clientId, inputArea(input)] : [input.clientId];
         const [rows] = await conn.execute(
-          'SELECT id, client_id as clientId, `type`, title, file_url as fileUrl, file_type as fileType, notes, uploaded_by as uploadedBy, created_at as createdAt FROM client_documents WHERE client_id = ? ORDER BY created_at DESC',
-          [input.clientId]
+          `SELECT id, client_id as clientId, area_id as areaId, \`type\`, title, file_url as fileUrl, file_type as fileType, notes, uploaded_by as uploadedBy, created_at as createdAt FROM client_documents WHERE client_id = ?${documentAreaClause} ORDER BY created_at DESC`,
+          documentParams
         );
         return rows || [];
       } catch (err: any) {
@@ -1987,12 +2009,15 @@ export const cargoLoadsRouter = router({
       clientId: z.number(),
       type: z.enum(['proposta', 'contrato', 'nota_fiscal', 'boleto', 'recibo', 'outros']),
       title: z.string().min(1),
+      areaId: z.number().nullable().optional(),
       fileBase64: z.string(),
       fileType: z.string().optional(),
       fileName: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await checkedArea(db, input.clientId, inputArea(input), false);
       // Upload file to Cloudinary with original filename for proper download
       const uploaded = await cloudinaryUpload(
         input.fileBase64,
@@ -2015,13 +2040,14 @@ export const cargoLoadsRouter = router({
             file_type varchar(50),
             notes text,
             uploaded_by int,
+            area_id int NULL,
             created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY(id)
           )
         `);
         const [result] = await conn.execute(
-          'INSERT INTO client_documents (client_id, `type`, title, file_url, file_type, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [input.clientId, input.type, input.title, uploaded.url, input.fileType || null, input.notes || null, now]
+          'INSERT INTO client_documents (client_id, area_id, `type`, title, file_url, file_type, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [input.clientId, inputArea(input), input.type, input.title, uploaded.url, input.fileType || null, input.notes || null, now]
         );
         return { success: true, id: (result as any)?.insertId, url: uploaded.url };
       } catch (err: any) {
@@ -2162,11 +2188,13 @@ export const cargoLoadsRouter = router({
       receivedFilter: z.enum(['all', 'received', 'pending']).optional(),
       statusFilter: z.enum(['all', 'entregue', 'pendente']).optional(),
       paymentStatusFilter: z.enum(['all', 'sem_boleto', 'a_pagar', 'pago']).optional(),
+      areaId: z.number().nullable().optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       const conditions: any[] = [];
+      const areaCondition = listArea(input); if (areaCondition) conditions.push(areaCondition);
       // Status filter - default to 'all' (show all statuses)
       if (input.statusFilter && input.statusFilter !== 'all') {
         conditions.push(eq(cargoLoads.status, input.statusFilter));

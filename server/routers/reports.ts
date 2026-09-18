@@ -3,6 +3,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
+import { getCargoFinancialValue } from "../lib/clientAreaScope";
 import {
   collaboratorAttendance,
   collaborators,
@@ -11,6 +12,7 @@ import {
   machineHours,
   extraExpenses,
   cargoLoads,
+  clientAreas,
   equipment,
   gpsLocations,
   vehicleRecords,
@@ -426,6 +428,11 @@ export const reportsRouter = router({
           destinationId: cargoLoads.destinationId,
           destination: cargoLoads.destination,
           clientId: cargoLoads.clientId,
+          areaId: cargoLoads.areaId,
+          agreedUnit: cargoLoads.agreedUnit,
+          agreedUnitPrice: cargoLoads.agreedUnitPrice,
+          finalVolumeM3: cargoLoads.finalVolumeM3,
+          weightOutKg: cargoLoads.weightOutKg,
           clientName: cargoLoads.clientName,
           paymentStatus: cargoLoads.paymentStatus,
           invoiceNumber: cargoLoads.invoiceNumber,
@@ -471,15 +478,14 @@ export const reportsRouter = router({
         for (const r of clientRows) clientPriceMap.set(r.id, r.pricePerTon);
       }
 
-      // Helper: calcular custo a pagar ao cliente fornecedor de madeira (preço do cliente × peso)
-      const calcClientPayment = (cargo: { clientId: number | null; weightNetKg: string | null }) => {
-        if (!cargo.clientId) return 0;
-        const pricePerTon = parseFloat(clientPriceMap.get(cargo.clientId) || '0');
-        if (!pricePerTon) return 0;
-        const weightTons = parseFloat(cargo.weightNetKg || '0') / 1000;
-        return pricePerTon * weightTons;
-      };
-
+      // Nunca usar o preço da área original em uma nova área.
+      const areaIds = Array.from(new Set(allCargos.map(c => c.areaId).filter(Boolean))) as number[];
+      const areaRows = areaIds.length ? await db.select().from(clientAreas).where(inArray(clientAreas.id, areaIds)) : [];
+      const areaMap = new Map(areaRows.map(a => [a.id, a]));
+      const clientValue = (cargo: any) => cargo.clientId
+        ? getCargoFinancialValue(cargo, {pricePerTon: clientPriceMap.get(cargo.clientId)}, areaMap.get(cargo.areaId)) : 0;
+      const calcClientPayment = (cargo: any) => clientValue(cargo) ?? 0;
+      const pendingAgreementLoads = allCargos.filter(c => clientValue(c) === null).length;
       // Buscar pagamentos de clientes (despesa: o que pagamos ao cliente fornecedor)
       const clientPaymentsData = await db
         .select({
@@ -690,6 +696,7 @@ export const reportsRouter = router({
           freteTerceirizado: { total: totalLocFrete, qtd: locFreteTer.length },
           corteTerceirizado: { total: totalLocCorte, qtd: locCorte.length },
           pagamentoClientes: { total: totalLocClientPayments, qtd: locClientPayments.length },
+          pendingAgreementLoads: locCargos.filter(c => clientValue(c) === null).length,
           cargas: { total: locCargos.length, volumeM3: totalVol },
           receitaEstimada: totalLocReceitaEstimada,
           receita: totalLocReceitaEstimada,
@@ -717,6 +724,7 @@ export const reportsRouter = router({
           totalCorteTerceirizado: totalCorteTerceirizadoGlobal,
           totalFreteTerceirizado: totalFreteTerceirizadoGlobal + totalTPFuelGlobal,
           totalPagamentoClientes: totalPagamentoClientesGlobal,
+          pendingAgreementLoads,
           totalCargas: allCargos.length,
           totalVolumeM3: allCargos.reduce((s, r) => s + parseFloat(r.volumeM3 || "0"), 0),
           totalReceita: totalReceitaReal,

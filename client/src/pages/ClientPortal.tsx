@@ -217,12 +217,20 @@ const BTREE_LOGO_NEW = "/btree-logo-full.png";
 const KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 
 // ===== PDF FECHAMENTO SEMANAL =====
-async function generateClosingPDF(closing: any, clientName: string, loads: any[], pricePerTon: number) {
+function formatCurrencyForPdf(value: number) {
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function generateClosingPDF(closing: any, clientName: string, loads: any[], terms: any, areaLabel?: string) {
   const [kobayashiB64, qrB64] = await loadPdfAssets();
   const weekStartFmt = closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR') : '-';
   const weekEndFmt = closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR') : '-';
-  const totalWeightTon = closing.totalWeightKg ? formatBR(parseFloat(closing.totalWeightKg) / 1000, 2) : '0';
+  const totalWeightTon = closing.portalWeightKg != null
+    ? formatBR(Number(closing.portalWeightKg) / 1000, 2)
+    : (closing.totalWeightKg ? formatBR(parseFloat(closing.totalWeightKg) / 1000, 2) : '0');
   const dueDateFmt = closing.dueDate ? safeDate(closing.dueDate).toLocaleDateString('pt-BR') : '-';
+  const unit = closing.priceUnit || terms?.unit || 'ton';
+  const unitPrice = closing.pricePerTon != null ? parseFloat(String(closing.pricePerTon)) : null;
   const statusLabel = closing.status === 'pago' ? 'PAGO' : closing.status === 'atrasado' ? 'ATRASADO' : 'AGUARDANDO PAGAMENTO';
   const statusClass = closing.status === 'pago' ? 'badge-pago' : closing.status === 'atrasado' ? 'badge-atrasado' : 'badge-pendente';
 
@@ -234,10 +242,12 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
     const d = safeDate(l.deliveryDate || l.date);
     return d >= pdfWkStart && d <= pdfWkEnd;
   });
-  const actualTotalLoads = pdfLoads.length;
-  const actualTotalWeightKg = pdfLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
+  const actualTotalLoads = closing.portalLoadCount ?? closing.totalLoads ?? pdfLoads.length;
+  const actualTotalWeightKg = Number(closing.portalWeightKg ?? closing.totalWeightKg ?? pdfLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0));
   const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
-  const actualTotalAmount = formatBR(actualTotalWeightKg / 1000 * parseFloat(String(closing.pricePerTon || pricePerTon)), 2);
+  const actualTotalAmount = closing.portalAmount == null
+    ? null
+    : formatBR(Number(closing.portalAmount), 2);
 
   // Listar cargas do período para detalhamento no PDF (apenas visual)
   const weekStart = safeDate(closing.weekStart);
@@ -253,6 +263,7 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
     const weight = l.weightNetKg || l.weightOutKg || '-';
     const weightTon = parseFloat(weight) > 0 ? formatBR(parseFloat(weight) / 1000, 3) : '-';
     const vol = l.volumeM3 || '-';
+    const loadValue = l.portalValue == null ? '—' : formatCurrencyForPdf(Number(l.portalValue));
     const dest = l.destination || '-';
     const plate = l.vehiclePlate || '-';
     const driver = l.driverName || '-';
@@ -267,6 +278,7 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
       <td style="text-align:right">${vol} m\u00b3</td>
       <td style="text-align:right">${weight} kg</td>
       <td style="text-align:right">${weightTon} ton</td>
+      <td style="text-align:right">R$ ${loadValue}</td>
     </tr>`;
   }).join('');
 
@@ -317,6 +329,7 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
   <div class="pdf-subheader">
     <div>
       <span style="font-size:15px;font-weight:700;color:#0d4f2e;">Cliente: ${clientName}</span><br/>
+      ${areaLabel ? `<span style="font-size:12px;color:#0d4f2e;font-weight:600;">Área: ${areaLabel}</span><br/>` : ''}
       <span style="font-size:12px;color:#6b7280;">Per\u00edodo: ${weekStartFmt} a ${weekEndFmt}</span>
     </div>
     <span class="${statusClass}">${statusLabel}</span>
@@ -325,8 +338,8 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
     <div class="summary-box">
       <div class="summary-item"><div class="label">Cargas</div><div class="value">${actualTotalLoads}</div></div>
       <div class="summary-item"><div class="label">Peso Total</div><div class="value">${actualTotalWeightTon} ton</div></div>
-      <div class="summary-item"><div class="label">Pre\u00e7o/Ton</div><div class="value">R$ ${formatBR(parseFloat(String(closing.pricePerTon || pricePerTon)))}</div></div>
-      <div class="summary-item"><div class="label">Valor Total</div><div class="value blue">R$ ${actualTotalAmount}</div></div>
+      <div class="summary-item"><div class="label">Base de cobrança</div><div class="value">${unit === 'm3' ? 'm³' : 'Toneladas'}</div></div>
+      <div class="summary-item"><div class="label">Valor Total</div><div class="value blue">${actualTotalAmount == null ? 'A configurar' : `R$ ${actualTotalAmount}`}</div></div>
       <div class="summary-item"><div class="label">Vencimento</div><div class="value">${dueDateFmt}</div></div>
     </div>
     ${weekLoads.length > 0 ? `
@@ -342,6 +355,7 @@ async function generateClosingPDF(closing: any, clientName: string, loads: any[]
         <th style="text-align:right">Volume</th>
         <th style="text-align:right">Peso</th>
         <th style="text-align:right">Tonelada</th>
+        <th style="text-align:right">Valor</th>
       </tr></thead>
       <tbody>${loadsRows}</tbody>
     </table>` : ''}
@@ -586,9 +600,11 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
   const [showNotification, setShowNotification] = useState(false);
   const [newItems, setNewItems] = useState({ cargas: 0, docs: 0, fechamentos: 0, replantios: 0 });
   const [generatingAdvancePdf, setGeneratingAdvancePdf] = useState(false);
+  // null representa explicitamente a Área atual (Área 1); o acesso do cliente é preservado.
+  const [selectedAreaId, setSelectedAreaId] = useState<number | null>(null);
 
   const { data, isLoading } = trpc.clientPortal.getPortalData.useQuery(
-    { clientId: session.clientId, email: session.clientEmail ?? "" },
+    { clientId: session.clientId, email: session.clientEmail ?? "", areaId: selectedAreaId },
     { retry: false }
   );
   // advancesData vem do getPortalData (já inclui advances e totalAdvanceBalance)
@@ -635,12 +651,10 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
 
   // Calcular valor de uma carga
   const getLoadValue = (load: any) => {
-    const weightNet = parseFloat(load.weightNetKg || load.weightOutKg || '0');
-    const pricePerTon = parseFloat(data?.client?.pricePerTon || '0');
-    if (weightNet > 0 && pricePerTon > 0) {
-      return (weightNet / 1000) * pricePerTon;
-    }
-    return 0;
+    // Valores são calculados pelo backend depois do filtro de área; não herdar o legado.
+    if (data?.areaPending || data?.selectedArea?.agreementStatus === 'pending') return null;
+    const value = Number(load.portalValue);
+    return Number.isFinite(value) ? value : null;
   };
 
   const statusColor = (s: string) => {
@@ -662,7 +676,10 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
         return d >= pStart && d <= pEnd;
       });
       const pKg = pLoads.reduce((s: number, l: any) => s + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
-      return acc + (pKg / 1000) * parseFloat(c.pricePerTon || data?.client?.pricePerTon || '130');
+      return acc + (data?.areaPending ? 0 : (data?.loads || []).filter((l: any) => {
+        const d = safeDate(l.deliveryDate || l.date);
+        return d >= pStart && d <= pEnd;
+      }).reduce((sum: number, l: any) => sum + (Number(l.portalValue) || 0), 0));
     }, 0) ?? 0;
 
   return (
@@ -725,12 +742,39 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
         <div className="bg-black/20 px-4 py-3">
           <div className="max-w-5xl mx-auto">
             {/* Nome do cliente */}
-            <div className="mb-2">
+            <div className="mb-3">
               <p className="font-bold text-sm leading-none">{session.clientName}</p>
               <p className="text-green-300 text-xs mt-0.5">Área do Cliente</p>
+              <label className="block mt-3 text-left">
+                <span className="sr-only">Selecionar área de trabalho</span>
+                <select
+                  value={selectedAreaId == null ? "legacy" : String(selectedAreaId)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSelectedAreaId(value === "legacy" ? null : Number(value));
+                    setActiveTab("cargas");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                  className="w-full min-h-11 rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm font-semibold text-white outline-none focus:ring-2 focus:ring-white/70"
+                  aria-label="Área de trabalho"
+                >
+                  <option value="legacy" className="text-gray-900">Área atual (Área 1)</option>
+                  {(data?.areas || []).filter((area: any) => area.isActive !== 0).map((area: any) => (
+                    <option key={area.id} value={String(area.id)} className="text-gray-900">
+                      {area.fieldName ? `${area.fieldName} — ` : ''}{area.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
+            {data?.areaPending && (
+              <div className="mb-3 rounded-xl border border-amber-300/60 bg-amber-100/15 px-3 py-2 text-left text-xs text-amber-100" role="status">
+                <strong>Acordo da área pendente.</strong> Cargas e documentos podem ser consultados, mas valores, pagamentos e saldos só aparecem após a confirmação das condições desta área.
+              </div>
+            )}
             {/* Resumo rápido — valores calculados no backend (fonte única de verdade) */}
-            {!isLoading && data && (() => {
+            {!isLoading && data && !data.areaPending && (() => {
               const totalEntregues = (data.loads || []).filter((l: any) => l.status === 'entregue').length;
               // Usar campos calculados pelo backend — não recalcular aqui
               const valorTotal = data.valorTotal ?? 0;
@@ -816,6 +860,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
           </div>
         ) : (() => {
           // Usar campos calculados pelo backend — não recalcular aqui
+          if (data?.areaPending) return <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center text-sm text-amber-800">Valores financeiros indisponíveis enquanto o acordo da área estiver pendente.</div>;
           const allLoads = data?.loads || [];
           const valorAbatido = data?.valorAbatidoAdiantamento ?? 0;
           const saldo = data?.totalAdvanceBalance ?? 0;
@@ -861,7 +906,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
               { id: "documentos" as const, label: "Docs", badge: newItems.docs },
               { id: "replantio" as const, label: "Replantio", badge: newItems.replantios },
               // Mostrar aba Adiantamentos apenas para clientes que têm adiantamentos cadastrados
-              ...((data?.advances?.length ?? 0) > 0 ? [{ id: "adiantamentos" as const, label: "Adiantamentos", badge: 0 }] : []),
+              ...(!data?.areaPending && (data?.advances?.length ?? 0) > 0 ? [{ id: "adiantamentos" as const, label: "Adiantamentos", badge: 0 }] : []),
             ].map(({ id, label, badge }) => (
               <button
                 key={id}
@@ -955,15 +1000,15 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                         return codeB - codeA;
                       });
                       if (filteredLoads.length === 0) return <EmptyState icon={<Truck />} text={dateFrom || dateTo ? "Nenhuma carga no período selecionado." : "Nenhuma carga registrada ainda."} />;
-                      const totalValue = filteredLoads.reduce((sum: number, l: any) => sum + getLoadValue(l), 0);
+                      const totalValue = filteredLoads.reduce((sum: number, l: any) => sum + (getLoadValue(l) || 0), 0);
                       const totalWeightNet = filteredLoads.reduce((sum: number, l: any) => sum + parseFloat((l as any).weightNetKg || '0'), 0);
                       return (
                         <>
-                          {totalValue > 0 && (
+                          {!data?.areaPending && totalValue > 0 && (
                             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                               <p className="text-blue-700 text-xs font-semibold uppercase tracking-wide">Valor Total{dateFrom || dateTo ? ' no Período' : ' das Cargas'}</p>
                               <p className="text-blue-900 text-lg font-black">{formatCurrency(totalValue)}</p>
-                              <p className="text-blue-600 text-xs">{filteredLoads.length} carga{filteredLoads.length !== 1 ? 's' : ''} · {formatBR(totalWeightNet / 1000)} ton × R$ {data?.client?.pricePerTon || '0'}/ton</p>
+                              <p className="text-blue-600 text-xs">{filteredLoads.length} carga{filteredLoads.length !== 1 ? 's' : ''} · {formatBR(totalWeightNet / 1000)} ton</p>
                             </div>
                           )}
                           {(() => {
@@ -994,7 +1039,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                 {activeTab === "fechamentos" && (
                   <div className="space-y-4">
                     {(() => {
-                      const pricePerTon = parseFloat(data?.client?.pricePerTon || '0');
+                      const pricePerTon = data?.areaPending ? 0 : parseFloat(String(data?.areaTerms?.unitPrice || '0'));
                       const formalClosings = data?.weeklyClosings || [];
                       const allLoads = data?.loads || [];
 
@@ -1035,8 +1080,9 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
 
                       const thisWeek = { ...calcStats(thisWeekLoads), start: thisWeekStart, end: thisWeekEnd };
                       const lastWeek = { ...calcStats(lastWeekLoads), start: lastWeekStart, end: lastWeekEnd };
-                      const thisWeekValue = pricePerTon > 0 ? (thisWeek.peso / 1000) * pricePerTon : 0;
-                      const lastWeekValue = pricePerTon > 0 ? (lastWeek.peso / 1000) * pricePerTon : 0;
+                      const valueForPeriod = (arr: any[]) => arr.reduce((sum: number, load: any) => sum + (Number(load.portalValue) || 0), 0);
+                      const thisWeekValue = data?.areaPending ? null : valueForPeriod(thisWeekLoads);
+                      const lastWeekValue = data?.areaPending ? null : valueForPeriod(lastWeekLoads);
 
                       // Check if last week has a formal closing
                       const lastWeekKey = lastWeekStart.toISOString().slice(0, 10);
@@ -1073,7 +1119,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                   </div>
                                   <div className="flex justify-between items-baseline">
                                     <span className="text-xs text-gray-500">Valor</span>
-                                    <span className="text-sm font-black text-blue-700">{thisWeekValue > 0 ? formatCurrency(thisWeekValue) : '—'}</span>
+                                    <span className="text-sm font-black text-blue-700">{thisWeekValue != null && thisWeekValue > 0 ? formatCurrency(thisWeekValue) : data?.areaPending ? 'A configurar' : '—'}</span>
                                   </div>
                                   {thisWeek.entregues > 0 && (
                                     <p className="text-[10px] text-green-600 text-right">{thisWeek.entregues} entregue{thisWeek.entregues > 1 ? 's' : ''}</p>
@@ -1099,7 +1145,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                   </div>
                                   <div className="flex justify-between items-baseline">
                                     <span className="text-xs text-gray-500">Valor</span>
-                                    <span className="text-sm font-black text-blue-600">{lastWeekValue > 0 ? formatCurrency(lastWeekValue) : '—'}</span>
+                                    <span className="text-sm font-black text-blue-600">{lastWeekValue != null && lastWeekValue > 0 ? formatCurrency(lastWeekValue) : data?.areaPending ? 'A configurar' : '—'}</span>
                                   </div>
                                   {lastWeek.entregues > 0 && (
                                     <p className="text-[10px] text-green-600 text-right">{lastWeek.entregues} entregue{lastWeek.entregues > 1 ? 's' : ''}</p>
@@ -1128,12 +1174,12 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                   <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                                     <span>{thisWeek.count} carga{thisWeek.count !== 1 ? 's' : ''}</span>
                                     <span>{formatBR(thisWeek.peso / 1000)} ton</span>
-                                    {pricePerTon > 0 && <span>R$ {formatBR(pricePerTon)}/ton</span>}
+                                    {!data?.areaPending && pricePerTon > 0 && <span>Condição atual: R$ {formatBR(pricePerTon)}/{data?.areaTerms?.unit === 'm3' ? 'm³' : 'ton'}</span>}
                                   </div>
                                   <p className="text-[10px] text-blue-600 mt-1.5 italic">Fechamento na sexta-feira</p>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <p className="font-black text-blue-600 text-lg">{thisWeekValue > 0 ? formatCurrency(thisWeekValue) : '—'}</p>
+                                  <p className="font-black text-blue-600 text-lg">{thisWeekValue != null && thisWeekValue > 0 ? formatCurrency(thisWeekValue) : data?.areaPending ? 'A configurar' : '—'}</p>
                                   <p className="text-[10px] text-blue-400 font-medium">parcial</p>
                                 </div>
                               </div>
@@ -1149,7 +1195,8 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                             <ClosingsList
                               closings={formalClosings}
                               allLoads={allLoads}
-                              pricePerTon={pricePerTon}
+                              terms={data?.areaTerms}
+                              areaLabel={data?.selectedArea ? `${data.selectedArea.fieldName ? `${data.selectedArea.fieldName} — ` : ''}${data.selectedArea.name}` : 'Área atual (Área 1)'}
                               clientName={data?.client?.name || ''}
                               formatCurrency={formatCurrency}
                               codeMap={buildClientCodeMap(allLoads)}
@@ -1206,11 +1253,7 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                   const totalAdiantado = allAdvances.reduce((s: number, a: any) => s + parseFloat(a.amount || '0'), 0);
                   const totalAbatido = allDeductions.reduce((s: number, d: any) => s + parseFloat(d.amount || '0'), 0);
                   const totalEntregue = (data?.loads ?? []).filter((l: any) => l.status === 'entregue' || l.trackingStatus === 'finalizado').length;
-                  const pricePerTon = parseFloat((data?.client as any)?.pricePerTon || '0');
-                  const valorEntregue = (data?.loads ?? []).reduce((s: number, l: any) => {
-                    const w = parseFloat(l.weightNetKg || l.weightOutKg || '0');
-                    return s + (w / 1000) * pricePerTon;
-                  }, 0);
+                  const valorEntregue = data?.areaPending ? null : (data?.loads ?? []).reduce((s: number, l: any) => s + (Number(l.portalValue) || 0), 0);
                   const saldoRestante = data?.totalAdvanceBalance ?? 0;
                   // Mapa id → código sequencial para exibir no histórico de abatimentos
                   const allLoadsForCode = data?.loads ?? [];
@@ -1336,10 +1379,9 @@ function ClientDashboard({ session, onLogout }: { session: ClientSession; onLogo
                                         const statusLabel = advBalance <= 0 ? 'QUITADO' : 'EM ABERTO';
                                         const statusColor = advBalance <= 0 ? '#166534' : '#854d0e';
                                         const statusBg = advBalance <= 0 ? '#dcfce7' : '#fef9c3';
-                                        const pricePerTonVal = parseFloat((data?.client as any)?.pricePerTon || '130');
                                         const deductRows = deductions.map((d: any, idx: number) => {
                                           const cargoLoad = d.cargoLoadId ? allLoadsForCode.find((l: any) => l.id === d.cargoLoadId) : null;
-                                          const cargoTotalValue = cargoLoad ? (parseFloat(cargoLoad.weightNetKg || cargoLoad.weightOutKg || '0') / 1000) * pricePerTonVal : 0;
+                                          const cargoTotalValue = cargoLoad && cargoLoad.portalValue != null ? Number(cargoLoad.portalValue) : 0;
                                           const abatidoAmount = parseFloat(d.amount || '0');
                                           const isPartial = cargoTotalValue > 0 && abatidoAmount < cargoTotalValue * 0.999;
                                           const code = d.cargoLoadId ? getClientCode(clientNameForCode, d.cargoLoadId, deductionCodeMap) : `#${idx+1}`;
@@ -1443,11 +1485,8 @@ table tr:nth-child(even) { background:#f9fafb; }
                                 <div className="space-y-2">
                                   {deductions.map((d: any, i: number) => {
                                     // Calcular valor total da carga para detectar abatimento parcial
-                                    const pricePerTonVal = parseFloat((data?.client as any)?.pricePerTon || '130');
                                     const cargoLoad = d.cargoLoadId ? allLoadsForCode.find((l: any) => l.id === d.cargoLoadId) : null;
-                                    const cargoTotalValue = cargoLoad
-                                      ? (parseFloat(cargoLoad.weightNetKg || cargoLoad.weightOutKg || '0') / 1000) * pricePerTonVal
-                                      : 0;
+                                    const cargoTotalValue = cargoLoad && cargoLoad.portalValue != null ? Number(cargoLoad.portalValue) : 0;
                                     const abatidoAmount = parseFloat(d.amount || '0');
                                     const isPartial = cargoTotalValue > 0 && abatidoAmount < cargoTotalValue * 0.999;
                                     return (
@@ -1559,10 +1598,11 @@ table tr:nth-child(even) { background:#f9fafb; }
 // getClientPrefix, buildClientCodeMap, getClientCode
 
 // ── FECHAMENTOS COM EXPANSÃO ──
-function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurrency, codeMap }: {
+function ClosingsList({ closings, allLoads, terms, areaLabel, clientName, formatCurrency, codeMap }: {
   closings: any[];
   allLoads: any[];
-  pricePerTon: number;
+  terms: any;
+  areaLabel?: string;
   clientName: string;
   formatCurrency: (v: string | number | null) => string;
   codeMap?: Map<number, string>;
@@ -1593,8 +1633,8 @@ function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurre
           const d = safeDate(l.deliveryDate || l.date);
           return d >= cwStart && d <= cwEnd;
         });
-        const realWeightKg = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
-        const realAmount = realWeightKg / 1000 * parseFloat(closing.pricePerTon || String(pricePerTon) || '130');
+        const realWeightKg = Number(closing.portalWeightKg ?? closing.totalWeightKg ?? realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0));
+        const realAmount = closing.portalAmount == null ? null : Number(closing.portalAmount);
         const isExpanded = expandedIds.has(closing.id);
 
         return (
@@ -1622,7 +1662,7 @@ function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurre
                   <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                     <span>{realLoads.length} carga{realLoads.length !== 1 ? 's' : ''}</span>
                     <span>{formatBR(realWeightKg / 1000)} ton</span>
-                    {closing.pricePerTon && <span>R$ {closing.pricePerTon}/ton</span>}
+                    {realAmount != null && <span>Valor do fechamento emitido</span>}
                   </div>
                   {closing.status !== 'pago' && closing.dueDate && (
                     <p className={`text-xs mt-1.5 font-medium ${isOverdue ? 'text-red-600' : 'text-orange-600'}`}>
@@ -1650,10 +1690,10 @@ function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurre
                   )}
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-1">
-                  <p className="font-black text-[#0d4f2e] text-base">{formatCurrency(realAmount)}</p>
+                  <p className="font-black text-[#0d4f2e] text-base">{realAmount == null ? 'A configurar' : formatCurrency(realAmount)}</p>
                   <div className="flex items-center gap-1 mt-1">
                     <button
-                      onClick={() => generateClosingPDF(closing, clientName, allLoads, pricePerTon)}
+                      onClick={() => generateClosingPDF(closing, clientName, allLoads, terms, areaLabel)}
                       className="inline-flex items-center gap-1 px-2 py-1 bg-[#0d4f2e]/10 text-[#0d4f2e] rounded-lg text-[10px] font-semibold hover:bg-[#0d4f2e]/20 transition-colors"
                     >
                       <Download className="h-3 w-3" /> PDF
@@ -1685,8 +1725,7 @@ function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurre
                     const weightNet = parseFloat(l.weightNetKg || l.weightOutKg || '0');
                     const weightTon = weightNet > 0 ? formatBR(weightNet / 1000, 3) : '-';
                     const clientCode = getClientCode(clientName, l.id, codeMap);
-                    const unitPrice = parseFloat(closing.pricePerTon || String(pricePerTon) || '0');
-                    const loadAmount = weightNet > 0 && unitPrice > 0 ? weightNet / 1000 * unitPrice : 0;
+                    const loadAmount = l.portalValue == null ? null : Number(l.portalValue);
                     return (
                       <div key={l.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -1702,7 +1741,7 @@ function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurre
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-xs font-bold text-emerald-700">{weightTon} ton</p>
-                          {loadAmount > 0 && <p className="text-[10px] text-blue-600 font-semibold">{formatCurrency(loadAmount)}</p>}
+                          {loadAmount != null && loadAmount > 0 && <p className="text-[10px] text-blue-600 font-semibold">{formatCurrency(loadAmount)}</p>}
                         </div>
                       </div>
                     );
@@ -1710,7 +1749,7 @@ function ClosingsList({ closings, allLoads, pricePerTon, clientName, formatCurre
                 </div>
                 <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
                   <span className="text-xs font-bold text-gray-600">{realLoads.length} cargas · {formatBR(realWeightKg / 1000)} ton</span>
-                  <span className="text-xs font-black text-[#0d4f2e]">{formatCurrency(realAmount)}</span>
+                  <span className="text-xs font-black text-[#0d4f2e]">{realAmount == null ? 'A configurar' : formatCurrency(realAmount)}</span>
                 </div>
               </div>
             )}

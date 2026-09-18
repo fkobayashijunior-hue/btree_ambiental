@@ -70,6 +70,11 @@ export const cargoDestinations = mysqlTable("cargo_destinations", {
 });
 
 export const cargoLoads = mysqlTable("cargo_loads", {
+	agreedUnit: mysqlEnum("agreed_unit", ['ton','m3']),
+	agreedUnitPrice: varchar("agreed_unit_price", { length: 20 }),
+	agreedPaymentMethod: varchar("agreed_payment_method", { length: 100 }),
+	agreedPaymentTermDays: int("agreed_payment_term_days"),
+	areaId: int("area_id"), // NULL preserva a area original / historico
 	id: int().autoincrement().notNull(),
 	date: timestamp({ mode: 'string' }).notNull(),
 	vehicleId: int("vehicle_id"),
@@ -283,6 +288,7 @@ export const clientPaymentReceipts = mysqlTable("client_payment_receipts", {
 });
 
 export const clientPayments = mysqlTable("client_payments", {
+	areaId: int("area_id"), // NULL preserva a area original / historico
 	id: int().autoincrement().notNull(),
 	// Banco de produção usa camelCase sem underscore
 	clientId: int("clientId").notNull().references(() => clients.id),
@@ -550,9 +556,10 @@ export const financialEntries = mysqlTable("financial_entries", {
 	amount: varchar({ length: 20 }).notNull(),
 	date: timestamp({ mode: 'string' }).notNull(),
 	referenceMonth: varchar("reference_month", { length: 7 }),
-	paymentMethod: mysqlEnum("payment_method", ['dinheiro','pix','cartao','transferencia','boleto','cheque']).default('pix').notNull(),
+	paymentMethod: varchar("payment_method", { length: 100 }).default('pix').notNull(),
 	status: mysqlEnum(['pendente','confirmado','cancelado']).default('confirmado').notNull(),
 	clientId: int("client_id"),
+	areaId: int("area_id"),
 	clientName: varchar("client_name", { length: 255 }),
 	receiptImageUrl: text("receipt_image_url"),
 	notes: text(),
@@ -903,6 +910,7 @@ export const purchaseOrders = mysqlTable("purchase_orders", {
 });
 
 export const replantingRecords = mysqlTable("replanting_records", {
+	areaId: int("area_id"), // NULL preserva a area original / historico
 	id: int().autoincrement().notNull(),
 	clientId: int("client_id").notNull().references(() => clients.id),
 	date: timestamp({ mode: 'string' }).notNull(),
@@ -1247,6 +1255,10 @@ export type GpsDeviceLink = typeof gpsDeviceLinks.$inferSelect;
 export type InsertGpsDeviceLink = typeof gpsDeviceLinks.$inferInsert;
 
 export const cargoWeeklyClosings = mysqlTable("cargo_weekly_closings", {
+	areaScopeKey: int("area_scope_key").default(0).notNull(),
+	priceUnit: mysqlEnum("price_unit", ['ton','m3']).default('ton').notNull(),
+	totalVolumeM3: varchar("total_volume_m3", { length: 20 }),
+	areaId: int("area_id"), // NULL preserva a area original / historico
 	id: int().autoincrement().notNull(),
 	clientId: int("client_id").notNull().references(() => clients.id),
 	weekStart: timestamp("week_start", { mode: 'string' }).notNull(),
@@ -1265,13 +1277,14 @@ export const cargoWeeklyClosings = mysqlTable("cargo_weekly_closings", {
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
-	uniqueIndex("cargo_weekly_closings_client_week_unique").on(table.clientId, table.weekStart),
+	uniqueIndex("cargo_weekly_closings_client_area_week_unique").on(table.clientId, table.areaScopeKey, table.weekStart),
 ]);
 
 export type CargoWeeklyClosing = typeof cargoWeeklyClosings.$inferSelect;
 export type InsertCargoWeeklyClosing = typeof cargoWeeklyClosings.$inferInsert;
 
 export const clientDocuments = mysqlTable("client_documents", {
+	areaId: int("area_id"), // NULL preserva a area original / historico
 	id: int().autoincrement().notNull(),
 	clientId: int("client_id").notNull(),
 	type: mysqlEnum(['proposta','contrato','nota_fiscal','boleto','recibo','outros']).default('outros').notNull(),
@@ -1738,6 +1751,7 @@ export type InsertThirdPartyFuel = typeof thirdPartyFuel.$inferInsert;
 // MÓDULO: ADIANTAMENTOS DE CLIENTES
 // ============================================================
 export const clientAdvances = mysqlTable("client_advances", {
+	areaId: int("area_id"), // NULL preserva a area original / historico
   id: int().autoincrement().primaryKey().notNull(),
   clientId: int("client_id").notNull().references(() => clients.id),
   amount: varchar({ length: 20 }).notNull(),           // valor do adiantamento
@@ -1882,3 +1896,27 @@ export const fiscalNotes = mysqlTable("fiscal_notes", {
 });
 export type FiscalNote = typeof fiscalNotes.$inferSelect;
 export type InsertFiscalNote = typeof fiscalNotes.$inferInsert;
+
+// Areas financeiras independentes. A area original permanece area_id NULL.
+export const clientAreas = mysqlTable("client_areas", {
+  id: int().autoincrement().primaryKey().notNull(),
+  clientId: int("client_id").notNull(),
+  name: varchar({ length: 255 }).notNull(),
+  fieldName: varchar("field_name", { length: 255 }),
+  workLocationId: int("work_location_id").notNull(),
+  agreementStatus: mysqlEnum("agreement_status", ['pending','confirmed']).default('pending').notNull(),
+  unit: mysqlEnum(['ton','m3']),
+  unitPrice: varchar("unit_price", { length: 20 }),
+  paymentMethod: varchar("payment_method", { length: 100 }),
+  paymentTermDays: int("payment_term_days"),
+  billingCycle: varchar("billing_cycle", { length: 30 }),
+  notes: text(),
+  isActive: tinyint("is_active").default(1).notNull(),
+  createdBy: int("created_by"),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("client_areas_location_unique").on(table.workLocationId),
+  index("client_areas_client_idx").on(table.clientId),
+]);
+export type ClientArea = typeof clientAreas.$inferSelect;

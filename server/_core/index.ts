@@ -1281,6 +1281,8 @@ function scheduleWeeklyClosingCron() {
         const weekStartStr = weekStart.toISOString().slice(0, 10);
         const weekEndStr = weekEnd.toISOString().slice(0, 10);
 
+        // Este ciclo automático mantém somente a área original (area_id NULL).
+        // Novas áreas têm acordos próprios e fechamento manual com escopo validado.
         // Buscar todos os clientes ativos
         const [clientRows] = await conn.execute(
           `SELECT id, name, price_per_ton, payment_term_days, billing_cycle FROM clients WHERE active = 1`
@@ -1293,7 +1295,7 @@ function scheduleWeeklyClosingCron() {
           // que cobre o caso de dois processos (ex: staging Hostinger + ambiente local)
           // rodando este cron ao mesmo tempo.
           const [existing] = await conn.execute(
-            `SELECT id FROM cargo_weekly_closings WHERE client_id = ? AND DATE(week_start) = ?`,
+            `SELECT id FROM cargo_weekly_closings WHERE client_id = ? AND area_id IS NULL AND DATE(week_start) = ?`,
             [client.id, weekStartStr]
           ) as any;
 
@@ -1305,7 +1307,7 @@ function scheduleWeeklyClosingCron() {
           // Buscar cargas do cliente nesta semana (usa delivery_date se disponível, senão date)
           const [loadsInWeek] = await conn.execute(
             `SELECT weight_net_kg, weight_out_kg FROM cargo_loads 
-             WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
+             WHERE client_id = ? AND area_id IS NULL AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
             [client.id, weekStartStr, weekEndStr]
           ) as any;
 

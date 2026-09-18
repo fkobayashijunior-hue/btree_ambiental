@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { getClientPrefix, buildClientCodeMap, getClientCode } from "@shared/clientCode";
 import { formatBR, formatBRL } from "@/lib/formatBR";
 import { BTREE_LOGO_B64, fetchImageAsBase64, loadPdfAssets, generatePDFFromHtml, buildPdfFooterHtml, PDF_BASE_STYLES } from "@/lib/pdfUtils";
@@ -22,6 +22,7 @@ import {
   DollarSign, CalendarClock, AlertTriangle, XCircle,
 } from "lucide-react";
 import { useFilePicker } from "@/hooks/useFilePicker";
+import ClientAreaSelect from "@/components/ClientAreaSelect";
 import WorkLocationSelect from "@/components/WorkLocationSelect";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useWorkLocations } from "@/hooks/useWorkLocations";
@@ -48,6 +49,13 @@ function safeDate(dateStr: string | null | undefined): Date {
   return new Date(s);
 }
 
+function cargoAreaValue(c: any, legacyPrice = 0): number | null {
+  if (c.financialValue !== undefined) return c.financialValue == null ? null : Number(c.financialValue);
+  if (c.areaId != null) return null;
+  return parseFloat(c.weightNetKg || c.weightOutKg || '0') / 1000 * legacyPrice;
+}
+const cargoAreaName = (c: any) => c.areaName || (c.areaId == null ? 'Área atual (Área 1)' : `Área #${c.areaId}`);
+const htmlText = (s: any) => String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 // ===== TIPOS =====
 type TrackingStatus = "aguardando" | "carregando" | "em_transito" | "pesagem_saida" | "descarregando" | "pesagem_chegada" | "finalizado";
 
@@ -289,7 +297,7 @@ async function generateCargoPDF(cargo: Record<string, unknown>, _companyName = "
     <div class="section">
       <div class="section-title">&#127970; Cliente e Destino</div>
       <div class="grid">
-        <div class="field"><div class="field-label">Cliente</div><div class="field-value highlight">${cargo.clientName || "-"}</div></div>
+        <div class="field"><div class="field-label">Cliente</div><div class="field-value highlight">${htmlText(cargo.clientName || "-")} — ${htmlText(cargoAreaName(cargo))}</div></div>
         <div class="field"><div class="field-label">Destino</div><div class="field-value">${cargo.destination || "-"}</div></div>
         <div class="field"><div class="field-label">Nº Nota Fiscal</div><div class="field-value">${cargo.invoiceNumber || "-"}</div></div>
         <div class="field"><div class="field-label">Tipo de Madeira</div><div class="field-value">${cargo.woodType || "-"}</div></div>
@@ -373,14 +381,15 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
     const w = parseFloat(((c as any).weightNetKg || "0").replace(",", "."));
     return acc + (isNaN(w) ? 0 : w);
   }, 0);
-  const totalValor = pricePerTon > 0 && totalPesoLiquido > 0 ? (totalPesoLiquido / 1000) * pricePerTon : 0;
+  const totalValor = cargas.reduce((sum,c)=>sum+(cargoAreaValue(c,pricePerTon)??0),0);
+  const showValues = cargas.every(c=>cargoAreaValue(c,pricePerTon)!=null);
 
   const rows = cargas.map(c => {
     const date = c.date ? safeDate(c.date as string).toLocaleDateString("pt-BR") : "-";
     const statusLabel = c.status === "entregue" ? "Entregue" : c.status === "cancelado" ? "Cancelado" : "Pendente";
     const statusColor = c.status === "entregue" ? "#166534" : c.status === "cancelado" ? "#991b1b" : "#854d0e";
     const weightNet = parseFloat(((c as any).weightNetKg || "0").replace(",", "."));
-    const valorCarga = pricePerTon > 0 && weightNet > 0 ? (weightNet / 1000) * pricePerTon : 0;
+    const valorCarga = cargoAreaValue(c,pricePerTon)??0;
     // Abatimento via adiantamento para esta carga
     const cargoDeductions = deductions.filter(d => d.cargoLoadId === (c.id as number));
     const totalDeducted = cargoDeductions.reduce((s, d) => s + parseFloat(d.amount || '0'), 0);
@@ -412,7 +421,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       <td style="text-align:right;">${(c as any).weightInKg || "-"}</td>
       <td style="text-align:right;font-weight:700;">${(c as any).weightNetKg || "-"}</td>
       <td>${c.invoiceNumber || "-"}</td>
-      ${pricePerTon > 0 ? `<td style="text-align:right;font-weight:600;color:#1d4ed8;">${valorCarga > 0 ? "R$ " + formatBR(valorCarga, 2) : "-"}</td>` : ""}
+      ${showValues ? `<td style="text-align:right;font-weight:600;color:#1d4ed8;">${valorCarga > 0 ? "R$ " + formatBR(valorCarga, 2) : "-"}</td>` : ""}
       <td style="color:${statusColor};font-weight:600;">${statusLabel}</td>
       <td style="color:${pagColor};font-weight:600;font-size:9px;">${pagLabel}${totalDeducted > 0 ? `<br><span style="color:#166534;font-size:8px;">-R$ ${formatBR(totalDeducted, 2)}</span>` : ''}</td>
     </tr>`;
@@ -421,7 +430,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
   const [kobayashiB64, qrB64] = await loadPdfAssets();
   const footerHtml = buildPdfFooterHtml(kobayashiB64, qrB64);
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<title>Relatório de Cargas - ${clientName} - BTREE Ambiental</title>
+<title>Relatório de Cargas - ${htmlText(clientName)} - BTREE Ambiental</title>
 <style>${PDF_BASE_STYLES}
   @page { size: A4 landscape; margin: 0; }
   .page { min-height: 100vh; display: flex; flex-direction: column; }
@@ -464,7 +473,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
     </div>
   </div>
   <div class="pdf-subheader">
-    <span style="font-size:15px;font-weight:700;color:#0d4f2e;">&#127970; Cliente: ${clientName}</span>
+    <span style="font-size:15px;font-weight:700;color:#0d4f2e;">&#127970; Cliente: ${htmlText(clientName)}</span>
     <span style="font-size:12px;color:#6b7280;">Período: ${cargas.length > 0 ? safeDate(cargas[cargas.length - 1].date as string).toLocaleDateString("pt-BR") : "-"} a ${cargas.length > 0 ? safeDate(cargas[0].date as string).toLocaleDateString("pt-BR") : "-"}</span>
   </div>
   <div class="pdf-content">
@@ -474,7 +483,6 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
       <div class="summary-item"><div class="label">Total de Cargas</div><div class="value">${totalCargas}</div></div>
       <div class="summary-item"><div class="label">Volume Total</div><div class="value">${totalVolume} m³</div></div>
       <div class="summary-item"><div class="label">Peso Líquido Total</div><div class="value">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</div></div>
-      ${pricePerTon > 0 ? `<div class="summary-item"><div class="label">Preço/Ton</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(pricePerTon, 0)}</div></div>` : ""}
       ${totalValor > 0 ? `<div class="summary-item"><div class="label">Valor Total</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(totalValor, 2)}</div></div>` : ""}
       ${valorPagoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Valor Abatido</div><div class="value" style="color:#166534;">R$ ${formatBR(valorPagoAdiantamento, 2)}</div></div>` : ""}
       ${saldoAdiantamento > 0 ? `<div class="summary-item"><div class="label">Saldo Adiantamento</div><div class="value" style="color:#1d4ed8;">R$ ${formatBR(saldoAdiantamento, 2)}</div></div>` : ""}
@@ -496,7 +504,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
         <col class="col-peso" />
         <col class="col-peso" />
         <col class="col-nota" />
-        ${pricePerTon > 0 ? '<col class="col-valor" />' : ''}
+        ${showValues ? '<col class="col-valor" />' : ''}
         <col class="col-status" />
         <col class="col-pagamento" />
       </colgroup>
@@ -513,7 +521,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
           <th style="text-align:right;">P.Cheg.</th>
           <th style="text-align:right;">P.Líq.</th>
           <th>Nota</th>
-          ${pricePerTon > 0 ? `<th style="text-align:right;">Valor</th>` : ""}
+          ${showValues ? `<th style="text-align:right;">Valor</th>` : ""}
           <th>Status</th>
           <th>Pagamento</th>
         </tr>
@@ -528,7 +536,7 @@ async function generateClientReportPDF(clientName: string, cargas: Array<Record<
           <td colspan="2"></td>
           <td style="text-align:right;color:#0d4f2e;font-size:8px;">${totalPesoLiquido > 0 ? formatBR(totalPesoLiquido, 0) + " kg" : "-"}</td>
           <td></td>
-          ${pricePerTon > 0 ? `<td style="text-align:right;color:#1d4ed8;font-size:8px;">R$ ${formatBR(totalValor, 2)}</td>` : ""}
+          ${showValues ? `<td style="text-align:right;color:#1d4ed8;font-size:8px;">R$ ${formatBR(totalValor, 2)}</td>` : ""}
           <td style="text-align:center;color:#0d4f2e;">${totalCargas}</td>
           <td></td>
         </tr>
@@ -561,13 +569,13 @@ async function generateWeeklyClosingPDF(closing: any, clientName: string, loadsA
   });
 
   // Use actual filtered loads count (not the saved totalLoads which may be stale)
-  const actualTotalLoads = weekLoads.length;
+  const actualTotalLoads = closing.totalLoads ?? weekLoads.length;
   const actualTotalWeightKg = weekLoads.reduce((sum: number, l: any) => {
     const w = parseFloat(l.weightNetKg || l.weightOutKg || '0');
     return sum + w;
   }, 0);
   const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
-  const actualTotalAmount = formatBR(actualTotalWeightKg / 1000 * (closing.pricePerTon || pricePerTon), 2);
+  const actualTotalAmount = formatBR(Number(closing.totalAmount || 0), 2);
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
     const date = (l.deliveryDate || l.date) ? safeDate(l.deliveryDate || l.date).toLocaleDateString('pt-BR') : '-';
@@ -634,7 +642,7 @@ async function generateWeeklyClosingPDF(closing: any, clientName: string, loadsA
     <div class="summary-box">
       <div class="summary-item"><div class="label">Cargas</div><div class="value">${actualTotalLoads}</div></div>
       <div class="summary-item"><div class="label">Peso Total</div><div class="value">${actualTotalWeightTon} ton</div></div>
-      <div class="summary-item"><div class="label">Pre\u00e7o/Ton</div><div class="value">R$ ${formatBR(parseFloat(String(closing.pricePerTon || pricePerTon)))}</div></div>
+      <div class="summary-item"><div class="label">Base de cobrança</div><div class="value">R$ ${formatBR(parseFloat(String(closing.pricePerTon || pricePerTon)))}/${closing.priceUnit==='m3'?'m³':'ton'}</div></div>
       <div class="summary-item"><div class="label">Valor Total</div><div class="value blue">R$ ${actualTotalAmount}</div></div>
       <div class="summary-item"><div class="label">Vencimento</div><div class="value">${dueDateFmt}</div></div>
     </div>
@@ -678,12 +686,18 @@ function WeeklyClosingsView({
   setIsClosingFormOpen: (v: boolean) => void;
 }) {
   const utils = trpc.useUtils();
+  const [closingAreaId,setClosingAreaId] = useState<number|null>(null);
+  const {data: closingAreas = []} = trpc.clientAreas.list.useQuery({clientId:closingClientId},{enabled:closingClientId>0});
+  const area = closingAreas.find(a=>a.id===closingAreaId);
+  const closingAreaPending = closingAreaId != null && (!area || area.agreementStatus !== 'confirmed');
+  useEffect(()=>setClosingAreaId(null),[closingClientId]);
+  const scopedLoads = loads.filter(c=>(!closingClientId || c.clientId===closingClientId) && (!closingClientId || (c.areaId??null)===closingAreaId));
   const { data: closings = [], isLoading } = trpc.cargoLoads.listWeeklyClosings.useQuery(
-    closingClientId ? { clientId: closingClientId } : undefined
+    closingClientId ? { clientId: closingClientId,areaId:closingAreaId } : undefined
   );
   // Buscar deduções de adiantamento do cliente selecionado para filtrar cargas no preview
   const { data: advanceDeductionsData = [] } = trpc.clientAdvances.listDeductions.useQuery(
-    closingClientId ? { clientId: closingClientId } : { clientId: 0 },
+    closingClientId ? { clientId: closingClientId, areaId:closingAreaId } : { clientId: 0, areaId:null },
     { enabled: closingClientId > 0 }
   );
   const createClosing = trpc.cargoLoads.createWeeklyClosing.useMutation({
@@ -745,11 +759,11 @@ function WeeklyClosingsView({
   lastWeekEnd.setDate(lastWeekEnd.getDate() + 6);
   lastWeekEnd.setHours(23, 59, 59, 999);
 
-  const thisWeekLoads = loads.filter((c: any) => {
+  const thisWeekLoads = scopedLoads.filter((c: any) => {
     const d = safeDate(c.deliveryDate || c.date);
     return d >= thisWeekStart && d <= thisWeekEnd;
   });
-  const lastWeekLoads = loads.filter((c: any) => {
+  const lastWeekLoads = scopedLoads.filter((c: any) => {
     const d = safeDate(c.deliveryDate || c.date);
     return d >= lastWeekStart && d <= lastWeekEnd;
   });
@@ -876,7 +890,7 @@ function WeeklyClosingsView({
 
       {/* ── HEADER + ACTIONS ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={closingClientId}
             onChange={e => setClosingClientId(parseInt(e.target.value))}
@@ -887,6 +901,7 @@ function WeeklyClosingsView({
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          {closingClientId>0 && <ClientAreaSelect clientId={closingClientId} value={closingAreaId} onChange={setClosingAreaId} label="Área do fechamento" />}
         </div>
         <Button
           className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
@@ -922,6 +937,7 @@ function WeeklyClosingsView({
                   ))}
                 </select>
               </div>
+              <ClientAreaSelect clientId={closingClientId} value={closingAreaId} onChange={setClosingAreaId} label="Área do novo fechamento" />
               <div>
                 <Label>Início (Sábado)</Label>
                 <Input type="date" value={closingWeekStart} onChange={e => setClosingWeekStart(e.target.value)} />
@@ -931,63 +947,31 @@ function WeeklyClosingsView({
                 <Input type="date" value={closingWeekEnd} onChange={e => setClosingWeekEnd(e.target.value)} />
               </div>
             </div>
-            {closingClientId > 0 && closingWeekStart && closingWeekEnd && (() => {
-              const client = clientsList.find(c => c.id === closingClientId);
-              const pricePerTon = parseFloat((client as any)?.pricePerTon || '130');
-              const weekStartDate = safeDate(closingWeekStart);
-              const weekEndDate = safeDate(closingWeekEnd);
-              weekEndDate.setHours(23, 59, 59, 999);
-              const allLoadsInPeriod = loads.filter((l: any) => {
-                if (l.clientId !== closingClientId) return false;
-                const loadDate = safeDate(l.deliveryDate || l.date);
-                return loadDate >= weekStartDate && loadDate <= weekEndDate;
-              });
-              // Separar cargas já abatidas pelo adiantamento das que ainda não foram
-              const abatidasIds = new Set(
-                (advanceDeductionsData || []).filter((d: any) => d.cargoLoadId).map((d: any) => d.cargoLoadId)
-              );
-              const loadsAbatidas = allLoadsInPeriod.filter((l: any) => abatidasIds.has(l.id));
-              const loadsInPeriod = allLoadsInPeriod.filter((l: any) => !abatidasIds.has(l.id));
-              const totalWeight = loadsInPeriod.reduce((sum: number, l: any) => sum + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
-              const totalValue = (totalWeight / 1000) * pricePerTon;
-              const paymentTermDays = (client as any)?.paymentTermDays || 21;
-              const dueDate = safeDate(closingWeekEnd);
-              dueDate.setDate(dueDate.getDate() + paymentTermDays);
-              return (
-                <div className="space-y-2">
-                  {loadsAbatidas.length > 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-                      <p className="font-semibold text-amber-800">⚠️ {loadsAbatidas.length} carga{loadsAbatidas.length > 1 ? 's' : ''} já abatida{loadsAbatidas.length > 1 ? 's' : ''} pelo adiantamento</p>
-                      <p className="text-amber-700 text-xs mt-0.5">Essas cargas não entrarão no fechamento pois já foram pagas via adiantamento.</p>
-                    </div>
-                  )}
-                  {loadsInPeriod.length === 0 ? (
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-600">
-                      <p className="font-semibold">ℹ️ Nenhuma carga pendente neste período</p>
-                      <p className="text-xs mt-0.5">Todas as cargas do período já foram abatidas pelo adiantamento. Não é necessário criar um fechamento.</p>
-                    </div>
-                  ) : (
-                    <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
-                      <p><strong>Preview:</strong> {loadsInPeriod.length} carga{loadsInPeriod.length !== 1 ? 's' : ''} pendente{loadsInPeriod.length !== 1 ? 's' : ''} no período</p>
-                      <p>Peso total: {formatBR(totalWeight / 1000)} toneladas ({formatBR(totalWeight, 0)} kg)</p>
-                      <p>Valor: <strong className="text-blue-700">R$ {formatBR(totalValue)}</strong> ({formatBR(totalWeight / 1000)} ton x R$ {formatBR(pricePerTon, 0)}/ton)</p>
-                      <p>Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong> ({paymentTermDays} dias após fechamento)</p>
-                    </div>
-                  )}
-                </div>
-              );
+            {closingAreaPending && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Acordo da área a configurar. Confirme preço, unidade, forma e prazo antes de gerar pagamentos. Nenhum valor da área antiga será utilizado.</div>}
+            {closingClientId>0 && closingWeekStart && closingWeekEnd && !closingAreaPending && (()=>{
+              const client=clientsList.find(c=>c.id===closingClientId);
+              const start=safeDate(closingWeekStart), end=safeDate(closingWeekEnd);end.setHours(23,59,59,999);
+              const rows=scopedLoads.filter(c=>c.status==='entregue' && safeDate(c.deliveryDate||c.date)>=start && safeDate(c.deliveryDate||c.date)<=end);
+              const deductionFor=(id:number)=>advanceDeductionsData.filter(d=>d.cargoLoadId===id).reduce((sum,d)=>sum+Number(d.amount||0),0);
+              const unpaid=rows.filter(c=>closingAreaId===null ? !advanceDeductionsData.some(d=>d.cargoLoadId===c.id) : c.paymentStatus!=='pago' && (cargoAreaValue(c)??0)-deductionFor(c.id)>0.005);
+              const amount=unpaid.reduce((sum,c)=>sum+Math.max(0,(cargoAreaValue(c,Number(client?.pricePerTon||0))??0)-deductionFor(c.id)),0);
+              const days=closingAreaId==null ? (client?.paymentTermDays??21) : area?.paymentTermDays??0;
+              const due=safeDate(closingWeekEnd);due.setDate(due.getDate()+days);
+              return <div className="rounded-lg bg-blue-50 p-3 text-sm space-y-1"><p><strong>Prévia da área:</strong> {unpaid.length} carga(s) entregue(s) com saldo.</p><p>Saldo líquido após abatimentos: <strong>R$ {formatBR(amount)}</strong></p><p>Base: {closingAreaId===null ? 'toneladas' : area?.unit==='m3' ? 'm³' : 'toneladas'} · Vencimento: {due.toLocaleDateString('pt-BR')}</p><p className="text-xs text-slate-500">Novas áreas: fechamento manual; o ciclo cadastrado serve como referência.</p></div>;
             })()}
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setIsClosingFormOpen(false)}>Cancelar</Button>
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                disabled={!closingClientId || !closingWeekStart || !closingWeekEnd || createClosing.isPending}
+                disabled={!closingClientId || !closingWeekStart || !closingWeekEnd || closingAreaPending || createClosing.isPending}
                 onClick={() => {
                   const client = clientsList.find(c => c.id === closingClientId);
-                  const pricePerTon = parseFloat((client as any)?.pricePerTon || '130');
-                  const effectivePrice = pricePerTon > 0 ? pricePerTon : 130;
+                  const pricePerTon = closingAreaId === null ? Number(client?.pricePerTon || 0) : Number(area?.unitPrice || 0);
+                  if(closingAreaPending || !pricePerTon){toast.error("Configure o acordo antes de fechar.");return;}
+                  const effectivePrice = pricePerTon;
                   createClosing.mutate({
                     clientId: closingClientId,
+                    areaId: closingAreaId,
                     weekStart: closingWeekStart,
                     weekEnd: closingWeekEnd,
                     pricePerTon: String(effectivePrice),
@@ -1021,18 +1005,18 @@ function WeeklyClosingsView({
           {closings.map(closing => {
             const isOverdue = closing.status === 'fechado' && closing.dueDate && safeDate(closing.dueDate) < new Date();
             const clientForClosing = clientsList.find(c => c.id === closing.clientId);
-            const pricePerTon = parseFloat(closing.pricePerTon || (clientForClosing as any)?.pricePerTon || '130');
+            const pricePerTon = parseFloat(closing.pricePerTon || (closing.areaId==null ? (clientForClosing as any)?.pricePerTon : null) || '0');
             // Calculate live totals from actual loads in the period (same logic as PDF)
             const wStart = safeDate(closing.weekStart);
             const wEnd = safeDate(closing.weekEnd);
             wEnd.setHours(23, 59, 59, 999);
             const realLoads = loads.filter((l: any) => {
-              if (l.clientId !== closing.clientId) return false;
+              if (l.clientId !== closing.clientId || (l.areaId??null)!==(closing.areaId??null)) return false;
               const d = safeDate(l.deliveryDate || l.date);
               return d >= wStart && d <= wEnd;
             });
             const realWeightKg = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
-            const realAmount = realWeightKg / 1000 * pricePerTon;
+            const realAmount = Number(closing.totalAmount || 0);
             return (
               <div key={closing.id} className={`border rounded-xl p-4 transition-all hover:shadow-md ${
                 closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
@@ -1060,9 +1044,9 @@ function WeeklyClosingsView({
                       </span>
                     </div>
                     <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      <span>{realLoads.length} carga{realLoads.length !== 1 ? 's' : ''}</span>
-                      <span>{formatBR(realWeightKg / 1000)} ton</span>
-                      {closing.pricePerTon && <span>R$ {formatBR(parseFloat(closing.pricePerTon))}/ton</span>}
+                      <span>{closing.totalLoads} carga{realLoads.length !== 1 ? 's' : ''}</span>
+                      <span>{closing.priceUnit==='m3' ? `${formatBR(Number(closing.totalVolumeM3||0),3)} m³` : `${formatBR(Number(closing.totalWeightKg||0)/1000)} ton`}</span><span>{realLoads[0]?.areaName || (closing.areaId==null ? "Área atual (Área 1)" : "Área #"+closing.areaId)}</span>
+                      {closing.pricePerTon && <span>R$ {formatBR(parseFloat(closing.pricePerTon))}/{closing.priceUnit==='m3'?'m³':'ton'}</span>}
                     </div>
                     {closing.status !== 'pago' && closing.dueDate && (
                       <p className={`text-xs mt-1.5 font-medium ${isOverdue ? 'text-red-600' : 'text-orange-600'}`}>
@@ -1106,8 +1090,8 @@ function WeeklyClosingsView({
                     {/* PDF Button */}
                     <button
                       onClick={() => {
-                        const clientLoads = loads.filter((l: any) => l.clientId === closing.clientId);
-                        generateWeeklyClosingPDF(closing, closing.clientName || 'Cliente', clientLoads, pricePerTon);
+                        const clientLoads = loads.filter((l: any) => l.clientId === closing.clientId && (l.areaId??null)===(closing.areaId??null));
+                        generateWeeklyClosingPDF(closing, (closing.clientName || 'Cliente')+' — '+(clientLoads[0]?.areaName || (closing.areaId==null?'Área atual (Área 1)':closingAreas.find(a=>a.id===closing.areaId)?.name||'Área #'+closing.areaId)), clientLoads, pricePerTon);
                       }}
                       className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-semibold hover:bg-emerald-200 transition-colors mt-1"
                     >
@@ -1135,7 +1119,7 @@ function WeeklyClosingsView({
                                 });
                                 const data = await res.json();
                                 if (data.secure_url) {
-                                  updateStatus.mutate({ id: closing.id, status: 'pago', receiptUrl: data.secure_url });
+                                  updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago', receiptUrl: data.secure_url });
                                 } else {
                                   toast.error('Erro no upload do comprovante');
                                 }
@@ -1152,7 +1136,7 @@ function WeeklyClosingsView({
                       )}
                       {closing.status === 'fechado' && (
                         <button
-                          onClick={() => updateStatus.mutate({ id: closing.id, status: 'pago' })}
+                          onClick={() => updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago' })}
                           className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded-lg text-[10px] font-semibold hover:bg-green-100 transition-colors"
                         >
                           <CheckCircle2 className="h-3 w-3" /> Sem comp.
@@ -1178,7 +1162,7 @@ function WeeklyClosingsView({
                                 });
                                 const data = await res.json();
                                 if (data.secure_url) {
-                                  updateStatus.mutate({ id: closing.id, status: 'pago', receiptUrl: data.secure_url });
+                                  updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago', receiptUrl: data.secure_url });
                                 } else {
                                   toast.error('Erro no upload do comprovante');
                                 }
@@ -1194,7 +1178,7 @@ function WeeklyClosingsView({
                         </button>
                       )}
                       <button
-                        onClick={() => { if (confirm('Remover este fechamento?')) deleteClosing.mutate({ id: closing.id }); }}
+                        onClick={() => { if (confirm('Remover este fechamento?')) deleteClosing.mutate({ id: closing.id,areaId:closing.areaId??null }); }}
                         className="inline-flex items-center gap-1 px-2 py-1 text-gray-400 hover:text-red-500 rounded-lg text-[10px] transition-colors"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -1239,7 +1223,7 @@ function WeeklyClosingsView({
                 disabled={!editClosingPaymentValue || updateClosingPaymentDate.isPending}
                 onClick={() => {
                   if (editClosingPaymentId && editClosingPaymentValue) {
-                    updateClosingPaymentDate.mutate({ id: editClosingPaymentId, paidAt: editClosingPaymentValue });
+                    updateClosingPaymentDate.mutate({ id: editClosingPaymentId, areaId:closings.find(c=>c.id===editClosingPaymentId)?.areaId??null, paidAt: editClosingPaymentValue });
                   }
                 }}
               >
@@ -1262,6 +1246,8 @@ export default function CargoControl() {
   const [filterStatus, setFilterStatus] = useState<"" | "pendente" | "entregue" | "cancelado">("")
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<"" | "pago" | "a_pagar" | "sem_boleto">("");
   const [filterClientId, setFilterClientId] = useState<number>(0);
+  const [filterAreaId, setFilterAreaId] = useState<string>("all");
+  const [areaChosen, setAreaChosen] = useState(false);
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [viewMode, setViewMode] = useState<"cliente" | "lista" | "tracking" | "fechamentos">("cliente");
@@ -1308,6 +1294,7 @@ export default function CargoControl() {
     noteQuantity: "",
     noteUnit: "" as "" | "m3" | "ton",
     clientId: 0,
+    areaId: null as number | null,
     clientName: "",
     notes: "",
     status: "pendente" as "pendente" | "entregue" | "cancelado",
@@ -1339,13 +1326,18 @@ export default function CargoControl() {
   const { user: loggedUser } = useAuth();
   const myCollaboratorId = (allCollaborators as any[]).find(c => c.userId === loggedUser?.id)?.id || 0;
   const { data: clientsList = [] } = trpc.clients.list.useQuery();
+  const formAreasQuery = trpc.clientAreas.list.useQuery({clientId:form.clientId}, {enabled:form.clientId>0});
+  const formAreas = formAreasQuery.data || [];
+  const {data: filterAreas = []} = trpc.clientAreas.list.useQuery({clientId:filterClientId}, {enabled:filterClientId>0});
+  useEffect(()=>{if(!editId){setAreaChosen(false);setForm(f=>({...f,areaId:null,workLocationId:""}));}},[form.clientId,editId]);
+  useEffect(()=>{setFilterAreaId(filterClientId ? 'legacy' : 'all');},[filterClientId]);
   // Deduções de adiantamento para exibir resumo financeiro por carga (todas, sem filtro)
   const { data: allDeductions = [] } = trpc.clientAdvances.listAllDeductions.useQuery();
   // Todos os adiantamentos (para uso no PDF)
   const { data: allAdvancesList = [] } = trpc.clientAdvances.listAll.useQuery();
   // Adiantamentos do cliente selecionado para cálculo de saldo
   const { data: clientAdvancesList = [] } = trpc.clientAdvances.listByClient.useQuery(
-    { clientId: filterClientId },
+    { clientId: filterClientId, ...(filterAreaId === "all" ? {} : {areaId:filterAreaId === "legacy" ? null : Number(filterAreaId)}) },
     { enabled: filterClientId > 0 }
   );
   const { data: destinations = [] } = trpc.cargoLoads.listDestinations.useQuery();
@@ -1463,6 +1455,7 @@ export default function CargoControl() {
   const [payNotes, setPayNotes] = useState('');
 
   function openPayModal(cargo: typeof loads[number], loadValue: number) {
+    if (cargo.areaId != null && cargoAreaValue(cargo) == null) {toast.error('Acordo da área a configurar.');return;}
     setPayDate(new Date().toISOString().slice(0, 10));
     setPayNotes('');
     setPayDialog({ open: true, cargoId: cargo.id, vehiclePlate: cargo.vehiclePlate || cargo.vehicleName || 'Veículo', clientName: cargo.clientName || '', loadValue });
@@ -1477,7 +1470,7 @@ export default function CargoControl() {
   function handleConfirmPayment() {
     if (!payDate) { toast.error('Selecione a data de pagamento'); return; }
     if (!payDialog.cargoId) return;
-    markAsPaidMutation.mutate({ id: payDialog.cargoId, paidAt: payDate, notes: payNotes || undefined }, {
+    markAsPaidMutation.mutate({ id: payDialog.cargoId, areaId: loads.find(c=>c.id===payDialog.cargoId)?.areaId ?? null, paidAt: payDate, notes: payNotes || undefined }, {
       onSuccess: () => closePayModal(),
     });
   }
@@ -1505,13 +1498,14 @@ export default function CargoControl() {
     }
         // Auto-selecionar local de trabalho se há apenas 1 disponível
     const autoWorkLocationId = workLocations.length === 1 ? String(workLocations[0].id) : "";
-    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", noteUnit: "", invoiceUrl: "", clientId: autoClientId, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "", responsavelCargaId: myCollaboratorId });
+    setForm({ date: new Date().toISOString().slice(0, 10), deliveryDate: "", vehicleId: 0, vehiclePlate: "", driverCollaboratorId: 0, driverName: "", heightM: "", widthM: "", lengthM: "", weightKg: "", weightOutKg: "", weightInKg: "", weightNetKg: "", woodType: "", destinationId: 0, destination: "", invoiceNumber: "", noteQuantity: "", noteUnit: "", invoiceUrl: "", clientId: autoClientId, areaId: null, clientName: autoClientName, notes: "", status: "pendente", workLocationId: autoWorkLocationId, humidity: "", receiverName: "", thirdPartyContractor: "", thirdPartyCost: "", responsavelCargaId: myCollaboratorId });
     setPendingPhotos([]);
     setInvoiceFile(null);
   };
 
   const openEdit = (cargo: typeof loads[number]) => {
     setEditId(cargo.id);
+    setAreaChosen(true);
     setForm({
       date: cargo.date ? safeDate(cargo.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
       vehicleId: cargo.vehicleId || 0,
@@ -1533,6 +1527,7 @@ export default function CargoControl() {
       noteUnit: ((cargo as any).fiscalNoteQuantityType === 'm3' || (cargo as any).fiscalNoteQuantityType === 'ton') ? (cargo as any).fiscalNoteQuantityType : "",
       invoiceUrl: (cargo as any).invoiceUrl || (cargo as any).fiscalNoteFileUrl || "",
       clientId: cargo.clientId || 0,
+      areaId: cargo.areaId ?? null,
       clientName: cargo.clientName || "",
       notes: cargo.notes || "",
       status: cargo.status as "pendente" | "entregue" | "cancelado",
@@ -1552,6 +1547,9 @@ export default function CargoControl() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.clientId && (formAreasQuery.isLoading || formAreasQuery.isError)) {toast.error('Aguarde o carregamento das áreas antes de salvar.');return;}
+    if (!editId && formAreas.length && !areaChosen) {toast.error('Selecione explicitamente a área desta carga.');return;}
+    if (form.areaId != null && !formAreas.some(a=>a.id===form.areaId)) {toast.error('Área inválida para este cliente.');return;}
     // Ao criar carga, marcar a nota selecionada como usada
     const noteIdToMark = !editId ? selectedNoteId : null;
     // Converter arquivo da NF para base64 (se selecionado)
@@ -1580,6 +1578,7 @@ export default function CargoControl() {
       driverCollaboratorId: form.driverCollaboratorId || undefined,
       destinationId: form.destinationId || undefined,
       clientId: form.clientId || undefined,
+      areaId: form.areaId ?? null,
       volumeM3: volume || "0",
       weightOutKg: form.weightOutKg || undefined,
       weightInKg: form.weightInKg || undefined,
@@ -1707,6 +1706,7 @@ export default function CargoControl() {
   // Filtrar cargas (respeitar allowedClientIds para encarregados)
   const filtered = useMemo(() => {
     return loads.filter(c => {
+      if (filterAreaId !== "all" && (c.areaId ?? null) !== (filterAreaId === "legacy" ? null : Number(filterAreaId))) return false;
       // Filtro de permissão: encarregado só vê cargas dos clientes permitidos
       if (allowedClientIds && allowedClientIds.length > 0) {
         if (!c.clientId || !allowedClientIds.includes(c.clientId)) return false;
@@ -1722,17 +1722,17 @@ export default function CargoControl() {
       }
       return true;
     });
-  }, [loads, filterStatus, filterPaymentStatus, filterClientId, filterDateFrom, filterDateTo, allowedClientIds]);
+  }, [loads, filterStatus, filterPaymentStatus, filterClientId, filterAreaId, filterDateFrom, filterDateTo, allowedClientIds]);
 
   // Agrupar por cliente (ordenado por data dentro de cada grupo)
   const groupedByClient = useMemo(() => {
     const groups: Record<string, { clientName: string; clientId: number | null; cargas: typeof filtered; totalVolume: number; totalCargas: number; pendentes: number; entregues: number }> = {};
     
     for (const cargo of filtered) {
-      const clientKey = cargo.clientName || "Sem Cliente";
+      const clientKey = (cargo.clientName || "Sem Cliente") + '::area:' + String(cargo.areaId ?? 'legacy');
       if (!groups[clientKey]) {
         groups[clientKey] = {
-          clientName: clientKey,
+          clientName: (cargo.clientName || "Sem Cliente") + " — " + cargoAreaName(cargo),
           clientId: cargo.clientId,
           cargas: [],
           totalVolume: 0,
@@ -1816,7 +1816,7 @@ export default function CargoControl() {
         "Tipo Madeira", "Destino", "Nota Fiscal",
         "Altura (m)", "Largura (m)", "Comprimento (m)", "Volume (m³)",
         "Peso Saída (kg)", "Peso Chegada (kg)", "Peso Líquido (kg)", "Peso Líquido (ton)", "Umidade (%)",
-        "Preço/ton (R$)", "Valor Total (R$)",
+        "Preço / Unidade", "Valor Total (R$)",
         "Status Pagamento", "Valor Boleto (R$)", "Vencimento Boleto", "Data Pagamento",
         "Recebido por", "Terceirizado", "Custo Terceirizado (R$)", "Terceirizado Pago",
         "Observações", "Registrado em",
@@ -1886,15 +1886,15 @@ export default function CargoControl() {
         const row = ws.getRow(rowNum);
         const isEven = idx % 2 === 0;
         const client = clientsList.find((cl: any) => cl.id === c.clientId) as any;
-        const pricePerTon = parseFloat(client?.pricePerTon || "0");
+        const pricePerTon = c.areaId != null ? Number(c.agreedUnitPrice || 0) : parseFloat(client?.pricePerTon || "0");
         const weightNet = parseFloat(c.weightNetKg || c.weightOutKg || "0");
         const weightTon = weightNet / 1000;
-        const valorTotal = pricePerTon > 0 && weightNet > 0 ? weightTon * pricePerTon : 0;
+        const valorTotal = cargoAreaValue(c, pricePerTon) ?? 0;
 
         const values = [
           c.date ? safeDate(c.date).toLocaleDateString("pt-BR") : "-",
           c.deliveryDate ? safeDate(c.deliveryDate).toLocaleDateString("pt-BR") : "-",
-          c.clientName || "-",
+          (c.clientName || "-") + " — " + cargoAreaName(c),
           c.vehiclePlate || "-",
           c.driverName || "-",
           c.woodType || "-",
@@ -1909,7 +1909,7 @@ export default function CargoControl() {
           weightNet || "-",
           weightNet ? weightTon : "-",
           c.humidity ? parseFloat(c.humidity) : "-",
-          pricePerTon || "-",
+          c.areaId != null ? (c.agreedUnitPrice ? `${c.agreedUnitPrice}/${c.agreedUnit === "m3" ? "m³" : "ton"}` : "A configurar") : pricePerTon || "-",
           valorTotal || "-",
           paymentLabel(c.paymentStatus),
           c.boletoAmount ? parseFloat(c.boletoAmount) : "-",
@@ -2098,7 +2098,7 @@ export default function CargoControl() {
     const client = clientsList.find(c => c.id === cargo.clientId);
     const pricePerTon = parseFloat((client as any)?.pricePerTon || '0');
     const weightNet = parseFloat((cargo as any).weightNetKg || (cargo as any).weightOutKg || '0');
-    const loadValue = weightNet > 0 && pricePerTon > 0 ? (weightNet / 1000) * pricePerTon : 0;
+    const loadValue = cargoAreaValue(cargo, pricePerTon) ?? 0;
     const remaining = Math.max(0, loadValue - totalDeducted);
     const isPago = (cargo as any).paymentStatus === 'pago';
     // Badge de dados incompletos — apenas para admins, apenas em cargas entregues
@@ -2438,6 +2438,10 @@ export default function CargoControl() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="Buscar placa, cliente, destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
         </div>
+        <select aria-label="Filtrar área" value={filterAreaId} onChange={e=>setFilterAreaId(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+          <option value="all">Todas as áreas</option><option value="legacy">Área atual (Área 1)</option>
+          {(filterClientId ? filterAreas : Array.from(new Map(loads.filter(c=>c.areaId!=null).map(c=>[c.areaId,{id:c.areaId,name:cargoAreaName(c)}])).values())).map(a=><option key={a.id} value={String(a.id)}>{a.fieldName ? a.fieldName+' — ' : ''}{a.name}</option>)}
+        </select>
         <select
           value={filterClientId}
           onChange={e => setFilterClientId(parseInt(e.target.value))}
@@ -2612,7 +2616,7 @@ export default function CargoControl() {
                             )}
                             {pricePerTon > 0 && totalWeight > 0 && (
                               <span className="font-semibold text-blue-700">
-                                Valor: R$ {formatBR((totalWeight / 1000) * pricePerTon)} ({formatBR(totalWeight / 1000)} ton x R$ {formatBR(pricePerTon, 0)}/ton)
+                                Valor: {group.cargas.some(c=>cargoAreaValue(c,pricePerTon)==null) ? "Acordo a configurar" : "R$ "+formatBR(group.cargas.reduce((sum,c)=>sum+(cargoAreaValue(c,pricePerTon)??0),0))}
                               </span>
                             )}
                           </>
@@ -2637,7 +2641,7 @@ export default function CargoControl() {
                           const client = clientsList.find(c => c.id === group.clientId);
                           const price = parseFloat((client as any)?.pricePerTon || '0');
                           // Calcular valor pago e saldo dos adiantamentos deste cliente
-                          const groupAdvances = (allAdvancesList as any[]).filter((a: any) => a.clientId === group.clientId);
+                          const groupAdvances = (allAdvancesList as any[]).filter((a: any) => a.clientId === group.clientId && (a.areaId??null)===(group.cargas[0]?.areaId??null));
                           const groupValorPago = groupAdvances.reduce((sum: number, a: any) => {
                             const total = parseFloat(a.amount || a.totalAmount || '0');
                             const saldoA = parseFloat(a.balanceRemaining || '0');
@@ -2646,7 +2650,7 @@ export default function CargoControl() {
                           const groupSaldo = groupAdvances
                             .filter((a: any) => a.status === 'ativo')
                             .reduce((sum: number, a: any) => sum + parseFloat(a.balanceRemaining || '0'), 0);
-                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>, price, (allDeductions as any[]).filter(d => d.clientId === group.clientId), groupValorPago, groupSaldo);
+                          generateClientReportPDF(group.clientName, group.cargas as unknown as Array<Record<string, unknown>>, price, (allDeductions as any[]).filter(d => d.clientId === group.clientId && group.cargas.some(c=>c.id===d.cargoLoadId)), groupValorPago, groupSaldo);
                         }}
                       >
                         <Download className="h-3.5 w-3.5" /> Relatório PDF
@@ -2697,7 +2701,7 @@ export default function CargoControl() {
                         </div>
                         <div className="flex flex-wrap gap-x-3 text-xs text-gray-500 mt-0.5">
                           <span>{cargo.date ? safeDate(cargo.date).toLocaleDateString("pt-BR") : "-"}</span>
-                          {cargo.clientName && <span translate="no">{cargo.clientName}</span>}
+                          {cargo.clientName && <span translate="no">{cargo.clientName}</span>}<span className="font-medium text-emerald-700">{cargoAreaName(cargo)}</span>
                           {cargo.destination && <span>→ <span translate="no">{cargo.destination}</span></span>}
                           <span>{cargo.volumeM3} m³</span>
                         </div>
@@ -3058,6 +3062,10 @@ export default function CargoControl() {
                   ))}
                 </select>
               </div>
+              {form.clientId > 0 && <ClientAreaSelect clientId={form.clientId} value={form.areaId}
+                label="Área / talhão da carga" required={formAreas.length>0}
+                requireExplicit={!editId && formAreas.length>0 && !areaChosen}
+                onChange={(id,area)=>{setAreaChosen(true);setForm(f=>({...f,areaId:id,workLocationId:area?.workLocationId ? String(area.workLocationId) : ""}));}} />}
               {!form.clientId && (
                 <div className="space-y-1">
                   <Label>Cliente (manual)</Label>
@@ -3167,10 +3175,13 @@ export default function CargoControl() {
               </div>
             </div>
             {/* Local de Trabalho */}
+            <fieldset disabled={form.areaId != null}>
             <WorkLocationSelect
               value={form.workLocationId}
               onChange={(id) => setForm(f => ({ ...f, workLocationId: id }))}
             />
+            </fieldset>
+            {form.areaId != null && <p className="text-xs text-emerald-700">Local de custos próprio da área selecionada.</p>}
 
             {/* Status e Observações */}
             <div className="space-y-3">
@@ -3271,6 +3282,7 @@ export default function CargoControl() {
                   ["Veículo", detailCargo.vehiclePlate || detailCargo.vehicleName || "-"],
                   ["Motorista", detailCargo.driverName || "-"],
                   ["Cliente", detailCargo.clientName || "-"],
+                  ["Área", cargoAreaName(detailCargo)],
                   ["Destino", detailCargo.destination || "-"],
                   ["Tipo de Madeira", detailCargo.woodType || "-"],
                   ["Volume Previsto", `${detailCargo.volumeM3 ? formatBR(parseFloat(detailCargo.volumeM3), 3) : '-'} m³`],
@@ -3563,7 +3575,7 @@ export default function CargoControl() {
                 const detailClient = clientsList.find(c => c.id === detailCargo.clientId);
                 const detailPricePerTon = parseFloat((detailClient as any)?.pricePerTon || '0');
                 const detailWeightNet = parseFloat((detailCargo as any).weightNetKg || (detailCargo as any).weightOutKg || '0');
-                const detailLoadValue = detailWeightNet > 0 && detailPricePerTon > 0 ? (detailWeightNet / 1000) * detailPricePerTon : 0;
+                const detailLoadValue = cargoAreaValue(detailCargo,detailPricePerTon)??0;
                 const detailDeductions = allDeductions.filter((d: any) => d.cargoLoadId === detailCargo.id);
                 const detailTotalDeducted = detailDeductions.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0);
                 const detailRemaining = Math.max(0, detailLoadValue - detailTotalDeducted);
