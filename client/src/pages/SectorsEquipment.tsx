@@ -43,7 +43,7 @@ export default function SectorsEquipment() {
   const [equipSearch, setEquipSearch] = useState("");
   const [equipForm, setEquipForm] = useState({
     name: "", typeId: 0, sectorId: 0, clientId: 0, brand: "", model: "",
-    year: "", serialNumber: "", licensePlate: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
+    year: "", serialNumber: "", licensePlate: "", trailerPlate: "", status: "ativo" as "ativo" | "manutencao" | "inativo",
     defaultHeightM: "", defaultWidthM: "", defaultLengthM: "", expectedWeightTon: "",
   });
   const [filterSectorId, setFilterSectorId] = useState(0);
@@ -131,7 +131,8 @@ export default function SectorsEquipment() {
                 ${e.model ? `<div><span style="color:#6b7280;">Modelo:</span> <strong>${e.model}</strong></div>` : ""}
                 ${e.year ? `<div><span style="color:#6b7280;">Ano:</span> <strong>${e.year}</strong></div>` : ""}
                 ${e.serialNumber ? `<div><span style="color:#6b7280;">Nº Série:</span> <strong>${e.serialNumber}</strong></div>` : ""}
-                ${e.licensePlate ? `<div><span style="color:#6b7280;">Placa:</span> <strong>${e.licensePlate}</strong></div>` : ""}
+                ${e.licensePlate ? `<div><span style="color:#6b7280;">Placa do veículo:</span> <strong>${e.licensePlate}</strong></div>` : ""}
+                ${e.trailerPlate ? `<div><span style="color:#6b7280;">Placa da carreta:</span> <strong>${e.trailerPlate}</strong></div>` : ""}
               </div>
             </div>
           </div>`;
@@ -191,7 +192,8 @@ export default function SectorsEquipment() {
               ${e.model ? `<div><span style="color:#6b7280;">Modelo:</span> <strong>${e.model}</strong></div>` : ""}
               ${e.year ? `<div><span style="color:#6b7280;">Ano:</span> <strong>${e.year}</strong></div>` : ""}
               ${e.serialNumber ? `<div><span style="color:#6b7280;">Nº Série:</span> <strong>${e.serialNumber}</strong></div>` : ""}
-              ${e.licensePlate ? `<div><span style="color:#6b7280;">Placa:</span> <strong>${e.licensePlate}</strong></div>` : ""}
+              ${e.licensePlate ? `<div><span style="color:#6b7280;">Placa do veículo:</span> <strong>${e.licensePlate}</strong></div>` : ""}
+                ${e.trailerPlate ? `<div><span style="color:#6b7280;">Placa da carreta:</span> <strong>${e.trailerPlate}</strong></div>` : ""}
             </div>
           </div>
         </div>`;
@@ -248,7 +250,7 @@ export default function SectorsEquipment() {
   });
 
   const resetEquipForm = () => {
-    setEquipForm({ name: "", typeId: 0, sectorId: 0, clientId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", status: "ativo", defaultHeightM: "", defaultWidthM: "", defaultLengthM: "", expectedWeightTon: "" });
+    setEquipForm({ name: "", typeId: 0, sectorId: 0, clientId: 0, brand: "", model: "", year: "", serialNumber: "", licensePlate: "", trailerPlate: "", status: "ativo", defaultHeightM: "", defaultWidthM: "", defaultLengthM: "", expectedWeightTon: "" });
     setEquipPhotoPreview(null);
     setEquipPhotoBase64(null);
     setExistingImageUrl(null);
@@ -281,6 +283,7 @@ export default function SectorsEquipment() {
   // Mais restrito que isVehicleType — só caminhões (não carros/motos/tratores/etc.), pro campo
   // de peso previsto, que só faz sentido pra quem carrega madeira.
   const isTruckType = normalizedTypeName.includes("caminhao") || normalizedTypeName.includes("caminhoes");
+  const showTrailerPlate = isTruckType || ["truck", "carreta", "bitrem", "rodotrem"].some(type => normalizedTypeName.includes(type)) || !!equipForm.trailerPlate;
 
   const openEditSector = (s: typeof sectorsList[number]) => {
     setEditSectorId(s.id);
@@ -293,7 +296,7 @@ export default function SectorsEquipment() {
     setEquipForm({
       name: e.name, typeId: e.typeId, sectorId: (e as any).sectorId || 0, clientId: (e as any).clientId || 0, brand: e.brand || "",
       model: e.model || "", year: e.year?.toString() || "",
-      serialNumber: e.serialNumber || "", licensePlate: (e as any).licensePlate || "", status: e.status as any,
+      serialNumber: e.serialNumber || "", licensePlate: (e as any).licensePlate || "", trailerPlate: e.trailerPlate || "", status: e.status as any,
       defaultHeightM: (e as any).defaultHeightM || "", defaultWidthM: (e as any).defaultWidthM || "", defaultLengthM: (e as any).defaultLengthM || "",
       expectedWeightTon: (e as any).expectedWeightTon || "",
     });
@@ -355,6 +358,7 @@ export default function SectorsEquipment() {
       year: equipForm.year ? parseInt(equipForm.year) : undefined,
       serialNumber: isVehicleType ? undefined : (equipForm.serialNumber || undefined),
       licensePlate: isVehicleType ? (equipForm.licensePlate || undefined) : undefined,
+      trailerPlate: showTrailerPlate ? (equipForm.trailerPlate.trim() || null) : undefined,
       status: equipForm.status,
       imageUrl: equipPhotoBase64 || existingImageUrl || undefined,
       defaultHeightM: isVehicleType ? (equipForm.defaultHeightM || undefined) : undefined,
@@ -640,8 +644,9 @@ export default function SectorsEquipment() {
                       <div>
                         {isVehicleType ? (
                           <>
-                            <Label>Placa do Veículo</Label>
+                            <Label htmlFor="equipment-license-plate">Placa do Veículo</Label>
                             <Input
+                              id="equipment-license-plate"
                               value={equipForm.licensePlate}
                               onChange={e => setEquipForm(f => ({ ...f, licensePlate: e.target.value.toUpperCase() }))}
                               placeholder="ex: ABC-1234 ou ABC1D23"
@@ -656,6 +661,24 @@ export default function SectorsEquipment() {
                           </>
                         )}
                       </div>
+                      {showTrailerPlate && (
+                        <div className="col-span-2">
+                          <Label htmlFor="equipment-trailer-plate">Placa da carreta</Label>
+                          <Input
+                            id="equipment-trailer-plate"
+                            value={equipForm.trailerPlate}
+                            onChange={e => setEquipForm(f => ({ ...f, trailerPlate: e.target.value.toUpperCase() }))}
+                            placeholder="ex: ABC-1234 ou ABC1D23"
+                            maxLength={8}
+                            autoCapitalize="characters"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            className="uppercase"
+                            aria-describedby="equipment-trailer-plate-help"
+                          />
+                          <p id="equipment-trailer-plate-help" className="text-xs text-gray-500 mt-1">Opcional. Placa da carreta vinculada a este caminhão.</p>
+                        </div>
+                      )}
                       {/* Medidas padrão do caminhão */}
                       {isVehicleType && (
                         <div className="col-span-2">
@@ -987,6 +1010,7 @@ export default function SectorsEquipment() {
                                     <p className="text-xs text-gray-500 mt-1">{[e.brand, e.model].filter(Boolean).join(" · ")}{e.year ? ` · ${e.year}` : ""}</p>
                                   )}
                                   {(e as any).licensePlate && <p className="text-xs text-blue-600 font-medium">🚗 {(e as any).licensePlate}</p>}
+                                  {e.trailerPlate && <p className="text-xs text-blue-600 font-medium">Carreta: {e.trailerPlate}</p>}
                                   {e.serialNumber && <p className="text-xs text-gray-400">Série: {e.serialNumber}</p>}
                                   {(e as any).clientName && <p className="text-xs text-blue-600 font-medium">📍 {(e as any).clientName}</p>}
                                   {/* Motorista responsável */}
@@ -1007,7 +1031,7 @@ export default function SectorsEquipment() {
                                     <Icon className="h-3 w-3" /> {sc.label}
                                   </span>
                                   <div className="flex gap-1">
-                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" onClick={() => openEditEquip(e)}>
+                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" aria-label={`Editar ${e.name}`} onClick={() => openEditEquip(e)}>
                                       <Pencil className="h-3.5 w-3.5" />
                                     </Button>
                                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-500 hover:text-emerald-700" title="Ficha do Equipamento" onClick={() => setLocation(`/equipamento/${e.id}`)}>

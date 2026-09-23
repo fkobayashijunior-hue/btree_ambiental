@@ -758,6 +758,7 @@ var init_schema = __esm({
       year: int(),
       serialNumber: varchar("serial_number", { length: 100 }),
       licensePlate: varchar("license_plate", { length: 20 }),
+      trailerPlate: varchar("trailer_plate", { length: 8 }),
       imageUrl: text("image_url"),
       status: mysqlEnum(["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
       createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
@@ -2490,7 +2491,7 @@ __export(notifications_exports, {
   notifyResponsavelCargaNfAnexada: () => notifyResponsavelCargaNfAnexada,
   notifyUsers: () => notifyUsers
 });
-import { z as z5 } from "zod";
+import { z as z6 } from "zod";
 import mysql2 from "mysql2/promise";
 async function getConnection() {
   return mysql2.createConnection({
@@ -2658,9 +2659,9 @@ var init_notifications = __esm({
     init_whatsapp();
     notificationsRouter = router({
       // List notifications for current user
-      list: protectedProcedure.input(z5.object({
-        onlyUnread: z5.boolean().optional().default(false),
-        limit: z5.number().optional().default(50)
+      list: protectedProcedure.input(z6.object({
+        onlyUnread: z6.boolean().optional().default(false),
+        limit: z6.number().optional().default(50)
       }).optional()).query(async ({ ctx, input }) => {
         const conn = await getConnection();
         try {
@@ -2693,7 +2694,7 @@ var init_notifications = __esm({
         }
       }),
       // Mark one as read
-      markAsRead: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ ctx, input }) => {
+      markAsRead: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ ctx, input }) => {
         const conn = await getConnection();
         try {
           await conn.execute(
@@ -2719,7 +2720,7 @@ var init_notifications = __esm({
         }
       }),
       // Delete a notification
-      delete: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ ctx, input }) => {
+      delete: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ ctx, input }) => {
         const conn = await getConnection();
         try {
           await conn.execute(
@@ -3225,7 +3226,7 @@ var init_nfExtraction = __esm({
 });
 
 // server/routers/payroll.ts
-import { z as z23 } from "zod";
+import { z as z24 } from "zod";
 import { eq as eq23, sql as sql12 } from "drizzle-orm";
 import { TRPCError as TRPCError16 } from "@trpc/server";
 async function ensurePayrollTable(db) {
@@ -3579,7 +3580,7 @@ var init_payroll = __esm({
     payrollRouter = router({
       // Retorna a folha do mês: junta colaboradores ativos com entradas já fechadas
       // (payroll_entries) e calcula um rascunho ao vivo (não salvo) para quem ainda não foi fechado.
-      getMonth: protectedProcedure.input(z23.object({ referenceMonth: z23.string() })).query(async ({ ctx, input }) => {
+      getMonth: protectedProcedure.input(z24.object({ referenceMonth: z24.string() })).query(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
@@ -3706,15 +3707,15 @@ var init_payroll = __esm({
       }),
       // Salva/fecha a linha de um colaborador (grava snapshot dos valores no momento).
       // markPaid: já grava com status 'pago' (usado pelo botão "Pagar" na linha em rascunho).
-      saveEntry: protectedProcedure.input(z23.object({
-        collaboratorId: z23.number(),
-        referenceMonth: z23.string(),
-        commission: z23.string().optional(),
-        daysWorkedOverride: z23.number().optional(),
-        baseValueOverride: z23.string().optional(),
-        notes: z23.string().optional(),
-        markPaid: z23.boolean().optional(),
-        paidAt: z23.string().optional()
+      saveEntry: protectedProcedure.input(z24.object({
+        collaboratorId: z24.number(),
+        referenceMonth: z24.string(),
+        commission: z24.string().optional(),
+        daysWorkedOverride: z24.number().optional(),
+        baseValueOverride: z24.string().optional(),
+        notes: z24.string().optional(),
+        markPaid: z24.boolean().optional(),
+        paidAt: z24.string().optional()
       })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
@@ -3768,7 +3769,7 @@ var init_payroll = __esm({
       }),
       // Fecha a folha inteira do mês: cria snapshot (comissão 0) para todo colaborador ativo
       // que ainda não tenha entrada salva nesse mês. Não sobrescreve linhas já fechadas/editadas.
-      closeMonth: protectedProcedure.input(z23.object({ referenceMonth: z23.string() })).mutation(async ({ ctx, input }) => {
+      closeMonth: protectedProcedure.input(z24.object({ referenceMonth: z24.string() })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
@@ -3811,14 +3812,14 @@ var init_payroll = __esm({
         }
         return { success: true, created };
       }),
-      markPaid: protectedProcedure.input(z23.object({ id: z23.number(), paidAt: z23.string() })).mutation(async ({ ctx, input }) => {
+      markPaid: protectedProcedure.input(z24.object({ id: z24.number(), paidAt: z24.string() })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ status: "pago", paidAt: input.paidAt }).where(eq23(payrollEntries.id, input.id));
         return { success: true };
       }),
-      unmarkPaid: protectedProcedure.input(z23.object({ id: z23.number() })).mutation(async ({ ctx, input }) => {
+      unmarkPaid: protectedProcedure.input(z24.object({ id: z24.number() })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
@@ -3827,7 +3828,7 @@ var init_payroll = __esm({
       }),
       // Marca/desmarca o pagamento de UMA sexta-feira específica de um colaborador "Semanal"
       // (diferente de markPaid/unmarkPaid, que travam o mês inteiro — usado só por CLT/PJ).
-      markWeeklyPaid: protectedProcedure.input(z23.object({ collaboratorId: z23.number(), weekFriday: z23.string() })).mutation(async ({ ctx, input }) => {
+      markWeeklyPaid: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), weekFriday: z24.string() })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
@@ -3839,7 +3840,7 @@ var init_payroll = __esm({
         );
         return { success: true };
       }),
-      unmarkWeeklyPaid: protectedProcedure.input(z23.object({ collaboratorId: z23.number(), weekFriday: z23.string() })).mutation(async ({ ctx, input }) => {
+      unmarkWeeklyPaid: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), weekFriday: z24.string() })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
@@ -3852,7 +3853,7 @@ var init_payroll = __esm({
         return { success: true };
       }),
       // Remove a entrada salva (volta a ser calculada ao vivo a partir de colaboradores/presenças)
-      reopenEntry: protectedProcedure.input(z23.object({ id: z23.number() })).mutation(async ({ ctx, input }) => {
+      reopenEntry: protectedProcedure.input(z24.object({ id: z24.number() })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
@@ -3862,14 +3863,14 @@ var init_payroll = __esm({
       // Tarifas de comissão atuais (motorista por destino, operador por tonelada). Passando
       // collaboratorId, retorna a tarifa efetiva daquele colaborador (própria, se configurada,
       // senão o padrão global).
-      getCommissionRates: protectedProcedure.input(z23.object({ collaboratorId: z23.number().optional() }).optional()).query(async ({ ctx, input }) => {
+      getCommissionRates: protectedProcedure.input(z24.object({ collaboratorId: z24.number().optional() }).optional()).query(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         return getCommissionRatesMap(db, input?.collaboratorId ?? 0);
       }),
-      updateCommissionRates: protectedProcedure.input(z23.object({ rates: z23.record(z23.string(), z23.string()), collaboratorId: z23.number().optional() })).mutation(async ({ ctx, input }) => {
+      updateCommissionRates: protectedProcedure.input(z24.object({ rates: z24.record(z24.string(), z24.string()), collaboratorId: z24.number().optional() })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
@@ -3885,7 +3886,7 @@ var init_payroll = __esm({
       }),
       // Detalhamento da comissão de Motorista (por carga entregue no destino, no próprio mês da
       // Folha) ou Operador (toneladas líquidas do cliente no mês ÷ nº de operadores daquele cliente).
-      getCommissionBreakdown: protectedProcedure.input(z23.object({ collaboratorId: z23.number(), referenceMonth: z23.string(), numOperadoresOverride: z23.number().optional() })).query(async ({ ctx, input }) => {
+      getCommissionBreakdown: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), referenceMonth: z24.string(), numOperadoresOverride: z24.number().optional() })).query(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
@@ -4166,7 +4167,7 @@ __export(sicoob_exports, {
   syncSicoobBoletos: () => syncSicoobBoletos,
   syncSicoobExtrato: () => syncSicoobExtrato
 });
-import { z as z45 } from "zod";
+import { z as z46 } from "zod";
 import https from "https";
 import fs from "fs";
 import path from "path";
@@ -4728,7 +4729,7 @@ var init_sicoob = __esm({
         }
       }),
       // Extrato da conta corrente
-      extrato: protectedProcedure.input(z45.object({ mes: z45.number(), ano: z45.number() })).query(async ({ input }) => {
+      extrato: protectedProcedure.input(z46.object({ mes: z46.number(), ano: z46.number() })).query(async ({ input }) => {
         try {
           const data = await sicoobGet(`/conta-corrente/v4/extrato/${input.mes}/${input.ano}`, {
             numeroContaCorrente: String(NUMERO_CONTA)
@@ -4739,11 +4740,11 @@ var init_sicoob = __esm({
         }
       }),
       // Boletos a receber (por pagador) — direto da API
-      boletosPorPagador: protectedProcedure.input(z45.object({
-        numeroCpfCnpj: z45.string(),
-        dataInicio: z45.string().optional(),
-        dataFim: z45.string().optional(),
-        codigoSituacao: z45.number().optional()
+      boletosPorPagador: protectedProcedure.input(z46.object({
+        numeroCpfCnpj: z46.string(),
+        dataInicio: z46.string().optional(),
+        dataFim: z46.string().optional(),
+        codigoSituacao: z46.number().optional()
       })).query(async ({ input }) => {
         try {
           const data = await sicoobGet(
@@ -4761,7 +4762,7 @@ var init_sicoob = __esm({
         }
       }),
       // Boleto individual
-      boleto: protectedProcedure.input(z45.object({ nossoNumero: z45.number() })).query(async ({ input }) => {
+      boleto: protectedProcedure.input(z46.object({ nossoNumero: z46.number() })).query(async ({ input }) => {
         try {
           const data = await sicoobGet("/cobranca-bancaria/v3/boletos", {
             numeroCliente: NUMERO_CLIENTE,
@@ -4782,10 +4783,10 @@ var init_sicoob = __esm({
         };
       }),
       // ── Contas a Receber (lê da tabela sicoob_boletos) ──
-      listBoletos: protectedProcedure.input(z45.object({
-        mes: z45.number().min(1).max(12),
-        ano: z45.number().min(2020).max(2100),
-        pesquisa: z45.string().optional()
+      listBoletos: protectedProcedure.input(z46.object({
+        mes: z46.number().min(1).max(12),
+        ano: z46.number().min(2020).max(2100),
+        pesquisa: z46.string().optional()
       })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -4807,9 +4808,9 @@ var init_sicoob = __esm({
           return { boletos: [], error: e.message };
         }
       }),
-      summaryBoletos: protectedProcedure.input(z45.object({
-        mes: z45.number().min(1).max(12),
-        ano: z45.number().min(2020).max(2100)
+      summaryBoletos: protectedProcedure.input(z46.object({
+        mes: z46.number().min(1).max(12),
+        ano: z46.number().min(2020).max(2100)
       })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -4847,7 +4848,7 @@ var init_sicoob = __esm({
         }
       }),
       // ── Extrato Movimentações (lê da tabela sicoob_extrato) ──
-      listExtrato: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).query(async ({ input }) => {
+      listExtrato: protectedProcedure.input(z46.object({ mes: z46.number().min(1).max(12), ano: z46.number().min(2020).max(2100) })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
           const db = await getDb2();
@@ -4870,14 +4871,14 @@ var init_sicoob = __esm({
           return { lancamentos: [], sincronizadoEm: null, error: e.message };
         }
       }),
-      syncExtrato: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+      syncExtrato: protectedProcedure.input(z46.object({ mes: z46.number().min(1).max(12), ano: z46.number().min(2020).max(2100) })).mutation(async ({ input }) => {
         const result = await syncSicoobExtrato(input.mes, input.ano);
         return result;
       }),
-      fluxoCaixaDiario: protectedProcedure.input(z45.object({
-        mes: z45.number().min(1).max(12),
-        ano: z45.number().min(2020).max(2100),
-        modo: z45.enum(["projecao", "real"]).optional()
+      fluxoCaixaDiario: protectedProcedure.input(z46.object({
+        mes: z46.number().min(1).max(12),
+        ano: z46.number().min(2020).max(2100),
+        modo: z46.enum(["projecao", "real"]).optional()
       })).query(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
@@ -4887,7 +4888,7 @@ var init_sicoob = __esm({
       // Visão anual: soma os totais (recebimentos/pagamentos) de cada mês do ano, reaproveitando
       // o mesmo cálculo dia-a-dia usado na visão mensal — sem duplicar nenhuma regra de negócio
       // (Sicoob, boletos, NFs, Folha). O saldo acumulado passa de mês em mês.
-      fluxoCaixaAnual: protectedProcedure.input(z45.object({ ano: z45.number().min(2020).max(2100), modo: z45.enum(["projecao", "real"]).optional() })).query(async ({ input }) => {
+      fluxoCaixaAnual: protectedProcedure.input(z46.object({ ano: z46.number().min(2020).max(2100), modo: z46.enum(["projecao", "real"]).optional() })).query(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { meses: [], saldoInicialAno: 0, error: "DB indispon\xEDvel" };
@@ -4910,7 +4911,7 @@ var init_sicoob = __esm({
           return { meses: [], saldoInicialAno: 0, error: e.message };
         }
       }),
-      updateValor: protectedProcedure.input(z45.object({ id: z45.number(), valor: z45.string() })).mutation(async ({ input }) => {
+      updateValor: protectedProcedure.input(z46.object({ id: z46.number(), valor: z46.string() })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -4921,15 +4922,15 @@ var init_sicoob = __esm({
         return { success: true };
       }),
       // ── Lançamentos Futuros (importados do Excel do banco) ──
-      importLancamentosFuturos: protectedProcedure.input(z45.object({
-        lancamentos: z45.array(z45.object({
-          data: z45.string(),
-          documento: z45.string().nullable(),
-          historico: z45.string().nullable(),
-          infoComplementar: z45.string().nullable(),
-          valor: z45.string()
+      importLancamentosFuturos: protectedProcedure.input(z46.object({
+        lancamentos: z46.array(z46.object({
+          data: z46.string(),
+          documento: z46.string().nullable(),
+          historico: z46.string().nullable(),
+          infoComplementar: z46.string().nullable(),
+          valor: z46.string()
         })),
-        substituirMes: z45.string().optional()
+        substituirMes: z46.string().optional()
         // "YYYY-MM" — apaga os do mês antes de inserir
       })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -4955,7 +4956,7 @@ var init_sicoob = __esm({
         }
         return { inserted, error: null };
       }),
-      listLancamentosFuturos: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).query(async ({ input }) => {
+      listLancamentosFuturos: protectedProcedure.input(z46.object({ mes: z46.number().min(1).max(12), ano: z46.number().min(2020).max(2100) })).query(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { lancamentos: [], error: "DB indispon\xEDvel" };
@@ -4966,7 +4967,7 @@ var init_sicoob = __esm({
         );
         return { lancamentos: rows ?? [], error: null };
       }),
-      deleteLancamentosFuturos: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+      deleteLancamentosFuturos: protectedProcedure.input(z46.object({ mes: z46.number().min(1).max(12), ano: z46.number().min(2020).max(2100) })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5003,10 +5004,10 @@ var init_sicoob = __esm({
         }
       }),
       // ── Contas a Pagar (débitos do extrato Sicoob + lançamentos futuros negativos) ──
-      contasAPagar: protectedProcedure.input(z45.object({
-        mes: z45.number().min(1).max(12),
-        ano: z45.number().min(2020).max(2100),
-        pesquisa: z45.string().optional()
+      contasAPagar: protectedProcedure.input(z46.object({
+        mes: z46.number().min(1).max(12),
+        ano: z46.number().min(2020).max(2100),
+        pesquisa: z46.string().optional()
       })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -5105,11 +5106,11 @@ var init_sicoob = __esm({
       // Dashboard de análise: débitos JÁ REALIZADOS (extrato Sicoob, não pendências/projeção) num
       // período, com a classificação (Grupo/Centro de Custo/Natureza) de cada um — a agregação por
       // grupo/centro de custo/natureza e por mês é feita no frontend em cima dessa lista "achatada".
-      dashboardContasAPagar: protectedProcedure.input(z45.object({
-        anoInicio: z45.number().min(2020).max(2100),
-        mesInicio: z45.number().min(1).max(12),
-        anoFim: z45.number().min(2020).max(2100),
-        mesFim: z45.number().min(1).max(12)
+      dashboardContasAPagar: protectedProcedure.input(z46.object({
+        anoInicio: z46.number().min(2020).max(2100),
+        mesInicio: z46.number().min(1).max(12),
+        anoFim: z46.number().min(2020).max(2100),
+        mesFim: z46.number().min(1).max(12)
       })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -5191,10 +5192,10 @@ var init_sicoob = __esm({
       // Classificação, Fixo/Variável, Direto/Indireto). Como os campos formam uma hierarquia
       // (dropdowns em cascata na tela), mudar um campo limpa os campos abaixo dele nessa mesma
       // linha — evita deixar uma combinação inconsistente com o que passou a estar acima.
-      updateFavorecidoClassificacao: protectedProcedure.input(z45.object({
-        id: z45.number(),
-        campo: z45.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
-        valor: z45.string().nullable()
+      updateFavorecidoClassificacao: protectedProcedure.input(z46.object({
+        id: z46.number(),
+        campo: z46.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
+        valor: z46.string().nullable()
       })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
@@ -5212,11 +5213,11 @@ var init_sicoob = __esm({
       // Mesma edição de campo de classificação, mas endereçada pela CHAVE do favorecido (não pelo
       // id) — usada na aba Lançamentos, onde o favorecido pode ainda nem existir na memória (ex:
       // primeira vez que esse CNPJ aparece). Cria o registro na hora se ainda não existir.
-      upsertFavorecidoClassificacaoPorChave: protectedProcedure.input(z45.object({
-        chave: z45.string(),
-        tipoChave: z45.enum(["cnpj", "nome", "cpf_fragmento"]),
-        campo: z45.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
-        valor: z45.string().nullable()
+      upsertFavorecidoClassificacaoPorChave: protectedProcedure.input(z46.object({
+        chave: z46.string(),
+        tipoChave: z46.enum(["cnpj", "nome", "cpf_fragmento"]),
+        campo: z46.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
+        valor: z46.string().nullable()
       })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
@@ -5242,7 +5243,7 @@ var init_sicoob = __esm({
         }
         return { success: true };
       }),
-      updateFavorecidoNome: protectedProcedure.input(z45.object({ id: z45.number(), razaoSocial: z45.string().min(1) })).mutation(async ({ input }) => {
+      updateFavorecidoNome: protectedProcedure.input(z46.object({ id: z46.number(), razaoSocial: z46.string().min(1) })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5252,7 +5253,7 @@ var init_sicoob = __esm({
         );
         return { success: true };
       }),
-      deleteFavorecidoCategoria: protectedProcedure.input(z45.object({ id: z45.number() })).mutation(async ({ input }) => {
+      deleteFavorecidoCategoria: protectedProcedure.input(z46.object({ id: z46.number() })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5261,19 +5262,19 @@ var init_sicoob = __esm({
       }),
       // Importa uma planilha de CNPJs (ex: base de razão social/CNAE já levantada externamente)
       // como ponto de partida da memória — cada linha vira (ou atualiza) um favorecido por CNPJ.
-      importFavorecidosCategoriaPlanilha: protectedProcedure.input(z45.object({
-        linhas: z45.array(z45.object({
-          cnpj: z45.string(),
-          razaoSocial: z45.string().nullable().optional(),
-          nomeFantasia: z45.string().nullable().optional(),
-          cnaeCodigo: z45.string().nullable().optional(),
-          cnaeDescricao: z45.string().nullable().optional(),
-          grupo: z45.string().nullable().optional(),
-          centroCusto: z45.string().nullable().optional(),
-          natureza: z45.string().nullable().optional(),
-          classificacao: z45.string().nullable().optional(),
-          fixoVariavel: z45.string().nullable().optional(),
-          diretoIndireto: z45.string().nullable().optional()
+      importFavorecidosCategoriaPlanilha: protectedProcedure.input(z46.object({
+        linhas: z46.array(z46.object({
+          cnpj: z46.string(),
+          razaoSocial: z46.string().nullable().optional(),
+          nomeFantasia: z46.string().nullable().optional(),
+          cnaeCodigo: z46.string().nullable().optional(),
+          cnaeDescricao: z46.string().nullable().optional(),
+          grupo: z46.string().nullable().optional(),
+          centroCusto: z46.string().nullable().optional(),
+          natureza: z46.string().nullable().optional(),
+          classificacao: z46.string().nullable().optional(),
+          fixoVariavel: z46.string().nullable().optional(),
+          diretoIndireto: z46.string().nullable().optional()
         }))
       })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -6059,9 +6060,15 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z3 } from "zod";
+import { z as z4 } from "zod";
 import { alias } from "drizzle-orm/mysql-core";
 import { eq as eq3 } from "drizzle-orm";
+
+// server/lib/trailerPlate.ts
+import { z as z3 } from "zod";
+var trailerPlateInput = z3.string().trim().toUpperCase().max(8, "A placa da carreta deve ter no m\xE1ximo 8 caracteres.").regex(/^(?:[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2})?$/, "Informe a placa da carreta como ABC-1234 ou ABC1D23.").transform((value) => value || null).nullish();
+
+// server/routers/sectors.ts
 var collaborators2 = collaborators;
 var driverAlias = alias(collaborators, "driver");
 var sectorsRouter = router({
@@ -6071,10 +6078,10 @@ var sectorsRouter = router({
     if (!db) throw new Error("Database not available");
     return db.select().from(sectors).orderBy(sectors.name);
   }),
-  createSector: protectedProcedure.input(z3.object({
-    name: z3.string().min(1),
-    description: z3.string().optional(),
-    color: z3.string().optional()
+  createSector: protectedProcedure.input(z4.object({
+    name: z4.string().min(1),
+    description: z4.string().optional(),
+    color: z4.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -6086,12 +6093,12 @@ var sectorsRouter = router({
     });
     return { id: result.insertId };
   }),
-  updateSector: protectedProcedure.input(z3.object({
-    id: z3.number(),
-    name: z3.string().min(1).optional(),
-    description: z3.string().optional(),
-    color: z3.string().optional(),
-    active: z3.number().optional()
+  updateSector: protectedProcedure.input(z4.object({
+    id: z4.number(),
+    name: z4.string().min(1).optional(),
+    description: z4.string().optional(),
+    color: z4.string().optional(),
+    active: z4.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -6099,7 +6106,7 @@ var sectorsRouter = router({
     await db.update(sectors).set(data).where(eq3(sectors.id, id));
     return { success: true };
   }),
-  deleteSector: protectedProcedure.input(z3.object({ id: z3.number() })).mutation(async ({ input }) => {
+  deleteSector: protectedProcedure.input(z4.object({ id: z4.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.delete(sectors).where(eq3(sectors.id, input.id));
@@ -6111,17 +6118,17 @@ var sectorsRouter = router({
     if (!db) throw new Error("Database not available");
     return db.select().from(equipmentTypes).orderBy(equipmentTypes.name);
   }),
-  createEquipmentType: protectedProcedure.input(z3.object({ name: z3.string().min(1) })).mutation(async ({ input }) => {
+  createEquipmentType: protectedProcedure.input(z4.object({ name: z4.string().min(1) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [result] = await db.insert(equipmentTypes).values({ name: input.name });
     return { id: result.insertId };
   }),
   // --- EQUIPAMENTOS ---
-  listEquipment: protectedProcedure.input(z3.object({
-    search: z3.string().optional(),
-    typeId: z3.number().optional(),
-    status: z3.string().optional()
+  listEquipment: protectedProcedure.input(z4.object({
+    search: z4.string().optional(),
+    typeId: z4.number().optional(),
+    status: z4.string().optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -6147,6 +6154,7 @@ var sectorsRouter = router({
       year: equipment.year,
       serialNumber: equipment.serialNumber,
       licensePlate: equipment.licensePlate,
+      trailerPlate: equipment.trailerPlate,
       imageUrl: equipment.imageUrl,
       status: equipment.status,
       typeId: equipment.typeId,
@@ -6176,31 +6184,32 @@ var sectorsRouter = router({
       if (input.status && r.status !== input.status) return false;
       if (input.search) {
         const s = input.search.toLowerCase();
-        return r.name.toLowerCase().includes(s) || (r.brand || "").toLowerCase().includes(s) || (r.model || "").toLowerCase().includes(s) || (r.serialNumber || "").toLowerCase().includes(s) || (r.licensePlate || "").toLowerCase().includes(s);
+        return r.name.toLowerCase().includes(s) || (r.brand || "").toLowerCase().includes(s) || (r.model || "").toLowerCase().includes(s) || (r.serialNumber || "").toLowerCase().includes(s) || (r.licensePlate || "").toLowerCase().includes(s) || (r.trailerPlate || "").toLowerCase().includes(s);
       }
       return true;
     });
   }),
-  createEquipment: protectedProcedure.input(z3.object({
-    name: z3.string().min(1),
-    typeId: z3.number(),
-    sectorId: z3.number().optional(),
-    clientId: z3.number().optional().nullable(),
-    brand: z3.string().optional(),
-    model: z3.string().optional(),
-    year: z3.number().optional(),
-    serialNumber: z3.string().optional(),
-    licensePlate: z3.string().optional(),
-    imageUrl: z3.string().optional(),
-    status: z3.enum(["ativo", "manutencao", "inativo"]).optional(),
-    defaultHeightM: z3.string().optional(),
-    defaultWidthM: z3.string().optional(),
-    defaultLengthM: z3.string().optional(),
-    expectedWeightTon: z3.string().optional(),
-    invoiceUrl: z3.string().optional(),
-    documentUrl: z3.string().optional(),
-    insuranceUrl: z3.string().optional(),
-    responsibleDriverId: z3.number().optional().nullable()
+  createEquipment: protectedProcedure.input(z4.object({
+    name: z4.string().min(1),
+    typeId: z4.number(),
+    sectorId: z4.number().optional(),
+    clientId: z4.number().optional().nullable(),
+    brand: z4.string().optional(),
+    model: z4.string().optional(),
+    year: z4.number().optional(),
+    serialNumber: z4.string().optional(),
+    licensePlate: z4.string().optional(),
+    trailerPlate: trailerPlateInput,
+    imageUrl: z4.string().optional(),
+    status: z4.enum(["ativo", "manutencao", "inativo"]).optional(),
+    defaultHeightM: z4.string().optional(),
+    defaultWidthM: z4.string().optional(),
+    defaultLengthM: z4.string().optional(),
+    expectedWeightTon: z4.string().optional(),
+    invoiceUrl: z4.string().optional(),
+    documentUrl: z4.string().optional(),
+    insuranceUrl: z4.string().optional(),
+    responsibleDriverId: z4.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -6234,27 +6243,28 @@ var sectorsRouter = router({
     });
     return { id: result.insertId };
   }),
-  updateEquipment: protectedProcedure.input(z3.object({
-    id: z3.number(),
-    name: z3.string().optional(),
-    typeId: z3.number().optional(),
-    sectorId: z3.number().optional().nullable(),
-    clientId: z3.number().optional().nullable(),
-    brand: z3.string().optional(),
-    model: z3.string().optional(),
-    year: z3.number().optional(),
-    serialNumber: z3.string().optional(),
-    licensePlate: z3.string().optional(),
-    imageUrl: z3.string().optional(),
-    status: z3.enum(["ativo", "manutencao", "inativo"]).optional(),
-    defaultHeightM: z3.string().optional().nullable(),
-    defaultWidthM: z3.string().optional().nullable(),
-    defaultLengthM: z3.string().optional().nullable(),
-    expectedWeightTon: z3.string().optional().nullable(),
-    invoiceUrl: z3.string().optional().nullable(),
-    documentUrl: z3.string().optional().nullable(),
-    insuranceUrl: z3.string().optional().nullable(),
-    responsibleDriverId: z3.number().optional().nullable()
+  updateEquipment: protectedProcedure.input(z4.object({
+    id: z4.number(),
+    name: z4.string().optional(),
+    typeId: z4.number().optional(),
+    sectorId: z4.number().optional().nullable(),
+    clientId: z4.number().optional().nullable(),
+    brand: z4.string().optional(),
+    model: z4.string().optional(),
+    year: z4.number().optional(),
+    serialNumber: z4.string().optional(),
+    licensePlate: z4.string().optional(),
+    trailerPlate: trailerPlateInput,
+    imageUrl: z4.string().optional(),
+    status: z4.enum(["ativo", "manutencao", "inativo"]).optional(),
+    defaultHeightM: z4.string().optional().nullable(),
+    defaultWidthM: z4.string().optional().nullable(),
+    defaultLengthM: z4.string().optional().nullable(),
+    expectedWeightTon: z4.string().optional().nullable(),
+    invoiceUrl: z4.string().optional().nullable(),
+    documentUrl: z4.string().optional().nullable(),
+    insuranceUrl: z4.string().optional().nullable(),
+    responsibleDriverId: z4.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -6278,7 +6288,7 @@ var sectorsRouter = router({
     await db.update(equipment).set(data).where(eq3(equipment.id, id));
     return { success: true };
   }),
-  deleteEquipment: protectedProcedure.input(z3.object({ id: z3.number() })).mutation(async ({ input }) => {
+  deleteEquipment: protectedProcedure.input(z4.object({ id: z4.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.delete(equipment).where(eq3(equipment.id, input.id));
@@ -6290,7 +6300,7 @@ var sectorsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z4 } from "zod";
+import { z as z5 } from "zod";
 import { TRPCError as TRPCError3 } from "@trpc/server";
 import { eq as eq4, desc as desc2 } from "drizzle-orm";
 
@@ -6344,8 +6354,8 @@ async function loginUser(email, password) {
 // server/routers/usersManagement.ts
 var usersManagementRouter = router({
   // Listar todos os usuários (admin only)
-  list: protectedProcedure.input(z4.object({
-    search: z4.string().optional()
+  list: protectedProcedure.input(z5.object({
+    search: z5.string().optional()
   }).optional()).query(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
       throw new TRPCError3({ code: "FORBIDDEN", message: "Acesso negado" });
@@ -6371,11 +6381,11 @@ var usersManagementRouter = router({
     return results;
   }),
   // Criar novo usuário (admin only)
-  create: protectedProcedure.input(z4.object({
-    name: z4.string().min(2),
-    email: z4.string().email(),
-    password: z4.string().min(4),
-    role: z4.enum(["user", "admin"]).default("user")
+  create: protectedProcedure.input(z5.object({
+    name: z5.string().min(2),
+    email: z5.string().email(),
+    password: z5.string().min(4),
+    role: z5.enum(["user", "admin"]).default("user")
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
       throw new TRPCError3({ code: "FORBIDDEN", message: "Acesso negado" });
@@ -6398,12 +6408,12 @@ var usersManagementRouter = router({
     return { success: true };
   }),
   // Atualizar usuário (admin only)
-  update: protectedProcedure.input(z4.object({
-    id: z4.number(),
-    name: z4.string().min(2).optional(),
-    email: z4.string().email().optional(),
-    role: z4.enum(["user", "admin"]).optional(),
-    password: z4.string().min(4).optional()
+  update: protectedProcedure.input(z5.object({
+    id: z5.number(),
+    name: z5.string().min(2).optional(),
+    email: z5.string().email().optional(),
+    role: z5.enum(["user", "admin"]).optional(),
+    password: z5.string().min(4).optional()
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
       throw new TRPCError3({ code: "FORBIDDEN", message: "Acesso negado" });
@@ -6421,7 +6431,7 @@ var usersManagementRouter = router({
     return { success: true };
   }),
   // Remover usuário (admin only, não pode remover a si mesmo)
-  delete: protectedProcedure.input(z4.object({ id: z4.number() })).mutation(async ({ ctx, input }) => {
+  delete: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
       throw new TRPCError3({ code: "FORBIDDEN", message: "Acesso negado" });
     }
@@ -6441,7 +6451,7 @@ init_db();
 init_schema();
 init_cloudinary();
 init_clientAreaScope();
-import { z as z6 } from "zod";
+import { z as z7 } from "zod";
 import { TRPCError as TRPCError5 } from "@trpc/server";
 import { eq as eq7, desc as desc3, asc as asc2, and as and4, sql as sql2, ne, or as or3 } from "drizzle-orm";
 import mysql3 from "mysql2/promise";
@@ -6529,7 +6539,7 @@ async function autoDeductAdvanceForCargo(db, cargoId) {
 var cargoLoadsRouter = router({
   // ===== DESTINOS =====
   // Verificar se nota fiscal já existe (para validação em tempo real no frontend)
-  checkInvoice: protectedProcedure.input(z6.object({ invoiceNumber: z6.string(), excludeId: z6.number().optional() })).query(async ({ input }) => {
+  checkInvoice: protectedProcedure.input(z7.object({ invoiceNumber: z7.string(), excludeId: z7.number().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { exists: false, cargo: null };
     const trimmed = input.invoiceNumber.trim();
@@ -6546,28 +6556,28 @@ var cargoLoadsRouter = router({
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(cargoDestinations).where(eq7(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
   }),
-  createDestination: protectedProcedure.input(z6.object({
-    name: z6.string().min(1),
-    address: z6.string().optional(),
-    city: z6.string().optional(),
-    state: z6.string().optional(),
-    notes: z6.string().optional(),
-    clientId: z6.number().optional(),
-    pricePerTon: z6.string().optional(),
-    pricePerM3: z6.string().optional(),
-    priceType: z6.enum(["ton", "m3"]).optional().default("ton"),
+  createDestination: protectedProcedure.input(z7.object({
+    name: z7.string().min(1),
+    address: z7.string().optional(),
+    city: z7.string().optional(),
+    state: z7.string().optional(),
+    notes: z7.string().optional(),
+    clientId: z7.number().optional(),
+    pricePerTon: z7.string().optional(),
+    pricePerM3: z7.string().optional(),
+    priceType: z7.enum(["ton", "m3"]).optional().default("ton"),
     // Campos de comprador (unificação)
-    isBuyer: z6.number().optional().default(0),
-    cnpjCpf: z6.string().optional(),
-    inscricaoEstadual: z6.string().optional(),
-    phone: z6.string().optional(),
-    email: z6.string().optional(),
-    cep: z6.string().optional(),
-    contactPerson: z6.string().optional(),
-    product: z6.string().optional(),
-    paymentMethod: z6.string().optional(),
-    pricePerUnit: z6.string().optional(),
-    unit: z6.string().optional()
+    isBuyer: z7.number().optional().default(0),
+    cnpjCpf: z7.string().optional(),
+    inscricaoEstadual: z7.string().optional(),
+    phone: z7.string().optional(),
+    email: z7.string().optional(),
+    cep: z7.string().optional(),
+    contactPerson: z7.string().optional(),
+    product: z7.string().optional(),
+    paymentMethod: z7.string().optional(),
+    pricePerUnit: z7.string().optional(),
+    unit: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const {
       name: name2,
@@ -6628,29 +6638,29 @@ var cargoLoadsRouter = router({
       });
     }
   }),
-  updateDestination: protectedProcedure.input(z6.object({
-    id: z6.number(),
-    name: z6.string().min(1).optional(),
-    address: z6.string().optional(),
-    city: z6.string().optional(),
-    state: z6.string().optional(),
-    notes: z6.string().optional(),
-    clientId: z6.number().nullable().optional(),
-    pricePerTon: z6.string().nullable().optional(),
-    pricePerM3: z6.string().nullable().optional(),
-    priceType: z6.enum(["ton", "m3"]).nullable().optional(),
+  updateDestination: protectedProcedure.input(z7.object({
+    id: z7.number(),
+    name: z7.string().min(1).optional(),
+    address: z7.string().optional(),
+    city: z7.string().optional(),
+    state: z7.string().optional(),
+    notes: z7.string().optional(),
+    clientId: z7.number().nullable().optional(),
+    pricePerTon: z7.string().nullable().optional(),
+    pricePerM3: z7.string().nullable().optional(),
+    priceType: z7.enum(["ton", "m3"]).nullable().optional(),
     // Campos de comprador
-    isBuyer: z6.number().nullable().optional(),
-    cnpjCpf: z6.string().nullable().optional(),
-    inscricaoEstadual: z6.string().nullable().optional(),
-    phone: z6.string().nullable().optional(),
-    email: z6.string().nullable().optional(),
-    cep: z6.string().nullable().optional(),
-    contactPerson: z6.string().nullable().optional(),
-    product: z6.string().nullable().optional(),
-    paymentMethod: z6.string().nullable().optional(),
-    pricePerUnit: z6.string().nullable().optional(),
-    unit: z6.string().nullable().optional()
+    isBuyer: z7.number().nullable().optional(),
+    cnpjCpf: z7.string().nullable().optional(),
+    inscricaoEstadual: z7.string().nullable().optional(),
+    phone: z7.string().nullable().optional(),
+    email: z7.string().nullable().optional(),
+    cep: z7.string().nullable().optional(),
+    contactPerson: z7.string().nullable().optional(),
+    product: z7.string().nullable().optional(),
+    paymentMethod: z7.string().nullable().optional(),
+    pricePerUnit: z7.string().nullable().optional(),
+    unit: z7.string().nullable().optional()
   })).mutation(async ({ input }) => {
     const {
       id,
@@ -6769,20 +6779,20 @@ var cargoLoadsRouter = router({
       });
     }
   }),
-  deleteDestination: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ input }) => {
+  deleteDestination: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(cargoDestinations).set({ active: 0 }).where(eq7(cargoDestinations.id, input.id));
     return { success: true };
   }),
   // ===== CARGAS =====
-  list: protectedProcedure.input(z6.object({
-    search: z6.string().optional(),
-    clientId: z6.number().optional(),
-    status: z6.enum(["pendente", "entregue", "cancelado"]).optional(),
-    dateFrom: z6.string().optional(),
-    dateTo: z6.string().optional(),
-    areaId: z6.number().nullable().optional()
+  list: protectedProcedure.input(z7.object({
+    search: z7.string().optional(),
+    clientId: z7.number().optional(),
+    status: z7.enum(["pendente", "entregue", "cancelado"]).optional(),
+    dateFrom: z7.string().optional(),
+    dateTo: z7.string().optional(),
+    areaId: z7.number().nullable().optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -6897,7 +6907,7 @@ var cargoLoadsRouter = router({
       driverPhotoUrl: r.driverPhotoUrl || null
     }));
   }),
-  getById: protectedProcedure.input(z6.object({ id: z6.number(), areaId: z6.number().nullable().optional() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z7.object({ id: z7.number(), areaId: z7.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const result = await db.select({
@@ -6983,7 +6993,7 @@ var cargoLoadsRouter = router({
     };
   }),
   // Listagem pública para portal do cliente (por token)
-  getByClientToken: publicProcedure.input(z6.object({ clientId: z6.number(), token: z6.string(), areaId: z6.number().nullable().optional() })).query(async ({ input }) => {
+  getByClientToken: publicProcedure.input(z7.object({ clientId: z7.number(), token: z7.string(), areaId: z7.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
     const client = await db.select().from(clients).where(eq7(clients.id, input.clientId)).limit(1);
@@ -6991,10 +7001,10 @@ var cargoLoadsRouter = router({
     const loads = await db.select().from(cargoLoads).where(and4(eq7(cargoLoads.clientId, input.clientId), listArea(input))).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     return loads;
   }),
-  uploadPhoto: protectedProcedure.input(z6.object({
-    cargoId: z6.number(),
-    photoBase64: z6.string(),
-    photoType: z6.enum(["cargo", "weight_out", "weight_in"]).default("cargo")
+  uploadPhoto: protectedProcedure.input(z7.object({
+    cargoId: z7.number(),
+    photoBase64: z7.string(),
+    photoType: z7.enum(["cargo", "weight_out", "weight_in"]).default("cargo")
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -7019,55 +7029,55 @@ var cargoLoadsRouter = router({
     await db.update(cargoLoads).set({ photosJson: JSON.stringify(photos), updatedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") }).where(eq7(cargoLoads.id, input.cargoId));
     return { url: uploaded.url, photos };
   }),
-  create: protectedProcedure.input(z6.object({
-    date: z6.string(),
-    vehicleId: z6.number().optional(),
-    vehiclePlate: z6.string().optional(),
-    driverCollaboratorId: z6.number().optional(),
-    driverName: z6.string().optional(),
-    heightM: z6.string(),
-    widthM: z6.string(),
-    lengthM: z6.string(),
-    volumeM3: z6.string(),
-    weightKg: z6.string().optional(),
-    weightOutKg: z6.string().optional(),
-    weightInKg: z6.string().optional(),
-    weightNetKg: z6.string().optional(),
-    woodType: z6.string().optional(),
-    destination: z6.string().optional(),
-    destinationId: z6.number().optional(),
-    invoiceNumber: z6.string().optional(),
-    clientId: z6.number().optional(),
-    clientName: z6.string().optional(),
-    areaId: z6.number().nullable().optional(),
-    agreedUnit: z6.enum(["ton", "m3"]).nullable().optional(),
-    agreedUnitPrice: z6.string().nullable().optional(),
-    agreedPaymentMethod: z6.string().nullable().optional(),
-    agreedPaymentTermDays: z6.number().nullable().optional(),
-    photosJson: z6.string().optional(),
-    notes: z6.string().optional(),
-    status: z6.enum(["pendente", "entregue", "cancelado"]).optional(),
-    workLocationId: z6.number().optional(),
-    humidity: z6.string().optional(),
-    deliveryDate: z6.string().optional(),
-    receiverName: z6.string().optional(),
-    thirdPartyContractor: z6.string().optional(),
-    thirdPartyCost: z6.string().optional(),
-    fiscalNoteId: z6.number().optional(),
+  create: protectedProcedure.input(z7.object({
+    date: z7.string(),
+    vehicleId: z7.number().optional(),
+    vehiclePlate: z7.string().optional(),
+    driverCollaboratorId: z7.number().optional(),
+    driverName: z7.string().optional(),
+    heightM: z7.string(),
+    widthM: z7.string(),
+    lengthM: z7.string(),
+    volumeM3: z7.string(),
+    weightKg: z7.string().optional(),
+    weightOutKg: z7.string().optional(),
+    weightInKg: z7.string().optional(),
+    weightNetKg: z7.string().optional(),
+    woodType: z7.string().optional(),
+    destination: z7.string().optional(),
+    destinationId: z7.number().optional(),
+    invoiceNumber: z7.string().optional(),
+    clientId: z7.number().optional(),
+    clientName: z7.string().optional(),
+    areaId: z7.number().nullable().optional(),
+    agreedUnit: z7.enum(["ton", "m3"]).nullable().optional(),
+    agreedUnitPrice: z7.string().nullable().optional(),
+    agreedPaymentMethod: z7.string().nullable().optional(),
+    agreedPaymentTermDays: z7.number().nullable().optional(),
+    photosJson: z7.string().optional(),
+    notes: z7.string().optional(),
+    status: z7.enum(["pendente", "entregue", "cancelado"]).optional(),
+    workLocationId: z7.number().optional(),
+    humidity: z7.string().optional(),
+    deliveryDate: z7.string().optional(),
+    receiverName: z7.string().optional(),
+    thirdPartyContractor: z7.string().optional(),
+    thirdPartyCost: z7.string().optional(),
+    fiscalNoteId: z7.number().optional(),
     // ID da nota/ação selecionada no Controle de Notas
-    invoiceFileBase64: z6.string().optional(),
+    invoiceFileBase64: z7.string().optional(),
     // PDF da NF em base64
-    invoiceFileName: z6.string().optional(),
+    invoiceFileName: z7.string().optional(),
     // Nome do arquivo da NF
-    invoiceFileMimeType: z6.string().optional(),
+    invoiceFileMimeType: z7.string().optional(),
     // MIME type do arquivo da NF
-    noteQuantity: z6.string().optional(),
+    noteQuantity: z7.string().optional(),
     // Quantidade da nota (se diferente da carga)
-    noteUnit: z6.enum(["m3", "ton"]).optional(),
+    noteUnit: z7.enum(["m3", "ton"]).optional(),
     // Unidade da nota (se diferente do destino)
-    responsavelCargaId: z6.number().nullable().optional(),
+    responsavelCargaId: z7.number().nullable().optional(),
     // Colaborador responsável pela carga (padrão: quem registrou)
-    origin: z6.string().optional()
+    origin: z7.string().optional()
     // window.location.origin do cliente, pra montar o link de upload de NF certo (local/staging/produção)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -7300,49 +7310,49 @@ var cargoLoadsRouter = router({
     }
     return { success: true, id: createdId };
   }),
-  update: protectedProcedure.input(z6.object({
-    id: z6.number(),
-    date: z6.string().optional(),
-    vehicleId: z6.number().optional(),
-    vehiclePlate: z6.string().optional(),
-    driverCollaboratorId: z6.number().optional(),
-    driverName: z6.string().optional(),
-    responsavelCargaId: z6.number().nullable().optional(),
-    heightM: z6.string().optional(),
-    widthM: z6.string().optional(),
-    lengthM: z6.string().optional(),
-    volumeM3: z6.string().optional(),
-    weightKg: z6.string().optional(),
-    weightNetKg: z6.string().optional(),
-    woodType: z6.string().optional(),
-    destination: z6.string().optional(),
-    destinationId: z6.number().optional(),
-    invoiceNumber: z6.string().optional(),
-    clientId: z6.number().optional(),
-    clientName: z6.string().optional(),
-    areaId: z6.number().nullable().optional(),
-    photosJson: z6.string().optional(),
-    notes: z6.string().optional(),
-    status: z6.enum(["pendente", "entregue", "cancelado"]).optional(),
-    trackingStatus: z6.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).optional(),
-    trackingNotes: z6.string().optional(),
-    weightOutKg: z6.string().optional(),
-    weightInKg: z6.string().optional(),
-    workLocationId: z6.number().optional(),
-    humidity: z6.string().optional(),
-    deliveryDate: z6.string().optional(),
-    invoiceUrl: z6.string().optional(),
-    boletoUrl: z6.string().optional(),
-    boletoAmount: z6.string().optional(),
-    boletoDueDate: z6.string().optional(),
-    paymentReceiptUrl: z6.string().optional(),
-    paymentStatus: z6.enum(["sem_boleto", "a_pagar", "pago"]).optional(),
-    paidAt: z6.string().optional(),
-    receiverName: z6.string().optional(),
-    thirdPartyContractor: z6.string().optional(),
-    thirdPartyCost: z6.string().optional(),
-    noteQuantity: z6.string().optional(),
-    noteUnit: z6.enum(["m3", "ton"]).optional()
+  update: protectedProcedure.input(z7.object({
+    id: z7.number(),
+    date: z7.string().optional(),
+    vehicleId: z7.number().optional(),
+    vehiclePlate: z7.string().optional(),
+    driverCollaboratorId: z7.number().optional(),
+    driverName: z7.string().optional(),
+    responsavelCargaId: z7.number().nullable().optional(),
+    heightM: z7.string().optional(),
+    widthM: z7.string().optional(),
+    lengthM: z7.string().optional(),
+    volumeM3: z7.string().optional(),
+    weightKg: z7.string().optional(),
+    weightNetKg: z7.string().optional(),
+    woodType: z7.string().optional(),
+    destination: z7.string().optional(),
+    destinationId: z7.number().optional(),
+    invoiceNumber: z7.string().optional(),
+    clientId: z7.number().optional(),
+    clientName: z7.string().optional(),
+    areaId: z7.number().nullable().optional(),
+    photosJson: z7.string().optional(),
+    notes: z7.string().optional(),
+    status: z7.enum(["pendente", "entregue", "cancelado"]).optional(),
+    trackingStatus: z7.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]).optional(),
+    trackingNotes: z7.string().optional(),
+    weightOutKg: z7.string().optional(),
+    weightInKg: z7.string().optional(),
+    workLocationId: z7.number().optional(),
+    humidity: z7.string().optional(),
+    deliveryDate: z7.string().optional(),
+    invoiceUrl: z7.string().optional(),
+    boletoUrl: z7.string().optional(),
+    boletoAmount: z7.string().optional(),
+    boletoDueDate: z7.string().optional(),
+    paymentReceiptUrl: z7.string().optional(),
+    paymentStatus: z7.enum(["sem_boleto", "a_pagar", "pago"]).optional(),
+    paidAt: z7.string().optional(),
+    receiverName: z7.string().optional(),
+    thirdPartyContractor: z7.string().optional(),
+    thirdPartyCost: z7.string().optional(),
+    noteQuantity: z7.string().optional(),
+    noteUnit: z7.enum(["m3", "ton"]).optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -7567,10 +7577,10 @@ var cargoLoadsRouter = router({
       }
     };
   }),
-  updateTracking: protectedProcedure.input(z6.object({
-    id: z6.number(),
-    trackingStatus: z6.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
-    trackingNotes: z6.string().optional()
+  updateTracking: protectedProcedure.input(z7.object({
+    id: z7.number(),
+    trackingStatus: z7.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
+    trackingNotes: z7.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -7599,12 +7609,12 @@ var cargoLoadsRouter = router({
     return { success: true };
   }),
   // Upload de documento (nota, boleto, comprovante) para uma carga
-  uploadDocument: protectedProcedure.input(z6.object({
-    cargoId: z6.number(),
-    docBase64: z6.string(),
-    docType: z6.enum(["invoice", "boleto", "payment_receipt"]),
-    boletoAmount: z6.string().optional(),
-    boletoDueDate: z6.string().optional()
+  uploadDocument: protectedProcedure.input(z7.object({
+    cargoId: z7.number(),
+    docBase64: z7.string(),
+    docType: z7.enum(["invoice", "boleto", "payment_receipt"]),
+    boletoAmount: z7.string().optional(),
+    boletoDueDate: z7.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -7693,9 +7703,9 @@ var cargoLoadsRouter = router({
     return { url: uploaded.url, success: true };
   }),
   // Listar cargas com boleto (para integração financeira)
-  listBoletos: protectedProcedure.input(z6.object({
-    status: z6.enum(["a_pagar", "pago"]).optional(),
-    areaId: z6.number().nullable().optional()
+  listBoletos: protectedProcedure.input(z7.object({
+    status: z7.enum(["a_pagar", "pago"]).optional(),
+    areaId: z7.number().nullable().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -7727,13 +7737,13 @@ var cargoLoadsRouter = router({
     }));
   }),
   // Marcar boleto como pago (com data e observação opcionais)
-  markAsPaid: protectedProcedure.input(z6.object({
-    id: z6.number(),
-    paidAt: z6.string().optional(),
+  markAsPaid: protectedProcedure.input(z7.object({
+    id: z7.number(),
+    paidAt: z7.string().optional(),
     // formato YYYY-MM-DD
-    notes: z6.string().optional(),
-    clientId: z6.number().optional(),
-    areaId: z6.number().nullable().optional()
+    notes: z7.string().optional(),
+    clientId: z7.number().optional(),
+    areaId: z7.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
@@ -7756,7 +7766,7 @@ var cargoLoadsRouter = router({
     }
   }),
   // Desfazer pagamento de uma carga (reverter para sem_boleto)
-  unmarkAsPaid: protectedProcedure.input(z6.object({ id: z6.number(), clientId: z6.number().optional(), areaId: z6.number().nullable().optional() })).mutation(async ({ input }) => {
+  unmarkAsPaid: protectedProcedure.input(z7.object({ id: z7.number(), clientId: z7.number().optional(), areaId: z7.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId }).from(cargoLoads).where(eq7(cargoLoads.id, input.id)).limit(1);
@@ -7776,12 +7786,12 @@ var cargoLoadsRouter = router({
     }
   }),
   // Atualizar data de pagamento de um boleto já pago
-  updatePaymentDate: protectedProcedure.input(z6.object({
-    id: z6.number(),
-    paidAt: z6.string(),
+  updatePaymentDate: protectedProcedure.input(z7.object({
+    id: z7.number(),
+    paidAt: z7.string(),
     // formato YYYY-MM-DD
-    clientId: z6.number().optional(),
-    areaId: z6.number().nullable().optional()
+    clientId: z7.number().optional(),
+    areaId: z7.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
@@ -7802,7 +7812,7 @@ var cargoLoadsRouter = router({
       await conn.end();
     }
   }),
-  delete: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ ctx, input }) => {
+  delete: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
       throw new TRPCError5({ code: "FORBIDDEN" });
     }
@@ -7812,16 +7822,16 @@ var cargoLoadsRouter = router({
     return { success: true };
   }),
   // ===== TRACKING PHOTOS =====
-  listTrackingPhotos: protectedProcedure.input(z6.object({ cargoId: z6.number() })).query(async ({ input }) => {
+  listTrackingPhotos: protectedProcedure.input(z7.object({ cargoId: z7.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(cargoTrackingPhotos).where(eq7(cargoTrackingPhotos.cargoId, input.cargoId)).orderBy(cargoTrackingPhotos.createdAt);
   }),
-  addTrackingPhoto: protectedProcedure.input(z6.object({
-    cargoId: z6.number(),
-    stage: z6.string().min(1),
-    photoBase64: z6.string(),
-    notes: z6.string().optional()
+  addTrackingPhoto: protectedProcedure.input(z7.object({
+    cargoId: z7.number(),
+    stage: z7.string().min(1),
+    photoBase64: z7.string(),
+    notes: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -7836,7 +7846,7 @@ var cargoLoadsRouter = router({
     });
     return { url: uploaded.url, success: true };
   }),
-  deleteTrackingPhoto: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ ctx, input }) => {
+  deleteTrackingPhoto: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
       throw new TRPCError5({ code: "FORBIDDEN" });
     }
@@ -7846,7 +7856,7 @@ var cargoLoadsRouter = router({
     return { success: true };
   }),
   // Listar fotos de tracking para o portal do cliente (público)
-  getTrackingPhotosPublic: publicProcedure.input(z6.object({ cargoId: z6.number(), clientId: z6.number() })).query(async ({ input }) => {
+  getTrackingPhotosPublic: publicProcedure.input(z7.object({ cargoId: z7.number(), clientId: z7.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [load] = await db.select({ clientId: cargoLoads.clientId, clientName: cargoLoads.clientName }).from(cargoLoads).where(eq7(cargoLoads.id, input.cargoId)).limit(1);
@@ -7971,11 +7981,11 @@ var cargoLoadsRouter = router({
   }),
   // Avançar tracking + enviar foto em um único passo
   // Atualizar medidas padrão de um caminhão (admin)
-  updateTruckDefaults: protectedProcedure.input(z6.object({
-    equipmentId: z6.number(),
-    defaultHeightM: z6.string().optional(),
-    defaultWidthM: z6.string().optional(),
-    defaultLengthM: z6.string().optional()
+  updateTruckDefaults: protectedProcedure.input(z7.object({
+    equipmentId: z7.number(),
+    defaultHeightM: z7.string().optional(),
+    defaultWidthM: z7.string().optional(),
+    defaultLengthM: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError5({ code: "FORBIDDEN" });
     const db = await getDb();
@@ -7987,19 +7997,19 @@ var cargoLoadsRouter = router({
     }).where(eq7(equipment.id, input.equipmentId));
     return { success: true };
   }),
-  advanceTrackingWithPhoto: protectedProcedure.input(z6.object({
-    cargoId: z6.number(),
-    stage: z6.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
-    photoBase64: z6.string().optional(),
-    notes: z6.string().optional(),
+  advanceTrackingWithPhoto: protectedProcedure.input(z7.object({
+    cargoId: z7.number(),
+    stage: z7.enum(["aguardando", "carregando", "em_transito", "pesagem_saida", "descarregando", "pesagem_chegada", "finalizado"]),
+    photoBase64: z7.string().optional(),
+    notes: z7.string().optional(),
     // Campos de peso (pesagem saída e chegada)
-    weightKg: z6.string().optional(),
-    weightNetKg: z6.string().optional(),
+    weightKg: z7.string().optional(),
+    weightNetKg: z7.string().optional(),
     // Campos de metragem final (ao finalizar)
-    finalHeightM: z6.string().optional(),
-    finalWidthM: z6.string().optional(),
-    finalLengthM: z6.string().optional(),
-    finalVolumeM3: z6.string().optional()
+    finalHeightM: z7.string().optional(),
+    finalWidthM: z7.string().optional(),
+    finalLengthM: z7.string().optional(),
+    finalVolumeM3: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -8049,7 +8059,7 @@ var cargoLoadsRouter = router({
     return { success: true, photoUrl };
   }),
   // ===== FECHAMENTOS SEMANAIS =====
-  listWeeklyClosings: protectedProcedure.input(z6.object({ clientId: z6.number().optional(), areaId: z6.number().nullable().optional() }).optional()).query(async ({ input }) => {
+  listWeeklyClosings: protectedProcedure.input(z7.object({ clientId: z7.number().optional(), areaId: z7.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
     let query = db.select({
@@ -8135,13 +8145,13 @@ var cargoLoadsRouter = router({
       await conn.end();
     }
   }),
-  createWeeklyClosing: protectedProcedure.input(z6.object({
-    clientId: z6.number(),
-    weekStart: z6.string(),
-    weekEnd: z6.string(),
-    pricePerTon: z6.string().optional(),
-    notes: z6.string().optional(),
-    areaId: z6.number().nullable().optional()
+  createWeeklyClosing: protectedProcedure.input(z7.object({
+    clientId: z7.number(),
+    weekStart: z7.string(),
+    weekEnd: z7.string(),
+    pricePerTon: z7.string().optional(),
+    notes: z7.string().optional(),
+    areaId: z7.number().nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
@@ -8192,12 +8202,12 @@ var cargoLoadsRouter = router({
     }
     return { success: true, id: result.insertId, totalLoads, totalWeightKg: totalWeightKg.toFixed(2), totalAmount };
   }),
-  updateWeeklyClosingStatus: protectedProcedure.input(z6.object({
-    id: z6.number(),
-    status: z6.enum(["aberto", "fechado", "pago", "atrasado"]),
-    paidAt: z6.string().optional(),
-    receiptUrl: z6.string().optional(),
-    areaId: z6.number().nullable().optional()
+  updateWeeklyClosingStatus: protectedProcedure.input(z7.object({
+    id: z7.number(),
+    status: z7.enum(["aberto", "fechado", "pago", "atrasado"]),
+    paidAt: z7.string().optional(),
+    receiptUrl: z7.string().optional(),
+    areaId: z7.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
@@ -8263,7 +8273,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     }
     return { success: true };
   }),
-  deleteWeeklyClosing: protectedProcedure.input(z6.object({ id: z6.number(), areaId: z6.number().nullable().optional() })).mutation(async ({ input }) => {
+  deleteWeeklyClosing: protectedProcedure.input(z7.object({ id: z7.number(), areaId: z7.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
     const [closing] = await db.select().from(cargoWeeklyClosings).where(eq7(cargoWeeklyClosings.id, input.id)).limit(1);
@@ -8273,11 +8283,11 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     return { success: true };
   }),
   // Atualizar data de pagamento de um fechamento semanal já pago
-  updateWeeklyClosingPaymentDate: protectedProcedure.input(z6.object({
-    id: z6.number(),
-    paidAt: z6.string(),
+  updateWeeklyClosingPaymentDate: protectedProcedure.input(z7.object({
+    id: z7.number(),
+    paidAt: z7.string(),
     // formato YYYY-MM-DD
-    areaId: z6.number().nullable().optional()
+    areaId: z7.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
@@ -8298,7 +8308,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     }
   }),
   // ===== DOCUMENTOS DO CLIENTE =====
-  listClientDocuments: protectedProcedure.input(z6.object({ clientId: z6.number(), areaId: z6.number().nullable().optional() })).query(async ({ input }) => {
+  listClientDocuments: protectedProcedure.input(z7.object({ clientId: z7.number(), areaId: z7.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
     await checkedArea(db, input.clientId, inputArea(input), false);
@@ -8335,15 +8345,15 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       });
     }
   }),
-  uploadClientDocument: protectedProcedure.input(z6.object({
-    clientId: z6.number(),
-    type: z6.enum(["proposta", "contrato", "nota_fiscal", "boleto", "recibo", "outros"]),
-    title: z6.string().min(1),
-    areaId: z6.number().nullable().optional(),
-    fileBase64: z6.string(),
-    fileType: z6.string().optional(),
-    fileName: z6.string().optional(),
-    notes: z6.string().optional()
+  uploadClientDocument: protectedProcedure.input(z7.object({
+    clientId: z7.number(),
+    type: z7.enum(["proposta", "contrato", "nota_fiscal", "boleto", "recibo", "outros"]),
+    title: z7.string().min(1),
+    areaId: z7.number().nullable().optional(),
+    fileBase64: z7.string(),
+    fileType: z7.string().optional(),
+    fileName: z7.string().optional(),
+    notes: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
@@ -8385,7 +8395,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       });
     }
   }),
-  deleteClientDocument: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ input }) => {
+  deleteClientDocument: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ input }) => {
     let conn = null;
     try {
       conn = await getDirectConnection();
@@ -8400,13 +8410,13 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     }
   }),
   // ===== ATUALIZAR PREÇO DO CLIENTE =====
-  updateClientPricing: protectedProcedure.input(z6.object({
-    clientId: z6.number(),
-    pricePerTon: z6.string().optional(),
-    residuePerTon: z6.string().optional(),
-    billingCycle: z6.enum(["semanal", "quinzenal", "mensal"]).optional(),
-    billingDayOfWeek: z6.number().optional(),
-    paymentTermDays: z6.number().optional()
+  updateClientPricing: protectedProcedure.input(z7.object({
+    clientId: z7.number(),
+    pricePerTon: z7.string().optional(),
+    residuePerTon: z7.string().optional(),
+    billingCycle: z7.enum(["semanal", "quinzenal", "mensal"]).optional(),
+    billingDayOfWeek: z7.number().optional(),
+    paymentTermDays: z7.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
@@ -8415,7 +8425,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     return { success: true };
   }),
   // ===== RELATÓRIO POR DESTINO/COMPRADOR =====
-  markReceivedByBuyer: protectedProcedure.input(z6.object({ id: z6.number(), received: z6.boolean() })).mutation(async ({ input, ctx }) => {
+  markReceivedByBuyer: protectedProcedure.input(z7.object({ id: z7.number(), received: z7.boolean() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
@@ -8484,15 +8494,15 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     }
     return { success: true, financialUpdated: true };
   }),
-  listByDestination: protectedProcedure.input(z6.object({
-    destinationId: z6.number().optional(),
-    buyerId: z6.number().optional(),
-    startDate: z6.string().optional(),
-    endDate: z6.string().optional(),
-    receivedFilter: z6.enum(["all", "received", "pending"]).optional(),
-    statusFilter: z6.enum(["all", "entregue", "pendente"]).optional(),
-    paymentStatusFilter: z6.enum(["all", "sem_boleto", "a_pagar", "pago"]).optional(),
-    areaId: z6.number().nullable().optional()
+  listByDestination: protectedProcedure.input(z7.object({
+    destinationId: z7.number().optional(),
+    buyerId: z7.number().optional(),
+    startDate: z7.string().optional(),
+    endDate: z7.string().optional(),
+    receivedFilter: z7.enum(["all", "received", "pending"]).optional(),
+    statusFilter: z7.enum(["all", "entregue", "pendente"]).optional(),
+    paymentStatusFilter: z7.enum(["all", "sem_boleto", "a_pagar", "pago"]).optional(),
+    areaId: z7.number().nullable().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -8594,10 +8604,10 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     }
     return { loads: results, buyerInfo, destInfo };
   }),
-  listThirdParty: protectedProcedure.input(z6.object({
-    startDate: z6.string().optional(),
-    endDate: z6.string().optional(),
-    contractor: z6.string().optional()
+  listThirdParty: protectedProcedure.input(z7.object({
+    startDate: z7.string().optional(),
+    endDate: z7.string().optional(),
+    contractor: z7.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -8636,11 +8646,11 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     return results;
   }),
   // Marcar carga de corte terceirizado como paga
-  markThirdPartyPaid: protectedProcedure.input(z6.object({
-    id: z6.number(),
-    paidAt: z6.string(),
+  markThirdPartyPaid: protectedProcedure.input(z7.object({
+    id: z7.number(),
+    paidAt: z7.string(),
     // YYYY-MM-DD
-    notes: z6.string().optional()
+    notes: z7.string().optional()
   })).mutation(async ({ input }) => {
     const conn = await getDirectConnection();
     try {
@@ -8656,7 +8666,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     }
   }),
   // Desfazer pagamento de corte terceirizado
-  markThirdPartyUnpaid: protectedProcedure.input(z6.object({ id: z6.number() })).mutation(async ({ input }) => {
+  markThirdPartyUnpaid: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ input }) => {
     const conn = await getDirectConnection();
     try {
       const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
@@ -8670,11 +8680,11 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     }
   }),
   // Marcar múltiplas cargas de um terceirizado como pagas de uma vez
-  markThirdPartyPaidBulk: protectedProcedure.input(z6.object({
-    ids: z6.array(z6.number()),
-    paidAt: z6.string(),
+  markThirdPartyPaidBulk: protectedProcedure.input(z7.object({
+    ids: z7.array(z7.number()),
+    paidAt: z7.string(),
     // YYYY-MM-DD
-    notes: z6.string().optional()
+    notes: z7.string().optional()
   })).mutation(async ({ input }) => {
     if (!input.ids.length) return { success: true, count: 0 };
     const conn = await getDirectConnection();
@@ -8694,7 +8704,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
   // ── Página pública de upload de NF (link enviado por WhatsApp) ──────────────
   // Sem login: o token (aleatório, 48 bytes) é a única credencial. Só devolve os
   // dados mínimos pra identificar a carga — nunca a carga inteira.
-  getByNfUploadToken: publicProcedure.input(z6.object({ token: z6.string().min(10) })).query(async ({ input }) => {
+  getByNfUploadToken: publicProcedure.input(z7.object({ token: z7.string().min(10) })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({
@@ -8721,14 +8731,14 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
   }),
   // Só altera invoiceNumber/invoiceUrl (+ quantidade/unidade da nota vinculada) DA CARGA
   // daquele token — nunca outra coisa, nunca outra carga.
-  uploadNfByToken: publicProcedure.input(z6.object({
-    token: z6.string().min(10),
-    invoiceNumber: z6.string().optional(),
-    invoiceFileBase64: z6.string().optional(),
-    invoiceFileName: z6.string().optional(),
-    invoiceFileMimeType: z6.string().optional(),
-    noteQuantity: z6.string().optional(),
-    noteUnit: z6.enum(["m3", "ton"]).optional()
+  uploadNfByToken: publicProcedure.input(z7.object({
+    token: z7.string().min(10),
+    invoiceNumber: z7.string().optional(),
+    invoiceFileBase64: z7.string().optional(),
+    invoiceFileName: z7.string().optional(),
+    invoiceFileMimeType: z7.string().optional(),
+    noteQuantity: z7.string().optional(),
+    noteUnit: z7.enum(["m3", "ton"]).optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
@@ -8841,7 +8851,7 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z7 } from "zod";
+import { z as z8 } from "zod";
 import { TRPCError as TRPCError6 } from "@trpc/server";
 import { eq as eq8, desc as desc4, sql as sql3, inArray as inArray2 } from "drizzle-orm";
 async function resolveAllowedClientIds2(db, ctx) {
@@ -8879,7 +8889,7 @@ async function getAllowedLocationIds(db, allowedClientIds) {
 }
 var machineHoursRouter = router({
   // === HORAS TRABALHADAS ===
-  listHours: protectedProcedure.input(z7.object({ equipmentId: z7.number().optional() }).optional()).query(async ({ ctx, input }) => {
+  listHours: protectedProcedure.input(z8.object({ equipmentId: z8.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const allowedClientIds = await resolveAllowedClientIds2(db, ctx);
@@ -8904,17 +8914,17 @@ var machineHoursRouter = router({
     }
     return filtered.map((r) => ({ ...r, locationName: r.workLocationId ? locMap[r.workLocationId] || null : null }));
   }),
-  createHours: protectedProcedure.input(z7.object({
-    equipmentId: z7.number(),
-    operatorCollaboratorId: z7.number().optional(),
-    date: z7.string(),
-    startHourMeter: z7.string(),
-    endHourMeter: z7.string(),
-    hoursWorked: z7.string(),
-    activity: z7.string().optional(),
-    location: z7.string().optional(),
-    notes: z7.string().optional(),
-    workLocationId: z7.number().optional()
+  createHours: protectedProcedure.input(z8.object({
+    equipmentId: z8.number(),
+    operatorCollaboratorId: z8.number().optional(),
+    date: z8.string(),
+    startHourMeter: z8.string(),
+    endHourMeter: z8.string(),
+    hoursWorked: z8.string(),
+    activity: z8.string().optional(),
+    location: z8.string().optional(),
+    notes: z8.string().optional(),
+    workLocationId: z8.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -8927,16 +8937,16 @@ var machineHoursRouter = router({
     });
     return { success: true };
   }),
-  updateHours: protectedProcedure.input(z7.object({
-    id: z7.number(),
-    date: z7.string().optional(),
-    startHourMeter: z7.string().optional(),
-    endHourMeter: z7.string().optional(),
-    hoursWorked: z7.string().optional(),
-    activity: z7.string().optional().nullable(),
-    location: z7.string().optional().nullable(),
-    notes: z7.string().optional().nullable(),
-    workLocationId: z7.number().optional().nullable()
+  updateHours: protectedProcedure.input(z8.object({
+    id: z8.number(),
+    date: z8.string().optional(),
+    startHourMeter: z8.string().optional(),
+    endHourMeter: z8.string().optional(),
+    hoursWorked: z8.string().optional(),
+    activity: z8.string().optional().nullable(),
+    location: z8.string().optional().nullable(),
+    notes: z8.string().optional().nullable(),
+    workLocationId: z8.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -8947,7 +8957,7 @@ var machineHoursRouter = router({
     }).where(eq8(machineHours.id, id));
     return { success: true };
   }),
-  deleteHours: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
+  deleteHours: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -8955,28 +8965,28 @@ var machineHoursRouter = router({
     return { success: true };
   }),
   // === MANUTENÇÕES ===
-  listMaintenance: protectedProcedure.input(z7.object({ equipmentId: z7.number().optional() }).optional()).query(async ({ input }) => {
+  listMaintenance: protectedProcedure.input(z8.object({ equipmentId: z8.number().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     if (input?.equipmentId) return results.filter((r) => r.equipmentId === input.equipmentId);
     return results;
   }),
-  createMaintenance: protectedProcedure.input(z7.object({
-    equipmentId: z7.number(),
-    date: z7.string(),
-    hourMeter: z7.string().optional(),
-    type: z7.enum(["preventiva", "corretiva", "revisao"]),
-    serviceType: z7.enum(["proprio", "terceirizado"]),
-    mechanicCollaboratorId: z7.number().optional(),
-    mechanicName: z7.string().optional(),
-    thirdPartyCompany: z7.string().optional(),
-    partsReplaced: z7.string().optional(),
+  createMaintenance: protectedProcedure.input(z8.object({
+    equipmentId: z8.number(),
+    date: z8.string(),
+    hourMeter: z8.string().optional(),
+    type: z8.enum(["preventiva", "corretiva", "revisao"]),
+    serviceType: z8.enum(["proprio", "terceirizado"]),
+    mechanicCollaboratorId: z8.number().optional(),
+    mechanicName: z8.string().optional(),
+    thirdPartyCompany: z8.string().optional(),
+    partsReplaced: z8.string().optional(),
     // JSON string
-    laborCost: z7.string().optional(),
-    totalCost: z7.string().optional(),
-    description: z7.string().optional(),
-    nextMaintenanceHours: z7.string().optional()
+    laborCost: z8.string().optional(),
+    totalCost: z8.string().optional(),
+    description: z8.string().optional(),
+    nextMaintenanceHours: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9012,18 +9022,18 @@ var machineHoursRouter = router({
     }
     return { success: true };
   }),
-  updateMaintenance: protectedProcedure.input(z7.object({
-    id: z7.number(),
-    date: z7.string().optional(),
-    hourMeter: z7.string().optional().nullable(),
-    type: z7.enum(["preventiva", "corretiva", "revisao"]).optional(),
-    serviceType: z7.enum(["proprio", "terceirizado"]).optional(),
-    mechanicName: z7.string().optional().nullable(),
-    thirdPartyCompany: z7.string().optional().nullable(),
-    description: z7.string().optional().nullable(),
-    laborCost: z7.string().optional().nullable(),
-    totalCost: z7.string().optional().nullable(),
-    nextMaintenanceHours: z7.string().optional().nullable()
+  updateMaintenance: protectedProcedure.input(z8.object({
+    id: z8.number(),
+    date: z8.string().optional(),
+    hourMeter: z8.string().optional().nullable(),
+    type: z8.enum(["preventiva", "corretiva", "revisao"]).optional(),
+    serviceType: z8.enum(["proprio", "terceirizado"]).optional(),
+    mechanicName: z8.string().optional().nullable(),
+    thirdPartyCompany: z8.string().optional().nullable(),
+    description: z8.string().optional().nullable(),
+    laborCost: z8.string().optional().nullable(),
+    totalCost: z8.string().optional().nullable(),
+    nextMaintenanceHours: z8.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9034,7 +9044,7 @@ var machineHoursRouter = router({
     }).where(eq8(machineMaintenance.id, id));
     return { success: true };
   }),
-  deleteMaintenance: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
+  deleteMaintenance: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9042,7 +9052,7 @@ var machineHoursRouter = router({
     return { success: true };
   }),
   // === ABASTECIMENTO ===
-  listFuel: protectedProcedure.input(z7.object({ equipmentId: z7.number().optional() }).optional()).query(async ({ ctx, input }) => {
+  listFuel: protectedProcedure.input(z8.object({ equipmentId: z8.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const allowedClientIds = await resolveAllowedClientIds2(db, ctx);
@@ -9067,17 +9077,17 @@ var machineHoursRouter = router({
     }
     return filteredFuel.map((r) => ({ ...r, locationName: r.workLocationId ? fuelLocMap[r.workLocationId] || null : null }));
   }),
-  createFuel: protectedProcedure.input(z7.object({
-    equipmentId: z7.number(),
-    date: z7.string(),
-    hourMeter: z7.string().optional(),
-    fuelType: z7.enum(["diesel", "diesel_s10", "gasolina", "mistura_2t", "arla"]),
-    liters: z7.string(),
-    pricePerLiter: z7.string().optional(),
-    totalValue: z7.string().optional(),
-    supplier: z7.string().optional(),
-    notes: z7.string().optional(),
-    workLocationId: z7.number().optional()
+  createFuel: protectedProcedure.input(z8.object({
+    equipmentId: z8.number(),
+    date: z8.string(),
+    hourMeter: z8.string().optional(),
+    fuelType: z8.enum(["diesel", "diesel_s10", "gasolina", "mistura_2t", "arla"]),
+    liters: z8.string(),
+    pricePerLiter: z8.string().optional(),
+    totalValue: z8.string().optional(),
+    supplier: z8.string().optional(),
+    notes: z8.string().optional(),
+    workLocationId: z8.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9115,9 +9125,9 @@ var machineHoursRouter = router({
     }
     return { success: true };
   }),
-  updateFuel: protectedProcedure.input(z7.object({
-    id: z7.number(),
-    workLocationId: z7.number().optional().nullable()
+  updateFuel: protectedProcedure.input(z8.object({
+    id: z8.number(),
+    workLocationId: z8.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9125,7 +9135,7 @@ var machineHoursRouter = router({
     await db.update(machineFuel).set(rest).where(eq8(machineFuel.id, id));
     return { success: true };
   }),
-  deleteFuel: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
+  deleteFuel: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9218,23 +9228,23 @@ var machineHoursRouter = router({
     });
   }),
   // === ÓLEO ===
-  listOil: protectedProcedure.input(z7.object({ equipmentId: z7.number().optional() }).optional()).query(async ({ input }) => {
+  listOil: protectedProcedure.input(z8.object({ equipmentId: z8.number().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(equipmentOilRecords).orderBy(desc4(equipmentOilRecords.createdAt));
     return input?.equipmentId ? results.filter((r) => r.equipmentId === input.equipmentId) : results;
   }),
-  createOil: protectedProcedure.input(z7.object({
-    equipmentId: z7.number(),
-    date: z7.string(),
-    hourMeter: z7.string().optional(),
-    oilType: z7.enum(["hidraulico", "motor", "transmissao", "diferencial", "outros"]),
-    quantityLiters: z7.string(),
-    brand: z7.string().optional(),
-    supplier: z7.string().optional(),
-    pricePerLiter: z7.string().optional(),
-    totalValue: z7.string().optional(),
-    notes: z7.string().optional()
+  createOil: protectedProcedure.input(z8.object({
+    equipmentId: z8.number(),
+    date: z8.string(),
+    hourMeter: z8.string().optional(),
+    oilType: z8.enum(["hidraulico", "motor", "transmissao", "diferencial", "outros"]),
+    quantityLiters: z8.string(),
+    brand: z8.string().optional(),
+    supplier: z8.string().optional(),
+    pricePerLiter: z8.string().optional(),
+    totalValue: z8.string().optional(),
+    notes: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9270,17 +9280,17 @@ var machineHoursRouter = router({
     }
     return { success: true };
   }),
-  updateOil: protectedProcedure.input(z7.object({
-    id: z7.number(),
-    date: z7.string().optional(),
-    hourMeter: z7.string().optional().nullable(),
-    oilType: z7.enum(["hidraulico", "motor", "transmissao", "diferencial", "outros"]).optional(),
-    quantityLiters: z7.string().optional(),
-    brand: z7.string().optional().nullable(),
-    supplier: z7.string().optional().nullable(),
-    pricePerLiter: z7.string().optional().nullable(),
-    totalValue: z7.string().optional().nullable(),
-    notes: z7.string().optional().nullable()
+  updateOil: protectedProcedure.input(z8.object({
+    id: z8.number(),
+    date: z8.string().optional(),
+    hourMeter: z8.string().optional().nullable(),
+    oilType: z8.enum(["hidraulico", "motor", "transmissao", "diferencial", "outros"]).optional(),
+    quantityLiters: z8.string().optional(),
+    brand: z8.string().optional().nullable(),
+    supplier: z8.string().optional().nullable(),
+    pricePerLiter: z8.string().optional().nullable(),
+    totalValue: z8.string().optional().nullable(),
+    notes: z8.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9291,7 +9301,7 @@ var machineHoursRouter = router({
     }).where(eq8(equipmentOilRecords.id, id));
     return { success: true };
   }),
-  deleteOil: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
+  deleteOil: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9304,15 +9314,15 @@ var machineHoursRouter = router({
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(oilStock).orderBy(desc4(oilStock.createdAt));
   }),
-  addOilStock: protectedProcedure.input(z7.object({
-    oilType: z7.enum(["hidraulico", "motor", "transmissao", "diferencial", "outros"]),
-    brand: z7.string().min(1),
-    purchaseQuantityLiters: z7.string(),
-    pricePerLiter: z7.string().optional(),
-    totalValue: z7.string().optional(),
-    photoBase64: z7.string().optional(),
-    supplier: z7.string().optional(),
-    notes: z7.string().optional()
+  addOilStock: protectedProcedure.input(z8.object({
+    oilType: z8.enum(["hidraulico", "motor", "transmissao", "diferencial", "outros"]),
+    brand: z8.string().min(1),
+    purchaseQuantityLiters: z8.string(),
+    pricePerLiter: z8.string().optional(),
+    totalValue: z8.string().optional(),
+    photoBase64: z8.string().optional(),
+    supplier: z8.string().optional(),
+    notes: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9349,7 +9359,7 @@ var machineHoursRouter = router({
     });
     return { id: res.insertId, updated: false };
   }),
-  deleteOilStock: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
+  deleteOilStock: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9357,13 +9367,13 @@ var machineHoursRouter = router({
     return { success: true };
   }),
   // createOil com baixa de estoque
-  createOilWithStock: protectedProcedure.input(z7.object({
-    equipmentId: z7.number(),
-    date: z7.string(),
-    hourMeter: z7.string().optional(),
-    oilStockId: z7.number(),
-    quantityLiters: z7.string(),
-    notes: z7.string().optional()
+  createOilWithStock: protectedProcedure.input(z8.object({
+    equipmentId: z8.number(),
+    date: z8.string(),
+    hourMeter: z8.string().optional(),
+    oilStockId: z8.number(),
+    quantityLiters: z8.string(),
+    notes: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9424,7 +9434,7 @@ var machineHoursRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z8 } from "zod";
+import { z as z9 } from "zod";
 import { TRPCError as TRPCError7 } from "@trpc/server";
 import { eq as eq9, desc as desc5, inArray as inArray3, sql as sql4 } from "drizzle-orm";
 
@@ -9535,9 +9545,9 @@ function sanitizeNumeric(value) {
 
 // server/routers/vehicleRecords.ts
 var vehicleRecordsRouter = router({
-  list: protectedProcedure.input(z8.object({
-    equipmentId: z8.number().optional(),
-    recordType: z8.enum(["abastecimento", "manutencao", "km"]).optional()
+  list: protectedProcedure.input(z9.object({
+    equipmentId: z9.number().optional(),
+    recordType: z9.enum(["abastecimento", "manutencao", "km"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9603,32 +9613,32 @@ var vehicleRecordsRouter = router({
       locationName: r.workLocationId ? locMap[r.workLocationId] || null : null
     }));
   }),
-  create: protectedProcedure.input(z8.object({
-    equipmentId: z8.number(),
-    date: z8.string(),
-    recordType: z8.enum(["abastecimento", "manutencao", "km"]),
-    fuelType: z8.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
-    liters: z8.string().optional(),
-    fuelCost: z8.string().optional(),
-    pricePerLiter: z8.string().optional(),
-    supplier: z8.string().optional(),
-    odometer: z8.string().optional(),
-    kmDriven: z8.string().optional(),
-    maintenanceType: z8.string().optional(),
-    maintenanceCost: z8.string().optional(),
-    serviceType: z8.enum(["proprio", "terceirizado"]).optional(),
-    mechanicName: z8.string().optional(),
-    driverCollaboratorId: z8.number().optional(),
-    photoBase64: z8.string().optional(),
-    photosBase64: z8.array(z8.string()).optional(),
+  create: protectedProcedure.input(z9.object({
+    equipmentId: z9.number(),
+    date: z9.string(),
+    recordType: z9.enum(["abastecimento", "manutencao", "km"]),
+    fuelType: z9.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
+    liters: z9.string().optional(),
+    fuelCost: z9.string().optional(),
+    pricePerLiter: z9.string().optional(),
+    supplier: z9.string().optional(),
+    odometer: z9.string().optional(),
+    kmDriven: z9.string().optional(),
+    maintenanceType: z9.string().optional(),
+    maintenanceCost: z9.string().optional(),
+    serviceType: z9.enum(["proprio", "terceirizado"]).optional(),
+    mechanicName: z9.string().optional(),
+    driverCollaboratorId: z9.number().optional(),
+    photoBase64: z9.string().optional(),
+    photosBase64: z9.array(z9.string()).optional(),
     // múltiplas fotos
-    notes: z8.string().optional(),
-    workLocationId: z8.number().optional(),
-    fuelInvoiceId: z8.number().optional(),
-    chargedValue: z8.string().optional(),
-    fuelLocation: z8.enum(["simflor", "astorga", "postos"]).optional(),
-    hourMeter: z8.string().optional(),
-    oil2tMl: z8.string().optional()
+    notes: z9.string().optional(),
+    workLocationId: z9.number().optional(),
+    fuelInvoiceId: z9.number().optional(),
+    chargedValue: z9.string().optional(),
+    fuelLocation: z9.enum(["simflor", "astorga", "postos"]).optional(),
+    hourMeter: z9.string().optional(),
+    oil2tMl: z9.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9744,32 +9754,32 @@ var vehicleRecordsRouter = router({
     }
     return { success: true };
   }),
-  update: protectedProcedure.input(z8.object({
-    id: z8.number(),
-    date: z8.string().optional(),
-    recordType: z8.enum(["abastecimento", "manutencao", "km"]).optional(),
-    fuelType: z8.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional().nullable(),
-    liters: z8.string().optional().nullable(),
-    fuelCost: z8.string().optional().nullable(),
-    pricePerLiter: z8.string().optional().nullable(),
-    supplier: z8.string().optional().nullable(),
-    odometer: z8.string().optional().nullable(),
-    kmDriven: z8.string().optional().nullable(),
-    maintenanceType: z8.string().optional().nullable(),
-    maintenanceCost: z8.string().optional().nullable(),
-    serviceType: z8.enum(["proprio", "terceirizado"]).optional().nullable(),
-    mechanicName: z8.string().optional().nullable(),
-    driverCollaboratorId: z8.number().optional().nullable(),
-    photoBase64: z8.string().optional().nullable(),
-    photosBase64: z8.array(z8.string()).optional().nullable(),
+  update: protectedProcedure.input(z9.object({
+    id: z9.number(),
+    date: z9.string().optional(),
+    recordType: z9.enum(["abastecimento", "manutencao", "km"]).optional(),
+    fuelType: z9.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional().nullable(),
+    liters: z9.string().optional().nullable(),
+    fuelCost: z9.string().optional().nullable(),
+    pricePerLiter: z9.string().optional().nullable(),
+    supplier: z9.string().optional().nullable(),
+    odometer: z9.string().optional().nullable(),
+    kmDriven: z9.string().optional().nullable(),
+    maintenanceType: z9.string().optional().nullable(),
+    maintenanceCost: z9.string().optional().nullable(),
+    serviceType: z9.enum(["proprio", "terceirizado"]).optional().nullable(),
+    mechanicName: z9.string().optional().nullable(),
+    driverCollaboratorId: z9.number().optional().nullable(),
+    photoBase64: z9.string().optional().nullable(),
+    photosBase64: z9.array(z9.string()).optional().nullable(),
     // múltiplas fotos
-    notes: z8.string().optional().nullable(),
-    workLocationId: z8.number().optional().nullable(),
-    fuelInvoiceId: z8.number().optional().nullable(),
-    chargedValue: z8.string().optional().nullable(),
-    fuelLocation: z8.enum(["simflor", "astorga", "postos"]).optional().nullable(),
-    hourMeter: z8.string().optional().nullable(),
-    oil2tMl: z8.string().optional().nullable()
+    notes: z9.string().optional().nullable(),
+    workLocationId: z9.number().optional().nullable(),
+    fuelInvoiceId: z9.number().optional().nullable(),
+    chargedValue: z9.string().optional().nullable(),
+    fuelLocation: z9.enum(["simflor", "astorga", "postos"]).optional().nullable(),
+    hourMeter: z9.string().optional().nullable(),
+    oil2tMl: z9.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9811,7 +9821,7 @@ var vehicleRecordsRouter = router({
     await db.update(vehicleRecords).set(updateData).where(eq9(vehicleRecords.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
+  delete: protectedProcedure.input(z9.object({ id: z9.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError7({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9825,12 +9835,12 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z9 } from "zod";
+import { z as z10 } from "zod";
 import { TRPCError as TRPCError8 } from "@trpc/server";
 import { eq as eq10, desc as desc6 } from "drizzle-orm";
 var partsRouter = router({
   // === PEÇAS ===
-  listParts: protectedProcedure.input(z9.object({ search: z9.string().optional() }).optional()).query(async ({ input }) => {
+  listParts: protectedProcedure.input(z10.object({ search: z10.string().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(parts).orderBy(desc6(parts.createdAt));
@@ -9842,17 +9852,17 @@ var partsRouter = router({
     }
     return results;
   }),
-  createPart: protectedProcedure.input(z9.object({
-    code: z9.string().optional(),
-    name: z9.string().min(2),
-    category: z9.string().optional(),
-    unit: z9.string().optional(),
-    stockQuantity: z9.number().optional(),
-    minStock: z9.number().optional(),
-    unitCost: z9.string().optional(),
-    supplier: z9.string().optional(),
-    photoBase64: z9.string().optional(),
-    notes: z9.string().optional()
+  createPart: protectedProcedure.input(z10.object({
+    code: z10.string().optional(),
+    name: z10.string().min(2),
+    category: z10.string().optional(),
+    unit: z10.string().optional(),
+    stockQuantity: z10.number().optional(),
+    minStock: z10.number().optional(),
+    unitCost: z10.string().optional(),
+    supplier: z10.string().optional(),
+    photoBase64: z10.string().optional(),
+    notes: z10.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9865,19 +9875,19 @@ var partsRouter = router({
     await db.insert(parts).values({ ...rest, photoUrl, createdBy: ctx.user.id });
     return { success: true };
   }),
-  updatePart: protectedProcedure.input(z9.object({
-    id: z9.number(),
-    code: z9.string().optional(),
-    name: z9.string().optional(),
-    category: z9.string().optional(),
-    unit: z9.string().optional(),
-    stockQuantity: z9.number().optional(),
-    minStock: z9.number().optional(),
-    unitCost: z9.string().optional(),
-    supplier: z9.string().optional(),
-    photoBase64: z9.string().optional(),
-    notes: z9.string().optional(),
-    active: z9.number().optional()
+  updatePart: protectedProcedure.input(z10.object({
+    id: z10.number(),
+    code: z10.string().optional(),
+    name: z10.string().optional(),
+    category: z10.string().optional(),
+    unit: z10.string().optional(),
+    stockQuantity: z10.number().optional(),
+    minStock: z10.number().optional(),
+    unitCost: z10.string().optional(),
+    supplier: z10.string().optional(),
+    photoBase64: z10.string().optional(),
+    notes: z10.string().optional(),
+    active: z10.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9890,7 +9900,7 @@ var partsRouter = router({
     await db.update(parts).set(updateData).where(eq10(parts.id, id));
     return { success: true };
   }),
-  deletePart: protectedProcedure.input(z9.object({ id: z9.number() })).mutation(async ({ ctx, input }) => {
+  deletePart: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError8({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9898,8 +9908,8 @@ var partsRouter = router({
     return { success: true };
   }),
   // === SOLICITAÇÕES ===
-  listRequests: protectedProcedure.input(z9.object({
-    status: z9.enum(["pendente", "aprovado", "rejeitado", "comprado", "entregue"]).optional()
+  listRequests: protectedProcedure.input(z10.object({
+    status: z10.enum(["pendente", "aprovado", "rejeitado", "comprado", "entregue"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9907,15 +9917,15 @@ var partsRouter = router({
     if (input?.status) return results.filter((r) => r.status === input.status);
     return results;
   }),
-  createRequest: protectedProcedure.input(z9.object({
-    partId: z9.number().optional(),
-    partName: z9.string(),
-    quantity: z9.number().min(1),
-    urgency: z9.enum(["baixa", "media", "alta"]),
-    equipmentId: z9.number().optional(),
-    equipmentName: z9.string().optional(),
-    reason: z9.string().optional(),
-    estimatedCost: z9.string().optional()
+  createRequest: protectedProcedure.input(z10.object({
+    partId: z10.number().optional(),
+    partName: z10.string(),
+    quantity: z10.number().min(1),
+    urgency: z10.enum(["baixa", "media", "alta"]),
+    equipmentId: z10.number().optional(),
+    equipmentName: z10.string().optional(),
+    reason: z10.string().optional(),
+    estimatedCost: z10.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9941,10 +9951,10 @@ var partsRouter = router({
     });
     return { success: true };
   }),
-  updateRequestStatus: protectedProcedure.input(z9.object({
-    id: z9.number(),
-    status: z9.enum(["pendente", "aprovado", "rejeitado", "comprado", "entregue"]),
-    rejectionReason: z9.string().optional()
+  updateRequestStatus: protectedProcedure.input(z10.object({
+    id: z10.number(),
+    status: z10.enum(["pendente", "aprovado", "rejeitado", "comprado", "entregue"]),
+    rejectionReason: z10.string().optional()
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin" && input.status !== "comprado" && input.status !== "entregue") {
       throw new TRPCError8({ code: "FORBIDDEN", message: "Apenas admins podem aprovar/rejeitar" });
@@ -9963,7 +9973,7 @@ var partsRouter = router({
     await db.update(partsRequests).set(updateData).where(eq10(partsRequests.id, input.id));
     return { success: true };
   }),
-  deleteRequest: protectedProcedure.input(z9.object({ id: z9.number() })).mutation(async ({ ctx, input }) => {
+  deleteRequest: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError8({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -9976,11 +9986,11 @@ var partsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z10 } from "zod";
+import { z as z11 } from "zod";
 import { TRPCError as TRPCError9 } from "@trpc/server";
 import { eq as eq11, desc as desc7, ne as ne2 } from "drizzle-orm";
 var clientsRouter = router({
-  list: protectedProcedure.input(z10.object({ search: z10.string().optional() }).optional()).query(async ({ input }) => {
+  list: protectedProcedure.input(z11.object({ search: z11.string().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(clients).where(ne2(clients.active, 0)).orderBy(desc7(clients.createdAt));
@@ -9992,36 +10002,36 @@ var clientsRouter = router({
     }
     return results;
   }),
-  create: protectedProcedure.input(z10.object({
-    name: z10.string().min(2),
-    document: z10.string().optional(),
-    email: z10.string().email().optional(),
-    phone: z10.string().optional(),
-    address: z10.string().optional(),
-    city: z10.string().optional(),
-    state: z10.string().optional(),
-    notes: z10.string().optional(),
-    pricePerTon: z10.string().optional(),
-    paymentTermDays: z10.number().optional()
+  create: protectedProcedure.input(z11.object({
+    name: z11.string().min(2),
+    document: z11.string().optional(),
+    email: z11.string().email().optional(),
+    phone: z11.string().optional(),
+    address: z11.string().optional(),
+    city: z11.string().optional(),
+    state: z11.string().optional(),
+    notes: z11.string().optional(),
+    pricePerTon: z11.string().optional(),
+    paymentTermDays: z11.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(clients).values({ ...input, createdBy: ctx.user.id });
     return { success: true };
   }),
-  update: protectedProcedure.input(z10.object({
-    id: z10.number(),
-    name: z10.string().optional(),
-    document: z10.string().optional(),
-    email: z10.string().email().optional(),
-    phone: z10.string().optional(),
-    address: z10.string().optional(),
-    city: z10.string().optional(),
-    state: z10.string().optional(),
-    notes: z10.string().optional(),
-    active: z10.number().optional(),
-    pricePerTon: z10.string().optional(),
-    paymentTermDays: z10.number().optional()
+  update: protectedProcedure.input(z11.object({
+    id: z11.number(),
+    name: z11.string().optional(),
+    document: z11.string().optional(),
+    email: z11.string().email().optional(),
+    phone: z11.string().optional(),
+    address: z11.string().optional(),
+    city: z11.string().optional(),
+    state: z11.string().optional(),
+    notes: z11.string().optional(),
+    active: z11.number().optional(),
+    pricePerTon: z11.string().optional(),
+    paymentTermDays: z11.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -10029,7 +10039,7 @@ var clientsRouter = router({
     await db.update(clients).set({ ...rest, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq11(clients.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
+  delete: protectedProcedure.input(z11.object({ id: z11.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError9({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -10043,11 +10053,11 @@ init_trpc();
 init_db();
 init_schema();
 init_clientAreaScope();
-import { z as z11 } from "zod";
+import { z as z12 } from "zod";
 import { and as and5, eq as eq12, isNull as isNull2 } from "drizzle-orm";
 import { TRPCError as TRPCError10 } from "@trpc/server";
-var name = z11.string().trim().min(1).max(255);
-var optionalText = z11.string().trim().max(255).optional();
+var name = z12.string().trim().min(1).max(255);
+var optionalText = z12.string().trim().max(255).optional();
 function locationName(client, area) {
   return [client, area.fieldName, area.name].filter(Boolean).join(" \u2014 ").slice(0, 255);
 }
@@ -10057,7 +10067,7 @@ async function database() {
   return db;
 }
 var clientAreasRouter = router({
-  list: protectedProcedure.input(z11.object({ clientId: z11.number().int().positive() })).query(async ({ input, ctx }) => {
+  list: protectedProcedure.input(z12.object({ clientId: z12.number().int().positive() })).query(async ({ input, ctx }) => {
     const db = await database();
     const rows = await db.select().from(clientAreas).where(eq12(clientAreas.clientId, input.clientId)).orderBy(clientAreas.id);
     if (ctx.user.role === "admin") return rows;
@@ -10072,7 +10082,7 @@ var clientAreasRouter = router({
     }
     return rows;
   }),
-  create: adminProcedure.input(z11.object({ clientId: z11.number().int().positive(), name, fieldName: optionalText, notes: z11.string().trim().max(5e3).optional() })).mutation(async ({ input, ctx }) => {
+  create: adminProcedure.input(z12.object({ clientId: z12.number().int().positive(), name, fieldName: optionalText, notes: z12.string().trim().max(5e3).optional() })).mutation(async ({ input, ctx }) => {
     const db = await database();
     return db.transaction(async (tx) => {
       const [client] = await tx.select({ id: clients.id, name: clients.name }).from(clients).where(eq12(clients.id, input.clientId)).limit(1);
@@ -10084,17 +10094,17 @@ var clientAreasRouter = router({
       return { success: true, id: Number(created.insertId), workLocationId: Number(location.insertId) };
     });
   }),
-  update: adminProcedure.input(z11.object({
-    id: z11.number().int().positive(),
+  update: adminProcedure.input(z12.object({
+    id: z12.number().int().positive(),
     name: name.optional(),
     fieldName: optionalText,
-    notes: z11.string().trim().max(5e3).optional(),
-    unit: z11.enum(["ton", "m3"]).optional(),
-    unitPrice: z11.string().regex(/^\d{1,12}([.,]\d{1,4})?$/, "Informe um valor num\xE9rico v\xE1lido.").optional(),
-    paymentMethod: z11.string().trim().max(100).optional(),
-    paymentTermDays: z11.number().int().min(0).max(3650).optional(),
-    billingCycle: z11.enum(["manual", "semanal", "quinzenal", "mensal"]).optional(),
-    agreementStatus: z11.enum(["pending", "confirmed"]).optional()
+    notes: z12.string().trim().max(5e3).optional(),
+    unit: z12.enum(["ton", "m3"]).optional(),
+    unitPrice: z12.string().regex(/^\d{1,12}([.,]\d{1,4})?$/, "Informe um valor num\xE9rico v\xE1lido.").optional(),
+    paymentMethod: z12.string().trim().max(100).optional(),
+    paymentTermDays: z12.number().int().min(0).max(3650).optional(),
+    billingCycle: z12.enum(["manual", "semanal", "quinzenal", "mensal"]).optional(),
+    agreementStatus: z12.enum(["pending", "confirmed"]).optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await database();
     const result = await db.transaction(async (tx) => {
@@ -10137,7 +10147,7 @@ init_trpc();
 init_db();
 init_schema();
 init_clientAreaScope();
-import { z as z12 } from "zod";
+import { z as z13 } from "zod";
 import { TRPCError as TRPCError11 } from "@trpc/server";
 import { eq as eq13, and as and6, isNull as isNull3, like as like3, desc as desc8, inArray as inArray4 } from "drizzle-orm";
 import bcrypt3 from "bcryptjs";
@@ -10325,7 +10335,7 @@ async function assertExistingAreaScope(db, table, id, requestedArea, clientId) {
   return row;
 }
 var clientPortalRouter = router({
-  login: publicProcedure.input(z12.object({ email: z12.string().email(), password: z12.string().min(1) })).mutation(async ({ input }) => {
+  login: publicProcedure.input(z13.object({ email: z13.string().email(), password: z13.string().min(1) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [client] = await db.select().from(clients).where(
@@ -10342,7 +10352,7 @@ var clientPortalRouter = router({
       clientCity: client.city
     };
   }),
-  getPortalData: publicProcedure.input(z12.object({ clientId: z12.number(), email: z12.string(), areaId: z12.number().nullable().optional() })).query(async ({ input }) => {
+  getPortalData: publicProcedure.input(z13.object({ clientId: z13.number(), email: z13.string(), areaId: z13.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [client] = await db.select({
@@ -10474,7 +10484,7 @@ var clientPortalRouter = router({
       ...totals
     };
   }),
-  listAllReplantings: protectedProcedure.input(z12.object({ areaId: z12.number().nullable().optional() }).optional()).query(async ({ input }) => {
+  listAllReplantings: protectedProcedure.input(z13.object({ areaId: z13.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const areaId = input?.areaId === void 0 ? void 0 : normalizePortalAreaId(input.areaId);
@@ -10483,7 +10493,7 @@ var clientPortalRouter = router({
     const labels = await areaLabelMap(db);
     return rows.map(({ record, clientName }) => ({ ...record, clientName, areaId: normalizePortalAreaId(record.areaId), areaLabel: labels.get(normalizePortalAreaId(record.areaId)) ?? null }));
   }),
-  listAllPayments: protectedProcedure.input(z12.object({ areaId: z12.number().nullable().optional() }).optional()).query(async ({ input }) => {
+  listAllPayments: protectedProcedure.input(z13.object({ areaId: z13.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const areaId = input?.areaId === void 0 ? void 0 : normalizePortalAreaId(input.areaId);
@@ -10508,19 +10518,19 @@ var clientPortalRouter = router({
       };
     });
   }),
-  updatePayment: protectedProcedure.input(z12.object({
-    id: z12.number(),
-    areaId: z12.number().nullable().optional(),
-    status: z12.string().optional(),
-    paidAt: z12.string().optional(),
-    notes: z12.string().optional(),
-    description: z12.string().optional(),
-    amount: z12.string().optional(),
-    grossAmount: z12.string().optional(),
-    netAmount: z12.string().optional(),
-    dueDate: z12.string().optional(),
-    invoiceNumber: z12.string().optional(),
-    paymentMethod: z12.string().optional()
+  updatePayment: protectedProcedure.input(z13.object({
+    id: z13.number(),
+    areaId: z13.number().nullable().optional(),
+    status: z13.string().optional(),
+    paidAt: z13.string().optional(),
+    notes: z13.string().optional(),
+    description: z13.string().optional(),
+    amount: z13.string().optional(),
+    grossAmount: z13.string().optional(),
+    netAmount: z13.string().optional(),
+    dueDate: z13.string().optional(),
+    invoiceNumber: z13.string().optional(),
+    paymentMethod: z13.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -10536,7 +10546,7 @@ var clientPortalRouter = router({
     await db.update(clientPayments).set(updateData).where(eq13(clientPayments.id, id));
     return { success: true, areaId: normalizePortalAreaId(existing.areaId) };
   }),
-  deleteReplanting: protectedProcedure.input(z12.object({ id: z12.number(), areaId: z12.number().nullable().optional() })).mutation(async ({ input }) => {
+  deleteReplanting: protectedProcedure.input(z13.object({ id: z13.number(), areaId: z13.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const existing = await db.select().from(replantingRecords).where(eq13(replantingRecords.id, input.id)).limit(1).then((rows) => rows[0]);
@@ -10545,7 +10555,7 @@ var clientPortalRouter = router({
     await db.delete(replantingRecords).where(eq13(replantingRecords.id, input.id));
     return { success: true };
   }),
-  deletePayment: protectedProcedure.input(z12.object({ id: z12.number(), areaId: z12.number().nullable().optional() })).mutation(async ({ input }) => {
+  deletePayment: protectedProcedure.input(z13.object({ id: z13.number(), areaId: z13.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [existing] = await db.select().from(clientPayments).where(eq13(clientPayments.id, input.id)).limit(1);
@@ -10554,21 +10564,21 @@ var clientPortalRouter = router({
     await db.delete(clientPayments).where(eq13(clientPayments.id, input.id));
     return { success: true };
   }),
-  setClientPassword: protectedProcedure.input(z12.object({ clientId: z12.number(), password: z12.string().min(4) })).mutation(async ({ input }) => {
+  setClientPassword: protectedProcedure.input(z13.object({ clientId: z13.number(), password: z13.string().min(4) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.update(clients).set({ password: await bcrypt3.hash(input.password, 10) }).where(eq13(clients.id, input.clientId));
     return { success: true };
   }),
-  addReplanting: protectedProcedure.input(z12.object({
-    clientId: z12.number(),
-    areaId: z12.number().nullable().optional(),
-    date: z12.string(),
-    area: z12.string().optional(),
-    species: z12.string().optional(),
-    quantity: z12.number().optional(),
-    areaHectares: z12.string().optional(),
-    notes: z12.string().optional()
+  addReplanting: protectedProcedure.input(z13.object({
+    clientId: z13.number(),
+    areaId: z13.number().nullable().optional(),
+    date: z13.string(),
+    area: z13.string().optional(),
+    species: z13.string().optional(),
+    quantity: z13.number().optional(),
+    areaHectares: z13.string().optional(),
+    notes: z13.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -10587,24 +10597,24 @@ var clientPortalRouter = router({
     await db.insert(replantingRecords).values(values);
     return { success: true, areaId };
   }),
-  addPayment: protectedProcedure.input(z12.object({
-    clientId: z12.number(),
-    areaId: z12.number().nullable().optional(),
-    referenceDate: z12.string().optional(),
-    description: z12.string().optional(),
-    volumeM3: z12.string().optional(),
-    pricePerM3: z12.string().optional(),
-    grossAmount: z12.string().optional(),
-    deductions: z12.string().optional(),
-    netAmount: z12.string().optional(),
-    status: z12.string().default("pending"),
-    dueDate: z12.string().optional(),
-    paidAt: z12.string().optional(),
-    notes: z12.string().optional(),
-    invoiceNumber: z12.string().optional(),
-    paymentMethod: z12.string().optional(),
-    pixKey: z12.string().optional(),
-    loadId: z12.number().optional()
+  addPayment: protectedProcedure.input(z13.object({
+    clientId: z13.number(),
+    areaId: z13.number().nullable().optional(),
+    referenceDate: z13.string().optional(),
+    description: z13.string().optional(),
+    volumeM3: z13.string().optional(),
+    pricePerM3: z13.string().optional(),
+    grossAmount: z13.string().optional(),
+    deductions: z13.string().optional(),
+    netAmount: z13.string().optional(),
+    status: z13.string().default("pending"),
+    dueDate: z13.string().optional(),
+    paidAt: z13.string().optional(),
+    notes: z13.string().optional(),
+    invoiceNumber: z13.string().optional(),
+    paymentMethod: z13.string().optional(),
+    pixKey: z13.string().optional(),
+    loadId: z13.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -10635,28 +10645,28 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z13 } from "zod";
+import { z as z14 } from "zod";
 import { eq as eq14, desc as desc9 } from "drizzle-orm";
 var DOC_TYPES = ["cnh", "certificado", "aso", "contrato", "rg", "cpf", "outros"];
 var collaboratorDocumentsRouter = router({
   // Listar documentos de um colaborador
-  list: protectedProcedure.input(z13.object({ collaboratorId: z13.number() })).query(async ({ input }) => {
+  list: protectedProcedure.input(z14.object({ collaboratorId: z14.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     return await db.select().from(collaboratorDocuments).where(eq14(collaboratorDocuments.collaboratorId, input.collaboratorId)).orderBy(desc9(collaboratorDocuments.createdAt));
   }),
   // Adicionar documento (imagem ou PDF) — usa S3 via cloudinaryUpload helper
-  add: protectedProcedure.input(z13.object({
-    collaboratorId: z13.number(),
-    type: z13.enum(DOC_TYPES),
-    title: z13.string().min(2),
-    fileBase64: z13.string(),
+  add: protectedProcedure.input(z14.object({
+    collaboratorId: z14.number(),
+    type: z14.enum(DOC_TYPES),
+    title: z14.string().min(2),
+    fileBase64: z14.string(),
     // base64 da imagem ou PDF (pode ter prefixo data:...)
-    fileType: z13.string().optional(),
+    fileType: z14.string().optional(),
     // "image/jpeg", "application/pdf"
-    issueDate: z13.string().optional(),
-    expiryDate: z13.string().optional(),
-    notes: z13.string().optional()
+    issueDate: z14.string().optional(),
+    expiryDate: z14.string().optional(),
+    notes: z14.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -10678,14 +10688,14 @@ var collaboratorDocumentsRouter = router({
     return created[0];
   }),
   // Remover documento
-  remove: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ input }) => {
+  remove: protectedProcedure.input(z14.object({ id: z14.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.delete(collaboratorDocuments).where(eq14(collaboratorDocuments.id, input.id));
     return { success: true };
   }),
   // Buscar colaborador com todos os dados para gerar PDF
-  getForPdf: protectedProcedure.input(z13.object({ collaboratorId: z13.number() })).query(async ({ input }) => {
+  getForPdf: protectedProcedure.input(z14.object({ collaboratorId: z14.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [collab] = await db.select().from(collaborators).where(eq14(collaborators.id, input.collaboratorId)).limit(1);
@@ -10700,13 +10710,13 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z14 } from "zod";
+import { z as z15 } from "zod";
 import { eq as eq15, desc as desc10, and as and7 } from "drizzle-orm";
 import { alias as alias2 } from "drizzle-orm/mysql-core";
 var driverAlias2 = alias2(collaborators, "driver");
 var equipmentDetailRouter = router({
   // ─── Equipamento ────────────────────────────────────────────────────────────
-  getById: protectedProcedure.input(z14.object({ id: z14.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z15.object({ id: z15.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const result = await db.select({
@@ -10717,6 +10727,7 @@ var equipmentDetailRouter = router({
       year: equipment.year,
       serialNumber: equipment.serialNumber,
       licensePlate: equipment.licensePlate,
+      trailerPlate: equipment.trailerPlate,
       imageUrl: equipment.imageUrl,
       status: equipment.status,
       typeId: equipment.typeId,
@@ -10736,15 +10747,15 @@ var equipmentDetailRouter = router({
     return result[0] || null;
   }),
   // ─── Fotos ──────────────────────────────────────────────────────────────────
-  listPhotos: protectedProcedure.input(z14.object({ equipmentId: z14.number() })).query(async ({ input }) => {
+  listPhotos: protectedProcedure.input(z15.object({ equipmentId: z15.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     return db.select().from(equipmentPhotos).where(eq15(equipmentPhotos.equipmentId, input.equipmentId)).orderBy(desc10(equipmentPhotos.createdAt));
   }),
-  addPhoto: protectedProcedure.input(z14.object({
-    equipmentId: z14.number(),
-    photoBase64: z14.string(),
-    caption: z14.string().optional()
+  addPhoto: protectedProcedure.input(z15.object({
+    equipmentId: z15.number(),
+    photoBase64: z15.string(),
+    caption: z15.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -10757,13 +10768,13 @@ var equipmentDetailRouter = router({
     });
     return { id: ins.insertId, url: result.url };
   }),
-  removePhoto: protectedProcedure.input(z14.object({ id: z14.number() })).mutation(async ({ input }) => {
+  removePhoto: protectedProcedure.input(z15.object({ id: z15.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.delete(equipmentPhotos).where(eq15(equipmentPhotos.id, input.id));
     return { success: true };
   }),
-  updateMainPhoto: protectedProcedure.input(z14.object({ id: z14.number(), photoBase64: z14.string() })).mutation(async ({ input }) => {
+  updateMainPhoto: protectedProcedure.input(z15.object({ id: z15.number(), photoBase64: z15.string() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const result = await cloudinaryUpload(input.photoBase64, `btree/equipment/main`);
@@ -10777,7 +10788,7 @@ var equipmentDetailRouter = router({
     const templates = await db.select().from(maintenanceTemplates).where(eq15(maintenanceTemplates.active, 1)).orderBy(maintenanceTemplates.name);
     return templates;
   }),
-  getTemplateWithParts: protectedProcedure.input(z14.object({ templateId: z14.number() })).query(async ({ input }) => {
+  getTemplateWithParts: protectedProcedure.input(z15.object({ templateId: z15.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [template] = await db.select().from(maintenanceTemplates).where(eq15(maintenanceTemplates.id, input.templateId)).limit(1);
@@ -10796,18 +10807,18 @@ var equipmentDetailRouter = router({
     }));
     return { ...template, parts: partsWithStock };
   }),
-  createTemplate: protectedProcedure.input(z14.object({
-    name: z14.string().min(2),
-    type: z14.enum(["preventiva", "corretiva", "revisao"]),
-    description: z14.string().optional(),
-    estimatedCost: z14.string().optional(),
-    parts: z14.array(z14.object({
-      partId: z14.number().optional(),
-      partCode: z14.string().optional(),
-      partName: z14.string(),
-      quantity: z14.number().min(1),
-      unit: z14.string().optional(),
-      notes: z14.string().optional()
+  createTemplate: protectedProcedure.input(z15.object({
+    name: z15.string().min(2),
+    type: z15.enum(["preventiva", "corretiva", "revisao"]),
+    description: z15.string().optional(),
+    estimatedCost: z15.string().optional(),
+    parts: z15.array(z15.object({
+      partId: z15.number().optional(),
+      partCode: z15.string().optional(),
+      partName: z15.string(),
+      quantity: z15.number().min(1),
+      unit: z15.string().optional(),
+      notes: z15.string().optional()
     }))
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -10827,14 +10838,14 @@ var equipmentDetailRouter = router({
     }
     return { id: templateId };
   }),
-  deleteTemplate: protectedProcedure.input(z14.object({ id: z14.number() })).mutation(async ({ input }) => {
+  deleteTemplate: protectedProcedure.input(z15.object({ id: z15.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.delete(maintenanceTemplates).where(eq15(maintenanceTemplates.id, input.id));
     return { success: true };
   }),
   // ─── Busca de Peça por Código ────────────────────────────────────────────────
-  searchPartByCode: protectedProcedure.input(z14.object({ code: z14.string() })).query(async ({ input }) => {
+  searchPartByCode: protectedProcedure.input(z15.object({ code: z15.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const results = await db.select().from(parts).where(and7(eq15(parts.active, 1)));
@@ -10844,7 +10855,7 @@ var equipmentDetailRouter = router({
     ).slice(0, 10);
   }),
   // ─── Manutenções ────────────────────────────────────────────────────────────
-  listMaintenance: protectedProcedure.input(z14.object({ equipmentId: z14.number() })).query(async ({ input }) => {
+  listMaintenance: protectedProcedure.input(z15.object({ equipmentId: z15.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const maintenances = await db.select().from(equipmentMaintenance).where(eq15(equipmentMaintenance.equipmentId, input.equipmentId)).orderBy(desc10(equipmentMaintenance.performedAt));
@@ -10854,30 +10865,30 @@ var equipmentDetailRouter = router({
     }));
     return result;
   }),
-  addMaintenance: protectedProcedure.input(z14.object({
-    equipmentId: z14.number(),
-    type: z14.enum(["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]),
-    description: z14.string().min(3),
-    performedBy: z14.string().optional(),
-    cost: z14.string().optional(),
-    nextMaintenanceDate: z14.string().optional(),
-    performedAt: z14.string(),
-    photoBase64: z14.string().optional(),
-    templateId: z14.number().optional(),
+  addMaintenance: protectedProcedure.input(z15.object({
+    equipmentId: z15.number(),
+    type: z15.enum(["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]),
+    description: z15.string().min(3),
+    performedBy: z15.string().optional(),
+    cost: z15.string().optional(),
+    nextMaintenanceDate: z15.string().optional(),
+    performedAt: z15.string(),
+    photoBase64: z15.string().optional(),
+    templateId: z15.number().optional(),
     // Peças utilizadas
-    parts: z14.array(z14.object({
-      partId: z14.number().optional(),
-      partCode: z14.string().optional(),
-      partName: z14.string(),
-      partPhotoUrl: z14.string().optional(),
-      quantity: z14.number().min(1),
-      unit: z14.string().optional(),
-      unitCost: z14.string().optional(),
-      fromStock: z14.number().optional()
+    parts: z15.array(z15.object({
+      partId: z15.number().optional(),
+      partCode: z15.string().optional(),
+      partName: z15.string(),
+      partPhotoUrl: z15.string().optional(),
+      quantity: z15.number().min(1),
+      unit: z15.string().optional(),
+      unitCost: z15.string().optional(),
+      fromStock: z15.number().optional()
       // 1 = baixou estoque, 0 = avulso
     })).optional(),
     // Serviços externos
-    laborCost: z14.string().optional()
+    laborCost: z15.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -10943,29 +10954,29 @@ var equipmentDetailRouter = router({
     }
     return { id: maintenanceId };
   }),
-  removeMaintenance: protectedProcedure.input(z14.object({ id: z14.number() })).mutation(async ({ input }) => {
+  removeMaintenance: protectedProcedure.input(z15.object({ id: z15.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.delete(equipmentMaintenance).where(eq15(equipmentMaintenance.id, input.id));
     return { success: true };
   }),
-  updateMaintenance: protectedProcedure.input(z14.object({
-    id: z14.number(),
-    type: z14.enum(["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]),
-    description: z14.string().min(3),
-    performedBy: z14.string().optional(),
-    nextMaintenanceDate: z14.string().optional(),
-    performedAt: z14.string(),
-    laborCost: z14.string().optional(),
-    parts: z14.array(z14.object({
-      partId: z14.number().optional(),
-      partCode: z14.string().optional(),
-      partName: z14.string(),
-      partPhotoUrl: z14.string().optional(),
-      quantity: z14.number().min(1),
-      unit: z14.string().optional(),
-      unitCost: z14.string().optional(),
-      fromStock: z14.number().optional()
+  updateMaintenance: protectedProcedure.input(z15.object({
+    id: z15.number(),
+    type: z15.enum(["manutencao", "limpeza", "afiacao", "revisao", "troca_oleo", "outros"]),
+    description: z15.string().min(3),
+    performedBy: z15.string().optional(),
+    nextMaintenanceDate: z15.string().optional(),
+    performedAt: z15.string(),
+    laborCost: z15.string().optional(),
+    parts: z15.array(z15.object({
+      partId: z15.number().optional(),
+      partCode: z15.string().optional(),
+      partName: z15.string(),
+      partPhotoUrl: z15.string().optional(),
+      quantity: z15.number().min(1),
+      unit: z15.string().optional(),
+      unitCost: z15.string().optional(),
+      fromStock: z15.number().optional()
     })).optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -11006,11 +11017,11 @@ var equipmentDetailRouter = router({
     return { success: true };
   }),
   // ─── Estoque de Peças ────────────────────────────────────────────────────────
-  addStockEntry: protectedProcedure.input(z14.object({
-    partId: z14.number(),
-    quantity: z14.number().min(1),
-    unitCost: z14.string().optional(),
-    notes: z14.string().optional()
+  addStockEntry: protectedProcedure.input(z15.object({
+    partId: z15.number(),
+    quantity: z15.number().min(1),
+    unitCost: z15.string().optional(),
+    notes: z15.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -11029,7 +11040,7 @@ var equipmentDetailRouter = router({
     });
     return { success: true, newStock: newQty };
   }),
-  listStockMovements: protectedProcedure.input(z14.object({ partId: z14.number() })).query(async ({ input }) => {
+  listStockMovements: protectedProcedure.input(z15.object({ partId: z15.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     return db.select().from(partsStockMovements).where(eq15(partsStockMovements.partId, input.partId)).orderBy(desc10(partsStockMovements.createdAt)).limit(50);
@@ -11040,12 +11051,12 @@ var equipmentDetailRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z15 } from "zod";
+import { z as z16 } from "zod";
 import { TRPCError as TRPCError12 } from "@trpc/server";
 import { eq as eq16, desc as desc11 } from "drizzle-orm";
 var purchaseOrdersRouter = router({
   // Listar todos os pedidos
-  listOrders: protectedProcedure.input(z15.object({ status: z15.string().optional() }).optional()).query(async ({ input }) => {
+  listOrders: protectedProcedure.input(z16.object({ status: z16.string().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const orders = await db.select().from(purchaseOrders).orderBy(desc11(purchaseOrders.createdAt));
@@ -11053,7 +11064,7 @@ var purchaseOrdersRouter = router({
     return orders;
   }),
   // Buscar pedido com itens
-  getOrder: protectedProcedure.input(z15.object({ id: z15.number() })).query(async ({ input }) => {
+  getOrder: protectedProcedure.input(z16.object({ id: z16.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [order] = await db.select().from(purchaseOrders).where(eq16(purchaseOrders.id, input.id));
@@ -11062,19 +11073,19 @@ var purchaseOrdersRouter = router({
     return { ...order, items };
   }),
   // Criar pedido com itens
-  createOrder: protectedProcedure.input(z15.object({
-    title: z15.string().min(2),
-    notes: z15.string().optional(),
-    items: z15.array(z15.object({
-      partId: z15.number().optional(),
-      partName: z15.string(),
-      partCode: z15.string().optional(),
-      partCategory: z15.string().optional(),
-      supplier: z15.string().optional(),
-      unit: z15.string().optional(),
-      quantity: z15.number().min(1),
-      unitCost: z15.string().optional(),
-      notes: z15.string().optional()
+  createOrder: protectedProcedure.input(z16.object({
+    title: z16.string().min(2),
+    notes: z16.string().optional(),
+    items: z16.array(z16.object({
+      partId: z16.number().optional(),
+      partName: z16.string(),
+      partCode: z16.string().optional(),
+      partCategory: z16.string().optional(),
+      supplier: z16.string().optional(),
+      unit: z16.string().optional(),
+      quantity: z16.number().min(1),
+      unitCost: z16.string().optional(),
+      notes: z16.string().optional()
     })).min(1)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -11118,9 +11129,9 @@ var purchaseOrdersRouter = router({
     return { success: true, orderId };
   }),
   // Atualizar status do pedido
-  updateOrderStatus: protectedProcedure.input(z15.object({
-    id: z15.number(),
-    status: z15.enum(["rascunho", "enviado", "aprovado", "rejeitado", "comprado"])
+  updateOrderStatus: protectedProcedure.input(z16.object({
+    id: z16.number(),
+    status: z16.enum(["rascunho", "enviado", "aprovado", "rejeitado", "comprado"])
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -11146,7 +11157,7 @@ var purchaseOrdersRouter = router({
     return { success: true };
   }),
   // Deletar pedido
-  deleteOrder: protectedProcedure.input(z15.object({ id: z15.number() })).mutation(async ({ ctx, input }) => {
+  deleteOrder: protectedProcedure.input(z16.object({ id: z16.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -11160,17 +11171,17 @@ init_trpc();
 init_db();
 init_schema();
 init_notification();
-import { z as z16 } from "zod";
+import { z as z17 } from "zod";
 import { TRPCError as TRPCError13 } from "@trpc/server";
 import { eq as eq17, desc as desc12, and as and8, inArray as inArray5, lt, sql as sql5 } from "drizzle-orm";
 var attendanceRouter = router({
   // Listar presenças com filtros
-  list: protectedProcedure.input(z16.object({
-    dateFrom: z16.string().optional(),
+  list: protectedProcedure.input(z17.object({
+    dateFrom: z17.string().optional(),
     // YYYY-MM-DD
-    dateTo: z16.string().optional(),
-    collaboratorId: z16.number().optional(),
-    paymentStatus: z16.enum(["pendente", "pago"]).optional()
+    dateTo: z17.string().optional(),
+    collaboratorId: z17.number().optional(),
+    paymentStatus: z17.enum(["pendente", "pago"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -11294,20 +11305,20 @@ var attendanceRouter = router({
     }
   }),
   // Criar presença
-  create: protectedProcedure.input(z16.object({
-    collaboratorId: z16.number(),
-    date: z16.string(),
+  create: protectedProcedure.input(z17.object({
+    collaboratorId: z17.number(),
+    date: z17.string(),
     // YYYY-MM-DD
-    employmentType: z16.enum(["clt", "terceirizado", "diarista", "pj"]),
-    dailyValue: z16.string(),
-    pixKey: z16.string().optional(),
-    activity: z16.string().optional(),
-    observations: z16.string().optional(),
+    employmentType: z17.enum(["clt", "terceirizado", "diarista", "pj"]),
+    dailyValue: z17.string(),
+    pixKey: z17.string().optional(),
+    activity: z17.string().optional(),
+    observations: z17.string().optional(),
     // GPS
-    latitude: z16.string().optional(),
-    longitude: z16.string().optional(),
-    locationName: z16.string().optional(),
-    workLocationId: z16.number().optional()
+    latitude: z17.string().optional(),
+    longitude: z17.string().optional(),
+    locationName: z17.string().optional(),
+    workLocationId: z17.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -11384,9 +11395,9 @@ Registrado por: ${ctx.user.name}`
     return { success: true };
   }),
   // Atualizar status de pagamento
-  markPaid: protectedProcedure.input(z16.object({
-    id: z16.number(),
-    paid: z16.boolean()
+  markPaid: protectedProcedure.input(z17.object({
+    id: z17.number(),
+    paid: z17.boolean()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -11397,7 +11408,7 @@ Registrado por: ${ctx.user.name}`
     return { success: true };
   }),
   // Deletar presença
-  delete: protectedProcedure.input(z16.object({ id: z16.number() })).mutation(async ({ ctx, input }) => {
+  delete: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -11451,10 +11462,10 @@ ${lines}`
     return { success: true, count: pendingRecords.length, message: `${pendingRecords.length} pagamento(s) pendente(s) notificados.` };
   }),
   // Atualizar local de uma presença já registrada
-  updateLocation: protectedProcedure.input(z16.object({
-    id: z16.number(),
-    workLocationId: z16.number().nullable().optional(),
-    locationName: z16.string().nullable().optional()
+  updateLocation: protectedProcedure.input(z17.object({
+    id: z17.number(),
+    workLocationId: z17.number().nullable().optional(),
+    locationName: z17.string().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -11480,7 +11491,7 @@ ${lines}`
 init_trpc();
 init_db();
 init_schema();
-import { z as z17 } from "zod";
+import { z as z18 } from "zod";
 import { TRPCError as TRPCError14 } from "@trpc/server";
 import { eq as eq18, and as and9, desc as desc13, gte as gte2, lte as lte2, sql as sql6 } from "drizzle-orm";
 function getTraccarUrl() {
@@ -11580,17 +11591,17 @@ var traccarRouter = router({
     return traccarFetch("/devices");
   }),
   /** Posicao mais recente de todos os dispositivos */
-  positions: protectedProcedure.input(z17.object({ deviceId: z17.number().optional() }).optional()).query(async ({ input }) => {
+  positions: protectedProcedure.input(z18.object({ deviceId: z18.number().optional() }).optional()).query(async ({ input }) => {
     const params = input?.deviceId ? `?deviceId=${input.deviceId}` : "";
     return traccarFetch(`/positions${params}`);
   }),
   /** Historico de posicoes de um dispositivo em um periodo */
-  history: protectedProcedure.input(z17.object({ deviceId: z17.number(), from: z17.string(), to: z17.string() })).query(async ({ input }) => {
+  history: protectedProcedure.input(z18.object({ deviceId: z18.number(), from: z18.string(), to: z18.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     return traccarFetch(`/reports/route?${params}`);
   }),
   /** Resumo de viagens de um dispositivo - enriquecido com endereços e distância real */
-  trips: protectedProcedure.input(z17.object({ deviceId: z17.number(), from: z17.string(), to: z17.string() })).query(async ({ input }) => {
+  trips: protectedProcedure.input(z18.object({ deviceId: z18.number(), from: z18.string(), to: z18.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     const trips = await traccarFetch(`/reports/trips?${params}`);
     const enriched = await Promise.all(
@@ -11637,12 +11648,12 @@ var traccarRouter = router({
     return enriched;
   }),
   /** Resumo de paradas de um dispositivo */
-  stops: protectedProcedure.input(z17.object({ deviceId: z17.number(), from: z17.string(), to: z17.string() })).query(async ({ input }) => {
+  stops: protectedProcedure.input(z18.object({ deviceId: z18.number(), from: z18.string(), to: z18.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     return traccarFetch(`/reports/stops?${params}`);
   }),
   /** Resumo de km e horas por dispositivo no periodo */
-  summary: protectedProcedure.input(z17.object({ deviceId: z17.number().optional(), from: z17.string(), to: z17.string() })).query(async ({ input }) => {
+  summary: protectedProcedure.input(z18.object({ deviceId: z18.number().optional(), from: z18.string(), to: z18.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ from: input.from, to: input.to });
     if (input.deviceId) params.set("deviceId", String(input.deviceId));
     return traccarFetch(`/reports/summary?${params}`);
@@ -11652,7 +11663,7 @@ var traccarRouter = router({
     return traccarFetch("/geofences");
   }),
   /** Eventos recentes (alertas de velocidade, ignicao, geofence) */
-  events: protectedProcedure.input(z17.object({ deviceId: z17.number(), from: z17.string(), to: z17.string(), type: z17.string().optional() })).query(async ({ input }) => {
+  events: protectedProcedure.input(z18.object({ deviceId: z18.number(), from: z18.string(), to: z18.string(), type: z18.string().optional() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     if (input.type) params.set("type", input.type);
     return traccarFetch(`/reports/events?${params}`);
@@ -11674,11 +11685,11 @@ var traccarRouter = router({
     }).from(gpsDeviceLinks).innerJoin(equipment, eq18(gpsDeviceLinks.equipmentId, equipment.id)).where(eq18(gpsDeviceLinks.active, 1)).orderBy(equipment.name);
   }),
   /** Vincula um dispositivo GPS a um equipamento */
-  linkDevice: protectedProcedure.input(z17.object({
-    equipmentId: z17.number(),
-    traccarDeviceId: z17.number(),
-    traccarDeviceName: z17.string().optional(),
-    traccarUniqueId: z17.string().optional()
+  linkDevice: protectedProcedure.input(z18.object({
+    equipmentId: z18.number(),
+    traccarDeviceId: z18.number(),
+    traccarDeviceName: z18.string().optional(),
+    traccarUniqueId: z18.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
@@ -11694,7 +11705,7 @@ var traccarRouter = router({
     return { id: result.insertId };
   }),
   /** Remove vinculo GPS de um equipamento */
-  unlinkDevice: protectedProcedure.input(z17.object({ linkId: z17.number() })).mutation(async ({ input }) => {
+  unlinkDevice: protectedProcedure.input(z18.object({ linkId: z18.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq18(gpsDeviceLinks.id, input.linkId));
@@ -11705,7 +11716,7 @@ var traccarRouter = router({
    * Sincroniza as horas de ignicao do dia anterior para todos os equipamentos vinculados.
    * Deve ser chamado diariamente (cron) ou manualmente pelo admin.
    */
-  syncDailyHours: protectedProcedure.input(z17.object({ date: z17.string().optional() })).mutation(async ({ input }) => {
+  syncDailyHours: protectedProcedure.input(z18.object({ date: z18.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
@@ -11767,7 +11778,7 @@ var traccarRouter = router({
     return { synced: results.length, results };
   }),
   /** Horas acumuladas por equipamento (GPS + manual) */
-  equipmentHoursSummary: protectedProcedure.input(z17.object({ equipmentId: z17.number().optional() })).query(async ({ input }) => {
+  equipmentHoursSummary: protectedProcedure.input(z18.object({ equipmentId: z18.number().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const baseQuery = db.select({
@@ -11783,14 +11794,14 @@ var traccarRouter = router({
     return baseQuery;
   }),
   /** Log de horas de um equipamento especifico */
-  hoursLog: protectedProcedure.input(z17.object({ equipmentId: z17.number(), limit: z17.number().default(30) })).query(async ({ input }) => {
+  hoursLog: protectedProcedure.input(z18.object({ equipmentId: z18.number(), limit: z18.number().default(30) })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     return db.select().from(gpsHoursLog).where(eq18(gpsHoursLog.equipmentId, input.equipmentId)).orderBy(desc13(gpsHoursLog.date)).limit(input.limit);
   }),
   // ─── PLANOS DE MANUTENCAO PREVENTIVA ────────────────────────────────────────
   /** Lista planos de manutencao de um equipamento */
-  listMaintenancePlans: protectedProcedure.input(z17.object({ equipmentId: z17.number() })).query(async ({ input }) => {
+  listMaintenancePlans: protectedProcedure.input(z18.object({ equipmentId: z18.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     return db.select().from(preventiveMaintenancePlans).where(and9(
@@ -11799,15 +11810,15 @@ var traccarRouter = router({
     )).orderBy(preventiveMaintenancePlans.name);
   }),
   /** Cria ou atualiza um plano de manutencao preventiva */
-  upsertMaintenancePlan: protectedProcedure.input(z17.object({
-    id: z17.number().optional(),
-    equipmentId: z17.number(),
-    name: z17.string(),
-    type: z17.enum(["troca_oleo", "engraxamento", "filtro_ar", "filtro_combustivel", "correia", "revisao_geral", "abastecimento", "outros"]),
-    intervalHours: z17.number().min(1),
-    lastDoneHours: z17.string().optional(),
-    alertThresholdHours: z17.number().default(10),
-    notes: z17.string().optional()
+  upsertMaintenancePlan: protectedProcedure.input(z18.object({
+    id: z18.number().optional(),
+    equipmentId: z18.number(),
+    name: z18.string(),
+    type: z18.enum(["troca_oleo", "engraxamento", "filtro_ar", "filtro_combustivel", "correia", "revisao_geral", "abastecimento", "outros"]),
+    intervalHours: z18.number().min(1),
+    lastDoneHours: z18.string().optional(),
+    alertThresholdHours: z18.number().default(10),
+    notes: z18.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
@@ -11836,7 +11847,7 @@ var traccarRouter = router({
     return { id: result.insertId };
   }),
   /** Remove um plano de manutencao */
-  deleteMaintenancePlan: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ input }) => {
+  deleteMaintenancePlan: protectedProcedure.input(z18.object({ id: z18.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     await db.update(preventiveMaintenancePlans).set({ active: 0 }).where(eq18(preventiveMaintenancePlans.id, input.id));
@@ -11844,7 +11855,7 @@ var traccarRouter = router({
   }),
   // ─── ALERTAS DE MANUTENCAO PREVENTIVA ───────────────────────────────────────
   /** Lista alertas pendentes (todos ou por equipamento) */
-  listAlerts: protectedProcedure.input(z17.object({ equipmentId: z17.number().optional(), status: z17.string().optional() })).query(async ({ input }) => {
+  listAlerts: protectedProcedure.input(z18.object({ equipmentId: z18.number().optional(), status: z18.string().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const conditions = [];
@@ -11866,11 +11877,11 @@ var traccarRouter = router({
     }).from(preventiveMaintenanceAlerts).innerJoin(equipment, eq18(preventiveMaintenanceAlerts.equipmentId, equipment.id)).innerJoin(preventiveMaintenancePlans, eq18(preventiveMaintenanceAlerts.planId, preventiveMaintenancePlans.id)).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc13(preventiveMaintenanceAlerts.generatedAt));
   }),
   /** Resolve (conclui) um alerta e atualiza o horimetro do plano */
-  resolveAlert: protectedProcedure.input(z17.object({
-    alertId: z17.number(),
-    status: z17.enum(["concluido", "ignorado"]),
-    notes: z17.string().optional(),
-    resolvedHourMeter: z17.string().optional()
+  resolveAlert: protectedProcedure.input(z18.object({
+    alertId: z18.number(),
+    status: z18.enum(["concluido", "ignorado"]),
+    notes: z18.string().optional(),
+    resolvedHourMeter: z18.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
@@ -11896,7 +11907,7 @@ var traccarRouter = router({
    * Sincroniza km percorrido do dia para veiculos/caminhoes com GPS.
    * Atualiza accumulated_km no equipment e registra em gps_hours_log.
    */
-  syncDailyOdometer: protectedProcedure.input(z17.object({ date: z17.string().optional() })).mutation(async ({ input }) => {
+  syncDailyOdometer: protectedProcedure.input(z18.object({ date: z18.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
@@ -11932,7 +11943,7 @@ var traccarRouter = router({
    * Detecta viagens longas (>50km) do dia e cria auto_freight_trips automaticamente.
    * Vincula combustivel e manutencoes do mesmo dia ao frete.
    */
-  detectFreightTrips: protectedProcedure.input(z17.object({ date: z17.string().optional() })).mutation(async ({ input }) => {
+  detectFreightTrips: protectedProcedure.input(z18.object({ date: z18.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
@@ -12020,11 +12031,11 @@ var traccarRouter = router({
     return { detected: detected.length, equipmentIds: detected };
   }),
   /** Lista fretes automaticos detectados pelo GPS */
-  listAutoFreights: protectedProcedure.input(z17.object({
-    equipmentId: z17.number().optional(),
-    dateFrom: z17.string().optional(),
-    dateTo: z17.string().optional(),
-    status: z17.enum(["detectado", "confirmado", "ignorado"]).optional()
+  listAutoFreights: protectedProcedure.input(z18.object({
+    equipmentId: z18.number().optional(),
+    dateFrom: z18.string().optional(),
+    dateTo: z18.string().optional(),
+    status: z18.enum(["detectado", "confirmado", "ignorado"]).optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -12036,10 +12047,10 @@ var traccarRouter = router({
     return db.select().from(autoFreightTrips).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc13(autoFreightTrips.tripDate));
   }),
   /** Confirma ou ignora um frete automatico */
-  updateAutoFreightStatus: protectedProcedure.input(z17.object({
-    id: z17.number(),
-    status: z17.enum(["confirmado", "ignorado"]),
-    notes: z17.string().optional()
+  updateAutoFreightStatus: protectedProcedure.input(z18.object({
+    id: z18.number(),
+    status: z18.enum(["confirmado", "ignorado"]),
+    notes: z18.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
@@ -12059,7 +12070,7 @@ var traccarRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z18 } from "zod";
+import { z as z19 } from "zod";
 import { TRPCError as TRPCError15 } from "@trpc/server";
 import { eq as eq19, sql as sql7 } from "drizzle-orm";
 var SYSTEM_MODULES = [
@@ -12299,12 +12310,12 @@ var permissionsRouter = router({
     };
   }),
   // Definir permissões de um usuário (apenas admin)
-  setPermissions: protectedProcedure.input(z18.object({
-    userId: z18.number(),
-    modules: z18.array(z18.string()).nullable(),
-    profile: z18.string().default("custom"),
-    allowedClientIds: z18.array(z18.number()).nullable().optional(),
-    allowedWorkLocationIds: z18.array(z18.number()).nullable().optional()
+  setPermissions: protectedProcedure.input(z19.object({
+    userId: z19.number(),
+    modules: z19.array(z19.string()).nullable(),
+    profile: z19.string().default("custom"),
+    allowedClientIds: z19.array(z19.number()).nullable().optional(),
+    allowedWorkLocationIds: z19.array(z19.number()).nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
     const db = await getDb();
@@ -12350,9 +12361,9 @@ var permissionsRouter = router({
     return { success: true };
   }),
   // Aplicar perfil pré-definido a um usuário
-  applyProfile: protectedProcedure.input(z18.object({
-    userId: z18.number(),
-    profileKey: z18.string()
+  applyProfile: protectedProcedure.input(z19.object({
+    userId: z19.number(),
+    profileKey: z19.string()
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
     const profile = PROFILES[input.profileKey];
@@ -12387,9 +12398,9 @@ var permissionsRouter = router({
     return { success: true };
   }),
   // Atualizar client_id de um colaborador
-  setCollaboratorClient: protectedProcedure.input(z18.object({
-    collaboratorId: z18.number(),
-    clientId: z18.number().nullable()
+  setCollaboratorClient: protectedProcedure.input(z19.object({
+    collaboratorId: z19.number(),
+    clientId: z19.number().nullable()
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
     const db = await getDb();
@@ -12403,7 +12414,7 @@ var permissionsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z19 } from "zod";
+import { z as z20 } from "zod";
 import { eq as eq20, desc as desc14, and as and10, sql as sql8 } from "drizzle-orm";
 var chainsawsRouter = router({
   list: protectedProcedure.query(async () => {
@@ -12411,14 +12422,14 @@ var chainsawsRouter = router({
     if (!db) return [];
     return db.select().from(chainsaws).orderBy(chainsaws.name);
   }),
-  create: protectedProcedure.input(z19.object({
-    name: z19.string().min(1),
-    brand: z19.string().optional(),
-    model: z19.string().optional(),
-    serialNumber: z19.string().optional(),
-    chainType: z19.string().default("30"),
-    imageUrl: z19.string().optional(),
-    notes: z19.string().optional()
+  create: protectedProcedure.input(z20.object({
+    name: z20.string().min(1),
+    brand: z20.string().optional(),
+    model: z20.string().optional(),
+    serialNumber: z20.string().optional(),
+    chainType: z20.string().default("30"),
+    imageUrl: z20.string().optional(),
+    notes: z20.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12440,16 +12451,16 @@ var chainsawsRouter = router({
     });
     return { success: true };
   }),
-  update: protectedProcedure.input(z19.object({
-    id: z19.number(),
-    name: z19.string().min(1).optional(),
-    brand: z19.string().optional(),
-    model: z19.string().optional(),
-    serialNumber: z19.string().optional(),
-    chainType: z19.string().optional(),
-    status: z19.enum(["ativa", "oficina", "inativa"]).optional(),
-    imageUrl: z19.string().optional(),
-    notes: z19.string().optional()
+  update: protectedProcedure.input(z20.object({
+    id: z20.number(),
+    name: z20.string().min(1).optional(),
+    brand: z20.string().optional(),
+    model: z20.string().optional(),
+    serialNumber: z20.string().optional(),
+    chainType: z20.string().optional(),
+    status: z20.enum(["ativa", "oficina", "inativa"]).optional(),
+    imageUrl: z20.string().optional(),
+    notes: z20.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12463,7 +12474,7 @@ var chainsawsRouter = router({
     await db.update(chainsaws).set({ ...data, ...imageUrl !== void 0 ? { imageUrl } : {} }).where(eq20(chainsaws.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z19.object({ id: z19.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z20.object({ id: z20.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await db.delete(chainsaws).where(eq20(chainsaws.id, input.id));
@@ -12476,12 +12487,12 @@ var fuelRouter = router({
     if (!db) return [];
     return db.select().from(fuelContainers).where(eq20(fuelContainers.isActive, 1)).orderBy(fuelContainers.name);
   }),
-  createContainer: protectedProcedure.input(z19.object({
-    name: z19.string().min(1),
-    color: z19.string().default("vermelho"),
-    type: z19.enum(["puro", "mistura"]),
-    capacityLiters: z19.string().default("20"),
-    notes: z19.string().optional()
+  createContainer: protectedProcedure.input(z20.object({
+    name: z20.string().min(1),
+    color: z20.string().default("vermelho"),
+    type: z20.enum(["puro", "mistura"]),
+    capacityLiters: z20.string().default("20"),
+    notes: z20.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12496,13 +12507,13 @@ var fuelRouter = router({
     return { success: true };
   }),
   // Abastecer galão (compra de combustível)
-  supplyContainer: protectedProcedure.input(z19.object({
-    containerId: z19.number(),
-    volumeLiters: z19.string(),
-    costPerLiter: z19.string().optional(),
-    totalCost: z19.string().optional(),
-    notes: z19.string().optional(),
-    workLocationId: z19.number().optional()
+  supplyContainer: protectedProcedure.input(z20.object({
+    containerId: z20.number(),
+    volumeLiters: z20.string(),
+    costPerLiter: z20.string().optional(),
+    totalCost: z20.string().optional(),
+    notes: z20.string().optional(),
+    workLocationId: z20.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12547,12 +12558,12 @@ var fuelRouter = router({
     return { success: true, oil2tMl };
   }),
   // Registrar uso de combustível no campo (baixa no galão)
-  useFuel: protectedProcedure.input(z19.object({
-    containerId: z19.number(),
-    volumeLiters: z19.string(),
-    chainsawId: z19.number().optional(),
-    notes: z19.string().optional(),
-    workLocationId: z19.number().optional()
+  useFuel: protectedProcedure.input(z20.object({
+    containerId: z20.number(),
+    volumeLiters: z20.string(),
+    chainsawId: z20.number().optional(),
+    notes: z20.string().optional(),
+    workLocationId: z20.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12575,12 +12586,12 @@ var fuelRouter = router({
     return { success: true };
   }),
   // Transferir combustível entre galões (vermelho → verde)
-  transferFuel: protectedProcedure.input(z19.object({
-    sourceContainerId: z19.number(),
-    targetContainerId: z19.number(),
-    volumeLiters: z19.string(),
-    notes: z19.string().optional(),
-    workLocationId: z19.number().optional()
+  transferFuel: protectedProcedure.input(z20.object({
+    sourceContainerId: z20.number(),
+    targetContainerId: z20.number(),
+    volumeLiters: z20.string(),
+    notes: z20.string().optional(),
+    workLocationId: z20.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12604,7 +12615,7 @@ var fuelRouter = router({
     });
     return { success: true };
   }),
-  listEvents: protectedProcedure.input(z19.object({ containerId: z19.number().optional() })).query(async ({ input }) => {
+  listEvents: protectedProcedure.input(z20.object({ containerId: z20.number().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     if (input.containerId) {
@@ -12627,12 +12638,12 @@ var chainsChainRouter = router({
     }
     return rows;
   }),
-  upsertStock: protectedProcedure.input(z19.object({
-    chainType: z19.string(),
-    sharpenedInBox: z19.number().optional(),
-    inField: z19.number().optional(),
-    inWorkshop: z19.number().optional(),
-    totalStock: z19.number().optional()
+  upsertStock: protectedProcedure.input(z20.object({
+    chainType: z20.string(),
+    sharpenedInBox: z20.number().optional(),
+    inField: z20.number().optional(),
+    inWorkshop: z20.number().optional(),
+    totalStock: z20.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12656,12 +12667,12 @@ var chainsChainRouter = router({
     }
     return { success: true };
   }),
-  registerEvent: protectedProcedure.input(z19.object({
-    chainType: z19.string(),
-    eventType: z19.enum(["envio_campo", "retorno_oficina", "afiacao_concluida", "baixa_estoque", "entrada_estoque"]),
-    quantity: z19.number().min(1),
-    chainsawId: z19.number().optional(),
-    notes: z19.string().optional()
+  registerEvent: protectedProcedure.input(z20.object({
+    chainType: z20.string(),
+    eventType: z20.enum(["envio_campo", "retorno_oficina", "afiacao_concluida", "baixa_estoque", "entrada_estoque"]),
+    quantity: z20.number().min(1),
+    chainsawId: z20.number().optional(),
+    notes: z20.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12713,7 +12724,7 @@ var chainsChainRouter = router({
     });
     return { success: true };
   }),
-  listEvents: protectedProcedure.input(z19.object({ chainType: z19.string().optional() })).query(async ({ input }) => {
+  listEvents: protectedProcedure.input(z20.object({ chainType: z20.string().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     if (input.chainType) {
@@ -12728,16 +12739,16 @@ var chainsawPartsRouter = router({
     if (!db) return [];
     return db.select().from(chainsawParts).where(eq20(chainsawParts.isActive, 1)).orderBy(chainsawParts.category, chainsawParts.name);
   }),
-  create: protectedProcedure.input(z19.object({
-    code: z19.string().optional(),
-    name: z19.string().min(1),
-    category: z19.string().optional(),
-    unit: z19.string().default("un"),
-    currentStock: z19.string().default("0"),
-    minStock: z19.string().default("0"),
-    unitCost: z19.string().optional(),
-    imageUrl: z19.string().optional(),
-    notes: z19.string().optional()
+  create: protectedProcedure.input(z20.object({
+    code: z20.string().optional(),
+    name: z20.string().min(1),
+    category: z20.string().optional(),
+    unit: z20.string().default("un"),
+    currentStock: z20.string().default("0"),
+    minStock: z20.string().default("0"),
+    unitCost: z20.string().optional(),
+    imageUrl: z20.string().optional(),
+    notes: z20.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12750,17 +12761,17 @@ var chainsawPartsRouter = router({
     await db.insert(chainsawParts).values({ ...input, imageUrl, createdBy: ctx.user.id });
     return { success: true };
   }),
-  update: protectedProcedure.input(z19.object({
-    id: z19.number(),
-    code: z19.string().optional(),
-    name: z19.string().optional(),
-    category: z19.string().optional(),
-    unit: z19.string().optional(),
-    currentStock: z19.string().optional(),
-    minStock: z19.string().optional(),
-    unitCost: z19.string().optional(),
-    imageUrl: z19.string().optional(),
-    notes: z19.string().optional()
+  update: protectedProcedure.input(z20.object({
+    id: z20.number(),
+    code: z20.string().optional(),
+    name: z20.string().optional(),
+    category: z20.string().optional(),
+    unit: z20.string().optional(),
+    currentStock: z20.string().optional(),
+    minStock: z20.string().optional(),
+    unitCost: z20.string().optional(),
+    imageUrl: z20.string().optional(),
+    notes: z20.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12775,17 +12786,17 @@ var chainsawPartsRouter = router({
     await db.update(chainsawParts).set(updateData).where(eq20(chainsawParts.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z19.object({ id: z19.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z20.object({ id: z20.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await db.update(chainsawParts).set({ isActive: 0 }).where(eq20(chainsawParts.id, input.id));
     return { success: true };
   }),
-  stockEntry: protectedProcedure.input(z19.object({
-    partId: z19.number(),
-    quantity: z19.string(),
-    unitCost: z19.string().optional(),
-    notes: z19.string().optional()
+  stockEntry: protectedProcedure.input(z20.object({
+    partId: z20.number(),
+    quantity: z20.string(),
+    unitCost: z20.string().optional(),
+    notes: z20.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -12805,7 +12816,7 @@ var chainsawPartsRouter = router({
     });
     return { success: true };
   }),
-  listMovements: protectedProcedure.input(z19.object({ partId: z19.number().optional() })).query(async ({ input }) => {
+  listMovements: protectedProcedure.input(z20.object({ partId: z20.number().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     if (input.partId) {
@@ -12815,8 +12826,8 @@ var chainsawPartsRouter = router({
   })
 });
 var chainsawOSRouter = router({
-  list: protectedProcedure.input(z19.object({
-    status: z19.enum(["aberta", "em_andamento", "concluida", "cancelada", "todas"]).default("todas")
+  list: protectedProcedure.input(z20.object({
+    status: z20.enum(["aberta", "em_andamento", "concluida", "cancelada", "todas"]).default("todas")
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -12838,7 +12849,7 @@ var chainsawOSRouter = router({
     ).orderBy(desc14(chainsawServiceOrders.openedAt));
     return rows;
   }),
-  getById: protectedProcedure.input(z19.object({ id: z19.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z20.object({ id: z20.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const rows = await db.select().from(chainsawServiceOrders).where(eq20(chainsawServiceOrders.id, input.id));
@@ -12846,12 +12857,12 @@ var chainsawOSRouter = router({
     const parts3 = await db.select().from(chainsawServiceParts).where(eq20(chainsawServiceParts.serviceOrderId, input.id));
     return { ...rows[0], parts: parts3 };
   }),
-  open: protectedProcedure.input(z19.object({
-    chainsawId: z19.number(),
-    problemType: z19.enum(["motor_falhando", "nao_liga", "superaquecimento", "vazamento", "corrente_problema", "sabre_problema", "manutencao_preventiva", "outro"]),
-    problemDescription: z19.string().optional(),
-    priority: z19.enum(["baixa", "media", "alta", "urgente"]).default("media"),
-    imageUrl: z19.string().optional()
+  open: protectedProcedure.input(z20.object({
+    chainsawId: z20.number(),
+    problemType: z20.enum(["motor_falhando", "nao_liga", "superaquecimento", "vazamento", "corrente_problema", "sabre_problema", "manutencao_preventiva", "outro"]),
+    problemDescription: z20.string().optional(),
+    priority: z20.enum(["baixa", "media", "alta", "urgente"]).default("media"),
+    imageUrl: z20.string().optional()
     // foto do problema tirada no campo
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -12874,22 +12885,22 @@ var chainsawOSRouter = router({
     });
     return { success: true };
   }),
-  startService: protectedProcedure.input(z19.object({ id: z19.number() })).mutation(async ({ input, ctx }) => {
+  startService: protectedProcedure.input(z20.object({ id: z20.number() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await db.update(chainsawServiceOrders).set({ status: "em_andamento", mechanicId: ctx.user.id }).where(eq20(chainsawServiceOrders.id, input.id));
     return { success: true };
   }),
-  complete: protectedProcedure.input(z19.object({
-    id: z19.number(),
-    serviceDescription: z19.string().min(1),
-    parts: z19.array(z19.object({
-      partId: z19.number().optional(),
-      partName: z19.string(),
-      quantity: z19.string(),
-      unit: z19.string().default("un"),
-      unitCost: z19.string().optional(),
-      fromStock: z19.number().default(1)
+  complete: protectedProcedure.input(z20.object({
+    id: z20.number(),
+    serviceDescription: z20.string().min(1),
+    parts: z20.array(z20.object({
+      partId: z20.number().optional(),
+      partName: z20.string(),
+      quantity: z20.string(),
+      unit: z20.string().default("un"),
+      unitCost: z20.string().optional(),
+      fromStock: z20.number().default(1)
     })).default([])
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -12934,7 +12945,7 @@ var chainsawOSRouter = router({
     await db.update(chainsaws).set({ status: "ativa" }).where(eq20(chainsaws.id, os.chainsawId));
     return { success: true };
   }),
-  cancel: protectedProcedure.input(z19.object({ id: z19.number() })).mutation(async ({ input }) => {
+  cancel: protectedProcedure.input(z20.object({ id: z20.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const osRows = await db.select().from(chainsawServiceOrders).where(eq20(chainsawServiceOrders.id, input.id));
@@ -12957,13 +12968,13 @@ var chainsawModuleRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z20 } from "zod";
+import { z as z21 } from "zod";
 import { desc as desc15, eq as eq21, and as and11, gte as gte3, lte as lte3, sql as sql9 } from "drizzle-orm";
 var extraExpensesRouter = router({
-  list: protectedProcedure.input(z20.object({
-    dateFrom: z20.string().optional(),
-    dateTo: z20.string().optional(),
-    category: z20.string().optional()
+  list: protectedProcedure.input(z21.object({
+    dateFrom: z21.string().optional(),
+    dateTo: z21.string().optional(),
+    category: z21.string().optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -13030,17 +13041,17 @@ var extraExpensesRouter = router({
     }
     return rows;
   }),
-  create: protectedProcedure.input(z20.object({
-    date: z20.string(),
-    category: z20.enum(["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]),
-    description: z20.string().min(1),
-    amount: z20.string().min(1),
-    paymentMethod: z20.enum(["dinheiro", "pix", "cartao", "debito", "transferencia"]).default("dinheiro"),
-    receiptImageUrl: z20.string().optional(),
-    notes: z20.string().optional(),
-    workLocationId: z20.number().optional(),
-    clientId: z20.number().optional(),
-    equipmentId: z20.number().optional()
+  create: protectedProcedure.input(z21.object({
+    date: z21.string(),
+    category: z21.enum(["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]),
+    description: z21.string().min(1),
+    amount: z21.string().min(1),
+    paymentMethod: z21.enum(["dinheiro", "pix", "cartao", "debito", "transferencia"]).default("dinheiro"),
+    receiptImageUrl: z21.string().optional(),
+    notes: z21.string().optional(),
+    workLocationId: z21.number().optional(),
+    clientId: z21.number().optional(),
+    equipmentId: z21.number().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -13085,9 +13096,9 @@ var extraExpensesRouter = router({
     }
     return { id: result.insertId };
   }),
-  updateLocation: protectedProcedure.input(z20.object({
-    id: z20.number(),
-    workLocationId: z20.number().nullable()
+  updateLocation: protectedProcedure.input(z21.object({
+    id: z21.number(),
+    workLocationId: z21.number().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -13096,17 +13107,17 @@ var extraExpensesRouter = router({
     }).where(eq21(extraExpenses.id, input.id));
     return { success: true };
   }),
-  update: protectedProcedure.input(z20.object({
-    id: z20.number(),
-    date: z20.string().optional(),
-    category: z20.enum(["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]).optional(),
-    description: z20.string().min(1).optional(),
-    amount: z20.string().optional(),
-    paymentMethod: z20.enum(["dinheiro", "pix", "cartao", "debito", "transferencia"]).optional(),
-    receiptImageUrl: z20.string().optional(),
-    notes: z20.string().optional(),
-    workLocationId: z20.number().optional(),
-    equipmentId: z20.number().optional()
+  update: protectedProcedure.input(z21.object({
+    id: z21.number(),
+    date: z21.string().optional(),
+    category: z21.enum(["abastecimento", "refeicao", "compra_material", "servico_terceiro", "pedagio", "outro"]).optional(),
+    description: z21.string().min(1).optional(),
+    amount: z21.string().optional(),
+    paymentMethod: z21.enum(["dinheiro", "pix", "cartao", "debito", "transferencia"]).optional(),
+    receiptImageUrl: z21.string().optional(),
+    notes: z21.string().optional(),
+    workLocationId: z21.number().optional(),
+    equipmentId: z21.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -13124,7 +13135,7 @@ var extraExpensesRouter = router({
     }).where(eq21(extraExpenses.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z20.object({ id: z20.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z21.object({ id: z21.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await db.delete(extraExpenses).where(eq21(extraExpenses.id, input.id));
@@ -13137,12 +13148,12 @@ init_trpc();
 init_db();
 init_schema();
 import { sql as sql10, gte as gte4, lte as lte4, and as and12 } from "drizzle-orm";
-import { z as z21 } from "zod";
+import { z as z22 } from "zod";
 var dashboardRouter = router({
-  stats: protectedProcedure.input(z21.object({
-    month: z21.number().min(0).max(11).optional(),
+  stats: protectedProcedure.input(z22.object({
+    month: z22.number().min(0).max(11).optional(),
     // 0-indexed
-    year: z21.number().min(2020).max(2100).optional()
+    year: z22.number().min(2020).max(2100).optional()
   }).optional()).query(async ({ input }) => {
     const now = /* @__PURE__ */ new Date();
     const targetMonth = input?.month ?? now.getMonth();
@@ -13247,7 +13258,7 @@ var dashboardRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z22 } from "zod";
+import { z as z23 } from "zod";
 import { desc as desc16, eq as eq22, and as and13, gte as gte5, lte as lte5, sql as sql11 } from "drizzle-orm";
 async function ensureFinancialTable(db) {
   try {
@@ -13281,14 +13292,14 @@ async function ensureFinancialTable(db) {
 }
 var financialRouter = router({
   // ── Listar lançamentos ──────────────────────────────────────────────────
-  list: protectedProcedure.input(z22.object({
-    type: z22.enum(["receita", "despesa", "all"]).default("all"),
-    dateFrom: z22.string().optional(),
-    dateTo: z22.string().optional(),
-    referenceMonth: z22.string().optional(),
+  list: protectedProcedure.input(z23.object({
+    type: z23.enum(["receita", "despesa", "all"]).default("all"),
+    dateFrom: z23.string().optional(),
+    dateTo: z23.string().optional(),
+    referenceMonth: z23.string().optional(),
     // "2026-04"
-    status: z22.string().optional(),
-    category: z22.string().optional()
+    status: z23.string().optional(),
+    category: z23.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -13315,8 +13326,8 @@ var financialRouter = router({
     return db.select().from(financialEntries).where(conditions.length > 0 ? and13(...conditions) : void 0).orderBy(desc16(financialEntries.date));
   }),
   // ── Resumo mensal ────────────────────────────────────────────────────────
-  monthlySummary: protectedProcedure.input(z22.object({
-    referenceMonth: z22.string()
+  monthlySummary: protectedProcedure.input(z23.object({
+    referenceMonth: z23.string()
     // "2026-04"
   })).query(async ({ input }) => {
     const db = await getDb();
@@ -13340,9 +13351,9 @@ var financialRouter = router({
     };
   }),
   // ── Resumo por categoria ─────────────────────────────────────────────────
-  categoryBreakdown: protectedProcedure.input(z22.object({
-    referenceMonth: z22.string(),
-    type: z22.enum(["receita", "despesa"])
+  categoryBreakdown: protectedProcedure.input(z23.object({
+    referenceMonth: z23.string(),
+    type: z23.enum(["receita", "despesa"])
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -13390,18 +13401,18 @@ var financialRouter = router({
     return Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month));
   }),
   // ── Criar lançamento ─────────────────────────────────────────────────────
-  create: protectedProcedure.input(z22.object({
-    type: z22.enum(["receita", "despesa"]),
-    category: z22.string().min(1),
-    description: z22.string().min(1),
-    amount: z22.string().min(1),
-    date: z22.string(),
-    paymentMethod: z22.enum(["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).default("pix"),
-    status: z22.enum(["pendente", "confirmado", "cancelado"]).default("confirmado"),
-    clientId: z22.number().optional(),
-    clientName: z22.string().optional(),
-    receiptImageUrl: z22.string().optional(),
-    notes: z22.string().optional()
+  create: protectedProcedure.input(z23.object({
+    type: z23.enum(["receita", "despesa"]),
+    category: z23.string().min(1),
+    description: z23.string().min(1),
+    amount: z23.string().min(1),
+    date: z23.string(),
+    paymentMethod: z23.enum(["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).default("pix"),
+    status: z23.enum(["pendente", "confirmado", "cancelado"]).default("confirmado"),
+    clientId: z23.number().optional(),
+    clientName: z23.string().optional(),
+    receiptImageUrl: z23.string().optional(),
+    notes: z23.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -13427,17 +13438,17 @@ var financialRouter = router({
     return { id: result.insertId };
   }),
   // ── Atualizar lançamento ─────────────────────────────────────────────────
-  update: protectedProcedure.input(z22.object({
-    id: z22.number(),
-    type: z22.enum(["receita", "despesa"]).optional(),
-    category: z22.string().optional(),
-    description: z22.string().optional(),
-    amount: z22.string().optional(),
-    date: z22.string().optional(),
-    paymentMethod: z22.enum(["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).optional(),
-    status: z22.enum(["pendente", "confirmado", "cancelado"]).optional(),
-    clientName: z22.string().optional(),
-    notes: z22.string().optional()
+  update: protectedProcedure.input(z23.object({
+    id: z23.number(),
+    type: z23.enum(["receita", "despesa"]).optional(),
+    category: z23.string().optional(),
+    description: z23.string().optional(),
+    amount: z23.string().optional(),
+    date: z23.string().optional(),
+    paymentMethod: z23.enum(["dinheiro", "pix", "cartao", "transferencia", "boleto", "cheque"]).optional(),
+    status: z23.enum(["pendente", "confirmado", "cancelado"]).optional(),
+    clientName: z23.string().optional(),
+    notes: z23.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -13452,15 +13463,15 @@ var financialRouter = router({
     return { success: true };
   }),
   // ──   // ── Excluir lançamento ───────────────────────────────────────────
-  delete: protectedProcedure.input(z22.object({ id: z22.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z23.object({ id: z23.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await db.delete(financialEntries).where(eq22(financialEntries.id, input.id));
     return { success: true };
   }),
   // ── Lançar folha de pagamento automaticamente ──────────────────────
-  launchPayroll: protectedProcedure.input(z22.object({
-    referenceMonth: z22.string()
+  launchPayroll: protectedProcedure.input(z23.object({
+    referenceMonth: z23.string()
     // "YYYY-MM"
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -13524,7 +13535,7 @@ var financialRouter = router({
     };
   }),
   // ── Verificar se folha já foi lançada ──────────────────────────────
-  checkPayrollStatus: protectedProcedure.input(z22.object({ referenceMonth: z22.string() })).query(async ({ input }) => {
+  checkPayrollStatus: protectedProcedure.input(z23.object({ referenceMonth: z23.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await ensureFinancialTable(db);
@@ -13544,16 +13555,16 @@ init_payroll();
 init_trpc();
 init_db();
 init_schema();
-import { z as z24 } from "zod";
+import { z as z25 } from "zod";
 import { and as and14, gte as gte6, lte as lte6, desc as desc17, eq as eq24 } from "drizzle-orm";
 function toNum(v) {
   if (!v) return 0;
   return parseFloat(String(v).replace(",", ".")) || 0;
 }
 var financialDashboardRouter = router({
-  consolidated: protectedProcedure.input(z24.object({
-    dateFrom: z24.string().optional(),
-    dateTo: z24.string().optional()
+  consolidated: protectedProcedure.input(z25.object({
+    dateFrom: z25.string().optional(),
+    dateTo: z25.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { kpis: { totalReceitas: 0, totalCustos: 0, saldo: 0 }, byCategory: [], byLocation: [], transactions: [] };
@@ -13858,7 +13869,7 @@ var financialDashboardRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z25 } from "zod";
+import { z as z26 } from "zod";
 import { eq as eq25, desc as desc18 } from "drizzle-orm";
 var gpsLocationsRouter = router({
   // ── Listar todos os locais ativos ────────────────────────────────────────
@@ -13894,13 +13905,13 @@ var gpsLocationsRouter = router({
     return rows;
   }),
   // ── Criar local ──────────────────────────────────────────────────────────
-  create: protectedProcedure.input(z25.object({
-    name: z25.string().min(1, "Nome \xE9 obrigat\xF3rio"),
-    latitude: z25.string().min(1, "Latitude \xE9 obrigat\xF3ria"),
-    longitude: z25.string().min(1, "Longitude \xE9 obrigat\xF3ria"),
-    radiusMeters: z25.number().min(100).max(5e4).default(2e3),
-    clientId: z25.number().optional(),
-    notes: z25.string().optional()
+  create: protectedProcedure.input(z26.object({
+    name: z26.string().min(1, "Nome \xE9 obrigat\xF3rio"),
+    latitude: z26.string().min(1, "Latitude \xE9 obrigat\xF3ria"),
+    longitude: z26.string().min(1, "Longitude \xE9 obrigat\xF3ria"),
+    radiusMeters: z26.number().min(100).max(5e4).default(2e3),
+    clientId: z26.number().optional(),
+    notes: z26.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -13918,15 +13929,15 @@ var gpsLocationsRouter = router({
     return { success: true };
   }),
   // ── Atualizar local ──────────────────────────────────────────────────────
-  update: protectedProcedure.input(z25.object({
-    id: z25.number(),
-    name: z25.string().min(1).optional(),
-    latitude: z25.string().optional(),
-    longitude: z25.string().optional(),
-    radiusMeters: z25.number().min(100).max(5e4).optional(),
-    clientId: z25.number().nullable().optional(),
-    notes: z25.string().optional(),
-    isActive: z25.number().optional()
+  update: protectedProcedure.input(z26.object({
+    id: z26.number(),
+    name: z26.string().min(1).optional(),
+    latitude: z26.string().optional(),
+    longitude: z26.string().optional(),
+    radiusMeters: z26.number().min(100).max(5e4).optional(),
+    clientId: z26.number().nullable().optional(),
+    notes: z26.string().optional(),
+    isActive: z26.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
@@ -13947,7 +13958,7 @@ var gpsLocationsRouter = router({
     return { success: true };
   }),
   // ── Excluir local ────────────────────────────────────────────────────────
-  delete: protectedProcedure.input(z25.object({ id: z25.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z26.object({ id: z26.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const [area] = await db.select({ id: clientAreas.id }).from(clientAreas).where(eq25(clientAreas.workLocationId, input.id)).limit(1);
@@ -13962,7 +13973,7 @@ init_trpc();
 init_db();
 init_clientAreaScope();
 init_schema();
-import { z as z26 } from "zod";
+import { z as z27 } from "zod";
 import { TRPCError as TRPCError17 } from "@trpc/server";
 import { eq as eq26, desc as desc19, and as and16, gte as gte7, lte as lte7, sql as sql14, inArray as inArray7 } from "drizzle-orm";
 var reportsRouter = router({
@@ -13973,10 +13984,10 @@ var reportsRouter = router({
     return db.select({ id: gpsLocations.id, name: gpsLocations.name, isActive: gpsLocations.isActive }).from(gpsLocations).orderBy(gpsLocations.name);
   }),
   // ── Padronizar nomes de locais (atualizar locationName em registros antigos) ──
-  standardizeLocationNames: protectedProcedure.input(z26.object({
-    oldName: z26.string(),
-    newLocationId: z26.number(),
-    newLocationName: z26.string()
+  standardizeLocationNames: protectedProcedure.input(z27.object({
+    oldName: z27.string(),
+    newLocationId: z27.number(),
+    newLocationName: z27.string()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
@@ -13999,13 +14010,13 @@ var reportsRouter = router({
     return results[0]?.map((r) => r.location_name) || [];
   }),
   // ── Relatório completo por local e período ─────────────────────────────────
-  fullReport: protectedProcedure.input(z26.object({
-    locationId: z26.number().optional(),
-    dateFrom: z26.string(),
-    dateTo: z26.string(),
-    includeMaoDeObra: z26.boolean().default(true),
-    includeConsumo: z26.boolean().default(true),
-    includeCargas: z26.boolean().default(true)
+  fullReport: protectedProcedure.input(z27.object({
+    locationId: z27.number().optional(),
+    dateFrom: z27.string(),
+    dateTo: z27.string(),
+    includeMaoDeObra: z27.boolean().default(true),
+    includeConsumo: z27.boolean().default(true),
+    includeCargas: z27.boolean().default(true)
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
@@ -14155,10 +14166,10 @@ var reportsRouter = router({
     };
   }),
   // ── Dashboard resumo por local (para a tela executiva) ─────────────────────
-  dashboardByLocation: protectedProcedure.input(z26.object({
-    dateFrom: z26.string(),
-    dateTo: z26.string(),
-    locationId: z26.number().optional()
+  dashboardByLocation: protectedProcedure.input(z27.object({
+    dateFrom: z27.string(),
+    dateTo: z27.string(),
+    locationId: z27.number().optional()
     // filtro por local específico
   })).query(async ({ input }) => {
     const db = await getDb();
@@ -14482,17 +14493,17 @@ var reportsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z27 } from "zod";
+import { z as z28 } from "zod";
 import { TRPCError as TRPCError18 } from "@trpc/server";
 import { eq as eq27, and as and17, gte as gte8, lte as lte8, isNotNull as isNotNull2 } from "drizzle-orm";
 var auditDataRouter = router({
-  list: protectedProcedure.input(z27.object({
-    dateFrom: z27.string(),
+  list: protectedProcedure.input(z28.object({
+    dateFrom: z28.string(),
     // YYYY-MM-DD
-    dateTo: z27.string(),
-    tipo: z27.enum(["todos", "custo", "receita"]).default("todos"),
-    categoria: z27.string().optional(),
-    localId: z27.number().optional()
+    dateTo: z28.string(),
+    tipo: z28.enum(["todos", "custo", "receita"]).default("todos"),
+    categoria: z28.string().optional(),
+    localId: z28.number().optional()
   })).query(async ({ input, ctx }) => {
     if (ctx.user.role !== "admin") {
       throw new TRPCError18({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
@@ -14952,7 +14963,7 @@ var auditDataRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z28 } from "zod";
+import { z as z29 } from "zod";
 import { TRPCError as TRPCError19 } from "@trpc/server";
 import { eq as eq28, desc as desc20, and as and18, gte as gte9, lte as lte9 } from "drizzle-orm";
 function formatCurrency(value) {
@@ -15229,13 +15240,13 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
   return html;
 }
 var reportPdfRouter = router({
-  generatePdfHtml: protectedProcedure.input(z28.object({
-    locationId: z28.number().optional(),
-    dateFrom: z28.string(),
-    dateTo: z28.string(),
-    includeMaoDeObra: z28.boolean().default(true),
-    includeConsumo: z28.boolean().default(true),
-    includeCargas: z28.boolean().default(true)
+  generatePdfHtml: protectedProcedure.input(z29.object({
+    locationId: z29.number().optional(),
+    dateFrom: z29.string(),
+    dateTo: z29.string(),
+    includeMaoDeObra: z29.boolean().default(true),
+    includeConsumo: z29.boolean().default(true),
+    includeCargas: z29.boolean().default(true)
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
@@ -15372,7 +15383,7 @@ var reportPdfRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z29 } from "zod";
+import { z as z30 } from "zod";
 import { TRPCError as TRPCError20 } from "@trpc/server";
 import { eq as eq29, desc as desc21, sql as sql16, and as and19 } from "drizzle-orm";
 function destToBuyer(d) {
@@ -15426,7 +15437,7 @@ var buyerClientsRouter = router({
     const rows = await db.select().from(cargoDestinations).where(eq29(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
     return rows.map(destToBuyer);
   }),
-  getById: protectedProcedure.input(z29.object({ id: z29.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z30.object({ id: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     const [dest] = await db.select().from(cargoDestinations).where(eq29(cargoDestinations.id, input.id));
@@ -15435,28 +15446,28 @@ var buyerClientsRouter = router({
     const payments = await db.select().from(buyerPayments).where(eq29(buyerPayments.buyerId, input.id)).orderBy(desc21(buyerPayments.id));
     return { ...destToBuyer(dest), prices, payments };
   }),
-  create: protectedProcedure.input(z29.object({
-    name: z29.string().min(1),
-    nickname: z29.string().optional(),
+  create: protectedProcedure.input(z30.object({
+    name: z30.string().min(1),
+    nickname: z30.string().optional(),
     // Apelido
-    cnpjCpf: z29.string().optional(),
-    inscricaoEstadual: z29.string().optional(),
-    phone: z29.string().optional(),
-    email: z29.string().optional(),
-    address: z29.string().optional(),
-    city: z29.string().optional(),
-    state: z29.string().optional(),
-    cep: z29.string().optional(),
-    contactPerson: z29.string().optional(),
-    product: z29.string().optional(),
-    paymentMethod: z29.string().optional(),
-    pricePerUnit: z29.string().optional(),
-    unit: z29.string().optional(),
-    notes: z29.string().optional(),
-    isBuyer: z29.number().optional(),
+    cnpjCpf: z30.string().optional(),
+    inscricaoEstadual: z30.string().optional(),
+    phone: z30.string().optional(),
+    email: z30.string().optional(),
+    address: z30.string().optional(),
+    city: z30.string().optional(),
+    state: z30.string().optional(),
+    cep: z30.string().optional(),
+    contactPerson: z30.string().optional(),
+    product: z30.string().optional(),
+    paymentMethod: z30.string().optional(),
+    pricePerUnit: z30.string().optional(),
+    unit: z30.string().optional(),
+    notes: z30.string().optional(),
+    isBuyer: z30.number().optional(),
     // 0 = destino normal, 1 = comprador
-    paymentTermDaysAfterDelivery: z29.number().nullable().optional(),
-    commissionCategory: z29.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco"]).optional()
+    paymentTermDaysAfterDelivery: z30.number().nullable().optional(),
+    commissionCategory: z30.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco"]).optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
@@ -15477,30 +15488,30 @@ var buyerClientsRouter = router({
       `);
     return { success: true };
   }),
-  update: protectedProcedure.input(z29.object({
-    id: z29.number(),
-    name: z29.string().min(1),
-    nickname: z29.string().optional(),
+  update: protectedProcedure.input(z30.object({
+    id: z30.number(),
+    name: z30.string().min(1),
+    nickname: z30.string().optional(),
     // Apelido
-    cnpjCpf: z29.string().optional(),
-    inscricaoEstadual: z29.string().optional(),
-    phone: z29.string().optional(),
-    email: z29.string().optional(),
-    address: z29.string().optional(),
-    city: z29.string().optional(),
-    state: z29.string().optional(),
-    cep: z29.string().optional(),
-    contactPerson: z29.string().optional(),
-    product: z29.string().optional(),
-    paymentMethod: z29.string().optional(),
-    pricePerUnit: z29.string().optional(),
-    unit: z29.string().optional(),
-    notes: z29.string().optional(),
-    active: z29.number().optional(),
-    isBuyer: z29.number().optional(),
+    cnpjCpf: z30.string().optional(),
+    inscricaoEstadual: z30.string().optional(),
+    phone: z30.string().optional(),
+    email: z30.string().optional(),
+    address: z30.string().optional(),
+    city: z30.string().optional(),
+    state: z30.string().optional(),
+    cep: z30.string().optional(),
+    contactPerson: z30.string().optional(),
+    product: z30.string().optional(),
+    paymentMethod: z30.string().optional(),
+    pricePerUnit: z30.string().optional(),
+    unit: z30.string().optional(),
+    notes: z30.string().optional(),
+    active: z30.number().optional(),
+    isBuyer: z30.number().optional(),
     // 0 = destino normal, 1 = comprador
-    paymentTermDaysAfterDelivery: z29.number().nullable().optional(),
-    commissionCategory: z29.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco"]).optional()
+    paymentTermDaysAfterDelivery: z30.number().nullable().optional(),
+    commissionCategory: z30.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco"]).optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
@@ -15535,7 +15546,7 @@ var buyerClientsRouter = router({
     }).where(eq29(cargoDestinations.id, input.id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z29.object({ id: z29.number(), force: z29.boolean().optional() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z30.object({ id: z30.number(), force: z30.boolean().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     const loads = await db.execute(sql16`SELECT COUNT(*) as cnt FROM cargo_loads WHERE destination_id = ${input.id}`);
@@ -15561,7 +15572,7 @@ var buyerClientsRouter = router({
   // Vencimento = data de entrega + payment_term_days_after_delivery do comprador.
   // Usa cargo_loads.buyer_paid_at (campo próprio) — NÃO usa payment_status, que controla o
   // pagamento da BTREE ao cliente/fornecedor daquela carga (fluxo de dinheiro oposto).
-  listCargasAReceber: protectedProcedure.input(z29.object({ mes: z29.number().min(1).max(12), ano: z29.number().min(2020).max(2100), pesquisa: z29.string().optional() })).query(async ({ input }) => {
+  listCargasAReceber: protectedProcedure.input(z30.object({ mes: z30.number().min(1).max(12), ano: z30.number().min(2020).max(2100), pesquisa: z30.string().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.$client.execute(
@@ -15624,28 +15635,28 @@ var buyerClientsRouter = router({
   }),
   // Marca/desmarca o recebimento do COMPRADOR para esta carga — campo próprio (buyer_paid_at),
   // sem relação com payment_status (pagamento da BTREE ao cliente/fornecedor da carga).
-  markCargaRecebida: protectedProcedure.input(z29.object({ id: z29.number(), buyerPaidAt: z29.string().optional() })).mutation(async ({ input }) => {
+  markCargaRecebida: protectedProcedure.input(z30.object({ id: z30.number(), buyerPaidAt: z30.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     const buyerPaidAt = input.buyerPaidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     await db.$client.execute(`UPDATE cargo_loads SET buyer_paid_at = ? WHERE id = ?`, [buyerPaidAt, input.id]);
     return { success: true };
   }),
-  unmarkCargaRecebida: protectedProcedure.input(z29.object({ id: z29.number() })).mutation(async ({ input }) => {
+  unmarkCargaRecebida: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     await db.$client.execute(`UPDATE cargo_loads SET buyer_paid_at = NULL WHERE id = ?`, [input.id]);
     return { success: true };
   }),
   // === PREÇOS ===
-  addPrice: protectedProcedure.input(z29.object({
-    buyerId: z29.number(),
-    product: z29.string().min(1),
-    pricePerUnit: z29.string().min(1),
-    unit: z29.string().optional(),
-    validFrom: z29.string().optional(),
-    validUntil: z29.string().optional(),
-    notes: z29.string().optional()
+  addPrice: protectedProcedure.input(z30.object({
+    buyerId: z30.number(),
+    product: z30.string().min(1),
+    pricePerUnit: z30.string().min(1),
+    unit: z30.string().optional(),
+    validFrom: z30.string().optional(),
+    validUntil: z30.string().optional(),
+    notes: z30.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
@@ -15656,26 +15667,26 @@ var buyerClientsRouter = router({
       `);
     return { success: true };
   }),
-  deletePrice: protectedProcedure.input(z29.object({ id: z29.number() })).mutation(async ({ input }) => {
+  deletePrice: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(buyerPriceHistory).where(eq29(buyerPriceHistory.id, input.id));
     return { success: true };
   }),
   // === PAGAMENTOS ===
-  addPayment: protectedProcedure.input(z29.object({
-    buyerId: z29.number(),
-    amount: z29.string().min(1),
-    paymentDate: z29.string().min(1),
-    paymentMethod: z29.string().optional(),
-    invoiceNumber: z29.string().optional(),
-    notes: z29.string().optional(),
-    status: z29.enum(["pendente", "pago", "atrasado"]).optional(),
+  addPayment: protectedProcedure.input(z30.object({
+    buyerId: z30.number(),
+    amount: z30.string().min(1),
+    paymentDate: z30.string().min(1),
+    paymentMethod: z30.string().optional(),
+    invoiceNumber: z30.string().optional(),
+    notes: z30.string().optional(),
+    status: z30.enum(["pendente", "pago", "atrasado"]).optional(),
     // Campos extras para integração com financeiro
-    destinationName: z29.string().optional(),
-    createFinancialEntry: z29.boolean().optional(),
+    destinationName: z30.string().optional(),
+    createFinancialEntry: z30.boolean().optional(),
     // se true, cria receita no financeiro
-    periodDescription: z29.string().optional()
+    periodDescription: z30.string().optional()
     // ex: "Mai/2026"
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -15718,25 +15729,25 @@ var buyerClientsRouter = router({
     }
     return { success: true };
   }),
-  updatePaymentStatus: protectedProcedure.input(z29.object({
-    id: z29.number(),
-    status: z29.enum(["pendente", "pago", "atrasado"])
+  updatePaymentStatus: protectedProcedure.input(z30.object({
+    id: z30.number(),
+    status: z30.enum(["pendente", "pago", "atrasado"])
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(buyerPayments).set({ status: input.status }).where(eq29(buyerPayments.id, input.id));
     return { success: true };
   }),
-  deletePayment: protectedProcedure.input(z29.object({ id: z29.number() })).mutation(async ({ input }) => {
+  deletePayment: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(buyerPayments).where(eq29(buyerPayments.id, input.id));
     return { success: true };
   }),
   // === DASHBOARD FINANCEIRO ===
-  financialDashboard: protectedProcedure.input(z29.object({
-    startDate: z29.string().optional(),
-    endDate: z29.string().optional()
+  financialDashboard: protectedProcedure.input(z30.object({
+    startDate: z30.string().optional(),
+    endDate: z30.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
@@ -15800,28 +15811,28 @@ var buyerClientsRouter = router({
       totals: { grandTotalReceivable, grandTotalPaid, grandBalance }
     };
   }),
-  getPayments: protectedProcedure.input(z29.object({ buyerId: z29.number() })).query(async ({ input }) => {
+  getPayments: protectedProcedure.input(z30.object({ buyerId: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     const payments = await db.select().from(buyerPayments).where(eq29(buyerPayments.buyerId, input.buyerId)).orderBy(desc21(buyerPayments.id));
     return payments;
   }),
   // ─── Produtos/Preços por Comprador ──────────────────────────────────────────
-  listProductPrices: protectedProcedure.input(z29.object({ buyerId: z29.number() })).query(async ({ input }) => {
+  listProductPrices: protectedProcedure.input(z30.object({ buyerId: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(buyerProductPrices).where(and19(eq29(buyerProductPrices.buyerId, input.buyerId), eq29(buyerProductPrices.isActive, 1))).orderBy(buyerProductPrices.productName);
   }),
-  listActiveProductPricesByBuyer: protectedProcedure.input(z29.object({ buyerId: z29.number() })).query(async ({ input }) => {
+  listActiveProductPricesByBuyer: protectedProcedure.input(z30.object({ buyerId: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(buyerProductPrices).where(and19(eq29(buyerProductPrices.buyerId, input.buyerId), eq29(buyerProductPrices.isActive, 1))).orderBy(buyerProductPrices.productName);
   }),
-  addProductPrice: protectedProcedure.input(z29.object({
-    buyerId: z29.number(),
-    productName: z29.string().min(1),
-    unit: z29.enum(["ton", "m3", "unidade"]),
-    pricePerUnit: z29.string().min(1)
+  addProductPrice: protectedProcedure.input(z30.object({
+    buyerId: z30.number(),
+    productName: z30.string().min(1),
+    unit: z30.enum(["ton", "m3", "unidade"]),
+    pricePerUnit: z30.string().min(1)
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
@@ -15834,18 +15845,18 @@ var buyerClientsRouter = router({
     });
     return { success: true };
   }),
-  updateProductPrice: protectedProcedure.input(z29.object({
-    id: z29.number(),
-    productName: z29.string().min(1),
-    unit: z29.enum(["ton", "m3", "unidade"]),
-    pricePerUnit: z29.string().min(1)
+  updateProductPrice: protectedProcedure.input(z30.object({
+    id: z30.number(),
+    productName: z30.string().min(1),
+    unit: z30.enum(["ton", "m3", "unidade"]),
+    pricePerUnit: z30.string().min(1)
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(buyerProductPrices).set({ productName: input.productName, unit: input.unit, pricePerUnit: input.pricePerUnit }).where(eq29(buyerProductPrices.id, input.id));
     return { success: true };
   }),
-  deleteProductPrice: protectedProcedure.input(z29.object({ id: z29.number() })).mutation(async ({ input }) => {
+  deleteProductPrice: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(buyerProductPrices).set({ isActive: 0 }).where(eq29(buyerProductPrices.id, input.id));
@@ -15857,13 +15868,13 @@ var buyerClientsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z30 } from "zod";
+import { z as z31 } from "zod";
 import { TRPCError as TRPCError21 } from "@trpc/server";
 import { eq as eq30, sql as sql17 } from "drizzle-orm";
 var freightRouter = router({
-  list: protectedProcedure.input(z30.object({
-    startDate: z30.string().optional(),
-    endDate: z30.string().optional()
+  list: protectedProcedure.input(z31.object({
+    startDate: z31.string().optional(),
+    endDate: z31.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
@@ -15874,38 +15885,38 @@ var freightRouter = router({
     const [rows] = await db.execute(sql17.raw(query));
     return rows || [];
   }),
-  getById: protectedProcedure.input(z30.object({ id: z30.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z31.object({ id: z31.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.execute(sql17`SELECT * FROM freight_calculations WHERE id = ${input.id}`);
     if (!rows || rows.length === 0) throw new TRPCError21({ code: "NOT_FOUND" });
     return rows[0];
   }),
-  create: protectedProcedure.input(z30.object({
-    cargoLoadId: z30.number().optional(),
-    date: z30.string().min(1),
-    vehiclePlate: z30.string().optional(),
-    driverName: z30.string().optional(),
-    driverType: z30.enum(["proprio", "terceirizado"]).optional(),
-    origin: z30.string().optional(),
-    destination: z30.string().optional(),
-    distanceKm: z30.string().optional(),
-    fuelLiters: z30.string().optional(),
-    fuelCostPerLiter: z30.string().optional(),
-    fuelTotalCost: z30.string().optional(),
-    driverCost: z30.string().optional(),
-    tollCost: z30.string().optional(),
-    maintenanceCost: z30.string().optional(),
-    otherCosts: z30.string().optional(),
-    otherCostsDescription: z30.string().optional(),
-    totalCost: z30.string().optional(),
-    costPerKm: z30.string().optional(),
-    costPerTon: z30.string().optional(),
-    weightTon: z30.string().optional(),
-    revenuePerTon: z30.string().optional(),
-    totalRevenue: z30.string().optional(),
-    profit: z30.string().optional(),
-    notes: z30.string().optional()
+  create: protectedProcedure.input(z31.object({
+    cargoLoadId: z31.number().optional(),
+    date: z31.string().min(1),
+    vehiclePlate: z31.string().optional(),
+    driverName: z31.string().optional(),
+    driverType: z31.enum(["proprio", "terceirizado"]).optional(),
+    origin: z31.string().optional(),
+    destination: z31.string().optional(),
+    distanceKm: z31.string().optional(),
+    fuelLiters: z31.string().optional(),
+    fuelCostPerLiter: z31.string().optional(),
+    fuelTotalCost: z31.string().optional(),
+    driverCost: z31.string().optional(),
+    tollCost: z31.string().optional(),
+    maintenanceCost: z31.string().optional(),
+    otherCosts: z31.string().optional(),
+    otherCostsDescription: z31.string().optional(),
+    totalCost: z31.string().optional(),
+    costPerKm: z31.string().optional(),
+    costPerTon: z31.string().optional(),
+    weightTon: z31.string().optional(),
+    revenuePerTon: z31.string().optional(),
+    totalRevenue: z31.string().optional(),
+    profit: z31.string().optional(),
+    notes: z31.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
@@ -15934,32 +15945,32 @@ var freightRouter = router({
     }
     return { success: true };
   }),
-  update: protectedProcedure.input(z30.object({
-    id: z30.number(),
-    cargoLoadId: z30.number().optional(),
-    date: z30.string().optional(),
-    vehiclePlate: z30.string().optional(),
-    driverName: z30.string().optional(),
-    driverType: z30.enum(["proprio", "terceirizado"]).optional(),
-    origin: z30.string().optional(),
-    destination: z30.string().optional(),
-    distanceKm: z30.string().optional(),
-    fuelLiters: z30.string().optional(),
-    fuelCostPerLiter: z30.string().optional(),
-    fuelTotalCost: z30.string().optional(),
-    driverCost: z30.string().optional(),
-    tollCost: z30.string().optional(),
-    maintenanceCost: z30.string().optional(),
-    otherCosts: z30.string().optional(),
-    otherCostsDescription: z30.string().optional(),
-    totalCost: z30.string().optional(),
-    costPerKm: z30.string().optional(),
-    costPerTon: z30.string().optional(),
-    weightTon: z30.string().optional(),
-    revenuePerTon: z30.string().optional(),
-    totalRevenue: z30.string().optional(),
-    profit: z30.string().optional(),
-    notes: z30.string().optional()
+  update: protectedProcedure.input(z31.object({
+    id: z31.number(),
+    cargoLoadId: z31.number().optional(),
+    date: z31.string().optional(),
+    vehiclePlate: z31.string().optional(),
+    driverName: z31.string().optional(),
+    driverType: z31.enum(["proprio", "terceirizado"]).optional(),
+    origin: z31.string().optional(),
+    destination: z31.string().optional(),
+    distanceKm: z31.string().optional(),
+    fuelLiters: z31.string().optional(),
+    fuelCostPerLiter: z31.string().optional(),
+    fuelTotalCost: z31.string().optional(),
+    driverCost: z31.string().optional(),
+    tollCost: z31.string().optional(),
+    maintenanceCost: z31.string().optional(),
+    otherCosts: z31.string().optional(),
+    otherCostsDescription: z31.string().optional(),
+    totalCost: z31.string().optional(),
+    costPerKm: z31.string().optional(),
+    costPerTon: z31.string().optional(),
+    weightTon: z31.string().optional(),
+    revenuePerTon: z31.string().optional(),
+    totalRevenue: z31.string().optional(),
+    profit: z31.string().optional(),
+    notes: z31.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
@@ -15992,16 +16003,16 @@ var freightRouter = router({
     }).where(eq30(freightCalculations.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z31.object({ id: z31.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(freightCalculations).where(eq30(freightCalculations.id, input.id));
     return { success: true };
   }),
   // Resumo de fretes por período
-  summary: protectedProcedure.input(z30.object({
-    startDate: z30.string().optional(),
-    endDate: z30.string().optional()
+  summary: protectedProcedure.input(z31.object({
+    startDate: z31.string().optional(),
+    endDate: z31.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
@@ -16031,7 +16042,7 @@ init_trpc();
 init_db();
 init_schema();
 init_llm();
-import { z as z31 } from "zod";
+import { z as z32 } from "zod";
 import { TRPCError as TRPCError22 } from "@trpc/server";
 import { eq as eq31, desc as desc23, and as and20 } from "drizzle-orm";
 
@@ -16099,9 +16110,9 @@ var fuelSuppliersRouter = router({
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).where(eq31(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
   }),
-  listActiveByLocation: protectedProcedure.input(z31.object({
-    locationType: z31.enum(["simflor", "astorga", "postos"]),
-    fuelType: z31.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional()
+  listActiveByLocation: protectedProcedure.input(z32.object({
+    locationType: z32.enum(["simflor", "astorga", "postos"]),
+    fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16131,7 +16142,7 @@ var fuelSuppliersRouter = router({
     )).orderBy(fuelSuppliers.name);
   }),
   // ===== RESUMO DE LOCAIS/PREÇOS POR FORNECEDOR (baseado nas NFs cadastradas) =====
-  getSupplierSummary: protectedProcedure.input(z31.object({ supplierId: z31.number() })).query(async ({ ctx, input }) => {
+  getSupplierSummary: protectedProcedure.input(z32.object({ supplierId: z32.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const invoices = await db.select().from(fuelInvoices).where(eq31(fuelInvoices.supplierId, input.supplierId)).orderBy(desc23(fuelInvoices.id));
@@ -16160,10 +16171,10 @@ var fuelSuppliersRouter = router({
     return Object.values(groups).sort((a, b) => a.location.localeCompare(b.location));
   }),
   // ===== PREÇOS POR LOCAL/TIPO (nova tabela multi-preço) =====
-  getPriceBySupplierAndType: protectedProcedure.input(z31.object({
-    supplierId: z31.number(),
-    fuelType: z31.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
-    locationType: z31.enum(["simflor", "astorga", "postos"]).optional()
+  getPriceBySupplierAndType: protectedProcedure.input(z32.object({
+    supplierId: z32.number(),
+    fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
+    locationType: z32.enum(["simflor", "astorga", "postos"]).optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16183,17 +16194,17 @@ var fuelSuppliersRouter = router({
     if (supplier) return { pricePerLiter: supplier.pricePerLiter, source: "supplier_default" };
     return null;
   }),
-  listSupplierPrices: protectedProcedure.input(z31.object({ supplierId: z31.number() })).query(async ({ ctx, input }) => {
+  listSupplierPrices: protectedProcedure.input(z32.object({ supplierId: z32.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSupplierPrices).where(eq31(fuelSupplierPrices.supplierId, input.supplierId)).orderBy(fuelSupplierPrices.locationType, fuelSupplierPrices.fuelType);
   }),
-  upsertSupplierPrice: protectedProcedure.input(z31.object({
-    supplierId: z31.number(),
-    fuelType: z31.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
-    locationType: z31.enum(["simflor", "astorga", "postos"]),
-    pricePerLiter: z31.string().min(1),
-    isActive: z31.number().optional().default(1)
+  upsertSupplierPrice: protectedProcedure.input(z32.object({
+    supplierId: z32.number(),
+    fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
+    locationType: z32.enum(["simflor", "astorga", "postos"]),
+    pricePerLiter: z32.string().min(1),
+    isActive: z32.number().optional().default(1)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16219,32 +16230,32 @@ var fuelSuppliersRouter = router({
       return { success: true };
     }
   }),
-  deleteSupplierPrice: protectedProcedure.input(z31.object({ id: z31.number() })).mutation(async ({ ctx, input }) => {
+  deleteSupplierPrice: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelSupplierPrices).where(eq31(fuelSupplierPrices.id, input.id));
     return { success: true };
   }),
-  create: protectedProcedure.input(z31.object({
-    name: z31.string().min(1),
-    tradeName: z31.string().optional(),
-    cnpj: z31.string().optional(),
-    phone: z31.string().optional(),
-    email: z31.string().optional(),
-    contactName: z31.string().optional(),
-    address: z31.string().optional(),
-    city: z31.string().optional(),
-    state: z31.string().optional(),
-    fuelType: z31.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
-    pricePerLiter: z31.string().min(1),
-    locationType: z31.enum(["simflor", "astorga", "postos"]).default("simflor"),
-    location: z31.string().optional(),
-    workLocationId: z31.number().optional(),
-    notes: z31.string().optional(),
-    tankCapacity: z31.string().optional(),
-    tankAlertThreshold: z31.string().optional(),
-    vendorName: z31.string().optional(),
-    managerName: z31.string().optional()
+  create: protectedProcedure.input(z32.object({
+    name: z32.string().min(1),
+    tradeName: z32.string().optional(),
+    cnpj: z32.string().optional(),
+    phone: z32.string().optional(),
+    email: z32.string().optional(),
+    contactName: z32.string().optional(),
+    address: z32.string().optional(),
+    city: z32.string().optional(),
+    state: z32.string().optional(),
+    fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
+    pricePerLiter: z32.string().min(1),
+    locationType: z32.enum(["simflor", "astorga", "postos"]).default("simflor"),
+    location: z32.string().optional(),
+    workLocationId: z32.number().optional(),
+    notes: z32.string().optional(),
+    tankCapacity: z32.string().optional(),
+    tankAlertThreshold: z32.string().optional(),
+    vendorName: z32.string().optional(),
+    managerName: z32.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16271,28 +16282,28 @@ var fuelSuppliersRouter = router({
     });
     return { success: true };
   }),
-  update: protectedProcedure.input(z31.object({
-    id: z31.number(),
-    name: z31.string().min(1).optional(),
-    tradeName: z31.string().nullable().optional(),
-    cnpj: z31.string().nullable().optional(),
-    phone: z31.string().nullable().optional(),
-    email: z31.string().nullable().optional(),
-    contactName: z31.string().nullable().optional(),
-    address: z31.string().nullable().optional(),
-    city: z31.string().nullable().optional(),
-    state: z31.string().nullable().optional(),
-    fuelType: z31.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
-    pricePerLiter: z31.string().optional(),
-    locationType: z31.enum(["simflor", "astorga", "postos"]).optional(),
-    location: z31.string().nullable().optional(),
-    workLocationId: z31.number().nullable().optional(),
-    isActive: z31.number().optional(),
-    notes: z31.string().nullable().optional(),
-    tankCapacity: z31.string().nullable().optional(),
-    tankAlertThreshold: z31.string().nullable().optional(),
-    vendorName: z31.string().nullable().optional(),
-    managerName: z31.string().nullable().optional()
+  update: protectedProcedure.input(z32.object({
+    id: z32.number(),
+    name: z32.string().min(1).optional(),
+    tradeName: z32.string().nullable().optional(),
+    cnpj: z32.string().nullable().optional(),
+    phone: z32.string().nullable().optional(),
+    email: z32.string().nullable().optional(),
+    contactName: z32.string().nullable().optional(),
+    address: z32.string().nullable().optional(),
+    city: z32.string().nullable().optional(),
+    state: z32.string().nullable().optional(),
+    fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
+    pricePerLiter: z32.string().optional(),
+    locationType: z32.enum(["simflor", "astorga", "postos"]).optional(),
+    location: z32.string().nullable().optional(),
+    workLocationId: z32.number().nullable().optional(),
+    isActive: z32.number().optional(),
+    notes: z32.string().nullable().optional(),
+    tankCapacity: z32.string().nullable().optional(),
+    tankAlertThreshold: z32.string().nullable().optional(),
+    vendorName: z32.string().nullable().optional(),
+    managerName: z32.string().nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16332,7 +16343,7 @@ var fuelSuppliersRouter = router({
     await db.update(fuelSuppliers).set(updateData).where(eq31(fuelSuppliers.id, id));
     return { success: true };
   }),
-  priceHistory: protectedProcedure.input(z31.object({ supplierId: z31.number().optional() })).query(async ({ ctx, input }) => {
+  priceHistory: protectedProcedure.input(z32.object({ supplierId: z32.number().optional() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     if (input.supplierId) {
@@ -16340,9 +16351,9 @@ var fuelSuppliersRouter = router({
     }
     return db.select().from(fuelPriceHistory).orderBy(desc23(fuelPriceHistory.changedAt));
   }),
-  fuelReport: protectedProcedure.input(z31.object({
-    startDate: z31.string().optional(),
-    endDate: z31.string().optional()
+  fuelReport: protectedProcedure.input(z32.object({
+    startDate: z32.string().optional(),
+    endDate: z32.string().optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16358,23 +16369,23 @@ var fuelSuppliersRouter = router({
     const records = await db.select().from(vehicleRecords2).where(and20(...conditions)).orderBy(desc23(vehicleRecords2.date));
     return records;
   }),
-  delete: protectedProcedure.input(z31.object({ id: z31.number() })).mutation(async ({ ctx, input }) => {
+  delete: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelSuppliers).where(eq31(fuelSuppliers.id, input.id));
     return { success: true };
   }),
   // ===== OCR - LEITURA AUTOMÁTICA DE NF POR FOTO =====
-  extractInvoiceFromPhoto: protectedProcedure.input(z31.object({
-    photos: z31.array(z31.object({
-      base64: z31.string().min(1),
-      mimeType: z31.string().default("image/jpeg"),
-      label: z31.string().default("nf")
+  extractInvoiceFromPhoto: protectedProcedure.input(z32.object({
+    photos: z32.array(z32.object({
+      base64: z32.string().min(1),
+      mimeType: z32.string().default("image/jpeg"),
+      label: z32.string().default("nf")
       // "nf" or "boleto"
     })).max(3).default([]),
-    photoUrls: z31.array(z31.object({
-      url: z31.string().url(),
-      label: z31.string().default("nf")
+    photoUrls: z32.array(z32.object({
+      url: z32.string().url(),
+      label: z32.string().default("nf")
     })).max(3).optional()
   })).mutation(async ({ ctx, input }) => {
     const uploadedPhotos = [];
@@ -16524,9 +16535,9 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     };
   }),
   // ===== CONTAS A PAGAR (NOTAS FISCAIS / BOLETOS) =====
-  listInvoices: protectedProcedure.input(z31.object({
-    supplierId: z31.number().optional(),
-    status: z31.enum(["pendente", "pago", "vencido", "cancelado"]).optional()
+  listInvoices: protectedProcedure.input(z32.object({
+    supplierId: z32.number().optional(),
+    status: z32.enum(["pendente", "pago", "vencido", "cancelado"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16542,24 +16553,24 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
       supplierTradeName: supplierMap[inv.supplierId]?.tradeName || null
     }));
   }),
-  createInvoice: protectedProcedure.input(z31.object({
-    supplierId: z31.number(),
-    invoiceNumber: z31.string().min(1),
-    invoiceDate: z31.string().min(1),
-    dueDate: z31.string().min(1),
-    totalAmount: z31.string().min(1),
-    liters: z31.string().optional(),
-    pricePerLiter: z31.string().optional(),
-    fuelType: z31.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
-    paymentMethod: z31.string().optional(),
-    bankName: z31.string().optional(),
-    barcodeNumber: z31.string().optional(),
-    transporterName: z31.string().optional(),
-    transporterPlate: z31.string().optional(),
-    deliveryLocation: z31.string().optional(),
-    notes: z31.string().optional(),
-    invoicePhotoUrl: z31.string().optional(),
-    boletoPhotoUrl: z31.string().optional()
+  createInvoice: protectedProcedure.input(z32.object({
+    supplierId: z32.number(),
+    invoiceNumber: z32.string().min(1),
+    invoiceDate: z32.string().min(1),
+    dueDate: z32.string().min(1),
+    totalAmount: z32.string().min(1),
+    liters: z32.string().optional(),
+    pricePerLiter: z32.string().optional(),
+    fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).default("diesel"),
+    paymentMethod: z32.string().optional(),
+    bankName: z32.string().optional(),
+    barcodeNumber: z32.string().optional(),
+    transporterName: z32.string().optional(),
+    transporterPlate: z32.string().optional(),
+    deliveryLocation: z32.string().optional(),
+    notes: z32.string().optional(),
+    invoicePhotoUrl: z32.string().optional(),
+    boletoPhotoUrl: z32.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16598,26 +16609,26 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     }
     return { success: true };
   }),
-  updateInvoice: protectedProcedure.input(z31.object({
-    id: z31.number(),
-    supplierId: z31.number().optional(),
-    invoiceNumber: z31.string().optional(),
-    invoiceDate: z31.string().optional(),
-    dueDate: z31.string().optional(),
-    totalAmount: z31.string().optional(),
-    liters: z31.string().nullable().optional(),
-    pricePerLiter: z31.string().nullable().optional(),
-    fuelType: z31.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
-    paymentMethod: z31.string().nullable().optional(),
-    bankName: z31.string().nullable().optional(),
-    barcodeNumber: z31.string().nullable().optional(),
-    status: z31.enum(["pendente", "pago", "vencido", "cancelado"]).optional(),
-    paidAt: z31.string().nullable().optional(),
-    paidAmount: z31.string().nullable().optional(),
-    transporterName: z31.string().nullable().optional(),
-    transporterPlate: z31.string().nullable().optional(),
-    deliveryLocation: z31.string().nullable().optional(),
-    notes: z31.string().nullable().optional()
+  updateInvoice: protectedProcedure.input(z32.object({
+    id: z32.number(),
+    supplierId: z32.number().optional(),
+    invoiceNumber: z32.string().optional(),
+    invoiceDate: z32.string().optional(),
+    dueDate: z32.string().optional(),
+    totalAmount: z32.string().optional(),
+    liters: z32.string().nullable().optional(),
+    pricePerLiter: z32.string().nullable().optional(),
+    fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional(),
+    paymentMethod: z32.string().nullable().optional(),
+    bankName: z32.string().nullable().optional(),
+    barcodeNumber: z32.string().nullable().optional(),
+    status: z32.enum(["pendente", "pago", "vencido", "cancelado"]).optional(),
+    paidAt: z32.string().nullable().optional(),
+    paidAmount: z32.string().nullable().optional(),
+    transporterName: z32.string().nullable().optional(),
+    transporterPlate: z32.string().nullable().optional(),
+    deliveryLocation: z32.string().nullable().optional(),
+    notes: z32.string().nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16629,10 +16640,10 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     await db.update(fuelInvoices).set(updateData).where(eq31(fuelInvoices.id, id));
     return { success: true };
   }),
-  markInvoicePaid: protectedProcedure.input(z31.object({
-    id: z31.number(),
-    paidAt: z31.string().min(1),
-    paidAmount: z31.string().optional()
+  markInvoicePaid: protectedProcedure.input(z32.object({
+    id: z32.number(),
+    paidAt: z32.string().min(1),
+    paidAmount: z32.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16643,7 +16654,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     }).where(eq31(fuelInvoices.id, input.id));
     return { success: true };
   }),
-  deleteInvoice: protectedProcedure.input(z31.object({ id: z31.number() })).mutation(async ({ ctx, input }) => {
+  deleteInvoice: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelInvoices).where(eq31(fuelInvoices.id, input.id));
@@ -16692,7 +16703,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     return results;
   }),
   // ===== LISTAR NFs ATIVAS (com saldo) PARA VINCULAR NO ABASTECIMENTO =====
-  activeInvoices: protectedProcedure.input(z31.object({ supplierId: z31.number().optional() }).optional()).query(async ({ ctx, input }) => {
+  activeInvoices: protectedProcedure.input(z32.object({ supplierId: z32.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     let conditions = [eq31(fuelInvoices.status, "pendente")];
@@ -16717,10 +16728,10 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     });
   }),
   // ===== VINCULAR ABASTECIMENTO A UMA NF (atualizar liters_used) =====
-  linkFuelingToInvoice: protectedProcedure.input(z31.object({
-    invoiceId: z31.number(),
-    liters: z31.number(),
-    vehicleRecordId: z31.number().optional()
+  linkFuelingToInvoice: protectedProcedure.input(z32.object({
+    invoiceId: z32.number(),
+    liters: z32.number(),
+    vehicleRecordId: z32.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
@@ -16780,7 +16791,7 @@ Solicite nova entrega de combust\xEDvel.`
 init_trpc();
 init_db();
 init_schema();
-import { z as z32 } from "zod";
+import { z as z33 } from "zod";
 import { TRPCError as TRPCError23 } from "@trpc/server";
 import { eq as eq32, asc as asc3 } from "drizzle-orm";
 var thirdPartyContractorsRouter = router({
@@ -16796,11 +16807,11 @@ var thirdPartyContractorsRouter = router({
     const rows = await db.select().from(thirdPartyContractors).where(eq32(thirdPartyContractors.isActive, 1)).orderBy(asc3(thirdPartyContractors.name));
     return rows;
   }),
-  create: protectedProcedure.input(z32.object({
-    name: z32.string().min(1, "Nome obrigat\xF3rio"),
-    ratePerM3: z32.string().default("0"),
-    phone: z32.string().optional(),
-    notes: z32.string().optional()
+  create: protectedProcedure.input(z33.object({
+    name: z33.string().min(1, "Nome obrigat\xF3rio"),
+    ratePerM3: z33.string().default("0"),
+    phone: z33.string().optional(),
+    notes: z33.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -16814,13 +16825,13 @@ var thirdPartyContractorsRouter = router({
     });
     return { success: true };
   }),
-  update: protectedProcedure.input(z32.object({
-    id: z32.number(),
-    name: z32.string().min(1).optional(),
-    ratePerM3: z32.string().optional(),
-    phone: z32.string().optional(),
-    notes: z32.string().optional(),
-    isActive: z32.number().optional()
+  update: protectedProcedure.input(z33.object({
+    id: z33.number(),
+    name: z33.string().min(1).optional(),
+    ratePerM3: z33.string().optional(),
+    phone: z33.string().optional(),
+    notes: z33.string().optional(),
+    isActive: z33.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -16834,7 +16845,7 @@ var thirdPartyContractorsRouter = router({
     await db.update(thirdPartyContractors).set(updateData).where(eq32(thirdPartyContractors.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(thirdPartyContractors).where(eq32(thirdPartyContractors.id, input.id));
@@ -16846,7 +16857,7 @@ var thirdPartyContractorsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z33 } from "zod";
+import { z as z34 } from "zod";
 import { TRPCError as TRPCError24 } from "@trpc/server";
 import { eq as eq33 } from "drizzle-orm";
 var purchaseCategoriesRouter = router({
@@ -16855,9 +16866,9 @@ var purchaseCategoriesRouter = router({
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     return await db.select().from(purchaseCategories).orderBy(purchaseCategories.name);
   }),
-  create: protectedProcedure.input(z33.object({
-    name: z33.string().min(1).max(100),
-    color: z33.string().optional().default("#6B7280")
+  create: protectedProcedure.input(z34.object({
+    name: z34.string().min(1).max(100),
+    color: z34.string().optional().default("#6B7280")
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
@@ -16868,17 +16879,17 @@ var purchaseCategoriesRouter = router({
     });
     return { id: result.insertId, name: input.name, color: input.color };
   }),
-  update: protectedProcedure.input(z33.object({
-    id: z33.number(),
-    name: z33.string().min(1).max(100),
-    color: z33.string().optional()
+  update: protectedProcedure.input(z34.object({
+    id: z34.number(),
+    name: z34.string().min(1).max(100),
+    color: z34.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(purchaseCategories).set({ name: input.name, color: input.color }).where(eq33(purchaseCategories.id, input.id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z34.object({ id: z34.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(purchaseCategories).where(eq33(purchaseCategories.id, input.id));
@@ -16890,7 +16901,7 @@ var purchaseCategoriesRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z34 } from "zod";
+import { z as z35 } from "zod";
 import { TRPCError as TRPCError25 } from "@trpc/server";
 import { eq as eq34, and as and21, desc as desc25, gte as gte10, lte as lte10, sql as sql19 } from "drizzle-orm";
 var TRACCAR_URL = process.env.TRACCAR_URL || "";
@@ -16976,13 +16987,13 @@ var freightCyclesRouter = router({
   }),
   /** Cria nova geofence */
   createGeofence: protectedProcedure.input(
-    z34.object({
-      name: z34.string().min(1),
-      latitude: z34.string(),
-      longitude: z34.string(),
-      radiusMeters: z34.number().default(500),
-      equipmentId: z34.number().optional(),
-      notes: z34.string().optional()
+    z35.object({
+      name: z35.string().min(1),
+      latitude: z35.string(),
+      longitude: z35.string(),
+      radiusMeters: z35.number().default(500),
+      equipmentId: z35.number().optional(),
+      notes: z35.string().optional()
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -17000,15 +17011,15 @@ var freightCyclesRouter = router({
   }),
   /** Atualiza geofence */
   updateGeofence: protectedProcedure.input(
-    z34.object({
-      id: z34.number(),
-      name: z34.string().min(1).optional(),
-      latitude: z34.string().optional(),
-      longitude: z34.string().optional(),
-      radiusMeters: z34.number().optional(),
-      equipmentId: z34.number().nullable().optional(),
-      active: z34.number().optional(),
-      notes: z34.string().optional()
+    z35.object({
+      id: z35.number(),
+      name: z35.string().min(1).optional(),
+      latitude: z35.string().optional(),
+      longitude: z35.string().optional(),
+      radiusMeters: z35.number().optional(),
+      equipmentId: z35.number().nullable().optional(),
+      active: z35.number().optional(),
+      notes: z35.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
@@ -17018,7 +17029,7 @@ var freightCyclesRouter = router({
     return { ok: true };
   }),
   /** Remove geofence */
-  deleteGeofence: protectedProcedure.input(z34.object({ id: z34.number() })).mutation(async ({ input }) => {
+  deleteGeofence: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(farmGeofences).where(eq34(farmGeofences.id, input.id));
@@ -17027,12 +17038,12 @@ var freightCyclesRouter = router({
   // ─── CICLOS DE FRETE ────────────────────────────────────────────────────────
   /** Lista ciclos de frete com filtros */
   listCycles: protectedProcedure.input(
-    z34.object({
-      equipmentId: z34.number().optional(),
-      status: z34.enum(["em_fazenda", "em_transito", "concluido", "cancelado"]).optional(),
-      dateFrom: z34.string().optional(),
-      dateTo: z34.string().optional(),
-      limit: z34.number().default(50)
+    z35.object({
+      equipmentId: z35.number().optional(),
+      status: z35.enum(["em_fazenda", "em_transito", "concluido", "cancelado"]).optional(),
+      dateFrom: z35.string().optional(),
+      dateTo: z35.string().optional(),
+      limit: z35.number().default(50)
     })
   ).query(async ({ input }) => {
     const db = await getDb();
@@ -17045,7 +17056,7 @@ var freightCyclesRouter = router({
     return db.select().from(freightCycles).where(conditions.length > 0 ? and21(...conditions) : void 0).orderBy(desc25(freightCycles.createdAt)).limit(input.limit);
   }),
   /** Detalhe de um ciclo */
-  getCycle: protectedProcedure.input(z34.object({ id: z34.number() })).query(async ({ input }) => {
+  getCycle: protectedProcedure.input(z35.object({ id: z35.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const [cycle] = await db.select().from(freightCycles).where(eq34(freightCycles.id, input.id));
@@ -17061,7 +17072,7 @@ var freightCyclesRouter = router({
     ).orderBy(desc25(freightCycles.createdAt));
   }),
   /** Vincula uma carga ao ciclo */
-  linkCargoLoad: protectedProcedure.input(z34.object({ cycleId: z34.number(), cargoLoadId: z34.number() })).mutation(async ({ input }) => {
+  linkCargoLoad: protectedProcedure.input(z35.object({ cycleId: z35.number(), cargoLoadId: z35.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({ destination: cargoLoads.destination }).from(cargoLoads).where(eq34(cargoLoads.id, input.cargoLoadId));
@@ -17073,10 +17084,10 @@ var freightCyclesRouter = router({
   }),
   /** Atualiza motorista do ciclo */
   updateDriver: protectedProcedure.input(
-    z34.object({
-      cycleId: z34.number(),
-      driverCollaboratorId: z34.number().optional(),
-      driverName: z34.string().optional()
+    z35.object({
+      cycleId: z35.number(),
+      driverCollaboratorId: z35.number().optional(),
+      driverName: z35.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
@@ -17089,9 +17100,9 @@ var freightCyclesRouter = router({
   }),
   /** Fecha manualmente um ciclo em andamento */
   closeCycleManually: protectedProcedure.input(
-    z34.object({
-      cycleId: z34.number(),
-      notes: z34.string().optional()
+    z35.object({
+      cycleId: z35.number(),
+      notes: z35.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
@@ -17119,7 +17130,7 @@ var freightCyclesRouter = router({
     return { ok: true };
   }),
   /** Cancela um ciclo */
-  cancelCycle: protectedProcedure.input(z34.object({ cycleId: z34.number(), notes: z34.string().optional() })).mutation(async ({ input }) => {
+  cancelCycle: protectedProcedure.input(z35.object({ cycleId: z35.number(), notes: z35.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(freightCycles).set({ status: "cancelado", notes: input.notes ?? null }).where(eq34(freightCycles.id, input.cycleId));
@@ -17292,11 +17303,11 @@ var freightCyclesRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z35 } from "zod";
+import { z as z36 } from "zod";
 import { TRPCError as TRPCError26 } from "@trpc/server";
 import { eq as eq35, desc as desc26, sql as sql20 } from "drizzle-orm";
 var suppliersRouter = router({
-  list: protectedProcedure.input(z35.object({ activeOnly: z35.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
+  list: protectedProcedure.input(z36.object({ activeOnly: z36.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     let rows;
@@ -17311,7 +17322,7 @@ var suppliersRouter = router({
       contacts: allContacts.filter((c) => c.supplierId === s.id)
     }));
   }),
-  getById: protectedProcedure.input(z35.object({ id: z35.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z36.object({ id: z36.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const [supplier] = await db.select().from(suppliers).where(eq35(suppliers.id, input.id));
@@ -17328,20 +17339,20 @@ var suppliersRouter = router({
     }).from(quotations).where(eq35(quotations.supplierId, input.id)).orderBy(desc26(quotations.quotedAt)).limit(20);
     return { ...supplier, contacts, recentQuotations };
   }),
-  create: protectedProcedure.input(z35.object({
-    name: z35.string().min(1).max(255),
-    address: z35.string().optional(),
-    city: z35.string().optional(),
-    state: z35.string().max(2).optional(),
-    phone: z35.string().optional(),
-    whatsapp: z35.string().optional(),
-    email: z35.string().email().optional().or(z35.literal("")),
-    website: z35.string().optional(),
-    notes: z35.string().optional(),
-    sellerName: z35.string().optional(),
-    pixKey: z35.string().optional(),
-    tradeName: z35.string().optional(),
-    productsSold: z35.string().optional()
+  create: protectedProcedure.input(z36.object({
+    name: z36.string().min(1).max(255),
+    address: z36.string().optional(),
+    city: z36.string().optional(),
+    state: z36.string().max(2).optional(),
+    phone: z36.string().optional(),
+    whatsapp: z36.string().optional(),
+    email: z36.string().email().optional().or(z36.literal("")),
+    website: z36.string().optional(),
+    notes: z36.string().optional(),
+    sellerName: z36.string().optional(),
+    pixKey: z36.string().optional(),
+    tradeName: z36.string().optional(),
+    productsSold: z36.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
@@ -17364,22 +17375,22 @@ var suppliersRouter = router({
     });
     return { id: result.insertId, ...input };
   }),
-  update: protectedProcedure.input(z35.object({
-    id: z35.number(),
-    name: z35.string().min(1).max(255),
-    address: z35.string().optional(),
-    city: z35.string().optional(),
-    state: z35.string().max(2).optional(),
-    phone: z35.string().optional(),
-    whatsapp: z35.string().optional(),
-    email: z35.string().email().optional().or(z35.literal("")),
-    website: z35.string().optional(),
-    notes: z35.string().optional(),
-    active: z35.number().optional(),
-    sellerName: z35.string().optional(),
-    pixKey: z35.string().optional(),
-    tradeName: z35.string().optional(),
-    productsSold: z35.string().optional()
+  update: protectedProcedure.input(z36.object({
+    id: z36.number(),
+    name: z36.string().min(1).max(255),
+    address: z36.string().optional(),
+    city: z36.string().optional(),
+    state: z36.string().max(2).optional(),
+    phone: z36.string().optional(),
+    whatsapp: z36.string().optional(),
+    email: z36.string().email().optional().or(z36.literal("")),
+    website: z36.string().optional(),
+    notes: z36.string().optional(),
+    active: z36.number().optional(),
+    sellerName: z36.string().optional(),
+    pixKey: z36.string().optional(),
+    tradeName: z36.string().optional(),
+    productsSold: z36.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
@@ -17393,7 +17404,7 @@ var suppliersRouter = router({
     return { success: true };
   }),
   // Permanent delete
-  delete: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(supplierContacts).where(eq35(supplierContacts.supplierId, input.id));
@@ -17401,13 +17412,13 @@ var suppliersRouter = router({
     return { success: true };
   }),
   // --- Supplier Contacts ---
-  addContact: protectedProcedure.input(z35.object({
-    supplierId: z35.number(),
-    contactName: z35.string().min(1).max(255),
-    role: z35.string().optional(),
-    phone: z35.string().optional(),
-    whatsapp: z35.string().optional(),
-    email: z35.string().email().optional().or(z35.literal(""))
+  addContact: protectedProcedure.input(z36.object({
+    supplierId: z36.number(),
+    contactName: z36.string().min(1).max(255),
+    role: z36.string().optional(),
+    phone: z36.string().optional(),
+    whatsapp: z36.string().optional(),
+    email: z36.string().email().optional().or(z36.literal(""))
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
@@ -17422,13 +17433,13 @@ var suppliersRouter = router({
     });
     return { id: result.insertId };
   }),
-  updateContact: protectedProcedure.input(z35.object({
-    id: z35.number(),
-    contactName: z35.string().min(1).max(255),
-    role: z35.string().optional(),
-    phone: z35.string().optional(),
-    whatsapp: z35.string().optional(),
-    email: z35.string().email().optional().or(z35.literal(""))
+  updateContact: protectedProcedure.input(z36.object({
+    id: z36.number(),
+    contactName: z36.string().min(1).max(255),
+    role: z36.string().optional(),
+    phone: z36.string().optional(),
+    whatsapp: z36.string().optional(),
+    email: z36.string().email().optional().or(z36.literal(""))
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
@@ -17439,7 +17450,7 @@ var suppliersRouter = router({
     }).where(eq35(supplierContacts.id, id));
     return { success: true };
   }),
-  deleteContact: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
+  deleteContact: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(supplierContacts).where(eq35(supplierContacts.id, input.id));
@@ -17481,14 +17492,14 @@ var suppliersRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z36 } from "zod";
+import { z as z37 } from "zod";
 import { TRPCError as TRPCError27 } from "@trpc/server";
 import { eq as eq36, desc as desc27, asc as asc4, sql as sql21 } from "drizzle-orm";
 var quotationsRouter = router({
   // List all quotations, optionally filtered by category or supplier
-  list: protectedProcedure.input(z36.object({
-    categoryId: z36.number().optional(),
-    supplierId: z36.number().optional()
+  list: protectedProcedure.input(z37.object({
+    categoryId: z37.number().optional(),
+    supplierId: z37.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
@@ -17514,7 +17525,7 @@ var quotationsRouter = router({
     return rows;
   }),
   // List by product name — price history across suppliers, lowest price first
-  listByProduct: protectedProcedure.input(z36.object({ productName: z36.string() })).query(async ({ input }) => {
+  listByProduct: protectedProcedure.input(z37.object({ productName: z37.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
@@ -17600,15 +17611,15 @@ var quotationsRouter = router({
       )
     }));
   }),
-  create: protectedProcedure.input(z36.object({
-    supplierId: z36.number(),
-    categoryId: z36.number().optional(),
-    productName: z36.string().min(1).max(255),
-    unit: z36.string().optional(),
-    quantity: z36.string().optional(),
-    unitPrice: z36.string().min(1),
-    totalPrice: z36.string().optional(),
-    notes: z36.string().optional()
+  create: protectedProcedure.input(z37.object({
+    supplierId: z37.number(),
+    categoryId: z37.number().optional(),
+    productName: z37.string().min(1).max(255),
+    unit: z37.string().optional(),
+    quantity: z37.string().optional(),
+    unitPrice: z37.string().min(1),
+    totalPrice: z37.string().optional(),
+    notes: z37.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
@@ -17628,16 +17639,16 @@ var quotationsRouter = router({
     });
     return { id: result.insertId, ...input };
   }),
-  update: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    supplierId: z36.number().optional(),
-    categoryId: z36.number().optional(),
-    productName: z36.string().optional(),
-    unit: z36.string().optional(),
-    quantity: z36.string().optional(),
-    unitPrice: z36.string().optional(),
-    totalPrice: z36.string().optional(),
-    notes: z36.string().optional()
+  update: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    supplierId: z37.number().optional(),
+    categoryId: z37.number().optional(),
+    productName: z37.string().optional(),
+    unit: z37.string().optional(),
+    quantity: z37.string().optional(),
+    unitPrice: z37.string().optional(),
+    totalPrice: z37.string().optional(),
+    notes: z37.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
@@ -17645,7 +17656,7 @@ var quotationsRouter = router({
     await db.update(quotations).set(data).where(eq36(quotations.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(quotations).where(eq36(quotations.id, input.id));
@@ -17658,11 +17669,11 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z37 } from "zod";
+import { z as z38 } from "zod";
 import { TRPCError as TRPCError28 } from "@trpc/server";
 import { eq as eq37, sql as sql22 } from "drizzle-orm";
-var statusEnum = z37.enum(["pendente", "lida", "analisando", "comprando", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
-var urgencyEnum = z37.enum(["baixa", "media", "alta", "critica"]);
+var statusEnum = z38.enum(["pendente", "lida", "analisando", "comprando", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
+var urgencyEnum = z38.enum(["baixa", "media", "alta", "critica"]);
 var URGENCY_TO_DB = {
   baixa: "low",
   media: "medium",
@@ -17724,10 +17735,10 @@ var purchaseRequestsRouter = router({
     const [cols] = await db.execute(`SHOW COLUMNS FROM purchase_requests`);
     return cols.map((c) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
   }),
-  list: protectedProcedure.input(z37.object({
+  list: protectedProcedure.input(z38.object({
     status: statusEnum.optional(),
     urgency: urgencyEnum.optional(),
-    categoryId: z37.number().optional()
+    categoryId: z38.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
@@ -17780,7 +17791,7 @@ var purchaseRequestsRouter = router({
     }
     return filtered;
   }),
-  getById: protectedProcedure.input(z37.object({ id: z37.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z38.object({ id: z38.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.execute(sql22`
@@ -17821,19 +17832,19 @@ var purchaseRequestsRouter = router({
     const items = await db.select().from(purchaseRequestItems).where(eq37(purchaseRequestItems.requestId, input.id));
     return { ...normalized, items };
   }),
-  create: protectedProcedure.input(z37.object({
-    title: z37.string().min(1),
-    description: z37.string().optional(),
-    linkUrl: z37.string().optional(),
-    categoryId: z37.number().optional(),
-    equipmentId: z37.number().optional(),
+  create: protectedProcedure.input(z38.object({
+    title: z38.string().min(1),
+    description: z38.string().optional(),
+    linkUrl: z38.string().optional(),
+    categoryId: z38.number().optional(),
+    equipmentId: z38.number().optional(),
     urgency: urgencyEnum.optional().default("media"),
-    notes: z37.string().optional(),
-    items: z37.array(z37.object({
-      name: z37.string().min(1),
-      quantity: z37.string().optional().default("1"),
-      unit: z37.string().optional().default("un"),
-      notes: z37.string().optional()
+    notes: z38.string().optional(),
+    items: z38.array(z38.object({
+      name: z38.string().min(1),
+      quantity: z38.string().optional().default("1"),
+      unit: z38.string().optional().default("un"),
+      notes: z38.string().optional()
     })).optional().default([])
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -17864,15 +17875,15 @@ var purchaseRequestsRouter = router({
     }
     return { id: requestId, success: true };
   }),
-  update: protectedProcedure.input(z37.object({
-    id: z37.number(),
-    title: z37.string().optional(),
-    description: z37.string().optional(),
-    linkUrl: z37.string().optional(),
-    categoryId: z37.number().optional(),
-    equipmentId: z37.number().optional(),
+  update: protectedProcedure.input(z38.object({
+    id: z38.number(),
+    title: z38.string().optional(),
+    description: z38.string().optional(),
+    linkUrl: z38.string().optional(),
+    categoryId: z38.number().optional(),
+    equipmentId: z38.number().optional(),
     urgency: urgencyEnum.optional(),
-    notes: z37.string().optional()
+    notes: z38.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
@@ -17890,14 +17901,14 @@ var purchaseRequestsRouter = router({
     await db.execute(sql22`UPDATE purchase_requests SET ${setSql} WHERE id = ${input.id}`);
     return { success: true };
   }),
-  markRead: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input, ctx }) => {
+  markRead: protectedProcedure.input(z38.object({ id: z38.number() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql22`UPDATE purchase_requests SET read_at = ${Date.now()}, status = 'lida', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   // Atualizar status diretamente (para a grade de edição)
-  updateStatus: protectedProcedure.input(z37.object({ id: z37.number(), status: statusEnum })).mutation(async ({ input, ctx }) => {
+  updateStatus: protectedProcedure.input(z38.object({ id: z38.number(), status: statusEnum })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const nowMs = Date.now();
@@ -17915,11 +17926,11 @@ var purchaseRequestsRouter = router({
     return { success: true };
   }),
   // Atualizar datas da compra/entrega (edição direta na grade)
-  updateDates: protectedProcedure.input(z37.object({
-    id: z37.number(),
-    purchaseDate: z37.string().optional().nullable(),
+  updateDates: protectedProcedure.input(z38.object({
+    id: z38.number(),
+    purchaseDate: z38.string().optional().nullable(),
     // 'YYYY-MM-DD' ou null
-    expectedArrival: z37.string().optional().nullable()
+    expectedArrival: z38.string().optional().nullable()
     // 'YYYY-MM-DD' ou null
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -17929,9 +17940,9 @@ var purchaseRequestsRouter = router({
     return { success: true };
   }),
   // Responsável responde a solicitação (parecer) — também marca como lida
-  respond: protectedProcedure.input(z37.object({
-    id: z37.number(),
-    responseNotes: z37.string().min(1)
+  respond: protectedProcedure.input(z38.object({
+    id: z38.number(),
+    responseNotes: z38.string().min(1)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
@@ -17944,19 +17955,19 @@ var purchaseRequestsRouter = router({
     return { success: true };
   }),
   // Negar solicitação com motivo
-  deny: protectedProcedure.input(z37.object({
-    id: z37.number(),
-    denialReason: z37.string().min(1)
+  deny: protectedProcedure.input(z38.object({
+    id: z38.number(),
+    denialReason: z38.string().min(1)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql22`UPDATE purchase_requests SET status = 'negada', denial_reason = ${input.denialReason}, responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
-  markPurchased: protectedProcedure.input(z37.object({
-    id: z37.number(),
-    purchaseDate: z37.string().optional(),
-    expectedArrival: z37.string().optional()
+  markPurchased: protectedProcedure.input(z38.object({
+    id: z38.number(),
+    purchaseDate: z38.string().optional(),
+    expectedArrival: z38.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
@@ -17965,28 +17976,28 @@ var purchaseRequestsRouter = router({
     await db.execute(sql22`UPDATE purchase_requests SET purchased_at = ${purchaseMs}, expected_arrival = ${arrivalMs}, status = 'comprada', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
-  markReceived: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
+  markReceived: protectedProcedure.input(z38.object({ id: z38.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql22`UPDATE purchase_requests SET received_at = ${Date.now()}, status = 'recebida', updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
-  confirmItems: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
+  confirmItems: protectedProcedure.input(z38.object({ id: z38.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql22`UPDATE purchase_request_items SET confirmed = 1 WHERE request_id = ${input.id}`);
     return { success: true };
   }),
-  toggleItemConfirm: protectedProcedure.input(z37.object({ itemId: z37.number(), confirmed: z37.boolean() })).mutation(async ({ input }) => {
+  toggleItemConfirm: protectedProcedure.input(z38.object({ itemId: z38.number(), confirmed: z38.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql22`UPDATE purchase_request_items SET confirmed = ${input.confirmed ? 1 : 0} WHERE id = ${input.itemId}`);
     return { success: true };
   }),
-  uploadImage: protectedProcedure.input(z37.object({
-    id: z37.number(),
-    imageBase64: z37.string(),
-    mimeType: z37.string().default("image/jpeg")
+  uploadImage: protectedProcedure.input(z38.object({
+    id: z38.number(),
+    imageBase64: z38.string(),
+    mimeType: z38.string().default("image/jpeg")
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
@@ -18004,7 +18015,7 @@ var purchaseRequestsRouter = router({
     await db.execute(sql22`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { url, success: true };
   }),
-  removeImage: protectedProcedure.input(z37.object({ id: z37.number(), imageUrl: z37.string() })).mutation(async ({ input }) => {
+  removeImage: protectedProcedure.input(z38.object({ id: z38.number(), imageUrl: z38.string() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.execute(sql22`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
@@ -18019,7 +18030,7 @@ var purchaseRequestsRouter = router({
     await db.execute(sql22`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
-  delete: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z38.object({ id: z38.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql22`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
@@ -18032,20 +18043,20 @@ var purchaseRequestsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z38 } from "zod";
+import { z as z39 } from "zod";
 import { TRPCError as TRPCError29 } from "@trpc/server";
 import { eq as eq38, desc as desc28 } from "drizzle-orm";
 var invoiceControlRouter = router({
   // Listar notas com filtros — mostra todas as cargas (sem filtro de status)
-  list: protectedProcedure.input(z38.object({
-    search: z38.string().optional(),
-    destinationId: z38.number().optional(),
-    clientId: z38.number().optional(),
-    checked: z38.boolean().optional(),
+  list: protectedProcedure.input(z39.object({
+    search: z39.string().optional(),
+    destinationId: z39.number().optional(),
+    clientId: z39.number().optional(),
+    checked: z39.boolean().optional(),
     // undefined = todos, true = conferidos, false = não conferidos
-    dateFrom: z38.string().optional(),
-    dateTo: z38.string().optional(),
-    limit: z38.number().optional().default(200)
+    dateFrom: z39.string().optional(),
+    dateTo: z39.string().optional(),
+    limit: z39.number().optional().default(200)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -18093,7 +18104,7 @@ var invoiceControlRouter = router({
     return filtered;
   }),
   // Marcar/desmarcar nota como conferida (sem colunas extras que podem não existir)
-  toggleChecked: protectedProcedure.input(z38.object({ id: z38.number(), checked: z38.boolean() })).mutation(async ({ input }) => {
+  toggleChecked: protectedProcedure.input(z39.object({ id: z39.number(), checked: z39.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(cargoLoads).set({
@@ -18128,7 +18139,7 @@ init_trpc();
 init_db();
 init_schema();
 init_notification();
-import { z as z39 } from "zod";
+import { z as z40 } from "zod";
 import { eq as eq39, desc as desc29, sql as sql24 } from "drizzle-orm";
 import { TRPCError as TRPCError30 } from "@trpc/server";
 import crypto from "crypto";
@@ -18154,7 +18165,7 @@ var quotationRequestsRouter = router({
     }));
   }),
   // Buscar por ID com respostas (protegido)
-  getById: protectedProcedure.input(z39.object({ id: z39.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z40.object({ id: z40.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.id, input.id));
@@ -18172,18 +18183,18 @@ var quotationRequestsRouter = router({
   }),
   // Criar nova solicitação (protegido)
   create: protectedProcedure.input(
-    z39.object({
-      title: z39.string().min(1),
-      requesterId: z39.number().optional(),
-      requesterName: z39.string().optional(),
-      requesterPhone: z39.string().optional(),
-      requesterEmail: z39.string().optional(),
-      items: z39.array(z39.object({
-        name: z39.string().min(1),
-        quantity: z39.string().min(1),
-        unit: z39.string().optional().default("un")
+    z40.object({
+      title: z40.string().min(1),
+      requesterId: z40.number().optional(),
+      requesterName: z40.string().optional(),
+      requesterPhone: z40.string().optional(),
+      requesterEmail: z40.string().optional(),
+      items: z40.array(z40.object({
+        name: z40.string().min(1),
+        quantity: z40.string().min(1),
+        unit: z40.string().optional().default("un")
       })).min(1),
-      notes: z39.string().optional()
+      notes: z40.string().optional()
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -18207,26 +18218,26 @@ var quotationRequestsRouter = router({
     return { id, token };
   }),
   // Cancelar solicitação (protegido)
-  cancel: protectedProcedure.input(z39.object({ id: z39.number() })).mutation(async ({ input }) => {
+  cancel: protectedProcedure.input(z40.object({ id: z40.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(quotationRequests).set({ status: "cancelada" }).where(eq39(quotationRequests.id, input.id));
     return { success: true };
   }),
   // Editar resposta/fornecedor (protegido) — permite corrigir dados e condições
-  adminUpdateResponse: protectedProcedure.input(z39.object({
-    responseId: z39.number(),
-    supplierName: z39.string().optional(),
-    tradeName: z39.string().optional(),
-    cnpj: z39.string().optional(),
-    address: z39.string().optional(),
-    sellerName: z39.string().optional(),
-    sellerPhone: z39.string().optional(),
-    sellerEmail: z39.string().optional(),
-    paymentTerms: z39.string().optional(),
-    deliveryTerms: z39.string().optional(),
-    productsSold: z39.string().optional(),
-    notes: z39.string().optional()
+  adminUpdateResponse: protectedProcedure.input(z40.object({
+    responseId: z40.number(),
+    supplierName: z40.string().optional(),
+    tradeName: z40.string().optional(),
+    cnpj: z40.string().optional(),
+    address: z40.string().optional(),
+    sellerName: z40.string().optional(),
+    sellerPhone: z40.string().optional(),
+    sellerEmail: z40.string().optional(),
+    paymentTerms: z40.string().optional(),
+    deliveryTerms: z40.string().optional(),
+    productsSold: z40.string().optional(),
+    notes: z40.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
@@ -18246,16 +18257,16 @@ var quotationRequestsRouter = router({
     return { success: true };
   }),
   // Editar itens de uma resposta (protegido) — corrige preço/embalagem/quantidade que o fornecedor esqueceu
-  adminUpdateResponseItems: protectedProcedure.input(z39.object({
-    responseId: z39.number(),
-    items: z39.array(z39.object({
-      name: z39.string(),
-      quantity: z39.string(),
-      unit: z39.string().optional(),
-      price: z39.string(),
-      brand: z39.string().optional(),
-      packaging: z39.string().optional(),
-      notes: z39.string().optional()
+  adminUpdateResponseItems: protectedProcedure.input(z40.object({
+    responseId: z40.number(),
+    items: z40.array(z40.object({
+      name: z40.string(),
+      quantity: z40.string(),
+      unit: z40.string().optional(),
+      price: z40.string(),
+      brand: z40.string().optional(),
+      packaging: z40.string().optional(),
+      notes: z40.string().optional()
     })).min(1)
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -18264,9 +18275,9 @@ var quotationRequestsRouter = router({
     return { success: true };
   }),
   // Escolher manualmente o vencedor de cada item do comparativo (override do melhor preço)
-  adminSetBestChoice: protectedProcedure.input(z39.object({
-    quotationRequestId: z39.number(),
-    choices: z39.record(z39.string(), z39.object({ responseId: z39.number(), itemIndex: z39.number() }))
+  adminSetBestChoice: protectedProcedure.input(z40.object({
+    quotationRequestId: z40.number(),
+    choices: z40.record(z40.string(), z40.object({ responseId: z40.number(), itemIndex: z40.number() }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
@@ -18281,8 +18292,8 @@ var quotationRequestsRouter = router({
   // 2. Cria/encontra categoria com o título do orçamento
   // 3. Popula catálogo de preços com todos os itens de todas as respostas
   // 4. Retorna resumo estruturado para mensagem WhatsApp (NÃO cria solicitação de compra)
-  autoProcess: protectedProcedure.input(z39.object({
-    quotationRequestId: z39.number()
+  autoProcess: protectedProcedure.input(z40.object({
+    quotationRequestId: z40.number()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
@@ -18491,7 +18502,7 @@ var quotationRequestsRouter = router({
   }),
   // ===== ROTAS PÚBLICAS (sem auth) =====
   // Fornecedor busca sua resposta existente pelo token + nome da empresa
-  getMyResponse: publicProcedure.input(z39.object({ token: z39.string(), supplierName: z39.string() })).query(async ({ input }) => {
+  getMyResponse: publicProcedure.input(z40.object({ token: z40.string(), supplierName: z40.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.token, input.token));
@@ -18517,27 +18528,27 @@ var quotationRequestsRouter = router({
     };
   }),
   // Fornecedor atualiza sua resposta existente (público)
-  updateResponse: publicProcedure.input(z39.object({
-    token: z39.string(),
-    responseId: z39.number(),
-    supplierName: z39.string().min(1),
-    cnpj: z39.string().optional(),
-    address: z39.string().optional(),
-    sellerName: z39.string().optional(),
-    sellerPhone: z39.string().optional(),
-    sellerEmail: z39.string().optional(),
-    paymentTerms: z39.string().optional(),
-    deliveryTerms: z39.string().optional(),
-    items: z39.array(z39.object({
-      name: z39.string(),
-      quantity: z39.string(),
-      unit: z39.string().optional(),
-      price: z39.string(),
-      brand: z39.string().optional(),
-      packaging: z39.string().optional(),
-      notes: z39.string().optional()
+  updateResponse: publicProcedure.input(z40.object({
+    token: z40.string(),
+    responseId: z40.number(),
+    supplierName: z40.string().min(1),
+    cnpj: z40.string().optional(),
+    address: z40.string().optional(),
+    sellerName: z40.string().optional(),
+    sellerPhone: z40.string().optional(),
+    sellerEmail: z40.string().optional(),
+    paymentTerms: z40.string().optional(),
+    deliveryTerms: z40.string().optional(),
+    items: z40.array(z40.object({
+      name: z40.string(),
+      quantity: z40.string(),
+      unit: z40.string().optional(),
+      price: z40.string(),
+      brand: z40.string().optional(),
+      packaging: z40.string().optional(),
+      notes: z40.string().optional()
     })).min(1),
-    notes: z39.string().optional()
+    notes: z40.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
@@ -18570,9 +18581,9 @@ var quotationRequestsRouter = router({
     return { success: true };
   }),
   // Fornecedor: verificar se já existe cadastro por CNPJ ou nome (público)
-  findSupplier: publicProcedure.input(z39.object({
-    cnpj: z39.string().optional(),
-    supplierName: z39.string().optional()
+  findSupplier: publicProcedure.input(z40.object({
+    cnpj: z40.string().optional(),
+    supplierName: z40.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
@@ -18609,7 +18620,7 @@ var quotationRequestsRouter = router({
     };
   }),
   // Buscar solicitação por token (fornecedor acessa)
-  getByToken: publicProcedure.input(z39.object({ token: z39.string() })).query(async ({ input }) => {
+  getByToken: publicProcedure.input(z40.object({ token: z40.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.token, input.token));
@@ -18633,30 +18644,30 @@ var quotationRequestsRouter = router({
   }),
   // Fornecedor envia resposta (público)
   submitResponse: publicProcedure.input(
-    z39.object({
-      token: z39.string(),
-      supplierName: z39.string().min(1),
-      cnpj: z39.string().optional(),
-      address: z39.string().optional(),
-      sellerName: z39.string().optional(),
-      sellerPhone: z39.string().optional(),
-      sellerEmail: z39.string().optional(),
-      paymentTerms: z39.string().optional(),
-      deliveryTerms: z39.string().optional(),
-      tradeName: z39.string().optional(),
-      productsSold: z39.string().optional(),
-      items: z39.array(
-        z39.object({
-          name: z39.string(),
-          quantity: z39.string(),
-          unit: z39.string().optional(),
-          price: z39.string(),
-          brand: z39.string().optional(),
-          packaging: z39.string().optional(),
-          notes: z39.string().optional()
+    z40.object({
+      token: z40.string(),
+      supplierName: z40.string().min(1),
+      cnpj: z40.string().optional(),
+      address: z40.string().optional(),
+      sellerName: z40.string().optional(),
+      sellerPhone: z40.string().optional(),
+      sellerEmail: z40.string().optional(),
+      paymentTerms: z40.string().optional(),
+      deliveryTerms: z40.string().optional(),
+      tradeName: z40.string().optional(),
+      productsSold: z40.string().optional(),
+      items: z40.array(
+        z40.object({
+          name: z40.string(),
+          quantity: z40.string(),
+          unit: z40.string().optional(),
+          price: z40.string(),
+          brand: z40.string().optional(),
+          packaging: z40.string().optional(),
+          notes: z40.string().optional()
         })
       ).min(1),
-      notes: z39.string().optional()
+      notes: z40.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
@@ -18720,7 +18731,7 @@ var quotationRequestsRouter = router({
     return { success: true, responseToken, responseId };
   }),
   // Buscar resposta pelo responseToken (fornecedor acessa para revisar)
-  getByResponseToken: publicProcedure.input(z39.object({ responseToken: z39.string() })).query(async ({ input }) => {
+  getByResponseToken: publicProcedure.input(z40.object({ responseToken: z40.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
     const [resp] = await db.select().from(quotationResponses).where(eq39(quotationResponses.responseToken, input.responseToken));
@@ -18753,23 +18764,23 @@ var quotationRequestsRouter = router({
     };
   }),
   // Atualizar resposta pelo responseToken (fornecedor revisa)
-  updateResponseByToken: publicProcedure.input(z39.object({
-    responseToken: z39.string(),
-    supplierName: z39.string().min(1),
-    cnpj: z39.string().optional(),
-    address: z39.string().optional(),
-    sellerName: z39.string().optional(),
-    sellerPhone: z39.string().optional(),
-    sellerEmail: z39.string().optional(),
-    items: z39.array(z39.object({
-      name: z39.string(),
-      quantity: z39.string(),
-      unit: z39.string().optional(),
-      price: z39.string(),
-      brand: z39.string().optional(),
-      notes: z39.string().optional()
+  updateResponseByToken: publicProcedure.input(z40.object({
+    responseToken: z40.string(),
+    supplierName: z40.string().min(1),
+    cnpj: z40.string().optional(),
+    address: z40.string().optional(),
+    sellerName: z40.string().optional(),
+    sellerPhone: z40.string().optional(),
+    sellerEmail: z40.string().optional(),
+    items: z40.array(z40.object({
+      name: z40.string(),
+      quantity: z40.string(),
+      unit: z40.string().optional(),
+      price: z40.string(),
+      brand: z40.string().optional(),
+      notes: z40.string().optional()
     })).min(1),
-    notes: z39.string().optional()
+    notes: z40.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
@@ -18804,7 +18815,7 @@ init_trpc();
 init_db();
 init_schema();
 init_clientAreaScope();
-import { z as z40 } from "zod";
+import { z as z41 } from "zod";
 import { TRPCError as TRPCError31 } from "@trpc/server";
 import { eq as eq40, desc as desc30, and as and23, asc as asc5, ne as ne3, sql as sql25 } from "drizzle-orm";
 var advanceAreaId2 = clientAdvances.areaId;
@@ -18829,33 +18840,33 @@ async function scopedAdvance(db, id, clientId, areaId) {
 }
 var clientAdvancesRouter = router({
   // Listar adiantamentos de um cliente
-  list: protectedProcedure.input(z40.object({ clientId: z40.number(), areaId: z40.number().nullable().optional() })).query(async ({ input }) => {
+  list: protectedProcedure.input(z41.object({ clientId: z41.number(), areaId: z41.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(and23(eq40(clientAdvances.clientId, input.clientId), listArea2(input))).orderBy(desc30(clientAdvances.date));
   }),
   // Listar adiantamentos de um cliente (alias para uso no CargoControl)
-  listByClient: protectedProcedure.input(z40.object({ clientId: z40.number(), areaId: z40.number().nullable().optional() })).query(async ({ input }) => {
+  listByClient: protectedProcedure.input(z41.object({ clientId: z41.number(), areaId: z41.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(and23(eq40(clientAdvances.clientId, input.clientId), listArea2(input))).orderBy(desc30(clientAdvances.date));
   }),
   // Listar todos os adiantamentos (para uso no PDF do CargoControl)
-  listAll: protectedProcedure.input(z40.object({ areaId: z40.number().nullable().optional() }).optional()).query(async ({ input }) => {
+  listAll: protectedProcedure.input(z41.object({ areaId: z41.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(listArea2(input)).orderBy(desc30(clientAdvances.date));
   }),
   // Criar novo adiantamento
-  create: protectedProcedure.input(z40.object({
-    clientId: z40.number(),
-    amount: z40.number().positive(),
-    description: z40.string().optional(),
-    receiptUrl: z40.string().optional(),
-    date: z40.string(),
-    startDate: z40.string().optional(),
+  create: protectedProcedure.input(z41.object({
+    clientId: z41.number(),
+    amount: z41.number().positive(),
+    description: z41.string().optional(),
+    receiptUrl: z41.string().optional(),
+    date: z41.string(),
+    startDate: z41.string().optional(),
     // data de início dos abatimentos
-    areaId: z40.number().nullable().optional()
+    areaId: z41.number().nullable().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -18903,7 +18914,7 @@ var clientAdvancesRouter = router({
     return { id: advanceId };
   }),
   // Buscar saldo total de adiantamentos ativos de um cliente
-  getBalance: protectedProcedure.input(z40.object({ clientId: z40.number(), areaId: z40.number().nullable().optional() })).query(async ({ input }) => {
+  getBalance: protectedProcedure.input(z41.object({ clientId: z41.number(), areaId: z41.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advances = await db.select().from(clientAdvances).where(and23(
@@ -18915,7 +18926,7 @@ var clientAdvancesRouter = router({
     return { totalBalance, advances };
   }),
   // Listar deduções de um adiantamento
-  listDeductions: protectedProcedure.input(z40.object({ clientId: z40.number(), areaId: z40.number().nullable().optional() })).query(async ({ input }) => {
+  listDeductions: protectedProcedure.input(z41.object({ clientId: z41.number(), areaId: z41.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     if (!hasField2(input, "areaId")) {
@@ -18927,7 +18938,7 @@ var clientAdvancesRouter = router({
     return db.select().from(clientAdvanceDeductions).where(and23(eq40(clientAdvanceDeductions.clientId, input.clientId), sql25`${clientAdvanceDeductions.advanceId} IN (${sql25.join(ids.map((id) => sql25`${id}`), sql25`, `)})`)).orderBy(desc30(clientAdvanceDeductions.date));
   }),
   // Listar TODAS as deduções (para o controle de cargas sem filtro de cliente)
-  listAllDeductions: protectedProcedure.input(z40.object({ areaId: z40.number().nullable().optional() }).optional()).query(async ({ input }) => {
+  listAllDeductions: protectedProcedure.input(z41.object({ areaId: z41.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     if (!hasField2(input, "areaId")) return db.select().from(clientAdvanceDeductions).orderBy(desc30(clientAdvanceDeductions.date));
@@ -18937,15 +18948,15 @@ var clientAdvancesRouter = router({
     return db.select().from(clientAdvanceDeductions).where(sql25`${clientAdvanceDeductions.advanceId} IN (${sql25.join(ids.map((id) => sql25`${id}`), sql25`, `)})`).orderBy(desc30(clientAdvanceDeductions.date));
   }),
   // Aplicar abatimento manual em um adiantamento (para fechamento semanal)
-  applyDeduction: protectedProcedure.input(z40.object({
-    advanceId: z40.number(),
-    clientId: z40.number(),
-    amount: z40.number().positive(),
-    description: z40.string().optional(),
-    weeklyClosingId: z40.number().optional(),
-    cargoLoadId: z40.number().optional(),
-    date: z40.string(),
-    areaId: z40.number().nullable().optional()
+  applyDeduction: protectedProcedure.input(z41.object({
+    advanceId: z41.number(),
+    clientId: z41.number(),
+    amount: z41.number().positive(),
+    description: z41.string().optional(),
+    weeklyClosingId: z41.number().optional(),
+    cargoLoadId: z41.number().optional(),
+    date: z41.string(),
+    areaId: z41.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -19016,17 +19027,17 @@ var clientAdvancesRouter = router({
     return { deductAmount, balanceAfter };
   }),
   // Abatimento automático: aplica o saldo do adiantamento nas cargas entregues em ordem cronológica
-  applyAutoDeductionByLoads: protectedProcedure.input(z40.object({
-    clientId: z40.number(),
-    advanceId: z40.number(),
-    areaId: z40.number().nullable().optional(),
+  applyAutoDeductionByLoads: protectedProcedure.input(z41.object({
+    clientId: z41.number(),
+    advanceId: z41.number(),
+    areaId: z41.number().nullable().optional(),
     // Cargas a abater: array de { id, date, valueAmount } ordenadas da mais antiga para a mais nova
-    loads: z40.array(z40.object({
-      id: z40.number(),
-      date: z40.string(),
-      valueAmount: z40.number(),
+    loads: z41.array(z41.object({
+      id: z41.number(),
+      date: z41.string(),
+      valueAmount: z41.number(),
       // valor em R$ desta carga
-      description: z40.string().optional()
+      description: z41.string().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -19105,11 +19116,11 @@ var clientAdvancesRouter = router({
     };
   }),
   // Upload de comprovante para um adiantamento
-  uploadReceipt: protectedProcedure.input(z40.object({
-    advanceId: z40.number(),
-    fileBase64: z40.string(),
-    mimeType: z40.string().default("image/jpeg"),
-    areaId: z40.number().nullable().optional()
+  uploadReceipt: protectedProcedure.input(z41.object({
+    advanceId: z41.number(),
+    fileBase64: z41.string(),
+    mimeType: z41.string().default("image/jpeg"),
+    areaId: z41.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -19124,13 +19135,13 @@ var clientAdvancesRouter = router({
     return { url };
   }),
   // Atualizar adiantamento (amount, description, date, receiptUrl)
-  update: protectedProcedure.input(z40.object({
-    id: z40.number(),
-    areaId: z40.number().nullable().optional(),
-    amount: z40.number().positive().optional(),
-    description: z40.string().optional().nullable(),
-    date: z40.string().optional(),
-    receiptUrl: z40.string().optional().nullable()
+  update: protectedProcedure.input(z41.object({
+    id: z41.number(),
+    areaId: z41.number().nullable().optional(),
+    amount: z41.number().positive().optional(),
+    description: z41.string().optional().nullable(),
+    date: z41.string().optional(),
+    receiptUrl: z41.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
@@ -19156,7 +19167,7 @@ var clientAdvancesRouter = router({
   }),
   // Deletar adiantamento
   // Se force=true, remove deduções e reverte paymentStatus das cargas abatidas
-  delete: protectedProcedure.input(z40.object({ id: z40.number(), force: z40.boolean().optional(), areaId: z40.number().nullable().optional() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z41.object({ id: z41.number(), force: z41.boolean().optional(), areaId: z41.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advance = await scopedAdvance(db, input.id, void 0, inputArea2(input));
@@ -19190,7 +19201,7 @@ var clientAdvancesRouter = router({
     return { success: true };
   }),
   // Limpar deduções duplicadas de um adiantamento (manter apenas a mais antiga por cargo_load_id)
-  cleanDuplicateDeductions: protectedProcedure.input(z40.object({ advanceId: z40.number(), areaId: z40.number().nullable().optional() })).mutation(async ({ input }) => {
+  cleanDuplicateDeductions: protectedProcedure.input(z41.object({ advanceId: z41.number(), areaId: z41.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advance = await scopedAdvance(db, input.advanceId, void 0, inputArea2(input));
@@ -19226,7 +19237,7 @@ var clientAdvancesRouter = router({
     return { success: true, deletedCount: toDelete.length, newBalance: null };
   }),
   // Processar abatimentos retroativos: abate automaticamente cargas entregues sem dedução
-  processRetroactiveDeductions: protectedProcedure.input(z40.object({ clientId: z40.number(), areaId: z40.number().nullable().optional() })).mutation(async ({ input }) => {
+  processRetroactiveDeductions: protectedProcedure.input(z41.object({ clientId: z41.number(), areaId: z41.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const areaId = inputArea2(input);
@@ -19289,7 +19300,7 @@ var clientAdvancesRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z41 } from "zod";
+import { z as z42 } from "zod";
 import { eq as eq41, desc as desc31, and as and24, gte as gte11, lte as lte11, inArray as inArray8 } from "drizzle-orm";
 import { TRPCError as TRPCError32 } from "@trpc/server";
 var thirdPartyRouter = router({
@@ -19299,11 +19310,11 @@ var thirdPartyRouter = router({
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(freightRates).orderBy(freightRates.worksite, freightRates.destination);
   }),
-  createRate: protectedProcedure.input(z41.object({
-    worksite: z41.string().min(1),
-    destination: z41.string().min(1),
-    ratePerTon: z41.string().min(1),
-    notes: z41.string().optional()
+  createRate: protectedProcedure.input(z42.object({
+    worksite: z42.string().min(1),
+    destination: z42.string().min(1),
+    ratePerTon: z42.string().min(1),
+    notes: z42.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
@@ -19315,12 +19326,12 @@ var thirdPartyRouter = router({
     });
     return { id: result.insertId };
   }),
-  updateRate: protectedProcedure.input(z41.object({
-    id: z41.number(),
-    worksite: z41.string().min(1),
-    destination: z41.string().min(1),
-    ratePerTon: z41.string().min(1),
-    notes: z41.string().optional()
+  updateRate: protectedProcedure.input(z42.object({
+    id: z42.number(),
+    worksite: z42.string().min(1),
+    destination: z42.string().min(1),
+    ratePerTon: z42.string().min(1),
+    notes: z42.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
@@ -19332,7 +19343,7 @@ var thirdPartyRouter = router({
     }).where(eq41(freightRates.id, input.id));
     return { success: true };
   }),
-  deleteRate: protectedProcedure.input(z41.object({ id: z41.number() })).mutation(async ({ input }) => {
+  deleteRate: protectedProcedure.input(z42.object({ id: z42.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(freightRates).where(eq41(freightRates.id, input.id));
@@ -19340,10 +19351,10 @@ var thirdPartyRouter = router({
   }),
   // ===== ABASTECIMENTOS DE TERCEIRIZADOS =====
   // Retorna TANTO os registros de third_party_fuel QUANTO os fuel_records de caminhões terceirizados
-  listFuel: protectedProcedure.input(z41.object({
-    equipmentId: z41.number().optional(),
-    startDate: z41.string().optional(),
-    endDate: z41.string().optional()
+  listFuel: protectedProcedure.input(z42.object({
+    equipmentId: z42.number().optional(),
+    startDate: z42.string().optional(),
+    endDate: z42.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
@@ -19404,14 +19415,14 @@ var thirdPartyRouter = router({
     ].map((r) => ({ ...r, ownerName: ownerMap.get(r.equipmentId) ?? null })).sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
     return combined;
   }),
-  createFuel: protectedProcedure.input(z41.object({
-    equipmentId: z41.number(),
-    date: z41.string(),
-    liters: z41.string(),
-    pricePerLiter: z41.string(),
-    total: z41.string(),
-    location: z41.string().optional(),
-    notes: z41.string().optional()
+  createFuel: protectedProcedure.input(z42.object({
+    equipmentId: z42.number(),
+    date: z42.string(),
+    liters: z42.string(),
+    pricePerLiter: z42.string(),
+    total: z42.string(),
+    location: z42.string().optional(),
+    notes: z42.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
@@ -19444,15 +19455,15 @@ var thirdPartyRouter = router({
     }
     return { id };
   }),
-  updateFuel: protectedProcedure.input(z41.object({
-    id: z41.number(),
-    equipmentId: z41.number(),
-    date: z41.string(),
-    liters: z41.string(),
-    pricePerLiter: z41.string(),
-    total: z41.string(),
-    location: z41.string().optional(),
-    notes: z41.string().optional()
+  updateFuel: protectedProcedure.input(z42.object({
+    id: z42.number(),
+    equipmentId: z42.number(),
+    date: z42.string(),
+    liters: z42.string(),
+    pricePerLiter: z42.string(),
+    total: z42.string(),
+    location: z42.string().optional(),
+    notes: z42.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
@@ -19467,7 +19478,7 @@ var thirdPartyRouter = router({
     }).where(eq41(thirdPartyFuel.id, input.id));
     return { success: true };
   }),
-  deleteFuel: protectedProcedure.input(z41.object({ id: z41.number() })).mutation(async ({ input }) => {
+  deleteFuel: protectedProcedure.input(z42.object({ id: z42.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(thirdPartyFuel).where(eq41(thirdPartyFuel.id, input.id));
@@ -19479,10 +19490,10 @@ var thirdPartyRouter = router({
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(equipment).where(eq41(equipment.isThirdParty, 1));
   }),
-  setThirdParty: protectedProcedure.input(z41.object({
-    id: z41.number(),
-    isThirdParty: z41.boolean(),
-    thirdPartyOwner: z41.string().optional()
+  setThirdParty: protectedProcedure.input(z42.object({
+    id: z42.number(),
+    isThirdParty: z42.boolean(),
+    thirdPartyOwner: z42.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
@@ -19495,10 +19506,10 @@ var thirdPartyRouter = router({
   // ===== LISTAGEM DE FRETES DE TERCEIRIZADOS =====
   // Lista cargas onde o veículo é terceirizado, com cálculo de valor de frete
   // Busca tarifa por: (1) worksite+destination exato, (2) worksite parcial + destination parcial
-  listFreights: protectedProcedure.input(z41.object({
-    startDate: z41.string().optional(),
-    endDate: z41.string().optional(),
-    equipmentId: z41.number().optional()
+  listFreights: protectedProcedure.input(z42.object({
+    startDate: z42.string().optional(),
+    endDate: z42.string().optional(),
+    equipmentId: z42.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
@@ -19602,15 +19613,15 @@ var thirdPartyRouter = router({
     return result;
   }),
   // ===== MARCAR FRETE COMO PAGO =====
-  markFreightPaid: protectedProcedure.input(z41.object({
-    cargoLoadId: z41.number(),
-    notes: z41.string().optional(),
-    netAmount: z41.string(),
-    grossAmount: z41.string(),
-    fuelCost: z41.string(),
-    truckName: z41.string().optional(),
+  markFreightPaid: protectedProcedure.input(z42.object({
+    cargoLoadId: z42.number(),
+    notes: z42.string().optional(),
+    netAmount: z42.string(),
+    grossAmount: z42.string(),
+    fuelCost: z42.string(),
+    truckName: z42.string().optional(),
     // Valor manual (quando não há tarifa cadastrada)
-    manualAmount: z41.string().optional()
+    manualAmount: z42.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
@@ -19648,7 +19659,7 @@ var thirdPartyRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z42 } from "zod";
+import { z as z43 } from "zod";
 import { eq as eq42 } from "drizzle-orm";
 import { TRPCError as TRPCError33 } from "@trpc/server";
 async function requireDb() {
@@ -19664,22 +19675,22 @@ var geofencesRouter = router({
     return rows;
   }),
   // Buscar uma porteira por ID
-  getById: protectedProcedure.input(z42.object({ id: z42.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z43.object({ id: z43.number() })).query(async ({ input }) => {
     const db = await requireDb();
     const rows = await db.select().from(geofences).where(eq42(geofences.id, input.id));
     return rows[0] ?? null;
   }),
   // Criar nova porteira virtual
   create: protectedProcedure.input(
-    z42.object({
-      name: z42.string().min(1),
-      lat: z42.string(),
-      lng: z42.string(),
-      radiusMeters: z42.number().min(50).max(5e4).default(300),
-      traccarDeviceId: z42.number().optional(),
-      traccarGeofenceId: z42.number().optional(),
-      defaultOriginName: z42.string().default("SIMFLOR"),
-      notes: z42.string().optional()
+    z43.object({
+      name: z43.string().min(1),
+      lat: z43.string(),
+      lng: z43.string(),
+      radiusMeters: z43.number().min(50).max(5e4).default(300),
+      traccarDeviceId: z43.number().optional(),
+      traccarGeofenceId: z43.number().optional(),
+      defaultOriginName: z43.string().default("SIMFLOR"),
+      notes: z43.string().optional()
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await requireDb();
@@ -19699,16 +19710,16 @@ var geofencesRouter = router({
   }),
   // Atualizar porteira virtual
   update: protectedProcedure.input(
-    z42.object({
-      id: z42.number(),
-      name: z42.string().min(1).optional(),
-      lat: z42.string().optional(),
-      lng: z42.string().optional(),
-      radiusMeters: z42.number().min(50).max(5e4).optional(),
-      traccarDeviceId: z42.number().nullable().optional(),
-      traccarGeofenceId: z42.number().nullable().optional(),
-      defaultOriginName: z42.string().optional(),
-      notes: z42.string().nullable().optional()
+    z43.object({
+      id: z43.number(),
+      name: z43.string().min(1).optional(),
+      lat: z43.string().optional(),
+      lng: z43.string().optional(),
+      radiusMeters: z43.number().min(50).max(5e4).optional(),
+      traccarDeviceId: z43.number().nullable().optional(),
+      traccarGeofenceId: z43.number().nullable().optional(),
+      defaultOriginName: z43.string().optional(),
+      notes: z43.string().nullable().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await requireDb();
@@ -19726,13 +19737,13 @@ var geofencesRouter = router({
     return { success: true };
   }),
   // Ativar/desativar porteira
-  toggleActive: protectedProcedure.input(z42.object({ id: z42.number(), isActive: z42.boolean() })).mutation(async ({ input }) => {
+  toggleActive: protectedProcedure.input(z43.object({ id: z43.number(), isActive: z43.boolean() })).mutation(async ({ input }) => {
     const db = await requireDb();
     await db.update(geofences).set({ isActive: input.isActive ? 1 : 0 }).where(eq42(geofences.id, input.id));
     return { success: true };
   }),
   // Excluir porteira
-  delete: protectedProcedure.input(z42.object({ id: z42.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z43.object({ id: z43.number() })).mutation(async ({ input }) => {
     const db = await requireDb();
     await db.delete(geofences).where(eq42(geofences.id, input.id));
     return { success: true };
@@ -19743,7 +19754,7 @@ var geofencesRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z43 } from "zod";
+import { z as z44 } from "zod";
 import { eq as eq43, desc as desc32, and as and25, gte as gte12, lte as lte12 } from "drizzle-orm";
 import { TRPCError as TRPCError34 } from "@trpc/server";
 async function requireDb2() {
@@ -19754,11 +19765,11 @@ async function requireDb2() {
 var freightTripsRouter = router({
   // Listar fretes com filtro de data
   list: protectedProcedure.input(
-    z43.object({
-      dateFrom: z43.string().optional(),
-      dateTo: z43.string().optional(),
-      status: z43.enum(["open", "closed", "cancelled", "all"]).default("all"),
-      geofenceId: z43.number().optional()
+    z44.object({
+      dateFrom: z44.string().optional(),
+      dateTo: z44.string().optional(),
+      status: z44.enum(["open", "closed", "cancelled", "all"]).default("all"),
+      geofenceId: z44.number().optional()
     })
   ).query(async ({ input }) => {
     const db = await requireDb2();
@@ -19781,22 +19792,22 @@ var freightTripsRouter = router({
     return rows;
   }),
   // Buscar frete por ID
-  getById: protectedProcedure.input(z43.object({ id: z43.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z44.object({ id: z44.number() })).query(async ({ input }) => {
     const db = await requireDb2();
     const rows = await db.select().from(freightTrips).where(eq43(freightTrips.id, input.id));
     return rows[0] ?? null;
   }),
   // Abrir frete manualmente
   open: protectedProcedure.input(
-    z43.object({
-      geofenceId: z43.number(),
-      vehicleId: z43.number().optional(),
-      vehicleName: z43.string().optional(),
-      driverId: z43.number().optional(),
-      driverName: z43.string().optional(),
-      originName: z43.string().default("SIMFLOR"),
-      destinationName: z43.string().optional(),
-      entryAt: z43.string().optional()
+    z44.object({
+      geofenceId: z44.number(),
+      vehicleId: z44.number().optional(),
+      vehicleName: z44.string().optional(),
+      driverId: z44.number().optional(),
+      driverName: z44.string().optional(),
+      originName: z44.string().default("SIMFLOR"),
+      destinationName: z44.string().optional(),
+      entryAt: z44.string().optional()
       // ISO timestamp, default = now
     })
   ).mutation(async ({ input }) => {
@@ -19821,12 +19832,12 @@ var freightTripsRouter = router({
   }),
   // Fechar frete
   close: protectedProcedure.input(
-    z43.object({
-      id: z43.number(),
-      exitAt: z43.string().optional(),
+    z44.object({
+      id: z44.number(),
+      exitAt: z44.string().optional(),
       // ISO timestamp, default = now
-      distanceKm: z43.string().optional(),
-      traccarPositionsJson: z43.string().optional()
+      distanceKm: z44.string().optional(),
+      traccarPositionsJson: z44.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await requireDb2();
@@ -19841,15 +19852,15 @@ var freightTripsRouter = router({
   }),
   // Atualizar dados do frete (destino, notas, custos)
   update: protectedProcedure.input(
-    z43.object({
-      id: z43.number(),
-      destinationName: z43.string().nullable().optional(),
-      routeNotes: z43.string().nullable().optional(),
-      tollCost: z43.string().optional(),
-      maintenanceCost: z43.string().optional(),
-      fuelCost: z43.string().optional(),
-      distanceKm: z43.string().nullable().optional(),
-      status: z43.enum(["open", "closed", "cancelled"]).optional()
+    z44.object({
+      id: z44.number(),
+      destinationName: z44.string().nullable().optional(),
+      routeNotes: z44.string().nullable().optional(),
+      tollCost: z44.string().optional(),
+      maintenanceCost: z44.string().optional(),
+      fuelCost: z44.string().optional(),
+      distanceKm: z44.string().nullable().optional(),
+      status: z44.enum(["open", "closed", "cancelled"]).optional()
     })
   ).mutation(async ({ input }) => {
     const db = await requireDb2();
@@ -19873,23 +19884,23 @@ var freightTripsRouter = router({
     return { success: true };
   }),
   // Cancelar frete
-  cancel: protectedProcedure.input(z43.object({ id: z43.number() })).mutation(async ({ input }) => {
+  cancel: protectedProcedure.input(z44.object({ id: z44.number() })).mutation(async ({ input }) => {
     const db = await requireDb2();
     await db.update(freightTrips).set({ status: "cancelled" }).where(eq43(freightTrips.id, input.id));
     return { success: true };
   }),
   // Buscar frete aberto para uma porteira específica
-  getOpenTrip: protectedProcedure.input(z43.object({ geofenceId: z43.number() })).query(async ({ input }) => {
+  getOpenTrip: protectedProcedure.input(z44.object({ geofenceId: z44.number() })).query(async ({ input }) => {
     const db = await requireDb2();
     const rows = await db.select().from(freightTrips).where(and25(eq43(freightTrips.geofenceId, input.geofenceId), eq43(freightTrips.status, "open"))).orderBy(desc32(freightTrips.entryAt)).limit(1);
     return rows[0] ?? null;
   }),
   // Estatísticas de fretes
   stats: protectedProcedure.input(
-    z43.object({
-      dateFrom: z43.string().optional(),
-      dateTo: z43.string().optional(),
-      geofenceId: z43.number().optional()
+    z44.object({
+      dateFrom: z44.string().optional(),
+      dateTo: z44.string().optional(),
+      geofenceId: z44.number().optional()
     })
   ).query(async ({ input }) => {
     const db = await requireDb2();
@@ -19914,7 +19925,7 @@ var freightTripsRouter = router({
 // server/routers/financialConsolidated.ts
 init_trpc();
 init_db();
-import { z as z44 } from "zod";
+import { z as z45 } from "zod";
 import { sql as sql27 } from "drizzle-orm";
 function toNum2(v) {
   if (!v) return 0;
@@ -19935,10 +19946,10 @@ function getLocationName(id) {
 }
 var financialConsolidatedRouter = router({
   // ─── RESUMO GERAL (cards de totais por categoria) ─────────────────────────
-  getSummary: protectedProcedure.input(z44.object({
-    dateFrom: z44.string().optional(),
-    dateTo: z44.string().optional(),
-    workLocationId: z44.number().optional()
+  getSummary: protectedProcedure.input(z45.object({
+    dateFrom: z45.string().optional(),
+    dateTo: z45.string().optional(),
+    workLocationId: z45.number().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
@@ -20175,13 +20186,13 @@ var financialConsolidatedRouter = router({
     };
   }),
   // ─── DETALHE POR CATEGORIA (listagem completa com paginação) ─────────────
-  getDetailByCategory: protectedProcedure.input(z44.object({
-    category: z44.string(),
-    dateFrom: z44.string().optional(),
-    dateTo: z44.string().optional(),
-    workLocationId: z44.number().optional(),
-    page: z44.number().default(1),
-    pageSize: z44.number().default(50)
+  getDetailByCategory: protectedProcedure.input(z45.object({
+    category: z45.string(),
+    dateFrom: z45.string().optional(),
+    dateTo: z45.string().optional(),
+    workLocationId: z45.number().optional(),
+    page: z45.number().default(1),
+    pageSize: z45.number().default(50)
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
@@ -20630,9 +20641,9 @@ var financialConsolidatedRouter = router({
     };
   }),
   // ─── BREAKDOWN POR LOCAL DE TRABALHO ─────────────────────────────────────
-  getByLocation: protectedProcedure.input(z44.object({
-    dateFrom: z44.string().optional(),
-    dateTo: z44.string().optional()
+  getByLocation: protectedProcedure.input(z45.object({
+    dateFrom: z45.string().optional(),
+    dateTo: z45.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
@@ -20732,7 +20743,7 @@ init_sicoob();
 
 // server/routers/contaAzul.ts
 init_trpc();
-import { z as z46 } from "zod";
+import { z as z47 } from "zod";
 import axios2 from "axios";
 
 // server/utils/feriadosBrasil.ts
@@ -21205,7 +21216,7 @@ async function syncNotasFiscais(mes, ano) {
   return { synced, errors };
 }
 var contaAzulRouter = router({
-  setRefreshToken: protectedProcedure.input(z46.object({ refreshToken: z46.string().min(10) })).mutation(async ({ input }) => {
+  setRefreshToken: protectedProcedure.input(z47.object({ refreshToken: z47.string().min(10) })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(
@@ -21229,11 +21240,11 @@ var contaAzulRouter = router({
       configurado: Number(tokenRows?.[0]?.cnt ?? 0) > 0
     };
   }),
-  listNotasFiscais: protectedProcedure.input(z46.object({
-    mes: z46.number().min(1).max(12),
-    ano: z46.number().min(2020).max(2100),
-    pesquisa: z46.string().optional(),
-    incluirCanceladas: z46.boolean().optional()
+  listNotasFiscais: protectedProcedure.input(z47.object({
+    mes: z47.number().min(1).max(12),
+    ano: z47.number().min(2020).max(2100),
+    pesquisa: z47.string().optional(),
+    incluirCanceladas: z47.boolean().optional()
   })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { notas: [], error: "DB indispon\xEDvel" };
@@ -21270,7 +21281,7 @@ var contaAzulRouter = router({
   }),
   // Resumo (Vencidos/Vencem hoje/A vencer/Recebidos/Total) apenas das NFs sem boleto correspondente.
   // O frontend soma este resultado ao summaryBoletos (Sicoob) para formar os cards finais.
-  summaryNFsSemBoleto: protectedProcedure.input(z46.object({ mes: z46.number().min(1).max(12), ano: z46.number().min(2020).max(2100) })).query(async ({ input }) => {
+  summaryNFsSemBoleto: protectedProcedure.input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { vencidos: 0, vencemHoje: 0, aVencer: 0, recebidos: 0, total: 0, error: "DB indispon\xEDvel" };
     const [rows] = await db.$client.execute(
@@ -21298,10 +21309,10 @@ var contaAzulRouter = router({
     return { ...resumo, error: null };
   }),
   // Altera o Status NF (manual). Registra auditoria e, se "pago", a data de pagamento confirmado.
-  updateStatusNf: protectedProcedure.input(z46.object({
-    id: z46.number(),
-    novoStatus: z46.enum(["em_aberto", "pago", "cancelado"]),
-    dataPagamentoConfirmado: z46.string().optional()
+  updateStatusNf: protectedProcedure.input(z47.object({
+    id: z47.number(),
+    novoStatus: z47.enum(["em_aberto", "pago", "cancelado"]),
+    dataPagamentoConfirmado: z47.string().optional()
     // "YYYY-MM-DD" — obrigatório apenas quando novoStatus = pago (default: hoje)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
@@ -21327,7 +21338,7 @@ var contaAzulRouter = router({
     return { success: true };
   }),
   // Edita o valor da NF manualmente (protegido de sobrescrita em sincronizações futuras)
-  updateValorNF: protectedProcedure.input(z46.object({ id: z46.number(), valor: z46.string() })).mutation(async ({ input }) => {
+  updateValorNF: protectedProcedure.input(z47.object({ id: z47.number(), valor: z47.string() })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(
@@ -21337,7 +21348,7 @@ var contaAzulRouter = router({
     return { success: true };
   }),
   // Histórico de alterações de uma NF (auditoria)
-  historicoStatusNf: protectedProcedure.input(z46.object({ notaFiscalId: z46.number() })).query(async ({ input }) => {
+  historicoStatusNf: protectedProcedure.input(z47.object({ notaFiscalId: z47.number() })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { historico: [], error: "DB indispon\xEDvel" };
     const [rows] = await db.$client.execute(
@@ -21346,7 +21357,7 @@ var contaAzulRouter = router({
     );
     return { historico: rows ?? [], error: null };
   }),
-  syncNotasFiscais: protectedProcedure.input(z46.object({ mes: z46.number().min(1).max(12), ano: z46.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+  syncNotasFiscais: protectedProcedure.input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).mutation(async ({ input }) => {
     try {
       return { success: true, ...await syncNotasFiscais(input.mes, input.ano) };
     } catch (e) {
@@ -21360,7 +21371,7 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z47 } from "zod";
+import { z as z48 } from "zod";
 import { desc as desc33, eq as eq44, and as and26, sql as sql29 } from "drizzle-orm";
 async function getNextActionCode(db) {
   if (!db) return "AC-00001";
@@ -21385,9 +21396,9 @@ var fiscalNotesRouter = router({
     return { actionCode: await getNextActionCode(db) };
   }),
   // Listar todas as notas com filtros
-  list: protectedProcedure.input(z47.object({
-    quantityType: z47.enum(["m3", "ton", "all"]).optional(),
-    status: z47.enum(["available", "used", "all"]).optional()
+  list: protectedProcedure.input(z48.object({
+    quantityType: z48.enum(["m3", "ton", "all"]).optional(),
+    status: z48.enum(["available", "used", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -21402,8 +21413,8 @@ var fiscalNotesRouter = router({
     return rows;
   }),
   // Listar apenas notas disponíveis para o select no Controle de Cargas
-  getAvailable: protectedProcedure.input(z47.object({
-    quantityType: z47.enum(["m3", "ton", "all"]).optional()
+  getAvailable: protectedProcedure.input(z48.object({
+    quantityType: z48.enum(["m3", "ton", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -21415,16 +21426,16 @@ var fiscalNotesRouter = router({
     return rows;
   }),
   // Criar nova nota/ação
-  create: protectedProcedure.input(z47.object({
-    invoiceNumber: z47.string().optional(),
-    issueDate: z47.string(),
-    quantityType: z47.enum(["m3", "ton"]),
-    quantity: z47.string(),
-    fileBase64: z47.string().optional(),
+  create: protectedProcedure.input(z48.object({
+    invoiceNumber: z48.string().optional(),
+    issueDate: z48.string(),
+    quantityType: z48.enum(["m3", "ton"]),
+    quantity: z48.string(),
+    fileBase64: z48.string().optional(),
     // base64 do arquivo
-    fileName: z47.string().optional(),
-    fileMimeType: z47.string().optional(),
-    notes: z47.string().optional()
+    fileName: z48.string().optional(),
+    fileMimeType: z48.string().optional(),
+    notes: z48.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -21454,13 +21465,13 @@ var fiscalNotesRouter = router({
     return { success: true, actionCode };
   }),
   // Marcar nota como utilizada (chamado ao salvar uma carga)
-  markAsUsed: protectedProcedure.input(z47.object({
-    id: z47.number(),
-    cargoId: z47.number().optional(),
-    clientId: z47.number().optional(),
-    clientName: z47.string().optional(),
-    destination: z47.string().optional(),
-    workLocation: z47.string().optional()
+  markAsUsed: protectedProcedure.input(z48.object({
+    id: z48.number(),
+    cargoId: z48.number().optional(),
+    clientId: z48.number().optional(),
+    clientName: z48.string().optional(),
+    destination: z48.string().optional(),
+    workLocation: z48.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -21481,16 +21492,16 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Editar nota/ação (data, quantidade, NF, observações, arquivo)
-  update: protectedProcedure.input(z47.object({
-    id: z47.number(),
-    invoiceNumber: z47.string().optional(),
-    issueDate: z47.string().optional(),
-    quantityType: z47.enum(["m3", "ton"]).optional(),
-    quantity: z47.string().optional(),
-    fileBase64: z47.string().optional(),
-    fileName: z47.string().optional(),
-    fileMimeType: z47.string().optional(),
-    notes: z47.string().optional()
+  update: protectedProcedure.input(z48.object({
+    id: z48.number(),
+    invoiceNumber: z48.string().optional(),
+    issueDate: z48.string().optional(),
+    quantityType: z48.enum(["m3", "ton"]).optional(),
+    quantity: z48.string().optional(),
+    fileBase64: z48.string().optional(),
+    fileName: z48.string().optional(),
+    fileMimeType: z48.string().optional(),
+    notes: z48.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -21517,7 +21528,7 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Liberar nota (desfazer uso — admin)
-  release: protectedProcedure.input(z47.object({ id: z47.number() })).mutation(async ({ input }) => {
+  release: protectedProcedure.input(z48.object({ id: z48.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.update(fiscalNotes).set({
@@ -21530,20 +21541,20 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Deletar nota (somente disponíveis)
-  delete: protectedProcedure.input(z47.object({ id: z47.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z48.object({ id: z48.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.delete(fiscalNotes).where(eq44(fiscalNotes.id, input.id));
     return { success: true };
   }),
   // Relatório-planilha: notas com dados da carga, local e destino
-  report: protectedProcedure.input(z47.object({
-    workLocationId: z47.number().optional(),
-    destinationId: z47.number().optional(),
-    dateFrom: z47.string().optional(),
-    dateTo: z47.string().optional(),
-    search: z47.string().optional(),
-    limit: z47.number().optional().default(500)
+  report: protectedProcedure.input(z48.object({
+    workLocationId: z48.number().optional(),
+    destinationId: z48.number().optional(),
+    dateFrom: z48.string().optional(),
+    dateTo: z48.string().optional(),
+    search: z48.string().optional(),
+    limit: z48.number().optional().default(500)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -21640,7 +21651,7 @@ var fiscalNotesRouter = router({
 // server/routers/notificationSettings.ts
 init_trpc();
 init_db();
-import { z as z48 } from "zod";
+import { z as z49 } from "zod";
 import { sql as sql30 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
@@ -21773,11 +21784,11 @@ var notificationSettingsRouter = router({
   // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
   // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
   // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
-  updateCargoNfResponsible: protectedProcedure.input(z48.object({
-    recipients: z48.array(z48.object({
-      collaboratorId: z48.number().nullable(),
-      manualName: z48.string().nullable().optional(),
-      manualPhone: z48.string().nullable().optional()
+  updateCargoNfResponsible: protectedProcedure.input(z49.object({
+    recipients: z49.array(z49.object({
+      collaboratorId: z49.number().nullable(),
+      manualName: z49.string().nullable().optional(),
+      manualPhone: z49.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -21786,12 +21797,12 @@ var notificationSettingsRouter = router({
     await setSetting(db, "cargoNfResponsible", input);
     return { ok: true };
   }),
-  update: protectedProcedure.input(z48.record(z48.string(), z48.object({
-    enabled: z48.boolean(),
-    hour: z48.number().int().min(0).max(23),
-    minute: z48.number().int().min(0).max(59),
-    weekday: z48.number().int().min(0).max(6).nullable(),
-    whatsappCollaboratorIds: z48.array(z48.number())
+  update: protectedProcedure.input(z49.record(z49.string(), z49.object({
+    enabled: z49.boolean(),
+    hour: z49.number().int().min(0).max(23),
+    minute: z49.number().int().min(0).max(59),
+    weekday: z49.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z49.array(z49.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -21799,9 +21810,9 @@ var notificationSettingsRouter = router({
     await setSetting(db, "jobConfig", input);
     return { ok: true };
   }),
-  updateClientConfig: protectedProcedure.input(z48.record(z48.string(), z48.object({
-    enabled: z48.boolean(),
-    clientIds: z48.array(z48.number())
+  updateClientConfig: protectedProcedure.input(z49.record(z49.string(), z49.object({
+    enabled: z49.boolean(),
+    clientIds: z49.array(z49.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -21812,7 +21823,7 @@ var notificationSettingsRouter = router({
 });
 
 // server/routers.ts
-import { z as z49 } from "zod";
+import { z as z50 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -21994,10 +22005,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z49.object({
-      name: z49.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z49.string().email("Email inv\xE1lido"),
-      password: z49.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z50.object({
+      name: z50.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z50.string().email("Email inv\xE1lido"),
+      password: z50.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -22012,9 +22023,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z49.object({
-      email: z49.string().email("Email inv\xE1lido"),
-      password: z49.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z50.object({
+      email: z50.string().email("Email inv\xE1lido"),
+      password: z50.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -22033,11 +22044,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z49.object({
-      seedKey: z49.string(),
-      email: z49.string().email(),
-      name: z49.string(),
-      password: z49.string().min(4)
+    seedAdmin: publicProcedure.input(z50.object({
+      seedKey: z50.string(),
+      email: z50.string().email(),
+      name: z50.string(),
+      password: z50.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -22047,9 +22058,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z49.object({
-      email: z49.string().email("Email inv\xE1lido"),
-      origin: z49.string().url().optional()
+    forgotPassword: publicProcedure.input(z50.object({
+      email: z50.string().email("Email inv\xE1lido"),
+      origin: z50.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -22063,9 +22074,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z49.object({
-      token: z49.string().min(1),
-      password: z49.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z50.object({
+      token: z50.string().min(1),
+      password: z50.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -22133,7 +22144,7 @@ var appRouter = router({
   notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z49.object({ key: z49.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z50.object({ key: z50.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();

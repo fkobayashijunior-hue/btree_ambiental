@@ -6,6 +6,7 @@ const collaborators = collaboratorsTable;
 const driverAlias = alias(collaboratorsTable, "driver");
 import { eq } from "drizzle-orm";
 import { cloudinaryUpload } from "../cloudinary";
+import { trailerPlateInput } from "../lib/trailerPlate";
 
 export const sectorsRouter = router({
   // --- SETORES ---
@@ -112,6 +113,7 @@ export const sectorsRouter = router({
           year: equipment.year,
           serialNumber: equipment.serialNumber,
           licensePlate: equipment.licensePlate,
+          trailerPlate: equipment.trailerPlate,
           imageUrl: equipment.imageUrl,
           status: equipment.status,
           typeId: equipment.typeId,
@@ -152,7 +154,8 @@ export const sectorsRouter = router({
             (r.brand || "").toLowerCase().includes(s) ||
             (r.model || "").toLowerCase().includes(s) ||
             (r.serialNumber || "").toLowerCase().includes(s) ||
-            (r.licensePlate || "").toLowerCase().includes(s);
+            (r.licensePlate || "").toLowerCase().includes(s) ||
+            (r.trailerPlate || "").toLowerCase().includes(s);
         }
         return true;
       });
@@ -169,6 +172,7 @@ export const sectorsRouter = router({
       year: z.number().optional(),
       serialNumber: z.string().optional(),
       licensePlate: z.string().optional(),
+      trailerPlate: trailerPlateInput,
       imageUrl: z.string().optional(),
       status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
       defaultHeightM: z.string().optional(),
@@ -228,6 +232,7 @@ export const sectorsRouter = router({
       year: z.number().optional(),
       serialNumber: z.string().optional(),
       licensePlate: z.string().optional(),
+      trailerPlate: trailerPlateInput,
       imageUrl: z.string().optional(),
       status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
       defaultHeightM: z.string().optional().nullable(),

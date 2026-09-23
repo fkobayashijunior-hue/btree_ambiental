@@ -479,6 +479,7 @@ export const equipment = mysqlTable("equipment", {
 	year: int(),
 	serialNumber: varchar("serial_number", { length: 100 }),
 	licensePlate: varchar("license_plate", { length: 20 }),
+	trailerPlate: varchar("trailer_plate", { length: 8 }),
 	imageUrl: text("image_url"),
 	status: mysqlEnum(['ativo','manutencao','inativo']).default('ativo').notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
