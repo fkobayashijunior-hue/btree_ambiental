@@ -48,6 +48,7 @@ export const SYSTEM_MODULES = [
   { slug: "compras",      label: "Solicitações de Compras",  group: "Compras" },
   { slug: "fornecedores", label: "Fornecedores",             group: "Compras" },
   { slug: "orcamentos",   label: "Orçamentos",               group: "Compras" },
+  { slug: "estoque",      label: "Estoque",                  group: "Compras" },
   // Transporte
   { slug: "ciclos-frete",    label: "Ciclos de Frete (Geofence)",   group: "Transporte" },
   // Notas

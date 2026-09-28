@@ -1,5 +1,6 @@
 // @ts-nocheck
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearch, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,11 +40,13 @@ function itemNamesMatch(a: string, b: string): boolean {
   const cb = nb.replace(/\s+/g, '');
   if (ca === cb) return true;
   if (ca.length >= 4 && cb.length >= 4 && (ca.includes(cb) || cb.includes(ca))) return true;
-  // Palavras significativas (≥3 chars)
-  const words = (s: string) => s.split(/\s+/).filter(w => w.length >= 3);
+  // Palavras significativas: ≥3 letras, OU qualquer token com dígito (ex: "68", "10w",
+  // "15w40") — números curtos são justamente o que distingue produtos parecidos
+  // ("68 hidráulico" vs "15w40 hidráulico"), então não podem ser descartados aqui.
+  const words = (s: string) => s.split(/\s+/).filter(w => w.length >= 3 || /\d/.test(w));
   const wa = words(na);
   const wb = words(nb);
-  // Se algum lado não tem palavras significativas (nomes curtos tipo '10w', '68'), só casa por exato/compacto acima
+  // Se algum lado não tem palavras significativas, só casa por exato/compacto acima
   if (wa.length === 0 || wb.length === 0) return false;
   const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
   return shorter.every(w => longer.includes(w));
@@ -112,6 +115,11 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   cancelada: { label: 'Cancelada', color: 'bg-red-100 text-red-500 border-red-200' },
 };
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  boleto: 'Boleto', pix: 'PIX', cartao_credito: 'Cartão de Crédito', cartao_debito: 'Cartão de Débito',
+  dinheiro: 'Dinheiro', transferencia: 'Transferência', outro: 'Outro',
+};
+
 // Dados da empresa
 const COMPANY = {
   name: 'BTREE Ambiental',
@@ -153,10 +161,10 @@ type AutoProcessResult = {
 
 export default function QuotationsPage() {
   const utils = trpc.useUtils();
+  const searchString = useSearch();
+  const [, navigate] = useLocation();
 
   const [activeTab, setActiveTab] = useState('last');
-  const [expandedCat, setExpandedCat] = useState<string | null>(null);
-  const [expandedProd, setExpandedProd] = useState<string | null>(null);
 
   // New quotation form
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -189,8 +197,10 @@ export default function QuotationsPage() {
   const [autoProcessResult, setAutoProcessResult] = useState<AutoProcessResult | null>(null);
   const [showWhatsAppSummary, setShowWhatsAppSummary] = useState(false);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
+  // Rascunho de quantidade em edição na revisão pré-compra (por nome do item),
+  // antes de confirmar no bestChoices — reseta ao trocar/fechar o orçamento aberto.
+  const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
 
-  const { data: grouped, isLoading } = trpc.quotations.listByCategory.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery({ activeOnly: true });
   const { data: categories } = trpc.purchaseCategories.list.useQuery();
   const { data: collaboratorsRaw } = trpc.collaborators.list.useQuery({ active: true });
@@ -203,6 +213,84 @@ export default function QuotationsPage() {
     { enabled: viewResponsesId !== null }
   );
 
+  // Abre direto o comparativo de um orçamento quando chega com ?open=<id> —
+  // usado pelo botão "Solicitar Orçamento" da Solicitação de Compra.
+  useEffect(() => {
+    if (!searchString) return;
+    const params = new URLSearchParams(searchString);
+    const openId = params.get('open');
+    if (openId) {
+      setActiveTab('requests');
+      setViewResponsesId(parseInt(openId, 10));
+    }
+  }, [searchString]);
+
+  function fmtBreakdown(breakdown: Array<{ supplierName: string; subtotal: number }> | undefined) {
+    if (!breakdown || breakdown.length === 0) return '';
+    return breakdown.map(s => `${s.supplierName}: ${fmtPrice(String(s.subtotal))}`).join(' · ');
+  }
+
+  const confirmPurchaseMutation = trpc.quotationRequests.confirmPurchaseDecision.useMutation({
+    onSuccess: (data) => {
+      utils.quotationRequests.getById.invalidate({ id: viewResponsesId! });
+      toast.success(`Compra confirmada! ${fmtBreakdown(data.suppliersBreakdown)}`);
+      setShowConfirmPurchaseDialog(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Dialog de "Confirmar Compra" — pede forma de pagamento e permite anexar NF/comprovante
+  // antes de fechar a compra (opcionais; a compra fecha mesmo sem nenhum dos dois).
+  const [showConfirmPurchaseDialog, setShowConfirmPurchaseDialog] = useState(false);
+  const [confirmPaymentMethod, setConfirmPaymentMethod] = useState('');
+  const [confirmInvoiceUrl, setConfirmInvoiceUrl] = useState('');
+  const [confirmReceiptUrl, setConfirmReceiptUrl] = useState('');
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+
+  async function uploadPurchaseFile(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', 'btree_ambiental');
+    formData.append('folder', 'btree-receipts');
+    const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!data.secure_url) throw new Error('Upload não retornou URL');
+    return data.secure_url as string;
+  }
+
+  async function handlePickFile(kind: 'invoice' | 'receipt', file: File | undefined) {
+    if (!file) return;
+    const setUploading = kind === 'invoice' ? setUploadingInvoice : setUploadingReceipt;
+    const setUrl = kind === 'invoice' ? setConfirmInvoiceUrl : setConfirmReceiptUrl;
+    setUploading(true);
+    try {
+      const url = await uploadPurchaseFile(file);
+      setUrl(url);
+      toast.success(kind === 'invoice' ? 'Nota Fiscal anexada' : 'Comprovante anexado');
+    } catch {
+      toast.error('Erro ao enviar arquivo');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function openConfirmPurchaseDialog() {
+    setConfirmPaymentMethod('');
+    setConfirmInvoiceUrl('');
+    setConfirmReceiptUrl('');
+    setShowConfirmPurchaseDialog(true);
+  }
+
+  const createPurchaseFromDecisionMutation = trpc.quotationRequests.createPurchaseRequestFromDecision.useMutation({
+    onSuccess: (data) => {
+      utils.quotationRequests.getById.invalidate({ id: viewResponsesId! });
+      toast.success(`Solicitação de Compra gerada! ${fmtBreakdown(data.suppliersBreakdown)}`);
+      navigate(`/compras/${data.purchaseRequestId}`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const createQuoteMutation = trpc.quotations.create.useMutation({
     onSuccess: () => {
       utils.quotations.listByCategory.invalidate();
@@ -210,13 +298,6 @@ export default function QuotationsPage() {
       resetQuoteForm();
     },
     onError: (err) => toast.error("Erro: " + err.message),
-  });
-
-  const deleteQuoteMutation = trpc.quotations.delete.useMutation({
-    onSuccess: () => {
-      utils.quotations.listByCategory.invalidate();
-      toast.success("Orçamento excluído");
-    },
   });
 
   const createCatMutation = trpc.purchaseCategories.create.useMutation({
@@ -397,25 +478,29 @@ export default function QuotationsPage() {
     const link = getPublicLink(token);
     const firstName = requesterName ? requesterName.split(' ')[0] : 'a equipe BTREE Ambiental';
 
-    let msg = `🌿 *${COMPANY.name}*\n`;
-    msg += `📞 Contato Comercial: ${COMPANY.phone} · ${COMPANY.commercial}\n`;
-    msg += `🌐 ${COMPANY.site}\n`;
-    msg += `📸 Instagram: ${COMPANY.instagram}\n`;
+    // Nota: emojis de 4 bytes (fora do BMP, ex: 🌿📞🌐📸📋) viram "�" quando passam pelo
+    // link wa.me/?text= — é uma limitação do próprio WhatsApp ao decodificar a URL, não
+    // do nosso código. Por isso essa mensagem usa só texto simples e símbolos de 3 bytes
+    // (como "━", que é seguro). Não reintroduza emojis aqui.
+    let msg = `*${COMPANY.name}*\n`;
+    msg += `Contato Comercial: ${COMPANY.phone} · ${COMPANY.commercial}\n`;
+    msg += `${COMPANY.site}\n`;
+    msg += `Instagram: ${COMPANY.instagram}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
     msg += `Olá! Tudo bem? Aqui é ${firstName} da BTREE Ambiental!!\n`;
     msg += `Eu gostaria de solicitar um orçamento! Segue abaixo:\n\n`;
-    msg += `📋 *${title}*\n\n`;
+    msg += `*${title}*\n\n`;
     msg += `*Itens solicitados:*\n`;
     items.forEach((item, i) => {
       msg += `${i + 1}. ${item.name} — ${item.quantity} ${item.unit}\n`;
     });
-    if (notes) msg += `\n📝 *Obs:* ${notes}\n`;
+    if (notes) msg += `\n*Obs:* ${notes}\n`;
     msg += `\nFavor mandar formulário de orçamento, ou se preferir preencha nosso formulário pelo link:\n${link}\n`;
     msg += `\n━━━━━━━━━━━━━━━━━━━━\n`;
     if (requesterName) {
       msg += `*Solicitante:* ${requesterName}\n`;
-      if (requesterPhone) msg += `📱 ${requesterPhone}\n`;
-      if (requesterEmail) msg += `✉️ ${requesterEmail}\n`;
+      if (requesterPhone) msg += `Tel: ${requesterPhone}\n`;
+      if (requesterEmail) msg += `E-mail: ${requesterEmail}\n`;
     }
     return msg;
   }
@@ -423,15 +508,16 @@ export default function QuotationsPage() {
   // ===== MENSAGEM WHATSAPP PARA GESTORES (RESUMO DE COMPRAS) =====
   function buildManagerWhatsAppMessage(result: AutoProcessResult): string {
     const today = new Date().toLocaleDateString('pt-BR');
-    const systemLink = `https://btreeambiental.com/orcamentos`;
+    const systemLink = `${window.location.origin}/orcamentos?open=${result.quotationRequestId}`;
 
-    let msg = `🌿 *BTREE Ambiental — Resumo de Cotação*\n`;
-    msg += `📅 Data: ${today}\n`;
-    if (result.requesterName) msg += `👤 Solicitante: ${result.requesterName}\n`;
+    // Mesma observação de buildWhatsAppMessage: sem emojis de 4 bytes aqui, só texto e "━".
+    let msg = `*BTREE Ambiental — Resumo de Cotação*\n`;
+    msg += `Data: ${today}\n`;
+    if (result.requesterName) msg += `Solicitante: ${result.requesterName}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    msg += `📋 *${result.quotationTitle}*\n`;
-    msg += `🏢 Fornecedores consultados: ${result.responseCount}\n\n`;
-    msg += `*📦 Melhor preço por item:*\n\n`;
+    msg += `*${result.quotationTitle}*\n`;
+    msg += `Fornecedores consultados: ${result.responseCount}\n\n`;
+    msg += `*Melhor preço por item:*\n\n`;
 
     result.summaryItems.forEach((item, i) => {
       if (item.found) {
@@ -442,17 +528,17 @@ export default function QuotationsPage() {
         msg += `   • Subtotal: *${fmtPrice(item.subtotal)}*\n\n`;
       } else {
         msg += `${i + 1}. *${item.name}*\n`;
-        msg += `   ⚠️ Não cotado\n\n`;
+        msg += `   (Não cotado)\n\n`;
       }
     });
 
     msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `💰 *TOTAL ESTIMADO: ${fmtPrice(result.grandTotal)}*\n`;
+    msg += `*TOTAL ESTIMADO: ${fmtPrice(result.grandTotal)}*\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    msg += `🔗 Para ver o orçamento completo com todos os fornecedores e preços:\n`;
+    msg += `Para ver o orçamento completo com todos os fornecedores e preços:\n`;
     msg += `${systemLink}\n\n`;
     msg += `_Aguardamos sua aprovação para prosseguir com a compra._\n`;
-    msg += `\n🌿 *BTREE Ambiental* | ${COMPANY.phone}`;
+    msg += `\n*BTREE Ambiental* | ${COMPANY.phone}`;
 
     return msg;
   }
@@ -529,144 +615,85 @@ export default function QuotationsPage() {
               <p className="text-xs mt-1">Crie uma solicitação na aba Solicitar</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {quotRequests.map((req: any) => {
-                const expired = req.isExpired;
-                const statusKey = expired && req.status === 'ativa' ? 'expirada' : req.status;
-                const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS['ativa'];
-                const respCount = req.responseCount ?? req.responses?.length ?? null;
-                return (
-                  <button
-                    key={req.id}
-                    className="w-full text-left"
-                    onClick={() => { setAutoProcessResult(null); setViewResponsesId(req.id); }}
-                  >
-                    <Card className="hover:border-emerald-300 hover:shadow-sm transition-all">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-semibold text-gray-800 truncate">{req.title}</p>
-                              <Badge className={`text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
+            <>
+              {/* Mobile: cards */}
+              <div className="space-y-2 md:hidden">
+                {quotRequests.map((req: any) => {
+                  const expired = req.isExpired;
+                  const statusKey = expired && req.status === 'ativa' ? 'expirada' : req.status;
+                  const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS['ativa'];
+                  const respCount = req.responseCount ?? req.responses?.length ?? null;
+                  return (
+                    <button
+                      key={req.id}
+                      className="w-full text-left"
+                      onClick={() => { setAutoProcessResult(null); setQtyDrafts({}); setViewResponsesId(req.id); }}
+                    >
+                      <Card className="hover:border-emerald-300 hover:shadow-sm transition-all">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-gray-800 truncate">{req.title}</p>
+                                <Badge className={`text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
+                                <span className="flex items-center gap-1"><Package className="w-3 h-3" /> {req.items.length} item(s)</span>
+                                {respCount !== null && (
+                                  <span className="flex items-center gap-1 text-emerald-700"><Building2 className="w-3 h-3" /> {respCount} resposta(s)</span>
+                                )}
+                                {req.requesterName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {req.requesterName}</span>}
+                              </div>
                             </div>
-                            <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
-                              <span className="flex items-center gap-1"><Package className="w-3 h-3" /> {req.items.length} item(s)</span>
-                              {respCount !== null && (
-                                <span className="flex items-center gap-1 text-emerald-700"><Building2 className="w-3 h-3" /> {respCount} resposta(s)</span>
-                              )}
-                              {req.requesterName && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {req.requesterName}</span>}
-                            </div>
+                            <ChevronDown className="w-5 h-5 text-gray-400 -rotate-90 flex-shrink-0" />
                           </div>
-                          <ChevronDown className="w-5 h-5 text-gray-400 -rotate-90 flex-shrink-0" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
+                        </CardContent>
+                      </Card>
+                    </button>
+                  );
+                })}
+              </div>
 
-        {/* CATALOG TAB (oculto — legado) */}
-        <TabsContent value="catalog" className="space-y-3 mt-3 hidden">
-          {isLoading ? (
-            <div className="text-center py-8 text-gray-400">Carregando...</div>
-          ) : !grouped || grouped.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <TrendingDown className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>Nenhum orçamento registrado</p>
-              <Button variant="outline" className="mt-3" onClick={() => setShowQuoteForm(true)}>
-                <Plus className="w-4 h-4 mr-2" /> Registrar primeiro orçamento
-              </Button>
-            </div>
-          ) : (
-            grouped.map(cat => {
-              const catKey = cat.categoryId?.toString() ?? 'sem_categoria';
-              const isExpanded = expandedCat === catKey;
-              return (
-                <Card key={catKey} className="overflow-hidden">
-                  <button className="w-full text-left" onClick={() => setExpandedCat(isExpanded ? null : catKey)}>
-                    <CardHeader className="p-4 pb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.categoryColor }} />
-                          <span className="font-semibold text-gray-800">{cat.categoryName}</span>
-                          <Badge variant="outline" className="text-xs">{cat.products.length} produto(s)</Badge>
-                        </div>
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                      </div>
-                    </CardHeader>
-                  </button>
-                  {isExpanded && (
-                    <CardContent className="p-4 pt-0 space-y-3">
-                      {cat.products.map(prod => {
-                        const prodKey = prod.productName;
-                        const isProdExpanded = expandedProd === `${catKey}-${prodKey}`;
-                        const bestEntry = (prod.quotes || []).reduce((best: any, e: any) => {
-                          const p = parseFloat(e.unitPrice);
-                          return (!best || p < parseFloat(best.unitPrice)) ? e : best;
-                        }, null);
+              {/* Desktop/notebook: tabela */}
+              <Card className="hidden md:block overflow-hidden">
+                <CardContent className="p-0 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-emerald-700 text-white">
+                        <th className="px-3 py-2 text-left text-xs font-semibold">Título</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold">Status</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold">Itens</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold">Respostas</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold">Solicitante</th>
+                        <th className="px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {quotRequests.map((req: any) => {
+                        const expired = req.isExpired;
+                        const statusKey = expired && req.status === 'ativa' ? 'expirada' : req.status;
+                        const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS['ativa'];
+                        const respCount = req.responseCount ?? req.responses?.length ?? null;
                         return (
-                          <div key={prodKey} className="border rounded-lg overflow-hidden">
-                            <button
-                              className="w-full text-left p-3 hover:bg-gray-50 transition-colors"
-                              onClick={() => setExpandedProd(isProdExpanded ? null : `${catKey}-${prodKey}`)}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-medium text-gray-800">{prod.productName}</p>
-                                  {bestEntry && (
-                                    <p className="text-xs text-green-700 mt-0.5">
-                                      Melhor: {fmtPrice(bestEntry.unitPrice)} — {bestEntry.supplierName}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-xs">{(prod.quotes || []).length} cot.</Badge>
-                                  {isProdExpanded ? <ChevronUp className="w-3 h-3 text-gray-400" /> : <ChevronDown className="w-3 h-3 text-gray-400" />}
-                                </div>
-                              </div>
-                            </button>
-                            {isProdExpanded && (
-                              <div className="border-t bg-gray-50 p-3 space-y-2">
-                                {(prod.quotes || [])
-                                  .slice()
-                                  .sort((a: any, b: any) => parseFloat(a.unitPrice) - parseFloat(b.unitPrice))
-                                  .map((entry: any, i: number) => (
-                                    <div key={entry.id} className={`flex items-center justify-between rounded p-2 ${i === 0 ? 'bg-green-50 border border-green-200' : 'bg-white border'}`}>
-                                      <div>
-                                        <div className="flex items-center gap-1">
-                                          <Building2 className="w-3 h-3 text-gray-400" />
-                                          <span className="text-sm font-medium text-gray-700">{entry.supplierName}</span>
-                                          {i === 0 && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
-                                        </div>
-                                        <p className="text-xs text-gray-400 mt-0.5">{fmt(entry.quotedAt)} · {entry.unit}</p>
-                                        {entry.notes && <p className="text-xs text-gray-400 italic mt-0.5">{entry.notes}</p>}
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className={`font-bold text-sm ${i === 0 ? 'text-green-700' : 'text-gray-700'}`}>{fmtPrice(entry.unitPrice)}</span>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="text-red-300 hover:text-red-500 p-1 h-auto"
-                                          onClick={() => deleteQuoteMutation.mutate({ id: entry.id })}
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))}
-                              </div>
-                            )}
-                          </div>
+                          <tr
+                            key={req.id}
+                            className="border-b hover:bg-emerald-50/60 cursor-pointer"
+                            onClick={() => { setAutoProcessResult(null); setQtyDrafts({}); setViewResponsesId(req.id); }}
+                          >
+                            <td className="px-3 py-2 font-medium text-gray-900">{req.title}</td>
+                            <td className="px-3 py-2 whitespace-nowrap"><Badge className={`text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge></td>
+                            <td className="px-3 py-2 whitespace-nowrap text-gray-600">{req.items.length}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-emerald-700">{respCount ?? '—'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-gray-600">{req.requesterName || '—'}</td>
+                            <td className="px-3 py-2 text-right"><ChevronDown className="w-4 h-4 text-gray-300 inline -rotate-90" /></td>
+                          </tr>
                         );
                       })}
-                    </CardContent>
-                  )}
-                </Card>
-              );
-            })
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            </>
           )}
         </TabsContent>
 
@@ -717,7 +744,7 @@ export default function QuotationsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => { setAutoProcessResult(null); setViewResponsesId(req.id); }}
+                            onClick={() => { setAutoProcessResult(null); setQtyDrafts({}); setViewResponsesId(req.id); }}
                             className="text-blue-500 hover:text-blue-700 p-1"
                             title="Ver respostas"
                           >
@@ -1000,8 +1027,8 @@ export default function QuotationsPage() {
       </Dialog>
 
       {/* ===== DIALOG: VER RESPOSTAS ===== */}
-      <Dialog open={viewResponsesId !== null} onOpenChange={(open) => { if (!open) { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={viewResponsesId !== null} onOpenChange={(open) => { if (!open) { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); setQtyDrafts({}); } }}>
+        <DialogContent className="max-w-2xl md:max-w-4xl lg:max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-600" />
@@ -1010,7 +1037,7 @@ export default function QuotationsPage() {
           </DialogHeader>
 
           {requestDetail && (
-            <div className="space-y-4">
+            <div className="space-y-4 min-w-0">
               {/* Info da solicitação */}
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="font-semibold text-gray-800">{requestDetail.title}</p>
@@ -1215,9 +1242,227 @@ export default function QuotationsPage() {
                         </table>
                       </div>
                     </div>
-                    {/* mapa de melhor preço por grupo (usado para destacar itens nos cards abaixo) */}
-                    {(() => { return null; })()}
+
+                    {/* Revisão antes de comprar: fornecedor e quantidade editáveis por item */}
+                    {(() => {
+                      const reviewRows = rowsArr.map((r: any) => {
+                        const reqItem = requestDetail.items.find((i: QuotItem) => itemNamesMatch(i.name, r.label));
+                        const override = manualChoices[r.label] || manualChoices[r.gk];
+                        const quantity = qtyDrafts[r.label] ?? override?.quantity ?? reqItem?.quantity ?? '';
+                        const chosen = r.bestCell as (typeof r.cells)[number] | null;
+                        const unitPrice = chosen?.price ?? 0;
+                        const subtotal = unitPrice * (parseFloat(quantity) || 0);
+                        return { ...r, quantity, chosen, unitPrice, subtotal };
+                      });
+                      const reviewTotal = reviewRows.reduce((s: number, r: any) => s + r.subtotal, 0);
+                      const commitChoice = (label: string, gk: string, responseId: number, itemIndex: number, quantity: string) => {
+                        const choices = { ...(manualChoices || {}) };
+                        choices[label] = { responseId, itemIndex, quantity };
+                        adminSetBestMutation.mutate({ quotationRequestId: requestDetail.id, choices });
+                      };
+                      return (
+                        <div className="rounded-lg border border-slate-300 overflow-hidden shadow-sm">
+                          <div className="bg-slate-700 text-white px-3 py-2 flex items-center gap-2">
+                            <Edit className="w-4 h-4" />
+                            <span className="text-sm font-semibold">Revisar antes de comprar</span>
+                            <span className="text-[11px] text-slate-200 ml-auto hidden md:inline">troque o fornecedor ou a quantidade de cada item</span>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-slate-50 text-slate-700">
+                                  <th className="text-left px-3 py-2 font-semibold">Item</th>
+                                  <th className="text-left px-3 py-2 font-semibold">Fornecedor</th>
+                                  <th className="text-right px-3 py-2 font-semibold w-20">Qtd</th>
+                                  <th className="text-right px-3 py-2 font-semibold">Preço Un.</th>
+                                  <th className="text-right px-3 py-2 font-semibold">Subtotal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {reviewRows.map((r: any) => (
+                                  <tr key={r.gk} className="border-t">
+                                    <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{r.label}</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="border rounded px-1.5 py-1 text-xs w-full max-w-[240px] bg-white"
+                                        value={r.chosen ? `${r.chosen.rIdx}-${r.chosen.itemIndex}` : ''}
+                                        onChange={(e) => {
+                                          const [rIdxStr, itemIdxStr] = e.target.value.split('-');
+                                          const respId = requestDetail.responses[parseInt(rIdxStr, 10)].id;
+                                          commitChoice(r.label, r.gk, respId, parseInt(itemIdxStr, 10), r.quantity || '1');
+                                        }}
+                                      >
+                                        {r.cells.length === 0 && <option value="">— nenhuma resposta —</option>}
+                                        {r.cells.map((c: any, ci: number) => (
+                                          <option key={ci} value={`${c.rIdx}-${c.itemIndex}`}>
+                                            {c.supplier} — {fmtPrice(String(c.price))}{c.pack ? ` (${c.pack})` : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <Input
+                                        type="text"
+                                        inputMode="decimal"
+                                        className="h-7 text-xs text-right w-20 ml-auto"
+                                        value={r.quantity}
+                                        onChange={(e) => setQtyDrafts(prev => ({ ...prev, [r.label]: e.target.value }))}
+                                        onBlur={() => {
+                                          if (r.chosen) commitChoice(r.label, r.gk, requestDetail.responses[r.chosen.rIdx].id, r.chosen.itemIndex, r.quantity);
+                                        }}
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2 text-right whitespace-nowrap">{r.chosen ? fmtPrice(String(r.unitPrice)) : '—'}</td>
+                                    <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{r.chosen ? fmtPrice(String(r.subtotal)) : '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr className="border-t bg-slate-50 font-bold">
+                                  <td colSpan={4} className="px-3 py-2 text-right">Total</td>
+                                  <td className="px-3 py-2 text-right text-emerald-700 whitespace-nowrap">{fmtPrice(String(reviewTotal))}</td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                          <p className="text-[11px] text-gray-400 px-3 py-2 bg-slate-50 border-t">
+                            É isso que vai ser usado ao clicar em "Confirmar Compra" ou "Gerar Solicitação de Compra" — ajuste aqui se o fornecedor não tiver toda a quantidade ou se você quiser comprar de outro fornecedor.
+                          </p>
+                        </div>
+                      );
+                    })()}
                     <p className="text-sm font-medium text-gray-700">{requestDetail.responses.length} resposta(s) recebida(s)</p>
+
+                    {/* Desktop/notebook: tabela analítica */}
+                    <div className="hidden md:block rounded-lg border overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-gray-100 text-left text-gray-600">
+                              <th className="px-3 py-2 font-semibold">Fornecedor</th>
+                              <th className="px-3 py-2 font-semibold">Contato</th>
+                              <th className="px-3 py-2 font-semibold">Itens cotados</th>
+                              <th className="px-3 py-2 font-semibold">Condições</th>
+                              <th className="px-3 py-2 font-semibold text-right">Total</th>
+                              <th className="px-3 py-2 font-semibold text-center">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {requestDetail.responses.map((resp: any) => {
+                              const total = totals.find((t: any) => t.id === resp.id)?.total || 0;
+                              const isBestTotal = Math.abs(total - minTotal) < 0.01;
+                              return (
+                                <tr key={resp.id} className={`border-t align-top ${isBestTotal ? 'bg-green-50/40' : ''}`}>
+                                  <td className="px-3 py-2 min-w-[160px]">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-semibold text-gray-800">{resp.tradeName || resp.supplierName}</span>
+                                      {isBestTotal && (
+                                        <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0 flex items-center gap-1">
+                                          <Trophy className="w-2.5 h-2.5" /> Menor Total
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {resp.tradeName && resp.supplierName && resp.tradeName !== resp.supplierName && <p className="text-gray-400 mt-0.5">{resp.supplierName}</p>}
+                                    {resp.cnpj && <p className="text-gray-500 mt-0.5">CNPJ: {resp.cnpj}</p>}
+                                    {resp.address && <p className="text-gray-500">{resp.address}</p>}
+                                    <p className="text-gray-400 mt-0.5">{fmt(resp.createdAt)}</p>
+                                  </td>
+                                  <td className="px-3 py-2 min-w-[140px]">
+                                    {resp.sellerName && <p className="flex items-center gap-1 text-gray-600"><User className="w-3 h-3" /> {resp.sellerName}</p>}
+                                    {resp.sellerPhone && <a href={`tel:${resp.sellerPhone}`} className="flex items-center gap-1 text-blue-500 hover:underline mt-0.5"><Phone className="w-3 h-3" /> {resp.sellerPhone}</a>}
+                                    {resp.sellerEmail && <a href={`mailto:${resp.sellerEmail}`} className="flex items-center gap-1 text-blue-500 hover:underline mt-0.5 break-all"><Mail className="w-3 h-3 shrink-0" /> {resp.sellerEmail}</a>}
+                                  </td>
+                                  <td className="px-3 py-2 min-w-[220px]">
+                                    <div className="space-y-1">
+                                      {resp.items.map((item: ResponseItem, i: number) => {
+                                        const gk = itemGroupKey(item.name, (item as any).packaging);
+                                        const grp = rowsMap[gk];
+                                        const itemNorm = normalizedUnitPrice(item);
+                                        const isBest = !!grp && grp.cells.length > 0 && !isNaN(itemNorm) && Math.abs(itemNorm - Math.min(...grp.cells.map(c => c.norm))) < 0.0001;
+                                        return (
+                                          <div key={i} className={`flex items-center justify-between gap-2 rounded px-1.5 py-1 ${isBest ? 'bg-green-100/70' : 'bg-gray-50'}`}>
+                                            <div className="min-w-0">
+                                              <span className="font-medium text-gray-800">{item.name}</span>
+                                              {(item as any).packaging && <span className="text-gray-400"> ({(item as any).packaging})</span>}
+                                              {isBest && <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500 inline ml-1" />}
+                                              <span className="block text-gray-400">{item.quantity} {item.unit || 'un'}{item.brand ? ` · ${item.brand}` : ''}</span>
+                                            </div>
+                                            <span className={`font-bold whitespace-nowrap ${isBest ? 'text-green-700' : 'text-gray-700'}`}>{fmtPrice(item.price)}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                    {resp.notes && <p className="text-gray-400 italic mt-1">{resp.notes}</p>}
+                                  </td>
+                                  <td className="px-3 py-2 min-w-[120px]">
+                                    {resp.paymentTerms && <p className="text-blue-700">💳 {resp.paymentTerms}</p>}
+                                    {resp.deliveryTerms && <p className="text-purple-700 mt-0.5">🚚 {resp.deliveryTerms}</p>}
+                                  </td>
+                                  <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${isBestTotal ? 'text-green-700' : 'text-gray-800'}`}>{fmtPrice(String(total))}</td>
+                                  <td className="px-3 py-2">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <Button
+                                        variant="ghost" size="sm" className="p-1.5 h-auto text-blue-600 hover:bg-blue-50"
+                                        title="Editar dados do fornecedor"
+                                        onClick={() => setEditResp({
+                                          id: resp.id,
+                                          supplierName: resp.supplierName || '',
+                                          tradeName: resp.tradeName || '',
+                                          cnpj: resp.cnpj || '',
+                                          address: resp.address || '',
+                                          sellerName: resp.sellerName || '',
+                                          sellerPhone: resp.sellerPhone || '',
+                                          sellerEmail: resp.sellerEmail || '',
+                                          paymentTerms: resp.paymentTerms || '',
+                                          deliveryTerms: resp.deliveryTerms || '',
+                                          productsSold: resp.productsSold || '',
+                                          notes: resp.notes || '',
+                                        })}
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost" size="sm" className="p-1.5 h-auto text-emerald-600 hover:bg-emerald-50"
+                                        title="Editar itens / preços"
+                                        onClick={() => {
+                                          setEditItemsResp(resp);
+                                          setEditItemsList((resp.items || []).map((it: any) => ({
+                                            name: it.name || '',
+                                            quantity: it.quantity || '1',
+                                            unit: it.unit || 'un',
+                                            price: it.price || '',
+                                            brand: it.brand || '',
+                                            packaging: it.packaging || '',
+                                            notes: it.notes || '',
+                                          })));
+                                        }}
+                                      >
+                                        <Package className="w-3.5 h-3.5" />
+                                      </Button>
+                                      {resp.responseToken && (
+                                        <Button
+                                          variant="ghost" size="sm" className="p-1.5 h-auto text-amber-600 hover:bg-amber-50"
+                                          title={`Copiar link de revisão para ${resp.supplierName}`}
+                                          onClick={() => {
+                                            const link = `${window.location.origin}/orcamento/resposta/${resp.responseToken}`;
+                                            navigator.clipboard.writeText(link).then(() => toast.success(`Link de revisão copiado! Envie para ${resp.supplierName}`));
+                                          }}
+                                        >
+                                          <Edit className="w-3.5 h-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Mobile: cards */}
+                    <div className="grid grid-cols-1 gap-3 md:hidden">
                     {requestDetail.responses.map((resp: any, rIdx: number) => {
                       const total = totals.find((t: any) => t.id === resp.id)?.total || 0;
                       const isBestTotal = Math.abs(total - minTotal) < 0.01;
@@ -1344,6 +1589,86 @@ export default function QuotationsPage() {
                         </Card>
                       );
                     })}
+                    </div>
+
+                    {requestDetail.purchaseRequestId && (
+                      <Card className="border-2 border-emerald-300 bg-emerald-50/40">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <p className="text-sm font-semibold text-emerald-900 flex items-center gap-1.5">
+                              <ShoppingCart className="w-4 h-4" /> Vinculado à Solicitação de Compra #{requestDetail.purchaseRequestId}
+                            </p>
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="h-auto p-0 text-emerald-700"
+                              onClick={() => navigate(`/compras/${requestDetail.purchaseRequestId}`)}
+                            >
+                              Ver solicitação <ExternalLink className="w-3 h-3 ml-1" />
+                            </Button>
+                          </div>
+                          {requestDetail.purchaseRequestDecided ? (
+                            <div className="space-y-1.5">
+                              <p className="text-sm text-emerald-800 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4" /> Compra já confirmada nessa solicitação.
+                              </p>
+                              <div className="flex flex-wrap gap-3 text-xs text-emerald-800">
+                                {requestDetail.purchasePaymentMethod && (
+                                  <span>Pagamento: <strong>{PAYMENT_METHOD_LABELS[requestDetail.purchasePaymentMethod] || requestDetail.purchasePaymentMethod}</strong></span>
+                                )}
+                                {requestDetail.purchaseInvoiceUrl && (
+                                  <a href={requestDetail.purchaseInvoiceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-emerald-700 hover:underline">
+                                    <FileText className="w-3.5 h-3.5" /> Ver Nota Fiscal
+                                  </a>
+                                )}
+                                {requestDetail.purchaseReceiptUrl && (
+                                  <a href={requestDetail.purchaseReceiptUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-emerald-700 hover:underline">
+                                    <FileText className="w-3.5 h-3.5" /> Ver Comprovante
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-xs text-emerald-800">
+                                Fecha automaticamente com o melhor preço de cada item (respeitando qualquer escolha manual
+                                feita na planilha acima) — pode envolver mais de um fornecedor.
+                              </p>
+                              <Button
+                                className="bg-emerald-600 hover:bg-emerald-700 h-9 w-full sm:w-auto"
+                                disabled={confirmPurchaseMutation.isPending || adminSetBestMutation.isPending}
+                                onClick={openConfirmPurchaseDialog}
+                              >
+                                <CheckCircle2 className="w-4 h-4 mr-1" />
+                                Confirmar Compra
+                              </Button>
+                            </>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {!requestDetail.purchaseRequestId && requestDetail.responses.length > 0 && (
+                      <Card className="border-2 border-purple-300 bg-purple-50/40">
+                        <CardContent className="p-4 space-y-3">
+                          <p className="text-sm font-semibold text-purple-900 flex items-center gap-1.5">
+                            <ShoppingCart className="w-4 h-4" /> Nenhuma Solicitação de Compra vinculada — gerar uma agora?
+                          </p>
+                          <p className="text-xs text-purple-800">
+                            Fecha automaticamente com o melhor preço de cada item (respeitando qualquer escolha manual
+                            feita na planilha acima) — pode envolver mais de um fornecedor.
+                          </p>
+                          <Button
+                            className="bg-purple-600 hover:bg-purple-700 h-9 w-full sm:w-auto"
+                            disabled={createPurchaseFromDecisionMutation.isPending || adminSetBestMutation.isPending}
+                            onClick={() => createPurchaseFromDecisionMutation.mutate({ quotationRequestId: requestDetail.id })}
+                          >
+                            <ShoppingCart className="w-4 h-4 mr-1" />
+                            {createPurchaseFromDecisionMutation.isPending ? 'Gerando...' : 'Gerar Solicitação de Compra'}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 );
               })()}
@@ -1355,7 +1680,7 @@ export default function QuotationsPage() {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); }}
+                onClick={() => { setViewResponsesId(null); setAutoProcessResult(null); setShowWhatsAppSummary(false); setQtyDrafts({}); }}
               >
                 Fechar
               </Button>
@@ -1378,7 +1703,7 @@ export default function QuotationsPage() {
                   disabled={autoProcessMutation.isPending}
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
-                  {autoProcessMutation.isPending ? "Gerando..." : "Resumo Gestores"}
+                  {autoProcessMutation.isPending ? "Gerando..." : "Avisar Gestores (WhatsApp)"}
                 </Button>
               )}
               {autoProcessResult && (
@@ -1401,10 +1726,14 @@ export default function QuotationsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-green-600" />
-              Gerar resumo de cotação?
+              Avisar os gestores por WhatsApp?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
+                <p className="text-xs text-gray-500">
+                  Isso é só pra comunicação — não é necessário pra fechar a compra (já dá pra usar
+                  "Confirmar Compra"/"Gerar Solicitação de Compra" direto, sem passar por aqui).
+                </p>
                 <p>Esta ação irá executar automaticamente:</p>
                 <div className="space-y-2 bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-2 text-sm">
@@ -1417,7 +1746,7 @@ export default function QuotationsPage() {
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <TrendingDown className="w-4 h-4 text-amber-500" />
-                    <span><strong>Registrar catálogo de preços</strong> com todos os itens e valores</span>
+                    <span><strong>Registrar catálogo de preços</strong> com todos os itens e valores, de todos os fornecedores</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <MessageCircle className="w-4 h-4 text-green-500" />
@@ -1437,7 +1766,7 @@ export default function QuotationsPage() {
               }}
               className="bg-green-600 hover:bg-green-700"
             >
-              <Sparkles className="w-4 h-4 mr-2" /> Gerar Resumo
+              <Sparkles className="w-4 h-4 mr-2" /> Avisar Gestores
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1521,12 +1850,12 @@ export default function QuotationsPage() {
                 <ExternalLinkIcon className="w-3 h-3 text-blue-500 flex-shrink-0" />
                 <span>Link para o orçamento completo:</span>
                 <a
-                  href="https://btreeambiental.com/orcamentos"
+                  href={`${window.location.origin}/orcamentos?open=${autoProcessResult.quotationRequestId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline font-medium truncate"
                 >
-                  btreeambiental.com/orcamentos
+                  {window.location.host}/orcamentos?open={autoProcessResult.quotationRequestId}
                 </a>
               </div>
 
@@ -1826,6 +2155,80 @@ export default function QuotationsPage() {
               }}
             >
               {adminUpdateItemsMutation.isPending ? 'Salvando...' : 'Salvar itens'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmar Compra — forma de pagamento + NF/comprovante (opcionais) */}
+      <Dialog open={showConfirmPurchaseDialog} onOpenChange={setShowConfirmPurchaseDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Confirmar Compra
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Forma de pagamento</Label>
+              <Select value={confirmPaymentMethod} onValueChange={setConfirmPaymentMethod}>
+                <SelectTrigger><SelectValue placeholder="Selecionar (opcional)..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="boleto">Boleto</SelectItem>
+                  <SelectItem value="pix">PIX</SelectItem>
+                  <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                  <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                  <SelectItem value="transferencia">Transferência</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="flex items-center gap-1"><FileText className="w-3.5 h-3.5 text-gray-400" /> Nota Fiscal (opcional)</Label>
+              {confirmInvoiceUrl ? (
+                <div className="flex items-center gap-2 text-sm mt-1">
+                  <a href={confirmInvoiceUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Anexada — ver arquivo
+                  </a>
+                  <button type="button" className="text-gray-400 hover:text-red-500" onClick={() => setConfirmInvoiceUrl('')}><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ) : (
+                <Input type="file" accept="image/*,application/pdf" disabled={uploadingInvoice}
+                  onChange={e => handlePickFile('invoice', e.target.files?.[0])} className="mt-1" />
+              )}
+              {uploadingInvoice && <p className="text-xs text-gray-400 mt-1">Enviando...</p>}
+            </div>
+            <div>
+              <Label className="flex items-center gap-1"><FileText className="w-3.5 h-3.5 text-gray-400" /> Comprovante de Pagamento (opcional)</Label>
+              {confirmReceiptUrl ? (
+                <div className="flex items-center gap-2 text-sm mt-1">
+                  <a href={confirmReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Anexado — ver arquivo
+                  </a>
+                  <button type="button" className="text-gray-400 hover:text-red-500" onClick={() => setConfirmReceiptUrl('')}><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ) : (
+                <Input type="file" accept="image/*,application/pdf" disabled={uploadingReceipt}
+                  onChange={e => handlePickFile('receipt', e.target.files?.[0])} className="mt-1" />
+              )}
+              {uploadingReceipt && <p className="text-xs text-gray-400 mt-1">Enviando...</p>}
+            </div>
+            <p className="text-[11px] text-gray-400">Nada aqui é obrigatório — pode confirmar a compra e anexar depois.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmPurchaseDialog(false)}>Cancelar</Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={confirmPurchaseMutation.isPending || uploadingInvoice || uploadingReceipt}
+              onClick={() => confirmPurchaseMutation.mutate({
+                quotationRequestId: requestDetail.id,
+                paymentMethod: confirmPaymentMethod || undefined,
+                invoiceUrl: confirmInvoiceUrl || undefined,
+                receiptUrl: confirmReceiptUrl || undefined,
+              })}
+            >
+              {confirmPurchaseMutation.isPending ? 'Confirmando...' : 'Confirmar Compra'}
             </Button>
           </DialogFooter>
         </DialogContent>

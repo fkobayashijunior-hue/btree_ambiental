@@ -221,7 +221,7 @@ export const buyerClientsRouter = router({
 
       const [rows] = await db.$client.execute(
         `SELECT cl.id, cl.date, cl.delivery_date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3,
-                cl.buyer_paid_at, cl.invoice_number,
+                cl.buyer_paid_at, cl.invoice_number, cl.buyer_receipt_url,
                 cd.id AS destino_id, cd.name AS destino_nome, cd.cnpj_cpf, cd.price_per_unit, cd.unit,
                 cd.payment_term_days_after_delivery
          FROM cargo_loads cl
@@ -260,6 +260,7 @@ export const buyerClientsRouter = router({
             invoiceNumber: r.invoice_number,
             recebido: !!r.buyer_paid_at,
             buyerPaidAt: r.buyer_paid_at ? toDateStr(r.buyer_paid_at) : null,
+            receiptUrl: r.buyer_receipt_url || null,
           };
         })
         .filter((c: any) => {
@@ -296,6 +297,17 @@ export const buyerClientsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const buyerPaidAt = input.buyerPaidAt || new Date().toISOString().slice(0, 10);
       await db.$client.execute(`UPDATE cargo_loads SET buyer_paid_at = ? WHERE id = ?`, [buyerPaidAt, input.id]);
+      return { success: true };
+    }),
+
+  // Anexa/troca o comprovante de pagamento do comprador pra esta carga — independente de
+  // marcar como recebido (o financeiro pode anexar antes ou depois de dar baixa).
+  updateCargaReceipt: protectedProcedure
+    .input(z.object({ id: z.number(), receiptUrl: z.string().url() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.$client.execute(`UPDATE cargo_loads SET buyer_receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
       return { success: true };
     }),
 

@@ -35,6 +35,7 @@ import { thirdPartyContractorsRouter } from "./routers/thirdPartyContractors";
 import { purchaseCategoriesRouter } from "./routers/purchaseCategories";
 import { freightCyclesRouter } from "./routers/freightCycles";
 import { suppliersRouter } from "./routers/suppliers";
+import { stockRouter } from "./routers/stock";
 import { quotationsRouter } from "./routers/quotations";
 import { purchaseRequestsRouter } from "./routers/purchaseRequests";
 import { invoiceControlRouter } from "./routers/invoiceControl";
@@ -329,6 +330,7 @@ export const appRouter = router({
   purchaseCategories: purchaseCategoriesRouter,
   freightCycles: freightCyclesRouter,
   suppliers: suppliersRouter,
+  stock: stockRouter,
   quotations: quotationsRouter,
   purchaseRequests: purchaseRequestsRouter,
   invoiceControl: invoiceControlRouter,

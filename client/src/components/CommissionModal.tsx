@@ -169,6 +169,47 @@ export default function CommissionModal({
               <span className="text-sm font-semibold text-gray-700">Total da Comissão</span>
               <span className="text-lg font-bold text-emerald-700">R$ {fmtBRL(motoristaTotal)}</span>
             </div>
+            {((data as any).loads?.length > 0 || (data as any).fuels?.length > 0) && (
+              <details className="rounded-lg border border-gray-200 bg-white p-2.5 text-xs">
+                <summary className="cursor-pointer font-medium text-gray-700">Ver cargas e combustíveis do período</summary>
+                <div className="mt-2 space-y-3">
+                  {(data as any).loads?.length > 0 && (
+                    <div>
+                      <div className="font-medium text-gray-700 mb-1">Cargas entregues</div>
+                      <table className="w-full">
+                        <thead><tr className="text-left text-gray-500"><th className="py-0.5">Entrega</th><th>Carga</th><th>Placa</th><th>Destino</th><th className="text-right">Ton</th><th className="text-right">Comissão</th></tr></thead>
+                        <tbody>
+                          {(data as any).loads.map((l: any) => (
+                            <tr key={l.loadId} className="border-t border-gray-100">
+                              <td className="py-0.5">{String(l.date).split("-").reverse().join("/")}</td><td>#{l.loadId}</td><td className="font-mono">{l.plate ?? "—"}</td><td>{l.dest ?? "—"}</td>
+                              <td className="text-right">{(l.kg / 1000).toFixed(2)}</td>
+                              <td className="text-right font-medium">R$ {fmtBRL((data.unidade === "tonelada" ? l.kg / 1000 : 1) * rate(`motorista_${l.categoria}`))}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {(data as any).fuels?.length > 0 && (
+                    <div>
+                      <div className="font-medium text-gray-700 mb-1">Combustível descontado</div>
+                      <table className="w-full">
+                        <thead><tr className="text-left text-gray-500"><th className="py-0.5">Data</th><th>Veículo</th><th className="text-right">Litros</th><th className="text-right">R$/L cobrado</th><th className="text-right">Desconto</th></tr></thead>
+                        <tbody>
+                          {(data as any).fuels.map((f: any, i: number) => (
+                            <tr key={i} className="border-t border-gray-100">
+                              <td className="py-0.5">{String(f.date).split("-").reverse().join("/")}</td><td>{f.equipmentName}</td><td className="text-right">{Number(f.liters).toLocaleString("pt-BR")}</td>
+                              <td className="text-right">R$ {fmtBRL(f.precoCobrado)}</td><td className="text-right font-medium text-red-600">- R$ {fmtBRL(f.subtotal)}</td>
+                            </tr>
+                          ))}
+                          <tr className="border-t border-gray-200 font-semibold"><td colSpan={4} className="py-0.5 text-right">Total desconto</td><td className="text-right text-red-600">- R$ {fmtBRL((data as any).fuels.reduce((s: number, f: any) => s + f.subtotal, 0))}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
           </div>
         ) : data.tipo === "operador" ? (
           <div className="space-y-4">

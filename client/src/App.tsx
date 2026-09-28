@@ -24,6 +24,7 @@ import MachineHoursPage from "./pages/MachineHoursPage";
 import EquipmentHistoryPage from "./pages/EquipmentHistoryPage";
 import VehicleControlPage from "./pages/VehicleControlPage";
 import PartsPage from "./pages/PartsPage";
+import StockPage from "./pages/StockPage";
 import ClientsPage from "./pages/ClientsPage";
 import ClientPortal from "./pages/ClientPortal";
 import CollaboratorDetail from "./pages/CollaboratorDetail";
@@ -127,6 +128,9 @@ function Router() {
       </Route>
       <Route path={"/veiculos"}>
         {() => <WithLayout component={VehicleControlPage} />}
+      </Route>
+      <Route path={"/estoque"}>
+        {() => <WithLayout component={StockPage} />}
       </Route>
       <Route path={"/pecas"}>
         {() => <WithLayout component={PartsPage} />}

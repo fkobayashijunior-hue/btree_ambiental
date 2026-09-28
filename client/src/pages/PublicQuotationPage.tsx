@@ -117,13 +117,14 @@ export default function PublicQuotationPage() {
 
   function handleSubmit() {
     if (!supplierName.trim()) { toast.error("Informe o nome da sua empresa"); return; }
+    if (!cnpj.replace(/\D/g, '').trim()) { toast.error("Informe o CNPJ ou CPF da sua empresa"); return; }
     const validItems = responseItems.filter(i => i.name.trim() && i.price.trim());
     if (validItems.length === 0) { toast.error("Informe o preço de pelo menos um item"); return; }
 
     submitMutation.mutate({
       token: token || '',
       supplierName: (existingSupplier?.companyName) || supplierName,
-      cnpj: cnpj || undefined,
+      cnpj,
       address: address || undefined,
       sellerName: sellerName || undefined,
       sellerPhone: sellerPhone || undefined,
@@ -181,6 +182,7 @@ export default function PublicQuotationPage() {
   function handleUpdate() {
     if (!submittedResponseId) { toast.error("ID da resposta não encontrado"); return; }
     if (!supplierName.trim()) { toast.error("Informe o nome da sua empresa"); return; }
+    if (!cnpj.replace(/\D/g, '').trim()) { toast.error("Informe o CNPJ ou CPF da sua empresa"); return; }
     const validItems = responseItems.filter(i => i.name.trim() && i.price.trim());
     if (validItems.length === 0) { toast.error("Informe o preço de pelo menos um item"); return; }
 
@@ -188,7 +190,7 @@ export default function PublicQuotationPage() {
       token: token || '',
       responseId: submittedResponseId,
       supplierName: (existingSupplier?.companyName) || supplierName,
-      cnpj: cnpj || undefined,
+      cnpj,
       address: address || undefined,
       sellerName: sellerName || undefined,
       sellerPhone: sellerPhone || undefined,
@@ -435,8 +437,9 @@ export default function PublicQuotationPage() {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <div>
-              <Label>CNPJ / CPF</Label>
+              <Label>CNPJ / CPF *</Label>
               <Input
+                required
                 value={cnpj}
                 onChange={e => setCnpj(e.target.value)}
                 onBlur={async () => {

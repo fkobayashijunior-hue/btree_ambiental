@@ -253,10 +253,36 @@ export const clientPortalRouter = router({
         (sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0
       );
 
-      // Valor pago via fechamentos semanais
-      const valorFechamentosPagos = weeklyClosings
+      // Fechamentos: recalculados pelas cargas ATUAIS da semana (mesmo valor exibido em cada
+      // fechamento na lista), não pelo total_amount gravado no dia do fechamento — que fica
+      // defasado quando uma carga entra na semana depois, ou peso/preço é editado.
+      let todosFechamentos: any[] = weeklyClosings;
+      try {
+        todosFechamentos = await db
+          .select()
+          .from(cargoWeeklyClosings)
+          .where(eq(cargoWeeklyClosings.clientId, input.clientId));
+      } catch { /* mantém os 20 mais recentes */ }
+      // Compara só o DIA (YYYY-MM-DD), sem hora/fuso: as datas chegam ora como string
+      // "YYYY-MM-DD HH:mm:ss", ora como Date à meia-noite UTC, e comparar como Date no fuso
+      // local jogava cargas do primeiro dia da semana pra fora da janela.
+      const diaStr = (v: any): string => {
+        if (!v) return '';
+        if (v instanceof Date) return isNaN(v.getTime()) ? '' : v.toISOString().slice(0, 10);
+        return String(v).slice(0, 10);
+      };
+      const loadDia = (l: any) => diaStr(l.deliveryDate || l.date);
+      const loadKg = (l: any) => parseFloat(l.weightNetKg || l.weightOutKg || '0');
+      const dentro = (l: any, c: any) => { const d = loadDia(l); return d !== '' && d >= diaStr(c.weekStart) && d <= diaStr(c.weekEnd); };
+      const valorRealFechamento = (c: any) => {
+        const kg = loads.filter((l: any) => dentro(l, c)).reduce((a: number, l: any) => a + loadKg(l), 0);
+        return (kg / 1000) * parseFloat(c.pricePerTon || String(pricePerTon) || '0');
+      };
+
+      // Valor pago via fechamentos semanais (valor atual das cargas das semanas pagas)
+      const valorFechamentosPagos = todosFechamentos
         .filter((c: any) => c.status === 'pago')
-        .reduce((sum: number, c: any) => sum + parseFloat(c.totalAmount || '0'), 0);
+        .reduce((sum: number, c: any) => sum + valorRealFechamento(c), 0);
 
       // Valor Pago:
       // Se o cliente tem adiantamentos, o valor pago é APENAS o que foi abatido pelo adiantamento.
@@ -267,8 +293,18 @@ export const clientPortalRouter = router({
         ? valorAbatidoAdiantamento
         : valorFechamentosPagos;
 
-      // A Receber = Valor Total - Valor Pago (nunca negativo)
-      const valorAReceber = Math.max(0, valorTotal - valorPago);
+      // A Receber = soma dos fechamentos AINDA NÃO PAGOS (recalculados pelas cargas atuais, igual
+      // ao valor exibido em cada fechamento na lista) + cargas entregues que ainda não caíram em
+      // nenhum fechamento. Antes era "Total - Pago", mas o Pago usa o total_amount congelado dos
+      // fechamentos pagos, e qualquer divergência com as cargas atuais (peso/preço editado depois)
+      // fazia o topo não bater com a soma dos fechamentos mostrados.
+      const valorFechamentosAbertos = todosFechamentos
+        .filter((c: any) => c.status !== 'pago')
+        .reduce((sum: number, c: any) => sum + valorRealFechamento(c), 0);
+      const valorSemFechamento = entregues
+        .filter((l: any) => !todosFechamentos.some((c: any) => dentro(l, c)))
+        .reduce((sum: number, l: any) => sum + (loadKg(l) / 1000) * pricePerTon, 0);
+      const valorAReceber = Math.max(0, valorFechamentosAbertos + valorSemFechamento);
 
       return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions, valorTotal, valorPago, valorAReceber, valorAbatidoAdiantamento };
     }),

@@ -274,6 +274,11 @@ __export(schema_exports, {
   sicoobExtrato: () => sicoobExtrato,
   sicoobLancamentosFuturos: () => sicoobLancamentosFuturos,
   sicoobSaldoMes: () => sicoobSaldoMes,
+  stockBalances: () => stockBalances,
+  stockLocations: () => stockLocations,
+  stockMovements: () => stockMovements,
+  stockProducts: () => stockProducts,
+  supplierCategories: () => supplierCategories,
   supplierContacts: () => supplierContacts,
   suppliers: () => suppliers,
   thirdPartyContractors: () => thirdPartyContractors,
@@ -281,10 +286,11 @@ __export(schema_exports, {
   userPermissions: () => userPermissions,
   userProfiles: () => userProfiles,
   users: () => users,
-  vehicleRecords: () => vehicleRecords
+  vehicleRecords: () => vehicleRecords,
+  whatsappConversationState: () => whatsappConversationState
 });
-import { mysqlTable, int, bigint, timestamp, mysqlEnum, varchar, text, index, uniqueIndex, tinyint, datetime } from "drizzle-orm/mysql-core";
-var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, payrollEntries, payrollWeeklyPayments, payrollCommissionRates, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, oilStock, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, sicoobBoletos, sicoobExtrato, favorecidoCategoria, sicoobLancamentosFuturos, contaazulTokens, notasFiscais, notasFiscaisStatusLog, clientePrazoPagamento, sicoobSaldoMes, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, suppliers, supplierContacts, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel, clientAdvances, clientAdvanceDeductions, geofences, freightTrips, fuelSupplierPrices, buyerProductPrices, fiscalNotes;
+import { mysqlTable, int, bigint, timestamp, mysqlEnum, varchar, text, index, uniqueIndex, tinyint, datetime, decimal } from "drizzle-orm/mysql-core";
+var attendanceRecords, biometricAttendance, cargoDestinations, cargoLoads, cargoShipments, chainsawChainEvents, chainsawChainStock, chainsawPartMovements, chainsawParts, chainsawServiceOrders, chainsawServiceParts, chainsaws, clientContracts, clientPaymentReceipts, clientPayments, clientPortalAccess, clients, collaboratorAttendance, collaboratorDocuments, collaborators, payrollEntries, payrollWeeklyPayments, payrollCommissionRates, equipment, equipmentMaintenance, equipmentPhotos, equipmentTypes, extraExpenses, financialEntries, fuelContainerEvents, fuelContainers, fuelRecords, gpsDeviceLinks, gpsHoursLog, gpsLocations, machineFuel, machineHours, equipmentOilRecords, oilStock, machineMaintenance, maintenanceParts, maintenanceTemplateParts, maintenanceTemplates, parts, partsRequests, partsStockMovements, passwordResetTokens, preventiveMaintenanceAlerts, preventiveMaintenancePlans, purchaseOrderItems, purchaseOrders, replantingRecords, rolePermissions, sectors, userPermissions, userProfiles, users, vehicleRecords, sicoobBoletos, sicoobExtrato, favorecidoCategoria, sicoobLancamentosFuturos, contaazulTokens, notasFiscais, notasFiscaisStatusLog, clientePrazoPagamento, sicoobSaldoMes, cargoTrackingPhotos, cargoWeeklyClosings, clientDocuments, buyerClients, buyerPriceHistory, buyerPayments, freightCalculations, notifications, fuelSuppliers, fuelPriceHistory, fuelInvoices, autoFreightTrips, thirdPartyContractors, purchaseCategories, purchaseRequests, purchaseRequestItems, stockLocations, stockProducts, stockBalances, stockMovements, suppliers, supplierContacts, supplierCategories, whatsappConversationState, quotations, farmGeofences, freightCycles, quotationRequests, quotationResponses, freightRates, thirdPartyFuel, clientAdvances, clientAdvanceDeductions, geofences, freightTrips, fuelSupplierPrices, buyerProductPrices, fiscalNotes;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -397,6 +403,8 @@ var init_schema = __esm({
       boletoAmount: varchar("boleto_amount", { length: 20 }),
       boletoDueDate: timestamp("boleto_due_date", { mode: "string" }),
       paymentReceiptUrl: text("payment_receipt_url"),
+      buyerReceiptUrl: text("buyer_receipt_url"),
+      // comprovante do comprador (Enerbio etc) na aba Cargas Entregues a Receber
       paymentStatus: mysqlEnum("payment_status", ["sem_boleto", "a_pagar", "pago"]).default("sem_boleto"),
       paidAt: timestamp("paid_at", { mode: "string" }),
       humidity: varchar({ length: 20 }),
@@ -702,7 +710,11 @@ var init_schema = __esm({
         // desconto de combustível (Terceirizado)
         totalAmount: varchar("total_amount", { length: 20 }).notNull(),
         status: mysqlEnum(["fechado", "pago"]).default("fechado").notNull(),
+        // pagamento do SALÁRIO/diária
         paidAt: timestamp("paid_at", { mode: "string" }),
+        commissionStatus: mysqlEnum("commission_status", ["pendente", "pago"]).default("pendente").notNull(),
+        // pagamento da COMISSÃO, independente do salário (datas de pagamento diferentes)
+        commissionPaidAt: timestamp("commission_paid_at", { mode: "string" }),
         notes: text(),
         closedBy: int("closed_by").references(() => users.id),
         createdAt: timestamp("created_at", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull(),
@@ -1274,6 +1286,8 @@ var init_schema = __esm({
         cnpjPagador: varchar("cnpj_pagador", { length: 30 }),
         nomePagador: varchar("nome_pagador", { length: 255 }),
         valor: varchar({ length: 20 }).notNull().default("0"),
+        receiptUrl: varchar("receipt_url", { length: 1e3 }),
+        // comprovante de pagamento
         dataVencimento: varchar("data_vencimento", { length: 10 }),
         dataPagamento: varchar("data_pagamento", { length: 10 }),
         situacao: int().notNull().default(1),
@@ -1366,9 +1380,12 @@ var init_schema = __esm({
         nomeDestinatario: varchar("nome_destinatario", { length: 255 }),
         cnpjDestinatario: varchar("cnpj_destinatario", { length: 20 }),
         valorTotal: varchar("valor_total", { length: 20 }),
+        valorOriginal: varchar("valor_original", { length: 20 }),
         unidade: varchar("unidade", { length: 20 }),
         quantidade: varchar("quantidade", { length: 20 }),
         cfop: varchar("cfop", { length: 10 }),
+        receiptUrl: varchar("receipt_url", { length: 1e3 }),
+        // comprovante de pagamento
         valorEditado: tinyint("valor_editado").default(0).notNull(),
         statusFiscalContaAzul: varchar("status_fiscal_conta_azul", { length: 50 }),
         statusNfInterno: mysqlEnum("status_nf_interno", ["em_aberto", "pago", "cancelado"]).default("em_aberto").notNull(),
@@ -1393,6 +1410,7 @@ var init_schema = __esm({
         valorNovo: varchar("valor_novo", { length: 100 }),
         usuarioId: int("usuario_id"),
         usuarioNome: varchar("usuario_nome", { length: 255 }),
+        observacao: text(),
         alteradoEm: timestamp("alterado_em", { mode: "string" }).default("CURRENT_TIMESTAMP").notNull()
       },
       (table) => [
@@ -1684,6 +1702,20 @@ var init_schema = __esm({
       // parecer/resposta do responsável
       denialReason: text("denial_reason"),
       // motivo da negativa
+      quotationRequestId: int("quotation_request_id"),
+      // orçamento vinculado (server/routers/quotationRequests.ts)
+      paymentMethod: mysqlEnum("payment_method", ["boleto", "pix", "cartao_credito", "cartao_debito", "dinheiro", "transferencia", "outro"]),
+      // forma de pagamento usada na compra
+      invoiceUrl: varchar("invoice_url", { length: 1e3 }),
+      // Nota Fiscal anexada na confirmação da compra
+      receiptUrl: varchar("receipt_url", { length: 1e3 }),
+      // Comprovante de pagamento anexado na confirmação da compra
+      winningSupplierId: int("winning_supplier_id"),
+      // fornecedor com maior parte da compra (ver suppliersBreakdown p/ divisão completa)
+      finalPrice: varchar("final_price", { length: 20 }),
+      // valor final decidido da compra
+      suppliersBreakdown: text("suppliers_breakdown"),
+      // JSON [{supplierId, supplierName, subtotal}]
       notes: text(),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
       updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
@@ -1696,6 +1728,63 @@ var init_schema = __esm({
       unit: varchar({ length: 50 }),
       notes: text(),
       confirmed: tinyint().default(0).notNull(),
+      // Recebimento no estoque (server/routers/stock.ts receivePurchaseItems)
+      receivedQuantity: decimal("received_quantity", { precision: 14, scale: 3 }),
+      stockProductId: int("stock_product_id"),
+      stockLocationId: int("stock_location_id"),
+      receivedAt: bigint("received_at", { mode: "number" }),
+      receivedBy: int("received_by"),
+      packageSize: decimal("package_size", { precision: 14, scale: 3 }),
+      packageUnit: varchar("package_unit", { length: 10 }),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
+    });
+    stockLocations = mysqlTable("stock_locations", {
+      id: int().autoincrement().primaryKey().notNull(),
+      name: varchar({ length: 150 }).notNull(),
+      type: mysqlEnum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]).default("almoxarifado").notNull(),
+      equipmentId: int("equipment_id"),
+      active: tinyint().default(1).notNull(),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
+    });
+    stockProducts = mysqlTable("stock_products", {
+      id: int().autoincrement().primaryKey().notNull(),
+      code: varchar({ length: 50 }),
+      name: varchar({ length: 255 }).notNull(),
+      brand: varchar({ length: 100 }),
+      tracksWeight: tinyint("tracks_weight").default(0).notNull(),
+      densityKgL: decimal("density_kg_l", { precision: 6, scale: 3 }),
+      unit: varchar({ length: 20 }).default("un").notNull(),
+      categoryId: int("category_id").references(() => purchaseCategories.id),
+      minStock: decimal("min_stock", { precision: 14, scale: 3 }).default("0").notNull(),
+      active: tinyint().default(1).notNull(),
+      notes: text(),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
+    });
+    stockBalances = mysqlTable("stock_balances", {
+      id: int().autoincrement().primaryKey().notNull(),
+      productId: int("product_id").notNull(),
+      locationId: int("location_id").notNull(),
+      quantity: decimal({ precision: 14, scale: 3 }).default("0").notNull(),
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
+    }, (table) => [uniqueIndex("stock_balances_product_location_unique").on(table.productId, table.locationId)]);
+    stockMovements = mysqlTable("stock_movements", {
+      id: int().autoincrement().primaryKey().notNull(),
+      productId: int("product_id").notNull(),
+      type: mysqlEnum(["entrada", "saida", "transferencia", "ajuste", "estorno", "devolucao"]).notNull(),
+      quantity: decimal({ precision: 14, scale: 3 }).notNull(),
+      fromLocationId: int("from_location_id"),
+      toLocationId: int("to_location_id"),
+      unitCost: decimal("unit_cost", { precision: 14, scale: 4 }),
+      supplierId: int("supplier_id"),
+      purchaseRequestId: int("purchase_request_id"),
+      purchaseRequestItemId: int("purchase_request_item_id"),
+      destinationEquipmentId: int("destination_equipment_id"),
+      destinationCollaboratorId: int("destination_collaborator_id"),
+      destinationNote: varchar("destination_note", { length: 255 }),
+      reason: text(),
+      performedBy: int("performed_by"),
+      balanceAfter: decimal("balance_after", { precision: 14, scale: 3 }),
       createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
     });
     suppliers = mysqlTable("suppliers", {
@@ -1729,6 +1818,22 @@ var init_schema = __esm({
       whatsapp: varchar({ length: 50 }),
       email: varchar({ length: 255 }),
       createdAt: bigint("created_at", { mode: "number" }).notNull()
+    });
+    supplierCategories = mysqlTable("supplier_categories", {
+      id: int().autoincrement().primaryKey().notNull(),
+      supplierId: int("supplier_id").notNull().references(() => suppliers.id),
+      categoryId: int("category_id").notNull().references(() => purchaseCategories.id),
+      createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull()
+    });
+    whatsappConversationState = mysqlTable("whatsapp_conversation_state", {
+      phone: varchar({ length: 20 }).primaryKey().notNull(),
+      // telefone normalizado (só dígitos, sem DDI)
+      flow: varchar({ length: 50 }).notNull(),
+      // ex: 'compra'
+      step: varchar({ length: 50 }).notNull(),
+      payload: text(),
+      // JSON com o que já foi coletado nessa sessão (categoria, itens, etc)
+      updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().onUpdateNow().notNull()
     });
     quotations = mysqlTable("quotations", {
       id: int().autoincrement().primaryKey().notNull(),
@@ -2313,6 +2418,75 @@ function normalizePhone(raw) {
   if (digits.startsWith("55")) return digits;
   return `55${digits}`;
 }
+function normalizePhoneLocal(raw) {
+  if (!raw) return null;
+  let digits = raw.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("55") && digits.length > 11) digits = digits.slice(2);
+  if (digits.length === 11) digits = digits.slice(0, 2) + digits.slice(3);
+  return digits;
+}
+async function sendWhatsAppRaw(body) {
+  const token = process.env.META_WA_TOKEN;
+  const phoneNumberId = process.env.META_WA_PHONE_ID;
+  if (!token || !phoneNumberId) {
+    console.log("[WhatsApp] META_WA_TOKEN/META_WA_PHONE_ID n\xE3o configurados \u2014 envio pulado.");
+    return false;
+  }
+  try {
+    const res = await fetch(GRAPH_BASE(), {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error(`[WhatsApp] Falha ao enviar (HTTP ${res.status}): ${errText}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[WhatsApp] Erro ao enviar mensagem:", err);
+    return false;
+  }
+}
+async function sendWhatsAppText(toPhoneE164, text2) {
+  return sendWhatsAppRaw({
+    messaging_product: "whatsapp",
+    to: toPhoneE164,
+    type: "text",
+    text: { body: text2 }
+  });
+}
+async function sendWhatsAppList(toPhoneE164, bodyText, buttonLabel, rows) {
+  return sendWhatsAppRaw({
+    messaging_product: "whatsapp",
+    to: toPhoneE164,
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: { text: bodyText },
+      action: {
+        button: buttonLabel,
+        sections: [{ title: "Op\xE7\xF5es", rows: rows.slice(0, 10) }]
+      }
+    }
+  });
+}
+async function sendWhatsAppButtons(toPhoneE164, bodyText, buttons) {
+  return sendWhatsAppRaw({
+    messaging_product: "whatsapp",
+    to: toPhoneE164,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text: bodyText },
+      action: {
+        buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id, title: b.title } }))
+      }
+    }
+  });
+}
 async function sendWhatsAppTemplate(params) {
   try {
     const token = process.env.META_WA_TOKEN;
@@ -2363,11 +2537,12 @@ async function sendWhatsAppTemplate(params) {
     console.error("[WhatsApp] Erro ao enviar mensagem:", err);
   }
 }
-var GRAPH_API_VERSION;
+var GRAPH_API_VERSION, GRAPH_BASE;
 var init_whatsapp = __esm({
   "server/utils/whatsapp.ts"() {
     "use strict";
     GRAPH_API_VERSION = "v21.0";
+    GRAPH_BASE = () => `https://graph.facebook.com/${GRAPH_API_VERSION}/${process.env.META_WA_PHONE_ID}/messages`;
   }
 });
 
@@ -2979,16 +3154,16 @@ async function extractNfDataFromPdfText(buffer) {
     const itemMatch = text2.match(/\b(TON|M3|M³|KG)\b\s+(\d+(?:[.,]\d+)?)/i);
     if (itemMatch) {
       const rawUnit = itemMatch[1].toUpperCase();
-      const num = parseFloat(itemMatch[2].replace(",", "."));
-      if (!isNaN(num) && num > 0) {
+      const num2 = parseFloat(itemMatch[2].replace(",", "."));
+      if (!isNaN(num2) && num2 > 0) {
         if (rawUnit === "TON") {
-          quantity = String(num);
+          quantity = String(num2);
           unit = "ton";
         } else if (rawUnit === "KG") {
-          quantity = String(num / 1e3);
+          quantity = String(num2 / 1e3);
           unit = "ton";
         } else if (rawUnit === "M3" || rawUnit === "M\xB3") {
-          quantity = String(num);
+          quantity = String(num2);
           unit = "m3";
         }
       }
@@ -2996,9 +3171,9 @@ async function extractNfDataFromPdfText(buffer) {
     if (!quantity) {
       const pesoMatch = text2.match(/PESO\s*L[IÍ]QUIDO[^\d]{0,15}([\d.,]+)/i);
       if (pesoMatch) {
-        const num = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
-        if (!isNaN(num) && num > 0) {
-          quantity = num > 100 ? String(num / 1e3) : String(num);
+        const num2 = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
+        if (!isNaN(num2) && num2 > 0) {
+          quantity = num2 > 100 ? String(num2 / 1e3) : String(num2);
           unit = "ton";
         }
       }
@@ -3190,6 +3365,17 @@ async function ensurePayrollTable(db) {
     console.warn("[Payroll] migratePayrollEntriesDiscount:", e?.message);
   }
   try {
+    const [cols] = await db.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payroll_entries' AND COLUMN_NAME = 'commission_status'`
+    );
+    if (cols.length === 0) {
+      await db.execute(`ALTER TABLE payroll_entries ADD COLUMN commission_status ENUM('pendente','pago') NOT NULL DEFAULT 'pendente' AFTER paid_at`);
+      await db.execute(`ALTER TABLE payroll_entries ADD COLUMN commission_paid_at TIMESTAMP NULL AFTER commission_status`);
+    }
+  } catch (e) {
+    console.warn("[Payroll] migrateCommissionStatus:", e?.message);
+  }
+  try {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS payroll_weekly_payments (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -3343,19 +3529,58 @@ async function getWeeklyBreakdownMap(db, year, month) {
   }
   return result;
 }
-async function getWeeklyVehicleCommissionMap(db, year, month) {
+async function getWeeklyPaidAnchors(db) {
   const [rows] = await db.execute(
-    sql12`SELECT eq.responsible_driver_id AS collaboratorId, cl.delivery_date AS deliveryDate, cd.commission_category AS categoria,
-               COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0) AS weightKg
+    sql12`SELECT id, employment_type AS employmentType, weekly_period_anchor AS anchor, payment_lag_days AS lag
+        FROM collaborators WHERE role IN ('motorista','terceirizado') AND commission_auto <> 0`
+  );
+  const m = /* @__PURE__ */ new Map();
+  for (const r of rows) {
+    const weekly = r.employmentType === "semanal" || r.anchor === "sabado" || r.lag !== null && r.lag !== void 0 && Number(r.lag) !== 7;
+    if (weekly) m.set(Number(r.id), anchorDayOf({ weeklyPeriodAnchor: r.anchor }));
+  }
+  return m;
+}
+function fridayOfWeekContaining(dateStr, anchorDay) {
+  return addDaysStr(weekStartOf(dateStr, anchorDay), anchorDay === 6 ? 6 : 5);
+}
+function monthWindow(year, month) {
+  const mm = String(month).padStart(2, "0");
+  const lastDay = new Date(year, month, 0).getDate();
+  return { start: addDaysStr(`${year}-${mm}-01`, -7), end: addDaysStr(`${year}-${mm}-${String(lastDay).padStart(2, "0")}`, 8) };
+}
+async function getCommissionLoadRows(db, year, month, onlyCollaboratorId) {
+  const { start, end } = monthWindow(year, month);
+  const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  const weeklyAnchors = await getWeeklyPaidAnchors(db);
+  const [rows] = await db.execute(
+    sql12`SELECT COALESCE(IF(eq.is_third_party = 1, NULL, cl.driver_collaborator_id), eq.responsible_driver_id) AS collaboratorId,
+               cl.delivery_date AS deliveryDate, cd.commission_category AS categoria,
+               COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0) AS weightKg,
+               cl.id AS loadId, COALESCE(cl.vehicle_plate, eq.license_plate) AS plate, cd.name AS destName
         FROM cargo_loads cl
         JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
-        JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
+        LEFT JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
           OR (cl.vehicle_id IS NULL AND cl.vehicle_plate IS NOT NULL AND eq.license_plate = cl.vehicle_plate)
         WHERE cl.status = 'entregue' AND cl.delivery_date IS NOT NULL
-          AND YEAR(cl.delivery_date) = ${year} AND MONTH(cl.delivery_date) = ${month}
+          AND cl.delivery_date >= ${start} AND cl.delivery_date < ${end}
           AND cd.commission_category != 'nenhuma'
-          AND eq.responsible_driver_id IS NOT NULL`
+          AND COALESCE(IF(eq.is_third_party = 1, NULL, cl.driver_collaborator_id), eq.responsible_driver_id) IS NOT NULL`
   );
+  const out = [];
+  for (const r of rows) {
+    const cid = Number(r.collaboratorId);
+    if (onlyCollaboratorId !== void 0 && cid !== onlyCollaboratorId) continue;
+    const dateStr = r.deliveryDate instanceof Date ? r.deliveryDate.toISOString().slice(0, 10) : String(r.deliveryDate).slice(0, 10);
+    const anchor = weeklyAnchors.get(cid);
+    const belongs = anchor !== void 0 ? fridayOfWeekContaining(dateStr, anchor).slice(0, 7) === monthPrefix : dateStr.slice(0, 7) === monthPrefix;
+    if (!belongs) continue;
+    out.push({ collaboratorId: cid, dateStr, categoria: r.categoria, weightKg: parseFloat(String(r.weightKg ?? 0)) || 0, loadId: Number(r.loadId), plate: r.plate ?? null, destName: r.destName ?? null });
+  }
+  return out;
+}
+async function getWeeklyVehicleCommissionMap(db, year, month) {
+  const rows = await getCommissionLoadRows(db, year, month);
   const map = /* @__PURE__ */ new Map();
   const ratesCache = /* @__PURE__ */ new Map();
   const configCache = /* @__PURE__ */ new Map();
@@ -3370,17 +3595,17 @@ async function getWeeklyVehicleCommissionMap(db, year, month) {
     const rates = ratesCache.get(cid);
     const config = configCache.get(cid);
     const porTonelada = config.unit === "tonelada";
-    const dateStr = r.deliveryDate instanceof Date ? r.deliveryDate.toISOString().slice(0, 10) : String(r.deliveryDate).slice(0, 10);
-    const weekKey = weekStartOf(dateStr, config.anchor);
+    const weekKey = weekStartOf(r.dateStr, config.anchor);
     const rate = rates[`motorista_${r.categoria}`] ?? 0;
-    const quantidadeIncremento = porTonelada ? parseFloat(r.weightKg ?? "0") / 1e3 : 1;
+    const quantidadeIncremento = porTonelada ? r.weightKg / 1e3 : 1;
     if (!map.has(cid)) map.set(cid, /* @__PURE__ */ new Map());
     const weeks = map.get(cid);
-    if (!weeks.has(weekKey)) weeks.set(weekKey, { cargas: 0, quantidade: 0, valor: 0 });
+    if (!weeks.has(weekKey)) weeks.set(weekKey, { cargas: 0, quantidade: 0, valor: 0, items: [] });
     const w = weeks.get(weekKey);
     w.cargas += 1;
     w.quantidade += quantidadeIncremento;
     w.valor += quantidadeIncremento * rate;
+    w.items.push({ loadId: r.loadId, date: r.dateStr, plate: r.plate, dest: r.destName, categoria: r.categoria, kg: r.weightKg, rate, valor: quantidadeIncremento * rate });
   }
   return map;
 }
@@ -3412,6 +3637,9 @@ async function getLiveOperadorCommissionMap(db, year, month, activeCollaborators
   return map;
 }
 async function getLiveTerceirizadoDiscountMap(db, year, month) {
+  const { start: discStart, end: discEnd } = monthWindow(year, month);
+  const discMonthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  const discWeeklyAnchors = await getWeeklyPaidAnchors(db);
   const [rows] = await db.execute(
     sql12`SELECT eq.responsible_driver_id AS collaboratorId, eq.name AS equipmentName, vr.date AS date,
                vr.liters AS liters, vr.charged_value AS chargedValue
@@ -3419,7 +3647,7 @@ async function getLiveTerceirizadoDiscountMap(db, year, month) {
         JOIN equipment eq ON eq.id = vr.equipment_id
         WHERE vr.record_type = 'abastecimento' AND vr.charged_value IS NOT NULL AND vr.charged_value != ''
           AND eq.responsible_driver_id IS NOT NULL
-          AND YEAR(vr.date) = ${year} AND MONTH(vr.date) = ${month}
+          AND vr.date >= ${discStart} AND vr.date < ${discEnd}
         ORDER BY vr.date`
   );
   const map = /* @__PURE__ */ new Map();
@@ -3434,16 +3662,20 @@ async function getLiveTerceirizadoDiscountMap(db, year, month) {
     const cobrado = parseFloat(r.chargedValue ?? "0");
     const subtotal = litros * cobrado;
     const dateStr = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10);
+    const wkAnchor = discWeeklyAnchors.get(cid);
+    const belongsToMonth = wkAnchor !== void 0 ? fridayOfWeekContaining(dateStr, wkAnchor).slice(0, 7) === discMonthPrefix : dateStr.slice(0, 7) === discMonthPrefix;
+    if (!belongsToMonth) continue;
     if (!map.has(cid)) map.set(cid, { total: 0, totalLiters: 0, records: [], byWeek: /* @__PURE__ */ new Map() });
     const info = map.get(cid);
     info.total += subtotal;
     info.totalLiters += litros;
     info.records.push({ date: dateStr, equipmentName: r.equipmentName, liters: litros, precoCobrado: cobrado, subtotal });
     const weekKey = weekStartOf(dateStr, anchorCache.get(cid));
-    if (!info.byWeek.has(weekKey)) info.byWeek.set(weekKey, { liters: 0, valor: 0 });
+    if (!info.byWeek.has(weekKey)) info.byWeek.set(weekKey, { liters: 0, valor: 0, records: [] });
     const w = info.byWeek.get(weekKey);
     w.liters += litros;
     w.valor += subtotal;
+    w.records.push({ date: dateStr, equipmentName: r.equipmentName, liters: litros, precoCobrado: cobrado, subtotal });
   }
   return map;
 }
@@ -3546,7 +3778,7 @@ var init_payroll = __esm({
           const baseValue = saved ? parseFloat(saved.baseValue || "0") : parseFloat(baseRateOf(c));
           const daysWorked = daily ? saved ? saved.daysWorked : daysMap.get(c.id) || 0 : null;
           const hasAutoCommission = (c.role === "motorista" || c.role === "terceirizado" || c.role === "operador") && c.commissionAuto !== 0;
-          const isPaid = saved?.status === "pago";
+          const isPaid = saved?.commissionStatus === "pago";
           const useSaved = !!saved && (!hasAutoCommission || isPaid) && !weeklyFixed;
           const commission = useSaved ? parseFloat(saved.commission || "0") : liveCommissionFor(c);
           const discount = useSaved ? parseFloat(saved.discount || "0") : liveDiscountFor(c);
@@ -3576,6 +3808,8 @@ var init_payroll = __esm({
                   cargas: w?.cargas ?? 0,
                   quantidade: w?.quantidade ?? 0,
                   unit: c.commissionUnit,
+                  loads: w?.items ?? [],
+                  fuels: weekDiscount?.records ?? [],
                   desconto: weekDiscount?.valor ?? 0,
                   valor: (w?.valor ?? 0) - (weekDiscount?.valor ?? 0),
                   allPaid: paidMap?.get(f) === true
@@ -3611,6 +3845,10 @@ var init_payroll = __esm({
             totalAmount: totalAmount.toFixed(2),
             status,
             paidAt: daily || weeklyFixed ? null : saved?.paidAt ?? null,
+            // Comissão: só existe como conceito de pagamento separado nas linhas "simples"
+            // (CLT/PJ e afins) — diarista/semanal já têm seu próprio controle por dia/semana.
+            commissionStatus: daily || weeklyFixed ? null : saved?.commissionStatus ?? "pendente",
+            commissionPaidAt: daily || weeklyFixed ? null : saved?.commissionPaidAt ?? null,
             isDraft: !saved,
             weeks
           };
@@ -3624,12 +3862,15 @@ var init_payroll = __esm({
           else acc.totalDiarias += total;
           if (r.status === "fechado" || r.status === "pago") acc.fechados++;
           if (r.status === "pago") acc.pagos++;
+          if (parseFloat(r.commission || "0") > 0 && r.commissionStatus === "pago") acc.comissoesPagas++;
           return acc;
-        }, { totalGeral: 0, totalComissao: 0, totalDesconto: 0, totalSalarios: 0, totalDiarias: 0, fechados: 0, pagos: 0 });
+        }, { totalGeral: 0, totalComissao: 0, totalDesconto: 0, totalSalarios: 0, totalDiarias: 0, fechados: 0, pagos: 0, comissoesPagas: 0 });
         return { rows, summary, totalCollaborators: rows.length };
       }),
       // Salva/fecha a linha de um colaborador (grava snapshot dos valores no momento).
-      // markPaid: já grava com status 'pago' (usado pelo botão "Pagar" na linha em rascunho).
+      // markPaid: já grava salário com status 'pago' (botão "Pagar Salário" na linha em rascunho).
+      // markCommissionPaid: idem, mas pra comissão — independente do salário (datas diferentes).
+      // Omitir markCommissionPaid preserva o status de comissão que já existia (não desmarca sem querer).
       saveEntry: protectedProcedure.input(z22.object({
         collaboratorId: z22.number(),
         referenceMonth: z22.string(),
@@ -3638,7 +3879,9 @@ var init_payroll = __esm({
         baseValueOverride: z22.string().optional(),
         notes: z22.string().optional(),
         markPaid: z22.boolean().optional(),
-        paidAt: z22.string().optional()
+        paidAt: z22.string().optional(),
+        markCommissionPaid: z22.boolean().optional(),
+        commissionPaidAt: z22.string().optional()
       })).mutation(async ({ ctx, input }) => {
         requireAdmin(ctx);
         const db = await getDb();
@@ -3670,10 +3913,12 @@ var init_payroll = __esm({
         const totalAmount = computeTotal(employmentType, baseValue, unitCount, commission, discount);
         const status = input.markPaid ? "pago" : "fechado";
         const paidAt = input.markPaid ? input.paidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) : null;
+        const commissionStatusVal = input.markCommissionPaid === void 0 ? null : input.markCommissionPaid ? "pago" : "pendente";
+        const commissionPaidAtVal = input.markCommissionPaid ? input.commissionPaidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) : null;
         await db.execute(
           sql12`INSERT INTO payroll_entries
-          (collaborator_id, reference_month, collaborator_name, cpf, employment_type, base_value, days_worked, commission, discount, total_amount, status, paid_at, notes, closed_by)
-          VALUES (${input.collaboratorId}, ${input.referenceMonth}, ${collab.name}, ${collab.cpf || null}, ${employmentType}, ${baseValue.toFixed(2)}, ${daysWorked}, ${commission.toFixed(2)}, ${discount.toFixed(2)}, ${totalAmount.toFixed(2)}, ${status}, ${paidAt}, ${input.notes || null}, ${ctx.user.id})
+          (collaborator_id, reference_month, collaborator_name, cpf, employment_type, base_value, days_worked, commission, discount, total_amount, status, paid_at, commission_status, commission_paid_at, notes, closed_by)
+          VALUES (${input.collaboratorId}, ${input.referenceMonth}, ${collab.name}, ${collab.cpf || null}, ${employmentType}, ${baseValue.toFixed(2)}, ${daysWorked}, ${commission.toFixed(2)}, ${discount.toFixed(2)}, ${totalAmount.toFixed(2)}, ${status}, ${paidAt}, COALESCE(${commissionStatusVal}, 'pendente'), ${commissionPaidAtVal}, ${input.notes || null}, ${ctx.user.id})
           ON DUPLICATE KEY UPDATE
             collaborator_name = VALUES(collaborator_name),
             cpf = VALUES(cpf),
@@ -3685,6 +3930,8 @@ var init_payroll = __esm({
             total_amount = VALUES(total_amount),
             status = VALUES(status),
             paid_at = VALUES(paid_at),
+            commission_status = IF(${commissionStatusVal} IS NULL, commission_status, VALUES(commission_status)),
+            commission_paid_at = IF(${commissionStatusVal} IS NULL, commission_paid_at, VALUES(commission_paid_at)),
             notes = VALUES(notes),
             closed_by = ${ctx.user.id}`
         );
@@ -3749,6 +3996,22 @@ var init_payroll = __esm({
         await db.update(payrollEntries).set({ status: "fechado", paidAt: null }).where(eq21(payrollEntries.id, input.id));
         return { success: true };
       }),
+      // Pagamento de COMISSÃO — independente do salário/diária (markPaid/unmarkPaid acima), já
+      // que o financeiro paga os dois em datas diferentes.
+      markCommissionPaid: protectedProcedure.input(z22.object({ id: z22.number(), paidAt: z22.string() })).mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx);
+        const db = await getDb();
+        if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(payrollEntries).set({ commissionStatus: "pago", commissionPaidAt: input.paidAt }).where(eq21(payrollEntries.id, input.id));
+        return { success: true };
+      }),
+      unmarkCommissionPaid: protectedProcedure.input(z22.object({ id: z22.number() })).mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx);
+        const db = await getDb();
+        if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(payrollEntries).set({ commissionStatus: "pendente", commissionPaidAt: null }).where(eq21(payrollEntries.id, input.id));
+        return { success: true };
+      }),
       // Marca/desmarca o pagamento de UMA sexta-feira específica de um colaborador "Semanal"
       // (diferente de markPaid/unmarkPaid, que travam o mês inteiro — usado só por CLT/PJ).
       markWeeklyPaid: protectedProcedure.input(z22.object({ collaboratorId: z22.number(), weekFriday: z22.string() })).mutation(async ({ ctx, input }) => {
@@ -3807,6 +4070,16 @@ var init_payroll = __esm({
         }
         return { success: true };
       }),
+      // Define se a comissão desse motorista/terceirizado é calculada por carga entregue ou por
+      // tonelada líquida entregue. Fica salvo por colaborador (não afeta os outros) — assim, quando
+      // um motorista novo entrar, basta trocar aqui em vez de mexer em código.
+      updateCommissionUnit: protectedProcedure.input(z22.object({ collaboratorId: z22.number(), unit: z22.enum(["carga", "tonelada"]) })).mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx);
+        const db = await getDb();
+        if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(collaborators).set({ commissionUnit: input.unit }).where(eq21(collaborators.id, input.collaboratorId));
+        return { success: true };
+      }),
       // Detalhamento da comissão de Motorista (por carga entregue no destino, no próprio mês da
       // Folha) ou Operador (toneladas líquidas do cliente no mês ÷ nº de operadores daquele cliente).
       getCommissionBreakdown: protectedProcedure.input(z22.object({ collaboratorId: z22.number(), referenceMonth: z22.string(), numOperadoresOverride: z22.number().optional() })).query(async ({ ctx, input }) => {
@@ -3826,28 +4099,15 @@ var init_payroll = __esm({
         const periodoBase = `${String(month).padStart(2, "0")}/${year}`;
         if (collab.role === "motorista" || collab.role === "terceirizado") {
           const porTonelada = collab.commissionUnit === "tonelada";
-          const [rows] = await db.execute(
-            porTonelada ? sql12`SELECT cd.commission_category AS categoria, COUNT(*) AS qtd,
-                     SUM(COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0)) AS totalKg
-                  FROM cargo_loads cl
-                  JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
-                  JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
-                    OR (cl.vehicle_id IS NULL AND cl.vehicle_plate IS NOT NULL AND eq.license_plate = cl.vehicle_plate)
-                  WHERE eq.responsible_driver_id = ${input.collaboratorId} AND cl.status = 'entregue'
-                    AND cl.delivery_date IS NOT NULL
-                    AND YEAR(cl.delivery_date) = ${year} AND MONTH(cl.delivery_date) = ${month}
-                    AND cd.commission_category != 'nenhuma'
-                  GROUP BY cd.commission_category` : sql12`SELECT cd.commission_category AS categoria, COUNT(*) AS qtd
-                  FROM cargo_loads cl
-                  JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
-                  JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
-                    OR (cl.vehicle_id IS NULL AND cl.vehicle_plate IS NOT NULL AND eq.license_plate = cl.vehicle_plate)
-                  WHERE eq.responsible_driver_id = ${input.collaboratorId} AND cl.status = 'entregue'
-                    AND cl.delivery_date IS NOT NULL
-                    AND YEAR(cl.delivery_date) = ${year} AND MONTH(cl.delivery_date) = ${month}
-                    AND cd.commission_category != 'nenhuma'
-                  GROUP BY cd.commission_category`
-          );
+          const loadRows = await getCommissionLoadRows(db, year, month, input.collaboratorId);
+          const byCat = /* @__PURE__ */ new Map();
+          for (const lr of loadRows) {
+            const g = byCat.get(lr.categoria) ?? { qtd: 0, totalKg: 0 };
+            g.qtd += 1;
+            g.totalKg += lr.weightKg;
+            byCat.set(lr.categoria, g);
+          }
+          const rows = Array.from(byCat.entries()).map(([categoria, g]) => ({ categoria, qtd: g.qtd, totalKg: g.totalKg }));
           const labels = { enerbio: "Enerbio", mabam: "Mabam (Rebnic)", lider: "L\xEDder", sonoco: "Sonoco" };
           const items = rows.map((r) => {
             const rate = rates[`motorista_${r.categoria}`] ?? 0;
@@ -3862,7 +4122,13 @@ var init_payroll = __esm({
             };
           });
           const total = items.reduce((s, i) => s + i.subtotal, 0);
-          return { tipo: "motorista", unidade: porTonelada ? "tonelada" : "carga", periodoBase, items, total, rates };
+          const loads = [...loadRows].sort((a, b) => a.dateStr.localeCompare(b.dateStr)).map((lr) => ({ loadId: lr.loadId, date: lr.dateStr, plate: lr.plate, dest: lr.destName, categoria: lr.categoria, kg: lr.weightKg }));
+          let fuels = [];
+          if (collab.role === "terceirizado") {
+            const dm = await getLiveTerceirizadoDiscountMap(db, year, month);
+            fuels = dm.get(input.collaboratorId)?.records ?? [];
+          }
+          return { tipo: "motorista", unidade: porTonelada ? "tonelada" : "carga", periodoBase, items, total, rates, loads, fuels };
         }
         if (collab.role === "operador") {
           if (!collab.clientId) {
@@ -4090,12 +4356,12 @@ __export(sicoob_exports, {
   syncSicoobBoletos: () => syncSicoobBoletos,
   syncSicoobExtrato: () => syncSicoobExtrato
 });
-import { z as z44 } from "zod";
+import { z as z45 } from "zod";
 import https from "https";
 import fs from "fs";
 import path from "path";
 import axios from "axios";
-import { sql as sql27 } from "drizzle-orm";
+import { sql as sql28 } from "drizzle-orm";
 function prevMonthOf(year, month) {
   return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
 }
@@ -4226,7 +4492,7 @@ async function syncSicoobExtrato(mes, ano) {
           saldo,
           tipoLancamento: tipoLancamento ? String(tipoLancamento) : null,
           numeroDocumento,
-          sincronizadoEm: sql27`NOW()`
+          sincronizadoEm: sql28`NOW()`
         }
       });
       synced++;
@@ -4333,11 +4599,11 @@ async function syncSicoobBoletos() {
               nfReferente,
               cnpjPagador,
               nomePagador,
-              valor: sql27`IF(valor_editado = 1, valor, ${valor})`,
+              valor: sql28`IF(valor_editado = 1, valor, ${valor})`,
               dataVencimento: dataVenc,
               dataPagamento: dataPag,
               situacao,
-              sincronizadoEm: sql27`NOW()`
+              sincronizadoEm: sql28`NOW()`
             }
           });
           synced++;
@@ -4652,7 +4918,7 @@ var init_sicoob = __esm({
         }
       }),
       // Extrato da conta corrente
-      extrato: protectedProcedure.input(z44.object({ mes: z44.number(), ano: z44.number() })).query(async ({ input }) => {
+      extrato: protectedProcedure.input(z45.object({ mes: z45.number(), ano: z45.number() })).query(async ({ input }) => {
         try {
           const data = await sicoobGet(`/conta-corrente/v4/extrato/${input.mes}/${input.ano}`, {
             numeroContaCorrente: String(NUMERO_CONTA)
@@ -4663,11 +4929,11 @@ var init_sicoob = __esm({
         }
       }),
       // Boletos a receber (por pagador) — direto da API
-      boletosPorPagador: protectedProcedure.input(z44.object({
-        numeroCpfCnpj: z44.string(),
-        dataInicio: z44.string().optional(),
-        dataFim: z44.string().optional(),
-        codigoSituacao: z44.number().optional()
+      boletosPorPagador: protectedProcedure.input(z45.object({
+        numeroCpfCnpj: z45.string(),
+        dataInicio: z45.string().optional(),
+        dataFim: z45.string().optional(),
+        codigoSituacao: z45.number().optional()
       })).query(async ({ input }) => {
         try {
           const data = await sicoobGet(
@@ -4685,7 +4951,7 @@ var init_sicoob = __esm({
         }
       }),
       // Boleto individual
-      boleto: protectedProcedure.input(z44.object({ nossoNumero: z44.number() })).query(async ({ input }) => {
+      boleto: protectedProcedure.input(z45.object({ nossoNumero: z45.number() })).query(async ({ input }) => {
         try {
           const data = await sicoobGet("/cobranca-bancaria/v3/boletos", {
             numeroCliente: NUMERO_CLIENTE,
@@ -4706,10 +4972,10 @@ var init_sicoob = __esm({
         };
       }),
       // ── Contas a Receber (lê da tabela sicoob_boletos) ──
-      listBoletos: protectedProcedure.input(z44.object({
-        mes: z44.number().min(1).max(12),
-        ano: z44.number().min(2020).max(2100),
-        pesquisa: z44.string().optional()
+      listBoletos: protectedProcedure.input(z45.object({
+        mes: z45.number().min(1).max(12),
+        ano: z45.number().min(2020).max(2100),
+        pesquisa: z45.string().optional()
       })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -4731,9 +4997,9 @@ var init_sicoob = __esm({
           return { boletos: [], error: e.message };
         }
       }),
-      summaryBoletos: protectedProcedure.input(z44.object({
-        mes: z44.number().min(1).max(12),
-        ano: z44.number().min(2020).max(2100)
+      summaryBoletos: protectedProcedure.input(z45.object({
+        mes: z45.number().min(1).max(12),
+        ano: z45.number().min(2020).max(2100)
       })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -4771,7 +5037,7 @@ var init_sicoob = __esm({
         }
       }),
       // ── Extrato Movimentações (lê da tabela sicoob_extrato) ──
-      listExtrato: protectedProcedure.input(z44.object({ mes: z44.number().min(1).max(12), ano: z44.number().min(2020).max(2100) })).query(async ({ input }) => {
+      listExtrato: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
           const db = await getDb2();
@@ -4794,14 +5060,14 @@ var init_sicoob = __esm({
           return { lancamentos: [], sincronizadoEm: null, error: e.message };
         }
       }),
-      syncExtrato: protectedProcedure.input(z44.object({ mes: z44.number().min(1).max(12), ano: z44.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+      syncExtrato: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).mutation(async ({ input }) => {
         const result = await syncSicoobExtrato(input.mes, input.ano);
         return result;
       }),
-      fluxoCaixaDiario: protectedProcedure.input(z44.object({
-        mes: z44.number().min(1).max(12),
-        ano: z44.number().min(2020).max(2100),
-        modo: z44.enum(["projecao", "real"]).optional()
+      fluxoCaixaDiario: protectedProcedure.input(z45.object({
+        mes: z45.number().min(1).max(12),
+        ano: z45.number().min(2020).max(2100),
+        modo: z45.enum(["projecao", "real"]).optional()
       })).query(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
@@ -4811,7 +5077,7 @@ var init_sicoob = __esm({
       // Visão anual: soma os totais (recebimentos/pagamentos) de cada mês do ano, reaproveitando
       // o mesmo cálculo dia-a-dia usado na visão mensal — sem duplicar nenhuma regra de negócio
       // (Sicoob, boletos, NFs, Folha). O saldo acumulado passa de mês em mês.
-      fluxoCaixaAnual: protectedProcedure.input(z44.object({ ano: z44.number().min(2020).max(2100), modo: z44.enum(["projecao", "real"]).optional() })).query(async ({ input }) => {
+      fluxoCaixaAnual: protectedProcedure.input(z45.object({ ano: z45.number().min(2020).max(2100), modo: z45.enum(["projecao", "real"]).optional() })).query(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { meses: [], saldoInicialAno: 0, error: "DB indispon\xEDvel" };
@@ -4834,7 +5100,14 @@ var init_sicoob = __esm({
           return { meses: [], saldoInicialAno: 0, error: e.message };
         }
       }),
-      updateValor: protectedProcedure.input(z44.object({ id: z44.number(), valor: z44.string() })).mutation(async ({ input }) => {
+      updateReceipt: protectedProcedure.input(z45.object({ id: z45.number(), receiptUrl: z45.string().url() })).mutation(async ({ input }) => {
+        const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+        const db = await getDb2();
+        if (!db) throw new Error("DB indispon\xEDvel");
+        await db.$client.execute(`UPDATE sicoob_boletos SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
+        return { success: true };
+      }),
+      updateValor: protectedProcedure.input(z45.object({ id: z45.number(), valor: z45.string() })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -4845,15 +5118,15 @@ var init_sicoob = __esm({
         return { success: true };
       }),
       // ── Lançamentos Futuros (importados do Excel do banco) ──
-      importLancamentosFuturos: protectedProcedure.input(z44.object({
-        lancamentos: z44.array(z44.object({
-          data: z44.string(),
-          documento: z44.string().nullable(),
-          historico: z44.string().nullable(),
-          infoComplementar: z44.string().nullable(),
-          valor: z44.string()
+      importLancamentosFuturos: protectedProcedure.input(z45.object({
+        lancamentos: z45.array(z45.object({
+          data: z45.string(),
+          documento: z45.string().nullable(),
+          historico: z45.string().nullable(),
+          infoComplementar: z45.string().nullable(),
+          valor: z45.string()
         })),
-        substituirMes: z44.string().optional()
+        substituirMes: z45.string().optional()
         // "YYYY-MM" — apaga os do mês antes de inserir
       })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -4879,7 +5152,7 @@ var init_sicoob = __esm({
         }
         return { inserted, error: null };
       }),
-      listLancamentosFuturos: protectedProcedure.input(z44.object({ mes: z44.number().min(1).max(12), ano: z44.number().min(2020).max(2100) })).query(async ({ input }) => {
+      listLancamentosFuturos: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).query(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { lancamentos: [], error: "DB indispon\xEDvel" };
@@ -4890,7 +5163,7 @@ var init_sicoob = __esm({
         );
         return { lancamentos: rows ?? [], error: null };
       }),
-      deleteLancamentosFuturos: protectedProcedure.input(z44.object({ mes: z44.number().min(1).max(12), ano: z44.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+      deleteLancamentosFuturos: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -4927,10 +5200,10 @@ var init_sicoob = __esm({
         }
       }),
       // ── Contas a Pagar (débitos do extrato Sicoob + lançamentos futuros negativos) ──
-      contasAPagar: protectedProcedure.input(z44.object({
-        mes: z44.number().min(1).max(12),
-        ano: z44.number().min(2020).max(2100),
-        pesquisa: z44.string().optional()
+      contasAPagar: protectedProcedure.input(z45.object({
+        mes: z45.number().min(1).max(12),
+        ano: z45.number().min(2020).max(2100),
+        pesquisa: z45.string().optional()
       })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -5029,11 +5302,11 @@ var init_sicoob = __esm({
       // Dashboard de análise: débitos JÁ REALIZADOS (extrato Sicoob, não pendências/projeção) num
       // período, com a classificação (Grupo/Centro de Custo/Natureza) de cada um — a agregação por
       // grupo/centro de custo/natureza e por mês é feita no frontend em cima dessa lista "achatada".
-      dashboardContasAPagar: protectedProcedure.input(z44.object({
-        anoInicio: z44.number().min(2020).max(2100),
-        mesInicio: z44.number().min(1).max(12),
-        anoFim: z44.number().min(2020).max(2100),
-        mesFim: z44.number().min(1).max(12)
+      dashboardContasAPagar: protectedProcedure.input(z45.object({
+        anoInicio: z45.number().min(2020).max(2100),
+        mesInicio: z45.number().min(1).max(12),
+        anoFim: z45.number().min(2020).max(2100),
+        mesFim: z45.number().min(1).max(12)
       })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -5115,10 +5388,10 @@ var init_sicoob = __esm({
       // Classificação, Fixo/Variável, Direto/Indireto). Como os campos formam uma hierarquia
       // (dropdowns em cascata na tela), mudar um campo limpa os campos abaixo dele nessa mesma
       // linha — evita deixar uma combinação inconsistente com o que passou a estar acima.
-      updateFavorecidoClassificacao: protectedProcedure.input(z44.object({
-        id: z44.number(),
-        campo: z44.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
-        valor: z44.string().nullable()
+      updateFavorecidoClassificacao: protectedProcedure.input(z45.object({
+        id: z45.number(),
+        campo: z45.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
+        valor: z45.string().nullable()
       })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
@@ -5136,11 +5409,11 @@ var init_sicoob = __esm({
       // Mesma edição de campo de classificação, mas endereçada pela CHAVE do favorecido (não pelo
       // id) — usada na aba Lançamentos, onde o favorecido pode ainda nem existir na memória (ex:
       // primeira vez que esse CNPJ aparece). Cria o registro na hora se ainda não existir.
-      upsertFavorecidoClassificacaoPorChave: protectedProcedure.input(z44.object({
-        chave: z44.string(),
-        tipoChave: z44.enum(["cnpj", "nome", "cpf_fragmento"]),
-        campo: z44.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
-        valor: z44.string().nullable()
+      upsertFavorecidoClassificacaoPorChave: protectedProcedure.input(z45.object({
+        chave: z45.string(),
+        tipoChave: z45.enum(["cnpj", "nome", "cpf_fragmento"]),
+        campo: z45.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
+        valor: z45.string().nullable()
       })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
@@ -5166,7 +5439,7 @@ var init_sicoob = __esm({
         }
         return { success: true };
       }),
-      updateFavorecidoNome: protectedProcedure.input(z44.object({ id: z44.number(), razaoSocial: z44.string().min(1) })).mutation(async ({ input }) => {
+      updateFavorecidoNome: protectedProcedure.input(z45.object({ id: z45.number(), razaoSocial: z45.string().min(1) })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5176,7 +5449,7 @@ var init_sicoob = __esm({
         );
         return { success: true };
       }),
-      deleteFavorecidoCategoria: protectedProcedure.input(z44.object({ id: z44.number() })).mutation(async ({ input }) => {
+      deleteFavorecidoCategoria: protectedProcedure.input(z45.object({ id: z45.number() })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5185,19 +5458,19 @@ var init_sicoob = __esm({
       }),
       // Importa uma planilha de CNPJs (ex: base de razão social/CNAE já levantada externamente)
       // como ponto de partida da memória — cada linha vira (ou atualiza) um favorecido por CNPJ.
-      importFavorecidosCategoriaPlanilha: protectedProcedure.input(z44.object({
-        linhas: z44.array(z44.object({
-          cnpj: z44.string(),
-          razaoSocial: z44.string().nullable().optional(),
-          nomeFantasia: z44.string().nullable().optional(),
-          cnaeCodigo: z44.string().nullable().optional(),
-          cnaeDescricao: z44.string().nullable().optional(),
-          grupo: z44.string().nullable().optional(),
-          centroCusto: z44.string().nullable().optional(),
-          natureza: z44.string().nullable().optional(),
-          classificacao: z44.string().nullable().optional(),
-          fixoVariavel: z44.string().nullable().optional(),
-          diretoIndireto: z44.string().nullable().optional()
+      importFavorecidosCategoriaPlanilha: protectedProcedure.input(z45.object({
+        linhas: z45.array(z45.object({
+          cnpj: z45.string(),
+          razaoSocial: z45.string().nullable().optional(),
+          nomeFantasia: z45.string().nullable().optional(),
+          cnaeCodigo: z45.string().nullable().optional(),
+          cnaeDescricao: z45.string().nullable().optional(),
+          grupo: z45.string().nullable().optional(),
+          centroCusto: z45.string().nullable().optional(),
+          natureza: z45.string().nullable().optional(),
+          classificacao: z45.string().nullable().optional(),
+          fixoVariavel: z45.string().nullable().optional(),
+          diretoIndireto: z45.string().nullable().optional()
         }))
       })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -5250,7 +5523,7 @@ var geofenceCheck_exports = {};
 __export(geofenceCheck_exports, {
   geofenceCheckHandler: () => geofenceCheckHandler
 });
-import { eq as eq43, and as and25, sql as sql30 } from "drizzle-orm";
+import { eq as eq43, and as and25, sql as sql32 } from "drizzle-orm";
 function traccarHeaders2() {
   if (TRACCAR_TOKEN2) {
     return {
@@ -5326,7 +5599,7 @@ async function geofenceCheckHandler(req, res) {
   const log = [];
   let processed = 0;
   try {
-    const activeGeofences = await db.select().from(geofences).where(and25(eq43(geofences.isActive, 1), sql30`${geofences.traccarDeviceId} IS NOT NULL`));
+    const activeGeofences = await db.select().from(geofences).where(and25(eq43(geofences.isActive, 1), sql32`${geofences.traccarDeviceId} IS NOT NULL`));
     for (const geo of activeGeofences) {
       if (!geo.traccarDeviceId) continue;
       const pos = await getDevicePosition2(geo.traccarDeviceId);
@@ -5447,7 +5720,7 @@ __export(heartbeat_exports, {
   listHeartbeatJobs: () => listHeartbeatJobs,
   updateHeartbeatJob: () => updateHeartbeatJob
 });
-import { TRPCError as TRPCError32 } from "@trpc/server";
+import { TRPCError as TRPCError33 } from "@trpc/server";
 async function createHeartbeatJob(job, userSession) {
   validateCallbackPath(job.path);
   return callForge(
@@ -5497,13 +5770,13 @@ var init_heartbeat = __esm({
     SERVICE = "webdevtoken.v1.WebDevService";
     buildEndpoint = (rpc) => {
       if (!ENV.forgeApiUrl) {
-        throw new TRPCError32({
+        throw new TRPCError33({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service URL is not configured (BUILT_IN_FORGE_API_URL)."
         });
       }
       if (!ENV.forgeApiKey) {
-        throw new TRPCError32({
+        throw new TRPCError33({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service API key is not configured (BUILT_IN_FORGE_API_KEY)."
         });
@@ -5531,7 +5804,7 @@ var init_heartbeat = __esm({
           body: JSON.stringify(body)
         });
       } catch (error) {
-        throw new TRPCError32({
+        throw new TRPCError33({
           code: "INTERNAL_SERVER_ERROR",
           message: `Heartbeat ${rpc} network error: ${String(error)}`
         });
@@ -5551,7 +5824,7 @@ var init_heartbeat = __esm({
       else if (status === 400 || status === 422) code = "BAD_REQUEST";
       else if (status === 409) code = "CONFLICT";
       else if (status === 429) code = "TOO_MANY_REQUESTS";
-      return new TRPCError32({
+      return new TRPCError33({
         code,
         message: `Heartbeat ${rpc} failed (${status})${detail ? `: ${detail}` : ""}`
       });
@@ -5563,7 +5836,7 @@ var init_heartbeat = __esm({
     };
     validateCallbackPath = (path4) => {
       if (!path4 || !path4.startsWith("/api/scheduled/")) {
-        throw new TRPCError32({
+        throw new TRPCError33({
           code: "BAD_REQUEST",
           message: "callback path must start with /api/scheduled/"
         });
@@ -7083,8 +7356,8 @@ var cargoLoadsRouter = router({
           `);
         const rows = row;
         if (rows && rows.length > 0 && rows[0]?.action_code) {
-          const num = parseInt(String(rows[0].action_code).replace("AC-", ""), 10);
-          if (!isNaN(num)) actionCode = `AC-${String(num + 1).padStart(5, "0")}`;
+          const num2 = parseInt(String(rows[0].action_code).replace("AC-", ""), 10);
+          if (!isNaN(num2)) actionCode = `AC-${String(num2 + 1).padStart(5, "0")}`;
         }
       } catch {
       }
@@ -7150,8 +7423,8 @@ var cargoLoadsRouter = router({
       const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc3(cargoLoads.id)).limit(1);
       createdId = newCargo?.id ?? null;
       if (createdId) {
-        const crypto3 = await import("crypto");
-        const token = crypto3.randomBytes(24).toString("hex");
+        const crypto5 = await import("crypto");
+        const token = crypto5.randomBytes(24).toString("hex");
         let responsavelCargaId = input.responsavelCargaId ?? null;
         if (responsavelCargaId === null && input.responsavelCargaId === void 0) {
           const [collab] = await db.select({ id: collaborators.id }).from(collaborators).where(eq6(collaborators.userId, ctx.user.id)).limit(1);
@@ -9331,9 +9604,9 @@ Registrado por: ${payload.registeredBy}` : ""
 function sanitizeNumeric(value) {
   if (value === null || value === void 0 || value === "") return null;
   const str = String(value).trim().replace(",", ".");
-  const num = parseFloat(str);
-  if (isNaN(num)) return null;
-  return String(num);
+  const num2 = parseFloat(str);
+  if (isNaN(num2)) return null;
+  return String(num2);
 }
 
 // server/routers/vehicleRecords.ts
@@ -9991,10 +10264,32 @@ var clientPortalRouter = router({
       (sum, d) => sum + parseFloat(d.amount || "0"),
       0
     );
-    const valorFechamentosPagos = weeklyClosings.filter((c) => c.status === "pago").reduce((sum, c) => sum + parseFloat(c.totalAmount || "0"), 0);
+    let todosFechamentos = weeklyClosings;
+    try {
+      todosFechamentos = await db.select().from(cargoWeeklyClosings).where(eq11(cargoWeeklyClosings.clientId, input.clientId));
+    } catch {
+    }
+    const diaStr = (v) => {
+      if (!v) return "";
+      if (v instanceof Date) return isNaN(v.getTime()) ? "" : v.toISOString().slice(0, 10);
+      return String(v).slice(0, 10);
+    };
+    const loadDia = (l) => diaStr(l.deliveryDate || l.date);
+    const loadKg = (l) => parseFloat(l.weightNetKg || l.weightOutKg || "0");
+    const dentro = (l, c) => {
+      const d = loadDia(l);
+      return d !== "" && d >= diaStr(c.weekStart) && d <= diaStr(c.weekEnd);
+    };
+    const valorRealFechamento = (c) => {
+      const kg = loads.filter((l) => dentro(l, c)).reduce((a, l) => a + loadKg(l), 0);
+      return kg / 1e3 * parseFloat(c.pricePerTon || String(pricePerTon) || "0");
+    };
+    const valorFechamentosPagos = todosFechamentos.filter((c) => c.status === "pago").reduce((sum, c) => sum + valorRealFechamento(c), 0);
     const temAdiantamentos = advances.length > 0;
     const valorPago = temAdiantamentos ? valorAbatidoAdiantamento : valorFechamentosPagos;
-    const valorAReceber = Math.max(0, valorTotal - valorPago);
+    const valorFechamentosAbertos = todosFechamentos.filter((c) => c.status !== "pago").reduce((sum, c) => sum + valorRealFechamento(c), 0);
+    const valorSemFechamento = entregues.filter((l) => !todosFechamentos.some((c) => dentro(l, c))).reduce((sum, l) => sum + loadKg(l) / 1e3 * pricePerTon, 0);
+    const valorAReceber = Math.max(0, valorFechamentosAbertos + valorSemFechamento);
     return { client, loads, replanting, payments, weeklyClosings, documents, advances, totalAdvanceBalance, advanceDeductions, valorTotal, valorPago, valorAReceber, valorAbatidoAdiantamento };
   }),
   // ── LISTAR TODOS OS REPLANTIOS (admin) ──
@@ -11611,6 +11906,7 @@ var SYSTEM_MODULES = [
   { slug: "compras", label: "Solicita\xE7\xF5es de Compras", group: "Compras" },
   { slug: "fornecedores", label: "Fornecedores", group: "Compras" },
   { slug: "orcamentos", label: "Or\xE7amentos", group: "Compras" },
+  { slug: "estoque", label: "Estoque", group: "Compras" },
   // Transporte
   { slug: "ciclos-frete", label: "Ciclos de Frete (Geofence)", group: "Transporte" },
   // Notas
@@ -15061,7 +15357,7 @@ var buyerClientsRouter = router({
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.$client.execute(
       `SELECT cl.id, cl.date, cl.delivery_date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3,
-                cl.buyer_paid_at, cl.invoice_number,
+                cl.buyer_paid_at, cl.invoice_number, cl.buyer_receipt_url,
                 cd.id AS destino_id, cd.name AS destino_nome, cd.cnpj_cpf, cd.price_per_unit, cd.unit,
                 cd.payment_term_days_after_delivery
          FROM cargo_loads cl
@@ -15094,7 +15390,8 @@ var buyerClientsRouter = router({
         valor,
         invoiceNumber: r.invoice_number,
         recebido: !!r.buyer_paid_at,
-        buyerPaidAt: r.buyer_paid_at ? toDateStr(r.buyer_paid_at) : null
+        buyerPaidAt: r.buyer_paid_at ? toDateStr(r.buyer_paid_at) : null,
+        receiptUrl: r.buyer_receipt_url || null
       };
     }).filter((c) => {
       const [ay, am] = c.vencimento.split("-").map(Number);
@@ -15124,6 +15421,14 @@ var buyerClientsRouter = router({
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     const buyerPaidAt = input.buyerPaidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     await db.$client.execute(`UPDATE cargo_loads SET buyer_paid_at = ? WHERE id = ?`, [buyerPaidAt, input.id]);
+    return { success: true };
+  }),
+  // Anexa/troca o comprovante de pagamento do comprador pra esta carga — independente de
+  // marcar como recebido (o financeiro pode anexar antes ou depois de dar baixa).
+  updateCargaReceipt: protectedProcedure.input(z28.object({ id: z28.number(), receiptUrl: z28.string().url() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
+    await db.$client.execute(`UPDATE cargo_loads SET buyer_receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
     return { success: true };
   }),
   unmarkCargaRecebida: protectedProcedure.input(z28.object({ id: z28.number() })).mutation(async ({ input }) => {
@@ -16790,6 +17095,15 @@ init_schema();
 import { z as z34 } from "zod";
 import { TRPCError as TRPCError23 } from "@trpc/server";
 import { eq as eq33, desc as desc26, sql as sql20 } from "drizzle-orm";
+var normalizeCnpj = (cnpj) => cnpj.replace(/\D/g, "");
+async function syncSupplierCategories(db, supplierId, categoryIds) {
+  if (categoryIds === void 0) return;
+  await db.delete(supplierCategories).where(eq33(supplierCategories.supplierId, supplierId));
+  const uniqueIds = Array.from(new Set(categoryIds));
+  for (const categoryId of uniqueIds) {
+    await db.insert(supplierCategories).values({ supplierId, categoryId });
+  }
+}
 var suppliersRouter = router({
   list: protectedProcedure.input(z34.object({ activeOnly: z34.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
     const db = await getDb();
@@ -16801,10 +17115,21 @@ var suppliersRouter = router({
       rows = await db.select().from(suppliers).orderBy(suppliers.companyName);
     }
     const allContacts = await db.select().from(supplierContacts);
-    return rows.map((s) => ({
-      ...s,
-      contacts: allContacts.filter((c) => c.supplierId === s.id)
-    }));
+    const allCategoryLinks = await db.select({
+      supplierId: supplierCategories.supplierId,
+      categoryId: supplierCategories.categoryId,
+      categoryName: purchaseCategories.name,
+      categoryColor: purchaseCategories.color
+    }).from(supplierCategories).innerJoin(purchaseCategories, eq33(supplierCategories.categoryId, purchaseCategories.id));
+    return rows.map((s) => {
+      const cats = allCategoryLinks.filter((c) => c.supplierId === s.id);
+      return {
+        ...s,
+        contacts: allContacts.filter((c) => c.supplierId === s.id),
+        categoryIds: cats.map((c) => c.categoryId),
+        categories: cats.map((c) => ({ id: c.categoryId, name: c.categoryName, color: c.categoryColor }))
+      };
+    });
   }),
   getById: protectedProcedure.input(z34.object({ id: z34.number() })).query(async ({ input }) => {
     const db = await getDb();
@@ -16812,6 +17137,11 @@ var suppliersRouter = router({
     const [supplier] = await db.select().from(suppliers).where(eq33(suppliers.id, input.id));
     if (!supplier) throw new TRPCError23({ code: "NOT_FOUND" });
     const contacts = await db.select().from(supplierContacts).where(eq33(supplierContacts.supplierId, input.id));
+    const categoryLinks = await db.select({
+      categoryId: supplierCategories.categoryId,
+      categoryName: purchaseCategories.name,
+      categoryColor: purchaseCategories.color
+    }).from(supplierCategories).innerJoin(purchaseCategories, eq33(supplierCategories.categoryId, purchaseCategories.id)).where(eq33(supplierCategories.supplierId, input.id));
     const recentQuotations = await db.select({
       id: quotations.id,
       productName: quotations.productName,
@@ -16819,12 +17149,20 @@ var suppliersRouter = router({
       unit: quotations.unit,
       quotedAt: quotations.quotedAt,
       categoryId: quotations.categoryId,
-      notes: quotations.notes
+      notes: quotations.notes,
+      purchaseRequestId: quotations.purchaseRequestId
     }).from(quotations).where(eq33(quotations.supplierId, input.id)).orderBy(desc26(quotations.quotedAt)).limit(20);
-    return { ...supplier, contacts, recentQuotations };
+    return {
+      ...supplier,
+      contacts,
+      recentQuotations,
+      categoryIds: categoryLinks.map((c) => c.categoryId),
+      categories: categoryLinks.map((c) => ({ id: c.categoryId, name: c.categoryName, color: c.categoryColor }))
+    };
   }),
   create: protectedProcedure.input(z34.object({
     name: z34.string().min(1).max(255),
+    cnpj: z34.string().optional(),
     address: z34.string().optional(),
     city: z34.string().optional(),
     state: z34.string().max(2).optional(),
@@ -16836,12 +17174,21 @@ var suppliersRouter = router({
     sellerName: z34.string().optional(),
     pixKey: z34.string().optional(),
     tradeName: z34.string().optional(),
-    productsSold: z34.string().optional()
+    productsSold: z34.string().optional(),
+    categoryIds: z34.array(z34.number()).optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.cnpj && normalizeCnpj(input.cnpj)) {
+      const normCnpj = normalizeCnpj(input.cnpj);
+      const existing = await db.select({ id: suppliers.id, companyName: suppliers.companyName }).from(suppliers).where(sql20`REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(${suppliers.cnpj}, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ${normCnpj}`).limit(1);
+      if (existing.length > 0) {
+        throw new TRPCError23({ code: "CONFLICT", message: `J\xE1 existe um fornecedor com esse CNPJ: "${existing[0].companyName}". Edite o cadastro existente em vez de criar um novo.` });
+      }
+    }
     const [result] = await db.insert(suppliers).values({
       companyName: input.name,
+      cnpj: input.cnpj || void 0,
       tradeName: input.tradeName,
       productsSold: input.productsSold,
       address: input.address,
@@ -16857,11 +17204,14 @@ var suppliersRouter = router({
       active: 1,
       createdBy: ctx.user.id
     });
-    return { id: result.insertId, ...input };
+    const insertId = result.insertId;
+    await syncSupplierCategories(db, insertId, input.categoryIds);
+    return { id: insertId, ...input };
   }),
   update: protectedProcedure.input(z34.object({
     id: z34.number(),
     name: z34.string().min(1).max(255),
+    cnpj: z34.string().optional(),
     address: z34.string().optional(),
     city: z34.string().optional(),
     state: z34.string().max(2).optional(),
@@ -16874,17 +17224,26 @@ var suppliersRouter = router({
     sellerName: z34.string().optional(),
     pixKey: z34.string().optional(),
     tradeName: z34.string().optional(),
-    productsSold: z34.string().optional()
+    productsSold: z34.string().optional(),
+    categoryIds: z34.array(z34.number()).optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, name, active, ...rest } = input;
+    if (input.cnpj && normalizeCnpj(input.cnpj)) {
+      const normCnpj = normalizeCnpj(input.cnpj);
+      const existing = await db.select({ id: suppliers.id, companyName: suppliers.companyName }).from(suppliers).where(sql20`REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(${suppliers.cnpj}, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ${normCnpj} AND ${suppliers.id} != ${input.id}`).limit(1);
+      if (existing.length > 0) {
+        throw new TRPCError23({ code: "CONFLICT", message: `J\xE1 existe outro fornecedor com esse CNPJ: "${existing[0].companyName}".` });
+      }
+    }
+    const { id, name, active, categoryIds, ...rest } = input;
     await db.update(suppliers).set({
       companyName: name,
       ...rest,
       email: rest.email || void 0,
       active: active !== void 0 ? active : void 0
     }).where(eq33(suppliers.id, id));
+    await syncSupplierCategories(db, id, categoryIds);
     return { success: true };
   }),
   // Permanent delete
@@ -16892,6 +17251,7 @@ var suppliersRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(supplierContacts).where(eq33(supplierContacts.supplierId, input.id));
+    await db.delete(supplierCategories).where(eq33(supplierCategories.supplierId, input.id));
     await db.delete(suppliers).where(eq33(suppliers.id, input.id));
     return { success: true };
   }),
@@ -16949,16 +17309,36 @@ var suppliersRouter = router({
     for (const resp of responses) {
       if (!resp.supplierName?.trim()) continue;
       const trimmedName = resp.supplierName.trim();
-      const rows = await db.execute(
-        sql20`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
-      );
-      const existing = rows[0];
+      const normCnpj = normalizeCnpj(resp.cnpj || "");
+      const normPhone = (resp.sellerPhone || "").replace(/\D/g, "");
+      let existing = [];
+      if (normCnpj) {
+        const rows = await db.execute(
+          sql20`SELECT id FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`
+        );
+        existing = rows[0] || [];
+      }
+      if (existing.length === 0 && normPhone.length >= 8) {
+        const rows = await db.execute(
+          sql20`SELECT id FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''),' ',''),'-',''),'(',''),')',''),'.','') = ${normPhone}
+                   OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),' ',''),'-',''),'(',''),')',''),'.','') = ${normPhone}
+                 LIMIT 1`
+        );
+        existing = rows[0] || [];
+      }
+      if (existing.length === 0) {
+        const rows = await db.execute(
+          sql20`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
+        );
+        existing = rows[0] || [];
+      }
       if (existing.length > 0) {
         skipped++;
         continue;
       }
       await db.insert(suppliers).values({
         companyName: trimmedName,
+        cnpj: resp.cnpj || void 0,
         address: resp.address ?? null,
         phone: resp.sellerPhone ?? null,
         whatsapp: resp.sellerPhone ?? null,
@@ -16972,21 +17352,641 @@ var suppliersRouter = router({
   })
 });
 
+// server/routers/stock.ts
+init_trpc();
+init_db();
+init_notifications();
+import { z as z35 } from "zod";
+import { TRPCError as TRPCError24 } from "@trpc/server";
+async function getPool() {
+  const db = await getDb();
+  if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  return db.$client;
+}
+async function withTx(fn) {
+  const pool = await getPool();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const result = await fn(conn);
+    await conn.commit();
+    return result;
+  } catch (err) {
+    await conn.rollback().catch(() => {
+    });
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+var num = (v) => v === null || v === void 0 || v === "" ? 0 : Number(v);
+function parseQuantity(text2) {
+  if (text2 === null || text2 === void 0) return null;
+  const m = String(text2).replace(",", ".").match(/[\d.]+/);
+  if (!m) return null;
+  const n = parseFloat(m[0]);
+  return isNaN(n) || n <= 0 ? null : n;
+}
+var normName = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+async function lockBalance(conn, productId, locationId) {
+  await conn.execute(
+    `INSERT IGNORE INTO stock_balances (product_id, location_id, quantity) VALUES (?, ?, 0)`,
+    [productId, locationId]
+  );
+  const [rows] = await conn.execute(
+    `SELECT quantity FROM stock_balances WHERE product_id = ? AND location_id = ? FOR UPDATE`,
+    [productId, locationId]
+  );
+  return num(rows[0]?.quantity);
+}
+async function setBalance(conn, productId, locationId, quantity) {
+  await conn.execute(
+    `UPDATE stock_balances SET quantity = ? WHERE product_id = ? AND location_id = ?`,
+    [quantity.toFixed(3), productId, locationId]
+  );
+}
+async function insertMovement(conn, m) {
+  const [res] = await conn.execute(
+    `INSERT INTO stock_movements
+      (product_id, type, quantity, from_location_id, to_location_id, unit_cost, supplier_id, purchase_request_id,
+       purchase_request_item_id, destination_equipment_id, destination_collaborator_id, destination_note, reason,
+       performed_by, balance_after)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      m.productId,
+      m.type,
+      m.quantity.toFixed(3),
+      m.fromLocationId ?? null,
+      m.toLocationId ?? null,
+      m.unitCost != null ? m.unitCost.toFixed(4) : null,
+      m.supplierId ?? null,
+      m.purchaseRequestId ?? null,
+      m.purchaseRequestItemId ?? null,
+      m.destinationEquipmentId ?? null,
+      m.destinationCollaboratorId ?? null,
+      m.destinationNote ?? null,
+      m.reason ?? null,
+      m.performedBy,
+      m.balanceAfter != null ? m.balanceAfter.toFixed(3) : null
+    ]
+  );
+  return res.insertId;
+}
+async function requireProductAndLocation(conn, productId, locationIds) {
+  const [p] = await conn.execute(`SELECT id, active FROM stock_products WHERE id = ?`, [productId]);
+  if (!p[0]) throw new TRPCError24({ code: "NOT_FOUND", message: "Produto n\xE3o encontrado" });
+  if (!p[0].active) throw new TRPCError24({ code: "BAD_REQUEST", message: "Produto inativo" });
+  for (const lid of locationIds) {
+    const [l] = await conn.execute(`SELECT id, active FROM stock_locations WHERE id = ?`, [lid]);
+    if (!l[0]) throw new TRPCError24({ code: "NOT_FOUND", message: "Local de estoque n\xE3o encontrado" });
+    if (!l[0].active) throw new TRPCError24({ code: "BAD_REQUEST", message: "Local de estoque inativo" });
+  }
+}
+var qtyInput = z35.number().positive("Quantidade deve ser maior que zero");
+function contentFactor(productUnit, density, content, contentUnit, itemName) {
+  const u = (productUnit || "").trim().toLowerCase();
+  if (u !== "l" && u !== "kg" && u !== "m") return 1;
+  if (!content || content <= 0 || !contentUnit) {
+    throw new TRPCError24({ code: "BAD_REQUEST", message: `"${itemName}": informe o conte\xFAdo por unidade (ex: 20 L) \u2014 o estoque desse produto \xE9 em ${productUnit}.` });
+  }
+  const cu = contentUnit.toLowerCase();
+  if (cu === u) return content;
+  if (u === "m" || cu === "m") {
+    throw new TRPCError24({ code: "BAD_REQUEST", message: `"${itemName}": o estoque \xE9 em ${productUnit} e o conte\xFAdo veio em ${contentUnit}. Informe o conte\xFAdo em ${productUnit}.` });
+  }
+  if (!(density > 0)) {
+    throw new TRPCError24({ code: "BAD_REQUEST", message: `"${itemName}": conte\xFAdo em ${contentUnit} mas o estoque \xE9 em ${productUnit}. Cadastre a densidade (kg/L) do produto ou informe o conte\xFAdo em ${productUnit}.` });
+  }
+  return u === "l" ? content / density : content * density;
+}
+var stockRouter = router({
+  // ───────── Locais ─────────
+  listLocations: protectedProcedure.query(async () => {
+    const pool = await getPool();
+    const [rows] = await pool.execute(`SELECT l.*, e.name AS equipmentName FROM stock_locations l LEFT JOIN equipment e ON e.id = l.equipment_id ORDER BY l.active DESC, l.name`);
+    return rows;
+  }),
+  createLocation: protectedProcedure.input(z35.object({ name: z35.string().min(1).max(150), type: z35.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z35.number().nullable().optional(), notes: z35.string().optional() })).mutation(async ({ input }) => {
+    const pool = await getPool();
+    const [r] = await pool.execute(`INSERT INTO stock_locations (name, type, equipment_id, notes) VALUES (?,?,?,?)`, [input.name.trim(), input.type, input.equipmentId ?? null, input.notes ?? null]);
+    return { id: r.insertId };
+  }),
+  updateLocation: protectedProcedure.input(z35.object({ id: z35.number(), name: z35.string().min(1).max(150), type: z35.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z35.number().nullable().optional(), notes: z35.string().optional(), active: z35.boolean().optional() })).mutation(async ({ input }) => {
+    const pool = await getPool();
+    await pool.execute(
+      `UPDATE stock_locations SET name=?, type=?, equipment_id=?, notes=?, active=COALESCE(?, active) WHERE id=?`,
+      [input.name.trim(), input.type, input.equipmentId ?? null, input.notes ?? null, input.active === void 0 ? null : input.active ? 1 : 0, input.id]
+    );
+    return { success: true };
+  }),
+  // ───────── Produtos (catálogo) ─────────
+  listProducts: protectedProcedure.query(async () => {
+    const pool = await getPool();
+    const [rows] = await pool.execute(`
+      SELECT p.*, c.name AS categoryName,
+        COALESCE((SELECT SUM(b.quantity) FROM stock_balances b JOIN stock_locations l ON l.id = b.location_id WHERE b.product_id = p.id), 0) AS totalQuantity
+      FROM stock_products p LEFT JOIN purchase_categories c ON c.id = p.category_id
+      ORDER BY p.active DESC, p.name`);
+    return rows.map((r) => ({ ...r, belowMin: num(r.min_stock) > 0 && num(r.totalQuantity) < num(r.min_stock) }));
+  }),
+  createProduct: protectedProcedure.input(z35.object({ name: z35.string().min(1).max(255), code: z35.string().max(50).optional(), brand: z35.string().max(100).optional(), tracksWeight: z35.boolean().optional(), densityKgL: z35.number().positive().nullable().optional(), unit: z35.string().min(1).max(20).default("un"), categoryId: z35.number().nullable().optional(), minStock: z35.number().min(0).default(0), notes: z35.string().optional() })).mutation(async ({ input }) => {
+    const pool = await getPool();
+    const [dup] = await pool.execute(`SELECT id, name FROM stock_products`);
+    const exists = dup.find((p) => normName(p.name) === normName(input.name));
+    if (exists) throw new TRPCError24({ code: "CONFLICT", message: `J\xE1 existe o produto "${exists.name}" no cat\xE1logo.` });
+    const [r] = await pool.execute(
+      `INSERT INTO stock_products (name, code, brand, tracks_weight, density_kg_l, unit, category_id, min_stock, notes) VALUES (?,?,?,?,?,?,?,?,?)`,
+      [input.name.trim(), input.code || null, input.brand?.trim() || null, input.tracksWeight ? 1 : 0, input.tracksWeight && input.densityKgL ? input.densityKgL.toFixed(3) : null, input.unit, input.categoryId ?? null, input.minStock.toFixed(3), input.notes ?? null]
+    );
+    return { id: r.insertId };
+  }),
+  updateProduct: protectedProcedure.input(z35.object({ id: z35.number(), name: z35.string().min(1).max(255), code: z35.string().max(50).optional(), brand: z35.string().max(100).optional(), tracksWeight: z35.boolean().optional(), densityKgL: z35.number().positive().nullable().optional(), unit: z35.string().min(1).max(20), categoryId: z35.number().nullable().optional(), minStock: z35.number().min(0), notes: z35.string().optional(), active: z35.boolean().optional() })).mutation(async ({ input }) => {
+    const pool = await getPool();
+    await pool.execute(
+      `UPDATE stock_products SET name=?, code=?, brand=?, tracks_weight=COALESCE(?, tracks_weight), density_kg_l=?, unit=?, category_id=?, min_stock=?, notes=?, active=COALESCE(?, active) WHERE id=?`,
+      [input.name.trim(), input.code || null, input.brand?.trim() || null, input.tracksWeight === void 0 ? null : input.tracksWeight ? 1 : 0, input.tracksWeight === false || !input.densityKgL ? null : input.densityKgL.toFixed(3), input.unit, input.categoryId ?? null, input.minStock.toFixed(3), input.notes ?? null, input.active === void 0 ? null : input.active ? 1 : 0, input.id]
+    );
+    return { success: true };
+  }),
+  // Sugere produtos a partir dos itens já comprados (nomes distintos, ainda fora do catálogo) — importação assistida.
+  suggestProductsFromPurchases: protectedProcedure.query(async () => {
+    const pool = await getPool();
+    const [items] = await pool.execute(`
+      SELECT TRIM(i.name) AS name, MAX(i.unit) AS unit, pr.category_id AS categoryId, COUNT(*) AS times
+      FROM purchase_request_items i JOIN purchase_requests pr ON pr.id = i.request_id
+      WHERE TRIM(i.name) != '' GROUP BY TRIM(i.name), pr.category_id`);
+    const [existing] = await pool.execute(`SELECT name FROM stock_products`);
+    const have = new Set(existing.map((p) => normName(p.name)));
+    const byKey = /* @__PURE__ */ new Map();
+    for (const it of items) {
+      const k = normName(it.name);
+      if (have.has(k)) continue;
+      const cur = byKey.get(k);
+      if (!cur || it.times > cur.times) byKey.set(k, { ...it, times: (cur?.times || 0) + it.times });
+    }
+    return Array.from(byKey.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }),
+  importProducts: protectedProcedure.input(z35.object({ products: z35.array(z35.object({ name: z35.string().min(1), unit: z35.string().default("un"), categoryId: z35.number().nullable().optional() })).min(1) })).mutation(async ({ input }) => {
+    const pool = await getPool();
+    const [existing] = await pool.execute(`SELECT name FROM stock_products`);
+    const have = new Set(existing.map((p) => normName(p.name)));
+    let created = 0;
+    for (const p of input.products) {
+      const k = normName(p.name);
+      if (have.has(k)) continue;
+      have.add(k);
+      await pool.execute(`INSERT INTO stock_products (name, unit, category_id) VALUES (?,?,?)`, [p.name.trim(), p.unit || "un", p.categoryId ?? null]);
+      created++;
+    }
+    return { created };
+  }),
+  // ───────── Saldos ─────────
+  balances: protectedProcedure.input(z35.object({ productId: z35.number().optional(), locationId: z35.number().optional(), includeZero: z35.boolean().optional() }).optional()).query(async ({ input }) => {
+    const pool = await getPool();
+    const where = [];
+    const params = [];
+    if (!input?.includeZero) where.push("b.quantity <> 0");
+    if (input?.productId) {
+      where.push("b.product_id = ?");
+      params.push(input.productId);
+    }
+    if (input?.locationId) {
+      where.push("b.location_id = ?");
+      params.push(input.locationId);
+    }
+    const [rows] = await pool.execute(`
+        SELECT b.product_id AS productId, b.location_id AS locationId, b.quantity, p.name AS productName, p.unit, p.code,
+               p.min_stock AS minStock, c.name AS categoryName, l.name AS locationName, l.type AS locationType
+        FROM stock_balances b JOIN stock_products p ON p.id = b.product_id JOIN stock_locations l ON l.id = b.location_id
+        LEFT JOIN purchase_categories c ON c.id = p.category_id
+        ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY p.name, l.name`, params);
+    return rows;
+  }),
+  // ───────── Extrato / rastreabilidade ─────────
+  movements: protectedProcedure.input(z35.object({
+    productId: z35.number().optional(),
+    locationId: z35.number().optional(),
+    purchaseRequestId: z35.number().optional(),
+    type: z35.string().optional(),
+    from: z35.string().optional(),
+    to: z35.string().optional(),
+    limit: z35.number().max(2e3).default(500)
+  }).optional()).query(async ({ input }) => {
+    const pool = await getPool();
+    const where = [];
+    const params = [];
+    if (input?.productId) {
+      where.push("m.product_id = ?");
+      params.push(input.productId);
+    }
+    if (input?.locationId) {
+      where.push("(m.from_location_id = ? OR m.to_location_id = ?)");
+      params.push(input.locationId, input.locationId);
+    }
+    if (input?.purchaseRequestId) {
+      where.push("m.purchase_request_id = ?");
+      params.push(input.purchaseRequestId);
+    }
+    if (input?.type) {
+      where.push("m.type = ?");
+      params.push(input.type);
+    }
+    if (input?.from) {
+      where.push("m.created_at >= ?");
+      params.push(input.from + " 00:00:00");
+    }
+    if (input?.to) {
+      where.push("m.created_at <= ?");
+      params.push(input.to + " 23:59:59");
+    }
+    const [rows] = await pool.execute(`
+        SELECT m.id, m.product_id AS productId, m.type, m.quantity, m.unit_cost AS unitCost, m.balance_after AS balanceAfter,
+               m.reason, m.destination_note AS destinationNote, m.created_at AS createdAt,
+               m.purchase_request_id AS purchaseRequestId, pr.title AS purchaseRequestTitle,
+               p.name AS productName, p.unit, lf.name AS fromLocationName, lt.name AS toLocationName,
+               COALESCE((SELECT c.name FROM collaborators c WHERE c.user_id = m.performed_by ORDER BY c.id LIMIT 1), pu.name) AS performedByName,
+               dc.name AS destinationCollaboratorName, de.name AS destinationEquipmentName, s.company_name AS supplierName
+        FROM stock_movements m
+        JOIN stock_products p ON p.id = m.product_id
+        LEFT JOIN stock_locations lf ON lf.id = m.from_location_id
+        LEFT JOIN stock_locations lt ON lt.id = m.to_location_id
+        LEFT JOIN users pu ON pu.id = m.performed_by
+        LEFT JOIN collaborators dc ON dc.id = m.destination_collaborator_id
+        LEFT JOIN equipment de ON de.id = m.destination_equipment_id
+        LEFT JOIN suppliers s ON s.id = m.supplier_id
+        LEFT JOIN purchase_requests pr ON pr.id = m.purchase_request_id
+        ${where.length ? "WHERE " + where.join(" AND ") : ""}
+        ORDER BY m.created_at DESC, m.id DESC LIMIT ${Number(input?.limit ?? 500)}`, params);
+    return rows;
+  }),
+  // ───────── Recebimento de compra ─────────
+  // Itens da solicitação com o que já foi recebido, quantidade sugerida e produto sugerido (mesmo nome normalizado).
+  pendingReceipt: protectedProcedure.input(z35.object({ purchaseRequestId: z35.number() })).query(async ({ input }) => {
+    const pool = await getPool();
+    const [prs] = await pool.execute(`SELECT id, title, status FROM purchase_requests WHERE id = ?`, [input.purchaseRequestId]);
+    if (!prs[0]) throw new TRPCError24({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    const [items] = await pool.execute(`SELECT * FROM purchase_request_items WHERE request_id = ? ORDER BY id`, [input.purchaseRequestId]);
+    const [products] = await pool.execute(`SELECT id, name, unit FROM stock_products WHERE active = 1`);
+    const byName = new Map(products.map((p) => [normName(p.name), p]));
+    return {
+      status: prs[0].status,
+      items: items.map((i) => {
+        const requested = parseQuantity(i.quantity) ?? 1;
+        const received = num(i.received_quantity);
+        const match = byName.get(normName(i.name));
+        return {
+          id: i.id,
+          name: i.name,
+          unit: i.unit,
+          quantityText: i.quantity,
+          requested,
+          received,
+          remaining: Math.max(0, requested - received),
+          // conteúdo por embalagem: coluna própria ou, se o pedido veio do WhatsApp/texto ("un de 20 L"), extraído da unidade
+          ...(() => {
+            if (i.package_size != null && i.package_unit) return { packageSize: num(i.package_size), packageUnit: i.package_unit };
+            const m = String(i.unit || "").match(/([\d.,]+)\s*(l|litros?|kg|m|metros?)\b/i);
+            const v = m ? parseFloat(m[1].replace(",", ".")) : NaN;
+            return m && v > 0 ? { packageSize: v, packageUnit: /^kg$/i.test(m[2]) ? "kg" : /^m/i.test(m[2]) ? "m" : "L" } : { packageSize: null, packageUnit: null };
+          })(),
+          suggestedProductId: i.stock_product_id ?? match?.id ?? null,
+          suggestedLocationId: i.stock_location_id ?? null
+        };
+      })
+    };
+  }),
+  receivePurchaseItems: protectedProcedure.input(z35.object({
+    purchaseRequestId: z35.number(),
+    receivedByCollaboratorId: z35.number({ required_error: "Informe quem recebeu" }),
+    items: z35.array(z35.object({ itemId: z35.number(), productId: z35.number(), locationId: z35.number(), quantityReceived: qtyInput, contentPerUnit: z35.number().positive().optional(), contentUnit: z35.enum(["L", "kg", "m"]).optional() })).min(1)
+  })).mutation(async ({ input, ctx }) => {
+    const result = await withTx(async (conn) => {
+      const [prs] = await conn.execute(`SELECT id, title, status, requested_by FROM purchase_requests WHERE id = ? FOR UPDATE`, [input.purchaseRequestId]);
+      const pr = prs[0];
+      if (!pr) throw new TRPCError24({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+      if (!["comprada", "purchased"].includes(pr.status)) {
+        throw new TRPCError24({ code: "BAD_REQUEST", message: "S\xF3 \xE9 poss\xEDvel receber no estoque uma solicita\xE7\xE3o com status Comprada." });
+      }
+      const [collabRows] = await conn.execute(`SELECT id FROM collaborators WHERE id = ?`, [input.receivedByCollaboratorId]);
+      if (!collabRows[0]) throw new TRPCError24({ code: "NOT_FOUND", message: "Colaborador (quem recebeu) n\xE3o encontrado" });
+      const nowMs = Date.now();
+      for (const it of input.items) {
+        const [rows] = await conn.execute(`SELECT * FROM purchase_request_items WHERE id = ? AND request_id = ? FOR UPDATE`, [it.itemId, input.purchaseRequestId]);
+        const item = rows[0];
+        if (!item) throw new TRPCError24({ code: "NOT_FOUND", message: `Item ${it.itemId} n\xE3o pertence a esta solicita\xE7\xE3o` });
+        const requested = parseQuantity(item.quantity) ?? 1;
+        const already = num(item.received_quantity);
+        const remaining = requested - already;
+        if (remaining <= 0) throw new TRPCError24({ code: "BAD_REQUEST", message: `"${item.name}" j\xE1 foi totalmente recebido.` });
+        if (it.quantityReceived > remaining + 1e-9) {
+          throw new TRPCError24({ code: "BAD_REQUEST", message: `"${item.name}": faltam receber ${remaining}, n\xE3o ${it.quantityReceived}.` });
+        }
+        await requireProductAndLocation(conn, it.productId, [it.locationId]);
+        const [q] = await conn.execute(
+          `SELECT supplier_id, unit_price FROM quotations WHERE purchase_request_id = ? AND product_name = ? ORDER BY id DESC LIMIT 1`,
+          [input.purchaseRequestId, item.name]
+        );
+        const unitCost = q[0] ? num(q[0].unit_price) : null;
+        const supplierId = q[0]?.supplier_id ?? null;
+        const [pInfo] = await conn.execute(`SELECT unit, density_kg_l FROM stock_products WHERE id = ?`, [it.productId]);
+        const factor = contentFactor(pInfo[0]?.unit, num(pInfo[0]?.density_kg_l), it.contentPerUnit, it.contentUnit, item.name);
+        const stockQty = Number((it.quantityReceived * factor).toFixed(3));
+        const balance = await lockBalance(conn, it.productId, it.locationId);
+        const newBalance = balance + stockQty;
+        await setBalance(conn, it.productId, it.locationId, newBalance);
+        await insertMovement(conn, {
+          productId: it.productId,
+          type: "entrada",
+          quantity: stockQty,
+          toLocationId: it.locationId,
+          unitCost: unitCost != null && factor > 0 ? unitCost / factor : unitCost,
+          supplierId,
+          purchaseRequestId: input.purchaseRequestId,
+          purchaseRequestItemId: it.itemId,
+          destinationCollaboratorId: input.receivedByCollaboratorId,
+          reason: `Recebimento da Solicita\xE7\xE3o #${input.purchaseRequestId}${factor !== 1 ? ` (${it.quantityReceived} un \xD7 ${it.contentPerUnit} ${it.contentUnit})` : ""}`,
+          performedBy: ctx.user.id,
+          balanceAfter: newBalance
+        });
+        const total = already + it.quantityReceived;
+        await conn.execute(
+          `UPDATE purchase_request_items SET received_quantity = ?, confirmed = ?, stock_product_id = ?, stock_location_id = ?, received_at = ?, received_by = ? WHERE id = ?`,
+          [total.toFixed(3), total + 1e-9 >= requested ? 1 : 0, it.productId, it.locationId, nowMs, ctx.user.id, it.itemId]
+        );
+      }
+      const [all] = await conn.execute(`SELECT quantity, received_quantity FROM purchase_request_items WHERE request_id = ?`, [input.purchaseRequestId]);
+      const complete = all.every((i) => num(i.received_quantity) + 1e-9 >= (parseQuantity(i.quantity) ?? 1));
+      if (complete) {
+        await conn.execute(
+          `UPDATE purchase_requests SET status = 'recebida', received_at = COALESCE(received_at, ?), updated_at = NOW() WHERE id = ?`,
+          [nowMs, input.purchaseRequestId]
+        );
+      }
+      return { complete, requestedBy: pr.requested_by, title: pr.title };
+    });
+    if (result.complete && result.requestedBy) {
+      await notifyUsers({
+        recipientUserIds: [result.requestedBy],
+        type: "geral",
+        title: "Solicita\xE7\xE3o de compra recebida",
+        relatedId: input.purchaseRequestId,
+        relatedType: "purchase_request"
+      }).catch(() => {
+      });
+    }
+    return { success: true, complete: result.complete };
+  }),
+  // Entrada manual — pra quando o item entra no estoque sem passar por uma Solicitação de
+  // Compra (saldo inicial, doação, sobra de obra, item achado na conferência etc.). Se não
+  // vier productId, cria o produto no catálogo na hora (mesma dedup por nome do createProduct).
+  manualEntry: protectedProcedure.input(z35.object({
+    productId: z35.number().optional(),
+    newProductName: z35.string().min(1).max(255).optional(),
+    newProductUnit: z35.string().min(1).max(20).optional(),
+    newProductCategoryId: z35.number().nullable().optional(),
+    locationId: z35.number(),
+    quantity: qtyInput,
+    unitCost: z35.number().min(0).optional(),
+    reason: z35.string().max(255).optional()
+  })).mutation(async ({ input, ctx }) => {
+    if (!input.productId && !input.newProductName?.trim()) {
+      throw new TRPCError24({ code: "BAD_REQUEST", message: "Selecione um produto do cat\xE1logo ou informe o nome de um novo." });
+    }
+    return withTx(async (conn) => {
+      let productId = input.productId ?? null;
+      if (!productId) {
+        const name = input.newProductName.trim();
+        const [existing] = await conn.execute(`SELECT id, name FROM stock_products`);
+        const dup = existing.find((p) => normName(p.name) === normName(name));
+        if (dup) {
+          productId = dup.id;
+        } else {
+          const [r] = await conn.execute(
+            `INSERT INTO stock_products (name, unit, category_id) VALUES (?,?,?)`,
+            [name, input.newProductUnit?.trim() || "un", input.newProductCategoryId ?? null]
+          );
+          productId = r.insertId;
+        }
+      }
+      await requireProductAndLocation(conn, productId, [input.locationId]);
+      const balance = await lockBalance(conn, productId, input.locationId);
+      const newBalance = balance + input.quantity;
+      await setBalance(conn, productId, input.locationId, newBalance);
+      const id = await insertMovement(conn, {
+        productId,
+        type: "entrada",
+        quantity: input.quantity,
+        toLocationId: input.locationId,
+        unitCost: input.unitCost ?? null,
+        reason: input.reason?.trim() || "Entrada manual",
+        performedBy: ctx.user.id,
+        balanceAfter: newBalance
+      });
+      return { id, productId, balanceAfter: newBalance };
+    });
+  }),
+  // ───────── Saída / transferência / ajuste ─────────
+  registerExit: protectedProcedure.input(z35.object({
+    productId: z35.number(),
+    locationId: z35.number(),
+    quantity: qtyInput.optional(),
+    destinationEquipmentId: z35.number().nullable().optional(),
+    destinationCollaboratorId: z35.number().nullable().optional(),
+    destinationNote: z35.string().max(255).optional(),
+    reason: z35.string().optional(),
+    grossWeightOut: z35.number().positive().optional()
+  })).mutation(async ({ input, ctx }) => {
+    if (!input.destinationEquipmentId && !input.destinationCollaboratorId && !(input.destinationNote || "").trim()) {
+      throw new TRPCError24({ code: "BAD_REQUEST", message: "Informe pra onde/quem levou o item (equipamento, colaborador ou destino)." });
+    }
+    return withTx(async (conn) => {
+      await requireProductAndLocation(conn, input.productId, [input.locationId]);
+      const [pw] = await conn.execute(`SELECT tracks_weight FROM stock_products WHERE id = ?`, [input.productId]);
+      const tracksWeight = !!pw[0]?.tracks_weight;
+      const balance = await lockBalance(conn, input.productId, input.locationId);
+      if (tracksWeight) {
+        if (!input.grossWeightOut) throw new TRPCError24({ code: "BAD_REQUEST", message: "Informe o peso na balan\xE7a na sa\xEDda." });
+        if (balance <= 1e-9) throw new TRPCError24({ code: "BAD_REQUEST", message: "Sem saldo desse produto nesse local." });
+        const [r] = await conn.execute(
+          `INSERT INTO stock_loans (product_id, location_id, gross_weight_out, destination_collaborator_id, destination_equipment_id, destination_note, reason, created_by)
+             VALUES (?,?,?,?,?,?,?,?)`,
+          [
+            input.productId,
+            input.locationId,
+            input.grossWeightOut.toFixed(3),
+            input.destinationCollaboratorId ?? null,
+            input.destinationEquipmentId ?? null,
+            input.destinationNote?.trim() || null,
+            input.reason ?? null,
+            ctx.user.id
+          ]
+        );
+        return { id: r.insertId, balanceAfter: balance };
+      }
+      if (!input.quantity) throw new TRPCError24({ code: "BAD_REQUEST", message: "Informe a quantidade." });
+      if (input.quantity > balance + 1e-9) {
+        throw new TRPCError24({ code: "BAD_REQUEST", message: `Saldo insuficiente nesse local (dispon\xEDvel: ${balance}).` });
+      }
+      const newBalance = balance - input.quantity;
+      await setBalance(conn, input.productId, input.locationId, newBalance);
+      const id = await insertMovement(conn, {
+        productId: input.productId,
+        type: "saida",
+        quantity: input.quantity,
+        fromLocationId: input.locationId,
+        destinationEquipmentId: input.destinationEquipmentId,
+        destinationCollaboratorId: input.destinationCollaboratorId,
+        destinationNote: input.destinationNote?.trim() || null,
+        reason: input.reason ?? null,
+        performedBy: ctx.user.id,
+        balanceAfter: newBalance
+      });
+      return { id, balanceAfter: newBalance };
+    });
+  }),
+  // Retiradas de produtos controlados por peso (líquidos/pastas), em aberto ou já devolvidas.
+  loans: protectedProcedure.input(z35.object({ status: z35.enum(["aberta", "devolvida"]).optional(), productId: z35.number().optional() }).optional()).query(async ({ input }) => {
+    const pool = await getPool();
+    const where = [];
+    const params = [];
+    if (input?.status) {
+      where.push("l.status = ?");
+      params.push(input.status);
+    }
+    if (input?.productId) {
+      where.push("l.product_id = ?");
+      params.push(input.productId);
+    }
+    const [rows] = await pool.execute(`
+        SELECT l.id, l.product_id AS productId, l.location_id AS locationId,
+               l.gross_weight_out AS grossWeightOut, l.status, l.gross_weight_in AS grossWeightIn, l.consumed, l.consumed_stock AS consumedStock, p.density_kg_l AS densityKgL,
+               l.created_at AS createdAt, l.returned_at AS returnedAt, p.name AS productName, p.unit,
+               loc.name AS locationName,
+               COALESCE((SELECT c.name FROM collaborators c WHERE c.user_id = l.created_by ORDER BY c.id LIMIT 1), cu.name) AS createdByName,
+               COALESCE((SELECT c.name FROM collaborators c WHERE c.user_id = l.returned_by ORDER BY c.id LIMIT 1), ru.name) AS returnedByName,
+               dc.name AS destinationCollaboratorName, de.name AS destinationEquipmentName, l.destination_note AS destinationNote
+        FROM stock_loans l
+        JOIN stock_products p ON p.id = l.product_id
+        JOIN stock_locations loc ON loc.id = l.location_id
+        LEFT JOIN users cu ON cu.id = l.created_by
+        LEFT JOIN users ru ON ru.id = l.returned_by
+        LEFT JOIN collaborators dc ON dc.id = l.destination_collaborator_id
+        LEFT JOIN equipment de ON de.id = l.destination_equipment_id
+        ${where.length ? "WHERE " + where.join(" AND ") : ""}
+        ORDER BY l.status = 'aberta' DESC, l.created_at DESC LIMIT 500`, params);
+    return rows;
+  }),
+  // Devolução: consumo = peso na saída − peso na devolução (mesma balança/embalagem, então a tara se anula).
+  // Só o consumo baixa do estoque (movimento "Saída" com quem/onde/motivo da retirada).
+  returnLoan: protectedProcedure.input(z35.object({ loanId: z35.number(), grossWeightIn: z35.number().min(0) })).mutation(async ({ input, ctx }) => {
+    return withTx(async (conn) => {
+      const [ls] = await conn.execute(`SELECT * FROM stock_loans WHERE id = ? FOR UPDATE`, [input.loanId]);
+      const loan = ls[0];
+      if (!loan) throw new TRPCError24({ code: "NOT_FOUND", message: "Retirada n\xE3o encontrada" });
+      if (loan.status !== "aberta") throw new TRPCError24({ code: "BAD_REQUEST", message: "Essa retirada j\xE1 foi devolvida." });
+      const out = num(loan.gross_weight_out);
+      const consumed = out - input.grossWeightIn;
+      if (consumed < -1e-9) {
+        throw new TRPCError24({ code: "BAD_REQUEST", message: `Peso na devolu\xE7\xE3o (${input.grossWeightIn}) maior que na sa\xEDda (${out}). Confira a balan\xE7a.` });
+      }
+      const usedKg = Math.max(0, consumed);
+      const [dp] = await conn.execute(`SELECT density_kg_l, unit FROM stock_products WHERE id = ?`, [loan.product_id]);
+      const density = num(dp[0]?.density_kg_l);
+      const unitLabel = dp[0]?.unit || "kg";
+      const used = density > 0 ? Number((usedKg / density).toFixed(3)) : usedKg;
+      const balance = await lockBalance(conn, loan.product_id, loan.location_id);
+      if (used > balance + 1e-9) {
+        throw new TRPCError24({ code: "BAD_REQUEST", message: `Consumo (${used.toFixed(3)} ${unitLabel}) maior que o saldo do local (${balance}). Confira os pesos ou ajuste o estoque.` });
+      }
+      let movId = null;
+      let newBalance = balance;
+      if (used > 1e-9) {
+        newBalance = balance - used;
+        await setBalance(conn, loan.product_id, loan.location_id, newBalance);
+        movId = await insertMovement(conn, {
+          productId: loan.product_id,
+          type: "saida",
+          quantity: used,
+          fromLocationId: loan.location_id,
+          destinationEquipmentId: loan.destination_equipment_id,
+          destinationCollaboratorId: loan.destination_collaborator_id,
+          destinationNote: loan.destination_note,
+          reason: `Consumo da retirada #${loan.id} (saiu ${out} kg, voltou ${input.grossWeightIn} kg = ${usedKg.toFixed(3)} kg${density > 0 ? ` \xF7 ${density} kg/L` : ""})${loan.reason ? " \u2014 " + loan.reason : ""}`,
+          performedBy: ctx.user.id,
+          balanceAfter: newBalance
+        });
+      }
+      await conn.execute(
+        `UPDATE stock_loans SET status = 'devolvida', gross_weight_in = ?, consumed = ?, consumed_stock = ?, return_movement_id = ?, returned_by = ?, returned_at = NOW() WHERE id = ?`,
+        [input.grossWeightIn.toFixed(3), usedKg.toFixed(3), used.toFixed(3), movId, ctx.user.id, loan.id]
+      );
+      return { consumed: used, consumedKg: usedKg, unit: unitLabel, balanceAfter: newBalance };
+    });
+  }),
+  transfer: protectedProcedure.input(z35.object({ productId: z35.number(), fromLocationId: z35.number(), toLocationId: z35.number(), quantity: qtyInput, collaboratorId: z35.number().nullable().optional(), reason: z35.string().optional() })).mutation(async ({ input, ctx }) => {
+    if (input.fromLocationId === input.toLocationId) throw new TRPCError24({ code: "BAD_REQUEST", message: "Origem e destino s\xE3o o mesmo local." });
+    return withTx(async (conn) => {
+      await requireProductAndLocation(conn, input.productId, [input.fromLocationId, input.toLocationId]);
+      const ordered = [input.fromLocationId, input.toLocationId].sort((a, b) => a - b);
+      const bal = {};
+      for (const lid of ordered) bal[lid] = await lockBalance(conn, input.productId, lid);
+      if (input.quantity > bal[input.fromLocationId] + 1e-9) {
+        throw new TRPCError24({ code: "BAD_REQUEST", message: `Saldo insuficiente na origem (dispon\xEDvel: ${bal[input.fromLocationId]}).` });
+      }
+      const fromAfter = bal[input.fromLocationId] - input.quantity;
+      await setBalance(conn, input.productId, input.fromLocationId, fromAfter);
+      await setBalance(conn, input.productId, input.toLocationId, bal[input.toLocationId] + input.quantity);
+      const id = await insertMovement(conn, {
+        productId: input.productId,
+        type: "transferencia",
+        quantity: input.quantity,
+        fromLocationId: input.fromLocationId,
+        toLocationId: input.toLocationId,
+        destinationCollaboratorId: input.collaboratorId ?? null,
+        reason: input.reason ?? null,
+        performedBy: ctx.user.id,
+        balanceAfter: fromAfter
+      });
+      return { id };
+    });
+  }),
+  // Contagem de inventário: define o saldo real. Só admin, motivo obrigatório; grava a diferença (com sinal).
+  adjust: adminProcedure.input(z35.object({ productId: z35.number(), locationId: z35.number(), newQuantity: z35.number().min(0), reason: z35.string().min(3, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
+    return withTx(async (conn) => {
+      await requireProductAndLocation(conn, input.productId, [input.locationId]);
+      const balance = await lockBalance(conn, input.productId, input.locationId);
+      const delta = input.newQuantity - balance;
+      if (Math.abs(delta) < 1e-9) throw new TRPCError24({ code: "BAD_REQUEST", message: "O saldo informado \xE9 igual ao atual." });
+      await setBalance(conn, input.productId, input.locationId, input.newQuantity);
+      const id = await insertMovement(conn, {
+        productId: input.productId,
+        type: "ajuste",
+        quantity: delta,
+        toLocationId: input.locationId,
+        reason: input.reason,
+        performedBy: ctx.user.id,
+        balanceAfter: input.newQuantity
+      });
+      return { id, delta };
+    });
+  })
+});
+
 // server/routers/quotations.ts
 init_trpc();
 init_db();
 init_schema();
-import { z as z35 } from "zod";
-import { TRPCError as TRPCError24 } from "@trpc/server";
+import { z as z36 } from "zod";
+import { TRPCError as TRPCError25 } from "@trpc/server";
 import { eq as eq34, desc as desc27, asc as asc4, sql as sql21 } from "drizzle-orm";
 var quotationsRouter = router({
   // List all quotations, optionally filtered by category or supplier
-  list: protectedProcedure.input(z35.object({
-    categoryId: z35.number().optional(),
-    supplierId: z35.number().optional()
+  list: protectedProcedure.input(z36.object({
+    categoryId: z36.number().optional(),
+    supplierId: z36.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -17009,9 +18009,9 @@ var quotationsRouter = router({
     return rows;
   }),
   // List by product name — price history across suppliers, lowest price first
-  listByProduct: protectedProcedure.input(z35.object({ productName: z35.string() })).query(async ({ input }) => {
+  listByProduct: protectedProcedure.input(z36.object({ productName: z36.string() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -17032,7 +18032,7 @@ var quotationsRouter = router({
   // List grouped by category — returns categories with their products and price history
   listByCategory: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -17095,18 +18095,18 @@ var quotationsRouter = router({
       )
     }));
   }),
-  create: protectedProcedure.input(z35.object({
-    supplierId: z35.number(),
-    categoryId: z35.number().optional(),
-    productName: z35.string().min(1).max(255),
-    unit: z35.string().optional(),
-    quantity: z35.string().optional(),
-    unitPrice: z35.string().min(1),
-    totalPrice: z35.string().optional(),
-    notes: z35.string().optional()
+  create: protectedProcedure.input(z36.object({
+    supplierId: z36.number(),
+    categoryId: z36.number().optional(),
+    productName: z36.string().min(1).max(255),
+    unit: z36.string().optional(),
+    quantity: z36.string().optional(),
+    unitPrice: z36.string().min(1),
+    totalPrice: z36.string().optional(),
+    notes: z36.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const now = Date.now();
     const [result] = await db.insert(quotations).values({
       supplierId: input.supplierId,
@@ -17123,26 +18123,26 @@ var quotationsRouter = router({
     });
     return { id: result.insertId, ...input };
   }),
-  update: protectedProcedure.input(z35.object({
-    id: z35.number(),
-    supplierId: z35.number().optional(),
-    categoryId: z35.number().optional(),
-    productName: z35.string().optional(),
-    unit: z35.string().optional(),
-    quantity: z35.string().optional(),
-    unitPrice: z35.string().optional(),
-    totalPrice: z35.string().optional(),
-    notes: z35.string().optional()
+  update: protectedProcedure.input(z36.object({
+    id: z36.number(),
+    supplierId: z36.number().optional(),
+    categoryId: z36.number().optional(),
+    productName: z36.string().optional(),
+    unit: z36.string().optional(),
+    quantity: z36.string().optional(),
+    unitPrice: z36.string().optional(),
+    totalPrice: z36.string().optional(),
+    notes: z36.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
     await db.update(quotations).set(data).where(eq34(quotations.id, id));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(quotations).where(eq34(quotations.id, input.id));
     return { success: true };
   })
@@ -17153,11 +18153,184 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z36 } from "zod";
-import { TRPCError as TRPCError25 } from "@trpc/server";
-import { eq as eq35, sql as sql22 } from "drizzle-orm";
-var statusEnum = z36.enum(["pendente", "lida", "analisando", "comprando", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
-var urgencyEnum = z36.enum(["baixa", "media", "alta", "critica"]);
+init_notifications();
+import { z as z37 } from "zod";
+import { TRPCError as TRPCError26 } from "@trpc/server";
+import { eq as eq35, sql as sql23 } from "drizzle-orm";
+import crypto from "crypto";
+
+// server/utils/whatsappNotifications.ts
+init_whatsapp();
+import { sql as sql22 } from "drizzle-orm";
+function appBaseUrl() {
+  return (process.env.APP_BASE_URL || "https://btreeambiental.com").replace(/\/$/, "");
+}
+function formatItemsList(items) {
+  if (!items || items.length === 0) return "\u2014";
+  return items.map((i) => `${i.name} (${i.quantity || "1"} ${i.unit || "un"})`).join(", ");
+}
+async function getPurchaseRequestNewResponsiblePhones(db) {
+  const [rows] = await db.execute(sql22`
+    SELECT value FROM notification_settings WHERE \`key\` = 'purchaseRequestNewResponsible'
+  `);
+  const row = rows[0];
+  if (!row?.value) return [];
+  let parsed;
+  try {
+    parsed = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
+  } catch {
+    return [];
+  }
+  const recipients = parsed?.recipients || [];
+  if (recipients.length === 0) return [];
+  const collaboratorIds = recipients.map((r) => r.collaboratorId).filter((id) => !!id);
+  let collaboratorPhones = {};
+  if (collaboratorIds.length > 0) {
+    const [collabRows] = await db.execute(sql22`SELECT id, phone FROM collaborators WHERE id IN (${sql22.join(collaboratorIds, sql22`, `)})`);
+    collaboratorPhones = Object.fromEntries(collabRows.map((r) => [r.id, r.phone]));
+  }
+  const phones = recipients.map((r) => r.collaboratorId ? collaboratorPhones[r.collaboratorId] : r.manualPhone).filter((p) => !!p && p.trim() !== "");
+  return Array.from(new Set(phones));
+}
+async function notifyFinanceiroNewPurchaseRequestWhatsApp(db, params) {
+  try {
+    const phones = await getPurchaseRequestNewResponsiblePhones(db);
+    if (phones.length === 0) {
+      console.log("[WhatsAppNotify] Nenhum respons\xE1vel configurado em Configura\xE7\xE3o de Notifica\xE7\xF5es \u2014 aviso pulado.");
+      return;
+    }
+    const link = `${appBaseUrl()}/compras/${params.requestId}`;
+    const itemsList = formatItemsList(params.items);
+    for (const phone of phones) {
+      await sendWhatsAppTemplate({
+        toPhone: phone,
+        templateName: process.env.WHATSAPP_TEMPLATE_NOVA_SOLICITACAO_COMPRA,
+        bodyParams: [params.title, params.requesterName, itemsList, link]
+      });
+    }
+  } catch (err) {
+    console.error("[WhatsAppNotify] Falha ao notificar financeiro (nova solicita\xE7\xE3o):", err);
+  }
+}
+async function notifyRequesterPurchaseCompletedWhatsApp(db, requestId) {
+  try {
+    const [prRows] = await db.execute(sql22`SELECT title, requested_by FROM purchase_requests WHERE id = ${requestId} LIMIT 1`);
+    const pr = prRows[0];
+    if (!pr || !pr.requested_by) return;
+    const [phoneRows] = await db.execute(sql22`
+      SELECT phone FROM collaborators WHERE user_id = ${pr.requested_by} AND phone IS NOT NULL AND phone != '' LIMIT 1
+    `);
+    const phone = phoneRows[0]?.phone;
+    if (!phone) {
+      console.log(`[WhatsAppNotify] Solicitante da compra #${requestId} sem telefone vinculado \u2014 aviso pulado.`);
+      return;
+    }
+    const [itemRows] = await db.execute(sql22`SELECT name, quantity, unit FROM purchase_request_items WHERE request_id = ${requestId}`);
+    const itemsList = formatItemsList(itemRows);
+    const link = `${appBaseUrl()}/compras/${requestId}`;
+    await sendWhatsAppTemplate({
+      toPhone: phone,
+      templateName: process.env.WHATSAPP_TEMPLATE_COMPRA_REALIZADA,
+      bodyParams: [pr.title, itemsList, link]
+    });
+  } catch (err) {
+    console.error("[WhatsAppNotify] Falha ao notificar solicitante (compra realizada):", err);
+  }
+}
+
+// server/routers/purchaseRequests.ts
+var statusEnum = z37.enum(["pendente", "lida", "analisando", "comprando", "aprovada", "comprada", "recebida", "cancelada", "negada"]);
+var urgencyEnum = z37.enum(["baixa", "media", "alta", "critica"]);
+async function createPurchaseRequestCore(db, params) {
+  const items = params.items || [];
+  let result;
+  try {
+    [result] = await db.execute(sql23`
+      INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
+      VALUES (${params.title}, ${params.description || null}, ${params.linkUrl || null}, ${params.categoryId || null}, ${params.equipmentId || null}, 'pending', ${URGENCY_TO_DB[params.urgency || "media"] || "medium"}, ${Date.now()}, ${params.userId}, ${params.notes || null}, NOW(), NOW())
+    `);
+  } catch (err) {
+    const cause = err?.cause?.message || err?.message || String(err);
+    console.error("[createPurchaseRequestCore] ERRO:", cause);
+    throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gravar: ${cause}` });
+  }
+  const requestId = result.insertId;
+  if (items.length > 0) {
+    await db.insert(purchaseRequestItems).values(
+      items.map((item) => ({
+        requestId,
+        name: item.name,
+        quantity: item.quantity || "1",
+        // O texto da unidade já carrega o conteúdo ("un de 20 L") pra aparecer em orçamentos, WhatsApp e fichas.
+        unit: item.packageSize && item.packageUnit ? `${item.unit || "un"} de ${String(item.packageSize).replace(".", ",")} ${item.packageUnit}` : item.unit || "un",
+        notes: item.notes,
+        confirmed: 0,
+        packageSize: item.packageSize && item.packageUnit ? String(item.packageSize) : null,
+        packageUnit: item.packageSize && item.packageUnit ? item.packageUnit : null
+      }))
+    );
+  }
+  await notifyFinanceiro({
+    type: "geral",
+    title: `Nova solicita\xE7\xE3o de compra: ${params.title}`,
+    message: `${params.requesterName} solicitou "${params.title}"${items.length > 0 ? ` (${items.length} item(ns))` : ""}.`,
+    relatedId: requestId,
+    relatedType: "purchase_request"
+  }).catch((e) => console.error("[createPurchaseRequestCore] Falha ao notificar financeiro:", e?.message));
+  await notifyFinanceiroNewPurchaseRequestWhatsApp(db, {
+    requestId,
+    title: params.title,
+    requesterName: params.requesterName,
+    items
+  });
+  return { id: requestId, success: true };
+}
+var ALLOWED_TRANSITIONS = {
+  pendente: ["analisando", "comprada", "negada", "cancelada"],
+  analisando: ["comprada", "negada", "cancelada"],
+  comprada: ["recebida"],
+  recebida: [],
+  negada: [],
+  cancelada: [],
+  lida: ["analisando", "comprada", "negada", "cancelada"],
+  aprovada: ["comprada", "cancelada"],
+  comprando: ["comprada", "negada", "cancelada"]
+};
+async function applyPurchaseQuotationDecision(db, params) {
+  const [rows] = await db.execute(sql23`SELECT status, requested_by FROM purchase_requests WHERE id = ${params.purchaseRequestId} LIMIT 1`);
+  const pr = rows[0];
+  if (!pr) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o de compra n\xE3o encontrada" });
+  const currentStatus = STATUS_FROM_DB[pr.status] || pr.status;
+  const terminalStates = ["negada", "cancelada", "recebida"];
+  const nextStatus = terminalStates.includes(currentStatus) ? currentStatus : "comprada";
+  const nowMs = Date.now();
+  await db.execute(sql23`
+    UPDATE purchase_requests
+    SET winning_supplier_id = ${params.winningSupplierId}, final_price = ${params.finalPrice},
+        suppliers_breakdown = ${JSON.stringify(params.suppliersBreakdown)},
+        status = ${nextStatus}, purchased_at = COALESCE(purchased_at, ${nowMs}),
+        payment_method = COALESCE(${params.paymentMethod ?? null}, payment_method),
+        invoice_url = COALESCE(${params.invoiceUrl ?? null}, invoice_url),
+        receipt_url = COALESCE(${params.receiptUrl ?? null}, receipt_url),
+        responded_by = ${params.userId}, responded_at = NOW(), updated_at = NOW()
+    WHERE id = ${params.purchaseRequestId}
+  `);
+  if (pr.requested_by) {
+    await notifyUsers({
+      recipientUserIds: [pr.requested_by],
+      type: "geral",
+      title: `Compra decidida`,
+      message: `A cota\xE7\xE3o da sua solicita\xE7\xE3o de compra foi decidida. Valor final: R$ ${params.finalPrice}.`,
+      relatedId: params.purchaseRequestId,
+      relatedType: "purchase_request"
+    }).catch(() => {
+    });
+  }
+  if (nextStatus === "comprada" && currentStatus !== "comprada") {
+    await notifyRequesterPurchaseCompletedWhatsApp(db, params.purchaseRequestId);
+  }
+  return { success: true, status: nextStatus };
+}
 var URGENCY_TO_DB = {
   baixa: "low",
   media: "medium",
@@ -17208,24 +18381,32 @@ function normalizeRow(r) {
     purchaseDate: epochToIso(r.purchaseDate),
     expectedArrival: epochToIso(r.expectedArrival),
     receivedDate: epochToIso(r.receivedDate),
-    respondedAt: r.respondedAt ? r.respondedAt instanceof Date ? r.respondedAt.toISOString() : String(r.respondedAt) : null
+    respondedAt: r.respondedAt ? r.respondedAt instanceof Date ? r.respondedAt.toISOString() : String(r.respondedAt) : null,
+    suppliersBreakdown: (() => {
+      try {
+        return r.suppliersBreakdown ? JSON.parse(r.suppliersBreakdown) : null;
+      } catch {
+        return null;
+      }
+    })()
   };
 }
 var purchaseRequestsRouter = router({
-  // Diagnóstico: mostra as colunas reais da tabela no banco (para troubleshooting)
-  schemaInfo: protectedProcedure.query(async () => {
+  // Diagnóstico: mostra as colunas reais da tabela no banco (para troubleshooting). Só admin.
+  schemaInfo: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError26({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const [cols] = await db.execute(`SHOW COLUMNS FROM purchase_requests`);
     return cols.map((c) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
   }),
-  list: protectedProcedure.input(z36.object({
+  list: protectedProcedure.input(z37.object({
     status: statusEnum.optional(),
     urgency: urgencyEnum.optional(),
-    categoryId: z36.number().optional()
+    categoryId: z37.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.execute(`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
@@ -17241,12 +18422,20 @@ var purchaseRequestsRouter = router({
           pr.expected_arrival AS expectedArrival,
           pr.received_at AS receivedDate,
           pr.requested_by AS requestedBy,
-          req_user.name AS requestedByName,
+          COALESCE((SELECT c.name FROM collaborators c WHERE c.user_id = pr.requested_by ORDER BY c.id LIMIT 1), req_user.name) AS requestedByName,
           pr.responded_by AS respondedBy,
-          resp_user.name AS respondedByName,
+          COALESCE((SELECT c.name FROM collaborators c WHERE c.user_id = pr.responded_by ORDER BY c.id LIMIT 1), resp_user.name) AS respondedByName,
           pr.responded_at AS respondedAt,
           pr.response_notes AS responseNotes,
           pr.denial_reason AS denialReason,
+          pr.quotation_request_id AS quotationRequestId,
+          pr.winning_supplier_id AS winningSupplierId,
+          sup.company_name AS winningSupplierName,
+          pr.final_price AS finalPrice,
+          pr.suppliers_breakdown AS suppliersBreakdown,
+          pr.payment_method AS paymentMethod,
+          pr.invoice_url AS invoiceUrl,
+          pr.receipt_url AS receiptUrl,
           pr.notes,
           pr.created_at AS createdAt,
           pr.updated_at AS updatedAt
@@ -17255,6 +18444,7 @@ var purchaseRequestsRouter = router({
         LEFT JOIN equipment eqp ON pr.equipment_id = eqp.id
         LEFT JOIN users req_user ON pr.requested_by = req_user.id
         LEFT JOIN users resp_user ON pr.responded_by = resp_user.id
+        LEFT JOIN suppliers sup ON pr.winning_supplier_id = sup.id
         ORDER BY
           FIELD(pr.status, 'pending','pendente','read','lida','approved','aprovada','purchased','comprada','received','recebida','negada','cancelled','canceled','cancelada'),
           FIELD(pr.urgency, 'critical','critica','high','alta','medium','media','low','baixa'),
@@ -17275,10 +18465,10 @@ var purchaseRequestsRouter = router({
     }
     return filtered;
   }),
-  getById: protectedProcedure.input(z36.object({ id: z36.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z37.object({ id: z37.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.execute(sql22`
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [rows] = await db.execute(sql23`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
           pr.link AS linkUrl,
@@ -17293,12 +18483,20 @@ var purchaseRequestsRouter = router({
           pr.expected_arrival AS expectedArrival,
           pr.received_at AS receivedDate,
           pr.requested_by AS requestedBy,
-          req_user.name AS requestedByName,
+          COALESCE((SELECT c.name FROM collaborators c WHERE c.user_id = pr.requested_by ORDER BY c.id LIMIT 1), req_user.name) AS requestedByName,
           pr.responded_by AS respondedBy,
-          resp_user.name AS respondedByName,
+          COALESCE((SELECT c.name FROM collaborators c WHERE c.user_id = pr.responded_by ORDER BY c.id LIMIT 1), resp_user.name) AS respondedByName,
           pr.responded_at AS respondedAt,
           pr.response_notes AS responseNotes,
           pr.denial_reason AS denialReason,
+          pr.quotation_request_id AS quotationRequestId,
+          pr.winning_supplier_id AS winningSupplierId,
+          sup.company_name AS winningSupplierName,
+          pr.final_price AS finalPrice,
+          pr.suppliers_breakdown AS suppliersBreakdown,
+          pr.payment_method AS paymentMethod,
+          pr.invoice_url AS invoiceUrl,
+          pr.receipt_url AS receiptUrl,
           pr.notes,
           pr.created_at AS createdAt,
           pr.updated_at AS updatedAt
@@ -17307,187 +18505,159 @@ var purchaseRequestsRouter = router({
         LEFT JOIN equipment eqp ON pr.equipment_id = eqp.id
         LEFT JOIN users req_user ON pr.requested_by = req_user.id
         LEFT JOIN users resp_user ON pr.responded_by = resp_user.id
+        LEFT JOIN suppliers sup ON pr.winning_supplier_id = sup.id
         WHERE pr.id = ${input.id}
         LIMIT 1
       `);
     const row = rows[0];
-    if (!row) throw new TRPCError25({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!row) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const normalized = normalizeRow(row);
     const items = await db.select().from(purchaseRequestItems).where(eq35(purchaseRequestItems.requestId, input.id));
     return { ...normalized, items };
   }),
-  create: protectedProcedure.input(z36.object({
-    title: z36.string().min(1),
-    description: z36.string().optional(),
-    linkUrl: z36.string().optional(),
-    categoryId: z36.number().optional(),
-    equipmentId: z36.number().optional(),
+  create: protectedProcedure.input(z37.object({
+    title: z37.string().min(1),
+    description: z37.string().optional(),
+    linkUrl: z37.string().optional(),
+    categoryId: z37.number().optional(),
+    equipmentId: z37.number().optional(),
     urgency: urgencyEnum.optional().default("media"),
-    notes: z36.string().optional(),
-    items: z36.array(z36.object({
-      name: z36.string().min(1),
-      quantity: z36.string().optional().default("1"),
-      unit: z36.string().optional().default("un"),
-      notes: z36.string().optional()
+    notes: z37.string().optional(),
+    items: z37.array(z37.object({
+      name: z37.string().min(1),
+      quantity: z37.string().optional().default("1"),
+      unit: z37.string().optional().default("un"),
+      notes: z37.string().optional(),
+      packageSize: z37.number().positive().optional(),
+      packageUnit: z37.enum(["L", "kg", "m"]).optional()
     })).optional().default([])
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    let result;
-    try {
-      [result] = await db.execute(sql22`
-          INSERT INTO purchase_requests (title, description, link, category_id, equipment_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at)
-          VALUES (${input.title}, ${input.description || null}, ${input.linkUrl || null}, ${input.categoryId || null}, ${input.equipmentId || null}, 'pending', ${URGENCY_TO_DB[input.urgency || "media"] || "medium"}, ${Date.now()}, ${ctx.user.id}, ${input.notes || null}, NOW(), NOW())
-        `);
-    } catch (err) {
-      const cause = err?.cause?.message || err?.message || String(err);
-      console.error("[purchaseRequests.create] ERRO:", cause);
-      throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gravar: ${cause}` });
-    }
-    const requestId = result.insertId;
-    if (input.items.length > 0) {
-      await db.insert(purchaseRequestItems).values(
-        input.items.map((item) => ({
-          requestId,
-          name: item.name,
-          quantity: item.quantity,
-          unit: item.unit,
-          notes: item.notes,
-          confirmed: 0
-        }))
-      );
-    }
-    return { id: requestId, success: true };
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    return createPurchaseRequestCore(db, { ...input, userId: ctx.user.id, requesterName: ctx.user.name });
   }),
-  update: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    title: z36.string().optional(),
-    description: z36.string().optional(),
-    linkUrl: z36.string().optional(),
-    categoryId: z36.number().optional(),
-    equipmentId: z36.number().optional(),
+  update: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    title: z37.string().optional(),
+    description: z37.string().optional(),
+    linkUrl: z37.string().optional(),
+    categoryId: z37.number().optional(),
+    equipmentId: z37.number().optional(),
     urgency: urgencyEnum.optional(),
-    notes: z36.string().optional()
+    notes: z37.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const sets = [];
-    if (input.title !== void 0) sets.push(sql22`title = ${input.title}`);
-    if (input.description !== void 0) sets.push(sql22`description = ${input.description}`);
-    if (input.linkUrl !== void 0) sets.push(sql22`link = ${input.linkUrl}`);
-    if (input.categoryId !== void 0) sets.push(sql22`category_id = ${input.categoryId}`);
-    if (input.equipmentId !== void 0) sets.push(sql22`equipment_id = ${input.equipmentId}`);
-    if (input.urgency !== void 0) sets.push(sql22`urgency = ${URGENCY_TO_DB[input.urgency] || "medium"}`);
-    if (input.notes !== void 0) sets.push(sql22`notes = ${input.notes}`);
+    if (input.title !== void 0) sets.push(sql23`title = ${input.title}`);
+    if (input.description !== void 0) sets.push(sql23`description = ${input.description}`);
+    if (input.linkUrl !== void 0) sets.push(sql23`link = ${input.linkUrl}`);
+    if (input.categoryId !== void 0) sets.push(sql23`category_id = ${input.categoryId}`);
+    if (input.equipmentId !== void 0) sets.push(sql23`equipment_id = ${input.equipmentId}`);
+    if (input.urgency !== void 0) sets.push(sql23`urgency = ${URGENCY_TO_DB[input.urgency] || "medium"}`);
+    if (input.notes !== void 0) sets.push(sql23`notes = ${input.notes}`);
     if (sets.length === 0) return { success: true };
-    sets.push(sql22`updated_at = NOW()`);
-    const setSql = sql22.join(sets, sql22`, `);
-    await db.execute(sql22`UPDATE purchase_requests SET ${setSql} WHERE id = ${input.id}`);
-    return { success: true };
-  }),
-  markRead: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(sql22`UPDATE purchase_requests SET read_at = ${Date.now()}, status = 'lida', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+    sets.push(sql23`updated_at = NOW()`);
+    const setSql = sql23.join(sets, sql23`, `);
+    await db.execute(sql23`UPDATE purchase_requests SET ${setSql} WHERE id = ${input.id}`);
     return { success: true };
   }),
   // Atualizar status diretamente (para a grade de edição)
-  updateStatus: protectedProcedure.input(z36.object({ id: z36.number(), status: statusEnum })).mutation(async ({ input, ctx }) => {
+  updateStatus: protectedProcedure.input(z37.object({ id: z37.number(), status: statusEnum })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [curRows] = await db.execute(sql23`SELECT status, requested_by FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
+    const current = curRows[0];
+    if (!current) throw new TRPCError26({ code: "NOT_FOUND" });
+    const currentStatusNorm = STATUS_FROM_DB[current.status] || current.status;
+    if (currentStatusNorm !== input.status && !ALLOWED_TRANSITIONS[currentStatusNorm]?.includes(input.status)) {
+      throw new TRPCError26({ code: "BAD_REQUEST", message: `N\xE3o \xE9 poss\xEDvel mudar de "${currentStatusNorm}" para "${input.status}"` });
+    }
     const nowMs = Date.now();
     if (input.status === "lida") {
-      await db.execute(sql22`UPDATE purchase_requests SET status = 'lida', read_at = COALESCE(read_at, ${nowMs}), responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+      await db.execute(sql23`UPDATE purchase_requests SET status = 'lida', read_at = COALESCE(read_at, ${nowMs}), responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     } else if (input.status === "comprada") {
-      await db.execute(sql22`UPDATE purchase_requests SET status = 'comprada', purchased_at = COALESCE(purchased_at, ${nowMs}), responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+      await db.execute(sql23`UPDATE purchase_requests SET status = 'comprada', purchased_at = COALESCE(purchased_at, ${nowMs}), responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     } else if (input.status === "recebida") {
-      await db.execute(sql22`UPDATE purchase_requests SET status = 'recebida', received_at = COALESCE(received_at, ${nowMs}), updated_at = NOW() WHERE id = ${input.id}`);
+      await db.execute(sql23`UPDATE purchase_requests SET status = 'recebida', received_at = COALESCE(received_at, ${nowMs}), updated_at = NOW() WHERE id = ${input.id}`);
     } else if (input.status === "negada") {
-      await db.execute(sql22`UPDATE purchase_requests SET status = 'negada', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+      await db.execute(sql23`UPDATE purchase_requests SET status = 'negada', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     } else {
-      await db.execute(sql22`UPDATE purchase_requests SET status = ${input.status}, updated_at = NOW() WHERE id = ${input.id}`);
+      await db.execute(sql23`UPDATE purchase_requests SET status = ${input.status}, updated_at = NOW() WHERE id = ${input.id}`);
+    }
+    if (current.requested_by && ["negada", "comprada", "recebida"].includes(input.status)) {
+      const labels = { negada: "negada", comprada: "comprada", recebida: "recebida" };
+      await notifyUsers({
+        recipientUserIds: [current.requested_by],
+        type: "geral",
+        title: `Solicita\xE7\xE3o de compra ${labels[input.status]}`,
+        relatedId: input.id,
+        relatedType: "purchase_request"
+      }).catch((e) => console.error("[purchaseRequests.updateStatus] Falha ao notificar solicitante:", e?.message));
+    }
+    if (input.status === "comprada" && currentStatusNorm !== "comprada") {
+      await notifyRequesterPurchaseCompletedWhatsApp(db, input.id);
     }
     return { success: true };
   }),
   // Atualizar datas da compra/entrega (edição direta na grade)
-  updateDates: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    purchaseDate: z36.string().optional().nullable(),
+  updateDates: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    purchaseDate: z37.string().optional().nullable(),
     // 'YYYY-MM-DD' ou null
-    expectedArrival: z36.string().optional().nullable()
+    expectedArrival: z37.string().optional().nullable()
     // 'YYYY-MM-DD' ou null
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const toMs = (d) => d ? (/* @__PURE__ */ new Date(d + "T12:00:00")).getTime() : null;
-    await db.execute(sql22`UPDATE purchase_requests SET purchased_at = ${toMs(input.purchaseDate)}, expected_arrival = ${toMs(input.expectedArrival)}, updated_at = NOW() WHERE id = ${input.id}`);
+    await db.execute(sql23`UPDATE purchase_requests SET purchased_at = ${toMs(input.purchaseDate)}, expected_arrival = ${toMs(input.expectedArrival)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   // Responsável responde a solicitação (parecer) — também marca como lida
-  respond: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    responseNotes: z36.string().min(1)
+  respond: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    responseNotes: z37.string().min(1)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(sql22`UPDATE purchase_requests
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.execute(sql23`UPDATE purchase_requests
          SET response_notes = ${input.responseNotes}, responded_by = ${ctx.user.id}, responded_at = NOW(),
              read_at = COALESCE(read_at, ${Date.now()}),
-             status = CASE WHEN status IN ('pendente','pending') THEN 'lida' ELSE status END,
              updated_at = NOW()
          WHERE id = ${input.id}`);
     return { success: true };
   }),
   // Negar solicitação com motivo
-  deny: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    denialReason: z36.string().min(1)
+  deny: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    denialReason: z37.string().min(1)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(sql22`UPDATE purchase_requests SET status = 'negada', denial_reason = ${input.denialReason}, responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.execute(sql23`UPDATE purchase_requests SET status = 'negada', denial_reason = ${input.denialReason}, responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
-  markPurchased: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    purchaseDate: z36.string().optional(),
-    expectedArrival: z36.string().optional()
-  })).mutation(async ({ input, ctx }) => {
+  toggleItemConfirm: protectedProcedure.input(z37.object({ itemId: z37.number(), confirmed: z37.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    const purchaseMs = input.purchaseDate ? new Date(input.purchaseDate.replace(" ", "T")).getTime() : Date.now();
-    const arrivalMs = input.expectedArrival ? new Date(input.expectedArrival.replace(" ", "T")).getTime() : null;
-    await db.execute(sql22`UPDATE purchase_requests SET purchased_at = ${purchaseMs}, expected_arrival = ${arrivalMs}, status = 'comprada', responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [chk] = await db.execute(sql23`SELECT received_quantity FROM purchase_request_items WHERE id = ${input.itemId} LIMIT 1`);
+    if (Number(chk[0]?.received_quantity || 0) > 0) {
+      throw new TRPCError26({ code: "BAD_REQUEST", message: "Este item j\xE1 foi lan\xE7ado no estoque. Corre\xE7\xF5es s\xE3o feitas no m\xF3dulo de Estoque (ajuste)." });
+    }
+    await db.execute(sql23`UPDATE purchase_request_items SET confirmed = ${input.confirmed ? 1 : 0} WHERE id = ${input.itemId}`);
     return { success: true };
   }),
-  markReceived: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(sql22`UPDATE purchase_requests SET received_at = ${Date.now()}, status = 'recebida', updated_at = NOW() WHERE id = ${input.id}`);
-    return { success: true };
-  }),
-  confirmItems: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(sql22`UPDATE purchase_request_items SET confirmed = 1 WHERE request_id = ${input.id}`);
-    return { success: true };
-  }),
-  toggleItemConfirm: protectedProcedure.input(z36.object({ itemId: z36.number(), confirmed: z36.boolean() })).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(sql22`UPDATE purchase_request_items SET confirmed = ${input.confirmed ? 1 : 0} WHERE id = ${input.itemId}`);
-    return { success: true };
-  }),
-  uploadImage: protectedProcedure.input(z36.object({
-    id: z36.number(),
-    imageBase64: z36.string(),
-    mimeType: z36.string().default("image/jpeg")
+  uploadImage: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    imageBase64: z37.string(),
+    mimeType: z37.string().default("image/jpeg")
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const dataUri = `data:${input.mimeType};base64,${input.imageBase64}`;
     const { url } = await cloudinaryUpload(dataUri, `btree/purchase-requests/${input.id}`, `foto-${Date.now()}.jpg`);
-    const [rows] = await db.execute(sql22`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
+    const [rows] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
     const current = rows[0]?.images;
     let images = [];
     try {
@@ -17496,13 +18666,13 @@ var purchaseRequestsRouter = router({
       images = [];
     }
     images.push(url);
-    await db.execute(sql22`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
+    await db.execute(sql23`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { url, success: true };
   }),
-  removeImage: protectedProcedure.input(z36.object({ id: z36.number(), imageUrl: z36.string() })).mutation(async ({ input }) => {
+  removeImage: protectedProcedure.input(z37.object({ id: z37.number(), imageUrl: z37.string() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.execute(sql22`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [rows] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
     const current = rows[0]?.images;
     let images = [];
     try {
@@ -17511,15 +18681,95 @@ var purchaseRequestsRouter = router({
       images = [];
     }
     images = images.filter((u) => u !== input.imageUrl);
-    await db.execute(sql22`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
+    await db.execute(sql23`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
-  delete: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(sql22`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
-    await db.execute(sql22`DELETE FROM purchase_requests WHERE id = ${input.id}`);
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    await db.execute(sql23`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
+    await db.execute(sql23`DELETE FROM purchase_requests WHERE id = ${input.id}`);
     return { success: true };
+  }),
+  // Dispara um Orçamento a partir desta solicitação, reaproveitando os itens já
+  // cadastrados — fecha o ciclo Compra -> Orçamento.
+  requestQuotation: protectedProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [rows] = await db.execute(sql23`SELECT title, requested_by, quotation_request_id, status FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
+    const pr = rows[0];
+    if (!pr) throw new TRPCError26({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (pr.quotation_request_id) throw new TRPCError26({ code: "BAD_REQUEST", message: "Esta solicita\xE7\xE3o j\xE1 tem um or\xE7amento vinculado" });
+    const items = await db.select().from(purchaseRequestItems).where(eq35(purchaseRequestItems.requestId, input.id));
+    if (items.length === 0) throw new TRPCError26({ code: "BAD_REQUEST", message: "Adicione ao menos um item antes de solicitar or\xE7amento" });
+    let requesterName = null;
+    let requesterId;
+    if (pr.requested_by) {
+      const [collab] = await db.select({ id: collaborators.id, name: collaborators.name }).from(collaborators).where(eq35(collaborators.userId, pr.requested_by)).limit(1);
+      if (collab) {
+        requesterName = collab.name;
+        requesterId = collab.id;
+      } else {
+        const [userRows] = await db.execute(sql23`SELECT name FROM users WHERE id = ${pr.requested_by} LIMIT 1`);
+        requesterName = userRows[0]?.name || null;
+      }
+    }
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1e3;
+    const [insertResult] = await db.insert(quotationRequests).values({
+      title: pr.title,
+      requesterId,
+      requesterName,
+      itemsJson: JSON.stringify(items.map((it) => ({ name: it.name, quantity: it.quantity, unit: it.unit || "un" }))),
+      token,
+      expiresAt,
+      status: "ativa",
+      createdBy: ctx.user.id
+    });
+    const quotationRequestId = insertResult.insertId;
+    const prStatusNorm = STATUS_FROM_DB[pr.status] || pr.status;
+    const nextStatus = ALLOWED_TRANSITIONS[prStatusNorm]?.includes("analisando") ? "analisando" : prStatusNorm;
+    await db.execute(sql23`UPDATE purchase_requests SET quotation_request_id = ${quotationRequestId}, status = ${nextStatus}, updated_at = NOW() WHERE id = ${input.id}`);
+    return { quotationRequestId, token };
+  }),
+  // Grava a decisão de compra (fornecedor vencedor + preço por item) direto pela tela
+  // da Solicitação de Compra — usado pra "Compra Direta" (site/loja, sem orçamento).
+  applyQuotationDecision: protectedProcedure.input(z37.object({
+    id: z37.number(),
+    winningSupplierId: z37.number(),
+    items: z37.array(z37.object({ itemId: z37.number(), price: z37.string() })).min(1)
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    const [supRows] = await db.execute(sql23`SELECT company_name FROM suppliers WHERE id = ${input.winningSupplierId} LIMIT 1`);
+    const supplierName = supRows[0]?.company_name || "";
+    const [prRows] = await db.execute(sql23`SELECT category_id FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
+    const categoryId = prRows[0]?.category_id;
+    const purchaseItems = await db.select().from(purchaseRequestItems).where(eq35(purchaseRequestItems.requestId, input.id));
+    let finalPriceNum = 0;
+    for (const it of input.items) {
+      const price = parseFloat(it.price.replace(",", ".")) || 0;
+      finalPriceNum += price;
+      if (categoryId) {
+        const item = purchaseItems.find((p) => p.id === it.itemId);
+        if (item) {
+          const qty = parseFloat(item.quantity) || 1;
+          const unitPrice = qty > 0 ? price / qty : price;
+          await db.execute(sql23`
+              INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, purchase_request_id, created_by, created_at)
+              VALUES (${input.winningSupplierId}, ${categoryId}, ${item.name}, ${item.unit || "un"}, ${item.quantity}, ${unitPrice.toFixed(2)}, ${price.toFixed(2)}, 'BRL', ${Date.now()}, ${input.id}, ${ctx.user.id}, NOW())
+            `);
+        }
+      }
+    }
+    const finalPrice = finalPriceNum.toFixed(2);
+    return applyPurchaseQuotationDecision(db, {
+      purchaseRequestId: input.id,
+      winningSupplierId: input.winningSupplierId,
+      finalPrice,
+      suppliersBreakdown: [{ supplierId: input.winningSupplierId, supplierName, subtotal: finalPriceNum }],
+      userId: ctx.user.id
+    });
   })
 });
 
@@ -17527,23 +18777,23 @@ var purchaseRequestsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z37 } from "zod";
-import { TRPCError as TRPCError26 } from "@trpc/server";
+import { z as z38 } from "zod";
+import { TRPCError as TRPCError27 } from "@trpc/server";
 import { eq as eq36, desc as desc28 } from "drizzle-orm";
 var invoiceControlRouter = router({
   // Listar notas com filtros — mostra todas as cargas (sem filtro de status)
-  list: protectedProcedure.input(z37.object({
-    search: z37.string().optional(),
-    destinationId: z37.number().optional(),
-    clientId: z37.number().optional(),
-    checked: z37.boolean().optional(),
+  list: protectedProcedure.input(z38.object({
+    search: z38.string().optional(),
+    destinationId: z38.number().optional(),
+    clientId: z38.number().optional(),
+    checked: z38.boolean().optional(),
     // undefined = todos, true = conferidos, false = não conferidos
-    dateFrom: z37.string().optional(),
-    dateTo: z37.string().optional(),
-    limit: z37.number().optional().default(200)
+    dateFrom: z38.string().optional(),
+    dateTo: z38.string().optional(),
+    limit: z38.number().optional().default(200)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
@@ -17588,9 +18838,9 @@ var invoiceControlRouter = router({
     return filtered;
   }),
   // Marcar/desmarcar nota como conferida (sem colunas extras que podem não existir)
-  toggleChecked: protectedProcedure.input(z37.object({ id: z37.number(), checked: z37.boolean() })).mutation(async ({ input }) => {
+  toggleChecked: protectedProcedure.input(z38.object({ id: z38.number(), checked: z38.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(cargoLoads).set({
       invoiceChecked: input.checked ? 1 : 0,
       invoiceCheckedAt: input.checked ? Date.now() : 0
@@ -17600,7 +18850,7 @@ var invoiceControlRouter = router({
   // Estatísticas resumidas — todas as cargas
   stats: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const all = await db.select({
       invoiceChecked: cargoLoads.invoiceChecked,
       invoiceNumber: cargoLoads.invoiceNumber
@@ -17623,15 +18873,166 @@ init_trpc();
 init_db();
 init_schema();
 init_notification();
-import { z as z38 } from "zod";
-import { eq as eq37, desc as desc29, sql as sql24 } from "drizzle-orm";
-import { TRPCError as TRPCError27 } from "@trpc/server";
-import crypto from "crypto";
+init_notifications();
+import { z as z39 } from "zod";
+import { eq as eq37, desc as desc29, sql as sql25 } from "drizzle-orm";
+import { TRPCError as TRPCError28 } from "@trpc/server";
+import crypto2 from "crypto";
+async function ensureSuppliersAndCategory(db, req, responses, createdByUserId) {
+  for (const resp of responses) {
+    if (resp.supplierId || !resp.supplierName?.trim()) continue;
+    const trimmedName = resp.supplierName.trim();
+    const [existingRows] = await db.execute(sql25`SELECT id, phone, whatsapp, email FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`);
+    const existing = existingRows;
+    let supplierId;
+    if (existing.length === 0) {
+      const [ins] = await db.insert(suppliers).values({
+        companyName: trimmedName,
+        address: resp.address ?? null,
+        phone: resp.sellerPhone ?? null,
+        whatsapp: resp.sellerPhone ?? null,
+        email: resp.sellerEmail ?? null,
+        notes: resp.notes ?? null
+      });
+      supplierId = ins.insertId;
+    } else {
+      const s = existing[0];
+      supplierId = s.id;
+      const updates = {};
+      if (!s.phone && resp.sellerPhone) updates.phone = resp.sellerPhone;
+      if (!s.whatsapp && resp.sellerPhone) updates.whatsapp = resp.sellerPhone;
+      if (!s.email && resp.sellerEmail) updates.email = resp.sellerEmail;
+      if (Object.keys(updates).length > 0) await db.update(suppliers).set(updates).where(eq37(suppliers.id, s.id));
+    }
+    await db.update(quotationResponses).set({ supplierId }).where(eq37(quotationResponses.id, resp.id));
+    resp.supplierId = supplierId;
+  }
+  const [linkedPrRows] = await db.execute(sql25`SELECT category_id FROM purchase_requests WHERE quotation_request_id = ${req.id} LIMIT 1`);
+  const categoryId = linkedPrRows[0]?.category_id ?? null;
+  return { categoryId };
+}
+async function recordWinningQuotations(db, params) {
+  for (const item of params.summaryItems) {
+    if (!item.found || !item.bestSupplierId) continue;
+    const totalPrice = item.subtotal.toFixed(2);
+    await db.execute(sql25`
+      INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, purchase_request_id, created_by, created_at)
+      VALUES (${item.bestSupplierId}, ${params.categoryId}, ${item.name}, ${item.unit}, ${item.quantity}, ${item.bestPrice.toFixed(2)}, ${totalPrice}, 'BRL', ${Date.now()}, ${params.purchaseRequestId}, ${params.createdByUserId}, NOW())
+    `);
+  }
+}
+function computeBestPriceBreakdown(req, responses) {
+  const requestItems = JSON.parse(req.itemsJson || "[]");
+  let manualChoices = {};
+  try {
+    manualChoices = req.bestChoices ? JSON.parse(req.bestChoices) : {};
+  } catch (_) {
+    manualChoices = {};
+  }
+  const normName2 = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\d+\s*l\b/gi, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const fuzzy = (a, b) => {
+    const na = normName2(a), nb = normName2(b);
+    if (na === nb) return true;
+    if (!na || !nb) return false;
+    const ca = na.replace(/\s+/g, "");
+    const cb = nb.replace(/\s+/g, "");
+    if (ca === cb) return true;
+    if (ca.length >= 4 && cb.length >= 4 && (ca.includes(cb) || cb.includes(ca))) return true;
+    const w = (s) => s.split(" ").filter((x) => x.length >= 3 || /\d/.test(x));
+    const wa = w(na), wb = w(nb);
+    if (wa.length === 0 || wb.length === 0) return false;
+    const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+    return shorter.every((x) => longer.includes(x));
+  };
+  const litersOf = (pack) => {
+    if (!pack) return null;
+    const p = pack.trim().toUpperCase();
+    const map = { "1L": 1, "5L": 5, "10L": 10, "20L": 20, "200L": 200 };
+    if (map[p]) return map[p];
+    const m = p.match(/(\d+(?:[\.,]\d+)?)\s*L/);
+    return m ? parseFloat(m[1].replace(",", ".")) : null;
+  };
+  const comparablePrice = (it) => {
+    const price = parseFloat(String(it.price).replace(",", "."));
+    if (isNaN(price)) return NaN;
+    const lit = litersOf(it.packaging);
+    if (lit && lit > 0) return price / lit;
+    return price;
+  };
+  const summaryItems = [];
+  for (const reqItem of requestItems) {
+    const manual = manualChoices[reqItem.name] || manualChoices[normName2(reqItem.name)];
+    let bestPrice = Infinity;
+    let bestCmp = Infinity;
+    let bestSupplierId = null;
+    let bestSupplierName = "";
+    let bestSupplierPhone = null;
+    let found = false;
+    if (manual) {
+      const resp = responses.find((r) => r.id === manual.responseId);
+      if (resp) {
+        const respItems = JSON.parse(resp.itemsJson || "[]");
+        const it = respItems[manual.itemIndex];
+        if (it) {
+          const p = parseFloat(String(it.price).replace(",", "."));
+          if (!isNaN(p) && p > 0) {
+            bestPrice = p;
+            bestSupplierId = resp.supplierId ?? null;
+            bestSupplierName = resp.tradeName || resp.supplierName || "";
+            bestSupplierPhone = resp.sellerPhone || null;
+            found = true;
+          }
+        }
+      }
+    }
+    if (!found) {
+      for (const resp of responses) {
+        const respItems = JSON.parse(resp.itemsJson || "[]");
+        const match = respItems.find((it) => fuzzy(it.name, reqItem.name));
+        if (match) {
+          const price = parseFloat(String(match.price).replace(",", "."));
+          const cmp = comparablePrice(match);
+          if (!isNaN(price) && price > 0 && !isNaN(cmp) && cmp < bestCmp) {
+            bestCmp = cmp;
+            bestPrice = price;
+            bestSupplierId = resp.supplierId ?? null;
+            bestSupplierName = resp.tradeName || resp.supplierName || "";
+            bestSupplierPhone = resp.sellerPhone || null;
+            found = true;
+          }
+        }
+      }
+    }
+    const finalQuantity = manual?.quantity && manual.quantity.trim() ? manual.quantity : reqItem.quantity;
+    const qty = parseFloat(finalQuantity) || 1;
+    summaryItems.push({
+      name: reqItem.name,
+      quantity: finalQuantity,
+      unit: reqItem.unit || "un",
+      bestPrice: found ? bestPrice : 0,
+      bestSupplierId,
+      bestSupplierName,
+      bestSupplierPhone,
+      subtotal: found ? bestPrice * qty : 0,
+      found
+    });
+  }
+  const grandTotal = summaryItems.reduce((sum, item) => sum + item.subtotal, 0);
+  const bySupplierMap = /* @__PURE__ */ new Map();
+  for (const item of summaryItems) {
+    if (!item.found || !item.bestSupplierId) continue;
+    const cur = bySupplierMap.get(item.bestSupplierId) || { supplierId: item.bestSupplierId, supplierName: item.bestSupplierName, subtotal: 0 };
+    cur.subtotal += item.subtotal;
+    bySupplierMap.set(item.bestSupplierId, cur);
+  }
+  const bySupplier = Array.from(bySupplierMap.values()).sort((a, b) => b.subtotal - a.subtotal);
+  return { summaryItems, grandTotal, bySupplier };
+}
 var quotationRequestsRouter = router({
   // Listar todas as solicitações (protegido)
   list: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
     const allResponses = await db.select({
       id: quotationResponses.id,
@@ -17648,17 +19049,60 @@ var quotationRequestsRouter = router({
       responseCount: countByRequest.get(r.id) || 0
     }));
   }),
-  // Buscar por ID com respostas (protegido)
-  getById: protectedProcedure.input(z38.object({ id: z38.number() })).query(async ({ input }) => {
+  // Tabela de consulta de itens já orçados: uma linha por item cotado por um fornecedor
+  // (nome do item, preço, data do orçamento, fornecedor, CNPJ).
+  listItemCatalog: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    const requests = await db.select().from(quotationRequests);
+    const requestTitleById = new Map(requests.map((r) => [r.id, r.title]));
+    const responses = await db.select().from(quotationResponses).orderBy(desc29(quotationResponses.createdAt));
+    const rows = [];
+    for (const resp of responses) {
+      let items = [];
+      try {
+        items = JSON.parse(resp.itemsJson || "[]");
+      } catch {
+        items = [];
+      }
+      for (const it of items) {
+        const rawName = it?.name?.trim();
+        if (!rawName || !it?.price) continue;
+        const priceNum = parseFloat(String(it.price).replace(",", "."));
+        if (isNaN(priceNum)) continue;
+        rows.push({
+          itemName: rawName,
+          price: priceNum,
+          unit: it.unit || "",
+          quotationDate: resp.createdAt,
+          supplierName: resp.tradeName || resp.supplierName,
+          cnpj: resp.cnpj || null,
+          requestTitle: requestTitleById.get(resp.quotationRequestId) || ""
+        });
+      }
+    }
+    return rows.sort((a, b) => new Date(b.quotationDate).getTime() - new Date(a.quotationDate).getTime());
+  }),
+  // Buscar por ID com respostas (protegido)
+  getById: protectedProcedure.input(z39.object({ id: z39.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.id, input.id));
-    if (!req) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!req) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const responses = await db.select().from(quotationResponses).where(eq37(quotationResponses.quotationRequestId, input.id)).orderBy(desc29(quotationResponses.createdAt));
+    const [prRows] = await db.execute(sql25`SELECT id, status, final_price, payment_method, invoice_url, receipt_url FROM purchase_requests WHERE quotation_request_id = ${input.id} LIMIT 1`);
+    const linkedPr = prRows[0];
     return {
       ...req,
       items: JSON.parse(req.itemsJson || "[]"),
       isExpired: Date.now() > req.expiresAt,
+      purchaseRequestId: linkedPr?.id ?? null,
+      // Já decidida = tem preço final gravado (Comprada/Recebida/etc — qualquer status
+      // além de pendente/lida/analisando/comprando "em aberto").
+      purchaseRequestDecided: !!linkedPr?.final_price,
+      purchasePaymentMethod: linkedPr?.payment_method ?? null,
+      purchaseInvoiceUrl: linkedPr?.invoice_url ?? null,
+      purchaseReceiptUrl: linkedPr?.receipt_url ?? null,
       responses: responses.map((r) => ({
         ...r,
         items: JSON.parse(r.itemsJson || "[]")
@@ -17667,23 +19111,24 @@ var quotationRequestsRouter = router({
   }),
   // Criar nova solicitação (protegido)
   create: protectedProcedure.input(
-    z38.object({
-      title: z38.string().min(1),
-      requesterId: z38.number().optional(),
-      requesterName: z38.string().optional(),
-      requesterPhone: z38.string().optional(),
-      requesterEmail: z38.string().optional(),
-      items: z38.array(z38.object({
-        name: z38.string().min(1),
-        quantity: z38.string().min(1),
-        unit: z38.string().optional().default("un")
+    z39.object({
+      title: z39.string().min(1),
+      requesterId: z39.number().optional(),
+      requesterName: z39.string().optional(),
+      requesterPhone: z39.string().optional(),
+      requesterEmail: z39.string().optional(),
+      purchaseRequestId: z39.number().optional(),
+      items: z39.array(z39.object({
+        name: z39.string().min(1),
+        quantity: z39.string().min(1),
+        unit: z39.string().optional().default("un")
       })).min(1),
-      notes: z38.string().optional()
+      notes: z39.string().optional()
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
-    const token = crypto.randomBytes(32).toString("hex");
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    const token = crypto2.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1e3;
     const [result] = await db.insert(quotationRequests).values({
       title: input.title,
@@ -17699,32 +19144,36 @@ var quotationRequestsRouter = router({
       createdBy: ctx.user.id
     });
     const id = result.insertId;
+    if (input.purchaseRequestId) {
+      await db.execute(sql25`UPDATE purchase_requests SET quotation_request_id = ${id}, updated_at = NOW() WHERE id = ${input.purchaseRequestId}`).catch(() => {
+      });
+    }
     return { id, token };
   }),
   // Cancelar solicitação (protegido)
-  cancel: protectedProcedure.input(z38.object({ id: z38.number() })).mutation(async ({ input }) => {
+  cancel: protectedProcedure.input(z39.object({ id: z39.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(quotationRequests).set({ status: "cancelada" }).where(eq37(quotationRequests.id, input.id));
     return { success: true };
   }),
   // Editar resposta/fornecedor (protegido) — permite corrigir dados e condições
-  adminUpdateResponse: protectedProcedure.input(z38.object({
-    responseId: z38.number(),
-    supplierName: z38.string().optional(),
-    tradeName: z38.string().optional(),
-    cnpj: z38.string().optional(),
-    address: z38.string().optional(),
-    sellerName: z38.string().optional(),
-    sellerPhone: z38.string().optional(),
-    sellerEmail: z38.string().optional(),
-    paymentTerms: z38.string().optional(),
-    deliveryTerms: z38.string().optional(),
-    productsSold: z38.string().optional(),
-    notes: z38.string().optional()
+  adminUpdateResponse: protectedProcedure.input(z39.object({
+    responseId: z39.number(),
+    supplierName: z39.string().optional(),
+    tradeName: z39.string().optional(),
+    cnpj: z39.string().optional(),
+    address: z39.string().optional(),
+    sellerName: z39.string().optional(),
+    sellerPhone: z39.string().optional(),
+    sellerEmail: z39.string().optional(),
+    paymentTerms: z39.string().optional(),
+    deliveryTerms: z39.string().optional(),
+    productsSold: z39.string().optional(),
+    notes: z39.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const set = {};
     if (input.supplierName !== void 0) set.supplierName = input.supplierName;
     if (input.tradeName !== void 0) set.tradeName = input.tradeName;
@@ -17741,34 +19190,125 @@ var quotationRequestsRouter = router({
     return { success: true };
   }),
   // Editar itens de uma resposta (protegido) — corrige preço/embalagem/quantidade que o fornecedor esqueceu
-  adminUpdateResponseItems: protectedProcedure.input(z38.object({
-    responseId: z38.number(),
-    items: z38.array(z38.object({
-      name: z38.string(),
-      quantity: z38.string(),
-      unit: z38.string().optional(),
-      price: z38.string(),
-      brand: z38.string().optional(),
-      packaging: z38.string().optional(),
-      notes: z38.string().optional()
+  adminUpdateResponseItems: protectedProcedure.input(z39.object({
+    responseId: z39.number(),
+    items: z39.array(z39.object({
+      name: z39.string(),
+      quantity: z39.string(),
+      unit: z39.string().optional(),
+      price: z39.string(),
+      brand: z39.string().optional(),
+      packaging: z39.string().optional(),
+      notes: z39.string().optional()
     })).min(1)
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(quotationResponses).set({ itemsJson: JSON.stringify(input.items) }).where(eq37(quotationResponses.id, input.responseId));
     return { success: true };
   }),
   // Escolher manualmente o vencedor de cada item do comparativo (override do melhor preço)
-  adminSetBestChoice: protectedProcedure.input(z38.object({
-    quotationRequestId: z38.number(),
-    choices: z38.record(z38.string(), z38.object({ responseId: z38.number(), itemIndex: z38.number() }))
+  adminSetBestChoice: protectedProcedure.input(z39.object({
+    quotationRequestId: z39.number(),
+    // quantity é opcional: quando informada, sobrescreve a quantidade solicitada
+    // originalmente (ex: fornecedor não tem tudo, ou decidiu comprar menos/mais).
+    choices: z39.record(z39.string(), z39.object({ responseId: z39.number(), itemIndex: z39.number(), quantity: z39.string().optional() }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.id, input.quotationRequestId));
-    if (!req) throw new TRPCError27({ code: "NOT_FOUND" });
+    if (!req) throw new TRPCError28({ code: "NOT_FOUND" });
     await db.update(quotationRequests).set({ bestChoices: JSON.stringify(input.choices) }).where(eq37(quotationRequests.id, input.quotationRequestId));
     return { success: true };
+  }),
+  // Fecha o ciclo: grava o fornecedor vencedor + preço final na Solicitação de
+  // Compra vinculada a este orçamento (se houver) e marca as linhas do catálogo
+  // (quotations) daquele fornecedor/categoria como consumidas por esta compra.
+  confirmPurchaseDecision: protectedProcedure.input(z39.object({
+    quotationRequestId: z39.number(),
+    paymentMethod: z39.enum(["boleto", "pix", "cartao_credito", "cartao_debito", "dinheiro", "transferencia", "outro"]).optional(),
+    invoiceUrl: z39.string().url().optional(),
+    receiptUrl: z39.string().url().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.id, input.quotationRequestId));
+    if (!req) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    const [prRows] = await db.execute(sql25`SELECT id FROM purchase_requests WHERE quotation_request_id = ${input.quotationRequestId} LIMIT 1`);
+    const purchaseRequestId = prRows[0]?.id;
+    if (!purchaseRequestId) {
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Este or\xE7amento n\xE3o est\xE1 vinculado a nenhuma solicita\xE7\xE3o de compra" });
+    }
+    const responses = await db.select().from(quotationResponses).where(eq37(quotationResponses.quotationRequestId, input.quotationRequestId));
+    if (responses.length === 0) {
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o ainda." });
+    }
+    const { categoryId } = await ensureSuppliersAndCategory(db, req, responses, ctx.user.id);
+    const { summaryItems, grandTotal, bySupplier } = computeBestPriceBreakdown(req, responses);
+    if (bySupplier.length === 0) {
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Nenhum item com pre\xE7o definido ainda \u2014 escolha os vencedores na planilha antes de confirmar." });
+    }
+    await recordWinningQuotations(db, { categoryId, purchaseRequestId, createdByUserId: ctx.user.id, summaryItems });
+    const result = await applyPurchaseQuotationDecision(db, {
+      purchaseRequestId,
+      winningSupplierId: bySupplier[0].supplierId,
+      finalPrice: grandTotal.toFixed(2),
+      suppliersBreakdown: bySupplier,
+      userId: ctx.user.id,
+      paymentMethod: input.paymentMethod,
+      invoiceUrl: input.invoiceUrl,
+      receiptUrl: input.receiptUrl
+    });
+    return { ...result, purchaseRequestId, suppliersBreakdown: bySupplier, grandTotal };
+  }),
+  // Caminho inverso: quando o orçamento foi feito por iniciativa do financeiro
+  // (sem uma Solicitação de Compra prévia), gera uma Solicitação de Compra já
+  // com o fornecedor vencedor e o preço final preenchidos, pra ficar rastreável.
+  createPurchaseRequestFromDecision: protectedProcedure.input(z39.object({
+    quotationRequestId: z39.number()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.id, input.quotationRequestId));
+    if (!req) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    const [existingRows] = await db.execute(sql25`SELECT id FROM purchase_requests WHERE quotation_request_id = ${input.quotationRequestId} LIMIT 1`);
+    if (existingRows[0]) {
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Este or\xE7amento j\xE1 tem uma solicita\xE7\xE3o de compra vinculada; use Confirmar Compra na tela da solicita\xE7\xE3o." });
+    }
+    const responses = await db.select().from(quotationResponses).where(eq37(quotationResponses.quotationRequestId, input.quotationRequestId));
+    if (responses.length === 0) {
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o ainda." });
+    }
+    const { categoryId } = await ensureSuppliersAndCategory(db, req, responses, ctx.user.id);
+    const { summaryItems, grandTotal, bySupplier } = computeBestPriceBreakdown(req, responses);
+    if (bySupplier.length === 0) {
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Nenhum item com pre\xE7o definido ainda \u2014 escolha os vencedores na planilha antes de gerar a compra." });
+    }
+    const winningSupplierId = bySupplier[0].supplierId;
+    const finalPrice = grandTotal.toFixed(2);
+    const suppliersBreakdownJson = JSON.stringify(bySupplier);
+    const nowMs = Date.now();
+    const [insertResult] = await db.execute(sql25`
+        INSERT INTO purchase_requests
+          (title, status, urgency, requested_at, purchased_at, requested_by, quotation_request_id, winning_supplier_id, final_price, suppliers_breakdown, responded_by, responded_at, created_at, updated_at)
+        VALUES
+          (${req.title}, 'comprada', 'medium', ${nowMs}, ${nowMs}, ${ctx.user.id}, ${input.quotationRequestId}, ${winningSupplierId}, ${finalPrice}, ${suppliersBreakdownJson}, ${ctx.user.id}, NOW(), NOW(), NOW())
+      `);
+    const purchaseRequestId = insertResult.insertId;
+    if (summaryItems.length > 0) {
+      await db.insert(purchaseRequestItems).values(
+        summaryItems.map((item) => ({
+          requestId: purchaseRequestId,
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit || "un",
+          confirmed: 0
+        }))
+      );
+    }
+    await recordWinningQuotations(db, { categoryId, purchaseRequestId, createdByUserId: ctx.user.id, summaryItems });
+    await notifyRequesterPurchaseCompletedWhatsApp(db, purchaseRequestId);
+    return { purchaseRequestId, suppliersBreakdown: bySupplier, grandTotal };
   }),
   // ===== AUTOMAÇÃO COMPLETA =====
   // Processa uma solicitação respondida:
@@ -17776,19 +19316,17 @@ var quotationRequestsRouter = router({
   // 2. Cria/encontra categoria com o título do orçamento
   // 3. Popula catálogo de preços com todos os itens de todas as respostas
   // 4. Retorna resumo estruturado para mensagem WhatsApp (NÃO cria solicitação de compra)
-  autoProcess: protectedProcedure.input(z38.object({
-    quotationRequestId: z38.number()
+  autoProcess: protectedProcedure.input(z39.object({
+    quotationRequestId: z39.number()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.id, input.quotationRequestId));
-    if (!req) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!req) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const responses = await db.select().from(quotationResponses).where(eq37(quotationResponses.quotationRequestId, input.quotationRequestId));
     if (responses.length === 0) {
-      throw new TRPCError27({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o" });
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o" });
     }
-    const requestItems = JSON.parse(req.itemsJson || "[]");
-    const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const result = {
       suppliersCreated: 0,
       suppliersUpdated: 0,
@@ -17801,7 +19339,7 @@ var quotationRequestsRouter = router({
       if (!resp.supplierName?.trim()) continue;
       const trimmedName = resp.supplierName.trim();
       const existingRows = await db.execute(
-        sql24`SELECT id, company_name, phone, whatsapp, email FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
+        sql25`SELECT id, company_name, phone, whatsapp, email FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
       );
       const existing = existingRows[0];
       if (existing.length === 0) {
@@ -17828,33 +19366,17 @@ var quotationRequestsRouter = router({
         }
         supplierIdByResponse.set(resp.id, s.id);
       }
-    }
-    const catTitle = req.title.trim();
-    const existingCatRows = await db.execute(
-      sql24`SELECT id, name FROM purchase_categories WHERE name = ${catTitle} LIMIT 1`
-    );
-    const existingCat = existingCatRows[0];
-    let categoryId;
-    if (existingCat.length > 0) {
-      categoryId = existingCat[0].id;
-    } else {
-      const colors = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#06B6D4", "#84CC16"];
-      const colorIndex = req.title.charCodeAt(0) % colors.length;
-      const catColor = colors[colorIndex];
-      const catName = req.title.trim();
-      const createdById = ctx.user.id;
-      const catInsResult = await db.execute(
-        sql24`INSERT INTO purchase_categories (name, color, created_by, created_at) VALUES (${catName}, ${catColor}, ${createdById}, NOW())`
-      );
-      categoryId = catInsResult[0]?.insertId ?? catInsResult?.insertId ?? 0;
-      if (!categoryId) {
-        const fallbackRows = await db.execute(
-          sql24`SELECT id FROM purchase_categories WHERE name = ${catName} LIMIT 1`
-        );
-        categoryId = fallbackRows[0][0]?.id ?? 0;
+      const linkedId = supplierIdByResponse.get(resp.id);
+      if (linkedId && resp.supplierId !== linkedId) {
+        await db.update(quotationResponses).set({ supplierId: linkedId }).where(eq37(quotationResponses.id, resp.id));
+        resp.supplierId = linkedId;
       }
     }
-    result.categoryId = categoryId;
+    const [linkedPrRows] = await db.execute(
+      sql25`SELECT category_id FROM purchase_requests WHERE quotation_request_id = ${req.id} LIMIT 1`
+    );
+    const categoryId = linkedPrRows[0]?.category_id ?? null;
+    result.categoryId = categoryId ?? 0;
     for (const resp of responses) {
       const supplierId = supplierIdByResponse.get(resp.id);
       if (!supplierId) continue;
@@ -17868,101 +19390,12 @@ var quotationRequestsRouter = router({
         const qQuotedAt = Date.now();
         const qCreatedBy = ctx.user.id;
         await db.execute(
-          sql24`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by, created_at) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || "1"}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy}, NOW())`
+          sql25`INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, notes, created_by, created_at) VALUES (${supplierId}, ${categoryId}, ${item.name}, ${qUnit}, ${item.quantity || "1"}, ${qUnitPrice}, ${qTotalPrice}, 'BRL', ${qQuotedAt}, ${qNotes}, ${qCreatedBy}, NOW())`
         );
         result.catalogEntriesCreated++;
       }
     }
-    const summaryItems = [];
-    let manualChoices = {};
-    try {
-      manualChoices = req.bestChoices ? JSON.parse(req.bestChoices) : {};
-    } catch (_) {
-      manualChoices = {};
-    }
-    const normName = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\d+\s*l\b/gi, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-    const fuzzy = (a, b) => {
-      const na = normName(a), nb = normName(b);
-      if (na === nb) return true;
-      if (!na || !nb) return false;
-      const ca = na.replace(/\s+/g, "");
-      const cb = nb.replace(/\s+/g, "");
-      if (ca === cb) return true;
-      if (ca.length >= 4 && cb.length >= 4 && (ca.includes(cb) || cb.includes(ca))) return true;
-      const w = (s) => s.split(" ").filter((x) => x.length >= 3);
-      const wa = w(na), wb = w(nb);
-      if (wa.length === 0 || wb.length === 0) return false;
-      const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
-      return shorter.every((x) => longer.includes(x));
-    };
-    const litersOf = (pack) => {
-      if (!pack) return null;
-      const p = pack.trim().toUpperCase();
-      const map = { "1L": 1, "5L": 5, "10L": 10, "20L": 20, "200L": 200 };
-      if (map[p]) return map[p];
-      const m = p.match(/(\d+(?:[\.,]\d+)?)\s*L/);
-      return m ? parseFloat(m[1].replace(",", ".")) : null;
-    };
-    const comparablePrice = (it) => {
-      const price = parseFloat(String(it.price).replace(",", "."));
-      if (isNaN(price)) return NaN;
-      const lit = litersOf(it.packaging);
-      if (lit && lit > 0) return price / lit;
-      return price;
-    };
-    for (const reqItem of requestItems) {
-      const manual = manualChoices[reqItem.name] || manualChoices[normName(reqItem.name)];
-      let bestPrice = Infinity;
-      let bestCmp = Infinity;
-      let bestSupplierName = "";
-      let bestSupplierPhone = null;
-      let found = false;
-      if (manual) {
-        const resp = responses.find((r) => r.id === manual.responseId);
-        if (resp) {
-          const respItems = JSON.parse(resp.itemsJson || "[]");
-          const it = respItems[manual.itemIndex];
-          if (it) {
-            const p = parseFloat(String(it.price).replace(",", "."));
-            if (!isNaN(p) && p > 0) {
-              bestPrice = p;
-              bestSupplierName = resp.tradeName || resp.supplierName || "";
-              bestSupplierPhone = resp.sellerPhone || null;
-              found = true;
-            }
-          }
-        }
-      }
-      if (!found) {
-        for (const resp of responses) {
-          const respItems = JSON.parse(resp.itemsJson || "[]");
-          const match = respItems.find((it) => fuzzy(it.name, reqItem.name));
-          if (match) {
-            const price = parseFloat(String(match.price).replace(",", "."));
-            const cmp = comparablePrice(match);
-            if (!isNaN(price) && price > 0 && !isNaN(cmp) && cmp < bestCmp) {
-              bestCmp = cmp;
-              bestPrice = price;
-              bestSupplierName = resp.tradeName || resp.supplierName || "";
-              bestSupplierPhone = resp.sellerPhone || null;
-              found = true;
-            }
-          }
-        }
-      }
-      const qty = parseFloat(reqItem.quantity) || 1;
-      summaryItems.push({
-        name: reqItem.name,
-        quantity: reqItem.quantity,
-        unit: reqItem.unit || "un",
-        bestPrice: found ? bestPrice : 0,
-        bestSupplierName,
-        bestSupplierPhone,
-        subtotal: found ? bestPrice * qty : 0,
-        found
-      });
-    }
-    const grandTotal = summaryItems.reduce((sum, item) => sum + item.subtotal, 0);
+    const { summaryItems, grandTotal } = computeBestPriceBreakdown(req, responses);
     try {
       await notifyOwner({
         title: `\u2705 Or\xE7amento processado: ${req.title}`,
@@ -17986,7 +19419,7 @@ var quotationRequestsRouter = router({
   }),
   // ===== ROTAS PÚBLICAS (sem auth) =====
   // Fornecedor busca sua resposta existente pelo token + nome da empresa
-  getMyResponse: publicProcedure.input(z38.object({ token: z38.string(), supplierName: z38.string() })).query(async ({ input }) => {
+  getMyResponse: publicProcedure.input(z39.object({ token: z39.string(), supplierName: z39.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.token, input.token));
@@ -18012,36 +19445,36 @@ var quotationRequestsRouter = router({
     };
   }),
   // Fornecedor atualiza sua resposta existente (público)
-  updateResponse: publicProcedure.input(z38.object({
-    token: z38.string(),
-    responseId: z38.number(),
-    supplierName: z38.string().min(1),
-    cnpj: z38.string().optional(),
-    address: z38.string().optional(),
-    sellerName: z38.string().optional(),
-    sellerPhone: z38.string().optional(),
-    sellerEmail: z38.string().optional(),
-    paymentTerms: z38.string().optional(),
-    deliveryTerms: z38.string().optional(),
-    items: z38.array(z38.object({
-      name: z38.string(),
-      quantity: z38.string(),
-      unit: z38.string().optional(),
-      price: z38.string(),
-      brand: z38.string().optional(),
-      packaging: z38.string().optional(),
-      notes: z38.string().optional()
+  updateResponse: publicProcedure.input(z39.object({
+    token: z39.string(),
+    responseId: z39.number(),
+    supplierName: z39.string().min(1),
+    cnpj: z39.string().min(1, "Informe o CNPJ ou CPF"),
+    address: z39.string().optional(),
+    sellerName: z39.string().optional(),
+    sellerPhone: z39.string().optional(),
+    sellerEmail: z39.string().optional(),
+    paymentTerms: z39.string().optional(),
+    deliveryTerms: z39.string().optional(),
+    items: z39.array(z39.object({
+      name: z39.string(),
+      quantity: z39.string(),
+      unit: z39.string().optional(),
+      price: z39.string(),
+      brand: z39.string().optional(),
+      packaging: z39.string().optional(),
+      notes: z39.string().optional()
     })).min(1),
-    notes: z38.string().optional()
+    notes: z39.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.token, input.token));
-    if (!req) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (req.status === "cancelada") throw new TRPCError27({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    if (!req) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError28({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
     const [existing] = await db.select().from(quotationResponses).where(eq37(quotationResponses.id, input.responseId));
     if (!existing || existing.quotationRequestId !== req.id) {
-      throw new TRPCError27({ code: "FORBIDDEN", message: "Resposta n\xE3o encontrada" });
+      throw new TRPCError28({ code: "FORBIDDEN", message: "Resposta n\xE3o encontrada" });
     }
     await db.update(quotationResponses).set({
       supplierName: input.supplierName,
@@ -18065,9 +19498,9 @@ var quotationRequestsRouter = router({
     return { success: true };
   }),
   // Fornecedor: verificar se já existe cadastro por CNPJ ou nome (público)
-  findSupplier: publicProcedure.input(z38.object({
-    cnpj: z38.string().optional(),
-    supplierName: z38.string().optional()
+  findSupplier: publicProcedure.input(z39.object({
+    cnpj: z39.string().optional(),
+    supplierName: z39.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
@@ -18076,11 +19509,11 @@ var quotationRequestsRouter = router({
     if (!normCnpj && !name) return { found: false };
     let rows = [];
     if (normCnpj) {
-      const [r] = await db.execute(sql24`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
+      const [r] = await db.execute(sql25`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
       rows = r || [];
     }
     if (rows.length === 0 && name) {
-      const [r] = await db.execute(sql24`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`);
+      const [r] = await db.execute(sql25`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`);
       rows = r || [];
     }
     const s = rows[0];
@@ -18104,7 +19537,7 @@ var quotationRequestsRouter = router({
     };
   }),
   // Buscar solicitação por token (fornecedor acessa)
-  getByToken: publicProcedure.input(z38.object({ token: z38.string() })).query(async ({ input }) => {
+  getByToken: publicProcedure.input(z39.object({ token: z39.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.token, input.token));
@@ -18128,37 +19561,37 @@ var quotationRequestsRouter = router({
   }),
   // Fornecedor envia resposta (público)
   submitResponse: publicProcedure.input(
-    z38.object({
-      token: z38.string(),
-      supplierName: z38.string().min(1),
-      cnpj: z38.string().optional(),
-      address: z38.string().optional(),
-      sellerName: z38.string().optional(),
-      sellerPhone: z38.string().optional(),
-      sellerEmail: z38.string().optional(),
-      paymentTerms: z38.string().optional(),
-      deliveryTerms: z38.string().optional(),
-      tradeName: z38.string().optional(),
-      productsSold: z38.string().optional(),
-      items: z38.array(
-        z38.object({
-          name: z38.string(),
-          quantity: z38.string(),
-          unit: z38.string().optional(),
-          price: z38.string(),
-          brand: z38.string().optional(),
-          packaging: z38.string().optional(),
-          notes: z38.string().optional()
+    z39.object({
+      token: z39.string(),
+      supplierName: z39.string().min(1),
+      cnpj: z39.string().min(1, "Informe o CNPJ ou CPF"),
+      address: z39.string().optional(),
+      sellerName: z39.string().optional(),
+      sellerPhone: z39.string().optional(),
+      sellerEmail: z39.string().optional(),
+      paymentTerms: z39.string().optional(),
+      deliveryTerms: z39.string().optional(),
+      tradeName: z39.string().optional(),
+      productsSold: z39.string().optional(),
+      items: z39.array(
+        z39.object({
+          name: z39.string(),
+          quantity: z39.string(),
+          unit: z39.string().optional(),
+          price: z39.string(),
+          brand: z39.string().optional(),
+          packaging: z39.string().optional(),
+          notes: z39.string().optional()
         })
       ).min(1),
-      notes: z38.string().optional()
+      notes: z39.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.token, input.token));
-    if (!req) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (req.status === "cancelada") throw new TRPCError27({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    if (!req) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError28({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
     let linkedSupplierId = null;
     let linkedSupplier = {};
     try {
@@ -18166,17 +19599,17 @@ var quotationRequestsRouter = router({
       const name = (input.supplierName || "").trim();
       let found = [];
       if (normCnpj) {
-        const [r] = await db.execute(sql24`SELECT id, trade_name, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
+        const [r] = await db.execute(sql25`SELECT id, trade_name, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
         found = r || [];
       }
       if (found.length === 0 && name) {
-        const [r] = await db.execute(sql24`SELECT id, trade_name, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`);
+        const [r] = await db.execute(sql25`SELECT id, trade_name, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name}) LIMIT 1`);
         found = r || [];
       }
       if (found[0]) {
         linkedSupplierId = found[0].id;
         linkedSupplier = { tradeName: found[0].trade_name, productsSold: found[0].products_sold };
-        await db.execute(sql24`UPDATE suppliers SET
+        await db.execute(sql25`UPDATE suppliers SET
             phone = COALESCE(NULLIF(phone,''), ${input.sellerPhone || ""}),
             whatsapp = COALESCE(NULLIF(whatsapp,''), ${input.sellerPhone || ""}),
             seller_name = COALESCE(NULLIF(seller_name,''), ${input.sellerName || ""}),
@@ -18185,7 +19618,7 @@ var quotationRequestsRouter = router({
       }
     } catch (_) {
     }
-    const responseToken = crypto.randomBytes(32).toString("hex");
+    const responseToken = crypto2.randomBytes(32).toString("hex");
     const [insertResult] = await db.insert(quotationResponses).values({
       quotationRequestId: req.id,
       supplierName: input.supplierName,
@@ -18212,10 +19645,23 @@ var quotationRequestsRouter = router({
       });
     } catch (_) {
     }
+    try {
+      const [prRows] = await db.execute(sql25`SELECT id FROM purchase_requests WHERE quotation_request_id = ${req.id} LIMIT 1`);
+      if (prRows[0]) {
+        await notifyFinanceiro({
+          type: "geral",
+          title: `Resposta de or\xE7amento recebida: ${req.title}`,
+          message: `O fornecedor "${input.supplierName}" respondeu.`,
+          relatedId: req.id,
+          relatedType: "quotation_request"
+        });
+      }
+    } catch (_) {
+    }
     return { success: true, responseToken, responseId };
   }),
   // Buscar resposta pelo responseToken (fornecedor acessa para revisar)
-  getByResponseToken: publicProcedure.input(z38.object({ responseToken: z38.string() })).query(async ({ input }) => {
+  getByResponseToken: publicProcedure.input(z39.object({ responseToken: z39.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { found: false };
     const [resp] = await db.select().from(quotationResponses).where(eq37(quotationResponses.responseToken, input.responseToken));
@@ -18248,31 +19694,31 @@ var quotationRequestsRouter = router({
     };
   }),
   // Atualizar resposta pelo responseToken (fornecedor revisa)
-  updateResponseByToken: publicProcedure.input(z38.object({
-    responseToken: z38.string(),
-    supplierName: z38.string().min(1),
-    cnpj: z38.string().optional(),
-    address: z38.string().optional(),
-    sellerName: z38.string().optional(),
-    sellerPhone: z38.string().optional(),
-    sellerEmail: z38.string().optional(),
-    items: z38.array(z38.object({
-      name: z38.string(),
-      quantity: z38.string(),
-      unit: z38.string().optional(),
-      price: z38.string(),
-      brand: z38.string().optional(),
-      notes: z38.string().optional()
+  updateResponseByToken: publicProcedure.input(z39.object({
+    responseToken: z39.string(),
+    supplierName: z39.string().min(1),
+    cnpj: z39.string().min(1, "Informe o CNPJ ou CPF"),
+    address: z39.string().optional(),
+    sellerName: z39.string().optional(),
+    sellerPhone: z39.string().optional(),
+    sellerEmail: z39.string().optional(),
+    items: z39.array(z39.object({
+      name: z39.string(),
+      quantity: z39.string(),
+      unit: z39.string().optional(),
+      price: z39.string(),
+      brand: z39.string().optional(),
+      notes: z39.string().optional()
     })).min(1),
-    notes: z38.string().optional()
+    notes: z39.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
     const [resp] = await db.select().from(quotationResponses).where(eq37(quotationResponses.responseToken, input.responseToken));
-    if (!resp) throw new TRPCError27({ code: "NOT_FOUND", message: "Resposta n\xE3o encontrada" });
+    if (!resp) throw new TRPCError28({ code: "NOT_FOUND", message: "Resposta n\xE3o encontrada" });
     const [req] = await db.select().from(quotationRequests).where(eq37(quotationRequests.id, resp.quotationRequestId));
-    if (!req) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (req.status === "cancelada") throw new TRPCError27({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    if (!req) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError28({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
     await db.update(quotationResponses).set({
       supplierName: input.supplierName,
       cnpj: input.cnpj ?? null,
@@ -18298,40 +19744,40 @@ var quotationRequestsRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z39 } from "zod";
-import { TRPCError as TRPCError28 } from "@trpc/server";
+import { z as z40 } from "zod";
+import { TRPCError as TRPCError29 } from "@trpc/server";
 import { eq as eq38, desc as desc30, and as and21, asc as asc5 } from "drizzle-orm";
 var clientAdvancesRouter = router({
   // Listar adiantamentos de um cliente
-  list: protectedProcedure.input(z39.object({ clientId: z39.number() })).query(async ({ input }) => {
+  list: protectedProcedure.input(z40.object({ clientId: z40.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(eq38(clientAdvances.clientId, input.clientId)).orderBy(desc30(clientAdvances.date));
   }),
   // Listar adiantamentos de um cliente (alias para uso no CargoControl)
-  listByClient: protectedProcedure.input(z39.object({ clientId: z39.number() })).query(async ({ input }) => {
+  listByClient: protectedProcedure.input(z40.object({ clientId: z40.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(eq38(clientAdvances.clientId, input.clientId)).orderBy(desc30(clientAdvances.date));
   }),
   // Listar todos os adiantamentos (para uso no PDF do CargoControl)
   listAll: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).orderBy(desc30(clientAdvances.date));
   }),
   // Criar novo adiantamento
-  create: protectedProcedure.input(z39.object({
-    clientId: z39.number(),
-    amount: z39.number().positive(),
-    description: z39.string().optional(),
-    receiptUrl: z39.string().optional(),
-    date: z39.string(),
-    startDate: z39.string().optional()
+  create: protectedProcedure.input(z40.object({
+    clientId: z40.number(),
+    amount: z40.number().positive(),
+    description: z40.string().optional(),
+    receiptUrl: z40.string().optional(),
+    date: z40.string(),
+    startDate: z40.string().optional()
     // data de início dos abatimentos
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [client] = await db.select({ name: clients.name }).from(clients).where(eq38(clients.id, input.clientId));
     const clientName = client?.name || `Cliente #${input.clientId}`;
     const [result] = await db.insert(clientAdvances).values({
@@ -18371,9 +19817,9 @@ var clientAdvancesRouter = router({
     return { id: advanceId };
   }),
   // Buscar saldo total de adiantamentos ativos de um cliente
-  getBalance: protectedProcedure.input(z39.object({ clientId: z39.number() })).query(async ({ input }) => {
+  getBalance: protectedProcedure.input(z40.object({ clientId: z40.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advances = await db.select().from(clientAdvances).where(and21(
       eq38(clientAdvances.clientId, input.clientId),
       eq38(clientAdvances.status, "ativo")
@@ -18382,33 +19828,33 @@ var clientAdvancesRouter = router({
     return { totalBalance, advances };
   }),
   // Listar deduções de um adiantamento
-  listDeductions: protectedProcedure.input(z39.object({ clientId: z39.number() })).query(async ({ input }) => {
+  listDeductions: protectedProcedure.input(z40.object({ clientId: z40.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvanceDeductions).where(eq38(clientAdvanceDeductions.clientId, input.clientId)).orderBy(desc30(clientAdvanceDeductions.date));
   }),
   // Listar TODAS as deduções (para o controle de cargas sem filtro de cliente)
   listAllDeductions: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvanceDeductions).orderBy(desc30(clientAdvanceDeductions.date));
   }),
   // Aplicar abatimento manual em um adiantamento (para fechamento semanal)
-  applyDeduction: protectedProcedure.input(z39.object({
-    advanceId: z39.number(),
-    clientId: z39.number(),
-    amount: z39.number().positive(),
-    description: z39.string().optional(),
-    weeklyClosingId: z39.number().optional(),
-    cargoLoadId: z39.number().optional(),
-    date: z39.string()
+  applyDeduction: protectedProcedure.input(z40.object({
+    advanceId: z40.number(),
+    clientId: z40.number(),
+    amount: z40.number().positive(),
+    description: z40.string().optional(),
+    weeklyClosingId: z40.number().optional(),
+    cargoLoadId: z40.number().optional(),
+    date: z40.string()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [advance] = await db.select().from(clientAdvances).where(eq38(clientAdvances.id, input.advanceId));
-    if (!advance) throw new TRPCError28({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError29({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     const balanceBefore = parseFloat(advance.balanceRemaining || "0");
-    if (balanceBefore <= 0) throw new TRPCError28({ code: "BAD_REQUEST", message: "Saldo insuficiente" });
+    if (balanceBefore <= 0) throw new TRPCError29({ code: "BAD_REQUEST", message: "Saldo insuficiente" });
     const deductAmount = Math.min(input.amount, balanceBefore);
     const balanceAfter = balanceBefore - deductAmount;
     await db.insert(clientAdvanceDeductions).values({
@@ -18452,24 +19898,24 @@ var clientAdvancesRouter = router({
     return { deductAmount, balanceAfter };
   }),
   // Abatimento automático: aplica o saldo do adiantamento nas cargas entregues em ordem cronológica
-  applyAutoDeductionByLoads: protectedProcedure.input(z39.object({
-    clientId: z39.number(),
-    advanceId: z39.number(),
+  applyAutoDeductionByLoads: protectedProcedure.input(z40.object({
+    clientId: z40.number(),
+    advanceId: z40.number(),
     // Cargas a abater: array de { id, date, valueAmount } ordenadas da mais antiga para a mais nova
-    loads: z39.array(z39.object({
-      id: z39.number(),
-      date: z39.string(),
-      valueAmount: z39.number(),
+    loads: z40.array(z40.object({
+      id: z40.number(),
+      date: z40.string(),
+      valueAmount: z40.number(),
       // valor em R$ desta carga
-      description: z39.string().optional()
+      description: z40.string().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [advance] = await db.select().from(clientAdvances).where(and21(eq38(clientAdvances.id, input.advanceId), eq38(clientAdvances.clientId, input.clientId)));
-    if (!advance) throw new TRPCError28({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError29({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     let balanceRemaining = parseFloat(advance.balanceRemaining || "0");
-    if (balanceRemaining <= 0) throw new TRPCError28({ code: "BAD_REQUEST", message: "Saldo do adiantamento j\xE1 esgotado" });
+    if (balanceRemaining <= 0) throw new TRPCError29({ code: "BAD_REQUEST", message: "Saldo do adiantamento j\xE1 esgotado" });
     const results = [];
     const sortedLoads = [...input.loads].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     for (const load of sortedLoads) {
@@ -18525,13 +19971,13 @@ var clientAdvancesRouter = router({
     };
   }),
   // Upload de comprovante para um adiantamento
-  uploadReceipt: protectedProcedure.input(z39.object({
-    advanceId: z39.number(),
-    fileBase64: z39.string(),
-    mimeType: z39.string().default("image/jpeg")
+  uploadReceipt: protectedProcedure.input(z40.object({
+    advanceId: z40.number(),
+    fileBase64: z40.string(),
+    mimeType: z40.string().default("image/jpeg")
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const buffer = Buffer.from(input.fileBase64, "base64");
     const ext = input.mimeType.includes("pdf") ? "pdf" : input.mimeType.split("/")[1] || "jpg";
     const key = `client-advances/${input.advanceId}/comprovante-${Date.now()}.${ext}`;
@@ -18540,17 +19986,17 @@ var clientAdvancesRouter = router({
     return { url };
   }),
   // Atualizar adiantamento (amount, description, date, receiptUrl)
-  update: protectedProcedure.input(z39.object({
-    id: z39.number(),
-    amount: z39.number().positive().optional(),
-    description: z39.string().optional().nullable(),
-    date: z39.string().optional(),
-    receiptUrl: z39.string().optional().nullable()
+  update: protectedProcedure.input(z40.object({
+    id: z40.number(),
+    amount: z40.number().positive().optional(),
+    description: z40.string().optional().nullable(),
+    date: z40.string().optional(),
+    receiptUrl: z40.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [advance] = await db.select().from(clientAdvances).where(eq38(clientAdvances.id, input.id));
-    if (!advance) throw new TRPCError28({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError29({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     const updateData = {};
     if (input.description !== void 0) updateData.description = input.description;
     if (input.date !== void 0) updateData.date = input.date;
@@ -18569,12 +20015,12 @@ var clientAdvancesRouter = router({
   }),
   // Deletar adiantamento
   // Se force=true, remove deduções e reverte paymentStatus das cargas abatidas
-  delete: protectedProcedure.input(z39.object({ id: z39.number(), force: z39.boolean().optional() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z40.object({ id: z40.number(), force: z40.boolean().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const deductions = await db.select().from(clientAdvanceDeductions).where(eq38(clientAdvanceDeductions.advanceId, input.id));
     if (deductions.length > 0 && !input.force) {
-      throw new TRPCError28({ code: "BAD_REQUEST", message: `Este adiantamento possui ${deductions.length} abatimento(s). Use a op\xE7\xE3o 'For\xE7ar exclus\xE3o' para remover tudo.` });
+      throw new TRPCError29({ code: "BAD_REQUEST", message: `Este adiantamento possui ${deductions.length} abatimento(s). Use a op\xE7\xE3o 'For\xE7ar exclus\xE3o' para remover tudo.` });
     }
     if (deductions.length > 0 && input.force) {
       const loadIds = deductions.map((d) => d.cargoLoadId).filter(Boolean);
@@ -18600,9 +20046,9 @@ var clientAdvancesRouter = router({
     return { success: true };
   }),
   // Limpar deduções duplicadas de um adiantamento (manter apenas a mais antiga por cargo_load_id)
-  cleanDuplicateDeductions: protectedProcedure.input(z39.object({ advanceId: z39.number() })).mutation(async ({ input }) => {
+  cleanDuplicateDeductions: protectedProcedure.input(z40.object({ advanceId: z40.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const allDeductions = await db.select().from(clientAdvanceDeductions).where(eq38(clientAdvanceDeductions.advanceId, input.advanceId)).orderBy(asc5(clientAdvanceDeductions.id));
     const seen = /* @__PURE__ */ new Map();
     const toDelete = [];
@@ -18633,9 +20079,9 @@ var clientAdvancesRouter = router({
     return { success: true, deletedCount: toDelete.length, newBalance: null };
   }),
   // Processar abatimentos retroativos: abate automaticamente cargas entregues sem dedução
-  processRetroactiveDeductions: protectedProcedure.input(z39.object({ clientId: z39.number() })).mutation(async ({ input }) => {
+  processRetroactiveDeductions: protectedProcedure.input(z40.object({ clientId: z40.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advances = await db.select().from(clientAdvances).where(and21(eq38(clientAdvances.clientId, input.clientId), eq38(clientAdvances.status, "ativo"))).orderBy(asc5(clientAdvances.date));
     if (advances.length === 0) return { success: true, processed: 0, message: "Nenhum adiantamento ativo" };
     const deliveredCargos = await db.select({
@@ -18698,24 +20144,24 @@ var clientAdvancesRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z40 } from "zod";
+import { z as z41 } from "zod";
 import { eq as eq39, desc as desc31, and as and22, gte as gte11, lte as lte11, inArray as inArray7 } from "drizzle-orm";
-import { TRPCError as TRPCError29 } from "@trpc/server";
+import { TRPCError as TRPCError30 } from "@trpc/server";
 var thirdPartyRouter = router({
   // ===== TARIFAS DE FRETE =====
   listRates: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(freightRates).orderBy(freightRates.worksite, freightRates.destination);
   }),
-  createRate: protectedProcedure.input(z40.object({
-    worksite: z40.string().min(1),
-    destination: z40.string().min(1),
-    ratePerTon: z40.string().min(1),
-    notes: z40.string().optional()
+  createRate: protectedProcedure.input(z41.object({
+    worksite: z41.string().min(1),
+    destination: z41.string().min(1),
+    ratePerTon: z41.string().min(1),
+    notes: z41.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(freightRates).values({
       worksite: input.worksite,
       destination: input.destination,
@@ -18724,15 +20170,15 @@ var thirdPartyRouter = router({
     });
     return { id: result.insertId };
   }),
-  updateRate: protectedProcedure.input(z40.object({
-    id: z40.number(),
-    worksite: z40.string().min(1),
-    destination: z40.string().min(1),
-    ratePerTon: z40.string().min(1),
-    notes: z40.string().optional()
+  updateRate: protectedProcedure.input(z41.object({
+    id: z41.number(),
+    worksite: z41.string().min(1),
+    destination: z41.string().min(1),
+    ratePerTon: z41.string().min(1),
+    notes: z41.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(freightRates).set({
       worksite: input.worksite,
       destination: input.destination,
@@ -18741,21 +20187,21 @@ var thirdPartyRouter = router({
     }).where(eq39(freightRates.id, input.id));
     return { success: true };
   }),
-  deleteRate: protectedProcedure.input(z40.object({ id: z40.number() })).mutation(async ({ input }) => {
+  deleteRate: protectedProcedure.input(z41.object({ id: z41.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(freightRates).where(eq39(freightRates.id, input.id));
     return { success: true };
   }),
   // ===== ABASTECIMENTOS DE TERCEIRIZADOS =====
   // Retorna TANTO os registros de third_party_fuel QUANTO os fuel_records de caminhões terceirizados
-  listFuel: protectedProcedure.input(z40.object({
-    equipmentId: z40.number().optional(),
-    startDate: z40.string().optional(),
-    endDate: z40.string().optional()
+  listFuel: protectedProcedure.input(z41.object({
+    equipmentId: z41.number().optional(),
+    startDate: z41.string().optional(),
+    endDate: z41.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name, thirdPartyOwner: equipment.thirdPartyOwner }).from(equipment).where(eq39(equipment.isThirdParty, 1));
     const thirdPartyIds = thirdPartyTrucks.map((t2) => t2.id);
     const ownerMap = new Map(thirdPartyTrucks.map((t2) => [t2.id, t2.thirdPartyOwner ?? null]));
@@ -18813,17 +20259,17 @@ var thirdPartyRouter = router({
     ].map((r) => ({ ...r, ownerName: ownerMap.get(r.equipmentId) ?? null })).sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
     return combined;
   }),
-  createFuel: protectedProcedure.input(z40.object({
-    equipmentId: z40.number(),
-    date: z40.string(),
-    liters: z40.string(),
-    pricePerLiter: z40.string(),
-    total: z40.string(),
-    location: z40.string().optional(),
-    notes: z40.string().optional()
+  createFuel: protectedProcedure.input(z41.object({
+    equipmentId: z41.number(),
+    date: z41.string(),
+    liters: z41.string(),
+    pricePerLiter: z41.string(),
+    total: z41.string(),
+    location: z41.string().optional(),
+    notes: z41.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(thirdPartyFuel).values({
       equipmentId: input.equipmentId,
       date: input.date,
@@ -18853,18 +20299,18 @@ var thirdPartyRouter = router({
     }
     return { id };
   }),
-  updateFuel: protectedProcedure.input(z40.object({
-    id: z40.number(),
-    equipmentId: z40.number(),
-    date: z40.string(),
-    liters: z40.string(),
-    pricePerLiter: z40.string(),
-    total: z40.string(),
-    location: z40.string().optional(),
-    notes: z40.string().optional()
+  updateFuel: protectedProcedure.input(z41.object({
+    id: z41.number(),
+    equipmentId: z41.number(),
+    date: z41.string(),
+    liters: z41.string(),
+    pricePerLiter: z41.string(),
+    total: z41.string(),
+    location: z41.string().optional(),
+    notes: z41.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(thirdPartyFuel).set({
       equipmentId: input.equipmentId,
       date: input.date,
@@ -18876,25 +20322,25 @@ var thirdPartyRouter = router({
     }).where(eq39(thirdPartyFuel.id, input.id));
     return { success: true };
   }),
-  deleteFuel: protectedProcedure.input(z40.object({ id: z40.number() })).mutation(async ({ input }) => {
+  deleteFuel: protectedProcedure.input(z41.object({ id: z41.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(thirdPartyFuel).where(eq39(thirdPartyFuel.id, input.id));
     return { success: true };
   }),
   // ===== CAMINHÕES TERCEIRIZADOS =====
   listThirdPartyTrucks: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(equipment).where(eq39(equipment.isThirdParty, 1));
   }),
-  setThirdParty: protectedProcedure.input(z40.object({
-    id: z40.number(),
-    isThirdParty: z40.boolean(),
-    thirdPartyOwner: z40.string().optional()
+  setThirdParty: protectedProcedure.input(z41.object({
+    id: z41.number(),
+    isThirdParty: z41.boolean(),
+    thirdPartyOwner: z41.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(equipment).set({
       isThirdParty: input.isThirdParty ? 1 : 0,
       thirdPartyOwner: input.thirdPartyOwner ?? null
@@ -18904,13 +20350,13 @@ var thirdPartyRouter = router({
   // ===== LISTAGEM DE FRETES DE TERCEIRIZADOS =====
   // Lista cargas onde o veículo é terceirizado, com cálculo de valor de frete
   // Busca tarifa por: (1) worksite+destination exato, (2) worksite parcial + destination parcial
-  listFreights: protectedProcedure.input(z40.object({
-    startDate: z40.string().optional(),
-    endDate: z40.string().optional(),
-    equipmentId: z40.number().optional()
+  listFreights: protectedProcedure.input(z41.object({
+    startDate: z41.string().optional(),
+    endDate: z41.string().optional(),
+    equipmentId: z41.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name, thirdPartyOwner: equipment.thirdPartyOwner }).from(equipment).where(eq39(equipment.isThirdParty, 1));
     if (thirdPartyTrucks.length === 0) return [];
     const truckIds = thirdPartyTrucks.map((t2) => t2.id);
@@ -19011,18 +20457,18 @@ var thirdPartyRouter = router({
     return result;
   }),
   // ===== MARCAR FRETE COMO PAGO =====
-  markFreightPaid: protectedProcedure.input(z40.object({
-    cargoLoadId: z40.number(),
-    notes: z40.string().optional(),
-    netAmount: z40.string(),
-    grossAmount: z40.string(),
-    fuelCost: z40.string(),
-    truckName: z40.string().optional(),
+  markFreightPaid: protectedProcedure.input(z41.object({
+    cargoLoadId: z41.number(),
+    notes: z41.string().optional(),
+    netAmount: z41.string(),
+    grossAmount: z41.string(),
+    fuelCost: z41.string(),
+    truckName: z41.string().optional(),
     // Valor manual (quando não há tarifa cadastrada)
-    manualAmount: z40.string().optional()
+    manualAmount: z41.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const now = /* @__PURE__ */ new Date();
     const nowStr = now.toISOString().slice(0, 10);
     const finalAmount = input.manualAmount && parseFloat(input.manualAmount) > 0 ? input.manualAmount : input.netAmount;
@@ -19057,12 +20503,12 @@ var thirdPartyRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z41 } from "zod";
+import { z as z42 } from "zod";
 import { eq as eq40 } from "drizzle-orm";
-import { TRPCError as TRPCError30 } from "@trpc/server";
+import { TRPCError as TRPCError31 } from "@trpc/server";
 async function requireDb() {
   const db = await getDb();
-  if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
+  if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
   return db;
 }
 var geofencesRouter = router({
@@ -19073,22 +20519,22 @@ var geofencesRouter = router({
     return rows;
   }),
   // Buscar uma porteira por ID
-  getById: protectedProcedure.input(z41.object({ id: z41.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z42.object({ id: z42.number() })).query(async ({ input }) => {
     const db = await requireDb();
     const rows = await db.select().from(geofences).where(eq40(geofences.id, input.id));
     return rows[0] ?? null;
   }),
   // Criar nova porteira virtual
   create: protectedProcedure.input(
-    z41.object({
-      name: z41.string().min(1),
-      lat: z41.string(),
-      lng: z41.string(),
-      radiusMeters: z41.number().min(50).max(5e4).default(300),
-      traccarDeviceId: z41.number().optional(),
-      traccarGeofenceId: z41.number().optional(),
-      defaultOriginName: z41.string().default("SIMFLOR"),
-      notes: z41.string().optional()
+    z42.object({
+      name: z42.string().min(1),
+      lat: z42.string(),
+      lng: z42.string(),
+      radiusMeters: z42.number().min(50).max(5e4).default(300),
+      traccarDeviceId: z42.number().optional(),
+      traccarGeofenceId: z42.number().optional(),
+      defaultOriginName: z42.string().default("SIMFLOR"),
+      notes: z42.string().optional()
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await requireDb();
@@ -19108,16 +20554,16 @@ var geofencesRouter = router({
   }),
   // Atualizar porteira virtual
   update: protectedProcedure.input(
-    z41.object({
-      id: z41.number(),
-      name: z41.string().min(1).optional(),
-      lat: z41.string().optional(),
-      lng: z41.string().optional(),
-      radiusMeters: z41.number().min(50).max(5e4).optional(),
-      traccarDeviceId: z41.number().nullable().optional(),
-      traccarGeofenceId: z41.number().nullable().optional(),
-      defaultOriginName: z41.string().optional(),
-      notes: z41.string().nullable().optional()
+    z42.object({
+      id: z42.number(),
+      name: z42.string().min(1).optional(),
+      lat: z42.string().optional(),
+      lng: z42.string().optional(),
+      radiusMeters: z42.number().min(50).max(5e4).optional(),
+      traccarDeviceId: z42.number().nullable().optional(),
+      traccarGeofenceId: z42.number().nullable().optional(),
+      defaultOriginName: z42.string().optional(),
+      notes: z42.string().nullable().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await requireDb();
@@ -19135,13 +20581,13 @@ var geofencesRouter = router({
     return { success: true };
   }),
   // Ativar/desativar porteira
-  toggleActive: protectedProcedure.input(z41.object({ id: z41.number(), isActive: z41.boolean() })).mutation(async ({ input }) => {
+  toggleActive: protectedProcedure.input(z42.object({ id: z42.number(), isActive: z42.boolean() })).mutation(async ({ input }) => {
     const db = await requireDb();
     await db.update(geofences).set({ isActive: input.isActive ? 1 : 0 }).where(eq40(geofences.id, input.id));
     return { success: true };
   }),
   // Excluir porteira
-  delete: protectedProcedure.input(z41.object({ id: z41.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z42.object({ id: z42.number() })).mutation(async ({ input }) => {
     const db = await requireDb();
     await db.delete(geofences).where(eq40(geofences.id, input.id));
     return { success: true };
@@ -19152,22 +20598,22 @@ var geofencesRouter = router({
 init_trpc();
 init_db();
 init_schema();
-import { z as z42 } from "zod";
+import { z as z43 } from "zod";
 import { eq as eq41, desc as desc32, and as and23, gte as gte12, lte as lte12 } from "drizzle-orm";
-import { TRPCError as TRPCError31 } from "@trpc/server";
+import { TRPCError as TRPCError32 } from "@trpc/server";
 async function requireDb2() {
   const db = await getDb();
-  if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
+  if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
   return db;
 }
 var freightTripsRouter = router({
   // Listar fretes com filtro de data
   list: protectedProcedure.input(
-    z42.object({
-      dateFrom: z42.string().optional(),
-      dateTo: z42.string().optional(),
-      status: z42.enum(["open", "closed", "cancelled", "all"]).default("all"),
-      geofenceId: z42.number().optional()
+    z43.object({
+      dateFrom: z43.string().optional(),
+      dateTo: z43.string().optional(),
+      status: z43.enum(["open", "closed", "cancelled", "all"]).default("all"),
+      geofenceId: z43.number().optional()
     })
   ).query(async ({ input }) => {
     const db = await requireDb2();
@@ -19190,22 +20636,22 @@ var freightTripsRouter = router({
     return rows;
   }),
   // Buscar frete por ID
-  getById: protectedProcedure.input(z42.object({ id: z42.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(z43.object({ id: z43.number() })).query(async ({ input }) => {
     const db = await requireDb2();
     const rows = await db.select().from(freightTrips).where(eq41(freightTrips.id, input.id));
     return rows[0] ?? null;
   }),
   // Abrir frete manualmente
   open: protectedProcedure.input(
-    z42.object({
-      geofenceId: z42.number(),
-      vehicleId: z42.number().optional(),
-      vehicleName: z42.string().optional(),
-      driverId: z42.number().optional(),
-      driverName: z42.string().optional(),
-      originName: z42.string().default("SIMFLOR"),
-      destinationName: z42.string().optional(),
-      entryAt: z42.string().optional()
+    z43.object({
+      geofenceId: z43.number(),
+      vehicleId: z43.number().optional(),
+      vehicleName: z43.string().optional(),
+      driverId: z43.number().optional(),
+      driverName: z43.string().optional(),
+      originName: z43.string().default("SIMFLOR"),
+      destinationName: z43.string().optional(),
+      entryAt: z43.string().optional()
       // ISO timestamp, default = now
     })
   ).mutation(async ({ input }) => {
@@ -19230,12 +20676,12 @@ var freightTripsRouter = router({
   }),
   // Fechar frete
   close: protectedProcedure.input(
-    z42.object({
-      id: z42.number(),
-      exitAt: z42.string().optional(),
+    z43.object({
+      id: z43.number(),
+      exitAt: z43.string().optional(),
       // ISO timestamp, default = now
-      distanceKm: z42.string().optional(),
-      traccarPositionsJson: z42.string().optional()
+      distanceKm: z43.string().optional(),
+      traccarPositionsJson: z43.string().optional()
     })
   ).mutation(async ({ input }) => {
     const db = await requireDb2();
@@ -19250,15 +20696,15 @@ var freightTripsRouter = router({
   }),
   // Atualizar dados do frete (destino, notas, custos)
   update: protectedProcedure.input(
-    z42.object({
-      id: z42.number(),
-      destinationName: z42.string().nullable().optional(),
-      routeNotes: z42.string().nullable().optional(),
-      tollCost: z42.string().optional(),
-      maintenanceCost: z42.string().optional(),
-      fuelCost: z42.string().optional(),
-      distanceKm: z42.string().nullable().optional(),
-      status: z42.enum(["open", "closed", "cancelled"]).optional()
+    z43.object({
+      id: z43.number(),
+      destinationName: z43.string().nullable().optional(),
+      routeNotes: z43.string().nullable().optional(),
+      tollCost: z43.string().optional(),
+      maintenanceCost: z43.string().optional(),
+      fuelCost: z43.string().optional(),
+      distanceKm: z43.string().nullable().optional(),
+      status: z43.enum(["open", "closed", "cancelled"]).optional()
     })
   ).mutation(async ({ input }) => {
     const db = await requireDb2();
@@ -19282,23 +20728,23 @@ var freightTripsRouter = router({
     return { success: true };
   }),
   // Cancelar frete
-  cancel: protectedProcedure.input(z42.object({ id: z42.number() })).mutation(async ({ input }) => {
+  cancel: protectedProcedure.input(z43.object({ id: z43.number() })).mutation(async ({ input }) => {
     const db = await requireDb2();
     await db.update(freightTrips).set({ status: "cancelled" }).where(eq41(freightTrips.id, input.id));
     return { success: true };
   }),
   // Buscar frete aberto para uma porteira específica
-  getOpenTrip: protectedProcedure.input(z42.object({ geofenceId: z42.number() })).query(async ({ input }) => {
+  getOpenTrip: protectedProcedure.input(z43.object({ geofenceId: z43.number() })).query(async ({ input }) => {
     const db = await requireDb2();
     const rows = await db.select().from(freightTrips).where(and23(eq41(freightTrips.geofenceId, input.geofenceId), eq41(freightTrips.status, "open"))).orderBy(desc32(freightTrips.entryAt)).limit(1);
     return rows[0] ?? null;
   }),
   // Estatísticas de fretes
   stats: protectedProcedure.input(
-    z42.object({
-      dateFrom: z42.string().optional(),
-      dateTo: z42.string().optional(),
-      geofenceId: z42.number().optional()
+    z43.object({
+      dateFrom: z43.string().optional(),
+      dateTo: z43.string().optional(),
+      geofenceId: z43.number().optional()
     })
   ).query(async ({ input }) => {
     const db = await requireDb2();
@@ -19323,8 +20769,8 @@ var freightTripsRouter = router({
 // server/routers/financialConsolidated.ts
 init_trpc();
 init_db();
-import { z as z43 } from "zod";
-import { sql as sql26 } from "drizzle-orm";
+import { z as z44 } from "zod";
+import { sql as sql27 } from "drizzle-orm";
 function toNum2(v) {
   if (!v) return 0;
   const s = String(v).replace(/R\$\s*/g, "").trim();
@@ -19344,10 +20790,10 @@ function getLocationName(id) {
 }
 var financialConsolidatedRouter = router({
   // ─── RESUMO GERAL (cards de totais por categoria) ─────────────────────────
-  getSummary: protectedProcedure.input(z43.object({
-    dateFrom: z43.string().optional(),
-    dateTo: z43.string().optional(),
-    workLocationId: z43.number().optional()
+  getSummary: protectedProcedure.input(z44.object({
+    dateFrom: z44.string().optional(),
+    dateTo: z44.string().optional(),
+    workLocationId: z44.number().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
@@ -19385,7 +20831,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND vr.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND vr.date <= '${dateTo} 23:59:59'`;
       if (workLocationId) q += ` AND vr.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         const fuelTypeLabel = {
           diesel: "Diesel",
@@ -19405,7 +20851,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND mf.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND mf.date <= '${dateTo} 23:59:59'`;
       if (workLocationId) q += ` AND mf.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         const fuelTypeLabel = {
           diesel: "Diesel",
@@ -19424,7 +20870,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT mm.*, e.name as equipment_name FROM machine_maintenance mm LEFT JOIN equipment e ON mm.equipment_id = e.id WHERE 1=1`;
       if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         const cost = toNum2(r.total_cost);
         if (cost > 0) addToCategory("manutencao", "Manuten\xE7\xE3o M\xE1quinas", cost);
@@ -19436,7 +20882,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT em.*, e.name as equipment_name FROM equipment_maintenance em LEFT JOIN equipment e ON em.equipment_id = e.id WHERE 1=1`;
       if (dateFrom) q += ` AND em.performed_at >= '${dateFrom}'`;
       if (dateTo) q += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         const cost = toNum2(r.cost) + toNum2(r.labor_cost);
         if (cost > 0) addToCategory("manutencao", "Manuten\xE7\xE3o Equipamentos", cost);
@@ -19445,7 +20891,7 @@ var financialConsolidatedRouter = router({
       console.error("equipment_maintenance:", e);
     }
     try {
-      const [rows] = await db.execute(sql26.raw(`SELECT mp.*, em.performed_at FROM maintenance_parts mp LEFT JOIN equipment_maintenance em ON mp.maintenance_id = em.id WHERE 1=1`));
+      const [rows] = await db.execute(sql27.raw(`SELECT mp.*, em.performed_at FROM maintenance_parts mp LEFT JOIN equipment_maintenance em ON mp.maintenance_id = em.id WHERE 1=1`));
       for (const r of rows) {
         const cost = toNum2(r.total_cost);
         if (cost > 0) addToCategory("pecas", "Pe\xE7as de Manuten\xE7\xE3o", cost);
@@ -19457,7 +20903,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT cpm.*, cp.name as part_name FROM chainsaw_part_movements cpm LEFT JOIN chainsaw_parts cp ON cpm.part_id = cp.id WHERE cpm.type = 'saida'`;
       if (dateFrom) q += ` AND cpm.created_at >= '${dateFrom}'`;
       if (dateTo) q += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
         const cost = toNum2(r.unit_cost) * qty;
@@ -19470,7 +20916,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT csp.* FROM chainsaw_service_parts csp WHERE 1=1`;
       if (dateFrom) q += ` AND csp.created_at >= '${dateFrom}'`;
       if (dateTo) q += ` AND csp.created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
         const cost = toNum2(r.unit_cost) * qty;
@@ -19483,7 +20929,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT eor.*, e.name as equipment_name FROM equipment_oil_records eor LEFT JOIN equipment e ON eor.equipment_id = e.id WHERE 1=1`;
       if (dateFrom) q += ` AND eor.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND eor.date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       const oilTypeLabel = {
         hidraulico: "\xD3leo Hidr\xE1ulico",
         motor: "\xD3leo Motor",
@@ -19503,7 +20949,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       const catMap = {
         abastecimento: "combustivel",
         refeicao: "refeicao",
@@ -19533,7 +20979,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND ca.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND ca.date <= '${dateTo} 23:59:59'`;
       if (workLocationId) q += ` AND ca.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         const val = toNum2(r.daily_value);
         if (val > 0) addToCategory("folha", "Di\xE1rias Colaboradores", val);
@@ -19545,7 +20991,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT * FROM cargo_loads WHERE third_party_cost IS NOT NULL AND third_party_cost > 0`;
       if (dateFrom) q += ` AND created_at >= '${dateFrom}'`;
       if (dateTo) q += ` AND created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         addToCategory("frete", "Frete Terceirizado", toNum2(r.third_party_cost));
       }
@@ -19556,7 +21002,7 @@ var financialConsolidatedRouter = router({
       let q = `SELECT * FROM financial_entries WHERE type = 'despesa' AND status = 'confirmado' AND (auto_generated IS NULL OR auto_generated = 0)`;
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       const catMap = {
         combustivel: "combustivel",
         manutencao: "manutencao",
@@ -19584,13 +21030,13 @@ var financialConsolidatedRouter = router({
     };
   }),
   // ─── DETALHE POR CATEGORIA (listagem completa com paginação) ─────────────
-  getDetailByCategory: protectedProcedure.input(z43.object({
-    category: z43.string(),
-    dateFrom: z43.string().optional(),
-    dateTo: z43.string().optional(),
-    workLocationId: z43.number().optional(),
-    page: z43.number().default(1),
-    pageSize: z43.number().default(50)
+  getDetailByCategory: protectedProcedure.input(z44.object({
+    category: z44.string(),
+    dateFrom: z44.string().optional(),
+    dateTo: z44.string().optional(),
+    workLocationId: z44.number().optional(),
+    page: z44.number().default(1),
+    pageSize: z44.number().default(50)
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
@@ -19610,7 +21056,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND vr.date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND vr.work_location_id = ${workLocationId}`;
         q += ` ORDER BY vr.date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         const fuelTypeLabel = {
           diesel: "Diesel",
           diesel_s10: "Diesel S10",
@@ -19645,7 +21091,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND mf.date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND mf.work_location_id = ${workLocationId}`;
         q += ` ORDER BY mf.date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         const fuelTypeLabel = {
           diesel: "Diesel",
           diesel_s10: "Diesel S10",
@@ -19674,7 +21120,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND date >= '${dateFrom}'`;
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `ee_fuel_${r.id}`,
@@ -19702,7 +21148,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
         if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY mm.date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         const typeLabel = { preventiva: "Preventiva", corretiva: "Corretiva", revisao: "Revis\xE3o" };
         for (const r of dbRows) {
           const cost = toNum2(r.total_cost);
@@ -19733,7 +21179,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND em.performed_at >= '${dateFrom}'`;
         if (dateTo) q += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY em.performed_at DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           const cost = toNum2(r.cost) + toNum2(r.labor_cost);
           if (cost > 0) {
@@ -19765,7 +21211,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND eor.date >= '${dateFrom}'`;
         if (dateTo) q += ` AND eor.date <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY eor.date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         const oilTypeLabel = {
           hidraulico: "\xD3leo Hidr\xE1ulico",
           motor: "\xD3leo Motor",
@@ -19795,7 +21241,7 @@ var financialConsolidatedRouter = router({
     }
     if (category === "pecas") {
       try {
-        const [dbRows] = await db.execute(sql26.raw(
+        const [dbRows] = await db.execute(sql27.raw(
           `SELECT mp.id, em.performed_at as date, mp.part_name, mp.quantity, mp.unit_cost, mp.total_cost,
                     e.name as equipment_name
              FROM maintenance_parts mp
@@ -19830,7 +21276,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND cpm.created_at >= '${dateFrom}'`;
         if (dateTo) q += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY cpm.created_at DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
           const cost = toNum2(r.unit_cost) * qty;
@@ -19857,7 +21303,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `ped_${r.id}`,
@@ -19881,7 +21327,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `ref_${r.id}`,
@@ -19905,7 +21351,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `st_${r.id}`,
@@ -19929,7 +21375,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `cm_${r.id}`,
@@ -19958,7 +21404,7 @@ var financialConsolidatedRouter = router({
         if (dateTo) q += ` AND ca.date <= '${dateTo} 23:59:59'`;
         if (workLocationId) q += ` AND ca.work_location_id = ${workLocationId}`;
         q += ` ORDER BY ca.date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           const val = toNum2(r.daily_value);
           if (val > 0) {
@@ -19987,7 +21433,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND cl.created_at >= '${dateFrom}'`;
         if (dateTo) q += ` AND cl.created_at <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY cl.created_at DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `frete_${r.id}`,
@@ -20009,7 +21455,7 @@ var financialConsolidatedRouter = router({
         if (dateFrom) q += ` AND date >= '${dateFrom}'`;
         if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
         q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql26.raw(q));
+        const [dbRows] = await db.execute(sql27.raw(q));
         for (const r of dbRows) {
           rows.push({
             id: `fin_${r.id}`,
@@ -20039,9 +21485,9 @@ var financialConsolidatedRouter = router({
     };
   }),
   // ─── BREAKDOWN POR LOCAL DE TRABALHO ─────────────────────────────────────
-  getByLocation: protectedProcedure.input(z43.object({
-    dateFrom: z43.string().optional(),
-    dateTo: z43.string().optional()
+  getByLocation: protectedProcedure.input(z44.object({
+    dateFrom: z44.string().optional(),
+    dateTo: z44.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
@@ -20062,7 +21508,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY work_location_id`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         addToLocation(r.work_location_id, getLocationName(r.work_location_id), "Combust\xEDvel", toNum2(String(r.total)));
       }
@@ -20074,7 +21520,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY work_location_id`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         addToLocation(r.work_location_id, getLocationName(r.work_location_id), "Combust\xEDvel", toNum2(String(r.total)));
       }
@@ -20086,7 +21532,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY work_location_id, category`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       const catMap = {
         abastecimento: "Combust\xEDvel",
         refeicao: "Refei\xE7\xE3o",
@@ -20107,7 +21553,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND date >= '${dateFrom}'`;
       if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY work_location_id, location_name`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         const locName = r.location_name || getLocationName(r.work_location_id);
         addToLocation(r.work_location_id, locName, "Folha de Pagamento", toNum2(String(r.total)));
@@ -20120,7 +21566,7 @@ var financialConsolidatedRouter = router({
       if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
       if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
       q += ` GROUP BY e.client_id`;
-      const [rows] = await db.execute(sql26.raw(q));
+      const [rows] = await db.execute(sql27.raw(q));
       for (const r of rows) {
         addToLocation(r.client_id, getLocationName(r.client_id), "Manuten\xE7\xE3o", toNum2(String(r.total)));
       }
@@ -20141,7 +21587,7 @@ init_sicoob();
 
 // server/routers/contaAzul.ts
 init_trpc();
-import { z as z45 } from "zod";
+import { z as z46 } from "zod";
 import axios2 from "axios";
 
 // server/utils/feriadosBrasil.ts
@@ -20614,7 +22060,7 @@ async function syncNotasFiscais(mes, ano) {
   return { synced, errors };
 }
 var contaAzulRouter = router({
-  setRefreshToken: protectedProcedure.input(z45.object({ refreshToken: z45.string().min(10) })).mutation(async ({ input }) => {
+  setRefreshToken: protectedProcedure.input(z46.object({ refreshToken: z46.string().min(10) })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(
@@ -20638,11 +22084,11 @@ var contaAzulRouter = router({
       configurado: Number(tokenRows?.[0]?.cnt ?? 0) > 0
     };
   }),
-  listNotasFiscais: protectedProcedure.input(z45.object({
-    mes: z45.number().min(1).max(12),
-    ano: z45.number().min(2020).max(2100),
-    pesquisa: z45.string().optional(),
-    incluirCanceladas: z45.boolean().optional()
+  listNotasFiscais: protectedProcedure.input(z46.object({
+    mes: z46.number().min(1).max(12),
+    ano: z46.number().min(2020).max(2100),
+    pesquisa: z46.string().optional(),
+    incluirCanceladas: z46.boolean().optional()
   })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { notas: [], error: "DB indispon\xEDvel" };
@@ -20679,7 +22125,7 @@ var contaAzulRouter = router({
   }),
   // Resumo (Vencidos/Vencem hoje/A vencer/Recebidos/Total) apenas das NFs sem boleto correspondente.
   // O frontend soma este resultado ao summaryBoletos (Sicoob) para formar os cards finais.
-  summaryNFsSemBoleto: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).query(async ({ input }) => {
+  summaryNFsSemBoleto: protectedProcedure.input(z46.object({ mes: z46.number().min(1).max(12), ano: z46.number().min(2020).max(2100) })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { vencidos: 0, vencemHoje: 0, aVencer: 0, recebidos: 0, total: 0, error: "DB indispon\xEDvel" };
     const [rows] = await db.$client.execute(
@@ -20707,10 +22153,10 @@ var contaAzulRouter = router({
     return { ...resumo, error: null };
   }),
   // Altera o Status NF (manual). Registra auditoria e, se "pago", a data de pagamento confirmado.
-  updateStatusNf: protectedProcedure.input(z45.object({
-    id: z45.number(),
-    novoStatus: z45.enum(["em_aberto", "pago", "cancelado"]),
-    dataPagamentoConfirmado: z45.string().optional()
+  updateStatusNf: protectedProcedure.input(z46.object({
+    id: z46.number(),
+    novoStatus: z46.enum(["em_aberto", "pago", "cancelado"]),
+    dataPagamentoConfirmado: z46.string().optional()
     // "YYYY-MM-DD" — obrigatório apenas quando novoStatus = pago (default: hoje)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
@@ -20735,18 +22181,40 @@ var contaAzulRouter = router({
     );
     return { success: true };
   }),
-  // Edita o valor da NF manualmente (protegido de sobrescrita em sincronizações futuras)
-  updateValorNF: protectedProcedure.input(z45.object({ id: z45.number(), valor: z45.string() })).mutation(async ({ input }) => {
+  // Edita o valor da NF manualmente (protegido de sobrescrita em sincronizações futuras).
+  // Guarda o valor original (só na primeira edição) e registra no log de auditoria com o
+  // Anexa/troca o comprovante de pagamento da NF. O upload em si (Cloudinary) acontece no
+  // cliente; aqui só grava a URL já pronta.
+  updateReceiptNF: protectedProcedure.input(z46.object({ id: z46.number(), receiptUrl: z46.string().url() })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
+    await db.$client.execute(`UPDATE notas_fiscais SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
+    return { success: true };
+  }),
+  // motivo — comum quando o cliente desconta na hora de pagar por divergência de peso
+  // entre o que a NF declara e o que foi efetivamente entregue/pesado.
+  updateValorNF: protectedProcedure.input(z46.object({ id: z46.number(), valor: z46.string(), observacao: z46.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
+    const db = await getDbInstance();
+    if (!db) throw new Error("DB indispon\xEDvel");
+    const [rows] = await db.$client.execute(
+      `SELECT valor_total, valor_original FROM notas_fiscais WHERE id = ?`,
+      [input.id]
+    );
+    const atual = rows?.[0];
+    if (!atual) throw new Error("NF n\xE3o encontrada");
     await db.$client.execute(
-      `UPDATE notas_fiscais SET valor_total = ?, valor_editado = 1 WHERE id = ?`,
-      [input.valor, input.id]
+      `UPDATE notas_fiscais SET valor_total = ?, valor_editado = 1, valor_original = COALESCE(valor_original, ?) WHERE id = ?`,
+      [input.valor, atual.valor_total, input.id]
+    );
+    await db.$client.execute(
+      `INSERT INTO notas_fiscais_status_log (nota_fiscal_id, campo, valor_anterior, valor_novo, usuario_id, usuario_nome, observacao, alterado_em)
+         VALUES (?, 'valor_total', ?, ?, ?, ?, ?, NOW())`,
+      [input.id, atual.valor_total, input.valor, ctx.user?.id ?? null, ctx.user?.name ?? "Desconhecido", input.observacao]
     );
     return { success: true };
   }),
   // Histórico de alterações de uma NF (auditoria)
-  historicoStatusNf: protectedProcedure.input(z45.object({ notaFiscalId: z45.number() })).query(async ({ input }) => {
+  historicoStatusNf: protectedProcedure.input(z46.object({ notaFiscalId: z46.number() })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { historico: [], error: "DB indispon\xEDvel" };
     const [rows] = await db.$client.execute(
@@ -20755,7 +22223,7 @@ var contaAzulRouter = router({
     );
     return { historico: rows ?? [], error: null };
   }),
-  syncNotasFiscais: protectedProcedure.input(z45.object({ mes: z45.number().min(1).max(12), ano: z45.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+  syncNotasFiscais: protectedProcedure.input(z46.object({ mes: z46.number().min(1).max(12), ano: z46.number().min(2020).max(2100) })).mutation(async ({ input }) => {
     try {
       return { success: true, ...await syncNotasFiscais(input.mes, input.ano) };
     } catch (e) {
@@ -20769,20 +22237,20 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z46 } from "zod";
-import { desc as desc33, eq as eq42, and as and24, sql as sql28 } from "drizzle-orm";
+import { z as z47 } from "zod";
+import { desc as desc33, eq as eq42, and as and24, sql as sql29 } from "drizzle-orm";
 async function getNextActionCode(db) {
   if (!db) return "AC-00001";
   try {
-    const [row] = await db.execute(sql28`
+    const [row] = await db.execute(sql29`
       SELECT action_code FROM fiscal_notes ORDER BY id DESC LIMIT 1
     `);
     const rows = row;
     if (!rows || rows.length === 0) return "AC-00001";
     const last = rows[0]?.action_code;
     if (!last) return "AC-00001";
-    const num = parseInt(last.replace("AC-", ""), 10);
-    return `AC-${String(num + 1).padStart(5, "0")}`;
+    const num2 = parseInt(last.replace("AC-", ""), 10);
+    return `AC-${String(num2 + 1).padStart(5, "0")}`;
   } catch {
     return "AC-00001";
   }
@@ -20794,9 +22262,9 @@ var fiscalNotesRouter = router({
     return { actionCode: await getNextActionCode(db) };
   }),
   // Listar todas as notas com filtros
-  list: protectedProcedure.input(z46.object({
-    quantityType: z46.enum(["m3", "ton", "all"]).optional(),
-    status: z46.enum(["available", "used", "all"]).optional()
+  list: protectedProcedure.input(z47.object({
+    quantityType: z47.enum(["m3", "ton", "all"]).optional(),
+    status: z47.enum(["available", "used", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -20811,8 +22279,8 @@ var fiscalNotesRouter = router({
     return rows;
   }),
   // Listar apenas notas disponíveis para o select no Controle de Cargas
-  getAvailable: protectedProcedure.input(z46.object({
-    quantityType: z46.enum(["m3", "ton", "all"]).optional()
+  getAvailable: protectedProcedure.input(z47.object({
+    quantityType: z47.enum(["m3", "ton", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -20824,16 +22292,16 @@ var fiscalNotesRouter = router({
     return rows;
   }),
   // Criar nova nota/ação
-  create: protectedProcedure.input(z46.object({
-    invoiceNumber: z46.string().optional(),
-    issueDate: z46.string(),
-    quantityType: z46.enum(["m3", "ton"]),
-    quantity: z46.string(),
-    fileBase64: z46.string().optional(),
+  create: protectedProcedure.input(z47.object({
+    invoiceNumber: z47.string().optional(),
+    issueDate: z47.string(),
+    quantityType: z47.enum(["m3", "ton"]),
+    quantity: z47.string(),
+    fileBase64: z47.string().optional(),
     // base64 do arquivo
-    fileName: z46.string().optional(),
-    fileMimeType: z46.string().optional(),
-    notes: z46.string().optional()
+    fileName: z47.string().optional(),
+    fileMimeType: z47.string().optional(),
+    notes: z47.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -20863,13 +22331,13 @@ var fiscalNotesRouter = router({
     return { success: true, actionCode };
   }),
   // Marcar nota como utilizada (chamado ao salvar uma carga)
-  markAsUsed: protectedProcedure.input(z46.object({
-    id: z46.number(),
-    cargoId: z46.number().optional(),
-    clientId: z46.number().optional(),
-    clientName: z46.string().optional(),
-    destination: z46.string().optional(),
-    workLocation: z46.string().optional()
+  markAsUsed: protectedProcedure.input(z47.object({
+    id: z47.number(),
+    cargoId: z47.number().optional(),
+    clientId: z47.number().optional(),
+    clientName: z47.string().optional(),
+    destination: z47.string().optional(),
+    workLocation: z47.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -20890,16 +22358,16 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Editar nota/ação (data, quantidade, NF, observações, arquivo)
-  update: protectedProcedure.input(z46.object({
-    id: z46.number(),
-    invoiceNumber: z46.string().optional(),
-    issueDate: z46.string().optional(),
-    quantityType: z46.enum(["m3", "ton"]).optional(),
-    quantity: z46.string().optional(),
-    fileBase64: z46.string().optional(),
-    fileName: z46.string().optional(),
-    fileMimeType: z46.string().optional(),
-    notes: z46.string().optional()
+  update: protectedProcedure.input(z47.object({
+    id: z47.number(),
+    invoiceNumber: z47.string().optional(),
+    issueDate: z47.string().optional(),
+    quantityType: z47.enum(["m3", "ton"]).optional(),
+    quantity: z47.string().optional(),
+    fileBase64: z47.string().optional(),
+    fileName: z47.string().optional(),
+    fileMimeType: z47.string().optional(),
+    notes: z47.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -20926,7 +22394,7 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Liberar nota (desfazer uso — admin)
-  release: protectedProcedure.input(z46.object({ id: z46.number() })).mutation(async ({ input }) => {
+  release: protectedProcedure.input(z47.object({ id: z47.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.update(fiscalNotes).set({
@@ -20939,20 +22407,20 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Deletar nota (somente disponíveis)
-  delete: protectedProcedure.input(z46.object({ id: z46.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z47.object({ id: z47.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.delete(fiscalNotes).where(eq42(fiscalNotes.id, input.id));
     return { success: true };
   }),
   // Relatório-planilha: notas com dados da carga, local e destino
-  report: protectedProcedure.input(z46.object({
-    workLocationId: z46.number().optional(),
-    destinationId: z46.number().optional(),
-    dateFrom: z46.string().optional(),
-    dateTo: z46.string().optional(),
-    search: z46.string().optional(),
-    limit: z46.number().optional().default(500)
+  report: protectedProcedure.input(z47.object({
+    workLocationId: z47.number().optional(),
+    destinationId: z47.number().optional(),
+    dateFrom: z47.string().optional(),
+    dateTo: z47.string().optional(),
+    search: z47.string().optional(),
+    limit: z47.number().optional().default(500)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -21023,7 +22491,7 @@ var fiscalNotesRouter = router({
     const db = await getDb();
     if (!db) return { total: 0, available: 0, used: 0, m3Available: 0, tonAvailable: 0 };
     try {
-      const [rows] = await db.execute(sql28`
+      const [rows] = await db.execute(sql29`
         SELECT
           COUNT(*) as total,
           SUM(status = 'available') as available,
@@ -21049,8 +22517,8 @@ var fiscalNotesRouter = router({
 // server/routers/notificationSettings.ts
 init_trpc();
 init_db();
-import { z as z47 } from "zod";
-import { sql as sql29 } from "drizzle-orm";
+import { z as z48 } from "zod";
+import { sql as sql30 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
   pagamentosPendentes: {
@@ -21097,7 +22565,7 @@ var DEFAULT_CLIENT_CONFIG = Object.fromEntries(
   CLIENT_NOTIF_KEYS.map((k) => [k, { enabled: false, clientIds: [] }])
 );
 async function ensureTable(db) {
-  await db.execute(sql29`
+  await db.execute(sql30`
     CREATE TABLE IF NOT EXISTS notification_settings (
       \`key\` VARCHAR(100) PRIMARY KEY,
       value JSON NOT NULL,
@@ -21106,7 +22574,7 @@ async function ensureTable(db) {
   `);
 }
 async function getSetting(db, key) {
-  const rows = await db.execute(sql29`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
+  const rows = await db.execute(sql30`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
   const data = Array.isArray(rows[0]) ? rows[0] : rows;
   if (!data || data.length === 0) return null;
   const val = data[0]?.value;
@@ -21115,7 +22583,7 @@ async function getSetting(db, key) {
 }
 async function setSetting(db, key, value) {
   const json = JSON.stringify(value);
-  await db.execute(sql29`
+  await db.execute(sql30`
     INSERT INTO notification_settings (\`key\`, value) VALUES (${key}, ${json})
     ON DUPLICATE KEY UPDATE value = ${json}
   `);
@@ -21137,6 +22605,7 @@ var notificationSettingsRouter = router({
     const storedConfig = await getSetting(db, "jobConfig");
     const storedClientConfig = await getSetting(db, "clientConfig");
     const storedCargoNfResponsible = await getSetting(db, "cargoNfResponsible");
+    const storedPurchaseRequestNewResponsible = await getSetting(db, "purchaseRequestNewResponsible");
     const config = storedConfig ? { ...DEFAULT_JOB_CONFIG, ...storedConfig } : DEFAULT_JOB_CONFIG;
     const clientConfig = storedClientConfig ? { ...DEFAULT_CLIENT_CONFIG, ...storedClientConfig } : DEFAULT_CLIENT_CONFIG;
     let cargoNfResponsible;
@@ -21153,16 +22622,22 @@ var notificationSettingsRouter = router({
     } else {
       cargoNfResponsible = { recipients: [] };
     }
+    let purchaseRequestNewResponsible;
+    if (storedPurchaseRequestNewResponsible?.recipients) {
+      purchaseRequestNewResponsible = storedPurchaseRequestNewResponsible;
+    } else {
+      purchaseRequestNewResponsible = { recipients: [] };
+    }
     let collaborators5 = [];
     try {
-      const rows = await db.execute(sql29`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
+      const rows = await db.execute(sql30`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
       const data = Array.isArray(rows[0]) ? rows[0] : rows;
       collaborators5 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
     }
     let clients3 = [];
     try {
-      const rows = await db.execute(sql29`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
+      const rows = await db.execute(sql30`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
       const data = Array.isArray(rows[0]) ? rows[0] : rows;
       clients3 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
@@ -21176,17 +22651,18 @@ var notificationSettingsRouter = router({
       clientNotifKeys: CLIENT_NOTIF_KEYS,
       clientMeta: CLIENT_META,
       clients: clients3,
-      cargoNfResponsible
+      cargoNfResponsible,
+      purchaseRequestNewResponsible
     };
   }),
   // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
   // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
   // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
-  updateCargoNfResponsible: protectedProcedure.input(z47.object({
-    recipients: z47.array(z47.object({
-      collaboratorId: z47.number().nullable(),
-      manualName: z47.string().nullable().optional(),
-      manualPhone: z47.string().nullable().optional()
+  updateCargoNfResponsible: protectedProcedure.input(z48.object({
+    recipients: z48.array(z48.object({
+      collaboratorId: z48.number().nullable(),
+      manualName: z48.string().nullable().optional(),
+      manualPhone: z48.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -21195,12 +22671,26 @@ var notificationSettingsRouter = router({
     await setSetting(db, "cargoNfResponsible", input);
     return { ok: true };
   }),
-  update: protectedProcedure.input(z47.record(z47.string(), z47.object({
-    enabled: z47.boolean(),
-    hour: z47.number().int().min(0).max(23),
-    minute: z47.number().int().min(0).max(59),
-    weekday: z47.number().int().min(0).max(6).nullable(),
-    whatsappCollaboratorIds: z47.array(z47.number())
+  // Idem, pra quem recebe o aviso de "nova solicitação de compra".
+  updatePurchaseRequestNewResponsible: protectedProcedure.input(z48.object({
+    recipients: z48.array(z48.object({
+      collaboratorId: z48.number().nullable(),
+      manualName: z48.string().nullable().optional(),
+      manualPhone: z48.string().nullable().optional()
+    }))
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Banco de dados indispon\xEDvel");
+    await ensureTable(db);
+    await setSetting(db, "purchaseRequestNewResponsible", input);
+    return { ok: true };
+  }),
+  update: protectedProcedure.input(z48.record(z48.string(), z48.object({
+    enabled: z48.boolean(),
+    hour: z48.number().int().min(0).max(23),
+    minute: z48.number().int().min(0).max(59),
+    weekday: z48.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z48.array(z48.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -21208,9 +22698,9 @@ var notificationSettingsRouter = router({
     await setSetting(db, "jobConfig", input);
     return { ok: true };
   }),
-  updateClientConfig: protectedProcedure.input(z47.record(z47.string(), z47.object({
-    enabled: z47.boolean(),
-    clientIds: z47.array(z47.number())
+  updateClientConfig: protectedProcedure.input(z48.record(z48.string(), z48.object({
+    enabled: z48.boolean(),
+    clientIds: z48.array(z48.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -21221,7 +22711,7 @@ var notificationSettingsRouter = router({
 });
 
 // server/routers.ts
-import { z as z48 } from "zod";
+import { z as z49 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -21318,7 +22808,7 @@ Se n\xE3o solicitou, ignore este email.`
 }
 
 // server/routers.ts
-import crypto2 from "crypto";
+import crypto3 from "crypto";
 async function createSessionToken(userId, email, name) {
   const secret = new TextEncoder().encode(process.env.JWT_SECRET || "btree-secret-key");
   const expiresAt = Math.floor((Date.now() + 365 * 24 * 60 * 60 * 1e3) / 1e3);
@@ -21334,12 +22824,12 @@ var appRouter = router({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { error: "DB null" };
-        const { sql: sql31 } = await import("drizzle-orm");
-        const [permsRows] = await db.execute(sql31`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
-        const [collabRows] = await db.execute(sql31`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
-        const [countRows] = await db.execute(sql31`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
-        const [colsRows] = await db.execute(sql31`SHOW COLUMNS FROM collaborators`);
-        const [sampleRows] = await db.execute(sql31`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
+        const { sql: sql33 } = await import("drizzle-orm");
+        const [permsRows] = await db.execute(sql33`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id}`);
+        const [collabRows] = await db.execute(sql33`SELECT id, name, email, role, client_id, user_id, active FROM collaborators WHERE user_id = ${ctx.user.id}`);
+        const [countRows] = await db.execute(sql33`SELECT COUNT(*) as cnt FROM collaborators WHERE active = 1`);
+        const [colsRows] = await db.execute(sql33`SHOW COLUMNS FROM collaborators`);
+        const [sampleRows] = await db.execute(sql33`SELECT id, name, user_id, client_id, active FROM collaborators WHERE active = 1 LIMIT 3`);
         let myPermsResult = null;
         try {
           const { collaborators: collabTable, userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -21403,10 +22893,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z48.object({
-      name: z48.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z48.string().email("Email inv\xE1lido"),
-      password: z48.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z49.object({
+      name: z49.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z49.string().email("Email inv\xE1lido"),
+      password: z49.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -21421,9 +22911,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z48.object({
-      email: z48.string().email("Email inv\xE1lido"),
-      password: z48.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z49.object({
+      email: z49.string().email("Email inv\xE1lido"),
+      password: z49.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -21442,11 +22932,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z48.object({
-      seedKey: z48.string(),
-      email: z48.string().email(),
-      name: z48.string(),
-      password: z48.string().min(4)
+    seedAdmin: publicProcedure.input(z49.object({
+      seedKey: z49.string(),
+      email: z49.string().email(),
+      name: z49.string(),
+      password: z49.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -21456,15 +22946,15 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z48.object({
-      email: z48.string().email("Email inv\xE1lido"),
-      origin: z48.string().url().optional()
+    forgotPassword: publicProcedure.input(z49.object({
+      email: z49.string().email("Email inv\xE1lido"),
+      origin: z49.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
         return { success: true };
       }
-      const token = crypto2.randomBytes(48).toString("hex");
+      const token = crypto3.randomBytes(48).toString("hex");
       await createPasswordResetToken(user.id, token);
       const baseUrl = input.origin || "https://btreeambiental.com";
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;
@@ -21472,9 +22962,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z48.object({
-      token: z48.string().min(1),
-      password: z48.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z49.object({
+      token: z49.string().min(1),
+      password: z49.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -21531,6 +23021,7 @@ var appRouter = router({
   purchaseCategories: purchaseCategoriesRouter,
   freightCycles: freightCyclesRouter,
   suppliers: suppliersRouter,
+  stock: stockRouter,
   quotations: quotationsRouter,
   purchaseRequests: purchaseRequestsRouter,
   invoiceControl: invoiceControlRouter,
@@ -21541,7 +23032,7 @@ var appRouter = router({
   notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z48.object({ key: z48.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z49.object({ key: z49.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -21734,6 +23225,383 @@ function registerStorageProxy(app) {
       res.status(502).send("Storage proxy error");
     }
   });
+}
+
+// server/webhooks/whatsappPurchaseBot.ts
+init_db();
+init_whatsapp();
+import crypto4 from "crypto";
+import { sql as sql31 } from "drizzle-orm";
+var URGENCY_LABELS = {
+  baixa: "\u{1F7E2} Baixa",
+  media: "\u{1F7E1} M\xE9dia",
+  alta: "\u{1F7E0} Alta",
+  critica: "\u{1F534} Cr\xEDtica"
+};
+function whatsappWebhookVerify(req, res) {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+  if (mode === "subscribe" && token === process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN) {
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
+  }
+}
+function isValidSignature(req) {
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (!appSecret) {
+    console.warn("[WhatsAppBot] WHATSAPP_APP_SECRET n\xE3o configurado \u2014 assinatura n\xE3o verificada.");
+    return true;
+  }
+  const signature = req.headers["x-hub-signature-256"];
+  const rawBody = req.rawBody;
+  if (!signature || !rawBody) return false;
+  const expected = "sha256=" + crypto4.createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  try {
+    return crypto4.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+async function getState(db, phone) {
+  const [rows] = await db.execute(sql31`SELECT flow, step, payload FROM whatsapp_conversation_state WHERE phone = ${phone} LIMIT 1`);
+  const row = rows[0];
+  if (!row) return null;
+  let payload = {};
+  try {
+    payload = row.payload ? JSON.parse(row.payload) : {};
+  } catch {
+  }
+  return { flow: row.flow, step: row.step, payload };
+}
+async function setState(db, phone, flow, step, payload) {
+  await db.execute(sql31`
+    INSERT INTO whatsapp_conversation_state (phone, flow, step, payload, updated_at)
+    VALUES (${phone}, ${flow}, ${step}, ${JSON.stringify(payload)}, NOW())
+    ON DUPLICATE KEY UPDATE flow = ${flow}, step = ${step}, payload = ${JSON.stringify(payload)}, updated_at = NOW()
+  `);
+}
+async function clearState(db, phone) {
+  await db.execute(sql31`DELETE FROM whatsapp_conversation_state WHERE phone = ${phone}`);
+}
+async function sendMainMenu(toPhone) {
+  await sendWhatsAppButtons(toPhone, "Ol\xE1! O que voc\xEA precisa?", [
+    { id: "menu_compra", title: "Solicitar compra" },
+    { id: "menu_estoque", title: "Consultar estoque" }
+  ]);
+}
+async function sendCategoryList(toPhone, db) {
+  const [cats] = await db.execute(sql31`SELECT id, name FROM purchase_categories ORDER BY name LIMIT 10`);
+  const rows = cats.map((c) => ({ id: `cat_${c.id}`, title: c.name.slice(0, 24) }));
+  if (rows.length === 0) {
+    await sendWhatsAppText(toPhone, "Nenhuma categoria cadastrada no sistema ainda. Pe\xE7a pro financeiro cadastrar uma categoria antes de pedir por aqui.");
+    return;
+  }
+  await sendWhatsAppList(toPhone, "Qual a categoria do que voc\xEA precisa comprar?", "Escolher categoria", rows);
+}
+function formatSummary(payload) {
+  const lines = (payload.items || []).map((it, i) => `${i + 1}. ${it.name} \u2014 ${it.quantity} ${it.unit}${it.packageSize ? ` de ${String(it.packageSize).replace(".", ",")} ${it.packageUnit}` : ""}`);
+  return [
+    `*Resumo da solicita\xE7\xE3o*`,
+    `Categoria: ${payload.categoryName}`,
+    ...lines,
+    `Urg\xEAncia: ${payload.urgency ? URGENCY_LABELS[payload.urgency] : "\u2014"}`,
+    ``,
+    `Confirma a cria\xE7\xE3o dessa solicita\xE7\xE3o?`
+  ].join("\n");
+}
+async function handleTextStep(db, toPhone, stateKey, step, payload, text2, collaborator) {
+  if (step === "awaiting_item_name") {
+    const name = text2.trim();
+    if (!name) {
+      await sendWhatsAppText(toPhone, "N\xE3o entendi o nome do item. Digite o nome do que precisa comprar.");
+      return;
+    }
+    payload.pendingItemName = name;
+    await setState(db, stateKey, "compra", "awaiting_item_qty", payload);
+    await sendWhatsAppText(toPhone, `Quantas unidades de "${name}" voc\xEA precisa?
+Digite s\xF3 o n\xFAmero (ex: 2).`);
+    return;
+  }
+  if (step === "awaiting_item_qty") {
+    const m = text2.trim().match(/^([\d.,]+)/);
+    if (!m) {
+      await sendWhatsAppText(toPhone, "N\xE3o entendi. Digite s\xF3 o n\xFAmero de unidades (ex: 2).");
+      return;
+    }
+    payload.pendingItemQty = m[1];
+    await setState(db, stateKey, "compra", "awaiting_item_pack", payload);
+    await sendWhatsAppButtons(
+      toPhone,
+      `Qual o conte\xFAdo de cada unidade de "${payload.pendingItemName}"?
+Ex: 20 L, 15 L, 20 kg ou 100 m (rolo).
+
+Se for item contado por unidade (filtro, pe\xE7a), toque em "N\xE3o se aplica".`,
+      [{ id: "pack_skip", title: "N\xE3o se aplica" }]
+    );
+    return;
+  }
+  if (step === "awaiting_item_pack") {
+    const m = text2.trim().match(/^([\d.,]+)\s*(l|lt|lts|litros?|kg|kgs|quilos?|m|mt|mts|metros?)\.?$/i);
+    const size = m ? parseFloat(m[1].replace(",", ".")) : NaN;
+    if (!m || !(size > 0)) {
+      await sendWhatsAppText(toPhone, 'N\xE3o entendi. Digite o conte\xFAdo com a unidade (ex: "20 L", "20 kg" ou "100 m") ou toque em "N\xE3o se aplica".');
+      return;
+    }
+    await addPendingItem(db, toPhone, stateKey, payload, { packageSize: size, packageUnit: /^(kg|kgs|quilo)/i.test(m[2]) ? "kg" : /^m/i.test(m[2]) ? "m" : "L" });
+    return;
+  }
+  await sendWhatsAppText(toPhone, "Por favor, use as op\xE7\xF5es da mensagem anterior pra continuar.");
+}
+async function addPendingItem(db, toPhone, stateKey, payload, pack) {
+  payload.items = payload.items || [];
+  payload.items.push({ name: payload.pendingItemName || "", quantity: payload.pendingItemQty || "1", unit: "un", ...pack || {} });
+  delete payload.pendingItemName;
+  delete payload.pendingItemQty;
+  await setState(db, stateKey, "compra", "awaiting_more_items", payload);
+  await sendWhatsAppButtons(toPhone, "Quer adicionar outro item nessa mesma solicita\xE7\xE3o?", [
+    { id: "more_yes", title: "Sim" },
+    { id: "more_no", title: "N\xE3o, finalizar" }
+  ]);
+}
+async function handleMenuChoice(db, toPhone, stateKey, replyId) {
+  if (replyId === "menu_compra") {
+    await setState(db, stateKey, "compra", "awaiting_category", {});
+    await sendCategoryList(toPhone, db);
+    return;
+  }
+  if (replyId === "menu_estoque") {
+    await setState(db, stateKey, "estoque", "awaiting_stock_query", {});
+    await sendWhatsAppText(toPhone, "Digite o nome (ou parte do nome) do produto que voc\xEA quer consultar no estoque.");
+    return;
+  }
+  await sendWhatsAppText(toPhone, "Op\xE7\xE3o n\xE3o reconhecida. Por favor, use os bot\xF5es da mensagem.");
+}
+async function searchStockProducts(db, query) {
+  const like4 = `%${query.trim()}%`;
+  const [rows] = await db.execute(sql31`SELECT id, name, unit FROM stock_products WHERE active = 1 AND name LIKE ${like4} ORDER BY name LIMIT 10`);
+  return rows;
+}
+async function sendStockBalance(db, toPhone, productId) {
+  const [prodRows] = await db.execute(sql31`SELECT name, unit FROM stock_products WHERE id = ${productId} LIMIT 1`);
+  const p = prodRows[0];
+  if (!p) {
+    await sendWhatsAppText(toPhone, "Produto n\xE3o encontrado.");
+    return;
+  }
+  const [balRows] = await db.execute(sql31`
+    SELECT b.quantity, l.name AS locationName
+    FROM stock_balances b JOIN stock_locations l ON l.id = b.location_id
+    WHERE b.product_id = ${productId} AND b.quantity <> 0
+    ORDER BY l.name
+  `);
+  const rows = balRows;
+  if (rows.length === 0) {
+    await sendWhatsAppText(toPhone, `*${p.name}*
+Sem estoque em nenhum local no momento.`);
+    return;
+  }
+  const total = rows.reduce((s, r) => s + Number(r.quantity), 0);
+  const lines = rows.map((r) => `\u2022 ${r.locationName}: ${Number(r.quantity).toLocaleString("pt-BR")} ${p.unit}`);
+  await sendWhatsAppText(toPhone, [`*${p.name}* \u2014 saldo total: ${total.toLocaleString("pt-BR")} ${p.unit}`, ...lines].join("\n"));
+}
+async function askStockAgain(db, toPhone, stateKey) {
+  await setState(db, stateKey, "estoque", "awaiting_stock_again", {});
+  await sendWhatsAppButtons(toPhone, "Quer consultar outro item?", [
+    { id: "stock_again_yes", title: "Sim" },
+    { id: "stock_again_no", title: "N\xE3o, obrigado" }
+  ]);
+}
+async function handleStockTextStep(db, toPhone, stateKey, step, payload, text2) {
+  if (step === "awaiting_stock_query") {
+    const query = text2.trim();
+    if (!query) {
+      await sendWhatsAppText(toPhone, "Digite o nome do produto que voc\xEA quer consultar.");
+      return;
+    }
+    const matches = await searchStockProducts(db, query);
+    if (matches.length === 0) {
+      await sendWhatsAppText(toPhone, `Nenhum produto encontrado com "${query}". Tente outro nome ou pe\xE7a pro financeiro cadastrar no cat\xE1logo de Estoque.`);
+      return;
+    }
+    if (matches.length === 1) {
+      await sendStockBalance(db, toPhone, matches[0].id);
+      await askStockAgain(db, toPhone, stateKey);
+      return;
+    }
+    payload.stockMatches = matches.map((m) => ({ id: m.id, name: m.name }));
+    await setState(db, stateKey, "estoque", "awaiting_stock_pick", payload);
+    await sendWhatsAppList(
+      toPhone,
+      `Encontrei ${matches.length} produtos com "${query}". Qual deles?`,
+      "Escolher produto",
+      matches.map((m) => ({ id: `stock_${m.id}`, title: m.name.slice(0, 24) }))
+    );
+    return;
+  }
+  await sendWhatsAppText(toPhone, "Por favor, use as op\xE7\xF5es da mensagem anterior pra continuar.");
+}
+async function handleStockInteractiveStep(db, toPhone, stateKey, step, payload, replyId) {
+  if (step === "awaiting_stock_pick" && replyId.startsWith("stock_")) {
+    const productId = Number(replyId.replace("stock_", ""));
+    const match = (payload.stockMatches || []).find((m) => m.id === productId);
+    if (!match) {
+      await sendWhatsAppText(toPhone, "Op\xE7\xE3o inv\xE1lida, tente consultar de novo.");
+      return;
+    }
+    await sendStockBalance(db, toPhone, productId);
+    await askStockAgain(db, toPhone, stateKey);
+    return;
+  }
+  if (step === "awaiting_stock_again" && (replyId === "stock_again_yes" || replyId === "stock_again_no")) {
+    if (replyId === "stock_again_yes") {
+      await setState(db, stateKey, "estoque", "awaiting_stock_query", {});
+      await sendWhatsAppText(toPhone, "Digite o nome do pr\xF3ximo produto.");
+    } else {
+      await clearState(db, stateKey);
+      await sendWhatsAppText(toPhone, "At\xE9 a pr\xF3xima!");
+    }
+    return;
+  }
+  await sendWhatsAppText(toPhone, "Op\xE7\xE3o n\xE3o reconhecida. Por favor, use os bot\xF5es/lista da mensagem.");
+}
+async function handleInteractiveStep(db, toPhone, stateKey, step, payload, replyId, collaborator) {
+  if (step === "awaiting_category" && replyId.startsWith("cat_")) {
+    const categoryId = Number(replyId.replace("cat_", ""));
+    const [rows] = await db.execute(sql31`SELECT name FROM purchase_categories WHERE id = ${categoryId} LIMIT 1`);
+    const cat = rows[0];
+    if (!cat) {
+      await sendWhatsAppText(toPhone, "Categoria inv\xE1lida, tente de novo.");
+      return;
+    }
+    payload.categoryId = categoryId;
+    payload.categoryName = cat.name;
+    payload.items = [];
+    await setState(db, stateKey, "compra", "awaiting_item_name", payload);
+    await sendWhatsAppText(toPhone, `Categoria: ${cat.name}. Qual o nome do item que voc\xEA precisa?`);
+    return;
+  }
+  if (step === "awaiting_item_pack" && replyId === "pack_skip") {
+    await addPendingItem(db, toPhone, stateKey, payload);
+    return;
+  }
+  if (step === "awaiting_more_items" && (replyId === "more_yes" || replyId === "more_no")) {
+    if (replyId === "more_yes") {
+      await setState(db, stateKey, "compra", "awaiting_item_name", payload);
+      await sendWhatsAppText(toPhone, "Qual o nome do pr\xF3ximo item?");
+    } else {
+      await setState(db, stateKey, "compra", "awaiting_urgency", payload);
+      await sendWhatsAppList(toPhone, "Qual a urg\xEAncia dessa compra?", "Escolher urg\xEAncia", [
+        { id: "urg_baixa", title: URGENCY_LABELS.baixa },
+        { id: "urg_media", title: URGENCY_LABELS.media },
+        { id: "urg_alta", title: URGENCY_LABELS.alta },
+        { id: "urg_critica", title: URGENCY_LABELS.critica }
+      ]);
+    }
+    return;
+  }
+  if (step === "awaiting_urgency" && replyId.startsWith("urg_")) {
+    const urgency = replyId.replace("urg_", "");
+    if (!URGENCY_LABELS[urgency]) {
+      await sendWhatsAppText(toPhone, "Op\xE7\xE3o inv\xE1lida, escolha uma das urg\xEAncias da lista.");
+      return;
+    }
+    payload.urgency = urgency;
+    await setState(db, stateKey, "compra", "confirm", payload);
+    await sendWhatsAppButtons(toPhone, formatSummary(payload), [
+      { id: "confirm_yes", title: "Confirmar" },
+      { id: "confirm_no", title: "Cancelar" }
+    ]);
+    return;
+  }
+  if (step === "confirm" && (replyId === "confirm_yes" || replyId === "confirm_no")) {
+    if (replyId === "confirm_no") {
+      await clearState(db, stateKey);
+      await sendWhatsAppText(toPhone, "Solicita\xE7\xE3o cancelada.");
+      return;
+    }
+    const title = payload.items?.length === 1 ? payload.items[0].name : `${payload.categoryName} (${payload.items?.length || 0} itens)`;
+    const result = await createPurchaseRequestCore(db, {
+      title,
+      categoryId: payload.categoryId,
+      urgency: payload.urgency || "media",
+      items: payload.items,
+      userId: collaborator.userId,
+      requesterName: collaborator.name
+    });
+    await clearState(db, stateKey);
+    await sendWhatsAppText(toPhone, `Solicita\xE7\xE3o #${result.id} criada com sucesso! O financeiro j\xE1 foi avisado.`);
+    return;
+  }
+  await sendWhatsAppText(toPhone, "Op\xE7\xE3o n\xE3o reconhecida. Por favor, use os bot\xF5es/lista da mensagem.");
+}
+async function whatsappWebhookHandler(req, res) {
+  res.sendStatus(200);
+  if (!isValidSignature(req)) {
+    console.error("[WhatsAppBot] Assinatura inv\xE1lida \u2014 requisi\xE7\xE3o ignorada.");
+    return;
+  }
+  try {
+    const entry = req.body?.entry?.[0];
+    const change = entry?.changes?.[0];
+    const value = change?.value;
+    const message = value?.messages?.[0];
+    if (!message) return;
+    const fromRaw = message.from;
+    const localPhone = normalizePhoneLocal(fromRaw);
+    if (!localPhone) return;
+    const db = await getDb();
+    if (!db) return;
+    const [collabRows] = await db.execute(sql31`
+      SELECT c.id, c.name, c.user_id AS userId, c.phone
+      FROM collaborators c
+      WHERE c.user_id IS NOT NULL AND c.phone IS NOT NULL AND c.phone != ''
+    `);
+    const collaborator = collabRows.find((c) => normalizePhoneLocal(c.phone) === localPhone);
+    if (!collaborator) {
+      await sendWhatsAppText(fromRaw, "Esse n\xFAmero n\xE3o est\xE1 vinculado a nenhum usu\xE1rio do sistema. Fale com o financeiro pra liberar o acesso antes de pedir compras por aqui.");
+      return;
+    }
+    let state = await getState(db, localPhone);
+    if (state) {
+      const [rows] = await db.execute(sql31`SELECT TIMESTAMPDIFF(MINUTE, updated_at, NOW()) AS mins FROM whatsapp_conversation_state WHERE phone = ${localPhone}`);
+      const mins = rows[0]?.mins ?? 0;
+      if (mins > 30) {
+        await clearState(db, localPhone);
+        state = null;
+      }
+    }
+    if (!state) {
+      await setState(db, localPhone, "menu", "awaiting_menu_choice", {});
+      await sendMainMenu(fromRaw);
+      return;
+    }
+    if (message.type === "text") {
+      if (state.flow === "compra") {
+        await handleTextStep(db, fromRaw, localPhone, state.step, state.payload, message.text?.body || "", collaborator);
+      } else if (state.flow === "estoque") {
+        await handleStockTextStep(db, fromRaw, localPhone, state.step, state.payload, message.text?.body || "");
+      } else {
+        await sendWhatsAppText(fromRaw, "Por favor, escolha uma das op\xE7\xF5es da mensagem anterior.");
+      }
+    } else if (message.type === "interactive") {
+      const replyId = message.interactive?.list_reply?.id || message.interactive?.button_reply?.id;
+      if (replyId) {
+        if (state.flow === "menu") {
+          await handleMenuChoice(db, fromRaw, localPhone, replyId);
+        } else if (state.flow === "compra") {
+          await handleInteractiveStep(db, fromRaw, localPhone, state.step, state.payload, replyId, collaborator);
+        } else if (state.flow === "estoque") {
+          await handleStockInteractiveStep(db, fromRaw, localPhone, state.step, state.payload, replyId);
+        }
+      }
+    } else {
+      await sendWhatsAppText(fromRaw, "N\xE3o entendi essa mensagem. Por favor, use texto ou as op\xE7\xF5es apresentadas.");
+    }
+  } catch (err) {
+    console.error("[WhatsAppBot] Erro ao processar mensagem:", err);
+  }
 }
 
 // server/_core/index.ts
@@ -22432,6 +24300,55 @@ async function runAutoMigrations() {
     try {
       await db.execute(
         /*sql*/
+        `ALTER TABLE notas_fiscais ADD COLUMN valor_original varchar(20) NULL`
+      );
+    } catch {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE notas_fiscais ADD COLUMN receipt_url varchar(1000) NULL`
+      );
+    } catch {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE sicoob_boletos ADD COLUMN receipt_url varchar(1000) NULL`
+      );
+    } catch {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE cargo_loads ADD COLUMN buyer_receipt_url TEXT NULL`
+      );
+    } catch {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN payment_method ENUM('boleto','pix','cartao_credito','cartao_debito','dinheiro','transferencia','outro') NULL`
+      );
+    } catch {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN invoice_url VARCHAR(1000) NULL`
+      );
+    } catch {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN receipt_url VARCHAR(1000) NULL`
+      );
+    } catch {
+    }
+    try {
+      await db.execute(
+        /*sql*/
         `UPDATE notas_fiscais SET status_fiscal_conta_azul = status WHERE status_fiscal_conta_azul IS NULL AND status IS NOT NULL`
       );
     } catch {
@@ -22453,6 +24370,13 @@ async function runAutoMigrations() {
       )
     `
     );
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE notas_fiscais_status_log ADD COLUMN observacao TEXT NULL`
+      );
+    } catch {
+    }
     await db.execute(
       /*sql*/
       `
@@ -22941,6 +24865,313 @@ async function runAutoMigrations() {
       );
     } catch (e) {
     }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN quotation_request_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN winning_supplier_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN final_price VARCHAR(20) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN suppliers_breakdown TEXT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests MODIFY COLUMN status ENUM(
+        'pendente','lida','analisando','comprando','aprovada','comprada','recebida','cancelada','negada',
+        'pending','read','approved','purchased','received','cancelled','canceled'
+      ) NOT NULL DEFAULT 'pendente'`
+      );
+      console.log("[AutoMigration] purchase_requests.status ENUM ampliado (analisando/comprando)");
+    } catch (e) {
+      console.error("[AutoMigration] Falha ao ampliar ENUM de status:", e?.message);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `UPDATE purchase_requests SET status = 'pendente' WHERE status = ''`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS supplier_categories (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          supplier_id INT NOT NULL,
+          category_id INT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY supplier_categories_unique (supplier_id, category_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS whatsapp_conversation_state (
+          phone VARCHAR(20) PRIMARY KEY,
+          flow VARCHAR(50) NOT NULL,
+          step VARCHAR(50) NOT NULL,
+          payload TEXT NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS stock_locations (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(150) NOT NULL,
+          type ENUM('almoxarifado','oficina','veiculo','obra','outro') NOT NULL DEFAULT 'almoxarifado',
+          equipment_id INT NULL,
+          active TINYINT NOT NULL DEFAULT 1,
+          notes TEXT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `
+      );
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS stock_products (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          code VARCHAR(50) NULL,
+          name VARCHAR(255) NOT NULL,
+          unit VARCHAR(20) NOT NULL DEFAULT 'un',
+          category_id INT NULL,
+          min_stock DECIMAL(14,3) NOT NULL DEFAULT 0,
+          active TINYINT NOT NULL DEFAULT 1,
+          notes TEXT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `
+      );
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS stock_balances (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          location_id INT NOT NULL,
+          quantity DECIMAL(14,3) NOT NULL DEFAULT 0,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY stock_balances_product_location_unique (product_id, location_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `
+      );
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS stock_movements (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          type ENUM('entrada','saida','transferencia','ajuste','estorno','devolucao') NOT NULL,
+          quantity DECIMAL(14,3) NOT NULL,
+          from_location_id INT NULL,
+          to_location_id INT NULL,
+          unit_cost DECIMAL(14,4) NULL,
+          supplier_id INT NULL,
+          purchase_request_id INT NULL,
+          purchase_request_item_id INT NULL,
+          destination_equipment_id INT NULL,
+          destination_collaborator_id INT NULL,
+          destination_note VARCHAR(255) NULL,
+          reason TEXT NULL,
+          performed_by INT NULL,
+          balance_after DECIMAL(14,3) NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX stock_movements_product_idx (product_id),
+          INDEX stock_movements_pr_idx (purchase_request_id),
+          INDEX stock_movements_pri_idx (purchase_request_item_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `
+      );
+    } catch (e) {
+      console.error("[AutoMigration] estoque:", e);
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_request_items ADD COLUMN received_quantity DECIMAL(14,3) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_request_items ADD COLUMN stock_product_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_request_items ADD COLUMN stock_location_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_request_items ADD COLUMN received_at BIGINT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_request_items ADD COLUMN received_by INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_products ADD COLUMN brand VARCHAR(100) NULL AFTER name`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_products ADD COLUMN tracks_weight TINYINT NOT NULL DEFAULT 0`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_products ADD COLUMN density_kg_l DECIMAL(6,3) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_request_items ADD COLUMN package_size DECIMAL(14,3) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_request_items ADD COLUMN package_unit VARCHAR(10) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_loans ADD COLUMN consumed_stock DECIMAL(14,3) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_movements MODIFY COLUMN type ENUM('entrada','saida','transferencia','ajuste','estorno','devolucao') NOT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_loans MODIFY COLUMN exit_movement_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_loans MODIFY COLUMN quantity_taken DECIMAL(14,3) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_loans ADD COLUMN destination_collaborator_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_loans ADD COLUMN destination_equipment_id INT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_loans ADD COLUMN destination_note VARCHAR(255) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE stock_loans ADD COLUMN reason TEXT NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `
+        CREATE TABLE IF NOT EXISTS stock_loans (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          location_id INT NOT NULL,
+          exit_movement_id INT NULL,
+          quantity_taken DECIMAL(14,3) NULL,
+          gross_weight_out DECIMAL(14,3) NOT NULL,
+          destination_collaborator_id INT NULL,
+          destination_equipment_id INT NULL,
+          destination_note VARCHAR(255) NULL,
+          reason TEXT NULL,
+          status ENUM('aberta','devolvida') NOT NULL DEFAULT 'aberta',
+          gross_weight_in DECIMAL(14,3) NULL,
+          consumed DECIMAL(14,3) NULL,
+          return_movement_id INT NULL,
+          returned_by INT NULL,
+          returned_at TIMESTAMP NULL,
+          created_by INT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX stock_loans_status_idx (status),
+          INDEX stock_loans_product_idx (product_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `
+      );
+    } catch (e) {
+    }
     console.log("[AutoMigration] Tables verified/created successfully");
   } catch (err) {
     console.error("[AutoMigration] Error:", err);
@@ -22967,9 +25198,13 @@ async function startServer() {
     },
     credentials: true
   }));
-  app.use(express2.json({ limit: "50mb" }));
+  app.use(express2.json({ limit: "50mb", verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  } }));
   app.use(express2.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
+  app.get("/api/whatsapp/webhook", whatsappWebhookVerify);
+  app.post("/api/whatsapp/webhook", whatsappWebhookHandler);
   app.get("/api/report-diagnostic", async (req, res) => {
     try {
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -23007,7 +25242,7 @@ async function startServer() {
       try {
         const schema = await Promise.resolve().then(() => (init_schema(), schema_exports));
         const { cargoLoads: cargoLoads2, cargoDestinations: cargoDestinations3 } = schema;
-        const { eq: eq44, and: and26, or: or5, sql: sql31, asc: asc6 } = await import("drizzle-orm");
+        const { eq: eq44, and: and26, or: or5, sql: sql33, asc: asc6 } = await import("drizzle-orm");
         const destResult = await db.select({ name: cargoDestinations3.name, nickname: cargoDestinations3.nickname }).from(cargoDestinations3).where(eq44(cargoDestinations3.id, destId)).limit(1);
         const dName = destResult[0]?.name ?? null;
         const dNick = destResult[0]?.nickname ?? null;
@@ -23016,14 +25251,14 @@ async function startServer() {
         const orClauses = [eq44(cargoLoads2.destinationId, destId)];
         for (const k of keys) {
           orClauses.push(eq44(cargoLoads2.destination, k));
-          orClauses.push(sql31`${cargoLoads2.destination} LIKE ${esc(k) + " \u2014 %"}`);
-          orClauses.push(sql31`${cargoLoads2.destination} LIKE ${esc(k) + " - %"}`);
+          orClauses.push(sql33`${cargoLoads2.destination} LIKE ${esc(k) + " \u2014 %"}`);
+          orClauses.push(sql33`${cargoLoads2.destination} LIKE ${esc(k) + " - %"}`);
         }
         const startDate = String(req.query.startDate || "2026-08-01");
         const endDate = String(req.query.endDate || "2026-08-31");
         const conditions = [or5(...orClauses)];
-        conditions.push(sql31`${cargoLoads2.date} >= ${startDate}`);
-        conditions.push(sql31`${cargoLoads2.date} <= ${endDate + " 23:59:59"}`);
+        conditions.push(sql33`${cargoLoads2.date} >= ${startDate}`);
+        conditions.push(sql33`${cargoLoads2.date} <= ${endDate + " 23:59:59"}`);
         const rows = await db.select({ id: cargoLoads2.id, date: cargoLoads2.date, destination: cargoLoads2.destination, status: cargoLoads2.status, photosJson: cargoLoads2.photosJson }).from(cargoLoads2).where(and26(...conditions)).orderBy(asc6(cargoLoads2.date)).limit(50);
         drizzleSim = { keys, startDate, endDate, total: rows.length, rows: rows.slice(0, 10).map((r) => ({ ...r, photosJson: r.photosJson ? String(r.photosJson).slice(0, 80) : null })) };
       } catch (e) {
@@ -23087,38 +25322,6 @@ async function startServer() {
       });
     } catch (e) {
       return res.status(500).json({ error: e.message, stack: e.stack });
-    }
-  });
-  app.get("/api/pr-schema-diagnostic", async (req, res) => {
-    try {
-      const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
-      const db = await getDb2();
-      if (!db) return res.status(500).json({ error: "db indisponivel" });
-      const [cols] = await db.execute(
-        /*sql*/
-        `SHOW COLUMNS FROM purchase_requests`
-      );
-      const [itemsCols] = await db.execute(
-        /*sql*/
-        `SHOW COLUMNS FROM purchase_request_items`
-      );
-      let insertTest = null;
-      try {
-        await db.execute(
-          /*sql*/
-          `INSERT INTO purchase_requests (title, description, link, category_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at) VALUES ('__diag__', NULL, NULL, NULL, 'pending', 'medium', 0, 1, NULL, NOW(), NOW())`
-        );
-        insertTest = "ok";
-        await db.execute(
-          /*sql*/
-          `DELETE FROM purchase_requests WHERE title = '__diag__'`
-        );
-      } catch (e) {
-        insertTest = { error: e.message };
-      }
-      return res.json({ columns: cols, itemsColumns: itemsCols, insertTest });
-    } catch (e) {
-      return res.status(500).json({ error: e.message });
     }
   });
   app.get("/api/image-proxy", async (req, res) => {

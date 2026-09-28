@@ -931,6 +931,16 @@ export const sicoobRouter = router({
     }),
 
 
+  updateReceipt: protectedProcedure
+    .input(z.object({ id: z.number(), receiptUrl: z.string().url() }))
+    .mutation(async ({ input }) => {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      await db.$client.execute(`UPDATE sicoob_boletos SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
+      return { success: true };
+    }),
+
   updateValor: protectedProcedure
     .input(z.object({ id: z.number(), valor: z.string() }))
     .mutation(async ({ input }) => {

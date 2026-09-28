@@ -454,15 +454,40 @@ export const contaAzulRouter = router({
       return { success: true };
     }),
 
-  // Edita o valor da NF manualmente (protegido de sobrescrita em sincronizações futuras)
-  updateValorNF: protectedProcedure
-    .input(z.object({ id: z.number(), valor: z.string() }))
+  // Edita o valor da NF manualmente (protegido de sobrescrita em sincronizações futuras).
+  // Guarda o valor original (só na primeira edição) e registra no log de auditoria com o
+  // Anexa/troca o comprovante de pagamento da NF. O upload em si (Cloudinary) acontece no
+  // cliente; aqui só grava a URL já pronta.
+  updateReceiptNF: protectedProcedure
+    .input(z.object({ id: z.number(), receiptUrl: z.string().url() }))
     .mutation(async ({ input }) => {
       const db = await getDbInstance();
       if (!db) throw new Error("DB indisponível");
+      await db.$client.execute(`UPDATE notas_fiscais SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
+      return { success: true };
+    }),
+
+  // motivo — comum quando o cliente desconta na hora de pagar por divergência de peso
+  // entre o que a NF declara e o que foi efetivamente entregue/pesado.
+  updateValorNF: protectedProcedure
+    .input(z.object({ id: z.number(), valor: z.string(), observacao: z.string().min(1, "Informe o motivo do ajuste") }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDbInstance();
+      if (!db) throw new Error("DB indisponível");
+      const [rows] = await db.$client.execute(
+        `SELECT valor_total, valor_original FROM notas_fiscais WHERE id = ?`, [input.id]
+      ) as any;
+      const atual = (rows as any[])?.[0];
+      if (!atual) throw new Error("NF não encontrada");
+
       await db.$client.execute(
-        `UPDATE notas_fiscais SET valor_total = ?, valor_editado = 1 WHERE id = ?`,
-        [input.valor, input.id]
+        `UPDATE notas_fiscais SET valor_total = ?, valor_editado = 1, valor_original = COALESCE(valor_original, ?) WHERE id = ?`,
+        [input.valor, atual.valor_total, input.id]
+      );
+      await db.$client.execute(
+        `INSERT INTO notas_fiscais_status_log (nota_fiscal_id, campo, valor_anterior, valor_novo, usuario_id, usuario_nome, observacao, alterado_em)
+         VALUES (?, 'valor_total', ?, ?, ?, ?, ?, NOW())`,
+        [input.id, atual.valor_total, input.valor, ctx.user?.id ?? null, ctx.user?.name ?? "Desconhecido", input.observacao]
       );
       return { success: true };
     }),

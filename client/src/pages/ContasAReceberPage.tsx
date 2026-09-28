@@ -3,12 +3,16 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
   ChevronLeft, ChevronRight, RefreshCw, Search, AlertCircle,
   Link2, Link2Off, Settings, FileDown, ArrowUp, ArrowDown, ArrowUpDown,
+  PencilLine, History, Paperclip, FileCheck, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
@@ -64,10 +68,10 @@ function fmtQuantidadeNf(quantidade?: string | number | null, unidade?: string |
   return `${n.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}${sufixo ? " " + sufixo : ""}`;
 }
 
-// Diferença entre a quantidade declarada na NF (unidade da própria NF: TON ou M3) e a quantidade
-// registrada na carga vinculada (peso líquido convertido pra ton, ou volume em m³, conforme a
-// unidade da NF) — serve pra flagar cargas onde o que saiu na nota não bate com o que foi pesado/
-// medido na entrega.
+// Diferença = quantidade registrada na carga vinculada (peso líquido convertido pra ton, ou volume
+// em m³, conforme a unidade da NF) MENOS a quantidade declarada na NF — serve pra flagar cargas onde
+// o que foi pesado/medido na entrega não bate com o que saiu na nota. Positivo = entregou a mais
+// que a NF; negativo = entregou a menos (base pro desconto do cliente).
 function calcDiferencaNfCarga(nf: any): { diff: number | null; unidade: string } {
   const qtdNf = nf.quantidade != null && nf.quantidade !== "" ? parseFloat(String(nf.quantidade).replace(",", ".")) : null;
   if (qtdNf == null || isNaN(qtdNf)) return { diff: null, unidade: "" };
@@ -75,12 +79,12 @@ function calcDiferencaNfCarga(nf: any): { diff: number | null; unidade: string }
   if (u === "TON") {
     const pesoKg = nf.carga_peso_kg != null && nf.carga_peso_kg !== "" ? parseFloat(String(nf.carga_peso_kg).replace(",", ".")) : null;
     if (pesoKg == null || isNaN(pesoKg)) return { diff: null, unidade: "ton" };
-    return { diff: qtdNf - pesoKg / 1000, unidade: "ton" };
+    return { diff: pesoKg / 1000 - qtdNf, unidade: "ton" };
   }
   if (u === "M3") {
     const vol = nf.carga_volume_m3 != null && nf.carga_volume_m3 !== "" ? parseFloat(String(nf.carga_volume_m3).replace(",", ".")) : null;
     if (vol == null || isNaN(vol)) return { diff: null, unidade: "m³" };
-    return { diff: qtdNf - vol, unidade: "m³" };
+    return { diff: vol - qtdNf, unidade: "m³" };
   }
   return { diff: null, unidade: "" };
 }
@@ -157,6 +161,50 @@ function sortRows<T>(rows: T[], sort: SortState, getValue: (row: T, field: strin
   return sorted;
 }
 
+// Sobe direto pro Cloudinary (mesmo preset/pasta já usados pro comprovante de fechamento
+// semanal em CargoControl.tsx) e devolve a URL — sem passar payload de arquivo pelo tRPC.
+async function uploadReceiptFile(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", "btree_ambiental");
+  formData.append("folder", "btree-receipts");
+  const res = await fetch("https://api.cloudinary.com/v1_1/djob7pxme/auto/upload", { method: "POST", body: formData });
+  const data = await res.json();
+  if (!data.secure_url) throw new Error("Upload não retornou URL");
+  return data.secure_url as string;
+}
+
+// Botão de anexar/ver comprovante — reaproveitado nas 3 abas (Boletos, NFs, Cargas a Receber).
+function ReceiptButton({ receiptUrl, onUpload, isUploading }: { receiptUrl?: string | null; onUpload: (url: string) => void; isUploading?: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pick = () => inputRef.current?.click();
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      toast.info("Enviando comprovante...");
+      const url = await uploadReceiptFile(file);
+      onUpload(url);
+    } catch {
+      toast.error("Erro ao enviar comprovante");
+    }
+  };
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleChange} />
+      {receiptUrl && (
+        <a href={receiptUrl} target="_blank" rel="noopener noreferrer" title="Ver comprovante" className="text-emerald-600 hover:text-emerald-700">
+          <FileCheck className="h-4 w-4" />
+        </a>
+      )}
+      <button type="button" onClick={pick} disabled={isUploading} title={receiptUrl ? "Substituir comprovante" : "Anexar comprovante"} className="text-muted-foreground hover:text-primary disabled:opacity-50">
+        {receiptUrl ? <Upload className="h-3.5 w-3.5" /> : <Paperclip className="h-4 w-4" />}
+      </button>
+    </span>
+  );
+}
+
 function SortableHeader({ label, field, sort, onSort, className, align }: {
   label: string; field: string; sort: SortState; onSort: (field: string) => void;
   className?: string; align?: "right" | "center";
@@ -218,6 +266,11 @@ export default function ContasAReceberPage() {
   const updateValorMutation = trpc.sicoob.updateValor.useMutation({
     onSuccess: () => { refetchSummary(); refetchList(); },
     onError: () => toast.error("Falha ao atualizar valor"),
+  });
+
+  const updateReceiptBoletoMutation = trpc.sicoob.updateReceipt.useMutation({
+    onSuccess: () => { toast.success("Comprovante anexado!"); refetchList(); },
+    onError: (e) => toast.error(`Falha ao anexar comprovante: ${e.message}`),
   });
 
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -310,24 +363,43 @@ export default function ContasAReceberPage() {
   });
 
   const updateValorNfMutation = trpc.contaAzul.updateValorNF.useMutation({
-    onSuccess: () => { refetchNFs(); refetchNFSummary(); },
-    onError: () => toast.error("Falha ao atualizar valor da NF"),
+    onSuccess: () => {
+      refetchNFs(); refetchNFSummary();
+      toast.success("Valor da NF atualizado!");
+      setValorDialogNf(null);
+    },
+    onError: (e) => toast.error(`Falha ao atualizar valor da NF: ${e.message}`),
   });
 
-  const [editingNfId, setEditingNfId] = useState<number | null>(null);
-  const [editingNfValor, setEditingNfValor] = useState("");
-  const nfInputRef = useRef<HTMLInputElement>(null);
+  const updateReceiptNfMutation = trpc.contaAzul.updateReceiptNF.useMutation({
+    onSuccess: () => { toast.success("Comprovante anexado!"); refetchNFs(); },
+    onError: (e) => toast.error(`Falha ao anexar comprovante: ${e.message}`),
+  });
 
-  const startEditNf = (id: number, valor: string) => {
-    setEditingNfId(id);
-    setEditingNfValor(parseFloat(valor || "0").toFixed(2).replace(".", ","));
-    setTimeout(() => nfInputRef.current?.select(), 0);
+  // Dialog de ajuste manual de valor — substitui o clique-e-edita inline: ajuste de valor
+  // fiscal precisa de confirmação deliberada e do motivo (comum quando o cliente desconta
+  // na hora de pagar por divergência de peso entre o que a NF declara e o que foi entregue).
+  const [valorDialogNf, setValorDialogNf] = useState<any | null>(null);
+  const [valorDialogValor, setValorDialogValor] = useState("");
+  const [valorDialogObs, setValorDialogObs] = useState("");
+
+  const openValorDialog = (nf: any) => {
+    setValorDialogNf(nf);
+    setValorDialogValor(parseFloat(nf.valor_total || "0").toFixed(2).replace(".", ","));
+    setValorDialogObs("");
   };
-  const commitEditNf = (id: number) => {
-    const num = parseFloat(editingNfValor.replace(/\./g, "").replace(",", "."));
-    if (!isNaN(num) && num >= 0) updateValorNfMutation.mutate({ id, valor: String(num) });
-    setEditingNfId(null);
+  const commitValorDialog = () => {
+    if (!valorDialogNf) return;
+    const num = parseFloat(valorDialogValor.replace(/\./g, "").replace(",", "."));
+    if (isNaN(num) || num < 0) { toast.error("Valor inválido"); return; }
+    if (!valorDialogObs.trim()) { toast.error("Informe o motivo do ajuste"); return; }
+    updateValorNfMutation.mutate({ id: valorDialogNf.id, valor: String(num), observacao: valorDialogObs.trim() });
   };
+
+  const { data: valorHistorico } = trpc.contaAzul.historicoStatusNf.useQuery(
+    { notaFiscalId: valorDialogNf?.id },
+    { enabled: !!valorDialogNf }
+  );
 
   const todasNotas = nfData?.notas ?? [];
 
@@ -425,6 +497,10 @@ export default function ContasAReceberPage() {
     onSuccess: () => { refetchCargas(); toast.success("Desfeito"); },
     onError: (e) => toast.error(`Falha: ${e.message}`),
   });
+  const updateReceiptCargaMutation = trpc.buyerClients.updateCargaReceipt.useMutation({
+    onSuccess: () => { toast.success("Comprovante anexado!"); refetchCargas(); },
+    onError: (e) => toast.error(`Falha ao anexar comprovante: ${e.message}`),
+  });
 
   const handleExportExcel = async () => {
     if (boletos.length === 0 && notas.length === 0 && cargas.length === 0) {
@@ -486,7 +562,7 @@ export default function ContasAReceberPage() {
             { header: "Madeira", width: 14 },
             { header: "Volume", width: 12 },
             { header: "Peso", width: 12 },
-            { header: "Diferença (NF x Carga)", width: 18 },
+            { header: "Diferença (Carga - NF)", width: 18 },
             { header: "Situação Carga", width: 16 },
           ],
           rows: notas.map((nf: any) => {
@@ -736,14 +812,15 @@ export default function ContasAReceberPage() {
                   <SortableHeader label="Total (R$)" field="valor" sort={sortBoletos} onSort={toggleSort(sortBoletos, setSortBoletos)} className="w-32" align="right" />
                   <TableHead className="text-right w-32">A receber (R$)</TableHead>
                   <SortableHeader label="Situação" field="situacao" sort={sortBoletos} onSort={toggleSort(sortBoletos, setSortBoletos)} className="w-28" />
+                  <TableHead className="w-20">Comprovante</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                 )}
                 {!isLoading && boletos.length === 0 && (
-                  <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Nenhum boleto para {MESES[mes - 1]}/{ano}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Nenhum boleto para {MESES[mes - 1]}/{ano}</TableCell></TableRow>
                 )}
                 {boletos.map((b: any) => {
                   const sit    = SITUACAO_LABEL[b.situacao] ?? SITUACAO_LABEL[1];
@@ -778,6 +855,13 @@ export default function ContasAReceberPage() {
                       <TableCell className="text-right text-sm text-muted-foreground">{fmtMoeda(aRec)}</TableCell>
                       <TableCell>
                         <Badge variant={sit.variant} className="text-xs">{sit.label}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <ReceiptButton
+                          receiptUrl={b.receipt_url}
+                          isUploading={updateReceiptBoletoMutation.isPending}
+                          onUpload={(url) => updateReceiptBoletoMutation.mutate({ id: b.id, receiptUrl: url })}
+                        />
                       </TableCell>
                     </TableRow>
                   );
@@ -826,17 +910,18 @@ export default function ContasAReceberPage() {
                   <SortableHeader label="Madeira" field="carga_madeira" sort={sortNfs} onSort={toggleSort(sortNfs, setSortNfs)} className="w-24" />
                   <SortableHeader label="Volume" field="carga_volume_m3" sort={sortNfs} onSort={toggleSort(sortNfs, setSortNfs)} className="w-24" align="right" />
                   <SortableHeader label="Peso" field="carga_peso_kg" sort={sortNfs} onSort={toggleSort(sortNfs, setSortNfs)} className="w-24" align="right" />
-                  <SortableHeader label="Diferença (NF x Carga)" field="diferenca_nf_carga" sort={sortNfs} onSort={toggleSort(sortNfs, setSortNfs)} className="w-20" align="right" />
+                  <SortableHeader label="Diferença (Carga - NF)" field="diferenca_nf_carga" sort={sortNfs} onSort={toggleSort(sortNfs, setSortNfs)} className="w-20" align="right" />
                   <SortableHeader label="Situação" field="carga_situacao" sort={sortNfs} onSort={toggleSort(sortNfs, setSortNfs)} className="w-32" />
+                  <TableHead className="w-20">Comprovante</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {nfLoading && (
-                  <TableRow><TableCell colSpan={17} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={18} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                 )}
                 {!nfLoading && notas.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={17} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={18} className="text-center py-8 text-muted-foreground">
                       {caStatus?.totalNFs === 0
                         ? `Nenhuma NF para ${MESES[mes - 1]}/${ano} — clique em "Sincronizar Conta Azul"`
                         : "Nenhuma NF encontrada no filtro"}
@@ -845,32 +930,32 @@ export default function ContasAReceberPage() {
                 )}
                 {notas.map((nf: any) => {
                   const isCancelada = nf.status_nf_interno === "cancelado";
+                  // "valor_editado" só fica true pra sempre, mesmo se o usuário editar e voltar pro
+                  // valor original — por isso comparamos os dois valores aqui em vez de confiar só na flag.
+                  const valorDivergeDoOriginal = !!nf.valor_editado && nf.valor_original != null
+                    && Math.abs(parseFloat(nf.valor_total ?? "0") - parseFloat(nf.valor_original)) > 0.001;
                   return (
-                    <TableRow key={nf.id} className={`hover:bg-muted/30 ${isCancelada ? "opacity-50" : ""}`}>
+                    <TableRow
+                      key={nf.id}
+                      className={`${!isCancelada && valorDivergeDoOriginal ? "bg-amber-50 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30" : "hover:bg-muted/30"} ${isCancelada ? "opacity-50" : ""}`}
+                    >
                       <TableCell className={`text-sm ${isCancelada ? "line-through" : ""}`}>{fmtData(nf.data_emissao)}</TableCell>
                       <TableCell><div className={`font-medium text-sm ${isCancelada ? "line-through" : ""}`}>{nf.nome_destinatario ?? "—"}</div></TableCell>
                       <TableCell className="text-sm font-mono text-xs text-muted-foreground">{nf.numero_nota ?? "—"}</TableCell>
                       <TableCell className="text-xs">{nf.unidade ?? "—"}</TableCell>
                       <TableCell className="text-xs text-right">{fmtQuantidadeNf(nf.quantidade, nf.unidade)}</TableCell>
                       <TableCell className={`text-right font-medium text-sm ${isCancelada ? "line-through" : ""}`}>
-                        {editingNfId === nf.id ? (
-                          <input
-                            ref={nfInputRef}
-                            className="w-28 text-right border rounded px-1 py-0.5 text-sm font-medium bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                            value={editingNfValor}
-                            onChange={e => setEditingNfValor(e.target.value)}
-                            onBlur={() => commitEditNf(nf.id)}
-                            onKeyDown={e => { if (e.key === "Enter") commitEditNf(nf.id); if (e.key === "Escape") setEditingNfId(null); }}
-                          />
-                        ) : (
-                          <span
-                            className={`cursor-pointer hover:underline hover:text-primary ${isCancelada ? "pointer-events-none" : ""}`}
-                            title="Clique para editar"
-                            onClick={() => !isCancelada && startEditNf(nf.id, nf.valor_total)}
-                          >
-                            {fmtMoeda(nf.valor_total ?? "0")}
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          disabled={isCancelada}
+                          className={`inline-flex items-center gap-1 hover:underline hover:text-primary ${isCancelada ? "pointer-events-none" : ""}`}
+                          title={valorDivergeDoOriginal
+                            ? `Valor ajustado manualmente — original: ${fmtMoeda(nf.valor_original ?? "0")}. Clique para editar.`
+                            : "Clique para editar o valor"}
+                          onClick={() => openValorDialog(nf)}
+                        >
+                          {fmtMoeda(nf.valor_total ?? "0")}
+                        </button>
                       </TableCell>
                       <TableCell>
                         <select
@@ -907,7 +992,7 @@ export default function ContasAReceberPage() {
                           if (diff == null) return <span className="text-muted-foreground">—</span>;
                           const igual = Math.abs(diff) < TOLERANCIA_DIFERENCA;
                           return (
-                            <span className={igual ? "text-muted-foreground" : "font-semibold text-red-600 dark:text-red-400"}>
+                            <span className={igual ? "text-muted-foreground" : diff > 0 ? "font-semibold text-emerald-600 dark:text-emerald-400" : "font-semibold text-red-600 dark:text-red-400"}>
                               {diff > 0 ? "+" : ""}{diff.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {unidade}
                             </span>
                           );
@@ -925,6 +1010,13 @@ export default function ContasAReceberPage() {
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <ReceiptButton
+                          receiptUrl={nf.receipt_url}
+                          isUploading={updateReceiptNfMutation.isPending}
+                          onUpload={(url) => updateReceiptNfMutation.mutate({ id: nf.id, receiptUrl: url })}
+                        />
                       </TableCell>
                     </TableRow>
                   );
@@ -961,15 +1053,16 @@ export default function ContasAReceberPage() {
                   <SortableHeader label="Valor (R$)" field="valor" sort={sortCargas} onSort={toggleSort(sortCargas, setSortCargas)} className="w-32" align="right" />
                   <SortableHeader label="Vencimento" field="vencimento" sort={sortCargas} onSort={toggleSort(sortCargas, setSortCargas)} className="w-28" />
                   <SortableHeader label="Situação" field="situacao" sort={sortCargas} onSort={toggleSort(sortCargas, setSortCargas)} className="w-32" />
+                  <TableHead className="w-20">Comprovante</TableHead>
                   <TableHead className="w-32">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {cargasLoading && (
-                  <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                 )}
                 {!cargasLoading && cargas.length === 0 && (
-                  <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhuma carga a receber para {MESES[mes - 1]}/{ano}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Nenhuma carga a receber para {MESES[mes - 1]}/{ano}</TableCell></TableRow>
                 )}
                 {cargas.map((c: any) => {
                   const hoje = new Date().toISOString().slice(0, 10);
@@ -999,6 +1092,13 @@ export default function ContasAReceberPage() {
                         )}
                       </TableCell>
                       <TableCell>
+                        <ReceiptButton
+                          receiptUrl={c.receiptUrl}
+                          isUploading={updateReceiptCargaMutation.isPending}
+                          onUpload={(url) => updateReceiptCargaMutation.mutate({ id: c.id, receiptUrl: url })}
+                        />
+                      </TableCell>
+                      <TableCell>
                         {recebido ? (
                           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => unmarkCargaRecebidaMutation.mutate({ id: c.id })} disabled={unmarkCargaRecebidaMutation.isPending}>
                             Desfazer
@@ -1020,6 +1120,80 @@ export default function ContasAReceberPage() {
           )}
         </>
       )}
+
+      {/* Ajuste manual de valor da NF — com motivo obrigatório e histórico de alterações */}
+      <Dialog open={!!valorDialogNf} onOpenChange={(open) => !open && setValorDialogNf(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PencilLine className="w-4 h-4 text-amber-500" />
+              Ajustar valor da NF {valorDialogNf?.numero_nota ?? ""}
+            </DialogTitle>
+          </DialogHeader>
+          {valorDialogNf && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Valor original</p>
+                  <p className="font-medium">{fmtMoeda(valorDialogNf.valor_original ?? valorDialogNf.valor_total ?? "0")}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Quantidade na NF</p>
+                  <p className="font-medium">{fmtQuantidadeNf(valorDialogNf.quantidade, valorDialogNf.unidade)}</p>
+                </div>
+              </div>
+              {valorDialogNf.carga_peso_kg && (
+                <p className="text-xs text-muted-foreground">
+                  Peso registrado na carga: {(parseFloat(valorDialogNf.carga_peso_kg) / 1000).toFixed(2)} ton
+                </p>
+              )}
+              <div>
+                <Label>Novo valor (R$) *</Label>
+                <Input
+                  value={valorDialogValor}
+                  onChange={e => setValorDialogValor(e.target.value)}
+                  placeholder="0,00"
+                />
+              </div>
+              <div>
+                <Label>Motivo do ajuste *</Label>
+                <Textarea
+                  value={valorDialogObs}
+                  onChange={e => setValorDialogObs(e.target.value)}
+                  placeholder="Ex: cliente descontou por divergência de peso na entrega (NF: 40 ton, entregue: 38 ton)"
+                  rows={3}
+                />
+              </div>
+              {(valorHistorico?.historico?.length ?? 0) > 0 && (
+                <div className="pt-2 border-t">
+                  <p className="text-xs font-medium flex items-center gap-1 text-muted-foreground mb-1.5">
+                    <History className="w-3.5 h-3.5" /> Histórico de alterações
+                  </p>
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {valorHistorico!.historico.map((h: any) => (
+                      <div key={h.id} className="text-xs bg-muted/50 rounded px-2 py-1.5">
+                        <p className="text-muted-foreground">
+                          {h.usuario_nome} · {new Date(h.alterado_em).toLocaleString('pt-BR')}
+                        </p>
+                        <p>
+                          <span className="font-medium">{h.campo}</span>: {h.valor_anterior} → {h.valor_novo}
+                        </p>
+                        {h.observacao && <p className="italic text-muted-foreground">"{h.observacao}"</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setValorDialogNf(null)}>Cancelar</Button>
+            <Button onClick={commitValorDialog} disabled={updateValorNfMutation.isPending}>
+              {updateValorNfMutation.isPending ? "Salvando..." : "Salvar ajuste"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
