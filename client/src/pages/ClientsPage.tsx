@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import ClientAreasManager from "@/components/ClientAreasManager";
+import ClientAreaSelect, { areaDisplayName } from "@/components/ClientAreaSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +40,7 @@ export default function ClientsPage() {
   const [form, setForm] = useState<FormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteName, setDeleteName] = useState("");
+  const [areaManagerClient, setAreaManagerClient] = useState<{ clientId: number; clientName: string } | null>(null);
 
   // Diálogo de senha do portal
   const [passwordDialog, setPasswordDialog] = useState<{ clientId: number; clientName: string } | null>(null);
@@ -46,12 +49,15 @@ export default function ClientsPage() {
 
   // Documentos do cliente
   const [docClientId, setDocClientId] = useState<number | null>(null);
+  const [docAreaId, setDocAreaId] = useState<number | null>(null);
   const [docTitle, setDocTitle] = useState("");
   const [docType, setDocType] = useState<string>("proposta");
   const [uploading, setUploading] = useState(false);
 
   // Adiantamentos
   const [advanceDialog, setAdvanceDialog] = useState<{ clientId: number; clientName: string } | null>(null);
+  // null is an explicit legacy scope (Área atual); new areas are never auto-selected.
+  const [advanceAreaId, setAdvanceAreaId] = useState<number | null>(null);
   const [advanceForm, setAdvanceForm] = useState({ amount: "", description: "", date: new Date().toISOString().slice(0, 10), startDate: "" });
   const [advanceClientId, setAdvanceClientId] = useState<number | null>(null);
   const [advanceReceiptFile, setAdvanceReceiptFile] = useState<File | null>(null);
@@ -73,7 +79,7 @@ export default function ClientsPage() {
   const utils = trpc.useUtils();
   const { data: clientsList = [], isLoading } = trpc.clients.list.useQuery({ search: search || undefined });
   const { data: clientDocs = [], refetch: refetchDocs } = trpc.cargoLoads.listClientDocuments.useQuery(
-    { clientId: docClientId ?? 0 },
+    { clientId: docClientId ?? 0, areaId: docAreaId },
     { enabled: !!docClientId }
   );
   const uploadDocMutation = trpc.cargoLoads.uploadClientDocument.useMutation({
@@ -95,6 +101,7 @@ export default function ClientsPage() {
       const base64 = (reader.result as string).split(",")[1];
       uploadDocMutation.mutate({
         clientId: docClientId,
+        areaId: docAreaId,
         type: docType as any,
         title: docTitle || file.name,
         fileBase64: base64,
@@ -152,6 +159,7 @@ export default function ClientsPage() {
   const openEdit = (c: any) => {
     setEditId(c.id);
     setDocClientId(c.id);
+    setDocAreaId(null);
     setForm({ name: c.name, document: c.document || "", email: c.email || "", phone: c.phone || "", address: c.address || "", city: c.city || "", state: c.state || "", notes: c.notes || "", pricePerTon: c.pricePerTon || "", paymentTermDays: c.paymentTermDays ? String(c.paymentTermDays) : "21" });
     setIsOpen(true);
   };
@@ -163,9 +171,15 @@ export default function ClientsPage() {
   };
 
   const { data: advancesList = [] } = trpc.clientAdvances.list.useQuery(
-    { clientId: advanceClientId ?? 0 },
+    { clientId: advanceClientId ?? 0, areaId: advanceAreaId },
     { enabled: !!advanceClientId }
   );
+  const { data: advanceAreas = [] } = trpc.clientAreas.list.useQuery(
+    { clientId: advanceClientId ?? 0 },
+    { enabled: !!advanceClientId, retry: false }
+  );
+  const selectedAdvanceArea = (advanceAreas as any[]).find((area: any) => area.id === advanceAreaId) || null;
+  const advanceAreaPending = !!selectedAdvanceArea && selectedAdvanceArea.agreementStatus === "pending";
   const uploadReceiptMutation = trpc.clientAdvances.uploadReceipt.useMutation();
   const createAdvanceMutation = trpc.clientAdvances.create.useMutation({
     onSuccess: async (data) => {
@@ -257,13 +271,13 @@ export default function ClientsPage() {
     onError: (e) => toast.error(e.message || "Erro ao atualizar adiantamento"),
   });
   const { data: advanceDeductions = [] } = trpc.clientAdvances.listDeductions.useQuery(
-    { clientId: advanceClientId ?? 0 },
+    { clientId: advanceClientId ?? 0, areaId: advanceAreaId },
     { enabled: !!advanceClientId }
   );
 
   // Buscar cargas do cliente para abatimento
   const { data: clientLoadsForDeduct = [] } = trpc.cargoLoads.list.useQuery(
-    { clientId: advanceClientId ?? 0 },
+    { clientId: advanceClientId ?? 0, areaId: advanceAreaId },
     { enabled: !!autoDeductDialog && !!advanceClientId }
   );
 
@@ -296,11 +310,20 @@ export default function ClientsPage() {
 
   const handleAutoDeduct = () => {
     if (!autoDeductDialog || !advanceClientId) return;
-    // Filtrar cargas entregues no período selecionado
-    const pricePerTon = parseFloat(
-      clientsList.find((c: any) => c.id === advanceClientId)?.pricePerTon || '0'
-    );
-    if (pricePerTon <= 0) {
+    if (advanceAreaPending) {
+      toast.error("Esta área está pendente. Confirme as condições antes de calcular ou abater cargas.");
+      return;
+    }
+    // A área nova usa somente seus próprios termos; o legado usa as condições do cliente.
+    const client = clientsList.find((c: any) => c.id === advanceClientId);
+    const areaUnit = selectedAdvanceArea?.unit || "ton";
+    const areaPrice = parseFloat(selectedAdvanceArea?.unitPrice || "0");
+    const legacyPrice = parseFloat(client?.pricePerTon || "0");
+    if (advanceAreaId !== null && areaPrice <= 0) {
+      toast.error("Configure o preço da área antes de abater.");
+      return;
+    }
+    if (advanceAreaId === null && legacyPrice <= 0) {
       toast.error("Configure o preço por tonelada no cadastro do cliente antes de abater.");
       return;
     }
@@ -316,7 +339,9 @@ export default function ClientsPage() {
     const loads = filtered.map((l: any) => ({
       id: l.id,
       date: typeof l.date === 'string' ? l.date : new Date(l.date).toISOString().slice(0, 10),
-      valueAmount: (parseFloat(l.weightNetKg || '0') / 1000) * pricePerTon,
+      valueAmount: areaUnit === "m3"
+        ? parseFloat(l.volumeM3 || "0") * areaPrice
+        : (parseFloat(l.weightNetKg || l.weightOutKg || "0") / 1000) * (advanceAreaId === null ? legacyPrice : areaPrice),
       description: `Carga ${l.vehiclePlate || ''} - ${l.destination || ''} - ${new Date(l.date).toLocaleDateString('pt-BR')}`,
     })).filter((l: any) => l.valueAmount > 0);
     if (loads.length === 0) {
@@ -325,6 +350,7 @@ export default function ClientsPage() {
     }
     applyAutoDeductMutation.mutate({
       clientId: advanceClientId,
+      areaId: advanceAreaId,
       advanceId: autoDeductDialog.advanceId,
       loads,
     });
@@ -339,6 +365,7 @@ export default function ClientsPage() {
     try {
       const [kobayashiB64] = await loadPdfAssets();
       const clientName = advanceDialog.clientName;
+      const areaLabel = advanceAreaId === null ? "Área atual (legado)" : areaDisplayName(selectedAdvanceArea);
       const advDate = adv.date ? pdfSafeDate(adv.date).toLocaleDateString('pt-BR') : '-';
       const advAmount = parseFloat(adv.amount || '0');
       const advBalance = parseFloat(adv.balanceRemaining || '0');
@@ -410,6 +437,7 @@ export default function ClientsPage() {
   <div class="pdf-subheader">
     <div>
       <span style="font-size:15px;font-weight:700;color:#0d4f2e;">Cliente: ${clientName}</span><br/>
+      <span style="font-size:12px;color:#374151;">Área: ${areaLabel}</span><br/>
       <span style="font-size:12px;color:#6b7280;">Adiantamento de ${advAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} &middot; Data: ${advDate}</span>
       ${adv.description ? `<br/><span style="font-size:11px;color:#6b7280;font-style:italic;">${adv.description}</span>` : ''}
     </div>
@@ -537,7 +565,17 @@ export default function ClientsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => { setAdvanceDialog({ clientId: c.id, clientName: c.name }); setAdvanceClientId(c.id); }}
+                      onClick={() => setAreaManagerClient({ clientId: c.id, clientName: c.name })}
+                      className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 text-xs gap-1 flex-1"
+                      title="Gerenciar áreas do cliente"
+                    >
+                      <MapPin className="h-3 w-3" />
+                      <span>Áreas</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setAdvanceDialog({ clientId: c.id, clientName: c.name }); setAdvanceClientId(c.id); setAdvanceAreaId(null); }}
                       className="text-amber-700 border-amber-200 hover:bg-amber-50 text-xs gap-1 flex-1"
                       title="Gerenciar adiantamentos"
                     >
@@ -557,6 +595,13 @@ export default function ClientsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog: Gerenciar áreas do cliente */}
+      <Dialog open={!!areaManagerClient} onOpenChange={(open) => { if (!open) setAreaManagerClient(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {areaManagerClient && <ClientAreasManager clientId={areaManagerClient.clientId} clientName={areaManagerClient.clientName} />}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Definir Senha do Portal */}
       <Dialog open={!!passwordDialog} onOpenChange={(v) => { if (!v) { setPasswordDialog(null); setNewPassword(""); } }}>
@@ -640,6 +685,7 @@ export default function ClientsPage() {
             {editId && (
               <div className="p-3 bg-amber-50 rounded-lg space-y-3">
                 <p className="text-sm font-semibold text-amber-800 flex items-center gap-2"><FileText className="h-4 w-4" /> Documentos do Cliente</p>
+                <ClientAreaSelect clientId={editId} value={docAreaId} onChange={(id) => setDocAreaId(id)} label="Escopo do documento" />
                 {/* Lista de documentos existentes */}
                 {clientDocs.length > 0 && (
                   <div className="space-y-2">
@@ -708,7 +754,7 @@ export default function ClientsPage() {
       </Sheet>
 
       {/* Dialog: Adiantamentos */}
-      <Dialog open={!!advanceDialog} onOpenChange={(v) => { if (!v) { setAdvanceDialog(null); setAdvanceClientId(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10), startDate: '' }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); } }}>
+      <Dialog open={!!advanceDialog} onOpenChange={(v) => { if (!v) { setAdvanceDialog(null); setAdvanceClientId(null); setAdvanceAreaId(null); setEditAdvanceId(null); setAdvanceForm({ amount: '', description: '', date: new Date().toISOString().slice(0, 10), startDate: '' }); setAdvanceReceiptFile(null); setAdvanceReceiptPreview(null); } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -718,6 +764,13 @@ export default function ClientsPage() {
               Registre pagamentos adiantados. O sistema abate automaticamente nas cargas.
             </DialogDescription>
           </DialogHeader>
+          <ClientAreaSelect clientId={advanceDialog?.clientId} value={advanceAreaId} onChange={(id) => setAdvanceAreaId(id)} label="Área do adiantamento" />
+          {advanceAreaPending && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span><strong>Acordo pendente.</strong> Este adiantamento fica isolado, mas cálculo, abatimento e fechamento desta área permanecem bloqueados até a confirmação das condições.</span>
+            </div>
+          )}
           {/* Saldo total */}
           {advancesList.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2">
@@ -738,6 +791,8 @@ export default function ClientsPage() {
               if (editAdvanceId) {
                 updateAdvanceMutation.mutate({
                   id: editAdvanceId,
+                  clientId: advanceDialog.clientId,
+                  areaId: advanceAreaId,
                   amount: parseFloat(advanceForm.amount),
                   description: advanceForm.description || null,
                   date: advanceForm.date,
@@ -745,6 +800,7 @@ export default function ClientsPage() {
               } else {
                 createAdvanceMutation.mutate({
                   clientId: advanceDialog.clientId,
+                  areaId: advanceAreaId,
                   amount: parseFloat(advanceForm.amount),
                   description: advanceForm.description || undefined,
                   date: advanceForm.date,
@@ -929,6 +985,7 @@ export default function ClientsPage() {
                           variant="outline"
                           className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
                           onClick={() => {
+                            if (advanceAreaPending) { toast.error("Confirme o acordo da área antes de abater cargas."); return; }
                             setAutoDeductDialog({ advanceId: adv.id, advanceName: adv.description || 'Adiantamento', balance: parseFloat(adv.balanceRemaining) });
                             setAutoDeductResult(null);
                             setAutoDeductFinalBalance(null);
@@ -949,12 +1006,12 @@ export default function ClientsPage() {
                       <button
                         onClick={() => {
                           if (window.confirm('Processar abatimentos retroativos: vai abater automaticamente todas as cargas entregues deste cliente que ainda não foram abatidas. Continuar?')) {
-                            processRetroactiveMutation.mutate({ clientId: adv.clientId });
+                            processRetroactiveMutation.mutate({ clientId: adv.clientId, areaId: adv.areaId ?? null });
                           }
                         }}
                         className="text-blue-400 hover:text-blue-600"
                         title="Processar abatimentos retroativos"
-                        disabled={processRetroactiveMutation.isPending}
+                        disabled={processRetroactiveMutation.isPending || advanceAreaPending}
                       >
                         <RefreshCw className="h-4 w-4" />
                       </button>
@@ -962,12 +1019,12 @@ export default function ClientsPage() {
                       <button
                         onClick={() => {
                           if (window.confirm('Isso vai remover deduções duplicadas (mesma carga abatida mais de uma vez) e recalcular o saldo. Continuar?')) {
-                            cleanDuplicateMutation.mutate({ advanceId: adv.id });
+                            cleanDuplicateMutation.mutate({ advanceId: adv.id, areaId: adv.areaId ?? null });
                           }
                         }}
                         className="text-orange-400 hover:text-orange-600"
                         title="Corrigir deduções duplicadas"
-                        disabled={cleanDuplicateMutation.isPending}
+                        disabled={cleanDuplicateMutation.isPending || advanceAreaPending}
                       >
                         <AlertCircle className="h-4 w-4" />
                       </button>
@@ -1004,7 +1061,7 @@ export default function ClientsPage() {
                           size="sm"
                           className="w-full bg-amber-600 hover:bg-amber-700 text-white text-xs"
                           onClick={handleAutoDeduct}
-                          disabled={applyAutoDeductMutation.isPending}
+                          disabled={applyAutoDeductMutation.isPending || advanceAreaPending}
                         >
                           {applyAutoDeductMutation.isPending ? 'Processando...' : <><Zap className="h-3 w-3 mr-1" /> Aplicar Abatimento nas Cargas</>}
                         </Button>

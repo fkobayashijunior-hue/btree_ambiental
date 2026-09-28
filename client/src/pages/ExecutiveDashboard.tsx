@@ -150,6 +150,7 @@ export default function ExecutiveDashboard() {
       totalCorteTerceirizado: loc.corteTerceirizado?.total ?? 0,
       totalFreteTerceirizado: loc.freteTerceirizado?.total ?? 0,
       totalPagamentoClientes: loc.pagamentoClientes?.total ?? 0,
+      pendingAgreementLoads: loc.pendingAgreementLoads ?? 0,
       totalCargas: loc.cargas.total,
       totalVolumeM3: loc.cargas.volumeM3,
       totalReceita: loc.receita ?? 0,
@@ -323,6 +324,11 @@ export default function ExecutiveDashboard() {
 
         {totals && (
           <>
+            {(totals as any).pendingAgreementLoads > 0 && (
+              <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <strong>Acordos de áreas a configurar:</strong> {(totals as any).pendingAgreementLoads} carga(s) ainda sem custo de madeira definido. Os custos e o lucro exibidos são parciais; nenhum preço da área antiga foi aplicado.
+              </div>
+            )}
             {/* ── Cards KPI principais ── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <KpiCard

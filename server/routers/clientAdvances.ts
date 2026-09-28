@@ -4,38 +4,57 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { clientAdvances, clientAdvanceDeductions, clients, financialEntries, cargoLoads, cargoWeeklyClosings } from "../../drizzle/schema";
-import { eq, desc, and, asc, ne } from "drizzle-orm";
+import { eq, desc, and, asc, ne, sql } from "drizzle-orm";
+import { areaScopeCondition, getCargoFinancialValue, getClientArea, normalizeAreaId, requireConfirmedArea, sameArea } from "../lib/clientAreaScope";
+
+const advanceAreaId = (clientAdvances as any).areaId;
+const cargoAreaId = (cargoLoads as any).areaId;
+const closingAreaId = (cargoWeeklyClosings as any).areaId;
+const hasField = (value: unknown, key: string) => !!value && Object.prototype.hasOwnProperty.call(value, key);
+const inputArea = (value: any) => normalizeAreaId(value?.areaId);
+const listArea = (input: any) => hasField(input, "areaId") ? areaScopeCondition(advanceAreaId, inputArea(input)) : sql`1 = 1`;
+const assertArea = (left: unknown, right: unknown) => { if (!sameArea(left, right)) throw new TRPCError({ code: "BAD_REQUEST", message: "Os registros pertencem a áreas financeiras diferentes." }); };
+async function checkedArea(db: any, clientId: number, areaId: number | null, confirmed = false) { const area = await getClientArea(db, clientId, areaId); if (confirmed && areaId !== null) requireConfirmedArea(area); return area; }
+async function scopedAdvance(db: any, id: number, clientId?: number, areaId?: number | null) { const c: any[] = [eq(clientAdvances.id, id), areaScopeCondition(advanceAreaId, areaId)]; if (clientId !== undefined) c.push(eq(clientAdvances.clientId, clientId)); const [row] = await db.select().from(clientAdvances).where(and(...c)).limit(1); return row; }
+
+export function planScopedDeductions(balance: number, loads: Array<{ id: number; value: number }>) {
+  let remaining = Math.max(0, Number(balance) || 0);
+  return loads.map(load => { const value = Math.max(0, Number(load.value) || 0); const before = remaining; const deducted = Math.min(value, remaining); remaining = Math.max(0, remaining - deducted); return { loadId: load.id, loadValue: value, deducted, balanceBefore: before, balanceAfter: remaining, status: deducted >= value ? "abatido_total" : deducted > 0 ? "abatido_parcial" : "saldo_insuficiente" } as const; });
+}
+
 import { storagePut } from "../storage";
 
 export const clientAdvancesRouter = router({
   // Listar adiantamentos de um cliente
   list: protectedProcedure
-    .input(z.object({ clientId: z.number() }))
+    .input(z.object({ clientId: z.number(), areaId: z.number().nullable().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       return db.select().from(clientAdvances)
-        .where(eq(clientAdvances.clientId, input.clientId))
+        .where(and(eq(clientAdvances.clientId, input.clientId), listArea(input)))
         .orderBy(desc(clientAdvances.date));
     }),
 
   // Listar adiantamentos de um cliente (alias para uso no CargoControl)
   listByClient: protectedProcedure
-    .input(z.object({ clientId: z.number() }))
+    .input(z.object({ clientId: z.number(), areaId: z.number().nullable().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       return db.select().from(clientAdvances)
-        .where(eq(clientAdvances.clientId, input.clientId))
+        .where(and(eq(clientAdvances.clientId, input.clientId), listArea(input)))
         .orderBy(desc(clientAdvances.date));
     }),
 
   // Listar todos os adiantamentos (para uso no PDF do CargoControl)
   listAll: protectedProcedure
-    .query(async () => {
+    .input(z.object({ areaId: z.number().nullable().optional() }).optional())
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       return db.select().from(clientAdvances)
+        .where(listArea(input))
         .orderBy(desc(clientAdvances.date));
     }),
 
@@ -48,16 +67,20 @@ export const clientAdvancesRouter = router({
       receiptUrl: z.string().optional(),
       date: z.string(),
       startDate: z.string().optional(),  // data de início dos abatimentos
+      areaId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      // Buscar nome do cliente
-      const [client] = await db.select({ name: clients.name }).from(clients).where(eq(clients.id, input.clientId));
+      const areaId = inputArea(input);
+      const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId)).limit(1);
+      if (!client) throw new TRPCError({ code: "BAD_REQUEST", message: "Cliente inválido." });
+      const area = await checkedArea(db, input.clientId, areaId, areaId !== null);
       const clientName = client?.name || `Cliente #${input.clientId}`;
 
       const [result] = await db.insert(clientAdvances).values({
         clientId: input.clientId,
+        areaId,
         amount: String(input.amount),
         balanceRemaining: String(input.amount),
         description: input.description,
@@ -69,7 +92,7 @@ export const clientAdvancesRouter = router({
       });
       const advanceId = (result as any).insertId;
 
-      // Lançar automaticamente no financeiro como despesa
+      // O financeiro geral continua recebendo a saída, identificada pela área.
       try {
         const refMonth = input.date.slice(0, 7); // "2026-05"
         const desc = input.description
@@ -78,15 +101,16 @@ export const clientAdvancesRouter = router({
         await db.insert(financialEntries).values({
           type: 'despesa',
           category: 'adiantamento_cliente',
-          description: desc,
+          description: area ? `${desc} — ${area.fieldName ? area.fieldName + " — " : ""}${area.name}` : desc,
+          areaId,
           amount: String(input.amount),
           date: input.date,
           referenceMonth: refMonth,
-          paymentMethod: 'pix',
+          paymentMethod: area ? area.paymentMethod : 'pix',
           status: 'confirmado',
           clientId: input.clientId,
           clientName,
-          notes: `Adiantamento ID #${advanceId} registrado automaticamente`,
+          notes: `Adiantamento ID #${advanceId} registrado automaticamente${area ? `; Área: ${area.name}; acordo: ${area.paymentMethod}` : ""}`,
           registeredBy: ctx.user.id,
           registeredByName: ctx.user.name,
           autoGenerated: 1,
@@ -101,14 +125,14 @@ export const clientAdvancesRouter = router({
 
   // Buscar saldo total de adiantamentos ativos de um cliente
   getBalance: protectedProcedure
-    .input(z.object({ clientId: z.number() }))
+    .input(z.object({ clientId: z.number(), areaId: z.number().nullable().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
       const advances = await db.select().from(clientAdvances)
         .where(and(
           eq(clientAdvances.clientId, input.clientId),
-          eq(clientAdvances.status, 'ativo')
+          eq(clientAdvances.status, 'ativo'), listArea(input)
         ));
       const totalBalance = advances.reduce((sum, a) => sum + parseFloat(a.balanceRemaining || '0'), 0);
       return { totalBalance, advances };
@@ -116,22 +140,35 @@ export const clientAdvancesRouter = router({
 
   // Listar deduções de um adiantamento
   listDeductions: protectedProcedure
-    .input(z.object({ clientId: z.number() }))
+    .input(z.object({ clientId: z.number(), areaId: z.number().nullable().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      if (!hasField(input, "areaId")) {
+        return db.select().from(clientAdvanceDeductions)
+          .where(eq(clientAdvanceDeductions.clientId, input.clientId))
+          .orderBy(desc(clientAdvanceDeductions.date));
+      }
+      const scoped = await db.select({ id: clientAdvances.id }).from(clientAdvances)
+        .where(and(eq(clientAdvances.clientId, input.clientId), areaScopeCondition(advanceAreaId, inputArea(input))));
+      const ids = scoped.map((row: any) => row.id);
+      if (!ids.length) return [];
       return db.select().from(clientAdvanceDeductions)
-        .where(eq(clientAdvanceDeductions.clientId, input.clientId))
+        .where(and(eq(clientAdvanceDeductions.clientId, input.clientId), sql`${clientAdvanceDeductions.advanceId} IN (${sql.join(ids.map((id: number) => sql`${id}`), sql`, `)})`))
         .orderBy(desc(clientAdvanceDeductions.date));
     }),
 
   // Listar TODAS as deduções (para o controle de cargas sem filtro de cliente)
   listAllDeductions: protectedProcedure
-    .query(async () => {
+    .input(z.object({ areaId: z.number().nullable().optional() }).optional())
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      return db.select().from(clientAdvanceDeductions)
-        .orderBy(desc(clientAdvanceDeductions.date));
+      if (!hasField(input, "areaId")) return db.select().from(clientAdvanceDeductions).orderBy(desc(clientAdvanceDeductions.date));
+      const advances = await db.select({ id: clientAdvances.id }).from(clientAdvances).where(areaScopeCondition(advanceAreaId, inputArea(input)));
+      const ids = advances.map((row: any) => row.id);
+      if (!ids.length) return [];
+      return db.select().from(clientAdvanceDeductions).where(sql`${clientAdvanceDeductions.advanceId} IN (${sql.join(ids.map((id: number) => sql`${id}`), sql`, `)})`).orderBy(desc(clientAdvanceDeductions.date));
     }),
 
   // Aplicar abatimento manual em um adiantamento (para fechamento semanal)
@@ -144,15 +181,28 @@ export const clientAdvancesRouter = router({
       weeklyClosingId: z.number().optional(),
       cargoLoadId: z.number().optional(),
       date: z.string(),
+      areaId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
-      // Buscar o adiantamento
-      const [advance] = await db.select().from(clientAdvances)
-        .where(eq(clientAdvances.id, input.advanceId));
+      const areaId = inputArea(input);
+      const advance = await scopedAdvance(db, input.advanceId, input.clientId, areaId);
       if (!advance) throw new TRPCError({ code: "NOT_FOUND", message: "Adiantamento não encontrado" });
+      assertArea(advance.areaId, areaId);
+      await checkedArea(db, advance.clientId, normalizeAreaId(advance.areaId), normalizeAreaId(advance.areaId) !== null);
+      if (input.cargoLoadId) {
+        const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId }).from(cargoLoads).where(eq(cargoLoads.id, input.cargoLoadId)).limit(1);
+        if (!cargo) throw new TRPCError({ code: "NOT_FOUND", message: "Carga não encontrada" });
+        if (cargo.clientId !== advance.clientId) throw new TRPCError({ code: "BAD_REQUEST", message: "Carga e adiantamento pertencem a clientes diferentes." });
+        assertArea(cargo.areaId, advance.areaId);
+      }
+      if (input.weeklyClosingId) {
+        const [closing] = await db.select().from(cargoWeeklyClosings).where(and(eq(cargoWeeklyClosings.id, input.weeklyClosingId), eq(cargoWeeklyClosings.clientId, advance.clientId), areaScopeCondition(closingAreaId, normalizeAreaId(advance.areaId)))).limit(1);
+        if (!closing || closing.clientId !== advance.clientId) throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento inválido para este adiantamento." });
+        assertArea(closing.areaId, advance.areaId);
+      }
 
       const balanceBefore = parseFloat(advance.balanceRemaining || '0');
       if (balanceBefore <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Saldo insuficiente" });
@@ -163,7 +213,7 @@ export const clientAdvancesRouter = router({
       // Registrar a dedução
       await db.insert(clientAdvanceDeductions).values({
         advanceId: input.advanceId,
-        clientId: input.clientId,
+        clientId: advance.clientId,
         cargoLoadId: input.cargoLoadId,
         weeklyClosingId: input.weeklyClosingId,
         amount: String(deductAmount),
@@ -176,9 +226,15 @@ export const clientAdvancesRouter = router({
       // Marcar carga como paga se foi abatida via adiantamento
       if (input.cargoLoadId && deductAmount > 0) {
         try {
-          await db.update(cargoLoads)
-            .set({ paymentStatus: 'pago', paidAt: new Date().toISOString().slice(0, 19).replace('T', ' ') })
-            .where(eq(cargoLoads.id, input.cargoLoadId));
+          const [cargoForPayment] = await db.select().from(cargoLoads).where(and(eq(cargoLoads.id, input.cargoLoadId), eq(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId, normalizeAreaId(advance.areaId)))).limit(1);
+          const [clientForPayment] = await db.select().from(clients).where(eq(clients.id, advance.clientId)).limit(1);
+          const paymentArea = normalizeAreaId(advance.areaId) === null ? null : await checkedArea(db, advance.clientId, normalizeAreaId(advance.areaId), true);
+          const cargoValue = cargoForPayment ? getCargoFinancialValue(cargoForPayment as any, clientForPayment as any, paymentArea as any) : null;
+          if (cargoValue != null && deductAmount >= cargoValue - 0.01) {
+            await db.update(cargoLoads)
+              .set({ paymentStatus: 'pago', paidAt: new Date().toISOString().slice(0, 19).replace('T', ' ') })
+              .where(and(eq(cargoLoads.id, input.cargoLoadId), eq(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId, normalizeAreaId(advance.areaId))));
+          }
         } catch (e) { console.error('[clientAdvances] Erro ao marcar carga como paga:', e); }
       }
 
@@ -187,18 +243,18 @@ export const clientAdvancesRouter = router({
         try {
           // Buscar o fechamento
           const [closing] = await db.select().from(cargoWeeklyClosings)
-            .where(eq(cargoWeeklyClosings.id, input.weeklyClosingId)).limit(1);
+            .where(and(eq(cargoWeeklyClosings.id, input.weeklyClosingId), eq(cargoWeeklyClosings.clientId, advance.clientId), areaScopeCondition(closingAreaId, normalizeAreaId(advance.areaId)))).limit(1);
           if (closing && closing.status !== 'pago') {
             // Calcular total já deduzido para este fechamento (incluindo a dedução recém criada)
             const deductions = await db.select().from(clientAdvanceDeductions)
-              .where(eq(clientAdvanceDeductions.weeklyClosingId, input.weeklyClosingId));
-            const totalDeducted = deductions.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0) + deductAmount;
+              .where(and(eq(clientAdvanceDeductions.weeklyClosingId, input.weeklyClosingId), eq(clientAdvanceDeductions.clientId, advance.clientId)));
+            const totalDeducted = deductions.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0);
             const totalAmount = parseFloat(closing.totalAmount || '0');
             if (totalAmount > 0 && totalDeducted >= totalAmount * 0.99) {
               const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
               await db.update(cargoWeeklyClosings)
                 .set({ status: 'pago', paidAt: now })
-                .where(eq(cargoWeeklyClosings.id, input.weeklyClosingId));
+                .where(and(eq(cargoWeeklyClosings.id, input.weeklyClosingId), eq(cargoWeeklyClosings.clientId, advance.clientId), areaScopeCondition(closingAreaId, normalizeAreaId(advance.areaId))));
             }
           }
         } catch (e) { console.error('[clientAdvances] Erro ao atualizar fechamento:', e); }
@@ -210,7 +266,7 @@ export const clientAdvancesRouter = router({
           balanceRemaining: String(balanceAfter),
           status: balanceAfter <= 0 ? 'quitado' : 'ativo',
         })
-        .where(eq(clientAdvances.id, input.advanceId));
+        .where(and(eq(clientAdvances.id, input.advanceId), eq(clientAdvances.clientId, advance.clientId), areaScopeCondition(advanceAreaId, normalizeAreaId(advance.areaId))));
 
       return { deductAmount, balanceAfter };
     }),
@@ -220,6 +276,7 @@ export const clientAdvancesRouter = router({
     .input(z.object({
       clientId: z.number(),
       advanceId: z.number(),
+      areaId: z.number().nullable().optional(),
       // Cargas a abater: array de { id, date, valueAmount } ordenadas da mais antiga para a mais nova
       loads: z.array(z.object({
         id: z.number(),
@@ -232,10 +289,13 @@ export const clientAdvancesRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
-      // Buscar o adiantamento
-      const [advance] = await db.select().from(clientAdvances)
-        .where(and(eq(clientAdvances.id, input.advanceId), eq(clientAdvances.clientId, input.clientId)));
+      const areaId = inputArea(input);
+      const advance = await scopedAdvance(db, input.advanceId, input.clientId, areaId);
       if (!advance) throw new TRPCError({ code: "NOT_FOUND", message: "Adiantamento não encontrado" });
+      assertArea(advance.areaId, areaId);
+      const advanceArea = normalizeAreaId(advance.areaId);
+      const [client] = await db.select().from(clients).where(eq(clients.id, advance.clientId)).limit(1);
+      const area = advanceArea === null ? null : await checkedArea(db, advance.clientId, advanceArea, true);
 
       let balanceRemaining = parseFloat(advance.balanceRemaining || '0');
       if (balanceRemaining <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Saldo do adiantamento já esgotado" });
@@ -250,15 +310,22 @@ export const clientAdvancesRouter = router({
         status: 'abatido_total' | 'abatido_parcial' | 'saldo_insuficiente';
       }> = [];
 
-      // Ordenar cargas por data (mais antiga primeiro)
-      const sortedLoads = [...input.loads].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const ids = input.loads.map((load: any) => load.id);
+      const authoritativeLoads = ids.length ? await db.select().from(cargoLoads).where(and(eq(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId, advanceArea), sql`${cargoLoads.id} IN (${sql.join(ids.map((id: number) => sql`${id}`), sql`, `)})`)) : [];
+      if (new Set(ids).size !== ids.length || authoritativeLoads.length !== ids.length) throw new TRPCError({code: 'BAD_REQUEST', message: 'Uma das cargas não pertence ao cliente e à área selecionados.'});
+      if (authoritativeLoads.some((load: any) => load.status !== 'entregue' || load.paymentStatus === 'pago')) throw new TRPCError({code: 'BAD_REQUEST', message: 'Selecione somente cargas entregues ainda não pagas.'});
+      const sortedLoads = authoritativeLoads.sort((a: any, b: any) => new Date(String(a.date)).getTime() - new Date(String(b.date)).getTime());
 
       for (const load of sortedLoads) {
+        const loadValue = getCargoFinancialValue(load as any, client as any, area as any);
+        if (loadValue == null || loadValue <= 0) continue;
+        const duplicate = await db.select({ id: clientAdvanceDeductions.id }).from(clientAdvanceDeductions).where(eq(clientAdvanceDeductions.cargoLoadId, load.id)).limit(1);
+        if (duplicate.length) continue;
         if (balanceRemaining <= 0) {
           results.push({
             loadId: load.id,
             date: load.date,
-            loadValue: load.valueAmount,
+            loadValue: loadValue,
             deducted: 0,
             balanceBefore: 0,
             balanceAfter: 0,
@@ -268,15 +335,17 @@ export const clientAdvancesRouter = router({
         }
 
         const balanceBefore = balanceRemaining;
-        const deducted = Math.min(load.valueAmount, balanceRemaining);
+        const deducted = Math.min(loadValue, balanceRemaining);
         const balanceAfter = balanceRemaining - deducted;
 
-        // Marcar carga como paga via adiantamento
-        try {
-          await db.update(cargoLoads)
-            .set({ paymentStatus: 'pago', paidAt: new Date().toISOString().slice(0, 19).replace('T', ' ') })
-            .where(eq(cargoLoads.id, load.id));
-        } catch (e) { console.error('[clientAdvances] Erro ao marcar carga como paga:', e); }
+        // Só uma dedução integral quita a carga; uma parcial mantém o pagamento pendente.
+        if (deducted >= loadValue - 0.01) {
+          try {
+            await db.update(cargoLoads)
+              .set({ paymentStatus: 'pago', paidAt: new Date().toISOString().slice(0, 19).replace('T', ' ') })
+              .where(and(eq(cargoLoads.id, load.id), eq(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId, advanceArea)));
+          } catch (e) { console.error('[clientAdvances] Erro ao marcar carga como paga:', e); }
+        }
         // Registrar a dedução no banco
         await db.insert(clientAdvanceDeductions).values({
           advanceId: input.advanceId,
@@ -294,11 +363,11 @@ export const clientAdvancesRouter = router({
         results.push({
           loadId: load.id,
           date: load.date,
-          loadValue: load.valueAmount,
+          loadValue,
           deducted,
           balanceBefore,
           balanceAfter,
-          status: deducted >= load.valueAmount ? 'abatido_total' : 'abatido_parcial',
+          status: deducted >= loadValue ? 'abatido_total' : 'abatido_parcial',
         });
       }
 
@@ -308,7 +377,7 @@ export const clientAdvancesRouter = router({
           balanceRemaining: String(balanceRemaining),
           status: balanceRemaining <= 0 ? 'quitado' : 'ativo',
         })
-        .where(eq(clientAdvances.id, input.advanceId));
+        .where(and(eq(clientAdvances.id, input.advanceId), eq(clientAdvances.clientId, advance.clientId), areaScopeCondition(advanceAreaId, advanceArea)));
 
       return {
         results,
@@ -323,17 +392,21 @@ export const clientAdvancesRouter = router({
       advanceId: z.number(),
       fileBase64: z.string(),
       mimeType: z.string().default('image/jpeg'),
+      areaId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+      const advance = await scopedAdvance(db, input.advanceId, undefined, inputArea(input));
+      if (!advance) throw new TRPCError({ code: "NOT_FOUND", message: "Adiantamento não encontrado" });
+      assertArea(advance.areaId, inputArea(input));
       const buffer = Buffer.from(input.fileBase64, 'base64');
       const ext = input.mimeType.includes('pdf') ? 'pdf' : (input.mimeType.split('/')[1] || 'jpg');
       const key = `client-advances/${input.advanceId}/comprovante-${Date.now()}.${ext}`;
       const { url } = await storagePut(key, buffer, input.mimeType);
       await db.update(clientAdvances)
         .set({ receiptUrl: url })
-        .where(eq(clientAdvances.id, input.advanceId));
+        .where(and(eq(clientAdvances.id, advance.id), eq(clientAdvances.clientId, advance.clientId), areaScopeCondition(advanceAreaId, normalizeAreaId(advance.areaId))));
       return { url };
     }),
 
@@ -341,6 +414,7 @@ export const clientAdvancesRouter = router({
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
+      areaId: z.number().nullable().optional(),
       amount: z.number().positive().optional(),
       description: z.string().optional().nullable(),
       date: z.string().optional(),
@@ -350,8 +424,9 @@ export const clientAdvancesRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
 
-      const [advance] = await db.select().from(clientAdvances).where(eq(clientAdvances.id, input.id));
+      const advance = await scopedAdvance(db, input.id, undefined, inputArea(input));
       if (!advance) throw new TRPCError({ code: "NOT_FOUND", message: "Adiantamento não encontrado" });
+      assertArea(advance.areaId, inputArea(input));
 
       const updateData: any = {};
       if (input.description !== undefined) updateData.description = input.description;
@@ -362,25 +437,28 @@ export const clientAdvancesRouter = router({
         const originalAmount = parseFloat(advance.amount || '0');
         const currentBalance = parseFloat(advance.balanceRemaining || '0');
         const deducted = originalAmount - currentBalance;
+        if (input.amount < deducted - 0.005) throw new TRPCError({code: 'BAD_REQUEST', message: 'O valor não pode ser menor que os abatimentos já realizados.'});
         const newBalance = Math.max(0, input.amount - deducted);
         updateData.amount = String(input.amount);
         updateData.balanceRemaining = String(newBalance);
         updateData.status = newBalance <= 0 ? 'quitado' : 'ativo';
       }
 
-      await db.update(clientAdvances).set(updateData).where(eq(clientAdvances.id, input.id));
+      await db.update(clientAdvances).set(updateData).where(and(eq(clientAdvances.id, input.id), areaScopeCondition(advanceAreaId, normalizeAreaId(advance.areaId))));
       return { success: true };
     }),
 
   // Deletar adiantamento
   // Se force=true, remove deduções e reverte paymentStatus das cargas abatidas
   delete: protectedProcedure
-    .input(z.object({ id: z.number(), force: z.boolean().optional() }))
+    .input(z.object({ id: z.number(), force: z.boolean().optional(), areaId: z.number().nullable().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
-      const deductions = await db.select().from(clientAdvanceDeductions)
-        .where(eq(clientAdvanceDeductions.advanceId, input.id));
+      const advance = await scopedAdvance(db, input.id, undefined, inputArea(input));
+      if (!advance) throw new TRPCError({ code: "NOT_FOUND", message: "Adiantamento não encontrado" });
+      assertArea(advance.areaId, inputArea(input));
+      const deductions = await db.select().from(clientAdvanceDeductions).where(eq(clientAdvanceDeductions.advanceId, advance.id));
       if (deductions.length > 0 && !input.force) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Este adiantamento possui ${deductions.length} abatimento(s). Use a opção 'Forçar exclusão' para remover tudo.` });
       }
@@ -403,7 +481,7 @@ export const clientAdvancesRouter = router({
             // Buscar a carga para verificar o status atual
             const [cargo] = await db.select({ paymentStatus: cargoLoads.paymentStatus })
               .from(cargoLoads)
-              .where(eq(cargoLoads.id, loadId));
+              .where(and(eq(cargoLoads.id, loadId), eq(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId, normalizeAreaId(advance.areaId))));
 
             // Só reverter se:
             // 1. A carga está marcada como paga
@@ -418,7 +496,7 @@ export const clientAdvancesRouter = router({
               if (totalThisAdvance > 0) {
                 await db.update(cargoLoads)
                   .set({ paymentStatus: 'sem_boleto', paidAt: null } as any)
-                  .where(eq(cargoLoads.id, loadId));
+                  .where(and(eq(cargoLoads.id, loadId), eq(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId, normalizeAreaId(advance.areaId))));
               }
             }
             // Se a carga foi paga manualmente (paymentStatus='pago' sem deduções deste adiantamento marcando como pago)
@@ -428,16 +506,19 @@ export const clientAdvancesRouter = router({
         // Excluir deduções
         await db.delete(clientAdvanceDeductions).where(eq(clientAdvanceDeductions.advanceId, input.id));
       }
-      await db.delete(clientAdvances).where(eq(clientAdvances.id, input.id));
+      await db.delete(clientAdvances).where(and(eq(clientAdvances.id, advance.id), eq(clientAdvances.clientId, advance.clientId), areaScopeCondition(advanceAreaId, normalizeAreaId(advance.areaId))));
       return { success: true };
     }),
 
   // Limpar deduções duplicadas de um adiantamento (manter apenas a mais antiga por cargo_load_id)
   cleanDuplicateDeductions: protectedProcedure
-    .input(z.object({ advanceId: z.number() }))
+    .input(z.object({ advanceId: z.number(), areaId: z.number().nullable().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indisponível' });
+      const advance = await scopedAdvance(db, input.advanceId, undefined, inputArea(input));
+      if (!advance) throw new TRPCError({ code: "NOT_FOUND", message: "Adiantamento não encontrado" });
+      assertArea(advance.areaId, inputArea(input));
       // Buscar todas as deduções do adiantamento ordenadas por id (mais antiga primeiro)
       const allDeductions = await db.select()
         .from(clientAdvanceDeductions)
@@ -463,14 +544,14 @@ export const clientAdvancesRouter = router({
         .from(clientAdvanceDeductions)
         .where(eq(clientAdvanceDeductions.advanceId, input.advanceId));
       const totalDeducted = remaining.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0);
-      const [advance] = await db.select().from(clientAdvances).where(eq(clientAdvances.id, input.advanceId)).limit(1);
-      if (advance) {
-        const originalAmount = parseFloat(advance.amount || '0');
+      const [currentAdvance] = await db.select().from(clientAdvances).where(and(eq(clientAdvances.id, advance.id), eq(clientAdvances.clientId, advance.clientId), areaScopeCondition(advanceAreaId, normalizeAreaId(advance.areaId)))).limit(1);
+      if (currentAdvance) {
+        const originalAmount = parseFloat(currentAdvance.amount || '0');
         const newBalance = Math.max(0, originalAmount - totalDeducted);
         await db.update(clientAdvances).set({
           balanceRemaining: String(newBalance.toFixed(2)),
           status: newBalance <= 0 ? 'quitado' : 'ativo',
-        }).where(eq(clientAdvances.id, input.advanceId));
+        }).where(and(eq(clientAdvances.id, currentAdvance.id), eq(clientAdvances.clientId, currentAdvance.clientId), areaScopeCondition(advanceAreaId, normalizeAreaId(currentAdvance.areaId))));
         return { success: true, deletedCount: toDelete.length, newBalance: newBalance.toFixed(2) };
       }
       return { success: true, deletedCount: toDelete.length, newBalance: null };
@@ -478,35 +559,30 @@ export const clientAdvancesRouter = router({
 
   // Processar abatimentos retroativos: abate automaticamente cargas entregues sem dedução
   processRetroactiveDeductions: protectedProcedure
-    .input(z.object({ clientId: z.number() }))
+    .input(z.object({ clientId: z.number(), areaId: z.number().nullable().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indisponível' });
 
-      // Buscar adiantamentos ativos do cliente
+      const areaId = inputArea(input);
+      const [client] = await db.select().from(clients).where(eq(clients.id, input.clientId)).limit(1);
+      if (!client) throw new TRPCError({ code: "BAD_REQUEST", message: "Cliente inválido." });
+      const area = areaId === null ? null : await checkedArea(db, input.clientId, areaId, true);
       const advances = await db.select().from(clientAdvances)
-        .where(and(eq(clientAdvances.clientId, input.clientId), eq(clientAdvances.status, 'ativo')))
+        .where(and(eq(clientAdvances.clientId, input.clientId), eq(clientAdvances.status, 'ativo'), areaScopeCondition(advanceAreaId, areaId)))
         .orderBy(asc(clientAdvances.date));
       if (advances.length === 0) return { success: true, processed: 0, message: 'Nenhum adiantamento ativo' };
 
       // Buscar cargas entregues do cliente sem dedução
-      const deliveredCargos = await db.select({
-        id: cargoLoads.id,
-        date: cargoLoads.date,
-        weightNetKg: cargoLoads.weightNetKg,
-        weightOutKg: cargoLoads.weightOutKg,
-        paymentStatus: cargoLoads.paymentStatus,
-      }).from(cargoLoads)
+      const deliveredCargos = await db.select().from(cargoLoads)
         .where(and(
           eq(cargoLoads.clientId, input.clientId),
-          eq(cargoLoads.status, 'entregue'),
+          eq(cargoLoads.status, 'entregue'), ne(cargoLoads.paymentStatus, 'pago'), areaScopeCondition(cargoAreaId, areaId),
         ))
         .orderBy(cargoLoads.date);
 
-      // Buscar preço do cliente
-      const [client] = await db.select({ pricePerTon: clients.pricePerTon, pricePerM3: clients.pricePerM3 })
-        .from(clients).where(eq(clients.id, input.clientId)).limit(1);
-      const pricePerTon = parseFloat(client?.pricePerTon || '0');
+      // Prices and unit are resolved from snapshots/confirmed area; never from a caller amount.
+
 
       let processed = 0;
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -519,10 +595,8 @@ export const clientAdvancesRouter = router({
           .limit(1);
         if (existing.length > 0) continue;
 
-        // Calcular valor da carga
-        const weightNet = parseFloat(cargo.weightNetKg || cargo.weightOutKg || '0');
-        if (weightNet <= 0 || pricePerTon <= 0) continue;
-        const loadValue = (weightNet / 1000) * pricePerTon;
+        const loadValue = getCargoFinancialValue(cargo as any, client as any, area as any);
+        if (loadValue == null || loadValue <= 0) continue;
         if (loadValue <= 0) continue;
 
         const cargoDateStr = typeof cargo.date === 'string' ? cargo.date.slice(0, 10) : new Date(cargo.date).toISOString().slice(0, 10);
@@ -532,6 +606,7 @@ export const clientAdvancesRouter = router({
           if (remainingToDeduct <= 0) break;
           let balanceRemaining = parseFloat(advance.balanceRemaining || '0');
           if (balanceRemaining <= 0) continue;
+          if (advance.startDate && cargoDateStr < String(advance.startDate).slice(0,10)) continue;
           const deducted = Math.min(remainingToDeduct, balanceRemaining);
           const balanceBefore = balanceRemaining;
           const balanceAfter = balanceRemaining - deducted;
@@ -548,14 +623,14 @@ export const clientAdvancesRouter = router({
           await db.update(clientAdvances).set({
             balanceRemaining: String(balanceAfter.toFixed(2)),
             status: balanceAfter <= 0 ? 'quitado' : 'ativo',
-          }).where(eq(clientAdvances.id, advance.id));
+          }).where(and(eq(clientAdvances.id, advance.id), eq(clientAdvances.clientId, input.clientId), areaScopeCondition(advanceAreaId, areaId)));
           advance.balanceRemaining = String(balanceAfter.toFixed(2));
           remainingToDeduct -= deducted;
         }
         if (remainingToDeduct <= 0.01) {
           await db.update(cargoLoads)
             .set({ paymentStatus: 'pago', paidAt: now })
-            .where(eq(cargoLoads.id, cargo.id));
+            .where(and(eq(cargoLoads.id, cargo.id), eq(cargoLoads.clientId, input.clientId), areaScopeCondition(cargoAreaId, areaId)));
         }
         processed++;
       }

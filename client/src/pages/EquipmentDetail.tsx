@@ -519,7 +519,8 @@ ${equip.brand ? `<div class="field"><label>Marca</label>${equip.brand}</div>` : 
 ${equip.model ? `<div class="field"><label>Modelo</label>${equip.model}</div>` : ""}
 ${equip.year ? `<div class="field"><label>Ano</label>${equip.year}</div>` : ""}
 ${equip.serialNumber ? `<div class="field"><label>Nº de Série</label>${equip.serialNumber}</div>` : ""}
-${(equip as any).licensePlate ? `<div class="field"><label>Placa</label>${(equip as any).licensePlate}</div>` : ""}
+${equip.licensePlate ? `<div class="field"><label>Placa do veículo</label>${equip.licensePlate}</div>` : ""}
+${equip.trailerPlate ? `<div class="field"><label>Placa da carreta</label>${equip.trailerPlate}</div>` : ""}
 ${(equip as any).clientName ? `<div class="field"><label>Operação</label>${(equip as any).clientName}</div>` : ""}
 ${(equip as any).responsibleDriverName ? `<div class="field"><label>Motorista Responsável</label>${(equip as any).responsibleDriverName}</div>` : ""}
 </div></div>
@@ -608,7 +609,8 @@ ${maintenances.length > 0 ? `<table><thead><tr><th>Data</th><th>Tipo</th><th>Des
             {/* Dados principais */}
             <div className="grid grid-cols-2 gap-2 text-sm">
               {equip.serialNumber && <div><span className="text-gray-500">Nº Série:</span> <span className="font-medium">{equip.serialNumber}</span></div>}
-              {equip.licensePlate && <div><span className="text-gray-500">Placa:</span> <span className="font-medium">{equip.licensePlate}</span></div>}
+              {equip.licensePlate && <div><span className="text-gray-500">Placa do veículo:</span> <span className="font-medium">{equip.licensePlate}</span></div>}
+              {equip.trailerPlate && <div><span className="text-gray-500">Placa da carreta:</span> <span className="font-medium">{equip.trailerPlate}</span></div>}
               {equip.year && <div><span className="text-gray-500">Ano:</span> <span className="font-medium">{equip.year}</span></div>}
             </div>
             {/* Motorista Responsável */}

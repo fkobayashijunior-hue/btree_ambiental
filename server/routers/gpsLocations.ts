@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq, desc, and, inArray } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { gpsLocations, userPermissions } from "../../drizzle/schema";
+import { gpsLocations, userPermissions, clientAreas } from "../../drizzle/schema";
 
 export const gpsLocationsRouter = router({
   // ── Listar todos os locais ativos ────────────────────────────────────────
@@ -92,6 +92,10 @@ export const gpsLocationsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       const { id, ...rest } = input;
+      const [area] = await db.select({ clientId: clientAreas.clientId }).from(clientAreas).where(eq(clientAreas.workLocationId, id)).limit(1);
+      if (area && rest.clientId !== undefined && rest.clientId !== area.clientId) {
+        throw new Error("Este local pertence a uma área do cliente e não pode ser transferido para outro cliente.");
+      }
       const updateData: any = {};
       if (rest.name !== undefined) updateData.name = rest.name;
       if (rest.latitude !== undefined) updateData.latitude = rest.latitude;
@@ -110,6 +114,8 @@ export const gpsLocationsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
+      const [area] = await db.select({ id: clientAreas.id }).from(clientAreas).where(eq(clientAreas.workLocationId, input.id)).limit(1);
+      if (area) throw new Error("Este local está vinculado a uma área. Preserve-o para manter o histórico de custos.");
       await db.delete(gpsLocations).where(eq(gpsLocations.id, input.id));
       return { success: true };
     }),

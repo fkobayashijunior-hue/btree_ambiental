@@ -44,8 +44,32 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+// Guard: rodar as migrações no MÁXIMO 1x a cada 6 horas. Antes rodavam a CADA
+// boot/restart do processo — 130 comandos DDL (CREATE/ALTER) sequenciais contra o
+// MySQL remoto, deixando o processo ocupado por muitos segundos. Sob tráfego, o
+// Passenger subia novos processos enquanto os antigos ainda migravam → acúmulo
+// de processos até o limite de 120 da Hostinger. A marca fica em arquivo em /tmp.
+const MIGRATION_MARK = '/tmp/btree_last_migration';
+const MIGRATION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
+function migrationDueRecently(): boolean {
+  try {
+    const fs = require('fs');
+    if (!fs.existsSync(MIGRATION_MARK)) return false;
+    const ts = parseInt(fs.readFileSync(MIGRATION_MARK, 'utf8').trim() || '0', 10);
+    return (Date.now() - ts) < MIGRATION_INTERVAL_MS;
+  } catch { return false; }
+}
+function markMigrationRun(): void {
+  try { const fs = require('fs'); fs.writeFileSync(MIGRATION_MARK, String(Date.now())); } catch { /* silent */ }
+}
+
 async function runAutoMigrations() {
   try {
+    if (migrationDueRecently()) {
+      console.log('[AutoMigration] Pulando — já rodou nas últimas 6h');
+      return;
+    }
+    markMigrationRun();
     const { getDb } = await import('../db');
     const db = await getDb();
     if (!db) return;
@@ -1425,6 +1449,8 @@ function scheduleWeeklyClosingCron() {
         const weekStartStr = weekStart.toISOString().slice(0, 10);
         const weekEndStr = weekEnd.toISOString().slice(0, 10);
 
+        // Este ciclo automático mantém somente a área original (area_id NULL).
+        // Novas áreas têm acordos próprios e fechamento manual com escopo validado.
         // Buscar todos os clientes ativos
         const [clientRows] = await conn.execute(
           `SELECT id, name, price_per_ton, payment_term_days, billing_cycle FROM clients WHERE active = 1`
@@ -1437,7 +1463,7 @@ function scheduleWeeklyClosingCron() {
           // que cobre o caso de dois processos (ex: staging Hostinger + ambiente local)
           // rodando este cron ao mesmo tempo.
           const [existing] = await conn.execute(
-            `SELECT id FROM cargo_weekly_closings WHERE client_id = ? AND DATE(week_start) = ?`,
+            `SELECT id FROM cargo_weekly_closings WHERE client_id = ? AND area_id IS NULL AND DATE(week_start) = ?`,
             [client.id, weekStartStr]
           ) as any;
 
@@ -1449,7 +1475,7 @@ function scheduleWeeklyClosingCron() {
           // Buscar cargas do cliente nesta semana (usa delivery_date se disponível, senão date)
           const [loadsInWeek] = await conn.execute(
             `SELECT weight_net_kg, weight_out_kg FROM cargo_loads 
-             WHERE client_id = ? AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
+             WHERE client_id = ? AND area_id IS NULL AND DATE(COALESCE(delivery_date, date)) >= ? AND DATE(COALESCE(delivery_date, date)) <= ?`,
             [client.id, weekStartStr, weekEndStr]
           ) as any;
 

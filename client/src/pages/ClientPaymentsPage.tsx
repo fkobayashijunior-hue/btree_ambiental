@@ -41,6 +41,7 @@ export default function ClientPaymentsPage() {
 
   const [form, setForm] = useState({
     clientId: "",
+    areaId: "",
     referenceDate: new Date().toISOString().split("T")[0],
     description: "",
     volumeM3: "",
@@ -56,6 +57,11 @@ export default function ClientPaymentsPage() {
 
   const utils = trpc.useUtils();
   const { data: clients } = trpc.clients.list.useQuery();
+  const selectedClientId = form.clientId ? Number(form.clientId) : 0;
+  const { data: clientAreas } = trpc.clientAreas.list.useQuery(
+    { clientId: selectedClientId },
+    { enabled: selectedClientId > 0 },
+  );
   const { data: allPayments, isLoading } = trpc.clientPortal.listAllPayments.useQuery();
 
   const addPayment = trpc.clientPortal.addPayment.useMutation({
@@ -88,6 +94,7 @@ export default function ClientPaymentsPage() {
   function resetForm() {
     setForm({
       clientId: "",
+      areaId: "",
       referenceDate: new Date().toISOString().split("T")[0],
       description: "",
       volumeM3: "",
@@ -112,10 +119,14 @@ export default function ClientPaymentsPage() {
     e.preventDefault();
     if (!form.clientId) return toast.error("Selecione um cliente");
     if (!form.grossAmount) return toast.error("Informe o valor bruto");
+    if (form.areaId && !(clientAreas || []).some((area: any) => String(area.id) === form.areaId)) {
+      return toast.error("Selecione uma área válida para este cliente");
+    }
     setSaving(true);
     const net = calcNet();
     addPayment.mutate({
       clientId: parseInt(form.clientId),
+      areaId: form.areaId ? parseInt(form.areaId) : null,
       referenceDate: form.referenceDate,
       description: form.description || undefined,
       volumeM3: form.volumeM3 || undefined,
@@ -130,16 +141,22 @@ export default function ClientPaymentsPage() {
     });
   }
 
+  function pAreaId(id: number) {
+    const payment = (allPayments || []).find((row: any) => row.id === id);
+    return payment?.areaId == null ? null : Number(payment.areaId);
+  }
+
   function handleMarkPaid(id: number) {
     updatePayment.mutate({
       id,
+      areaId: pAreaId(id),
       status: "pago",
       paidAt: new Date().toISOString(),
     });
   }
 
   function handleMarkOverdue(id: number) {
-    updatePayment.mutate({ id, status: "atrasado" });
+    updatePayment.mutate({ id, areaId: pAreaId(id), status: "atrasado" });
   }
 
   const filtered = useMemo(() => {
@@ -156,6 +173,7 @@ export default function ClientPaymentsPage() {
       list = list.filter((p: any) =>
         p.description?.toLowerCase().includes(s) ||
         p.clientName?.toLowerCase().includes(s) ||
+        p.areaLabel?.toLowerCase().includes(s) ||
         p.notes?.toLowerCase().includes(s)
       );
     }
@@ -199,7 +217,7 @@ export default function ClientPaymentsPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label>Cliente *</Label>
-                <Select value={form.clientId} onValueChange={(v) => setForm({ ...form, clientId: v })}>
+                <Select value={form.clientId} onValueChange={(v) => setForm({ ...form, clientId: v, areaId: "" })}>
                   <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent>
                     {clients?.map((c: any) => (
@@ -207,6 +225,26 @@ export default function ClientPaymentsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label>Área *</Label>
+                <Select
+                  value={form.areaId || "legacy"}
+                  onValueChange={(value) => setForm({ ...form, areaId: value === "legacy" ? "" : value })}
+                  disabled={!form.clientId}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione a área" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="legacy">Área atual (Área 1)</SelectItem>
+                    {(clientAreas || []).filter((area: any) => area.isActive !== 0).map((area: any) => (
+                      <SelectItem key={area.id} value={String(area.id)}>
+                        {area.fieldName ? `${area.fieldName} — ` : ''}{area.name}
+                        {area.agreementStatus === 'pending' ? ' (acordo a configurar)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-gray-500">O pagamento será validado e gravado nesta área.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -359,6 +397,9 @@ export default function ClientPaymentsPage() {
                         <span className="font-semibold text-sm text-gray-800 truncate">
                           {p.clientName || `Cliente #${p.clientId}`}
                         </span>
+                        <span className="text-[10px] rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                          {p.areaLabel || (p.areaId == null ? 'Área atual (Área 1)' : `Área #${p.areaId}`)}
+                        </span>
                         <Badge variant="outline" className={`text-xs ${cfg.color}`}>
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {cfg.label}
@@ -398,7 +439,7 @@ export default function ClientPaymentsPage() {
                         )}
                         <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50"
                           onClick={() => {
-                            if (confirm("Excluir este pagamento?")) deletePayment.mutate({ id: p.id });
+                            if (confirm("Excluir este pagamento?")) deletePayment.mutate({ id: p.id, areaId: p.areaId == null ? null : Number(p.areaId) });
                           }}>
                           <Trash2 className="h-4 w-4" />
                         </Button>

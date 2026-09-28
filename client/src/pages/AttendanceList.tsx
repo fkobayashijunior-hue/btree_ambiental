@@ -858,12 +858,13 @@ export default function AttendanceList() {
                             {canSeeFinancial ? (
                               <>
                                 <p className="font-bold text-emerald-700 text-lg">R$ {collab.total.toFixed(2)}</p>
-                                {collab.pendente > 0 && (
+                                {collab.employmentType === "clt" ? (
+                                  <Badge className="bg-emerald-50 text-emerald-700 text-xs">Custo por local</Badge>
+                                ) : collab.pendente > 0 ? (
                                   <p className="text-xs text-yellow-600 font-medium">R$ {collab.pendente.toFixed(2)} pendente</p>
-                                )}
-                                {collab.pago > 0 && collab.pendente === 0 && (
+                                ) : collab.pago > 0 ? (
                                   <Badge className="bg-green-100 text-green-700 text-xs">Pago</Badge>
-                                )}
+                                ) : null}
                               </>
                             ) : (
                               <Badge className={collab.pendente > 0 ? "bg-yellow-100 text-yellow-700 text-xs" : "bg-green-100 text-green-700 text-xs"}>
@@ -882,7 +883,7 @@ export default function AttendanceList() {
 
                         {/* Ações */}
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
-                          {canSeeFinancial && collab.pendente > 0 && (
+                          {canSeeFinancial && collab.employmentType !== "clt" && collab.pendente > 0 && (
                             <Button
                               size="sm"
                               className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white gap-1"
@@ -925,7 +926,7 @@ export default function AttendanceList() {
                               {/* Direita: valor + status + excluir */}
                               <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                                 {canSeeFinancial && <span className="font-semibold text-emerald-700 whitespace-nowrap">R$ {parseFloat(d.dailyValue || "0").toFixed(2)}</span>}
-                                {canSeeFinancial && (
+                                {canSeeFinancial && d.employmentType !== "clt" && (
                                   <button
                                     className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors whitespace-nowrap ${
                                       d.paymentStatus === "pago"

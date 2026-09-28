@@ -28,6 +28,7 @@ export const equipmentDetailRouter = router({
           year: equipment.year,
           serialNumber: equipment.serialNumber,
           licensePlate: equipment.licensePlate,
+          trailerPlate: equipment.trailerPlate,
           imageUrl: equipment.imageUrl,
           status: equipment.status,
           typeId: equipment.typeId,
