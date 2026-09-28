@@ -112,6 +112,7 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
 
   // Linha (Motorista/Operador) cujo modal de cálculo de comissão está aberto
   const [commissionModalRow, setCommissionModalRow] = useState<any | null>(null);
+  const [weekDetail, setWeekDetail] = useState<{ collaboratorId: number; weekStart: string } | null>(null);
 
   const saveEntry = trpc.payroll.saveEntry.useMutation({
     onSuccess: () => { utils.payroll.getMonth.invalidate({ referenceMonth }); },
@@ -123,6 +124,14 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
   });
   const unmarkPaid = trpc.payroll.unmarkPaid.useMutation({
     onSuccess: () => { utils.payroll.getMonth.invalidate({ referenceMonth }); toast.success("Pagamento desfeito"); },
+    onError: (e) => toast.error(e.message || "Erro"),
+  });
+  const markCommissionPaid = trpc.payroll.markCommissionPaid.useMutation({
+    onSuccess: () => { utils.payroll.getMonth.invalidate({ referenceMonth }); toast.success("Comissão marcada como paga"); },
+    onError: (e) => toast.error(e.message || "Erro"),
+  });
+  const unmarkCommissionPaid = trpc.payroll.unmarkCommissionPaid.useMutation({
+    onSuccess: () => { utils.payroll.getMonth.invalidate({ referenceMonth }); toast.success("Pagamento de comissão desfeito"); },
     onError: (e) => toast.error(e.message || "Erro"),
   });
   const reopenEntry = trpc.payroll.reopenEntry.useMutation({
@@ -147,25 +156,37 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
     return `${names[(m || 1) - 1]} de ${y}`;
   }, [referenceMonth]);
 
-  // Salva o snapshot da linha já marcando como pago (botão "Pagar" nas linhas em rascunho).
-  // overrideCommission é usado pelo modal de comissão de Motorista/Operador (já vem calculado).
-  const handlePayRow = (row: any, overrideCommission?: string) => {
-    const commissionStr = overrideCommission ?? commissionDrafts[row.collaboratorId] ?? row.commission ?? "0";
-    const commission = parseFloat(commissionStr || "0") || 0;
-    const total = computeLiveTotal(row, commissionStr, referenceMonth);
+  // Salva a linha (se ainda em rascunho) já marcando o SALÁRIO/diária como pago — não mexe na
+  // comissão. Usado pelo botão "Pagar Salário".
+  const handlePaySalary = (row: any) => {
+    const commissionStr = commissionDrafts[row.collaboratorId] ?? row.commission ?? "0";
     saveEntry.mutate({
       collaboratorId: row.collaboratorId,
       referenceMonth,
-      commission: String(commission),
+      commission: String(parseFloat(commissionStr || "0") || 0),
       markPaid: true,
       paidAt: new Date().toISOString().slice(0, 10),
     }, {
-      onSuccess: () => toast.success(
-        commission > 0
-          ? `${row.name}: comissão de R$ ${fmtBRL(commission)} confirmada — total pago R$ ${fmtBRL(total)}`
-          : `${row.name}: pagamento confirmado — total R$ ${fmtBRL(total)}`
-      ),
+      onSuccess: () => toast.success(`${row.name}: salário confirmado — R$ ${fmtBRL(row.baseValue)}`),
     });
+  };
+
+  // Idem, mas pra COMISSÃO — datas de pagamento independentes do salário (pedido do
+  // financeiro). overrideCommission vem do modal de cálculo de Motorista/Operador.
+  const handlePayCommission = (row: any, overrideCommission?: string) => {
+    const commissionStr = overrideCommission ?? commissionDrafts[row.collaboratorId] ?? row.commission ?? "0";
+    const commission = parseFloat(commissionStr || "0") || 0;
+    if (row.isDraft) {
+      saveEntry.mutate({
+        collaboratorId: row.collaboratorId,
+        referenceMonth,
+        commission: String(commission),
+        markCommissionPaid: true,
+        commissionPaidAt: new Date().toISOString().slice(0, 10),
+      }, { onSuccess: () => toast.success(`${row.name}: comissão de R$ ${fmtBRL(commission)} confirmada`) });
+    } else {
+      markCommissionPaid.mutate({ id: row.id, paidAt: new Date().toISOString().slice(0, 10) });
+    }
   };
 
   // Diarista/Terceirizado: pagamento é feito em Presenças, não na Folha.
@@ -219,8 +240,8 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
       const GRAY_BORDER = "E5E7EB";
       const GRAY_TEXT = "6B7280";
 
-      const headers = ["Nome", "Cargo", "CPF", "Tipo de Vínculo", "Salário/Diária (R$)", "Dias Trabalhados", "Comissão (R$)", "Desconto (R$)", "Total (R$)", "Status"];
-      ws.columns = [22, 16, 16, 16, 16, 14, 14, 14, 16, 14].map((w, i) => ({ key: `c${i}`, width: w }));
+      const headers = ["Nome", "Cargo", "CPF", "Tipo de Vínculo", "Salário/Diária (R$)", "Dias Trabalhados", "Comissão (R$)", "Desconto (R$)", "Total (R$)", "Status Salário", "Status Comissão"];
+      ws.columns = [22, 16, 16, 16, 16, 14, 14, 14, 16, 14, 14].map((w, i) => ({ key: `c${i}`, width: w }));
 
       ws.mergeCells(1, 1, 1, headers.length);
       const titleCell = ws.getCell(1, 1);
@@ -266,6 +287,7 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
           parseFloat(r.discount || "0"),
           parseFloat(r.totalAmount || "0"),
           r.status === "pago" ? "Pago" : "Pendente",
+          parseFloat(r.commission || "0") > 0 ? (r.commissionStatus === "pago" ? "Pago" : "Pendente") : "-",
         ];
         values.forEach((v, i) => {
           const cell = row.getCell(i + 1);
@@ -281,7 +303,7 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
 
       const totalsRowNum = 5 + rows.length;
       const totalsRow = ws.getRow(totalsRowNum);
-      const totalsValues = ["TOTAIS", "", "", `${rows.length} colaborador(es)`, "", "", "", "", summary?.totalGeral || 0, ""];
+      const totalsValues = ["TOTAIS", "", "", `${rows.length} colaborador(es)`, "", "", "", "", summary?.totalGeral || 0, "", ""];
       totalsValues.forEach((v, i) => {
         const cell = totalsRow.getCell(i + 1);
         cell.value = v;
@@ -342,7 +364,7 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
       {/* Ações */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-gray-500">
-          {summary?.fechados || 0} de {rows.length} fechado(s) · {summary?.pagos || 0} pago(s) — valores não fechados são calculados ao vivo e podem mudar.
+          {summary?.fechados || 0} de {rows.length} fechado(s) · {summary?.pagos || 0} salário(s) pago(s) · {summary?.comissoesPagas || 0} comissão(ões) paga(s) — valores não fechados são calculados ao vivo e podem mudar.
         </p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleExportExcel} className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
@@ -420,10 +442,10 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                           {hasCommissionRule(r.role, r.commissionAuto) ? (
                             <button
                               type="button"
-                              onClick={() => r.status !== "pago" && setCommissionModalRow(r)}
-                              disabled={r.status === "pago"}
+                              onClick={() => r.commissionStatus !== "pago" && setCommissionModalRow(r)}
+                              disabled={r.commissionStatus === "pago"}
                               className="h-8 w-28 ml-auto flex items-center justify-end gap-1 text-sm font-medium text-emerald-700 hover:text-emerald-800 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
-                              title={r.status === "pago" ? "Já pago — não é possível editar" : "Abrir cálculo de comissão"}
+                              title={r.commissionStatus === "pago" ? "Comissão já paga — não é possível editar" : "Abrir cálculo de comissão"}
                             >
                               <Calculator className="h-3.5 w-3.5" /> R$ {fmtBRL(commissionValue)}
                             </button>
@@ -432,7 +454,7 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                               type="number"
                               step="0.01"
                               value={commissionValue}
-                              disabled={isLocked}
+                              disabled={r.commissionStatus === "pago"}
                               onChange={e => setCommissionDrafts(prev => ({ ...prev, [r.collaboratorId]: e.target.value }))}
                               className="h-8 w-28 text-right ml-auto"
                             />
@@ -450,47 +472,78 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                         </td>
                         <td className="py-3 px-4 text-right font-semibold text-gray-800">R$ {fmtBRL(computeLiveTotal(r, commissionValue, referenceMonth))}</td>
                         <td className="py-3 px-4 text-center">
-                          {r.status === "pago" ? (
-                            <Badge className="bg-green-100 text-green-800">Pago</Badge>
+                          {(isDaily || isWeeklyFixed) ? (
+                            r.status === "pago" ? (
+                              <Badge className="bg-green-100 text-green-800">Pago</Badge>
+                            ) : (
+                              <Badge className="bg-amber-100 text-amber-800">Pendente</Badge>
+                            )
                           ) : (
-                            <Badge className="bg-amber-100 text-amber-800">Pendente</Badge>
+                            <div className="flex flex-col gap-0.5 items-center">
+                              <Badge className={r.status === "pago" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}>
+                                Salário {r.status === "pago" ? "pago" : "pendente"}
+                              </Badge>
+                              {parseFloat(r.commission || "0") > 0 && (
+                                <Badge className={r.commissionStatus === "pago" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}>
+                                  Comissão {r.commissionStatus === "pago" ? "paga" : "pendente"}
+                                </Badge>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex justify-end gap-1.5 flex-wrap">
                             {(isDaily || isWeeklyFixed) ? (
-                              <Button
-                                size="sm" variant="outline" className="h-7 text-xs gap-1"
-                                onClick={() => handleSaveCommission(r)} disabled={saveEntry.isPending}
-                                title={isDaily ? "Salvar comissão (o pagamento é feito em Presenças)" : "Salvar comissão (o pagamento é feito por semana, abaixo)"}
-                              >
-                                <Save className="h-3 w-3" /> Salvar
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm" variant="outline" className="h-7 text-xs gap-1"
+                                  onClick={() => handleSaveCommission(r)} disabled={saveEntry.isPending}
+                                  title={isDaily ? "Salvar comissão (o pagamento é feito em Presenças)" : "Salvar comissão (o pagamento é feito por semana, abaixo)"}
+                                >
+                                  <Save className="h-3 w-3" /> Salvar
+                                </Button>
+                                {!r.isDraft && (
+                                  <Button
+                                    size="sm" variant="ghost" className="h-7 text-xs gap-1 text-gray-400 hover:text-gray-600"
+                                    onClick={() => reopenEntry.mutate({ id: r.id })} disabled={reopenEntry.isPending}
+                                    title="Reabrir (recalcula salário/tipo de vínculo ao vivo — o pagamento em Presenças/por semana não é afetado)"
+                                  >
+                                    <LockOpen className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </>
                             ) : (
                               <>
                                 {!isLocked && (
-                                  <>
-                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleSaveCommission(r)} disabled={saveEntry.isPending} title="Salvar comissão sem marcar como pago">
-                                      <Save className="h-3 w-3" /> Salvar
-                                    </Button>
-                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50" onClick={() => handlePayRow(r)} disabled={saveEntry.isPending}>
-                                      <CheckCircle2 className="h-3 w-3" /> Pagar
-                                    </Button>
-                                  </>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleSaveCommission(r)} disabled={saveEntry.isPending} title="Salvar sem marcar nada como pago">
+                                    <Save className="h-3 w-3" /> Salvar
+                                  </Button>
                                 )}
-                                {isLocked && r.status !== "pago" && (
-                                  <>
-                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50" onClick={() => markPaid.mutate({ id: r.id, paidAt: new Date().toISOString().slice(0, 10) })} disabled={markPaid.isPending}>
-                                      <CheckCircle2 className="h-3 w-3" /> Pago
-                                    </Button>
-                                    <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-gray-400 hover:text-gray-600" onClick={() => reopenEntry.mutate({ id: r.id })} disabled={reopenEntry.isPending} title="Reabrir (volta a calcular ao vivo)">
-                                      <LockOpen className="h-3 w-3" />
-                                    </Button>
-                                  </>
-                                )}
-                                {r.status === "pago" && (
+                                {/* Salário — independente da comissão (datas de pagamento diferentes) */}
+                                {(r.isDraft || r.status !== "pago") ? (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50" onClick={() => handlePaySalary(r)} disabled={saveEntry.isPending || markPaid.isPending}>
+                                    <CheckCircle2 className="h-3 w-3" /> Pagar Salário
+                                  </Button>
+                                ) : (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-gray-400 hover:text-gray-600" onClick={() => unmarkPaid.mutate({ id: r.id })} disabled={unmarkPaid.isPending}>
-                                    Desfazer Pago
+                                    Desfazer Salário
+                                  </Button>
+                                )}
+                                {/* Comissão — só aparece quando há valor de comissão a pagar */}
+                                {parseFloat(r.commission || "0") > 0 && (
+                                  r.commissionStatus !== "pago" ? (
+                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => handlePayCommission(r)} disabled={saveEntry.isPending || markCommissionPaid.isPending}>
+                                      <CheckCircle2 className="h-3 w-3" /> Pagar Comissão
+                                    </Button>
+                                  ) : (
+                                    <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-gray-400 hover:text-gray-600" onClick={() => unmarkCommissionPaid.mutate({ id: r.id })} disabled={unmarkCommissionPaid.isPending}>
+                                      Desfazer Comissão
+                                    </Button>
+                                  )
+                                )}
+                                {isLocked && r.status !== "pago" && r.commissionStatus !== "pago" && (
+                                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-gray-400 hover:text-gray-600" onClick={() => reopenEntry.mutate({ id: r.id })} disabled={reopenEntry.isPending} title="Reabrir (volta a calcular ao vivo)">
+                                    <LockOpen className="h-3 w-3" />
                                   </Button>
                                 )}
                               </>
@@ -527,7 +580,12 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                                 <span key={w.weekStart} className="inline-flex items-center gap-1.5 text-xs bg-white border border-gray-200 rounded-full px-2.5 py-1">
                                   {w.cargas !== undefined ? (
                                     <>
-                                      <span className="text-gray-600">Semana {fmtWeekLabel(w.weekStart, w.weekEnd)}:</span>
+                                      <button
+                                        type="button"
+                                        className="text-gray-600 hover:text-gray-900 underline decoration-dotted"
+                                        title="Ver as cargas e os combustíveis dessa semana"
+                                        onClick={() => setWeekDetail(cur => cur?.collaboratorId === r.collaboratorId && cur?.weekStart === w.weekStart ? null : { collaboratorId: r.collaboratorId, weekStart: w.weekStart })}
+                                      >Semana {fmtWeekLabel(w.weekStart, w.weekEnd)}:</button>
                                       <span className="text-gray-500">
                                         {w.unit === "tonelada"
                                           ? `${(w.quantidade ?? 0).toFixed(2)} ton (${w.cargas} carga${w.cargas !== 1 ? "s" : ""})`
@@ -568,6 +626,58 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                                 </span>
                               ))}
                             </div>
+                            {(() => {
+                              const dw = weekDetail && weekDetail.collaboratorId === r.collaboratorId ? weeks.find((x: any) => x.weekStart === weekDetail.weekStart) : null;
+                              if (!dw) return null;
+                              const loads = dw.loads ?? [];
+                              const fuels = dw.fuels ?? [];
+                              const fmtD = (d: string) => d.split("-").reverse().join("/");
+                              const totalCom = loads.reduce((s: number, l: any) => s + l.valor, 0);
+                              return (
+                                <div className="mt-3 ml-5 rounded-lg border border-gray-200 bg-white p-3 space-y-3 text-xs">
+                                  <div className="flex items-center justify-between">
+                                    <b className="text-gray-800">Semana {fmtWeekLabel(dw.weekStart, dw.weekEnd)} — detalhamento</b>
+                                    <button type="button" className="text-gray-400 hover:text-gray-600" onClick={() => setWeekDetail(null)}>fechar</button>
+                                  </div>
+                                  <div>
+                                    <div className="font-medium text-gray-700 mb-1">Cargas entregues (comissão)</div>
+                                    {loads.length === 0 ? <div className="text-gray-400">Nenhuma carga.</div> : (
+                                      <table className="w-full">
+                                        <thead><tr className="text-left text-gray-500"><th className="py-0.5">Entrega</th><th>Carga</th><th>Placa</th><th>Destino</th><th className="text-right">Ton</th><th className="text-right">Tarifa</th><th className="text-right">Comissão</th></tr></thead>
+                                        <tbody>
+                                          {loads.map((l: any) => (
+                                            <tr key={l.loadId} className="border-t border-gray-100">
+                                              <td className="py-0.5">{fmtD(l.date)}</td><td>#{l.loadId}</td><td className="font-mono">{l.plate ?? "—"}</td><td>{l.dest ?? "—"}</td>
+                                              <td className="text-right">{(l.kg / 1000).toFixed(2)}</td><td className="text-right">R$ {fmtBRL(l.rate)}{dw.unit === "tonelada" ? "/t" : ""}</td>
+                                              <td className="text-right font-medium">R$ {fmtBRL(l.valor)}</td>
+                                            </tr>
+                                          ))}
+                                          <tr className="border-t border-gray-200 font-semibold"><td colSpan={6} className="py-0.5 text-right">Total comissão</td><td className="text-right">R$ {fmtBRL(totalCom)}</td></tr>
+                                        </tbody>
+                                      </table>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div className="font-medium text-gray-700 mb-1">Combustível descontado</div>
+                                    {fuels.length === 0 ? <div className="text-gray-400">Nenhum abastecimento.</div> : (
+                                      <table className="w-full">
+                                        <thead><tr className="text-left text-gray-500"><th className="py-0.5">Data</th><th>Veículo</th><th className="text-right">Litros</th><th className="text-right">R$/L cobrado</th><th className="text-right">Desconto</th></tr></thead>
+                                        <tbody>
+                                          {fuels.map((f: any, i: number) => (
+                                            <tr key={i} className="border-t border-gray-100">
+                                              <td className="py-0.5">{fmtD(f.date)}</td><td>{f.equipmentName}</td><td className="text-right">{Number(f.liters).toLocaleString("pt-BR")}</td>
+                                              <td className="text-right">R$ {fmtBRL(f.precoCobrado)}</td><td className="text-right font-medium text-red-600">- R$ {fmtBRL(f.subtotal)}</td>
+                                            </tr>
+                                          ))}
+                                          <tr className="border-t border-gray-200 font-semibold"><td colSpan={4} className="py-0.5 text-right">Total desconto</td><td className="text-right text-red-600">- R$ {fmtBRL(dw.desconto ?? 0)}</td></tr>
+                                        </tbody>
+                                      </table>
+                                    )}
+                                  </div>
+                                  <div className="text-right font-semibold text-gray-800">Líquido da semana: R$ {fmtBRL(dw.valor)}</div>
+                                </div>
+                              );
+                            })()}
                           </td>
                         </tr>
                       )}

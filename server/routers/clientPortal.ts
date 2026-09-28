@@ -40,6 +40,32 @@ export function filterPortalRowsByArea<T extends { areaId?: number | null }>(row
     : Number(row.areaId) === normalized);
 }
 
+// Compara só o DIA (YYYY-MM-DD), sem hora/fuso: as datas chegam ora como string "YYYY-MM-DD HH:mm:ss", ora
+// como Date à meia-noite UTC; comparar como Date no fuso local jogava cargas do 1º dia da semana pra fora.
+function diaStr(v: any): string {
+  if (!v) return "";
+  if (v instanceof Date) return isNaN(v.getTime()) ? "" : v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+}
+function loadDia(l: any): string { return diaStr(l.deliveryDate || l.date); }
+function loadKg(l: any): number { return parseFloat(String(l.weightNetKg || l.weightOutKg || "0")) || 0; }
+function loadInClosingWeek(l: any, c: any): boolean {
+  const d = loadDia(l);
+  return d !== "" && d >= diaStr(c.weekStart) && d <= diaStr(c.weekEnd);
+}
+
+// Regra B (área ORIGINAL, sem área): o valor de um fechamento é recalculado pelas cargas ATUAIS da semana,
+// não pelo total_amount gravado na sexta às 22h (que fica defasado quando uma carga entra depois ou peso/preço
+// é editado). Áreas novas continuam com o fechamento congelado, como definido no acordo de cada área.
+export function legacyClosingLive(closing: any, loads: any[], opts: { legacyPricePerTon?: number; windowStartDia?: string } = {}) {
+  // Se as cargas carregadas não alcançam essa semana (lista limitada), não dá pra recalcular: mantém o gravado.
+  if (opts.windowStartDia && diaStr(closing.weekStart) < opts.windowStartDia) return null;
+  const inWeek = loads.filter(l => loadInClosingWeek(l, closing));
+  const kg = inWeek.reduce((s, l) => s + loadKg(l), 0);
+  const price = parseFloat(String(closing.pricePerTon ?? "")) || opts.legacyPricePerTon || 0;
+  return { amount: (kg / 1000) * price, count: inWeek.length, weightKg: kg };
+}
+
 export function calculatePortalTotals({
   loads,
   advances,
@@ -48,6 +74,8 @@ export function calculatePortalTotals({
   areaPending = false,
   areaId = null,
   manualPayments = [],
+  legacyClosings,
+  legacyPricePerTon = 0,
 }: {
   loads: any[];
   advances: any[];
@@ -56,6 +84,8 @@ export function calculatePortalTotals({
   areaPending?: boolean;
   areaId?: number | null;
   manualPayments?: any[];
+  legacyClosings?: any[];
+  legacyPricePerTon?: number;
 }) {
   const totalAdvanceBalance = advances
     .filter(a => a.status === "ativo")
@@ -98,6 +128,30 @@ export function calculatePortalTotals({
     const standalonePayments = manualPayments.filter(p => p.status === 'pago')
       .reduce((sum, p) => sum + Number(p.netAmount ?? p.amount ?? p.grossAmount ?? 0), 0);
     valorPago = Math.round((valorFechamentosPagos + independentDeductions + standalonePayments) * 100) / 100;
+  }
+
+  // Regra B — só área original: Pago = fechamentos pagos e A Receber = fechamentos ainda não pagos + cargas
+  // entregues que ainda não entraram em nenhum fechamento, tudo pelo valor ATUAL das cargas. Assim o topo
+  // bate com a soma dos fechamentos exibidos e Total = Pago + A Receber.
+  // Cliente COM adiantamento fica de fora: nele o "Pago" é o que o adiantamento abateu e o saldo é
+  // Total − Pago; somar fechamentos abertos ignoraria o abatimento e superestimaria o A Receber.
+  if (normalizePortalAreaId(areaId) === null && legacyClosings && advances.length === 0) {
+    const fechPagos = legacyClosings.filter(c => c.status === "pago").reduce((s, c) => s + Number(c.portalAmount || 0), 0);
+    const fechAbertos = legacyClosings.filter(c => c.status !== "pago").reduce((s, c) => s + Number(c.portalAmount || 0), 0);
+    const semFechamento = entregues
+      .filter(l => !legacyClosings.some(c => loadInClosingWeek(l, c)))
+      .reduce((s, l) => {
+        const v = Number(l.portalValue);
+        return s + (Number.isFinite(v) ? v : (loadKg(l) / 1000) * legacyPricePerTon);
+      }, 0);
+    const pagoLegado = fechPagos;
+    return {
+      totalAdvanceBalance,
+      valorTotal,
+      valorPago: pagoLegado,
+      valorAReceber: Math.max(0, fechAbertos + semFechamento),
+      valorAbatidoAdiantamento,
+    };
   }
 
   return {
@@ -194,8 +248,15 @@ async function decorateLoads(loads: any[], client: any, area: any, terms: any) {
   }));
 }
 
-export async function decorateClosings(closings: any[], loads: any[], areaPending: boolean) {
+export async function decorateClosings(closings: any[], loads: any[], areaPending: boolean, opts: { legacyPricePerTon?: number; windowStartDia?: string } = {}) {
   return closings.map(closing => {
+    if (!areaPending && normalizePortalAreaId(closing.areaId) === null) {
+      const live = legacyClosingLive(closing, loads, opts);
+      if (live) {
+        const { closedBy, areaScopeKey, updatedAt, clientId, ...publicLegacy } = closing;
+        return { ...publicLegacy, areaId: null, portalAmount: live.amount, portalLoadCount: live.count, portalWeightKg: live.weightKg };
+      }
+    }
     const closingLoads = filterPortalLoadsForClosing(loads, closing);
     const {
       closedBy, areaScopeKey, updatedAt, clientId, ...publicClosing
@@ -352,7 +413,12 @@ export const clientPortalRouter = router({
       const rawClosings = await db.select().from(cargoWeeklyClosings).where(
         combineConditions(eq(cargoWeeklyClosings.clientId, input.clientId), closingScope),
       ).orderBy(desc(cargoWeeklyClosings.weekEnd)).limit(50).catch(() => []);
-      const decoratedClosings = await decorateClosings(rawClosings, loads, areaPending);
+      const legacyPricePerTon = parseFloat(String(client.pricePerTon ?? "0")) || 0;
+      // Se a lista de cargas atingiu o limite, semanas mais antigas que a carga mais antiga carregada não
+      // podem ser recalculadas (ficariam zeradas): nelas vale o valor gravado.
+      const oldestLoadDia = loads.length >= 500 ? loads.map(loadDia).filter(Boolean).sort()[0] ?? "" : "";
+      const liveOpts = { legacyPricePerTon, windowStartDia: oldestLoadDia };
+      const decoratedClosings = await decorateClosings(rawClosings, loads, areaPending, liveOpts);
       const weeklyClosings = decoratedClosings.map((closing: any) => areaId === null
         ? closing
         : { ...closing, totalAmount: closing.portalAmount, pricePerTon: null });
@@ -382,7 +448,17 @@ export const clientPortalRouter = router({
         : manualPaymentRows;
       const portalAdvances = areaPending ? [] : advances;
       const portalAdvanceDeductions = areaPending ? [] : advanceDeductions;
-      const totals = calculatePortalTotals({ loads, advances: portalAdvances, deductions: portalAdvanceDeductions, weeklyClosings, areaPending, areaId, manualPayments });
+      // Área original: os totais consideram TODOS os fechamentos (não só os 50 mais recentes da lista).
+      let legacyClosings: any[] | undefined;
+      if (areaId === null && !areaPending) {
+        try {
+          const allClosings = await db.select().from(cargoWeeklyClosings).where(
+            combineConditions(eq(cargoWeeklyClosings.clientId, input.clientId), closingScope),
+          );
+          legacyClosings = await decorateClosings(allClosings, loads, false, liveOpts);
+        } catch { legacyClosings = weeklyClosings; }
+      }
+      const totals = calculatePortalTotals({ loads, advances: portalAdvances, deductions: portalAdvanceDeductions, weeklyClosings, areaPending, areaId, manualPayments, legacyClosings, legacyPricePerTon });
       const publicClient = {
         ...client,
         // A new area must never receive legacy price terms through the client object.

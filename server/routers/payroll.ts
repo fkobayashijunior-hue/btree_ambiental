@@ -48,6 +48,20 @@ async function ensurePayrollTable(db: any) {
   } catch (e: any) {
     console.warn('[Payroll] migratePayrollEntriesDiscount:', e?.message);
   }
+  // Pagamento de salário e comissão em datas diferentes (pedido do financeiro) — separa o
+  // status/data que antes cobriam os dois juntos em `status`/`paid_at` (que passam a valer só
+  // pro salário/diária) de um par próprio pra comissão.
+  try {
+    const [cols] = await db.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payroll_entries' AND COLUMN_NAME = 'commission_status'`
+    ) as any;
+    if ((cols as any[]).length === 0) {
+      await db.execute(`ALTER TABLE payroll_entries ADD COLUMN commission_status ENUM('pendente','pago') NOT NULL DEFAULT 'pendente' AFTER paid_at`);
+      await db.execute(`ALTER TABLE payroll_entries ADD COLUMN commission_paid_at TIMESTAMP NULL AFTER commission_status`);
+    }
+  } catch (e: any) {
+    console.warn('[Payroll] migrateCommissionStatus:', e?.message);
+  }
   try {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS payroll_weekly_payments (
@@ -208,7 +222,9 @@ function addDaysStr(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-type WeekBreakdown = { weekStart: string; weekEnd: string; friday?: string; days?: number; cargas?: number; quantidade?: number; unit?: string; desconto?: number; valor?: number; allPaid: boolean };
+type WeekCommissionItem = { loadId: number; date: string; plate: string | null; dest: string | null; categoria: string; kg: number; rate: number; valor: number };
+type WeekCommissionAgg = { cargas: number; quantidade: number; valor: number; items: WeekCommissionItem[] };
+type WeekBreakdown = { loads?: WeekCommissionItem[]; fuels?: DiscountRecord[]; weekStart: string; weekEnd: string; friday?: string; days?: number; cargas?: number; quantidade?: number; unit?: string; desconto?: number; valor?: number; allPaid: boolean };
 
 // Para diarista/terceirizado/semanal: o pagamento de fato acontece em Presenças (por semana),
 // não na Folha. Aqui só lemos o que já foi marcado lá para montar o retrato por semana.
@@ -247,6 +263,75 @@ async function getWeeklyBreakdownMap(db: any, year: number, month: number): Prom
   return result;
 }
 
+// Colaboradores pagos POR SEMANA (sexta): Semanal, ou Motorista/Terceirizado com comissão automática e
+// período próprio (âncora sábado e/ou prazo ≠ 7 dias). Devolve id -> dia de início da semana (0=dom, 6=sáb).
+// Pra eles, uma semana pertence ao mês da SUA SEXTA — então uma entrega/abastecimento de 29–31/08, cuja
+// sexta é 04/09, entra na folha de setembro (senão não cairia em nenhuma sexta de nenhum mês).
+async function getWeeklyPaidAnchors(db: any): Promise<Map<number, number>> {
+  const [rows] = await db.execute(
+    sql`SELECT id, employment_type AS employmentType, weekly_period_anchor AS anchor, payment_lag_days AS lag
+        FROM collaborators WHERE role IN ('motorista','terceirizado') AND commission_auto <> 0`
+  ) as any;
+  const m = new Map<number, number>();
+  for (const r of rows as any[]) {
+    const weekly = r.employmentType === "semanal" || r.anchor === "sabado" || (r.lag !== null && r.lag !== undefined && Number(r.lag) !== 7);
+    if (weekly) m.set(Number(r.id), anchorDayOf({ weeklyPeriodAnchor: r.anchor }));
+  }
+  return m;
+}
+// A sexta de pagamento da semana que contém `dateStr` (semana começando em `anchorDay`).
+function fridayOfWeekContaining(dateStr: string, anchorDay: number): string {
+  return addDaysStr(weekStartOf(dateStr, anchorDay), anchorDay === 6 ? 6 : 5);
+}
+// Janela de datas a buscar: o mês inteiro ± 1 semana (pra alcançar semanas que cruzam a virada do mês).
+function monthWindow(year: number, month: number): { start: string; end: string } {
+  const mm = String(month).padStart(2, "0");
+  const lastDay = new Date(year, month, 0).getDate();
+  return { start: addDaysStr(`${year}-${mm}-01`, -7), end: addDaysStr(`${year}-${mm}-${String(lastDay).padStart(2, "0")}`, 8) };
+}
+
+// Cargas entregues que geram comissão de motorista/terceirizado naquele mês da folha. Fonte ÚNICA usada
+// pelo cálculo automático (mapa semanal) e pelo detalhamento da janela "Calculadora", pra os dois nunca
+// divergirem. Quem é pago por semana usa a regra da sexta; os demais, o mês calendário da entrega.
+async function getCommissionLoadRows(
+  db: any, year: number, month: number, onlyCollaboratorId?: number
+): Promise<Array<{ collaboratorId: number; dateStr: string; categoria: string; weightKg: number; loadId: number; plate: string | null; destName: string | null }>> {
+  const { start, end } = monthWindow(year, month);
+  const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  const weeklyAnchors = await getWeeklyPaidAnchors(db);
+  // A comissão vai pra quem REALMENTE fez a carga (cl.driver_collaborator_id) SÓ pra veículo PRÓPRIO (não
+  // terceirizado) — um caminhão próprio pode ter mais de um motorista revezando no mês. Veículo TERCEIRIZADO
+  // continua no "Motorista Responsável" fixo do equipamento (eq.responsible_driver_id), que é quem tem o
+  // vínculo de comissão, não necessariamente quem dirigiu fisicamente.
+  const [rows] = await db.execute(
+    sql`SELECT COALESCE(IF(eq.is_third_party = 1, NULL, cl.driver_collaborator_id), eq.responsible_driver_id) AS collaboratorId,
+               cl.delivery_date AS deliveryDate, cd.commission_category AS categoria,
+               COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0) AS weightKg,
+               cl.id AS loadId, COALESCE(cl.vehicle_plate, eq.license_plate) AS plate, cd.name AS destName
+        FROM cargo_loads cl
+        JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+        LEFT JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
+          OR (cl.vehicle_id IS NULL AND cl.vehicle_plate IS NOT NULL AND eq.license_plate = cl.vehicle_plate)
+        WHERE cl.status = 'entregue' AND cl.delivery_date IS NOT NULL
+          AND cl.delivery_date >= ${start} AND cl.delivery_date < ${end}
+          AND cd.commission_category != 'nenhuma'
+          AND COALESCE(IF(eq.is_third_party = 1, NULL, cl.driver_collaborator_id), eq.responsible_driver_id) IS NOT NULL`
+  ) as any;
+  const out: Array<{ collaboratorId: number; dateStr: string; categoria: string; weightKg: number; loadId: number; plate: string | null; destName: string | null }> = [];
+  for (const r of rows as any[]) {
+    const cid = Number(r.collaboratorId);
+    if (onlyCollaboratorId !== undefined && cid !== onlyCollaboratorId) continue;
+    const dateStr = r.deliveryDate instanceof Date ? r.deliveryDate.toISOString().slice(0, 10) : String(r.deliveryDate).slice(0, 10);
+    const anchor = weeklyAnchors.get(cid);
+    const belongs = anchor !== undefined
+      ? fridayOfWeekContaining(dateStr, anchor).slice(0, 7) === monthPrefix
+      : dateStr.slice(0, 7) === monthPrefix;
+    if (!belongs) continue;
+    out.push({ collaboratorId: cid, dateStr, categoria: r.categoria, weightKg: parseFloat(String(r.weightKg ?? 0)) || 0, loadId: Number(r.loadId), plate: r.plate ?? null, destName: r.destName ?? null });
+  }
+  return out;
+}
+
 // Motorista/Terceirizado com comissão automática (por carga ou por tonelada líquida, conforme
 // commissionUnit do colaborador — ex: Ruan é por tonelada, Samuel/Isaac por carga): a comissão
 // de cada sexta de pagamento é calculada com base nas cargas realmente entregues naquela semana
@@ -257,21 +342,10 @@ async function getWeeklyVehicleCommissionMap(
   db: any,
   year: number,
   month: number
-): Promise<Map<number, Map<string, { cargas: number; quantidade: number; valor: number }>>> {
-  const [rows] = await db.execute(
-    sql`SELECT eq.responsible_driver_id AS collaboratorId, cl.delivery_date AS deliveryDate, cd.commission_category AS categoria,
-               COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0) AS weightKg
-        FROM cargo_loads cl
-        JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
-        JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
-          OR (cl.vehicle_id IS NULL AND cl.vehicle_plate IS NOT NULL AND eq.license_plate = cl.vehicle_plate)
-        WHERE cl.status = 'entregue' AND cl.delivery_date IS NOT NULL
-          AND YEAR(cl.delivery_date) = ${year} AND MONTH(cl.delivery_date) = ${month}
-          AND cd.commission_category != 'nenhuma'
-          AND eq.responsible_driver_id IS NOT NULL`
-  ) as any;
+): Promise<Map<number, Map<string, WeekCommissionAgg>>> {
+  const rows = await getCommissionLoadRows(db, year, month);
 
-  const map = new Map<number, Map<string, { cargas: number; quantidade: number; valor: number }>>();
+  const map = new Map<number, Map<string, WeekCommissionAgg>>();
   // Tarifa, unidade (carga/tonelada) e âncora da semana podem ser próprias de cada
   // motorista/terceirizado — busca (e cacheia) por colaborador.
   const ratesCache = new Map<number, Record<string, number>>();
@@ -287,17 +361,17 @@ async function getWeeklyVehicleCommissionMap(
     const rates = ratesCache.get(cid)!;
     const config = configCache.get(cid)!;
     const porTonelada = config.unit === "tonelada";
-    const dateStr = r.deliveryDate instanceof Date ? r.deliveryDate.toISOString().slice(0, 10) : String(r.deliveryDate).slice(0, 10);
-    const weekKey = weekStartOf(dateStr, config.anchor);
+    const weekKey = weekStartOf(r.dateStr, config.anchor);
     const rate = rates[`motorista_${r.categoria}`] ?? 0;
-    const quantidadeIncremento = porTonelada ? parseFloat(r.weightKg ?? "0") / 1000 : 1;
+    const quantidadeIncremento = porTonelada ? r.weightKg / 1000 : 1;
     if (!map.has(cid)) map.set(cid, new Map());
     const weeks = map.get(cid)!;
-    if (!weeks.has(weekKey)) weeks.set(weekKey, { cargas: 0, quantidade: 0, valor: 0 });
+    if (!weeks.has(weekKey)) weeks.set(weekKey, { cargas: 0, quantidade: 0, valor: 0, items: [] });
     const w = weeks.get(weekKey)!;
     w.cargas += 1;
     w.quantidade += quantidadeIncremento;
     w.valor += quantidadeIncremento * rate;
+    w.items.push({ loadId: r.loadId, date: r.dateStr, plate: r.plate, dest: r.destName, categoria: r.categoria, kg: r.weightKg, rate, valor: quantidadeIncremento * rate });
   }
   return map;
 }
@@ -345,7 +419,7 @@ async function getLiveOperadorCommissionMap(
 export type DiscountRecord = { date: string; equipmentName: string; liters: number; precoCobrado: number; subtotal: number };
 export type DiscountInfo = {
   total: number; totalLiters: number; records: DiscountRecord[];
-  byWeek: Map<string, { liters: number; valor: number }>;
+  byWeek: Map<string, { liters: number; valor: number; records: DiscountRecord[] }>;
 };
 
 // Desconto de combustível para colaboradores com cargo Terceirizado: soma litros × "Valor a
@@ -353,6 +427,9 @@ export type DiscountInfo = {
 // veículo(s) em que ele é o Motorista Responsável (Setores e Máquinas), no mês da Folha.
 // Também devolve o detalhamento por abastecimento (data, litros, preço cobrado) para exibição.
 async function getLiveTerceirizadoDiscountMap(db: any, year: number, month: number): Promise<Map<number, DiscountInfo>> {
+  const { start: discStart, end: discEnd } = monthWindow(year, month);
+  const discMonthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  const discWeeklyAnchors = await getWeeklyPaidAnchors(db);
   const [rows] = await db.execute(
     sql`SELECT eq.responsible_driver_id AS collaboratorId, eq.name AS equipmentName, vr.date AS date,
                vr.liters AS liters, vr.charged_value AS chargedValue
@@ -360,7 +437,7 @@ async function getLiveTerceirizadoDiscountMap(db: any, year: number, month: numb
         JOIN equipment eq ON eq.id = vr.equipment_id
         WHERE vr.record_type = 'abastecimento' AND vr.charged_value IS NOT NULL AND vr.charged_value != ''
           AND eq.responsible_driver_id IS NOT NULL
-          AND YEAR(vr.date) = ${year} AND MONTH(vr.date) = ${month}
+          AND vr.date >= ${discStart} AND vr.date < ${discEnd}
         ORDER BY vr.date`
   ) as any;
   const map = new Map<number, DiscountInfo>();
@@ -376,6 +453,12 @@ async function getLiveTerceirizadoDiscountMap(db: any, year: number, month: numb
     const cobrado = parseFloat(r.chargedValue ?? "0");
     const subtotal = litros * cobrado;
     const dateStr = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10);
+    // Quem é pago por semana: o abastecimento pertence ao mês da sexta da sua semana (mesma regra das comissões).
+    const wkAnchor = discWeeklyAnchors.get(cid);
+    const belongsToMonth = wkAnchor !== undefined
+      ? fridayOfWeekContaining(dateStr, wkAnchor).slice(0, 7) === discMonthPrefix
+      : dateStr.slice(0, 7) === discMonthPrefix;
+    if (!belongsToMonth) continue;
     if (!map.has(cid)) map.set(cid, { total: 0, totalLiters: 0, records: [], byWeek: new Map() });
     const info = map.get(cid)!;
     info.total += subtotal;
@@ -385,10 +468,11 @@ async function getLiveTerceirizadoDiscountMap(db: any, year: number, month: numb
     // domingo–sábado, mas pode ser sábado–sexta pra colaboradores com âncora própria), pra que
     // o valor de cada sexta de pagamento (Semanalmente) já saia líquido do combustível daquela semana.
     const weekKey = weekStartOf(dateStr, anchorCache.get(cid)!);
-    if (!info.byWeek.has(weekKey)) info.byWeek.set(weekKey, { liters: 0, valor: 0 });
+    if (!info.byWeek.has(weekKey)) info.byWeek.set(weekKey, { liters: 0, valor: 0, records: [] });
     const w = info.byWeek.get(weekKey)!;
     w.liters += litros;
     w.valor += subtotal;
+    w.records.push({ date: dateStr, equipmentName: r.equipmentName, liters: litros, precoCobrado: cobrado, subtotal });
   }
   return map;
 }
@@ -522,7 +606,10 @@ export const payrollRouter = router({
         // nunca chega a "pago" no nível da linha (o pagamento é controlado por sexta, à parte),
         // então continua sempre ao vivo, como já era.
         const hasAutoCommission = (c.role === "motorista" || c.role === "terceirizado" || c.role === "operador") && c.commissionAuto !== 0;
-        const isPaid = saved?.status === "pago";
+        // Trava a comissão ao valor salvo quando ELA (não o salário) já foi paga — salário e
+        // comissão têm datas de pagamento independentes, então o congelamento de cada um segue
+        // o próprio status.
+        const isPaid = saved?.commissionStatus === "pago";
         const useSaved = !!saved && (!hasAutoCommission || isPaid) && !weeklyFixed;
         const commission = useSaved ? parseFloat(saved.commission || "0") : liveCommissionFor(c);
         const discount = useSaved ? parseFloat(saved.discount || "0") : liveDiscountFor(c);
@@ -561,6 +648,8 @@ export const payrollRouter = router({
                 cargas: w?.cargas ?? 0,
                 quantidade: w?.quantidade ?? 0,
                 unit: c.commissionUnit,
+                loads: w?.items ?? [],
+                fuels: weekDiscount?.records ?? [],
                 desconto: weekDiscount?.valor ?? 0,
                 valor: (w?.valor ?? 0) - (weekDiscount?.valor ?? 0),
                 allPaid: paidMap?.get(f) === true,
@@ -597,6 +686,10 @@ export const payrollRouter = router({
           totalAmount: totalAmount.toFixed(2),
           status,
           paidAt: (daily || weeklyFixed) ? null : (saved?.paidAt ?? null),
+          // Comissão: só existe como conceito de pagamento separado nas linhas "simples"
+          // (CLT/PJ e afins) — diarista/semanal já têm seu próprio controle por dia/semana.
+          commissionStatus: (daily || weeklyFixed) ? null : (saved?.commissionStatus ?? "pendente"),
+          commissionPaidAt: (daily || weeklyFixed) ? null : (saved?.commissionPaidAt ?? null),
           isDraft: !saved,
           weeks,
         };
@@ -611,14 +704,17 @@ export const payrollRouter = router({
         else acc.totalDiarias += total;
         if (r.status === "fechado" || r.status === "pago") acc.fechados++;
         if (r.status === "pago") acc.pagos++;
+        if (parseFloat(r.commission || "0") > 0 && r.commissionStatus === "pago") acc.comissoesPagas++;
         return acc;
-      }, { totalGeral: 0, totalComissao: 0, totalDesconto: 0, totalSalarios: 0, totalDiarias: 0, fechados: 0, pagos: 0 });
+      }, { totalGeral: 0, totalComissao: 0, totalDesconto: 0, totalSalarios: 0, totalDiarias: 0, fechados: 0, pagos: 0, comissoesPagas: 0 });
 
       return { rows, summary, totalCollaborators: rows.length };
     }),
 
   // Salva/fecha a linha de um colaborador (grava snapshot dos valores no momento).
-  // markPaid: já grava com status 'pago' (usado pelo botão "Pagar" na linha em rascunho).
+  // markPaid: já grava salário com status 'pago' (botão "Pagar Salário" na linha em rascunho).
+  // markCommissionPaid: idem, mas pra comissão — independente do salário (datas diferentes).
+  // Omitir markCommissionPaid preserva o status de comissão que já existia (não desmarca sem querer).
   saveEntry: protectedProcedure
     .input(z.object({
       collaboratorId: z.number(),
@@ -629,6 +725,8 @@ export const payrollRouter = router({
       notes: z.string().optional(),
       markPaid: z.boolean().optional(),
       paidAt: z.string().optional(),
+      markCommissionPaid: z.boolean().optional(),
+      commissionPaidAt: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       requireAdmin(ctx);
@@ -667,11 +765,16 @@ export const payrollRouter = router({
       const totalAmount = computeTotal(employmentType, baseValue, unitCount, commission, discount);
       const status = input.markPaid ? "pago" : "fechado";
       const paidAt = input.markPaid ? (input.paidAt || new Date().toISOString().slice(0, 10)) : null;
+      // undefined = não mexe no status de comissão que já existia (Salvar/Pagar Salário não
+      // devem desmarcar uma comissão já paga em outra data); só grava quando o chamador pede
+      // explicitamente (botão "Pagar Comissão"/"Desfazer Comissão").
+      const commissionStatusVal = input.markCommissionPaid === undefined ? null : (input.markCommissionPaid ? "pago" : "pendente");
+      const commissionPaidAtVal = input.markCommissionPaid ? (input.commissionPaidAt || new Date().toISOString().slice(0, 10)) : null;
 
       await db.execute(
         sql`INSERT INTO payroll_entries
-          (collaborator_id, reference_month, collaborator_name, cpf, employment_type, base_value, days_worked, commission, discount, total_amount, status, paid_at, notes, closed_by)
-          VALUES (${input.collaboratorId}, ${input.referenceMonth}, ${collab.name}, ${collab.cpf || null}, ${employmentType}, ${baseValue.toFixed(2)}, ${daysWorked}, ${commission.toFixed(2)}, ${discount.toFixed(2)}, ${totalAmount.toFixed(2)}, ${status}, ${paidAt}, ${input.notes || null}, ${ctx.user.id})
+          (collaborator_id, reference_month, collaborator_name, cpf, employment_type, base_value, days_worked, commission, discount, total_amount, status, paid_at, commission_status, commission_paid_at, notes, closed_by)
+          VALUES (${input.collaboratorId}, ${input.referenceMonth}, ${collab.name}, ${collab.cpf || null}, ${employmentType}, ${baseValue.toFixed(2)}, ${daysWorked}, ${commission.toFixed(2)}, ${discount.toFixed(2)}, ${totalAmount.toFixed(2)}, ${status}, ${paidAt}, COALESCE(${commissionStatusVal}, 'pendente'), ${commissionPaidAtVal}, ${input.notes || null}, ${ctx.user.id})
           ON DUPLICATE KEY UPDATE
             collaborator_name = VALUES(collaborator_name),
             cpf = VALUES(cpf),
@@ -683,6 +786,8 @@ export const payrollRouter = router({
             total_amount = VALUES(total_amount),
             status = VALUES(status),
             paid_at = VALUES(paid_at),
+            commission_status = IF(${commissionStatusVal} IS NULL, commission_status, VALUES(commission_status)),
+            commission_paid_at = IF(${commissionStatusVal} IS NULL, commission_paid_at, VALUES(commission_paid_at)),
             notes = VALUES(notes),
             closed_by = ${ctx.user.id}`
       );
@@ -764,6 +869,28 @@ export const payrollRouter = router({
       return { success: true };
     }),
 
+  // Pagamento de COMISSÃO — independente do salário/diária (markPaid/unmarkPaid acima), já
+  // que o financeiro paga os dois em datas diferentes.
+  markCommissionPaid: protectedProcedure
+    .input(z.object({ id: z.number(), paidAt: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(payrollEntries).set({ commissionStatus: "pago", commissionPaidAt: input.paidAt }).where(eq(payrollEntries.id, input.id));
+      return { success: true };
+    }),
+
+  unmarkCommissionPaid: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(payrollEntries).set({ commissionStatus: "pendente", commissionPaidAt: null }).where(eq(payrollEntries.id, input.id));
+      return { success: true };
+    }),
+
   // Marca/desmarca o pagamento de UMA sexta-feira específica de um colaborador "Semanal"
   // (diferente de markPaid/unmarkPaid, que travam o mês inteiro — usado só por CLT/PJ).
   markWeeklyPaid: protectedProcedure
@@ -837,6 +964,19 @@ export const payrollRouter = router({
       return { success: true };
     }),
 
+  // Define se a comissão desse motorista/terceirizado é calculada por carga entregue ou por
+  // tonelada líquida entregue. Fica salvo por colaborador (não afeta os outros) — assim, quando
+  // um motorista novo entrar, basta trocar aqui em vez de mexer em código.
+  updateCommissionUnit: protectedProcedure
+    .input(z.object({ collaboratorId: z.number(), unit: z.enum(["carga", "tonelada"]) }))
+    .mutation(async ({ ctx, input }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(collaborators).set({ commissionUnit: input.unit }).where(eq(collaborators.id, input.collaboratorId));
+      return { success: true };
+    }),
+
   // Detalhamento da comissão de Motorista (por carga entregue no destino, no próprio mês da
   // Folha) ou Operador (toneladas líquidas do cliente no mês ÷ nº de operadores daquele cliente).
   getCommissionBreakdown: protectedProcedure
@@ -867,37 +1007,21 @@ export const payrollRouter = router({
         // Terceirizado segue a mesma regra de comissão do motorista (por carga ou por tonelada
         // líquida entregue, conforme a categoria do destino do veículo responsável — configurável
         // por colaborador via commissionUnit, ex: Ruan é por tonelada, Samuel/Isaac por carga).
-        // As cargas são atribuídas ao motorista pelo VEÍCULO (Motorista Responsável em
-        // Setores e Máquinas), não pelo driver_collaborator_id da carga — isso porque
-        // o mesmo caminhão pode ser dirigido por terceiros/motoristas não cadastrados,
-        // e nesse caso a comissão é do responsável cadastrado pelo veículo. O match é
-        // feito preferencialmente por vehicle_id (FK) e, se ausente, por vehicle_plate
-        // (texto, sujeito a inconsistências de digitação).
+        // A comissão é de quem REALMENTE fez a carga (cl.driver_collaborator_id) SÓ pra veículo
+        // próprio (não terceirizado) — pode ter mais de um motorista revezando no mês. Veículo
+        // TERCEIRIZADO continua pelo "Motorista Responsável" cadastrado no equipamento, que é
+        // quem tem o vínculo de comissão, não necessariamente quem dirigiu fisicamente.
+        // Usa a MESMA fonte (getCommissionLoadRows) do cálculo automático, senão esse detalhamento
+        // mostraria cargas diferentes do valor que realmente foi calculado.
         const porTonelada = collab.commissionUnit === "tonelada";
-        const [rows] = await db.execute(
-          porTonelada
-            ? sql`SELECT cd.commission_category AS categoria, COUNT(*) AS qtd,
-                     SUM(COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0)) AS totalKg
-                  FROM cargo_loads cl
-                  JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
-                  JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
-                    OR (cl.vehicle_id IS NULL AND cl.vehicle_plate IS NOT NULL AND eq.license_plate = cl.vehicle_plate)
-                  WHERE eq.responsible_driver_id = ${input.collaboratorId} AND cl.status = 'entregue'
-                    AND cl.delivery_date IS NOT NULL
-                    AND YEAR(cl.delivery_date) = ${year} AND MONTH(cl.delivery_date) = ${month}
-                    AND cd.commission_category != 'nenhuma'
-                  GROUP BY cd.commission_category`
-            : sql`SELECT cd.commission_category AS categoria, COUNT(*) AS qtd
-                  FROM cargo_loads cl
-                  JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
-                  JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
-                    OR (cl.vehicle_id IS NULL AND cl.vehicle_plate IS NOT NULL AND eq.license_plate = cl.vehicle_plate)
-                  WHERE eq.responsible_driver_id = ${input.collaboratorId} AND cl.status = 'entregue'
-                    AND cl.delivery_date IS NOT NULL
-                    AND YEAR(cl.delivery_date) = ${year} AND MONTH(cl.delivery_date) = ${month}
-                    AND cd.commission_category != 'nenhuma'
-                  GROUP BY cd.commission_category`
-        ) as any;
+        const loadRows = await getCommissionLoadRows(db, year, month, input.collaboratorId);
+        const byCat = new Map<string, { qtd: number; totalKg: number }>();
+        for (const lr of loadRows) {
+          const g = byCat.get(lr.categoria) ?? { qtd: 0, totalKg: 0 };
+          g.qtd += 1; g.totalKg += lr.weightKg;
+          byCat.set(lr.categoria, g);
+        }
+        const rows = Array.from(byCat.entries()).map(([categoria, g]) => ({ categoria, qtd: g.qtd, totalKg: g.totalKg }));
         const labels: Record<string, string> = { enerbio: "Enerbio", mabam: "Mabam (Rebnic)", lider: "Líder", sonoco: "Sonoco" };
         const items = (rows as any[]).map((r: any) => {
           const rate = rates[`motorista_${r.categoria}`] ?? 0;
@@ -908,7 +1032,15 @@ export const payrollRouter = router({
           };
         });
         const total = items.reduce((s: number, i: any) => s + i.subtotal, 0);
-        return { tipo: "motorista" as const, unidade: porTonelada ? "tonelada" as const : "carga" as const, periodoBase, items, total, rates };
+        // Detalhamento cargo a carga e, pra Terceirizado, abastecimentos descontados (mesma fonte do cálculo).
+        const loads = [...loadRows].sort((a, b) => a.dateStr.localeCompare(b.dateStr))
+          .map(lr => ({ loadId: lr.loadId, date: lr.dateStr, plate: lr.plate, dest: lr.destName, categoria: lr.categoria, kg: lr.weightKg }));
+        let fuels: DiscountRecord[] = [];
+        if (collab.role === "terceirizado") {
+          const dm = await getLiveTerceirizadoDiscountMap(db, year, month);
+          fuels = dm.get(input.collaboratorId)?.records ?? [];
+        }
+        return { tipo: "motorista" as const, unidade: porTonelada ? "tonelada" as const : "carga" as const, periodoBase, items, total, rates, loads, fuels };
       }
 
       if (collab.role === "operador") {

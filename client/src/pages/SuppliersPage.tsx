@@ -13,11 +13,60 @@ import { toast } from "sonner";
 import {
   Plus, Building2, Phone, MessageCircle, Mail, Globe, MapPin,
   Edit2, Trash2, Search, ChevronDown, ChevronUp, RefreshCw,
-  UserPlus, User, AlertTriangle, X
+  UserPlus, User, AlertTriangle, X, History, ExternalLink, Tag
 } from "lucide-react";
+import { useLocation } from "wouter";
+
+function fmtQuoteDate(v: number | string | null | undefined) {
+  if (!v) return '';
+  const n = typeof v === 'string' ? parseInt(v, 10) : v;
+  const d = new Date(n);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
+}
+
+// Histórico de preços já cotados com este fornecedor (server/routers/suppliers.ts getById).
+// Componente à parte pra poder chamar o hook só quando o card estiver expandido.
+function SupplierPriceHistory({ supplierId }: { supplierId: number }) {
+  const [, navigate] = useLocation();
+  const { data, isLoading } = trpc.suppliers.getById.useQuery({ id: supplierId });
+  const quotations = data?.recentQuotations || [];
+  if (isLoading) return <p className="text-xs text-gray-400">Carregando histórico...</p>;
+  if (quotations.length === 0) return null;
+  return (
+    <div>
+      <p className="font-medium mb-1 flex items-center gap-1"><History className="w-3.5 h-3.5 text-gray-400" /> Histórico de preços cotados</p>
+      <div className="space-y-1">
+        {quotations.map((q: any) => (
+          <div key={q.id} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1 text-xs">
+            <div className="min-w-0">
+              <span className="font-medium text-gray-800">{q.productName}</span>
+              <span className="text-gray-400"> · {q.unit}</span>
+              {q.notes && <span className="text-gray-400 italic"> — {q.notes}</span>}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-gray-400">{fmtQuoteDate(q.quotedAt)}</span>
+              <span className="font-bold text-gray-700">R$ {q.unitPrice}</span>
+              {q.purchaseRequestId && (
+                <button
+                  type="button"
+                  title="Ver solicitação de compra de origem"
+                  onClick={() => navigate(`/compras/${q.purchaseRequestId}`)}
+                  className="text-blue-500 hover:text-blue-700"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface SupplierForm {
   name: string;
+  cnpj: string;
   tradeName: string;
   productsSold: string;
   address: string;
@@ -30,6 +79,7 @@ interface SupplierForm {
   notes: string;
   sellerName: string;
   pixKey: string;
+  categoryIds: number[];
 }
 
 interface ContactForm {
@@ -41,9 +91,9 @@ interface ContactForm {
 }
 
 const emptyForm: SupplierForm = {
-  name: '', tradeName: '', productsSold: '', address: '', city: '', state: '', phone: '',
+  name: '', cnpj: '', tradeName: '', productsSold: '', address: '', city: '', state: '', phone: '',
   whatsapp: '', email: '', website: '', notes: '',
-  sellerName: '', pixKey: '',
+  sellerName: '', pixKey: '', categoryIds: [],
 };
 
 const emptyContact: ContactForm = {
@@ -58,11 +108,12 @@ export default function SuppliersPage() {
   const [form, setForm] = useState<SupplierForm>(emptyForm);
   const [search, setSearch] = useState('');
   const [cityFilter, setCityFilter] = useState('all');
-  const [groupFilter, setGroupFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState<string>('all');
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   // Contact management
   const [showContactForm, setShowContactForm] = useState(false);
@@ -71,6 +122,16 @@ export default function SuppliersPage() {
   const [editContactId, setEditContactId] = useState<number | null>(null);
 
   const { data: suppliers, isLoading } = trpc.suppliers.list.useQuery({ activeOnly: false });
+  const { data: allCategories } = trpc.purchaseCategories.list.useQuery();
+
+  const createCategoryMutation = trpc.purchaseCategories.create.useMutation({
+    onSuccess: (data: any) => {
+      utils.purchaseCategories.list.invalidate();
+      setForm(f => ({ ...f, categoryIds: [...f.categoryIds, data.id] }));
+      setNewCategoryName('');
+    },
+    onError: (err) => toast.error("Erro ao criar tipo: " + err.message),
+  });
 
   const createMutation = trpc.suppliers.create.useMutation({
     onSuccess: () => {
@@ -87,11 +148,12 @@ export default function SuppliersPage() {
       toast.success("Fornecedor atualizado!");
       resetForm();
     },
+    onError: (err) => toast.error("Erro: " + err.message),
   });
 
   const syncMutation = trpc.suppliers.syncFromQuotationResponses.useMutation({
     onSuccess: (data: any) => {
-      toast.success(`Sincronização concluída: ${data.created} fornecedor(es) criado(s), ${data.updated} atualizado(s).`);
+      toast.success(`Sincronização concluída: ${data.created} fornecedor(es) criado(s), ${data.skipped} ignorado(s) (já existiam).`);
       utils.suppliers.list.invalidate();
     },
     onError: () => toast.error("Erro ao sincronizar fornecedores"),
@@ -139,11 +201,13 @@ export default function SuppliersPage() {
     setEditId(null);
     setShowForm(false);
     setDuplicateWarning(null);
+    setNewCategoryName('');
   }
 
   function openEdit(s: any) {
     setForm({
       name: s.companyName || '',
+      cnpj: (s as any).cnpj || '',
       tradeName: (s as any).tradeName || '',
       productsSold: (s as any).productsSold || '',
       address: s.address || '',
@@ -156,10 +220,33 @@ export default function SuppliersPage() {
       notes: s.notes || '',
       sellerName: s.sellerName || '',
       pixKey: s.pixKey || '',
+      categoryIds: (s as any).categoryIds || [],
     });
     setEditId(s.id);
     setDuplicateWarning(null);
+    setNewCategoryName('');
     setShowForm(true);
+  }
+
+  function toggleCategory(id: number) {
+    setForm(f => ({
+      ...f,
+      categoryIds: f.categoryIds.includes(id) ? f.categoryIds.filter(c => c !== id) : [...f.categoryIds, id],
+    }));
+  }
+
+  function handleAddCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    const existing = (allCategories || []).find((c: any) => c.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      if (!form.categoryIds.includes(existing.id)) {
+        setForm(f => ({ ...f, categoryIds: [...f.categoryIds, existing.id] }));
+      }
+      setNewCategoryName('');
+      return;
+    }
+    createCategoryMutation.mutate({ name });
   }
 
   function checkDuplicate(name: string) {
@@ -224,33 +311,38 @@ export default function SuppliersPage() {
 
   const q = search.toLowerCase();
   const filtered = (suppliers || []).filter(s => {
+    const cats = (s as any).categories || [];
     const matchSearch = s.companyName.toLowerCase().includes(q) ||
       ((s as any).tradeName || '').toLowerCase().includes(q) ||
       (s.city || '').toLowerCase().includes(q) ||
-      ((s as any).productsSold || '').toLowerCase().includes(q);
+      ((s as any).productsSold || '').toLowerCase().includes(q) ||
+      cats.some((c: any) => c.name.toLowerCase().includes(q));
     const matchCity = cityFilter === 'all' || (s.city || '').toLowerCase() === cityFilter.toLowerCase();
-    const matchGroup = groupFilter === 'all' || ((s as any).productsSold || '').toLowerCase().includes(groupFilter.toLowerCase());
+    const matchGroup = groupFilter === 'all' || ((s as any).categoryIds || []).map(String).includes(groupFilter);
     return matchSearch && matchCity && matchGroup;
   });
-  // Agrupar por tipo (products_sold). Primeiro token significativo como nome do grupo.
+  // Nome do(s) tipo(s) do fornecedor, com base nas categorias vinculadas (supplier_categories).
   const groupName = (s: any) => {
-    const ps = ((s.productsSold || '') as string).split(/[,;/]/)[0].trim();
-    return ps || 'Outros';
+    const cats = (s.categories || []) as Array<{ name: string }>;
+    return cats.length > 0 ? cats.map(c => c.name).join(', ') : 'Sem tipo';
   };
+  // Agrupa por categoria (um fornecedor com múltiplos tipos aparece em cada grupo correspondente).
   const groups = (() => {
     const map = new Map<string, any[]>();
     for (const s of filtered) {
-      const g = groupName(s);
-      if (!map.has(g)) map.set(g, []);
-      map.get(g)!.push(s);
+      const cats = (s.categories || []) as Array<{ name: string }>;
+      const names = cats.length > 0 ? cats.map(c => c.name) : ['Sem tipo'];
+      for (const g of names) {
+        if (!map.has(g)) map.set(g, []);
+        map.get(g)!.push(s);
+      }
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
   })();
   const cities = Array.from(new Set((suppliers || []).map(s => (s.city || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const groupNames = Array.from(new Set((suppliers || []).map(s => groupName(s)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   return (
-    <div className="p-4 max-w-3xl mx-auto space-y-4">
+    <div className="p-4 space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -296,7 +388,7 @@ export default function SuppliersPage() {
           className="h-10 w-full text-sm border rounded-md px-3 bg-white"
         >
           <option value="all">Todos os tipos</option>
-          {groupNames.map(g => <option key={g} value={g}>{g}</option>)}
+          {(allCategories || []).map((c: any) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
         </select>
         <select
           value={cityFilter}
@@ -319,7 +411,11 @@ export default function SuppliersPage() {
             <Plus className="w-4 h-4 mr-2" /> Cadastrar primeiro fornecedor
           </Button>
         </div>
-      ) : groupFilter === 'all' && cityFilter === 'all' && !q ? (
+      ) : (
+        <>
+        {/* Celular: mantém os cards (agrupados por tipo, ou lista plana quando filtrando) */}
+        <div className="md:hidden">
+        {groupFilter === 'all' && cityFilter === 'all' && !q ? (
         /* Visão agrupada por tipo (grupos expansíveis) */
         <div className="space-y-2">
           {groups.map(([gname, list]) => (
@@ -512,6 +608,7 @@ export default function SuppliersPage() {
                           </div>
                         </div>
                       )}
+                      <SupplierPriceHistory supplierId={s.id} />
                     </div>
                   )}
                 </CardContent>
@@ -519,6 +616,88 @@ export default function SuppliersPage() {
             );
           })}
         </div>
+        )}
+        </div>
+
+        {/* Notebook/computador: tabela */}
+        <div className="hidden md:block rounded-lg border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-blue-700 text-white text-left">
+                  <th className="px-3 py-2 text-xs font-semibold">Fornecedor</th>
+                  <th className="px-3 py-2 text-xs font-semibold">Tipo</th>
+                  <th className="px-3 py-2 text-xs font-semibold">Cidade</th>
+                  <th className="px-3 py-2 text-xs font-semibold">Contato</th>
+                  <th className="px-3 py-2 text-xs font-semibold">Vendedor</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(s => {
+                  const contacts = (s as any).contacts || [];
+                  return (
+                    <tr key={s.id} className={`border-t ${s.active === 0 ? 'opacity-50' : ''}`}>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-gray-900">{(s as any).tradeName || s.companyName}</span>
+                          {s.active === 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-gray-400">Inativo</Badge>}
+                        </div>
+                        {(s as any).tradeName && (s as any).tradeName !== s.companyName && (
+                          <p className="text-xs text-gray-400">{s.companyName}</p>
+                        )}
+                        {contacts.length > 0 && (
+                          <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><User className="w-3 h-3" /> {contacts.length} contato(s) adicional(is)</p>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {((s as any).categories || []).length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {(s as any).categories.map((c: any) => (
+                              <span
+                                key={c.id}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium text-white"
+                                style={{ backgroundColor: c.color || '#6B7280' }}
+                              >
+                                {c.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">Sem tipo</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600">
+                        {[s.city, s.state].filter(Boolean).join(' - ') || '—'}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">
+                        {s.phone && <a href={`tel:${s.phone}`} className="flex items-center gap-1 text-blue-600 hover:underline"><Phone className="w-3 h-3" /> {s.phone}</a>}
+                        {s.whatsapp && <a href={`https://wa.me/55${s.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 hover:underline mt-0.5"><MessageCircle className="w-3 h-3" /> WhatsApp</a>}
+                        {s.email && <a href={`mailto:${s.email}`} className="flex items-center gap-1 text-purple-600 hover:underline mt-0.5 break-all"><Mail className="w-3 h-3 shrink-0" /> {s.email}</a>}
+                        {!s.phone && !s.whatsapp && !s.email && '—'}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600">{s.sellerName || '—'}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openAddContact(s.id)} className="p-1.5 h-auto text-green-600 hover:bg-green-50" title="Adicionar contato">
+                            <UserPlus className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(s)} className="p-1.5 h-auto text-blue-500 hover:bg-blue-50" title="Editar">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(s.id)} className="p-1.5 h-auto text-red-400 hover:bg-red-50" title="Excluir">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        </>
       )}
 
       {/* Supplier Form Dialog */}
@@ -555,13 +734,53 @@ export default function SuppliersPage() {
               />
             </div>
             <div>
-              <Label>O que vende (grupo/tipo)</Label>
+              <Label>CNPJ</Label>
+              <Input
+                value={form.cnpj}
+                onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))}
+                placeholder="00.000.000/0001-00"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Usado para evitar fornecedores duplicados — se já existir um com esse CNPJ, o sistema avisa.</p>
+            </div>
+            <div>
+              <Label className="flex items-center gap-1"><Tag className="w-3.5 h-3.5 text-gray-400" /> Tipo (o que vende)</Label>
+              <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1 bg-gray-50">
+                {(allCategories || []).length === 0 && (
+                  <p className="text-xs text-gray-400 px-1 py-1">Nenhum tipo cadastrado ainda — crie um abaixo.</p>
+                )}
+                {(allCategories || []).map((c: any) => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm px-1 py-0.5 rounded hover:bg-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.categoryIds.includes(c.id)}
+                      onChange={() => toggleCategory(c.id)}
+                    />
+                    <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || '#6B7280' }} />
+                    {c.name}
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-1.5">
+                <Input
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
+                  placeholder="Novo tipo (ex: Óleos, Pneus...)"
+                  className="h-8 text-sm"
+                />
+                <Button type="button" variant="outline" size="sm" onClick={handleAddCategory} disabled={createCategoryMutation.isPending || !newCategoryName.trim()}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
+                </Button>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">Selecione um ou mais tipos existentes, ou crie um novo. Usado pra filtrar fornecedores na hora de cotar.</p>
+            </div>
+            <div>
+              <Label>Observações sobre produtos (opcional)</Label>
               <Input
                 value={form.productsSold}
                 onChange={e => setForm(f => ({ ...f, productsSold: e.target.value }))}
-                placeholder="Ex: Óleos, Filtros, Peças, Pneus"
+                placeholder="Detalhes livres, ex: marcas específicas que vende"
               />
-              <p className="text-[11px] text-gray-400 mt-1">Usado para agrupar fornecedores por tipo (ex: "Fornecedores de Óleo")</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2">

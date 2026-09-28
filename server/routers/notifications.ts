@@ -86,7 +86,7 @@ export async function findUserByName(name: string): Promise<number | null> {
 
 // Notify financeiro (Julia Mary)
 export async function notifyFinanceiro(params: {
-  type: 'solicitacao_peca' | 'pagamento_boleto' | 'pagamento_diaria';
+  type: 'solicitacao_peca' | 'pagamento_boleto' | 'pagamento_diaria' | 'geral';
   title: string;
   message?: string;
   relatedId?: number;

@@ -3,8 +3,22 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { suppliers, supplierContacts, quotations, quotationResponses } from "../../drizzle/schema";
+import { suppliers, supplierContacts, quotations, quotationResponses, supplierCategories, purchaseCategories } from "../../drizzle/schema";
 import { eq, desc, sql } from "drizzle-orm";
+
+// Normaliza CNPJ pra comparação (remove pontuação) — evita duplicidade por causa de
+// formatação diferente ("12.345.678/0001-90" vs "12345678000190").
+const normalizeCnpj = (cnpj: string) => cnpj.replace(/\D/g, '');
+
+// Substitui todos os vínculos de categoria de um fornecedor pela lista informada.
+async function syncSupplierCategories(db: Awaited<ReturnType<typeof getDb>>, supplierId: number, categoryIds: number[] | undefined) {
+  if (categoryIds === undefined) return;
+  await db.delete(supplierCategories).where(eq(supplierCategories.supplierId, supplierId));
+  const uniqueIds = Array.from(new Set(categoryIds));
+  for (const categoryId of uniqueIds) {
+    await db.insert(supplierCategories).values({ supplierId, categoryId });
+  }
+}
 
 export const suppliersRouter = router({
   list: protectedProcedure
@@ -23,10 +37,22 @@ export const suppliersRouter = router({
       }
       // Attach contacts for each supplier
       const allContacts = await db.select().from(supplierContacts);
-      return rows.map(s => ({
-        ...s,
-        contacts: allContacts.filter(c => c.supplierId === s.id),
-      }));
+      const allCategoryLinks = await db.select({
+        supplierId: supplierCategories.supplierId,
+        categoryId: supplierCategories.categoryId,
+        categoryName: purchaseCategories.name,
+        categoryColor: purchaseCategories.color,
+      }).from(supplierCategories)
+        .innerJoin(purchaseCategories, eq(supplierCategories.categoryId, purchaseCategories.id));
+      return rows.map(s => {
+        const cats = allCategoryLinks.filter(c => c.supplierId === s.id);
+        return {
+          ...s,
+          contacts: allContacts.filter(c => c.supplierId === s.id),
+          categoryIds: cats.map(c => c.categoryId),
+          categories: cats.map(c => ({ id: c.categoryId, name: c.categoryName, color: c.categoryColor })),
+        };
+      });
     }),
 
   getById: protectedProcedure
@@ -37,6 +63,13 @@ export const suppliersRouter = router({
       const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, input.id));
       if (!supplier) throw new TRPCError({ code: "NOT_FOUND" });
       const contacts = await db.select().from(supplierContacts).where(eq(supplierContacts.supplierId, input.id));
+      const categoryLinks = await db.select({
+        categoryId: supplierCategories.categoryId,
+        categoryName: purchaseCategories.name,
+        categoryColor: purchaseCategories.color,
+      }).from(supplierCategories)
+        .innerJoin(purchaseCategories, eq(supplierCategories.categoryId, purchaseCategories.id))
+        .where(eq(supplierCategories.supplierId, input.id));
       const recentQuotations = await db.select({
         id: quotations.id,
         productName: quotations.productName,
@@ -45,17 +78,25 @@ export const suppliersRouter = router({
         quotedAt: quotations.quotedAt,
         categoryId: quotations.categoryId,
         notes: quotations.notes,
+        purchaseRequestId: quotations.purchaseRequestId,
       })
         .from(quotations)
         .where(eq(quotations.supplierId, input.id))
         .orderBy(desc(quotations.quotedAt))
         .limit(20);
-      return { ...supplier, contacts, recentQuotations };
+      return {
+        ...supplier,
+        contacts,
+        recentQuotations,
+        categoryIds: categoryLinks.map(c => c.categoryId),
+        categories: categoryLinks.map(c => ({ id: c.categoryId, name: c.categoryName, color: c.categoryColor })),
+      };
     }),
 
   create: protectedProcedure
     .input(z.object({
       name: z.string().min(1).max(255),
+      cnpj: z.string().optional(),
       address: z.string().optional(),
       city: z.string().optional(),
       state: z.string().max(2).optional(),
@@ -68,12 +109,24 @@ export const suppliersRouter = router({
       pixKey: z.string().optional(),
       tradeName: z.string().optional(),
       productsSold: z.string().optional(),
+      categoryIds: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.cnpj && normalizeCnpj(input.cnpj)) {
+        const normCnpj = normalizeCnpj(input.cnpj);
+        const existing = await db.select({ id: suppliers.id, companyName: suppliers.companyName })
+          .from(suppliers)
+          .where(sql`REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(${suppliers.cnpj}, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ${normCnpj}`)
+          .limit(1);
+        if (existing.length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: `Já existe um fornecedor com esse CNPJ: "${existing[0].companyName}". Edite o cadastro existente em vez de criar um novo.` });
+        }
+      }
       const [result] = await db.insert(suppliers).values({
         companyName: input.name,
+        cnpj: input.cnpj || undefined,
         tradeName: input.tradeName,
         productsSold: input.productsSold,
         address: input.address,
@@ -89,13 +142,16 @@ export const suppliersRouter = router({
         active: 1,
         createdBy: ctx.user.id,
       });
-      return { id: (result as any).insertId, ...input };
+      const insertId = (result as any).insertId;
+      await syncSupplierCategories(db, insertId, input.categoryIds);
+      return { id: insertId, ...input };
     }),
 
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
       name: z.string().min(1).max(255),
+      cnpj: z.string().optional(),
       address: z.string().optional(),
       city: z.string().optional(),
       state: z.string().max(2).optional(),
@@ -109,17 +165,29 @@ export const suppliersRouter = router({
       pixKey: z.string().optional(),
       tradeName: z.string().optional(),
       productsSold: z.string().optional(),
+      categoryIds: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { id, name, active, ...rest } = input;
+      if (input.cnpj && normalizeCnpj(input.cnpj)) {
+        const normCnpj = normalizeCnpj(input.cnpj);
+        const existing = await db.select({ id: suppliers.id, companyName: suppliers.companyName })
+          .from(suppliers)
+          .where(sql`REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(${suppliers.cnpj}, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ${normCnpj} AND ${suppliers.id} != ${input.id}`)
+          .limit(1);
+        if (existing.length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: `Já existe outro fornecedor com esse CNPJ: "${existing[0].companyName}".` });
+        }
+      }
+      const { id, name, active, categoryIds, ...rest } = input;
       await db.update(suppliers).set({
         companyName: name,
         ...rest,
         email: rest.email || undefined,
         active: active !== undefined ? active : undefined,
       }).where(eq(suppliers.id, id));
+      await syncSupplierCategories(db, id, categoryIds);
       return { success: true };
     }),
 
@@ -129,8 +197,9 @@ export const suppliersRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Delete contacts first (cascade should handle it, but be explicit)
+      // Delete contacts/categorias first (cascade should handle it, but be explicit)
       await db.delete(supplierContacts).where(eq(supplierContacts.supplierId, input.id));
+      await db.delete(supplierCategories).where(eq(supplierCategories.supplierId, input.id));
       await db.delete(suppliers).where(eq(suppliers.id, input.id));
       return { success: true };
     }),
@@ -199,13 +268,35 @@ export const suppliersRouter = router({
       for (const resp of responses) {
         if (!resp.supplierName?.trim()) continue;
         const trimmedName = resp.supplierName.trim();
-        const rows = await db.execute(
-          sql`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
-        );
-        const existing = (rows as any)[0] as Array<{ id: number }>;
+        const normCnpj = normalizeCnpj(resp.cnpj || '');
+        const normPhone = (resp.sellerPhone || '').replace(/\D/g, '');
+
+        // Duplicidade: CNPJ (prioridade) → telefone/whatsapp → nome exato (como antes).
+        let existing: Array<{ id: number }> = [];
+        if (normCnpj) {
+          const rows = await db.execute(
+            sql`SELECT id FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`
+          );
+          existing = ((rows as any)[0] || []) as Array<{ id: number }>;
+        }
+        if (existing.length === 0 && normPhone.length >= 8) {
+          const rows = await db.execute(
+            sql`SELECT id FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''),' ',''),'-',''),'(',''),')',''),'.','') = ${normPhone}
+                   OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),' ',''),'-',''),'(',''),')',''),'.','') = ${normPhone}
+                 LIMIT 1`
+          );
+          existing = ((rows as any)[0] || []) as Array<{ id: number }>;
+        }
+        if (existing.length === 0) {
+          const rows = await db.execute(
+            sql`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
+          );
+          existing = ((rows as any)[0] || []) as Array<{ id: number }>;
+        }
         if (existing.length > 0) { skipped++; continue; }
         await db.insert(suppliers).values({
           companyName: trimmedName,
+          cnpj: resp.cnpj || undefined,
           address: resp.address ?? null,
           phone: resp.sellerPhone ?? null,
           whatsapp: resp.sellerPhone ?? null,

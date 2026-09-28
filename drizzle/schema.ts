@@ -116,6 +116,7 @@ export const cargoLoads = mysqlTable("cargo_loads", {
 		boletoAmount: varchar("boleto_amount", { length: 20 }),
 		boletoDueDate: timestamp("boleto_due_date", { mode: 'string' }),
 		paymentReceiptUrl: text("payment_receipt_url"),
+		buyerReceiptUrl: text("buyer_receipt_url"), // comprovante do comprador (Enerbio etc) na aba Cargas Entregues a Receber
 			paymentStatus: mysqlEnum("payment_status", ['sem_boleto','a_pagar','pago']).default('sem_boleto'),
 			paidAt: timestamp("paid_at", { mode: 'string' }),
 			humidity: varchar({ length: 20 }),
@@ -427,8 +428,10 @@ export const payrollEntries = mysqlTable("payroll_entries", {
 	commission: varchar({ length: 20 }).default('0').notNull(),
 	discount: varchar({ length: 20 }).default('0').notNull(), // desconto de combustível (Terceirizado)
 	totalAmount: varchar("total_amount", { length: 20 }).notNull(),
-	status: mysqlEnum(['fechado', 'pago']).default('fechado').notNull(),
+	status: mysqlEnum(['fechado', 'pago']).default('fechado').notNull(), // pagamento do SALÁRIO/diária
 	paidAt: timestamp("paid_at", { mode: 'string' }),
+	commissionStatus: mysqlEnum("commission_status", ['pendente', 'pago']).default('pendente').notNull(), // pagamento da COMISSÃO, independente do salário (datas de pagamento diferentes)
+	commissionPaidAt: timestamp("commission_paid_at", { mode: 'string' }),
 	notes: text(),
 	closedBy: int("closed_by").references(() => users.id),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
@@ -1036,6 +1039,7 @@ export const sicoobBoletos = mysqlTable("sicoob_boletos", {
   cnpjPagador: varchar("cnpj_pagador", { length: 30 }),
   nomePagador: varchar("nome_pagador", { length: 255 }),
   valor: varchar({ length: 20 }).notNull().default("0"),
+  receiptUrl: varchar("receipt_url", { length: 1000 }), // comprovante de pagamento
   dataVencimento: varchar("data_vencimento", { length: 10 }),
   dataPagamento: varchar("data_pagamento", { length: 10 }),
   situacao: int().notNull().default(1), // 1=em aberto, 2=baixado, 3=liquidado
@@ -1132,9 +1136,11 @@ export const notasFiscais = mysqlTable("notas_fiscais", {
   nomeDestinatario: varchar("nome_destinatario", { length: 255 }),
   cnpjDestinatario: varchar("cnpj_destinatario", { length: 20 }),
   valorTotal: varchar("valor_total", { length: 20 }),
+  valorOriginal: varchar("valor_original", { length: 20 }),
   unidade: varchar("unidade", { length: 20 }),
   quantidade: varchar("quantidade", { length: 20 }),
   cfop: varchar("cfop", { length: 10 }),
+  receiptUrl: varchar("receipt_url", { length: 1000 }), // comprovante de pagamento
   valorEditado: tinyint("valor_editado").default(0).notNull(),
   statusFiscalContaAzul: varchar("status_fiscal_conta_azul", { length: 50 }),
   statusNfInterno: mysqlEnum("status_nf_interno", ['em_aberto', 'pago', 'cancelado']).default('em_aberto').notNull(),
@@ -1159,6 +1165,7 @@ export const notasFiscaisStatusLog = mysqlTable("notas_fiscais_status_log", {
   valorNovo: varchar("valor_novo", { length: 100 }),
   usuarioId: int("usuario_id"),
   usuarioNome: varchar("usuario_nome", { length: 255 }),
+  observacao: text(),
   alteradoEm: timestamp("alterado_em", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 },
 (table) => [
@@ -1543,6 +1550,13 @@ export const purchaseRequests = mysqlTable("purchase_requests", {
   respondedAt: timestamp("responded_at", { mode: 'string' }), // data da resposta
   responseNotes: text("response_notes"), // parecer/resposta do responsável
   denialReason: text("denial_reason"), // motivo da negativa
+  quotationRequestId: int("quotation_request_id"), // orçamento vinculado (server/routers/quotationRequests.ts)
+  paymentMethod: mysqlEnum("payment_method", ['boleto','pix','cartao_credito','cartao_debito','dinheiro','transferencia','outro']), // forma de pagamento usada na compra
+  invoiceUrl: varchar("invoice_url", { length: 1000 }), // Nota Fiscal anexada na confirmação da compra
+  receiptUrl: varchar("receipt_url", { length: 1000 }), // Comprovante de pagamento anexado na confirmação da compra
+  winningSupplierId: int("winning_supplier_id"), // fornecedor com maior parte da compra (ver suppliersBreakdown p/ divisão completa)
+  finalPrice: varchar("final_price", { length: 20 }), // valor final decidido da compra
+  suppliersBreakdown: text("suppliers_breakdown"), // JSON [{supplierId, supplierName, subtotal}]
   notes: text(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
@@ -1558,10 +1572,74 @@ export const purchaseRequestItems = mysqlTable("purchase_request_items", {
   unit: varchar({ length: 50 }),
   notes: text(),
   confirmed: tinyint().default(0).notNull(),
+  // Recebimento no estoque (server/routers/stock.ts receivePurchaseItems)
+  receivedQuantity: decimal("received_quantity", { precision: 14, scale: 3 }),
+  stockProductId: int("stock_product_id"),
+  stockLocationId: int("stock_location_id"),
+  receivedAt: bigint("received_at", { mode: 'number' }),
+  receivedBy: int("received_by"),
+  packageSize: decimal("package_size", { precision: 14, scale: 3 }),
+  packageUnit: varchar("package_unit", { length: 10 }),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
 export type PurchaseRequestItem = typeof purchaseRequestItems.$inferSelect;
 export type InsertPurchaseRequestItem = typeof purchaseRequestItems.$inferInsert;
+
+// ===== ESTOQUE GERAL (server/routers/stock.ts) =====
+export const stockLocations = mysqlTable("stock_locations", {
+  id: int().autoincrement().primaryKey().notNull(),
+  name: varchar({ length: 150 }).notNull(),
+  type: mysqlEnum(['almoxarifado','oficina','veiculo','obra','outro']).default('almoxarifado').notNull(),
+  equipmentId: int("equipment_id"),
+  active: tinyint().default(1).notNull(),
+  notes: text(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const stockProducts = mysqlTable("stock_products", {
+  id: int().autoincrement().primaryKey().notNull(),
+  code: varchar({ length: 50 }),
+  name: varchar({ length: 255 }).notNull(),
+  brand: varchar({ length: 100 }),
+  tracksWeight: tinyint("tracks_weight").default(0).notNull(),
+  densityKgL: decimal("density_kg_l", { precision: 6, scale: 3 }),
+  unit: varchar({ length: 20 }).default('un').notNull(),
+  categoryId: int("category_id").references(() => purchaseCategories.id),
+  minStock: decimal("min_stock", { precision: 14, scale: 3 }).default('0').notNull(),
+  active: tinyint().default(1).notNull(),
+  notes: text(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+// Saldo atual por produto × local — cache, sempre atualizado na mesma transação do movimento.
+export const stockBalances = mysqlTable("stock_balances", {
+  id: int().autoincrement().primaryKey().notNull(),
+  productId: int("product_id").notNull(),
+  locationId: int("location_id").notNull(),
+  quantity: decimal({ precision: 14, scale: 3 }).default('0').notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [uniqueIndex("stock_balances_product_location_unique").on(table.productId, table.locationId)]);
+
+// Livro-razão IMUTÁVEL: nunca UPDATE/DELETE; correção = estorno/ajuste.
+export const stockMovements = mysqlTable("stock_movements", {
+  id: int().autoincrement().primaryKey().notNull(),
+  productId: int("product_id").notNull(),
+  type: mysqlEnum(['entrada','saida','transferencia','ajuste','estorno','devolucao']).notNull(),
+  quantity: decimal({ precision: 14, scale: 3 }).notNull(),
+  fromLocationId: int("from_location_id"),
+  toLocationId: int("to_location_id"),
+  unitCost: decimal("unit_cost", { precision: 14, scale: 4 }),
+  supplierId: int("supplier_id"),
+  purchaseRequestId: int("purchase_request_id"),
+  purchaseRequestItemId: int("purchase_request_item_id"),
+  destinationEquipmentId: int("destination_equipment_id"),
+  destinationCollaboratorId: int("destination_collaborator_id"),
+  destinationNote: varchar("destination_note", { length: 255 }),
+  reason: text(),
+  performedBy: int("performed_by"),
+  balanceAfter: decimal("balance_after", { precision: 14, scale: 3 }),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
 
 export const suppliers = mysqlTable("suppliers", {
   id: int().autoincrement().primaryKey().notNull(),
@@ -1600,6 +1678,28 @@ export const supplierContacts = mysqlTable("supplier_contacts", {
 });
 export type SupplierContact = typeof supplierContacts.$inferSelect;
 export type InsertSupplierContact = typeof supplierContacts.$inferInsert;
+
+export const supplierCategories = mysqlTable("supplier_categories", {
+  id: int().autoincrement().primaryKey().notNull(),
+  supplierId: int("supplier_id").notNull().references(() => suppliers.id),
+  categoryId: int("category_id").notNull().references(() => purchaseCategories.id),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+export type SupplierCategory = typeof supplierCategories.$inferSelect;
+export type InsertSupplierCategory = typeof supplierCategories.$inferInsert;
+
+// Estado da conversa do bot de Solicitação de Compra via WhatsApp (server/webhooks/
+// whatsappPurchaseBot.ts). Uma linha por telefone — a conversa é sempre sequencial,
+// nunca precisa de histórico de mais de uma sessão em aberto ao mesmo tempo.
+export const whatsappConversationState = mysqlTable("whatsapp_conversation_state", {
+  phone: varchar({ length: 20 }).primaryKey().notNull(), // telefone normalizado (só dígitos, sem DDI)
+  flow: varchar({ length: 50 }).notNull(), // ex: 'compra'
+  step: varchar({ length: 50 }).notNull(),
+  payload: text(), // JSON com o que já foi coletado nessa sessão (categoria, itens, etc)
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type WhatsappConversationState = typeof whatsappConversationState.$inferSelect;
+export type InsertWhatsappConversationState = typeof whatsappConversationState.$inferInsert;
 
 export const quotations = mysqlTable("quotations", {
   id: int().autoincrement().primaryKey().notNull(),

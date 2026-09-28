@@ -568,14 +568,15 @@ async function generateWeeklyClosingPDF(closing: any, clientName: string, loadsA
     return d >= weekStart && d <= weekEnd;
   });
 
-  // Use actual filtered loads count (not the saved totalLoads which may be stale)
-  const actualTotalLoads = closing.totalLoads ?? weekLoads.length;
+  // Sempre recalculado pelas cargas ATUAIS do período (não pelo total_loads/total_amount gravado
+  // no dia do fechamento) — evita o PDF mostrar cargas/peso/valor de fontes diferentes entre si.
+  const actualTotalLoads = weekLoads.length;
   const actualTotalWeightKg = weekLoads.reduce((sum: number, l: any) => {
     const w = parseFloat(l.weightNetKg || l.weightOutKg || '0');
     return sum + w;
   }, 0);
   const actualTotalWeightTon = formatBR(actualTotalWeightKg / 1000, 2);
-  const actualTotalAmount = formatBR(Number(closing.totalAmount || 0), 2);
+  const actualTotalAmount = formatBR((actualTotalWeightKg / 1000) * pricePerTon, 2);
 
   const loadsRows = weekLoads.map((l: any, i: number) => {
     const date = (l.deliveryDate || l.date) ? safeDate(l.deliveryDate || l.date).toLocaleDateString('pt-BR') : '-';
@@ -1016,7 +1017,8 @@ function WeeklyClosingsView({
               return d >= wStart && d <= wEnd;
             });
             const realWeightKg = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
-            const realAmount = Number(closing.totalAmount || 0);
+            const realVolumeM3 = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.volumeM3 || '0'), 0);
+            const realAmount = closing.priceUnit === 'm3' ? realVolumeM3 * pricePerTon : (realWeightKg / 1000) * pricePerTon;
             return (
               <div key={closing.id} className={`border rounded-xl p-4 transition-all hover:shadow-md ${
                 closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
@@ -1044,8 +1046,8 @@ function WeeklyClosingsView({
                       </span>
                     </div>
                     <div className="text-gray-500 text-xs mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      <span>{closing.totalLoads} carga{realLoads.length !== 1 ? 's' : ''}</span>
-                      <span>{closing.priceUnit==='m3' ? `${formatBR(Number(closing.totalVolumeM3||0),3)} m³` : `${formatBR(Number(closing.totalWeightKg||0)/1000)} ton`}</span><span>{realLoads[0]?.areaName || (closing.areaId==null ? "Área atual (Área 1)" : "Área #"+closing.areaId)}</span>
+                      <span>{realLoads.length} carga{realLoads.length !== 1 ? 's' : ''}</span>
+                      <span>{closing.priceUnit==='m3' ? `${formatBR(realVolumeM3,3)} m³` : `${formatBR(realWeightKg/1000)} ton`}</span><span>{realLoads[0]?.areaName || (closing.areaId==null ? "Área atual (Área 1)" : "Área #"+closing.areaId)}</span>
                       {closing.pricePerTon && <span>R$ {formatBR(parseFloat(closing.pricePerTon))}/{closing.priceUnit==='m3'?'m³':'ton'}</span>}
                     </div>
                     {closing.status !== 'pago' && closing.dueDate && (

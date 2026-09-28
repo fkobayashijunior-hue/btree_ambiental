@@ -95,6 +95,7 @@ export const notificationSettingsRouter = router({
     const storedConfig = await getSetting(db, "jobConfig");
     const storedClientConfig = await getSetting(db, "clientConfig");
     const storedCargoNfResponsible = await getSetting(db, "cargoNfResponsible");
+    const storedPurchaseRequestNewResponsible = await getSetting(db, "purchaseRequestNewResponsible");
 
     const config = storedConfig ? { ...DEFAULT_JOB_CONFIG, ...storedConfig } : DEFAULT_JOB_CONFIG;
     const clientConfig = storedClientConfig ? { ...DEFAULT_CLIENT_CONFIG, ...storedClientConfig } : DEFAULT_CLIENT_CONFIG;
@@ -115,6 +116,16 @@ export const notificationSettingsRouter = router({
       };
     } else {
       cargoNfResponsible = { recipients: [] };
+    }
+
+    // Mesma ideia, mas pra quem recebe o aviso via WhatsApp de "nova solicitação de compra"
+    // (server/utils/whatsappNotifications.ts) — antes era hardcoded (Julia + todos os admins),
+    // o que mandava mensagem demais; agora é configurável igual o responsável de NF.
+    let purchaseRequestNewResponsible: { recipients: Array<{ collaboratorId: number | null; manualName: string | null; manualPhone: string | null }> };
+    if (storedPurchaseRequestNewResponsible?.recipients) {
+      purchaseRequestNewResponsible = storedPurchaseRequestNewResponsible;
+    } else {
+      purchaseRequestNewResponsible = { recipients: [] };
     }
 
     // Buscar colaboradores ativos com telefone
@@ -143,6 +154,7 @@ export const notificationSettingsRouter = router({
       clientMeta: CLIENT_META,
       clients,
       cargoNfResponsible,
+      purchaseRequestNewResponsible,
     };
   }),
 
@@ -162,6 +174,23 @@ export const notificationSettingsRouter = router({
       if (!db) throw new Error("Banco de dados indisponível");
       await ensureTable(db);
       await setSetting(db, "cargoNfResponsible", input);
+      return { ok: true };
+    }),
+
+  // Idem, pra quem recebe o aviso de "nova solicitação de compra".
+  updatePurchaseRequestNewResponsible: protectedProcedure
+    .input(z.object({
+      recipients: z.array(z.object({
+        collaboratorId: z.number().nullable(),
+        manualName: z.string().nullable().optional(),
+        manualPhone: z.string().nullable().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível");
+      await ensureTable(db);
+      await setSetting(db, "purchaseRequestNewResponsible", input);
       return { ok: true };
     }),
 

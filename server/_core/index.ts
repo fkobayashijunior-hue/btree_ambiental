@@ -23,6 +23,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerStorageProxy } from "./storageProxy";
+import { whatsappWebhookVerify, whatsappWebhookHandler } from "../webhooks/whatsappPurchaseBot";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -539,6 +540,21 @@ async function runAutoMigrations() {
     try {
       await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN cfop varchar(10)`);
     } catch {}
+    // Guarda o valor que veio do Conta Azul antes do primeiro ajuste manual (o cliente às
+    // vezes paga a menos por divergência de peso na entrega) — sem isso, depois de editar
+    // não tinha mais como saber qual era o valor original da nota.
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN valor_original varchar(20) NULL`);
+    } catch {}
+    // Comprovante de pagamento anexado manualmente pelo financeiro (NF, boleto Sicoob e carga
+    // de comprador sem boleto/NF, como Enerbio) — sobe pro Cloudinary no cliente, aqui só grava a URL.
+    try { await db.execute(/*sql*/`ALTER TABLE notas_fiscais ADD COLUMN receipt_url varchar(1000) NULL`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE sicoob_boletos ADD COLUMN receipt_url varchar(1000) NULL`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE cargo_loads ADD COLUMN buyer_receipt_url TEXT NULL`); } catch {}
+    // NF/comprovante/forma de pagamento anexados na hora de "Confirmar Compra" (Orçamentos)
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN payment_method ENUM('boleto','pix','cartao_credito','cartao_debito','dinheiro','transferencia','outro') NULL`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN invoice_url VARCHAR(1000) NULL`); } catch {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN receipt_url VARCHAR(1000) NULL`); } catch {}
     try {
       // Se a coluna antiga 'status' existir e status_fiscal_conta_azul estiver vazio, copiar os dados
       await db.execute(/*sql*/`UPDATE notas_fiscais SET status_fiscal_conta_azul = status WHERE status_fiscal_conta_azul IS NULL AND status IS NOT NULL`);
@@ -559,6 +575,11 @@ async function runAutoMigrations() {
         INDEX notas_fiscais_status_log_nf_idx (nota_fiscal_id)
       )
     `);
+    // Motivo do ajuste manual de valor (ex: "cliente descontou por divergência de peso na
+    // entrega") — sem isso o log só mostrava o antes/depois do valor, sem explicar o porquê.
+    try {
+      await db.execute(/*sql*/`ALTER TABLE notas_fiscais_status_log ADD COLUMN observacao TEXT NULL`);
+    } catch {}
 
     // Criar tabela cliente_prazo_pagamento se não existir
     await db.execute(/*sql*/`
@@ -777,6 +798,167 @@ async function runAutoMigrations() {
     try { await db.execute(/*sql*/`ALTER TABLE quotation_responses ADD COLUMN products_sold VARCHAR(500) NULL`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE suppliers ADD COLUMN products_sold VARCHAR(500) NULL`); } catch(e) {}
 
+    // Vínculo Solicitação de Compra <-> Solicitação de Orçamento (fecha o ciclo
+    // compra -> cotação -> decisão de compra, antes disso os dois módulos eram desconectados)
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN quotation_request_id INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN winning_supplier_id INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN final_price VARCHAR(20) NULL`); } catch(e) {}
+    // JSON [{supplierId, supplierName, subtotal}] — a compra pode fechar com itens
+    // vindos de fornecedores diferentes, cada um com o melhor preço do seu item.
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN suppliers_breakdown TEXT NULL`); } catch(e) {}
+
+    // O app usa 'analisando'/'comprando' como status intermediários (colaborador pediu ->
+    // financeiro cotando -> comprando) desde a migração de 06/09/2026, mas esse ENUM real
+    // do banco nunca chegou a incluir esses dois valores (só 'negada' foi migrado na época) —
+    // gravar qualquer um deles virava silenciosamente '' (MySQL descarta enum inválido sem
+    // erro em modo não-estrito). Amplia o ENUM de vez, incluindo tudo que já existe hoje.
+    try {
+      await db.execute(/*sql*/`ALTER TABLE purchase_requests MODIFY COLUMN status ENUM(
+        'pendente','lida','analisando','comprando','aprovada','comprada','recebida','cancelada','negada',
+        'pending','read','approved','purchased','received','cancelled','canceled'
+      ) NOT NULL DEFAULT 'pendente'`);
+      console.log('[AutoMigration] purchase_requests.status ENUM ampliado (analisando/comprando)');
+    } catch(e: any) { console.error('[AutoMigration] Falha ao ampliar ENUM de status:', e?.message); }
+    // Corrige registros que já tinham ficado com status vazio por causa do bug acima.
+    try { await db.execute(/*sql*/`UPDATE purchase_requests SET status = 'pendente' WHERE status = ''`); } catch(e) {}
+
+    // Tipos do fornecedor viram um vínculo N:N com as categorias de compra (antes era um
+    // texto livre em suppliers.products_sold), pra permitir múltiplos tipos por fornecedor
+    // e filtrar por categoria já cadastrada na hora de cotar.
+    try {
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS supplier_categories (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          supplier_id INT NOT NULL,
+          category_id INT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY supplier_categories_unique (supplier_id, category_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    } catch(e) {}
+
+    // Estado da conversa do bot de Solicitação de Compra via WhatsApp — uma linha por
+    // telefone, guarda em que passo do fluxo (categoria/item/qtd/confirmação) a pessoa está.
+    try {
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS whatsapp_conversation_state (
+          phone VARCHAR(20) PRIMARY KEY,
+          flow VARCHAR(50) NOT NULL,
+          step VARCHAR(50) NOT NULL,
+          payload TEXT NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    } catch(e) {}
+
+    // ===== ESTOQUE GERAL (server/routers/stock.ts) =====
+    try {
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS stock_locations (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(150) NOT NULL,
+          type ENUM('almoxarifado','oficina','veiculo','obra','outro') NOT NULL DEFAULT 'almoxarifado',
+          equipment_id INT NULL,
+          active TINYINT NOT NULL DEFAULT 1,
+          notes TEXT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS stock_products (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          code VARCHAR(50) NULL,
+          name VARCHAR(255) NOT NULL,
+          unit VARCHAR(20) NOT NULL DEFAULT 'un',
+          category_id INT NULL,
+          min_stock DECIMAL(14,3) NOT NULL DEFAULT 0,
+          active TINYINT NOT NULL DEFAULT 1,
+          notes TEXT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS stock_balances (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          location_id INT NOT NULL,
+          quantity DECIMAL(14,3) NOT NULL DEFAULT 0,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY stock_balances_product_location_unique (product_id, location_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS stock_movements (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          type ENUM('entrada','saida','transferencia','ajuste','estorno','devolucao') NOT NULL,
+          quantity DECIMAL(14,3) NOT NULL,
+          from_location_id INT NULL,
+          to_location_id INT NULL,
+          unit_cost DECIMAL(14,4) NULL,
+          supplier_id INT NULL,
+          purchase_request_id INT NULL,
+          purchase_request_item_id INT NULL,
+          destination_equipment_id INT NULL,
+          destination_collaborator_id INT NULL,
+          destination_note VARCHAR(255) NULL,
+          reason TEXT NULL,
+          performed_by INT NULL,
+          balance_after DECIMAL(14,3) NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX stock_movements_product_idx (product_id),
+          INDEX stock_movements_pr_idx (purchase_request_id),
+          INDEX stock_movements_pri_idx (purchase_request_item_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    } catch(e) { console.error('[AutoMigration] estoque:', e); }
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN received_quantity DECIMAL(14,3) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN stock_product_id INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN stock_location_id INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN received_at BIGINT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN received_by INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_products ADD COLUMN brand VARCHAR(100) NULL AFTER name`); } catch(e) {}
+    // Devolução com pesagem (líquidos/pastas): produto controlado por peso (estoque em kg) + tabela de retiradas
+    try { await db.execute(/*sql*/`ALTER TABLE stock_products ADD COLUMN tracks_weight TINYINT NOT NULL DEFAULT 0`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_products ADD COLUMN density_kg_l DECIMAL(6,3) NULL`); } catch(e) {}
+    // Conteúdo por embalagem do item pedido (ex: 10 un × 20 L) — usado no recebimento no estoque
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN package_size DECIMAL(14,3) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN package_unit VARCHAR(10) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_loans ADD COLUMN consumed_stock DECIMAL(14,3) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_movements MODIFY COLUMN type ENUM('entrada','saida','transferencia','ajuste','estorno','devolucao') NOT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_loans MODIFY COLUMN exit_movement_id INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_loans MODIFY COLUMN quantity_taken DECIMAL(14,3) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_loans ADD COLUMN destination_collaborator_id INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_loans ADD COLUMN destination_equipment_id INT NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_loans ADD COLUMN destination_note VARCHAR(255) NULL`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE stock_loans ADD COLUMN reason TEXT NULL`); } catch(e) {}
+    try {
+      await db.execute(/*sql*/`
+        CREATE TABLE IF NOT EXISTS stock_loans (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          location_id INT NOT NULL,
+          exit_movement_id INT NULL,
+          quantity_taken DECIMAL(14,3) NULL,
+          gross_weight_out DECIMAL(14,3) NOT NULL,
+          destination_collaborator_id INT NULL,
+          destination_equipment_id INT NULL,
+          destination_note VARCHAR(255) NULL,
+          reason TEXT NULL,
+          status ENUM('aberta','devolvida') NOT NULL DEFAULT 'aberta',
+          gross_weight_in DECIMAL(14,3) NULL,
+          consumed DECIMAL(14,3) NULL,
+          return_movement_id INT NULL,
+          returned_by INT NULL,
+          returned_at TIMESTAMP NULL,
+          created_by INT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX stock_loans_status_idx (status),
+          INDEX stock_loans_product_idx (product_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    } catch(e) {}
+
     console.log('[AutoMigration] Tables verified/created successfully');
   } catch (err) {
     console.error('[AutoMigration] Error:', err);
@@ -808,12 +990,19 @@ async function startServer() {
     credentials: true,
   }));
   
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
+  // Configure body parser with larger size limit for file uploads.
+  // `verify` guarda o corpo cru em req.rawBody — necessário pra validar a assinatura
+  // HMAC do webhook do WhatsApp (a Meta assina o payload exato enviado, não o JSON já
+  // reserializado pelo Express).
+  app.use(express.json({ limit: "50mb", verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // Storage proxy for serving uploaded assets
   registerStorageProxy(app);
+
+  // Webhook do bot de Solicitação de Compra via WhatsApp (Meta Cloud API)
+  app.get('/api/whatsapp/webhook', whatsappWebhookVerify);
+  app.post('/api/whatsapp/webhook', whatsappWebhookHandler);
 
   // Diagnostic endpoint for destination report query (temporary)
   app.get('/api/report-diagnostic', async (req, res) => {
@@ -920,27 +1109,6 @@ async function startServer() {
     }
   });
 
-  app.get('/api/pr-schema-diagnostic', async (req, res) => {
-    try {
-      const { getDb } = await import('../db');
-      const db = await getDb();
-      if (!db) return res.status(500).json({ error: 'db indisponivel' });
-      const [cols] = await db.execute(/*sql*/`SHOW COLUMNS FROM purchase_requests`);
-      const [itemsCols] = await db.execute(/*sql*/`SHOW COLUMNS FROM purchase_request_items`);
-      // Teste de insert simulado (rollback)
-      let insertTest: any = null;
-      try {
-        await db.execute(/*sql*/`INSERT INTO purchase_requests (title, description, link, category_id, status, urgency, requested_at, requested_by, notes, created_at, updated_at) VALUES ('__diag__', NULL, NULL, NULL, 'pending', 'medium', 0, 1, NULL, NOW(), NOW())`);
-        insertTest = 'ok';
-        await db.execute(/*sql*/`DELETE FROM purchase_requests WHERE title = '__diag__'`);
-      } catch (e: any) {
-        insertTest = { error: e.message };
-      }
-      return res.json({ columns: cols, itemsColumns: itemsCols, insertTest });
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message });
-    }
-  });
   // Image proxy endpoint - fetches external images and returns as base64 to avoid CORS issues in PDF generation
   app.get('/api/image-proxy', async (req, res) => {
     try {

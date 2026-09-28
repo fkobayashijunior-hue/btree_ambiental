@@ -11,22 +11,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import ReceiveStockDialog from "@/components/ReceiveStockDialog";
 import {
   Plus, ShoppingCart, AlertTriangle, Clock, CheckCircle2, Package,
-  ExternalLink, Image, Trash2, ChevronRight, Filter, X, Paperclip
+  ExternalLink, Image, Trash2, ChevronRight, Filter, X, Paperclip, ArrowUp, ArrowDown, ArrowUpDown
 } from "lucide-react";
 
+// 'Em orçamento' é o rótulo de exibição do valor interno 'analisando'. 'lida' e
+// 'aprovada' saíram do fluxo ativo — ficam só pra não quebrar registros antigos.
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Pendente',
   lida: 'Visualizado',
-  analisando: 'Analisando',
+  analisando: 'Em orçamento',
   comprando: 'Comprando',
   aprovada: 'Aprovada',
   comprada: 'Comprada',
   recebida: 'Recebida',
   cancelada: 'Cancelada',
-  negada: 'Rejeitado',
+  negada: 'Negada',
 };
+// Status que aparecem nos filtros/seleção — o fluxo simplificado que o usuário vê.
+const ACTIVE_STATUS_KEYS = ['pendente', 'analisando', 'comprada', 'recebida', 'negada', 'cancelada'];
 
 const STATUS_COLORS: Record<string, string> = {
   pendente: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -61,11 +66,75 @@ const URGENCY_ICONS: Record<string, React.ReactNode> = {
   critica: <AlertTriangle className="w-3 h-3" />,
 };
 
+type SortState = { field: string; dir: 'asc' | 'desc' } | null;
+
+const URGENCY_RANK: Record<string, number> = { critica: 0, alta: 1, media: 2, baixa: 3 };
+const STATUS_RANK: Record<string, number> = { pendente: 0, lida: 1, analisando: 2, comprando: 3, aprovada: 4, comprada: 5, recebida: 6, negada: 7, cancelada: 8 };
+
+// Valor usado pra ordenar cada coluna (vazio/null sempre vai pro fim, independente da direção).
+function sortValue(r: any, field: string): string | number | null {
+  const dateMs = (v: any) => { if (!v) return null; const t = new Date(v).getTime(); return isNaN(t) ? null : t; };
+  const txt = (v: any) => (v ? String(v).toLowerCase() : null);
+  switch (field) {
+    case 'id': return r.id;
+    case 'urgency': return URGENCY_RANK[r.urgency] ?? 99;
+    case 'title': return txt(r.title);
+    case 'items': return txt((r.items || []).map((it: any) => it.name).join(' '));
+    case 'photos': { try { return r.images ? JSON.parse(r.images).length : 0; } catch { return 0; } }
+    case 'link': return r.linkUrl ? 1 : 0;
+    case 'equipment': return txt(r.equipmentName);
+    case 'category': return txt(r.categoryName);
+    case 'requester': return txt(r.requestedByName);
+    case 'requestDate': return dateMs(r.requestDate);
+    case 'status': return STATUS_RANK[r.status] ?? 99;
+    case 'responsible': return txt(r.respondedByName);
+    case 'purchaseDate': return dateMs(r.purchaseDate);
+    case 'expectedArrival': return dateMs(r.expectedArrival);
+    case 'receivedDate': return dateMs(r.receivedDate);
+    case 'notes': return txt(r.notes);
+    default: return null;
+  }
+}
+
+function sortRows<T>(rows: T[], sort: SortState): T[] {
+  if (!sort) return rows;
+  const withIdx = rows.map((r, i) => ({ r, i, v: sortValue(r, sort.field) }));
+  withIdx.sort((a, b) => {
+    if (a.v == null && b.v == null) return a.i - b.i;
+    if (a.v == null) return 1;
+    if (b.v == null) return -1;
+    const cmp = typeof a.v === 'number' && typeof b.v === 'number'
+      ? a.v - b.v
+      : String(a.v).localeCompare(String(b.v), 'pt-BR', { numeric: true });
+    return cmp !== 0 ? (sort.dir === 'asc' ? cmp : -cmp) : a.i - b.i;
+  });
+  return withIdx.map(x => x.r);
+}
+
+function SortTh({ label, field, sort, onSort, className = '' }: {
+  label: string; field: string; sort: SortState; onSort: (f: string) => void; className?: string;
+}) {
+  const active = sort?.field === field;
+  return (
+    <th
+      className={`px-3 py-2 text-left text-xs font-semibold cursor-pointer select-none hover:bg-green-800/40 ${className}`}
+      onClick={() => onSort(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (sort!.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
+      </span>
+    </th>
+  );
+}
+
 interface NewItem {
   name: string;
   quantity: string;
   unit: string;
   notes: string;
+  packageSize: string;
+  packageUnit: string;
 }
 
 export default function PurchaseRequestsPage() {
@@ -75,11 +144,15 @@ export default function PurchaseRequestsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showForm, setShowForm] = useState(false);
+  const [receivingId, setReceivingId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterUrgency, setFilterUrgency] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterEquipment, setFilterEquipment] = useState<string>('all');
   const [searchText, setSearchText] = useState<string>('');
+  const [sort, setSort] = useState<SortState>(null);
+  const toggleSort = (field: string) =>
+    setSort(cur => cur?.field === field ? { field, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' });
 
   // Form state
   const [title, setTitle] = useState('');
@@ -89,7 +162,7 @@ export default function PurchaseRequestsPage() {
   const [equipmentId, setEquipmentId] = useState<string>('');
   const [urgency, setUrgency] = useState<'baixa' | 'media' | 'alta' | 'critica'>('media');
   const [notes, setNotes] = useState('');
-  const [items, setItems] = useState<NewItem[]>([{ name: '', quantity: '1', unit: 'un', notes: '' }]);
+  const [items, setItems] = useState<NewItem[]>([{ name: '', quantity: '1', unit: 'un', notes: '', packageSize: '', packageUnit: 'L' }]);
   const [pendingImages, setPendingImages] = useState<{ file: File; preview: string }[]>([]);
 
   const { data: requests, isLoading } = trpc.purchaseRequests.list.useQuery();
@@ -138,13 +211,13 @@ export default function PurchaseRequestsPage() {
   function resetForm() {
     setTitle(''); setDescription(''); setLinkUrl(''); setCategoryId('');
     setUrgency('media'); setNotes('');
-    setItems([{ name: '', quantity: '1', unit: 'un', notes: '' }]);
+    setItems([{ name: '', quantity: '1', unit: 'un', notes: '', packageSize: '', packageUnit: 'L' }]);
     setPendingImages([]);
     setShowForm(false);
   }
 
   function addItem() {
-    setItems(prev => [...prev, { name: '', quantity: '1', unit: 'un', notes: '' }]);
+    setItems(prev => [...prev, { name: '', quantity: '1', unit: 'un', notes: '', packageSize: '', packageUnit: 'L' }]);
   }
 
   function removeItem(idx: number) {
@@ -178,7 +251,11 @@ export default function PurchaseRequestsPage() {
       equipmentId: equipmentId ? parseInt(equipmentId) : undefined,
       urgency,
       notes: notes || undefined,
-      items: validItems,
+      items: validItems.map(i => {
+        const size = parseFloat(String(i.packageSize).replace(',', '.'));
+        const { packageSize: _ps, packageUnit: _pu, ...rest } = i as any;
+        return size > 0 ? { ...rest, packageSize: size, packageUnit: i.packageUnit as 'L' | 'kg' | 'm' } : rest;
+      }),
     });
   }
 
@@ -199,7 +276,7 @@ export default function PurchaseRequestsPage() {
   const criticalCount = (requests || []).filter(r => r.urgency === 'critica').length;
 
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-4">
+    <div className="p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -247,8 +324,8 @@ export default function PurchaseRequestsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                {ACTIVE_STATUS_KEYS.map((k) => (
+                  <SelectItem key={k} value={k}>{STATUS_LABELS[k]}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -318,30 +395,30 @@ export default function PurchaseRequestsPage() {
       ) : (
         <Card>
           <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm min-w-[860px]">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="bg-green-700 text-white">
-                  <th className="px-3 py-2 text-left text-xs font-semibold">Cód.</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">Prioridade</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">Solicitação</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Itens</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Fotos</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Link</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Equipamento</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Categoria</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Solicitante</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Data solicitação</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">Status</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Responsável</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Data compra</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Entrega prevista</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Recebido em</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold hidden md:table-cell">Observações</th>
+                  <SortTh label="Cód." field="id" sort={sort} onSort={toggleSort} />
+                  <SortTh label="Prioridade" field="urgency" sort={sort} onSort={toggleSort} />
+                  <SortTh label="Solicitação" field="title" sort={sort} onSort={toggleSort} />
+                  <SortTh label="Itens" field="items" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
+                  <SortTh label="Fotos" field="photos" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
+                  <SortTh label="Link" field="link" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
+                  <SortTh label="Equipamento" field="equipment" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" />
+                  <SortTh label="Categoria" field="category" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
+                  <SortTh label="Solicitante" field="requester" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
+                  <SortTh label="Data solicitação" field="requestDate" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" />
+                  <SortTh label="Status" field="status" sort={sort} onSort={toggleSort} />
+                  <SortTh label="Responsável" field="responsible" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" />
+                  <SortTh label="Data compra" field="purchaseDate" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" />
+                  <SortTh label="Entrega prevista" field="expectedArrival" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
+                  <SortTh label="Recebido em" field="receivedDate" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
+                  <SortTh label="Observações" field="notes" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(req => {
+                {sortRows(filtered, sort).map(req => {
                   const urgencyOrder: Record<string, number> = { critica: 0, alta: 1, media: 2, baixa: 3 };
                   return (
                     <tr
@@ -357,29 +434,52 @@ export default function PurchaseRequestsPage() {
                         </Badge>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="font-medium text-gray-900">{req.title}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-gray-900">{req.title}</span>
+                        </div>
                         {req.description && <div className="text-xs text-gray-500 line-clamp-1">{req.description}</div>}
                       </td>
-                      <td className="px-3 py-2 text-xs text-gray-600 hidden md:table-cell">{(req.items && req.items.length > 0) ? req.items.map((it: any) => `${it.quantity} ${it.unit} ${it.name}`).join('; ') : '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{(() => { try { const imgs = req.images ? JSON.parse(req.images) : []; return imgs.length > 0 ? `${imgs.length} foto(s)` : '—'; } catch { return '—'; } })()}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{req.linkUrl ? <a href={req.linkUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-blue-600 hover:underline">Abrir</a> : '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">
+                      <td className="px-3 py-2 text-xs text-gray-600 hidden lg:table-cell max-w-[220px]">
+                        {(req.items && req.items.length > 0) ? (
+                          <span
+                            className="block truncate"
+                            title={req.items.map((it: any) => `${it.quantity} ${it.unit} ${it.name}`).join('; ')}
+                          >
+                            {req.items.slice(0, 2).map((it: any) => `${it.quantity} ${it.unit} ${it.name}`).join('; ')}
+                            {req.items.length > 2 ? ` +${req.items.length - 2}` : ''}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden 2xl:table-cell">{(() => { try { const imgs = req.images ? JSON.parse(req.images) : []; return imgs.length > 0 ? `${imgs.length} foto(s)` : '—'; } catch { return '—'; } })()}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden 2xl:table-cell">{req.linkUrl ? <a href={req.linkUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-blue-600 hover:underline">Abrir</a> : '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden xl:table-cell">
                         {req.equipmentName ? `${req.equipmentName}${req.equipmentPlate ? ` (${req.equipmentPlate})` : ''}` : '—'}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{req.categoryName || '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{req.requestedByName || '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{req.requestDate ? new Date(req.requestDate).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden lg:table-cell">{req.categoryName || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden lg:table-cell">{req.requestedByName || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden xl:table-cell">{req.requestDate ? new Date(req.requestDate).toLocaleDateString('pt-BR') : '—'}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <Badge className={`text-xs px-2 py-0.5 border ${STATUS_COLORS[req.status]}`}>
                           {STATUS_LABELS[req.status]}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{req.respondedByName || '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{req.purchaseDate ? new Date(req.purchaseDate).toLocaleDateString('pt-BR') : '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{req.expectedArrival ? new Date(req.expectedArrival).toLocaleDateString('pt-BR') : '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden md:table-cell">{req.receivedDate ? new Date(req.receivedDate).toLocaleDateString('pt-BR') : '—'}</td>
-                      <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px] truncate hidden md:table-cell">{req.notes || '—'}</td>
-                      <td className="px-3 py-2 text-right"><ChevronRight className="w-4 h-4 text-gray-300 inline" /></td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden xl:table-cell">{req.respondedByName || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden xl:table-cell">{req.purchaseDate ? new Date(req.purchaseDate).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden 2xl:table-cell">{req.expectedArrival ? new Date(req.expectedArrival).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden 2xl:table-cell">{req.receivedDate ? new Date(req.receivedDate).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px] truncate hidden 2xl:table-cell">{req.notes || '—'}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        {req.status === 'comprada' && (
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 h-7 px-2 text-xs mr-1"
+                            onClick={(e) => { e.stopPropagation(); setReceivingId(req.id); }}
+                          >
+                            <Package className="w-3.5 h-3.5 mr-1" /> Receber
+                          </Button>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-gray-300 inline" />
+                      </td>
                     </tr>
                   );
                 })}
@@ -497,6 +597,23 @@ export default function PurchaseRequestsPage() {
                           className="w-16 h-7 text-xs"
                         />
                         <Input
+                          value={item.packageSize}
+                          onChange={e => updateItem(idx, 'packageSize', e.target.value)}
+                          placeholder="Conteúdo"
+                          title="Conteúdo de cada unidade (ex: balde de 20 L, rolo de 100 m). Deixe vazio se não se aplica."
+                          className="w-20 h-7 text-xs"
+                        />
+                        <select
+                          value={item.packageUnit}
+                          onChange={e => updateItem(idx, 'packageUnit', e.target.value)}
+                          className="h-7 rounded-md border border-input bg-background px-1 text-xs"
+                          title="Unidade do conteúdo"
+                        >
+                          <option value="L">L</option>
+                          <option value="kg">kg</option>
+                          <option value="m">m</option>
+                        </select>
+                        <Input
                           value={item.notes}
                           onChange={e => updateItem(idx, 'notes', e.target.value)}
                           placeholder="Observação"
@@ -567,6 +684,12 @@ export default function PurchaseRequestsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ReceiveStockDialog
+        purchaseRequestId={receivingId}
+        open={receivingId !== null}
+        onOpenChange={(open) => { if (!open) setReceivingId(null); }}
+      />
     </div>
   );
 }

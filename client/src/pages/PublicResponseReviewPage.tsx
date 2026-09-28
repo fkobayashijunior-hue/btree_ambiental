@@ -93,13 +93,14 @@ export default function PublicResponseReviewPage() {
 
   function handleSave() {
     if (!supplierName.trim()) { toast.error("Informe o nome da empresa"); return; }
+    if (!cnpj.replace(/\D/g, '').trim()) { toast.error("Informe o CNPJ ou CPF da empresa"); return; }
     const validItems = responseItems.filter(i => i.name.trim() && i.price.trim());
     if (validItems.length === 0) { toast.error("Informe o preço de pelo menos um item"); return; }
 
     updateMutation.mutate({
       responseToken: responseToken || '',
       supplierName,
-      cnpj: cnpj || undefined,
+      cnpj,
       address: address || undefined,
       sellerName: sellerName || undefined,
       sellerPhone: sellerPhone || undefined,
@@ -292,8 +293,8 @@ export default function PublicResponseReviewPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>CNPJ / CPF</Label>
-                <Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                <Label>CNPJ / CPF *</Label>
+                <Input required value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
               </div>
               <div>
                 <Label>Cidade / Estado</Label>
