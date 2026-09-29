@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, FileDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { exportStyledExcel } from "@/lib/exportExcel";
@@ -59,13 +60,37 @@ export default function ExtratoMovimentacoesPage() {
     { refetchOnWindowFocus: false }
   );
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [idsSuspeitos, setIdsSuspeitos] = useState<Set<string>>(new Set());
+
   const syncMutation = trpc.sicoob.syncExtrato.useMutation({
-    onSuccess: (res) => {
+    onSuccess: (res: any) => {
       if (res.error) toast.error(`Erro: ${res.error}`);
-      else toast.success(`${res.synced} lançamento(s) sincronizado(s)`);
+      else toast.success(`${res.synced} lançamento(s) sincronizado(s)${res.duplicatasBloqueadas > 0 ? ` (${res.duplicatasBloqueadas} duplicata(s) do Sicoob ignorada(s) automaticamente)` : ""}`);
+      // O Sicoob já mandou a mesma cobrança 2x com IDs diferentes uma vez (caso real: empréstimo
+      // duplicado em 17/09/2026) — como o sync dedup por ID do banco, não por conteúdo, isso passa
+      // batido sem esse aviso. Não apaga sozinho: só avisa e destaca a linha, pra alguém conferir
+      // e decidir (o botão de excluir, ao lado de cada lançamento, aparece pra admin).
+      const suspeitos = new Set<string>();
+      if (res.duplicatasSuspeitas?.length > 0) {
+        for (const d of res.duplicatasSuspeitas) {
+          for (const id of d.ids) suspeitos.add(id);
+          toast.warning(
+            `Possível lançamento duplicado: "${d.descricao}" de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.abs(parseFloat(d.valor)))} em ${new Date(d.dataLancamento).toLocaleDateString("pt-BR")} (doc. ${d.numeroDocumento}) aparece ${d.quantidade}x. Confira e apague a linha repetida se for o caso.`,
+            { duration: 15000 }
+          );
+        }
+      }
+      setIdsSuspeitos(suspeitos);
       refetch();
     },
     onError: () => toast.error("Falha ao sincronizar"),
+  });
+
+  const deleteMutation = trpc.sicoob.deleteExtratoLancamento.useMutation({
+    onSuccess: () => { toast.success("Lançamento excluído"); refetch(); },
+    onError: (e) => toast.error(e.message),
   });
 
   const lancamentos: any[] = useMemo(() => {
@@ -247,15 +272,16 @@ export default function ExtratoMovimentacoesPage() {
                 <th className={`${thCls} text-right w-36`} onClick={() => toggleSort("valor")}>
                   Valor (R$) <SortIcon col="valor" sortCol={sortCol} sortDir={sortDir} />
                 </th>
+                {isAdmin && <th className="px-4 py-3 w-10"></th>}
               </tr>
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</td></tr>
               )}
               {!isLoading && lancamentos.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <td colSpan={7} className="text-center py-8 text-muted-foreground">
                     {(data?.lancamentos ?? []).length === 0
                       ? `Nenhum lançamento em ${MESES[mes - 1]}/${ano} — clique em "Sincronizar Sicoob"`
                       : "Nenhum lançamento no período filtrado"}
@@ -264,20 +290,40 @@ export default function ExtratoMovimentacoesPage() {
               )}
               {lancamentos.map((l: any) => {
                 const valor = parseFloat(l.valor ?? "0");
+                const suspeito = idsSuspeitos.has(l.numero_lancamento);
                 return (
-                  <tr key={l.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr key={l.id} className={`border-b last:border-0 hover:bg-muted/30 ${suspeito ? "bg-amber-50 dark:bg-amber-950/20" : ""}`}>
                     <td className="px-4 py-3 text-muted-foreground">{fmtData(l.data_lancamento)}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${l.tipo_lancamento === "DEBITO" ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"}`}>
                         {l.tipo_lancamento ?? "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-medium">{l.descricao ?? "—"}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {l.descricao ?? "—"}
+                      {suspeito && <span className="ml-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400" title="Possível lançamento duplicado — confira antes de excluir">⚠ possível duplicata</span>}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs font-mono">{l.numero_documento ?? "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">{l.complemento ?? "—"}</td>
                     <td className={`px-4 py-3 text-right font-medium ${valor >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                       {valor >= 0 ? "+" : ""}{fmtMoeda(valor)}
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          title="Excluir lançamento"
+                          className="text-muted-foreground hover:text-red-600 disabled:opacity-40"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Excluir o lançamento "${l.descricao}" de ${fmtMoeda(valor)} em ${fmtData(l.data_lancamento)}?\n\nEssa ação não pode ser desfeita — só use se tiver certeza de que é um lançamento duplicado ou errado (compare com o extrato oficial do Sicoob).`)) {
+                              deleteMutation.mutate({ numeroLancamento: l.numero_lancamento, mes, ano });
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

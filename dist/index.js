@@ -4515,6 +4515,30 @@ async function sicoobGet(path4, params) {
   });
   return res.data;
 }
+function chaveConteudo(dataLancamento, descricao, valor, numeroDocumento) {
+  if (!numeroDocumento || NUMERO_DOCUMENTO_GENERICOS.has(numeroDocumento.toUpperCase())) return null;
+  return `${dataLancamento}|${descricao}|${valor}|${numeroDocumento}`;
+}
+async function detectarDuplicatasSuspeitas(db, mes, ano) {
+  const [rows] = await db.$client.execute(
+    `SELECT data_lancamento, descricao, valor, numero_documento, COUNT(*) AS qtd,
+            GROUP_CONCAT(numero_lancamento) AS ids
+     FROM sicoob_extrato
+     WHERE mes = ? AND ano = ?
+       AND numero_documento IS NOT NULL AND numero_documento != ''
+     GROUP BY data_lancamento, descricao, valor, numero_documento
+     HAVING COUNT(*) > 1`,
+    [mes, ano]
+  );
+  return rows.filter((r) => !NUMERO_DOCUMENTO_GENERICOS.has(String(r.numero_documento).toUpperCase())).map((r) => ({
+    dataLancamento: r.data_lancamento,
+    descricao: r.descricao,
+    valor: r.valor,
+    numeroDocumento: r.numero_documento,
+    quantidade: r.qtd,
+    ids: String(r.ids).split(",")
+  }));
+}
 async function syncSicoobExtrato(mes, ano) {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
@@ -4538,25 +4562,47 @@ async function syncSicoobExtrato(mes, ano) {
        ON DUPLICATE KEY UPDATE saldo_inicial = ?, saldo_final = ?, sincronizado_em = NOW()`,
       [mes, ano, saldoAnterior, saldoAtual, saldoAnterior, saldoAtual]
     );
-    const rows = transacoes.map((l, i) => {
+    const [existentesRows] = await db.$client.execute(
+      `SELECT data_lancamento, descricao, valor, numero_documento FROM sicoob_extrato WHERE mes = ? AND ano = ?`,
+      [mes, ano]
+    );
+    const chavesExistentes = new Set(
+      existentesRows.map((r) => chaveConteudo(r.data_lancamento, r.descricao, r.valor, r.numero_documento)).filter((k) => k !== null)
+    );
+    let duplicatasBloqueadas = 0;
+    const rows = [];
+    for (let i = 0; i < transacoes.length; i++) {
+      const l = transacoes[i];
       const numeroLancamento = String(l.transactionId ?? l.numeroLancamento ?? l.id ?? `${mes}-${ano}-${i}`);
       const dataLancamento = l.dataLote ?? (l.data ? String(l.data).slice(0, 10) : null);
       const complemento = l.descInfComplementar ? String(l.descInfComplementar).replace(/\|@\*+/g, "").replace(/\|@/g, " ").trim() : null;
       const numeroDocumento = l.numeroDocumento ? String(l.numeroDocumento) : null;
       const valor = l.tipo === "DEBITO" ? String(-Math.abs(parseFloat(l.valor ?? "0"))) : String(Math.abs(parseFloat(l.valor ?? "0")));
-      return {
+      const descricao = l.descricao ?? null;
+      const chave = chaveConteudo(dataLancamento, descricao, valor, numeroDocumento);
+      if (chave) {
+        if (chavesExistentes.has(chave)) {
+          duplicatasBloqueadas++;
+          continue;
+        }
+        chavesExistentes.add(chave);
+      }
+      rows.push({
         numeroLancamento,
         mes,
         ano,
         dataLancamento,
-        descricao: l.descricao ?? null,
+        descricao,
         complemento,
         valor,
         saldo: "0",
         tipoLancamento: l.tipo ? String(l.tipo) : null,
         numeroDocumento
-      };
-    });
+      });
+    }
+    if (duplicatasBloqueadas > 0) {
+      console.warn(`[SicoobExtrato] ${duplicatasBloqueadas} lan\xE7amento(s) com mesmo conte\xFAdo j\xE1 existente foram ignorados (Sicoob mandou ID diferente pro mesmo lan\xE7amento).`);
+    }
     const CHUNK = 200;
     for (let i = 0; i < rows.length; i += CHUNK) {
       const chunk = rows.slice(i, i + CHUNK);
@@ -4583,7 +4629,11 @@ async function syncSicoobExtrato(mes, ano) {
         }
       }
     })();
-    return { synced: rows.length, error: null };
+    const duplicatasSuspeitas = await detectarDuplicatasSuspeitas(db, mes, ano);
+    if (duplicatasSuspeitas.length > 0) {
+      console.warn(`[SicoobExtrato] ${duplicatasSuspeitas.length} poss\xEDvel(is) duplicata(s):`, JSON.stringify(duplicatasSuspeitas));
+    }
+    return { synced: rows.length, error: null, duplicatasSuspeitas, duplicatasBloqueadas };
   } catch (e) {
     const detail = JSON.stringify(e?.response?.data ?? {});
     console.error(`[SicoobExtrato] Erro ${mes}/${ano}:`, detail);
@@ -4977,7 +5027,7 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
     return { dias: [], error: e.message };
   }
 }
-var tokenCache, certWarningLogged, NUMERO_CLIENTE, NUMERO_CONTA, CODIGO_MODALIDADE, sicoobRouter;
+var tokenCache, certWarningLogged, NUMERO_CLIENTE, NUMERO_CONTA, NUMERO_DOCUMENTO_GENERICOS, CODIGO_MODALIDADE, sicoobRouter;
 var init_sicoob = __esm({
   "server/routers/sicoob.ts"() {
     "use strict";
@@ -4990,6 +5040,14 @@ var init_sicoob = __esm({
     certWarningLogged = false;
     NUMERO_CLIENTE = Number(process.env.SICOOB_NUMERO_CLIENTE ?? "8971676");
     NUMERO_CONTA = Number(process.env.SICOOB_NUMERO_CONTA ?? "0");
+    NUMERO_DOCUMENTO_GENERICOS = /* @__PURE__ */ new Set([
+      "TAG.PG.PED",
+      "TAG.PL.DIA",
+      "TAG.PL.MES",
+      "TAG.EST.PD",
+      "PIX",
+      "AGRUPADO"
+    ]);
     CODIGO_MODALIDADE = Number(process.env.SICOOB_CODIGO_MODALIDADE ?? "1");
     sicoobRouter = router({
       // Saldo da conta corrente
@@ -5149,6 +5207,30 @@ var init_sicoob = __esm({
       syncExtrato: protectedProcedure.input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).mutation(async ({ input }) => {
         const result = await syncSicoobExtrato(input.mes, input.ano);
         return result;
+      }),
+      // Exclusão manual de um lançamento do extrato — pra corrigir casos como o de 17/09/2026, em
+      // que o próprio Sicoob mandou a mesma cobrança duas vezes com IDs diferentes (ver
+      // detectarDuplicatasSuspeitas). Só admin, porque mexe direto no livro-razão bancário; o
+      // registro apagado fica no log do servidor (não existe uma tabela de auditoria pro extrato).
+      deleteExtratoLancamento: adminProcedure.input(z47.object({ numeroLancamento: z47.string().min(1), mes: z47.number(), ano: z47.number() })).mutation(async ({ input, ctx }) => {
+        const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+        const db = await getDb2();
+        if (!db) throw new Error("DB indispon\xEDvel");
+        const [rows] = await db.$client.execute(
+          `SELECT * FROM sicoob_extrato WHERE numero_lancamento = ? AND mes = ? AND ano = ?`,
+          [input.numeroLancamento, input.mes, input.ano]
+        );
+        const lancamento = rows[0];
+        if (!lancamento) throw new Error("Lan\xE7amento n\xE3o encontrado");
+        await db.$client.execute(
+          `DELETE FROM sicoob_extrato WHERE numero_lancamento = ? AND mes = ? AND ano = ?`,
+          [input.numeroLancamento, input.mes, input.ano]
+        );
+        console.warn(
+          `[SicoobExtrato] Lan\xE7amento apagado manualmente por ${ctx.user?.name ?? ctx.user?.id}:`,
+          JSON.stringify(lancamento)
+        );
+        return { success: true };
       }),
       fluxoCaixaDiario: protectedProcedure.input(z47.object({
         mes: z47.number().min(1).max(12),
