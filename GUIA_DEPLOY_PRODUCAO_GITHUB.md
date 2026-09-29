@@ -1,4 +1,10 @@
-# Guia: Subindo Modificações para Produção (GitHub → Hostinger)
+# Guia: Subindo Modificações para Produção (GitHub → Hostinger) — DESATUALIZADO
+
+> ⚠️ **Este guia descreve o fluxo antigo (GitHub Actions + Hostinger
+> compartilhada com Passenger), desativado desde a migração para VPS.**
+> Use **`GUIA_DEPLOY_PRODUCAO_VPS.md`** — reflete o processo real confirmado
+> por SSH na VPS (deploy manual via `git pull` + `pm2 reload`, sem CI
+> automático). Mantido aqui só como referência histórica.
 
 > Baseado no processo real usado na equalização do módulo Financeiro (setembro/2026).
 > Leia isso **antes** de qualquer `git push` para `main`.
