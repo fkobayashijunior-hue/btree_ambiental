@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import https from "https";
 import fs from "fs";
 import path from "path";
@@ -937,6 +937,33 @@ export const sicoobRouter = router({
     .mutation(async ({ input }) => {
       const result = await syncSicoobExtrato(input.mes, input.ano);
       return result;
+    }),
+
+  // Exclusão manual de um lançamento do extrato — pra corrigir casos como o de 17/09/2026, em
+  // que o próprio Sicoob mandou a mesma cobrança duas vezes com IDs diferentes (ver
+  // detectarDuplicatasSuspeitas). Só admin, porque mexe direto no livro-razão bancário; o
+  // registro apagado fica no log do servidor (não existe uma tabela de auditoria pro extrato).
+  deleteExtratoLancamento: adminProcedure
+    .input(z.object({ numeroLancamento: z.string().min(1), mes: z.number(), ano: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      const [rows] = await db.$client.execute(
+        `SELECT * FROM sicoob_extrato WHERE numero_lancamento = ? AND mes = ? AND ano = ?`,
+        [input.numeroLancamento, input.mes, input.ano]
+      ) as any;
+      const lancamento = (rows as any[])[0];
+      if (!lancamento) throw new Error("Lançamento não encontrado");
+      await db.$client.execute(
+        `DELETE FROM sicoob_extrato WHERE numero_lancamento = ? AND mes = ? AND ano = ?`,
+        [input.numeroLancamento, input.mes, input.ano]
+      );
+      console.warn(
+        `[SicoobExtrato] Lançamento apagado manualmente por ${ctx.user?.name ?? ctx.user?.id}:`,
+        JSON.stringify(lancamento)
+      );
+      return { success: true };
     }),
 
   fluxoCaixaDiario: protectedProcedure

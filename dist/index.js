@@ -5182,6 +5182,30 @@ var init_sicoob = __esm({
         const result = await syncSicoobExtrato(input.mes, input.ano);
         return result;
       }),
+      // Exclusão manual de um lançamento do extrato — pra corrigir casos como o de 17/09/2026, em
+      // que o próprio Sicoob mandou a mesma cobrança duas vezes com IDs diferentes (ver
+      // detectarDuplicatasSuspeitas). Só admin, porque mexe direto no livro-razão bancário; o
+      // registro apagado fica no log do servidor (não existe uma tabela de auditoria pro extrato).
+      deleteExtratoLancamento: adminProcedure.input(z47.object({ numeroLancamento: z47.string().min(1), mes: z47.number(), ano: z47.number() })).mutation(async ({ input, ctx }) => {
+        const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+        const db = await getDb2();
+        if (!db) throw new Error("DB indispon\xEDvel");
+        const [rows] = await db.$client.execute(
+          `SELECT * FROM sicoob_extrato WHERE numero_lancamento = ? AND mes = ? AND ano = ?`,
+          [input.numeroLancamento, input.mes, input.ano]
+        );
+        const lancamento = rows[0];
+        if (!lancamento) throw new Error("Lan\xE7amento n\xE3o encontrado");
+        await db.$client.execute(
+          `DELETE FROM sicoob_extrato WHERE numero_lancamento = ? AND mes = ? AND ano = ?`,
+          [input.numeroLancamento, input.mes, input.ano]
+        );
+        console.warn(
+          `[SicoobExtrato] Lan\xE7amento apagado manualmente por ${ctx.user?.name ?? ctx.user?.id}:`,
+          JSON.stringify(lancamento)
+        );
+        return { success: true };
+      }),
       fluxoCaixaDiario: protectedProcedure.input(z47.object({
         mes: z47.number().min(1).max(12),
         ano: z47.number().min(2020).max(2100),
