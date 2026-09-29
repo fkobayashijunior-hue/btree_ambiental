@@ -4515,6 +4515,26 @@ async function sicoobGet(path4, params) {
   });
   return res.data;
 }
+async function detectarDuplicatasSuspeitas(db, mes, ano) {
+  const [rows] = await db.$client.execute(
+    `SELECT data_lancamento, descricao, valor, numero_documento, COUNT(*) AS qtd,
+            GROUP_CONCAT(numero_lancamento) AS ids
+     FROM sicoob_extrato
+     WHERE mes = ? AND ano = ?
+       AND numero_documento IS NOT NULL AND numero_documento != ''
+     GROUP BY data_lancamento, descricao, valor, numero_documento
+     HAVING COUNT(*) > 1`,
+    [mes, ano]
+  );
+  return rows.filter((r) => !NUMERO_DOCUMENTO_GENERICOS.has(String(r.numero_documento).toUpperCase())).map((r) => ({
+    dataLancamento: r.data_lancamento,
+    descricao: r.descricao,
+    valor: r.valor,
+    numeroDocumento: r.numero_documento,
+    quantidade: r.qtd,
+    ids: String(r.ids).split(",")
+  }));
+}
 async function syncSicoobExtrato(mes, ano) {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
@@ -4583,7 +4603,11 @@ async function syncSicoobExtrato(mes, ano) {
         }
       }
     })();
-    return { synced: rows.length, error: null };
+    const duplicatasSuspeitas = await detectarDuplicatasSuspeitas(db, mes, ano);
+    if (duplicatasSuspeitas.length > 0) {
+      console.warn(`[SicoobExtrato] ${duplicatasSuspeitas.length} poss\xEDvel(is) duplicata(s):`, JSON.stringify(duplicatasSuspeitas));
+    }
+    return { synced: rows.length, error: null, duplicatasSuspeitas };
   } catch (e) {
     const detail = JSON.stringify(e?.response?.data ?? {});
     console.error(`[SicoobExtrato] Erro ${mes}/${ano}:`, detail);
@@ -4977,7 +5001,7 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
     return { dias: [], error: e.message };
   }
 }
-var tokenCache, certWarningLogged, NUMERO_CLIENTE, NUMERO_CONTA, CODIGO_MODALIDADE, sicoobRouter;
+var tokenCache, certWarningLogged, NUMERO_CLIENTE, NUMERO_CONTA, NUMERO_DOCUMENTO_GENERICOS, CODIGO_MODALIDADE, sicoobRouter;
 var init_sicoob = __esm({
   "server/routers/sicoob.ts"() {
     "use strict";
@@ -4990,6 +5014,14 @@ var init_sicoob = __esm({
     certWarningLogged = false;
     NUMERO_CLIENTE = Number(process.env.SICOOB_NUMERO_CLIENTE ?? "8971676");
     NUMERO_CONTA = Number(process.env.SICOOB_NUMERO_CONTA ?? "0");
+    NUMERO_DOCUMENTO_GENERICOS = /* @__PURE__ */ new Set([
+      "TAG.PG.PED",
+      "TAG.PL.DIA",
+      "TAG.PL.MES",
+      "TAG.EST.PD",
+      "PIX",
+      "AGRUPADO"
+    ]);
     CODIGO_MODALIDADE = Number(process.env.SICOOB_CODIGO_MODALIDADE ?? "1");
     sicoobRouter = router({
       // Saldo da conta corrente

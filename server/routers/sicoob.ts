@@ -109,6 +109,37 @@ async function sicoobGet(path: string, params: Record<string, string | number | 
 
 const NUMERO_CLIENTE = Number(process.env.SICOOB_NUMERO_CLIENTE ?? "8971676");
 const NUMERO_CONTA = Number(process.env.SICOOB_NUMERO_CONTA ?? "0");
+
+// Documentos genéricos que o Sicoob reaproveita pra MUITOS lançamentos reais e distintos no
+// mesmo dia (pedágio, PIX, tarifas) — bater nesses códigos não indica duplicata, é normal.
+const NUMERO_DOCUMENTO_GENERICOS = new Set([
+  "TAG.PG.PED", "TAG.PL.DIA", "TAG.PL.MES", "TAG.EST.PD", "PIX", "AGRUPADO",
+]);
+
+// Achado real: em 17/09/2026 o Sicoob devolveu a mesma cobrança de empréstimo (mesmo contrato,
+// mesma data, mesmo valor) com DOIS IDs de transação diferentes — nosso sync (que dedup por ID
+// do Sicoob) gravou as duas, porque pro nosso lado eram lançamentos "diferentes". Isso só é
+// detectável olhando o CONTEÚDO (data + descrição + valor + documento), não o ID. Como
+// documentos genéricos (pedágio, PIX) legitimamente repetem no mesmo dia, só marcamos suspeito
+// quando o número de documento é um identificador específico (não genérico).
+async function detectarDuplicatasSuspeitas(db: any, mes: number, ano: number) {
+  const [rows] = await db.$client.execute(
+    `SELECT data_lancamento, descricao, valor, numero_documento, COUNT(*) AS qtd,
+            GROUP_CONCAT(numero_lancamento) AS ids
+     FROM sicoob_extrato
+     WHERE mes = ? AND ano = ?
+       AND numero_documento IS NOT NULL AND numero_documento != ''
+     GROUP BY data_lancamento, descricao, valor, numero_documento
+     HAVING COUNT(*) > 1`,
+    [mes, ano]
+  ) as any;
+  return (rows as any[])
+    .filter(r => !NUMERO_DOCUMENTO_GENERICOS.has(String(r.numero_documento).toUpperCase()))
+    .map(r => ({
+      dataLancamento: r.data_lancamento, descricao: r.descricao, valor: r.valor,
+      numeroDocumento: r.numero_documento, quantidade: r.qtd, ids: String(r.ids).split(","),
+    }));
+}
 const CODIGO_MODALIDADE = Number(process.env.SICOOB_CODIGO_MODALIDADE ?? "1");
 
 // ── Sync do extrato bancário para um mês/ano ──
@@ -193,7 +224,11 @@ export async function syncSicoobExtrato(mes: number, ano: number) {
       }
     })();
 
-    return { synced: rows.length, error: null };
+    const duplicatasSuspeitas = await detectarDuplicatasSuspeitas(db, mes, ano);
+    if (duplicatasSuspeitas.length > 0) {
+      console.warn(`[SicoobExtrato] ${duplicatasSuspeitas.length} possível(is) duplicata(s):`, JSON.stringify(duplicatasSuspeitas));
+    }
+    return { synced: rows.length, error: null, duplicatasSuspeitas };
   } catch (e: any) {
     const detail = JSON.stringify(e?.response?.data ?? {});
     console.error(`[SicoobExtrato] Erro ${mes}/${ano}:`, detail);

@@ -60,9 +60,20 @@ export default function ExtratoMovimentacoesPage() {
   );
 
   const syncMutation = trpc.sicoob.syncExtrato.useMutation({
-    onSuccess: (res) => {
+    onSuccess: (res: any) => {
       if (res.error) toast.error(`Erro: ${res.error}`);
       else toast.success(`${res.synced} lançamento(s) sincronizado(s)`);
+      // O Sicoob já mandou a mesma cobrança 2x com IDs diferentes uma vez (caso real: empréstimo
+      // duplicado em 17/09/2026) — como o sync dedup por ID do banco, não por conteúdo, isso passa
+      // batido sem esse aviso. Não apaga sozinho: só avisa, pra alguém conferir e decidir.
+      if (res.duplicatasSuspeitas?.length > 0) {
+        for (const d of res.duplicatasSuspeitas) {
+          toast.warning(
+            `Possível lançamento duplicado: "${d.descricao}" de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.abs(parseFloat(d.valor)))} em ${new Date(d.dataLancamento).toLocaleDateString("pt-BR")} (doc. ${d.numeroDocumento}) aparece ${d.quantidade}x. Confira e apague a linha repetida se for o caso.`,
+            { duration: 15000 }
+          );
+        }
+      }
       refetch();
     },
     onError: () => toast.error("Falha ao sincronizar"),
