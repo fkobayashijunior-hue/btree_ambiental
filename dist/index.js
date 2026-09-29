@@ -4538,43 +4538,52 @@ async function syncSicoobExtrato(mes, ano) {
        ON DUPLICATE KEY UPDATE saldo_inicial = ?, saldo_final = ?, sincronizado_em = NOW()`,
       [mes, ano, saldoAnterior, saldoAtual, saldoAnterior, saldoAtual]
     );
-    let synced = 0;
-    for (const l of transacoes) {
-      const numeroLancamento = String(l.transactionId ?? l.numeroLancamento ?? l.id ?? `${mes}-${ano}-${synced}`);
-      const dataLanc = l.dataLote ?? (l.data ? String(l.data).slice(0, 10) : null);
-      const descricao = l.descricao ?? null;
+    const rows = transacoes.map((l, i) => {
+      const numeroLancamento = String(l.transactionId ?? l.numeroLancamento ?? l.id ?? `${mes}-${ano}-${i}`);
+      const dataLancamento = l.dataLote ?? (l.data ? String(l.data).slice(0, 10) : null);
       const complemento = l.descInfComplementar ? String(l.descInfComplementar).replace(/\|@\*+/g, "").replace(/\|@/g, " ").trim() : null;
       const numeroDocumento = l.numeroDocumento ? String(l.numeroDocumento) : null;
       const valor = l.tipo === "DEBITO" ? String(-Math.abs(parseFloat(l.valor ?? "0"))) : String(Math.abs(parseFloat(l.valor ?? "0")));
-      const saldo = "0";
-      const tipoLancamento = l.tipo ?? null;
-      await descobrirFavorecido(db, descricao, complemento, numeroDocumento);
-      await db.insert(sicoobExtrato).values({
+      return {
         numeroLancamento,
         mes,
         ano,
-        dataLancamento: dataLanc,
-        descricao,
+        dataLancamento,
+        descricao: l.descricao ?? null,
         complemento,
         valor,
-        saldo,
-        tipoLancamento: tipoLancamento ? String(tipoLancamento) : null,
+        saldo: "0",
+        tipoLancamento: l.tipo ? String(l.tipo) : null,
         numeroDocumento
-      }).onDuplicateKeyUpdate({
+      };
+    });
+    const CHUNK = 200;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      if (chunk.length === 0) continue;
+      await db.insert(sicoobExtrato).values(chunk).onDuplicateKeyUpdate({
         set: {
-          dataLancamento: dataLanc,
-          descricao,
-          complemento,
-          valor,
-          saldo,
-          tipoLancamento: tipoLancamento ? String(tipoLancamento) : null,
-          numeroDocumento,
+          dataLancamento: sql29`VALUES(data_lancamento)`,
+          descricao: sql29`VALUES(descricao)`,
+          complemento: sql29`VALUES(complemento)`,
+          valor: sql29`VALUES(valor)`,
+          saldo: sql29`VALUES(saldo)`,
+          tipoLancamento: sql29`VALUES(tipo_lancamento)`,
+          numeroDocumento: sql29`VALUES(numero_documento)`,
           sincronizadoEm: sql29`NOW()`
         }
       });
-      synced++;
     }
-    return { synced, error: null };
+    void (async () => {
+      for (const r of rows) {
+        try {
+          await descobrirFavorecido(db, r.descricao, r.complemento, r.numeroDocumento);
+        } catch (e) {
+          console.error("[SicoobExtrato] descobrirFavorecido falhou (segundo plano):", e?.message);
+        }
+      }
+    })();
+    return { synced: rows.length, error: null };
   } catch (e) {
     const detail = JSON.stringify(e?.response?.data ?? {});
     console.error(`[SicoobExtrato] Erro ${mes}/${ano}:`, detail);
