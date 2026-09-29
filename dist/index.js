@@ -4515,6 +4515,10 @@ async function sicoobGet(path4, params) {
   });
   return res.data;
 }
+function chaveConteudo(dataLancamento, descricao, valor, numeroDocumento) {
+  if (!numeroDocumento || NUMERO_DOCUMENTO_GENERICOS.has(numeroDocumento.toUpperCase())) return null;
+  return `${dataLancamento}|${descricao}|${valor}|${numeroDocumento}`;
+}
 async function detectarDuplicatasSuspeitas(db, mes, ano) {
   const [rows] = await db.$client.execute(
     `SELECT data_lancamento, descricao, valor, numero_documento, COUNT(*) AS qtd,
@@ -4558,25 +4562,47 @@ async function syncSicoobExtrato(mes, ano) {
        ON DUPLICATE KEY UPDATE saldo_inicial = ?, saldo_final = ?, sincronizado_em = NOW()`,
       [mes, ano, saldoAnterior, saldoAtual, saldoAnterior, saldoAtual]
     );
-    const rows = transacoes.map((l, i) => {
+    const [existentesRows] = await db.$client.execute(
+      `SELECT data_lancamento, descricao, valor, numero_documento FROM sicoob_extrato WHERE mes = ? AND ano = ?`,
+      [mes, ano]
+    );
+    const chavesExistentes = new Set(
+      existentesRows.map((r) => chaveConteudo(r.data_lancamento, r.descricao, r.valor, r.numero_documento)).filter((k) => k !== null)
+    );
+    let duplicatasBloqueadas = 0;
+    const rows = [];
+    for (let i = 0; i < transacoes.length; i++) {
+      const l = transacoes[i];
       const numeroLancamento = String(l.transactionId ?? l.numeroLancamento ?? l.id ?? `${mes}-${ano}-${i}`);
       const dataLancamento = l.dataLote ?? (l.data ? String(l.data).slice(0, 10) : null);
       const complemento = l.descInfComplementar ? String(l.descInfComplementar).replace(/\|@\*+/g, "").replace(/\|@/g, " ").trim() : null;
       const numeroDocumento = l.numeroDocumento ? String(l.numeroDocumento) : null;
       const valor = l.tipo === "DEBITO" ? String(-Math.abs(parseFloat(l.valor ?? "0"))) : String(Math.abs(parseFloat(l.valor ?? "0")));
-      return {
+      const descricao = l.descricao ?? null;
+      const chave = chaveConteudo(dataLancamento, descricao, valor, numeroDocumento);
+      if (chave) {
+        if (chavesExistentes.has(chave)) {
+          duplicatasBloqueadas++;
+          continue;
+        }
+        chavesExistentes.add(chave);
+      }
+      rows.push({
         numeroLancamento,
         mes,
         ano,
         dataLancamento,
-        descricao: l.descricao ?? null,
+        descricao,
         complemento,
         valor,
         saldo: "0",
         tipoLancamento: l.tipo ? String(l.tipo) : null,
         numeroDocumento
-      };
-    });
+      });
+    }
+    if (duplicatasBloqueadas > 0) {
+      console.warn(`[SicoobExtrato] ${duplicatasBloqueadas} lan\xE7amento(s) com mesmo conte\xFAdo j\xE1 existente foram ignorados (Sicoob mandou ID diferente pro mesmo lan\xE7amento).`);
+    }
     const CHUNK = 200;
     for (let i = 0; i < rows.length; i += CHUNK) {
       const chunk = rows.slice(i, i + CHUNK);
@@ -4607,7 +4633,7 @@ async function syncSicoobExtrato(mes, ano) {
     if (duplicatasSuspeitas.length > 0) {
       console.warn(`[SicoobExtrato] ${duplicatasSuspeitas.length} poss\xEDvel(is) duplicata(s):`, JSON.stringify(duplicatasSuspeitas));
     }
-    return { synced: rows.length, error: null, duplicatasSuspeitas };
+    return { synced: rows.length, error: null, duplicatasSuspeitas, duplicatasBloqueadas };
   } catch (e) {
     const detail = JSON.stringify(e?.response?.data ?? {});
     console.error(`[SicoobExtrato] Erro ${mes}/${ano}:`, detail);

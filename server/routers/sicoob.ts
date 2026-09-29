@@ -116,6 +116,13 @@ const NUMERO_DOCUMENTO_GENERICOS = new Set([
   "TAG.PG.PED", "TAG.PL.DIA", "TAG.PL.MES", "TAG.EST.PD", "PIX", "AGRUPADO",
 ]);
 
+// Chave de conteúdo usada pra achar duplicata quando o ID de transação do Sicoob não ajuda
+// (documento específico só, não genérico — ver NUMERO_DOCUMENTO_GENERICOS).
+function chaveConteudo(dataLancamento: string | null, descricao: string | null, valor: string, numeroDocumento: string | null): string | null {
+  if (!numeroDocumento || NUMERO_DOCUMENTO_GENERICOS.has(numeroDocumento.toUpperCase())) return null;
+  return `${dataLancamento}|${descricao}|${valor}|${numeroDocumento}`;
+}
+
 // Achado real: em 17/09/2026 o Sicoob devolveu a mesma cobrança de empréstimo (mesmo contrato,
 // mesma data, mesmo valor) com DOIS IDs de transação diferentes — nosso sync (que dedup por ID
 // do Sicoob) gravou as duas, porque pro nosso lado eram lançamentos "diferentes". Isso só é
@@ -170,13 +177,31 @@ export async function syncSicoobExtrato(mes: number, ano: number) {
       [mes, ano, saldoAnterior, saldoAtual, saldoAnterior, saldoAtual]
     );
 
+    // Chaves de conteúdo (data+descrição+valor+documento específico) já gravadas neste mês —
+    // pra recusar um lançamento novo que seja a MESMA cobrança de um já existente, mas com um
+    // numero_lancamento (ID do Sicoob) diferente. É o caso real de 17/09/2026: o Sicoob mandou o
+    // mesmo empréstimo duas vezes com IDs diferentes; sem essa checagem, o dedup por ID sozinho
+    // deixa passar, porque pra ele são "lançamentos diferentes".
+    const [existentesRows] = await db.$client.execute(
+      `SELECT data_lancamento, descricao, valor, numero_documento FROM sicoob_extrato WHERE mes = ? AND ano = ?`,
+      [mes, ano]
+    ) as any;
+    const chavesExistentes = new Set(
+      (existentesRows as any[])
+        .map(r => chaveConteudo(r.data_lancamento, r.descricao, r.valor, r.numero_documento))
+        .filter((k): k is string => k !== null)
+    );
+
     // Monta todas as linhas em memória primeiro (sem chamada de rede/banco por item) — antes o
     // INSERT e a descoberta de favorecido (API externa de CNPJ) rodavam um a um, por transação;
     // com centenas de lançamentos isso passava do tempo limite do proxy mesmo com o Sicoob
     // respondendo rápido (o "Falha ao sincronizar" acontecia DEPOIS da resposta do Sicoob, no
     // meio desse processamento). Agora o INSERT vira poucos lotes, e a descoberta de favorecido
     // roda em segundo plano, sem travar a resposta pro usuário.
-    const rows = transacoes.map((l, i) => {
+    let duplicatasBloqueadas = 0;
+    const rows: (typeof sicoobExtrato.$inferInsert)[] = [];
+    for (let i = 0; i < transacoes.length; i++) {
+      const l = transacoes[i];
       const numeroLancamento = String(l.transactionId ?? l.numeroLancamento ?? l.id ?? `${mes}-${ano}-${i}`);
       const dataLancamento = l.dataLote ?? (l.data ? String(l.data).slice(0, 10) : null);
       const complemento = l.descInfComplementar
@@ -186,12 +211,26 @@ export async function syncSicoobExtrato(mes: number, ano: number) {
       const valor = l.tipo === "DEBITO"
         ? String(-Math.abs(parseFloat(l.valor ?? "0")))
         : String(Math.abs(parseFloat(l.valor ?? "0")));
-      return {
+      const descricao = l.descricao ?? null;
+
+      const chave = chaveConteudo(dataLancamento, descricao, valor, numeroDocumento);
+      if (chave) {
+        if (chavesExistentes.has(chave)) {
+          duplicatasBloqueadas++;
+          continue; // já existe uma linha com esse mesmo conteúdo (ID de transação diferente) — não duplica
+        }
+        chavesExistentes.add(chave); // evita duplicar também dentro do próprio lote sincronizado agora
+      }
+
+      rows.push({
         numeroLancamento, mes, ano, dataLancamento,
-        descricao: l.descricao ?? null, complemento, valor, saldo: "0",
+        descricao, complemento, valor, saldo: "0",
         tipoLancamento: l.tipo ? String(l.tipo) : null, numeroDocumento,
-      };
-    });
+      });
+    }
+    if (duplicatasBloqueadas > 0) {
+      console.warn(`[SicoobExtrato] ${duplicatasBloqueadas} lançamento(s) com mesmo conteúdo já existente foram ignorados (Sicoob mandou ID diferente pro mesmo lançamento).`);
+    }
 
     // Em lotes de 200 — evita um único INSERT grande demais pro max_allowed_packet do MySQL.
     const CHUNK = 200;
@@ -228,7 +267,7 @@ export async function syncSicoobExtrato(mes: number, ano: number) {
     if (duplicatasSuspeitas.length > 0) {
       console.warn(`[SicoobExtrato] ${duplicatasSuspeitas.length} possível(is) duplicata(s):`, JSON.stringify(duplicatasSuspeitas));
     }
-    return { synced: rows.length, error: null, duplicatasSuspeitas };
+    return { synced: rows.length, error: null, duplicatasSuspeitas, duplicatasBloqueadas };
   } catch (e: any) {
     const detail = JSON.stringify(e?.response?.data ?? {});
     console.error(`[SicoobExtrato] Erro ${mes}/${ano}:`, detail);

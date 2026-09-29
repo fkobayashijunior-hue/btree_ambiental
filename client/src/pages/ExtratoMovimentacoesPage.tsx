@@ -67,7 +67,7 @@ export default function ExtratoMovimentacoesPage() {
   const syncMutation = trpc.sicoob.syncExtrato.useMutation({
     onSuccess: (res: any) => {
       if (res.error) toast.error(`Erro: ${res.error}`);
-      else toast.success(`${res.synced} lançamento(s) sincronizado(s)`);
+      else toast.success(`${res.synced} lançamento(s) sincronizado(s)${res.duplicatasBloqueadas > 0 ? ` (${res.duplicatasBloqueadas} duplicata(s) do Sicoob ignorada(s) automaticamente)` : ""}`);
       // O Sicoob já mandou a mesma cobrança 2x com IDs diferentes uma vez (caso real: empréstimo
       // duplicado em 17/09/2026) — como o sync dedup por ID do banco, não por conteúdo, isso passa
       // batido sem esse aviso. Não apaga sozinho: só avisa e destaca a linha, pra alguém conferir
