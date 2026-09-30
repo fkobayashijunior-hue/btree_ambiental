@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
 
@@ -41,7 +42,7 @@ const FUEL_LOCATION_NAMES: Record<string, string> = {
 export const financialConsolidatedRouter = router({
 
   // ─── RESUMO GERAL (cards de totais por categoria) ─────────────────────────
-  getSummary: protectedProcedure
+  getSummary: moduleProcedure("relatorio-consolidado")
     .input(z.object({
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
@@ -291,7 +292,7 @@ export const financialConsolidatedRouter = router({
     }),
 
   // ─── DETALHE POR CATEGORIA (listagem completa com paginação) ─────────────
-  getDetailByCategory: protectedProcedure
+  getDetailByCategory: moduleProcedure("relatorio-consolidado")
     .input(z.object({
       category: z.string(),
       dateFrom: z.string().optional(),
@@ -749,7 +750,7 @@ export const financialConsolidatedRouter = router({
     }),
 
   // ─── BREAKDOWN POR LOCAL DE TRABALHO ─────────────────────────────────────
-  getByLocation: protectedProcedure
+  getByLocation: moduleProcedure("relatorio-consolidado")
     .input(z.object({
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),

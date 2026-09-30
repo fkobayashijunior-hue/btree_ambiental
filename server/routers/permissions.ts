@@ -14,9 +14,11 @@ export const SYSTEM_MODULES = [
   { slug: "manutencao",      label: "Manutenção",            group: "Maquinário" },
   { slug: "horas-maquina",   label: "Horas de Máquina",      group: "Maquinário" },
   { slug: "motosserras",     label: "Motosserras",           group: "Maquinário" },
+  { slug: "historico-equipamentos", label: "Histórico de Equipamentos", group: "Maquinário" },
   // Pessoas
   { slug: "colaboradores",   label: "Colaboradores",         group: "Pessoas" },
   { slug: "presencas",       label: "Presenças",             group: "Pessoas" },
+  { slug: "uniformes",       label: "Uniformes",             group: "Pessoas" },
   // Operações
   { slug: "cargas",          label: "Controle de Cargas",    group: "Operações" },
   { slug: "minha-carga",     label: "Minha Carga",           group: "Operações" },
@@ -26,6 +28,8 @@ export const SYSTEM_MODULES = [
   { slug: "replantios",      label: "Replantios",            group: "Operações" },
   { slug: "gps",             label: "Rastreamento GPS",      group: "Operações" },
   { slug: "locais-gps",      label: "Locais GPS",            group: "Operações" },
+  { slug: "porteiras-virtuais", label: "Porteiras Virtuais",  group: "Operações" },
+  { slug: "conferencia-notas", label: "Conferência de Notas", group: "Operações" },
   // Comercial
   { slug: "clientes",        label: "Clientes",              group: "Comercial" },
   { slug: "portal-cliente",  label: "Portal do Cliente",     group: "Comercial" },
@@ -39,8 +43,10 @@ export const SYSTEM_MODULES = [
   { slug: "acesso",                   label: "Controle de Acesso",              group: "Administrativo" },
   { slug: "corte-terceirizado",       label: "Corte Terceirizado",              group: "Administrativo" },
   { slug: "terceirizados",             label: "Terceirizados de Corte",           group: "Administrativo" },
+  { slug: "caminhoes-terceirizados",  label: "Caminhões Terceirizados",         group: "Administrativo" },
   { slug: "dashboard-financeiro",     label: "Dashboard Financeiro",           group: "Administrativo" },
   { slug: "fretes",                   label: "Cálculo de Fretes",               group: "Administrativo" },
+  { slug: "fretes-gps",               label: "Fretes GPS",                      group: "Administrativo" },
   { slug: "fornecedores-combustivel", label: "Fornecedores Combustível",        group: "Administrativo" },
   { slug: "relatorios-combustivel",   label: "Relatórios Combustível",          group: "Administrativo" },
   { slug: "contas-pagar-combustivel", label: "Contas a Pagar (Combustível)",    group: "Administrativo" },
@@ -53,6 +59,13 @@ export const SYSTEM_MODULES = [
   { slug: "ciclos-frete",    label: "Ciclos de Frete (Geofence)",   group: "Transporte" },
   // Notas
   { slug: "controle-notas", label: "Controle de Notas Fiscais",    group: "Notas" },
+  // Financeiro
+  { slug: "relatorio-consolidado",   label: "Relatório Consolidado",   group: "Financeiro" },
+  { slug: "contas-a-receber",        label: "Contas a Receber",        group: "Financeiro" },
+  { slug: "contas-a-pagar",          label: "Contas a Pagar",          group: "Financeiro" },
+  { slug: "extrato-movimentacoes",   label: "Extrato Movimentações",   group: "Financeiro" },
+  { slug: "folha-pagamento",         label: "Folha de Pagamento",      group: "Financeiro" },
+  { slug: "fluxo-de-caixa",          label: "Fluxo de Caixa",          group: "Financeiro" },
 ] as const;
 
 export type ModuleSlug = typeof SYSTEM_MODULES[number]["slug"];
@@ -100,6 +113,97 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
     modules: [],
   },
 };
+
+type ResolvedPermissions = {
+  modules: string[] | null;
+  profile: string;
+  allowedClientIds: number[] | null;
+  allowedWorkLocationIds: number[] | null;
+};
+
+// Resolve as permissões efetivas de um usuário (mesma lógica usada por `myPermissions`).
+// Extraído para ser reaproveitado pelo middleware `moduleProcedure`, que faz a checagem
+// de verdade no backend — antes disso, "Controle de Acesso" só escondia itens do menu,
+// mas não impedia acessar a tela/API diretamente pela URL.
+export async function resolveUserPermissions(userId: number, role: string | null | undefined): Promise<ResolvedPermissions> {
+  if (role === "admin") return { modules: null, profile: "admin", allowedClientIds: null, allowedWorkLocationIds: null };
+
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+  let perm: any = null;
+  try {
+    const [permRow] = await db.select().from(userPermissions).where(eq(userPermissions.userId, userId));
+    perm = permRow || null;
+  } catch (e) {
+    try {
+      const [rows] = await db.execute(sql`SELECT * FROM user_permissions WHERE user_id = ${userId} LIMIT 1`) as any;
+      perm = (rows as any[])?.[0] || null;
+    } catch {
+      perm = null;
+    }
+  }
+
+  if (!perm) {
+    let collab: any = null;
+    try {
+      const [collabRow] = await db.select({
+        clientId: collaborators.clientId,
+        role: collaborators.role,
+      }).from(collaborators).where(eq(collaborators.userId, userId));
+      collab = collabRow || null;
+    } catch {
+      try {
+        const [rows] = await db.execute(sql`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${userId} LIMIT 1`) as any;
+        collab = (rows as any[])?.[0] || null;
+      } catch {
+        collab = null;
+      }
+    }
+
+    if (collab?.clientId) {
+      const collabRole = collab.role || "custom";
+      const profileModules = PROFILES[collabRole]?.modules || [];
+      return {
+        modules: profileModules.length > 0 ? profileModules : [],
+        profile: collabRole,
+        allowedClientIds: [collab.clientId],
+        allowedWorkLocationIds: null,
+      };
+    }
+
+    return { modules: null, profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
+  }
+
+  return {
+    modules: perm.modules ? (typeof perm.modules === 'string' ? JSON.parse(perm.modules) : perm.modules) as string[] : [],
+    profile: perm.profile || "custom",
+    allowedClientIds: perm.allowedClientIds || perm.allowed_client_ids
+      ? JSON.parse(perm.allowedClientIds || perm.allowed_client_ids) as number[]
+      : null,
+    allowedWorkLocationIds: perm.allowedWorkLocationIds || perm.allowed_work_location_ids
+      ? JSON.parse(perm.allowedWorkLocationIds || perm.allowed_work_location_ids) as number[]
+      : null,
+  };
+}
+
+// Procedure que exige, além de login, acesso a pelo menos um dos módulos informados
+// (igual ao que o menu já verifica no front-end com `hasAccess`, mas checado de
+// verdade no servidor). Use no lugar de `protectedProcedure` em qualquer router que
+// sirva dados de um módulo restringível. Aceita mais de um slug para procedures
+// compartilhadas por mais de uma tela (ex: um mesmo endpoint usado tanto em
+// "Contas a Pagar" quanto em "Fluxo de Caixa").
+export function moduleProcedure(...slugs: ModuleSlug[]) {
+  return protectedProcedure.use(async ({ ctx, next }) => {
+    if (ctx.user.role !== "admin") {
+      const perms = await resolveUserPermissions(ctx.user.id, ctx.user.role);
+      if (perms.modules !== null && !slugs.some(slug => perms.modules!.includes(slug))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este módulo" });
+      }
+    }
+    return next();
+  });
+}
 
 export const permissionsRouter = router({
   // Listar módulos disponíveis
@@ -245,73 +349,7 @@ export const permissionsRouter = router({
 
   // Buscar permissões do usuário atual
   myPermissions: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role === "admin") return { modules: null, profile: "admin", allowedClientIds: null, allowedWorkLocationIds: null };
-
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-    // Tentar buscar permissões na tabela user_permissions (pode falhar se colunas não existem)
-    let perm: any = null;
-    try {
-      const [permRow] = await db.select().from(userPermissions)
-        .where(eq(userPermissions.userId, ctx.user.id));
-      perm = permRow || null;
-    } catch (e) {
-      // Tabela user_permissions pode não ter todas as colunas - usar SQL raw como fallback
-      try {
-        const [rows] = await db.execute(sql`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`) as any;
-        perm = (rows as any[])?.[0] || null;
-      } catch {
-        perm = null;
-      }
-    }
-
-    if (!perm) {
-      // Fallback: verificar se o usuário é um colaborador vinculado a um cliente
-      let collab: any = null;
-      try {
-        const [collabRow] = await db.select({
-          clientId: collaborators.clientId,
-          role: collaborators.role,
-        }).from(collaborators).where(eq(collaborators.userId, ctx.user.id));
-        collab = collabRow || null;
-      } catch {
-        // Fallback com SQL raw
-        try {
-          const [rows] = await db.execute(sql`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${ctx.user.id} LIMIT 1`) as any;
-          collab = (rows as any[])?.[0] || null;
-        } catch {
-          collab = null;
-        }
-      }
-
-      if (collab?.clientId) {
-        // Colaborador vinculado a um cliente: dar acesso baseado no role do colaborador
-        const collabRole = collab.role || "custom";
-        const profileModules = PROFILES[collabRole]?.modules || [];
-        return {
-          modules: profileModules.length > 0 ? profileModules : [],
-          profile: collabRole,
-          allowedClientIds: [collab.clientId],
-          allowedWorkLocationIds: null,
-        };
-      }
-
-      // Usuário sem permissões configuradas e sem vínculo de collaborator:
-      // Dar acesso a todos os módulos até que o admin configure
-      return { modules: null, profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
-    }
-
-    return {
-      modules: perm.modules ? (typeof perm.modules === 'string' ? JSON.parse(perm.modules) : perm.modules) as string[] : [],
-      profile: perm.profile || "custom",
-      allowedClientIds: perm.allowedClientIds || perm.allowed_client_ids
-        ? JSON.parse(perm.allowedClientIds || perm.allowed_client_ids) as number[]
-        : null,
-      allowedWorkLocationIds: perm.allowedWorkLocationIds || perm.allowed_work_location_ids
-        ? JSON.parse(perm.allowedWorkLocationIds || perm.allowed_work_location_ids) as number[]
-        : null,
-    };
+    return resolveUserPermissions(ctx.user.id, ctx.user.role);
   }),
 
   // Definir permissões de um usuário (apenas admin)

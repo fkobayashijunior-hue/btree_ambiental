@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getCargoFinancialValue } from "../lib/clientAreaScope";
@@ -33,7 +34,7 @@ import { eq, desc, and, gte, lte, sql, inArray, isNull } from "drizzle-orm";
 
 export const reportsRouter = router({
   // ── Listar todos os locais de trabalho (para filtro) ──────────────────────
-  locations: protectedProcedure.query(async () => {
+  locations: moduleProcedure("dashboard-exec").query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
     return db.select({ id: gpsLocations.id, name: gpsLocations.name, isActive: gpsLocations.isActive })
@@ -76,7 +77,7 @@ export const reportsRouter = router({
   }),
 
   // ── Relatório completo por local e período ─────────────────────────────────
-  fullReport: protectedProcedure
+  fullReport: moduleProcedure("dashboard-exec")
     .input(z.object({
       locationId: z.number().optional(),
       dateFrom: z.string(),
@@ -271,7 +272,7 @@ export const reportsRouter = router({
     }),
 
   // ── Dashboard resumo por local (para a tela executiva) ─────────────────────
-  dashboardByLocation: protectedProcedure
+  dashboardByLocation: moduleProcedure("dashboard-exec")
     .input(z.object({
       dateFrom: z.string(),
       dateTo: z.string(),

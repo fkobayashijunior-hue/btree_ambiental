@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { getDb } from "../db";
 import {
   extraExpenses, fuelRecords, machineFuel, equipmentMaintenance,
@@ -16,7 +17,7 @@ function toNum(v: string | null | undefined): number {
 
 export const financialDashboardRouter = router({
 
-  consolidated: protectedProcedure
+  consolidated: moduleProcedure("dashboard-financeiro")
     .input(z.object({
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),

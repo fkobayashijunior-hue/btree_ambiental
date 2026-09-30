@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { suppliers, supplierContacts, quotations, quotationResponses, supplierCategories, purchaseCategories } from "../../drizzle/schema";
@@ -21,7 +22,7 @@ async function syncSupplierCategories(db: Awaited<ReturnType<typeof getDb>>, sup
 }
 
 export const suppliersRouter = router({
-  list: protectedProcedure
+  list: moduleProcedure("fornecedores", "orcamentos", "compras")
     .input(z.object({ activeOnly: z.boolean().optional().default(true) }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
@@ -55,7 +56,7 @@ export const suppliersRouter = router({
       });
     }),
 
-  getById: protectedProcedure
+  getById: moduleProcedure("fornecedores")
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -93,7 +94,7 @@ export const suppliersRouter = router({
       };
     }),
 
-  create: protectedProcedure
+  create: moduleProcedure("fornecedores", "compras")
     .input(z.object({
       name: z.string().min(1).max(255),
       cnpj: z.string().optional(),
@@ -147,7 +148,7 @@ export const suppliersRouter = router({
       return { id: insertId, ...input };
     }),
 
-  update: protectedProcedure
+  update: moduleProcedure("fornecedores")
     .input(z.object({
       id: z.number(),
       name: z.string().min(1).max(255),
@@ -192,7 +193,7 @@ export const suppliersRouter = router({
     }),
 
   // Permanent delete
-  delete: protectedProcedure
+  delete: moduleProcedure("fornecedores")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -205,7 +206,7 @@ export const suppliersRouter = router({
     }),
 
   // --- Supplier Contacts ---
-  addContact: protectedProcedure
+  addContact: moduleProcedure("fornecedores")
     .input(z.object({
       supplierId: z.number(),
       contactName: z.string().min(1).max(255),
@@ -229,7 +230,7 @@ export const suppliersRouter = router({
       return { id: (result as any).insertId };
     }),
 
-  updateContact: protectedProcedure
+  updateContact: moduleProcedure("fornecedores")
     .input(z.object({
       id: z.number(),
       contactName: z.string().min(1).max(255),
@@ -249,7 +250,7 @@ export const suppliersRouter = router({
       return { success: true };
     }),
 
-  deleteContact: protectedProcedure
+  deleteContact: moduleProcedure("fornecedores")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -258,7 +259,7 @@ export const suppliersRouter = router({
       return { success: true };
     }),
 
-  syncFromQuotationResponses: protectedProcedure
+  syncFromQuotationResponses: moduleProcedure("fornecedores")
     .mutation(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });

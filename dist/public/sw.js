@@ -106,7 +106,7 @@ define(['./workbox-1fb923f4'], (function (workbox) { 'use strict';
     "revision": "3f504e54ba9aa202f0bca871a50df851"
   }, {
     "url": "index.html",
-    "revision": "cbf8b82e4720c9c2355e7f4139ebc015"
+    "revision": "dbc6e50948b445d061bc3f3c0178f9ea"
   }, {
     "url": "icon-btree-512v2.png",
     "revision": "3c4a952dce1bc2de66ce03c1ab0dba9d"

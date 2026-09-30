@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { purchaseRequestItems, quotationRequests, collaborators } from "../../drizzle/schema";
@@ -197,7 +198,7 @@ export const purchaseRequestsRouter = router({
     return (cols as any[]).map((c: any) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
   }),
 
-  list: protectedProcedure
+  list: moduleProcedure("compras")
     .input(z.object({
       status: statusEnum.optional(),
       urgency: urgencyEnum.optional(),
@@ -266,7 +267,7 @@ export const purchaseRequestsRouter = router({
       return filtered;
     }),
 
-  getById: protectedProcedure
+  getById: moduleProcedure("compras")
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -319,7 +320,7 @@ export const purchaseRequestsRouter = router({
       return { ...normalized, items };
     }),
 
-  create: protectedProcedure
+  create: moduleProcedure("compras")
     .input(z.object({
       title: z.string().min(1),
       description: z.string().optional(),
@@ -343,7 +344,7 @@ export const purchaseRequestsRouter = router({
       return createPurchaseRequestCore(db, { ...input, userId: ctx.user.id, requesterName: ctx.user.name });
     }),
 
-  update: protectedProcedure
+  update: moduleProcedure("compras")
     .input(z.object({
       id: z.number(),
       title: z.string().optional(),
@@ -373,7 +374,7 @@ export const purchaseRequestsRouter = router({
     }),
 
   // Atualizar status diretamente (para a grade de edição)
-  updateStatus: protectedProcedure
+  updateStatus: moduleProcedure("compras")
     .input(z.object({ id: z.number(), status: statusEnum }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -416,7 +417,7 @@ export const purchaseRequestsRouter = router({
     }),
 
   // Atualizar datas da compra/entrega (edição direta na grade)
-  updateDates: protectedProcedure
+  updateDates: moduleProcedure("compras")
     .input(z.object({
       id: z.number(),
       purchaseDate: z.string().optional().nullable(),   // 'YYYY-MM-DD' ou null
@@ -431,7 +432,7 @@ export const purchaseRequestsRouter = router({
     }),
 
   // Responsável responde a solicitação (parecer) — também marca como lida
-  respond: protectedProcedure
+  respond: moduleProcedure("compras")
     .input(z.object({
       id: z.number(),
       responseNotes: z.string().min(1),
@@ -450,7 +451,7 @@ export const purchaseRequestsRouter = router({
     }),
 
   // Negar solicitação com motivo
-  deny: protectedProcedure
+  deny: moduleProcedure("compras")
     .input(z.object({
       id: z.number(),
       denialReason: z.string().min(1),
@@ -462,7 +463,7 @@ export const purchaseRequestsRouter = router({
       return { success: true };
     }),
 
-  toggleItemConfirm: protectedProcedure
+  toggleItemConfirm: moduleProcedure("compras")
     .input(z.object({ itemId: z.number(), confirmed: z.boolean() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -477,7 +478,7 @@ export const purchaseRequestsRouter = router({
       return { success: true };
     }),
 
-  uploadImage: protectedProcedure
+  uploadImage: moduleProcedure("compras")
     .input(z.object({
       id: z.number(),
       imageBase64: z.string(),
@@ -497,7 +498,7 @@ export const purchaseRequestsRouter = router({
       return { url, success: true };
     }),
 
-  removeImage: protectedProcedure
+  removeImage: moduleProcedure("compras")
     .input(z.object({ id: z.number(), imageUrl: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -511,7 +512,7 @@ export const purchaseRequestsRouter = router({
       return { success: true };
     }),
 
-  delete: protectedProcedure
+  delete: moduleProcedure("compras")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -523,7 +524,7 @@ export const purchaseRequestsRouter = router({
 
   // Dispara um Orçamento a partir desta solicitação, reaproveitando os itens já
   // cadastrados — fecha o ciclo Compra -> Orçamento.
-  requestQuotation: protectedProcedure
+  requestQuotation: moduleProcedure("compras")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -576,7 +577,7 @@ export const purchaseRequestsRouter = router({
 
   // Grava a decisão de compra (fornecedor vencedor + preço por item) direto pela tela
   // da Solicitação de Compra — usado pra "Compra Direta" (site/loja, sem orçamento).
-  applyQuotationDecision: protectedProcedure
+  applyQuotationDecision: moduleProcedure("compras")
     .input(z.object({
       id: z.number(),
       winningSupplierId: z.number(),

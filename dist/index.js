@@ -690,8 +690,8 @@ var init_schema = __esm({
       active: int().default(1).notNull(),
       clientId: int("client_id"),
       commissionAuto: int("commission_auto").default(1).notNull(),
-      commissionUnit: mysqlEnum("commission_unit", ["carga", "tonelada"]).default("carga").notNull(),
-      // motorista/terceirizado: comissão por carga entregue ou por tonelada líquida entregue
+      commissionUnit: mysqlEnum("commission_unit", ["carga", "tonelada", "fixo"]).default("carga").notNull(),
+      // motorista/terceirizado: comissão por carga entregue, por tonelada líquida entregue, ou valor fixo mensal
       weeklyPeriodAnchor: mysqlEnum("weekly_period_anchor", ["domingo", "sabado"]).default("domingo").notNull(),
       // dia que inicia a semana de apuração (Ruan: sábado-sexta)
       paymentLagDays: int("payment_lag_days").default(7).notNull(),
@@ -3400,6 +3400,384 @@ var init_nfExtraction = __esm({
   }
 });
 
+// server/routers/permissions.ts
+import { z as z16 } from "zod";
+import { TRPCError as TRPCError12 } from "@trpc/server";
+import { eq as eq16, sql as sql5 } from "drizzle-orm";
+async function resolveUserPermissions(userId, role) {
+  if (role === "admin") return { modules: null, profile: "admin", allowedClientIds: null, allowedWorkLocationIds: null };
+  const db = await getDb();
+  if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+  let perm = null;
+  try {
+    const [permRow] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, userId));
+    perm = permRow || null;
+  } catch (e) {
+    try {
+      const [rows] = await db.execute(sql5`SELECT * FROM user_permissions WHERE user_id = ${userId} LIMIT 1`);
+      perm = rows?.[0] || null;
+    } catch {
+      perm = null;
+    }
+  }
+  if (!perm) {
+    let collab = null;
+    try {
+      const [collabRow] = await db.select({
+        clientId: collaborators.clientId,
+        role: collaborators.role
+      }).from(collaborators).where(eq16(collaborators.userId, userId));
+      collab = collabRow || null;
+    } catch {
+      try {
+        const [rows] = await db.execute(sql5`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${userId} LIMIT 1`);
+        collab = rows?.[0] || null;
+      } catch {
+        collab = null;
+      }
+    }
+    if (collab?.clientId) {
+      const collabRole = collab.role || "custom";
+      const profileModules = PROFILES[collabRole]?.modules || [];
+      return {
+        modules: profileModules.length > 0 ? profileModules : [],
+        profile: collabRole,
+        allowedClientIds: [collab.clientId],
+        allowedWorkLocationIds: null
+      };
+    }
+    return { modules: null, profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
+  }
+  return {
+    modules: perm.modules ? typeof perm.modules === "string" ? JSON.parse(perm.modules) : perm.modules : [],
+    profile: perm.profile || "custom",
+    allowedClientIds: perm.allowedClientIds || perm.allowed_client_ids ? JSON.parse(perm.allowedClientIds || perm.allowed_client_ids) : null,
+    allowedWorkLocationIds: perm.allowedWorkLocationIds || perm.allowed_work_location_ids ? JSON.parse(perm.allowedWorkLocationIds || perm.allowed_work_location_ids) : null
+  };
+}
+function moduleProcedure(...slugs) {
+  return protectedProcedure.use(async ({ ctx, next }) => {
+    if (ctx.user.role !== "admin") {
+      const perms = await resolveUserPermissions(ctx.user.id, ctx.user.role);
+      if (perms.modules !== null && !slugs.some((slug) => perms.modules.includes(slug))) {
+        throw new TRPCError12({ code: "FORBIDDEN", message: "Sem permiss\xE3o para este m\xF3dulo" });
+      }
+    }
+    return next();
+  });
+}
+var SYSTEM_MODULES, PROFILES, permissionsRouter;
+var init_permissions = __esm({
+  "server/routers/permissions.ts"() {
+    "use strict";
+    init_trpc();
+    init_db();
+    init_schema();
+    SYSTEM_MODULES = [
+      // Maquinário
+      { slug: "equipamentos", label: "Equipamentos", group: "Maquin\xE1rio" },
+      { slug: "pecas", label: "Pe\xE7as / Estoque", group: "Maquin\xE1rio" },
+      { slug: "manutencao", label: "Manuten\xE7\xE3o", group: "Maquin\xE1rio" },
+      { slug: "horas-maquina", label: "Horas de M\xE1quina", group: "Maquin\xE1rio" },
+      { slug: "motosserras", label: "Motosserras", group: "Maquin\xE1rio" },
+      { slug: "historico-equipamentos", label: "Hist\xF3rico de Equipamentos", group: "Maquin\xE1rio" },
+      // Pessoas
+      { slug: "colaboradores", label: "Colaboradores", group: "Pessoas" },
+      { slug: "presencas", label: "Presen\xE7as", group: "Pessoas" },
+      { slug: "uniformes", label: "Uniformes", group: "Pessoas" },
+      // Operações
+      { slug: "cargas", label: "Controle de Cargas", group: "Opera\xE7\xF5es" },
+      { slug: "minha-carga", label: "Minha Carga", group: "Opera\xE7\xF5es" },
+      { slug: "abastecimento", label: "Abastecimento", group: "Opera\xE7\xF5es" },
+      { slug: "gastos-extras", label: "Gastos Extras", group: "Opera\xE7\xF5es" },
+      { slug: "reflorestamento", label: "Reflorestamento", group: "Opera\xE7\xF5es" },
+      { slug: "replantios", label: "Replantios", group: "Opera\xE7\xF5es" },
+      { slug: "gps", label: "Rastreamento GPS", group: "Opera\xE7\xF5es" },
+      { slug: "locais-gps", label: "Locais GPS", group: "Opera\xE7\xF5es" },
+      { slug: "porteiras-virtuais", label: "Porteiras Virtuais", group: "Opera\xE7\xF5es" },
+      { slug: "conferencia-notas", label: "Confer\xEAncia de Notas", group: "Opera\xE7\xF5es" },
+      // Comercial
+      { slug: "clientes", label: "Clientes", group: "Comercial" },
+      { slug: "portal-cliente", label: "Portal do Cliente", group: "Comercial" },
+      { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" },
+      { slug: "compradores", label: "Compradores", group: "Comercial" },
+      { slug: "relatorio-destinos", label: "Relat\xF3rio Destinos", group: "Comercial" },
+      // Administrativo (valores financeiros)
+      { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Administrativo" },
+      { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
+      { slug: "dashboard-exec", label: "Dashboard Executivo", group: "Administrativo" },
+      { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" },
+      { slug: "corte-terceirizado", label: "Corte Terceirizado", group: "Administrativo" },
+      { slug: "terceirizados", label: "Terceirizados de Corte", group: "Administrativo" },
+      { slug: "caminhoes-terceirizados", label: "Caminh\xF5es Terceirizados", group: "Administrativo" },
+      { slug: "dashboard-financeiro", label: "Dashboard Financeiro", group: "Administrativo" },
+      { slug: "fretes", label: "C\xE1lculo de Fretes", group: "Administrativo" },
+      { slug: "fretes-gps", label: "Fretes GPS", group: "Administrativo" },
+      { slug: "fornecedores-combustivel", label: "Fornecedores Combust\xEDvel", group: "Administrativo" },
+      { slug: "relatorios-combustivel", label: "Relat\xF3rios Combust\xEDvel", group: "Administrativo" },
+      { slug: "contas-pagar-combustivel", label: "Contas a Pagar (Combust\xEDvel)", group: "Administrativo" },
+      // Compras
+      { slug: "compras", label: "Solicita\xE7\xF5es de Compras", group: "Compras" },
+      { slug: "fornecedores", label: "Fornecedores", group: "Compras" },
+      { slug: "orcamentos", label: "Or\xE7amentos", group: "Compras" },
+      { slug: "estoque", label: "Estoque", group: "Compras" },
+      // Transporte
+      { slug: "ciclos-frete", label: "Ciclos de Frete (Geofence)", group: "Transporte" },
+      // Notas
+      { slug: "controle-notas", label: "Controle de Notas Fiscais", group: "Notas" },
+      // Financeiro
+      { slug: "relatorio-consolidado", label: "Relat\xF3rio Consolidado", group: "Financeiro" },
+      { slug: "contas-a-receber", label: "Contas a Receber", group: "Financeiro" },
+      { slug: "contas-a-pagar", label: "Contas a Pagar", group: "Financeiro" },
+      { slug: "extrato-movimentacoes", label: "Extrato Movimenta\xE7\xF5es", group: "Financeiro" },
+      { slug: "folha-pagamento", label: "Folha de Pagamento", group: "Financeiro" },
+      { slug: "fluxo-de-caixa", label: "Fluxo de Caixa", group: "Financeiro" }
+    ];
+    PROFILES = {
+      admin: {
+        label: "Administrador",
+        modules: SYSTEM_MODULES.map((m) => m.slug)
+      },
+      mecanico: {
+        label: "Mec\xE2nico",
+        modules: ["equipamentos", "pecas", "manutencao", "horas-maquina", "motosserras"]
+      },
+      operador: {
+        label: "Operador",
+        modules: ["equipamentos", "horas-maquina", "presencas"]
+      },
+      motorista: {
+        label: "Motorista",
+        modules: ["equipamentos", "minha-carga", "abastecimento"]
+      },
+      motosserrista: {
+        label: "Motosserrista",
+        modules: ["equipamentos", "manutencao", "motosserras"]
+      },
+      encarregado: {
+        label: "Encarregado de Ro\xE7a",
+        modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas", "manutencao"]
+      },
+      lider: {
+        label: "L\xEDder de Equipe",
+        modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"]
+      },
+      equipe: {
+        label: "Equipe de Campo",
+        modules: ["presencas", "equipamentos", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"]
+      },
+      custom: {
+        label: "Personalizado",
+        modules: []
+      }
+    };
+    permissionsRouter = router({
+      // Listar módulos disponíveis
+      listModules: protectedProcedure.query(() => {
+        return SYSTEM_MODULES;
+      }),
+      // Listar perfis pré-definidos
+      listProfiles: protectedProcedure.query(() => {
+        return Object.entries(PROFILES).map(([key, val]) => ({
+          key,
+          label: val.label,
+          modules: val.modules
+        }));
+      }),
+      // Listar clientes (para seletor de clientes permitidos)
+      listClients: protectedProcedure.query(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        const db = await getDb();
+        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        const allClients = await db.select({ id: clients.id, name: clients.name }).from(clients);
+        return allClients;
+      }),
+      // Listar todos os usuários E colaboradores com suas permissões
+      listUsers: protectedProcedure.query(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        const db = await getDb();
+        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        const allUsers = await db.select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          createdAt: users.createdAt
+        }).from(users).orderBy(users.name);
+        const allCollabs = await db.select({
+          id: collaborators.id,
+          name: collaborators.name,
+          email: collaborators.email,
+          phone: collaborators.phone,
+          userId: collaborators.userId,
+          role: collaborators.role,
+          clientId: collaborators.clientId,
+          active: collaborators.active
+        }).from(collaborators).where(eq16(collaborators.active, 1)).orderBy(collaborators.name);
+        let allPerms = [];
+        try {
+          allPerms = await db.select().from(userPermissions);
+        } catch {
+          try {
+            const [rows] = await db.execute(sql5`SELECT * FROM user_permissions`);
+            allPerms = rows;
+          } catch {
+            allPerms = [];
+          }
+        }
+        const permMap = Object.fromEntries(allPerms.map((p) => [p.userId || p.user_id, p]));
+        const result = [];
+        const userIdsFromUsers = new Set(allUsers.map((u) => u.id));
+        for (const u of allUsers) {
+          const collab = allCollabs.find((c) => c.userId === u.id);
+          result.push({
+            id: u.id,
+            name: collab?.name || u.name,
+            email: u.email,
+            role: u.role,
+            createdAt: u.createdAt,
+            isCollaborator: !!collab,
+            collaboratorId: collab?.id || null,
+            collaboratorRole: collab?.role || null,
+            collaboratorClientId: collab?.clientId || null,
+            hasLoggedIn: true,
+            phone: collab?.phone || null,
+            modules: u.role === "admin" ? null : permMap[u.id]?.modules ? typeof permMap[u.id].modules === "string" ? JSON.parse(permMap[u.id].modules) : permMap[u.id].modules : [],
+            profile: permMap[u.id]?.profile || "custom",
+            allowedClientIds: permMap[u.id]?.allowedClientIds || permMap[u.id]?.allowed_client_ids ? JSON.parse(permMap[u.id].allowedClientIds || permMap[u.id].allowed_client_ids) : null,
+            allowedWorkLocationIds: permMap[u.id]?.allowedWorkLocationIds || permMap[u.id]?.allowed_work_location_ids ? JSON.parse(permMap[u.id].allowedWorkLocationIds || permMap[u.id].allowed_work_location_ids) : null
+          });
+        }
+        for (const c of allCollabs) {
+          if (c.userId && userIdsFromUsers.has(c.userId)) continue;
+          result.push({
+            id: -c.id,
+            // ID negativo para diferenciar de users (colaborador sem login)
+            name: c.name,
+            email: c.email,
+            role: null,
+            createdAt: null,
+            isCollaborator: true,
+            collaboratorId: c.id,
+            collaboratorRole: c.role,
+            collaboratorClientId: c.clientId,
+            hasLoggedIn: false,
+            phone: c.phone,
+            modules: [],
+            profile: "custom",
+            allowedClientIds: c.clientId ? [c.clientId] : null,
+            allowedWorkLocationIds: null
+          });
+        }
+        return result;
+      }),
+      // Buscar permissões do usuário atual
+      myPermissions: protectedProcedure.query(async ({ ctx }) => {
+        return resolveUserPermissions(ctx.user.id, ctx.user.role);
+      }),
+      // Definir permissões de um usuário (apenas admin)
+      setPermissions: protectedProcedure.input(z16.object({
+        userId: z16.number(),
+        modules: z16.array(z16.string()).nullable(),
+        profile: z16.string().default("custom"),
+        allowedClientIds: z16.array(z16.number()).nullable().optional(),
+        allowedWorkLocationIds: z16.array(z16.number()).nullable().optional()
+      })).mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        const db = await getDb();
+        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        const modulesJson = input.modules === null ? null : JSON.stringify(input.modules);
+        const allowedClientIdsJson = input.allowedClientIds === null || input.allowedClientIds === void 0 ? null : JSON.stringify(input.allowedClientIds);
+        const allowedWorkLocationIdsJson = input.allowedWorkLocationIds === null || input.allowedWorkLocationIds === void 0 ? null : JSON.stringify(input.allowedWorkLocationIds);
+        if (input.userId < 0) {
+          const collabId = Math.abs(input.userId);
+          const clientId = input.allowedClientIds && input.allowedClientIds.length > 0 ? input.allowedClientIds[0] : null;
+          await db.update(collaborators).set({ clientId }).where(eq16(collaborators.id, collabId));
+          return { success: true };
+        }
+        try {
+          const [existing] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, input.userId));
+          if (existing) {
+            await db.update(userPermissions).set({
+              modules: modulesJson,
+              profile: input.profile,
+              allowedClientIds: allowedClientIdsJson,
+              allowedWorkLocationIds: allowedWorkLocationIdsJson,
+              updatedBy: ctx.user.id
+            }).where(eq16(userPermissions.userId, input.userId));
+          } else {
+            await db.insert(userPermissions).values({
+              userId: input.userId,
+              modules: modulesJson,
+              profile: input.profile,
+              allowedClientIds: allowedClientIdsJson,
+              allowedWorkLocationIds: allowedWorkLocationIdsJson,
+              updatedBy: ctx.user.id
+            });
+          }
+        } catch {
+          await db.execute(sql5`INSERT INTO user_permissions (user_id, modules, profile, allowed_client_ids, allowed_work_location_ids, updated_by)
+          VALUES (${input.userId}, ${modulesJson}, ${input.profile}, ${allowedClientIdsJson}, ${allowedWorkLocationIdsJson}, ${ctx.user.id})
+          ON DUPLICATE KEY UPDATE modules = ${modulesJson}, profile = ${input.profile}, allowed_client_ids = ${allowedClientIdsJson}, allowed_work_location_ids = ${allowedWorkLocationIdsJson}, updated_by = ${ctx.user.id}`);
+        }
+        const [collab] = await db.select({ id: collaborators.id }).from(collaborators).where(eq16(collaborators.userId, input.userId));
+        if (collab && input.allowedClientIds && input.allowedClientIds.length > 0) {
+          await db.update(collaborators).set({ clientId: input.allowedClientIds[0] }).where(eq16(collaborators.id, collab.id));
+        }
+        return { success: true };
+      }),
+      // Aplicar perfil pré-definido a um usuário
+      applyProfile: protectedProcedure.input(z16.object({
+        userId: z16.number(),
+        profileKey: z16.string()
+      })).mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        const profile = PROFILES[input.profileKey];
+        if (!profile) throw new TRPCError12({ code: "BAD_REQUEST", message: "Perfil inv\xE1lido" });
+        const db = await getDb();
+        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        if (input.userId < 0) {
+          throw new TRPCError12({ code: "BAD_REQUEST", message: "Colaborador precisa fazer login para receber perfil completo" });
+        }
+        const modulesJson = input.profileKey === "admin" ? null : JSON.stringify(profile.modules);
+        try {
+          const [existing] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, input.userId));
+          if (existing) {
+            await db.update(userPermissions).set({
+              modules: modulesJson,
+              profile: input.profileKey,
+              updatedBy: ctx.user.id
+            }).where(eq16(userPermissions.userId, input.userId));
+          } else {
+            await db.insert(userPermissions).values({
+              userId: input.userId,
+              modules: modulesJson,
+              profile: input.profileKey,
+              updatedBy: ctx.user.id
+            });
+          }
+        } catch {
+          await db.execute(sql5`INSERT INTO user_permissions (user_id, modules, profile, updated_by)
+          VALUES (${input.userId}, ${modulesJson}, ${input.profileKey}, ${ctx.user.id})
+          ON DUPLICATE KEY UPDATE modules = ${modulesJson}, profile = ${input.profileKey}, updated_by = ${ctx.user.id}`);
+        }
+        return { success: true };
+      }),
+      // Atualizar client_id de um colaborador
+      setCollaboratorClient: protectedProcedure.input(z16.object({
+        collaboratorId: z16.number(),
+        clientId: z16.number().nullable()
+      })).mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        const db = await getDb();
+        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(collaborators).set({ clientId: input.clientId }).where(eq16(collaborators.id, input.collaboratorId));
+        return { success: true };
+      })
+    });
+  }
+});
+
 // server/routers/payroll.ts
 import { z as z24 } from "zod";
 import { eq as eq23, sql as sql12 } from "drizzle-orm";
@@ -3514,9 +3892,19 @@ async function getCommissionRatesMap(db, collaboratorId = 0) {
   }
   return map;
 }
-function requireAdmin(ctx) {
-  if (ctx.user.role !== "admin") {
-    throw new TRPCError16({ code: "FORBIDDEN", message: "Apenas administradores podem acessar a folha de pagamento." });
+async function getFixedCommissionMap(db) {
+  const [rows] = await db.execute(
+    sql12`SELECT collaborator_id AS collaboratorId, valor FROM payroll_commission_rates WHERE chave = 'motorista_fixo'`
+  );
+  const map = /* @__PURE__ */ new Map();
+  for (const r of rows) map.set(Number(r.collaboratorId), parseFloat(r.valor) || 0);
+  return map;
+}
+async function requireAdmin(ctx) {
+  if (ctx.user.role === "admin") return;
+  const perms = await resolveUserPermissions(ctx.user.id, ctx.user.role);
+  if (perms.modules !== null && !perms.modules.includes("folha-pagamento")) {
+    throw new TRPCError16({ code: "FORBIDDEN", message: "Apenas administradores ou usu\xE1rios com acesso \xE0 Folha de Pagamento." });
   }
 }
 function computeTotal(employmentType, baseValue, unitCount, commission, discount = 0) {
@@ -3669,8 +4057,9 @@ async function getWeeklyVehicleCommissionMap(db, year, month) {
       const row = crows?.[0];
       configCache.set(cid, { unit: row?.unit ?? "carga", anchor: anchorDayOf({ weeklyPeriodAnchor: row?.anchor }) });
     }
-    const rates = ratesCache.get(cid);
     const config = configCache.get(cid);
+    if (config.unit === "fixo") continue;
+    const rates = ratesCache.get(cid);
     const porTonelada = config.unit === "tonelada";
     const weekKey = weekStartOf(r.dateStr, config.anchor);
     const rate = rates[`motorista_${r.categoria}`] ?? 0;
@@ -3802,6 +4191,7 @@ var init_payroll = __esm({
     init_trpc();
     init_db();
     init_schema();
+    init_permissions();
     COMMISSION_RATE_DEFAULTS = {
       motorista_enerbio: "32.00",
       motorista_mabam: "32.00",
@@ -3813,7 +4203,7 @@ var init_payroll = __esm({
       // Retorna a folha do mês: junta colaboradores ativos com entradas já fechadas
       // (payroll_entries) e calcula um rascunho ao vivo (não salvo) para quem ainda não foi fechado.
       getMonth: protectedProcedure.input(z24.object({ referenceMonth: z24.string() })).query(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
@@ -3827,6 +4217,7 @@ var init_payroll = __esm({
         const weeklyCommissionMap = await getWeeklyVehicleCommissionMap(db, year, month);
         const liveOperadorCommissionMap = await getLiveOperadorCommissionMap(db, year, month, activeCollaborators);
         const liveDiscountMap = await getLiveTerceirizadoDiscountMap(db, year, month);
+        const fixedCommissionMap = await getFixedCommissionMap(db);
         const savedEntries = await db.select().from(payrollEntries).where(eq23(payrollEntries.referenceMonth, input.referenceMonth));
         const savedMap = /* @__PURE__ */ new Map();
         for (const e of savedEntries) savedMap.set(e.collaboratorId, e);
@@ -3836,6 +4227,7 @@ var init_payroll = __esm({
         const liveCommissionFor = (c) => {
           if (c.commissionAuto === 0) return 0;
           if (c.role === "motorista" || c.role === "terceirizado") {
+            if (c.commissionUnit === "fixo") return fixedCommissionMap.get(c.id) ?? 0;
             const weekMap = weeklyCommissionMap.get(c.id);
             if (!weekMap) return 0;
             let total = 0;
@@ -3960,7 +4352,7 @@ var init_payroll = __esm({
         markCommissionPaid: z24.boolean().optional(),
         commissionPaidAt: z24.string().optional()
       })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
@@ -4017,7 +4409,7 @@ var init_payroll = __esm({
       // Fecha a folha inteira do mês: cria snapshot (comissão 0) para todo colaborador ativo
       // que ainda não tenha entrada salva nesse mês. Não sobrescreve linhas já fechadas/editadas.
       closeMonth: protectedProcedure.input(z24.object({ referenceMonth: z24.string() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
@@ -4028,6 +4420,7 @@ var init_payroll = __esm({
         const weeklyCommissionMap = await getWeeklyVehicleCommissionMap(db, year, month);
         const liveOperadorCommissionMap = await getLiveOperadorCommissionMap(db, year, month, activeCollaborators);
         const liveDiscountMap = await getLiveTerceirizadoDiscountMap(db, year, month);
+        const fixedCommissionMap = await getFixedCommissionMap(db);
         const existing = await db.select({ collaboratorId: payrollEntries.collaboratorId }).from(payrollEntries).where(eq23(payrollEntries.referenceMonth, input.referenceMonth));
         const existingIds = new Set(existing.map((e) => e.collaboratorId));
         let created = 0;
@@ -4042,8 +4435,12 @@ var init_payroll = __esm({
           let commission = 0;
           if (c.commissionAuto !== 0) {
             if (c.role === "motorista" || c.role === "terceirizado") {
-              const weekMap = weeklyCommissionMap.get(c.id);
-              if (weekMap) for (const w of weekMap.values()) commission += w.valor;
+              if (c.commissionUnit === "fixo") {
+                commission = fixedCommissionMap.get(c.id) ?? 0;
+              } else {
+                const weekMap = weeklyCommissionMap.get(c.id);
+                if (weekMap) for (const w of weekMap.values()) commission += w.valor;
+              }
             } else if (c.role === "operador") {
               commission = liveOperadorCommissionMap.get(c.id) ?? 0;
             }
@@ -4060,14 +4457,14 @@ var init_payroll = __esm({
         return { success: true, created };
       }),
       markPaid: protectedProcedure.input(z24.object({ id: z24.number(), paidAt: z24.string() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ status: "pago", paidAt: input.paidAt }).where(eq23(payrollEntries.id, input.id));
         return { success: true };
       }),
       unmarkPaid: protectedProcedure.input(z24.object({ id: z24.number() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ status: "fechado", paidAt: null }).where(eq23(payrollEntries.id, input.id));
@@ -4076,14 +4473,14 @@ var init_payroll = __esm({
       // Pagamento de COMISSÃO — independente do salário/diária (markPaid/unmarkPaid acima), já
       // que o financeiro paga os dois em datas diferentes.
       markCommissionPaid: protectedProcedure.input(z24.object({ id: z24.number(), paidAt: z24.string() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ commissionStatus: "pago", commissionPaidAt: input.paidAt }).where(eq23(payrollEntries.id, input.id));
         return { success: true };
       }),
       unmarkCommissionPaid: protectedProcedure.input(z24.object({ id: z24.number() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ commissionStatus: "pendente", commissionPaidAt: null }).where(eq23(payrollEntries.id, input.id));
@@ -4092,7 +4489,7 @@ var init_payroll = __esm({
       // Marca/desmarca o pagamento de UMA sexta-feira específica de um colaborador "Semanal"
       // (diferente de markPaid/unmarkPaid, que travam o mês inteiro — usado só por CLT/PJ).
       markWeeklyPaid: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), weekFriday: z24.string() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
@@ -4104,7 +4501,7 @@ var init_payroll = __esm({
         return { success: true };
       }),
       unmarkWeeklyPaid: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), weekFriday: z24.string() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
@@ -4117,7 +4514,7 @@ var init_payroll = __esm({
       }),
       // Remove a entrada salva (volta a ser calculada ao vivo a partir de colaboradores/presenças)
       reopenEntry: protectedProcedure.input(z24.object({ id: z24.number() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await db.delete(payrollEntries).where(eq23(payrollEntries.id, input.id));
@@ -4127,14 +4524,14 @@ var init_payroll = __esm({
       // collaboratorId, retorna a tarifa efetiva daquele colaborador (própria, se configurada,
       // senão o padrão global).
       getCommissionRates: protectedProcedure.input(z24.object({ collaboratorId: z24.number().optional() }).optional()).query(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         return getCommissionRatesMap(db, input?.collaboratorId ?? 0);
       }),
       updateCommissionRates: protectedProcedure.input(z24.object({ rates: z24.record(z24.string(), z24.string()), collaboratorId: z24.number().optional() })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
@@ -4150,8 +4547,8 @@ var init_payroll = __esm({
       // Define se a comissão desse motorista/terceirizado é calculada por carga entregue ou por
       // tonelada líquida entregue. Fica salvo por colaborador (não afeta os outros) — assim, quando
       // um motorista novo entrar, basta trocar aqui em vez de mexer em código.
-      updateCommissionUnit: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), unit: z24.enum(["carga", "tonelada"]) })).mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+      updateCommissionUnit: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), unit: z24.enum(["carga", "tonelada", "fixo"]) })).mutation(async ({ ctx, input }) => {
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(collaborators).set({ commissionUnit: input.unit }).where(eq23(collaborators.id, input.collaboratorId));
@@ -4160,7 +4557,7 @@ var init_payroll = __esm({
       // Detalhamento da comissão de Motorista (por carga entregue no destino, no próprio mês da
       // Folha) ou Operador (toneladas líquidas do cliente no mês ÷ nº de operadores daquele cliente).
       getCommissionBreakdown: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), referenceMonth: z24.string(), numOperadoresOverride: z24.number().optional() })).query(async ({ ctx, input }) => {
-        requireAdmin(ctx);
+        await requireAdmin(ctx);
         const db = await getDb();
         if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
@@ -4175,6 +4572,10 @@ var init_payroll = __esm({
         const month = Number(monthStr);
         const periodoBase = `${String(month).padStart(2, "0")}/${year}`;
         if (collab.role === "motorista" || collab.role === "terceirizado") {
+          if (collab.commissionUnit === "fixo") {
+            const total2 = rates.motorista_fixo ?? 0;
+            return { tipo: "motorista", unidade: "fixo", periodoBase, items: [], total: total2, rates, loads: [], fuels: [] };
+          }
           const porTonelada = collab.commissionUnit === "tonelada";
           const loadRows = await getCommissionLoadRows(db, year, month, input.collaboratorId);
           const byCat = /* @__PURE__ */ new Map();
@@ -5032,6 +5433,7 @@ var init_sicoob = __esm({
   "server/routers/sicoob.ts"() {
     "use strict";
     init_trpc();
+    init_permissions();
     init_schema();
     init_fluxoCaixaProjecao();
     init_favorecidoCategoria();
@@ -5116,7 +5518,7 @@ var init_sicoob = __esm({
         };
       }),
       // ── Contas a Receber (lê da tabela sicoob_boletos) ──
-      listBoletos: protectedProcedure.input(z47.object({
+      listBoletos: moduleProcedure("contas-a-receber").input(z47.object({
         mes: z47.number().min(1).max(12),
         ano: z47.number().min(2020).max(2100),
         pesquisa: z47.string().optional()
@@ -5141,7 +5543,7 @@ var init_sicoob = __esm({
           return { boletos: [], error: e.message };
         }
       }),
-      summaryBoletos: protectedProcedure.input(z47.object({
+      summaryBoletos: moduleProcedure("contas-a-receber").input(z47.object({
         mes: z47.number().min(1).max(12),
         ano: z47.number().min(2020).max(2100)
       })).query(async ({ input }) => {
@@ -5181,7 +5583,7 @@ var init_sicoob = __esm({
         }
       }),
       // ── Extrato Movimentações (lê da tabela sicoob_extrato) ──
-      listExtrato: protectedProcedure.input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).query(async ({ input }) => {
+      listExtrato: moduleProcedure("extrato-movimentacoes").input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).query(async ({ input }) => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
           const db = await getDb2();
@@ -5204,7 +5606,7 @@ var init_sicoob = __esm({
           return { lancamentos: [], sincronizadoEm: null, error: e.message };
         }
       }),
-      syncExtrato: protectedProcedure.input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+      syncExtrato: moduleProcedure("extrato-movimentacoes").input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).mutation(async ({ input }) => {
         const result = await syncSicoobExtrato(input.mes, input.ano);
         return result;
       }),
@@ -5232,7 +5634,7 @@ var init_sicoob = __esm({
         );
         return { success: true };
       }),
-      fluxoCaixaDiario: protectedProcedure.input(z47.object({
+      fluxoCaixaDiario: moduleProcedure("fluxo-de-caixa").input(z47.object({
         mes: z47.number().min(1).max(12),
         ano: z47.number().min(2020).max(2100),
         modo: z47.enum(["projecao", "real"]).optional()
@@ -5245,7 +5647,7 @@ var init_sicoob = __esm({
       // Visão anual: soma os totais (recebimentos/pagamentos) de cada mês do ano, reaproveitando
       // o mesmo cálculo dia-a-dia usado na visão mensal — sem duplicar nenhuma regra de negócio
       // (Sicoob, boletos, NFs, Folha). O saldo acumulado passa de mês em mês.
-      fluxoCaixaAnual: protectedProcedure.input(z47.object({ ano: z47.number().min(2020).max(2100), modo: z47.enum(["projecao", "real"]).optional() })).query(async ({ input }) => {
+      fluxoCaixaAnual: moduleProcedure("fluxo-de-caixa").input(z47.object({ ano: z47.number().min(2020).max(2100), modo: z47.enum(["projecao", "real"]).optional() })).query(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { meses: [], saldoInicialAno: 0, error: "DB indispon\xEDvel" };
@@ -5268,14 +5670,14 @@ var init_sicoob = __esm({
           return { meses: [], saldoInicialAno: 0, error: e.message };
         }
       }),
-      updateReceipt: protectedProcedure.input(z47.object({ id: z47.number(), receiptUrl: z47.string().url() })).mutation(async ({ input }) => {
+      updateReceipt: moduleProcedure("contas-a-receber").input(z47.object({ id: z47.number(), receiptUrl: z47.string().url() })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
         await db.$client.execute(`UPDATE sicoob_boletos SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
         return { success: true };
       }),
-      updateValor: protectedProcedure.input(z47.object({ id: z47.number(), valor: z47.string() })).mutation(async ({ input }) => {
+      updateValor: moduleProcedure("contas-a-receber").input(z47.object({ id: z47.number(), valor: z47.string() })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5286,7 +5688,7 @@ var init_sicoob = __esm({
         return { success: true };
       }),
       // ── Lançamentos Futuros (importados do Excel do banco) ──
-      importLancamentosFuturos: protectedProcedure.input(z47.object({
+      importLancamentosFuturos: moduleProcedure("contas-a-pagar", "fluxo-de-caixa").input(z47.object({
         lancamentos: z47.array(z47.object({
           data: z47.string(),
           documento: z47.string().nullable(),
@@ -5331,7 +5733,7 @@ var init_sicoob = __esm({
         );
         return { lancamentos: rows ?? [], error: null };
       }),
-      deleteLancamentosFuturos: protectedProcedure.input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+      deleteLancamentosFuturos: moduleProcedure("contas-a-pagar", "fluxo-de-caixa").input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5342,7 +5744,7 @@ var init_sicoob = __esm({
         );
         return { success: true };
       }),
-      syncBoletos: protectedProcedure.mutation(async () => {
+      syncBoletos: moduleProcedure("contas-a-receber").mutation(async () => {
         try {
           const result = await syncSicoobBoletos();
           return { success: true, ...result };
@@ -5350,7 +5752,7 @@ var init_sicoob = __esm({
           return { success: false, synced: 0, errors: [e.message] };
         }
       }),
-      syncStatus: protectedProcedure.query(async () => {
+      syncStatus: moduleProcedure("contas-a-receber").query(async () => {
         try {
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
           const db = await getDb2();
@@ -5368,7 +5770,7 @@ var init_sicoob = __esm({
         }
       }),
       // ── Contas a Pagar (débitos do extrato Sicoob + lançamentos futuros negativos) ──
-      contasAPagar: protectedProcedure.input(z47.object({
+      contasAPagar: moduleProcedure("contas-a-pagar").input(z47.object({
         mes: z47.number().min(1).max(12),
         ano: z47.number().min(2020).max(2100),
         pesquisa: z47.string().optional()
@@ -5470,7 +5872,7 @@ var init_sicoob = __esm({
       // Dashboard de análise: débitos JÁ REALIZADOS (extrato Sicoob, não pendências/projeção) num
       // período, com a classificação (Grupo/Centro de Custo/Natureza) de cada um — a agregação por
       // grupo/centro de custo/natureza e por mês é feita no frontend em cima dessa lista "achatada".
-      dashboardContasAPagar: protectedProcedure.input(z47.object({
+      dashboardContasAPagar: moduleProcedure("contas-a-pagar").input(z47.object({
         anoInicio: z47.number().min(2020).max(2100),
         mesInicio: z47.number().min(1).max(12),
         anoFim: z47.number().min(2020).max(2100),
@@ -5526,7 +5928,7 @@ var init_sicoob = __esm({
         }
       }),
       // ── Memória de favorecidos (server/utils/favorecidoCategoria.ts) ──
-      listFavorecidosCategoria: protectedProcedure.query(async () => {
+      listFavorecidosCategoria: moduleProcedure("contas-a-pagar").query(async () => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { favorecidos: [], error: "DB indispon\xEDvel" };
@@ -5541,7 +5943,7 @@ var init_sicoob = __esm({
       // Combinações já usadas de Grupo/Centro de Custo/Natureza/Classificação/Fixo-Variável/
       // Direto-Indireto — o frontend usa isso pra montar os dropdowns em cascata (cada campo só
       // mostra as opções que já apareceram junto com o que foi escolhido nos campos anteriores).
-      listClassificacaoOpcoes: protectedProcedure.query(async () => {
+      listClassificacaoOpcoes: moduleProcedure("contas-a-pagar").query(async () => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { combos: [], error: "DB indispon\xEDvel" };
@@ -5556,7 +5958,7 @@ var init_sicoob = __esm({
       // Classificação, Fixo/Variável, Direto/Indireto). Como os campos formam uma hierarquia
       // (dropdowns em cascata na tela), mudar um campo limpa os campos abaixo dele nessa mesma
       // linha — evita deixar uma combinação inconsistente com o que passou a estar acima.
-      updateFavorecidoClassificacao: protectedProcedure.input(z47.object({
+      updateFavorecidoClassificacao: moduleProcedure("contas-a-pagar").input(z47.object({
         id: z47.number(),
         campo: z47.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
         valor: z47.string().nullable()
@@ -5577,7 +5979,7 @@ var init_sicoob = __esm({
       // Mesma edição de campo de classificação, mas endereçada pela CHAVE do favorecido (não pelo
       // id) — usada na aba Lançamentos, onde o favorecido pode ainda nem existir na memória (ex:
       // primeira vez que esse CNPJ aparece). Cria o registro na hora se ainda não existir.
-      upsertFavorecidoClassificacaoPorChave: protectedProcedure.input(z47.object({
+      upsertFavorecidoClassificacaoPorChave: moduleProcedure("contas-a-pagar").input(z47.object({
         chave: z47.string(),
         tipoChave: z47.enum(["cnpj", "nome", "cpf_fragmento"]),
         campo: z47.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
@@ -5607,7 +6009,7 @@ var init_sicoob = __esm({
         }
         return { success: true };
       }),
-      updateFavorecidoNome: protectedProcedure.input(z47.object({ id: z47.number(), razaoSocial: z47.string().min(1) })).mutation(async ({ input }) => {
+      updateFavorecidoNome: moduleProcedure("contas-a-pagar").input(z47.object({ id: z47.number(), razaoSocial: z47.string().min(1) })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5617,7 +6019,7 @@ var init_sicoob = __esm({
         );
         return { success: true };
       }),
-      deleteFavorecidoCategoria: protectedProcedure.input(z47.object({ id: z47.number() })).mutation(async ({ input }) => {
+      deleteFavorecidoCategoria: moduleProcedure("contas-a-pagar").input(z47.object({ id: z47.number() })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
@@ -5626,7 +6028,7 @@ var init_sicoob = __esm({
       }),
       // Importa uma planilha de CNPJs (ex: base de razão social/CNAE já levantada externamente)
       // como ponto de partida da memória — cada linha vira (ou atualiza) um favorecido por CNPJ.
-      importFavorecidosCategoriaPlanilha: protectedProcedure.input(z47.object({
+      importFavorecidosCategoriaPlanilha: moduleProcedure("contas-a-pagar").input(z47.object({
         linhas: z47.array(z47.object({
           cnpj: z47.string(),
           razaoSocial: z47.string().nullable().optional(),
@@ -11474,47 +11876,48 @@ var equipmentDetailRouter = router({
 
 // server/routers/purchaseOrders.ts
 init_trpc();
+init_permissions();
 init_db();
 init_schema();
-import { z as z16 } from "zod";
-import { TRPCError as TRPCError12 } from "@trpc/server";
-import { eq as eq16, desc as desc11 } from "drizzle-orm";
+import { z as z17 } from "zod";
+import { TRPCError as TRPCError13 } from "@trpc/server";
+import { eq as eq17, desc as desc11 } from "drizzle-orm";
 var purchaseOrdersRouter = router({
   // Listar todos os pedidos
-  listOrders: protectedProcedure.input(z16.object({ status: z16.string().optional() }).optional()).query(async ({ input }) => {
+  listOrders: moduleProcedure("pecas").input(z17.object({ status: z17.string().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const orders = await db.select().from(purchaseOrders).orderBy(desc11(purchaseOrders.createdAt));
     if (input?.status) return orders.filter((o) => o.status === input.status);
     return orders;
   }),
   // Buscar pedido com itens
-  getOrder: protectedProcedure.input(z16.object({ id: z16.number() })).query(async ({ input }) => {
+  getOrder: moduleProcedure("pecas").input(z17.object({ id: z17.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const [order] = await db.select().from(purchaseOrders).where(eq16(purchaseOrders.id, input.id));
-    if (!order) throw new TRPCError12({ code: "NOT_FOUND" });
-    const items = await db.select().from(purchaseOrderItems).where(eq16(purchaseOrderItems.orderId, input.id));
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [order] = await db.select().from(purchaseOrders).where(eq17(purchaseOrders.id, input.id));
+    if (!order) throw new TRPCError13({ code: "NOT_FOUND" });
+    const items = await db.select().from(purchaseOrderItems).where(eq17(purchaseOrderItems.orderId, input.id));
     return { ...order, items };
   }),
   // Criar pedido com itens
-  createOrder: protectedProcedure.input(z16.object({
-    title: z16.string().min(2),
-    notes: z16.string().optional(),
-    items: z16.array(z16.object({
-      partId: z16.number().optional(),
-      partName: z16.string(),
-      partCode: z16.string().optional(),
-      partCategory: z16.string().optional(),
-      supplier: z16.string().optional(),
-      unit: z16.string().optional(),
-      quantity: z16.number().min(1),
-      unitCost: z16.string().optional(),
-      notes: z16.string().optional()
+  createOrder: moduleProcedure("pecas").input(z17.object({
+    title: z17.string().min(2),
+    notes: z17.string().optional(),
+    items: z17.array(z17.object({
+      partId: z17.number().optional(),
+      partName: z17.string(),
+      partCode: z17.string().optional(),
+      partCategory: z17.string().optional(),
+      supplier: z17.string().optional(),
+      unit: z17.string().optional(),
+      quantity: z17.number().min(1),
+      unitCost: z17.string().optional(),
+      notes: z17.string().optional()
     })).min(1)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [result] = await db.insert(purchaseOrders).values({
       title: input.title,
       notes: input.notes,
@@ -11554,20 +11957,20 @@ var purchaseOrdersRouter = router({
     return { success: true, orderId };
   }),
   // Atualizar status do pedido
-  updateOrderStatus: protectedProcedure.input(z16.object({
-    id: z16.number(),
-    status: z16.enum(["rascunho", "enviado", "aprovado", "rejeitado", "comprado"])
+  updateOrderStatus: moduleProcedure("pecas").input(z17.object({
+    id: z17.number(),
+    status: z17.enum(["rascunho", "enviado", "aprovado", "rejeitado", "comprado"])
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const updateData = { status: input.status, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     if (input.status === "aprovado") {
       updateData.approvedBy = ctx.user.id;
       updateData.approvedAt = (/* @__PURE__ */ new Date()).toISOString();
     }
-    await db.update(purchaseOrders).set(updateData).where(eq16(purchaseOrders.id, input.id));
+    await db.update(purchaseOrders).set(updateData).where(eq17(purchaseOrders.id, input.id));
     if (input.status === "enviado") {
-      const [order] = await db.select({ title: purchaseOrders.title }).from(purchaseOrders).where(eq16(purchaseOrders.id, input.id));
+      const [order] = await db.select({ title: purchaseOrders.title }).from(purchaseOrders).where(eq17(purchaseOrders.id, input.id));
       notifyTeam({
         event: "pedido_compra_enviado",
         title: `Pedido de compra enviado para aprova\xE7\xE3o: ${order?.title || `#${input.id}`}.`,
@@ -11582,11 +11985,11 @@ var purchaseOrdersRouter = router({
     return { success: true };
   }),
   // Deletar pedido
-  deleteOrder: protectedProcedure.input(z16.object({ id: z16.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+  deleteOrder: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    await db.delete(purchaseOrders).where(eq16(purchaseOrders.id, input.id));
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.delete(purchaseOrders).where(eq17(purchaseOrders.id, input.id));
     return { success: true };
   })
 });
@@ -11596,31 +11999,31 @@ init_trpc();
 init_db();
 init_schema();
 init_notification();
-import { z as z17 } from "zod";
-import { TRPCError as TRPCError13 } from "@trpc/server";
-import { eq as eq17, desc as desc12, and as and8, inArray as inArray5, lt, sql as sql5 } from "drizzle-orm";
+import { z as z18 } from "zod";
+import { TRPCError as TRPCError14 } from "@trpc/server";
+import { eq as eq18, desc as desc12, and as and8, inArray as inArray5, lt, sql as sql6 } from "drizzle-orm";
 var attendanceRouter = router({
   // Listar presenças com filtros
-  list: protectedProcedure.input(z17.object({
-    dateFrom: z17.string().optional(),
+  list: protectedProcedure.input(z18.object({
+    dateFrom: z18.string().optional(),
     // YYYY-MM-DD
-    dateTo: z17.string().optional(),
-    collaboratorId: z17.number().optional(),
-    paymentStatus: z17.enum(["pendente", "pago"]).optional()
+    dateTo: z18.string().optional(),
+    collaboratorId: z18.number().optional(),
+    paymentStatus: z18.enum(["pendente", "pago"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     try {
       let allowedClientIds = null;
       if (ctx.user.role !== "admin") {
         try {
-          const [perm] = await db.select().from(userPermissions).where(eq17(userPermissions.userId, ctx.user.id));
+          const [perm] = await db.select().from(userPermissions).where(eq18(userPermissions.userId, ctx.user.id));
           if (perm?.allowedClientIds) {
             allowedClientIds = JSON.parse(perm.allowedClientIds);
           }
         } catch {
           try {
-            const [rows] = await db.execute(sql5`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+            const [rows] = await db.execute(sql6`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
             const row = rows?.[0];
             if (row?.allowed_client_ids) {
               allowedClientIds = JSON.parse(row.allowed_client_ids);
@@ -11630,7 +12033,7 @@ var attendanceRouter = router({
         }
         if (!allowedClientIds) {
           try {
-            const [collab] = await db.select({ clientId: collaborators.clientId }).from(collaborators).where(eq17(collaborators.userId, ctx.user.id));
+            const [collab] = await db.select({ clientId: collaborators.clientId }).from(collaborators).where(eq18(collaborators.userId, ctx.user.id));
             if (collab?.clientId) {
               allowedClientIds = [collab.clientId];
             }
@@ -11665,7 +12068,7 @@ var attendanceRouter = router({
         locationName: collaboratorAttendance.locationName,
         workLocationId: collaboratorAttendance.workLocationId,
         collaboratorPixKey: collaborators.pixKey
-      }).from(collaboratorAttendance).innerJoin(collaborators, eq17(collaboratorAttendance.collaboratorId, collaborators.id)).orderBy(desc12(collaboratorAttendance.date));
+      }).from(collaboratorAttendance).innerJoin(collaborators, eq18(collaboratorAttendance.collaboratorId, collaborators.id)).orderBy(desc12(collaboratorAttendance.date));
       let filtered = records;
       if (input?.collaboratorId) {
         filtered = filtered.filter((r) => r.collaboratorId === input.collaboratorId);
@@ -11723,31 +12126,31 @@ var attendanceRouter = router({
       }));
     } catch (err) {
       console.error("[attendance.list] ERRO DETALHADO:", err.message, err.stack);
-      throw new TRPCError13({
+      throw new TRPCError14({
         code: "INTERNAL_SERVER_ERROR",
         message: `Failed query: ${err.message}`
       });
     }
   }),
   // Criar presença
-  create: protectedProcedure.input(z17.object({
-    collaboratorId: z17.number(),
-    date: z17.string(),
+  create: protectedProcedure.input(z18.object({
+    collaboratorId: z18.number(),
+    date: z18.string(),
     // YYYY-MM-DD
-    employmentType: z17.enum(["clt", "terceirizado", "diarista", "pj"]),
-    dailyValue: z17.string(),
-    pixKey: z17.string().optional(),
-    activity: z17.string().optional(),
-    observations: z17.string().optional(),
+    employmentType: z18.enum(["clt", "terceirizado", "diarista", "pj"]),
+    dailyValue: z18.string(),
+    pixKey: z18.string().optional(),
+    activity: z18.string().optional(),
+    observations: z18.string().optional(),
     // GPS
-    latitude: z17.string().optional(),
-    longitude: z17.string().optional(),
-    locationName: z17.string().optional(),
-    workLocationId: z17.number().optional()
+    latitude: z18.string().optional(),
+    longitude: z18.string().optional(),
+    locationName: z18.string().optional(),
+    workLocationId: z18.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const [collaborator] = await db.select({ name: collaborators.name, monthlySalary: collaborators.monthlySalary }).from(collaborators).where(eq17(collaborators.id, input.collaboratorId));
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    const [collaborator] = await db.select({ name: collaborators.name, monthlySalary: collaborators.monthlySalary }).from(collaborators).where(eq18(collaborators.id, input.collaboratorId));
     const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
     let finalDailyValue = input.dailyValue;
     if (input.employmentType === "clt" && (!finalDailyValue || parseFloat(String(finalDailyValue).replace(",", ".")) === 0)) {
@@ -11757,11 +12160,11 @@ var attendanceRouter = router({
     let resolvedWorkLocationId = input.workLocationId || null;
     let resolvedLocationName = input.locationName || null;
     if (resolvedLocationName && !resolvedWorkLocationId) {
-      const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq17(gpsLocations.name, resolvedLocationName));
+      const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq18(gpsLocations.name, resolvedLocationName));
       if (loc) resolvedWorkLocationId = loc.id;
     }
     if (resolvedWorkLocationId && !resolvedLocationName) {
-      const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq17(gpsLocations.id, resolvedWorkLocationId));
+      const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq18(gpsLocations.id, resolvedWorkLocationId));
       if (loc) resolvedLocationName = loc.name;
     }
     await db.insert(collaboratorAttendance).values({
@@ -11820,31 +12223,31 @@ Registrado por: ${ctx.user.name}`
     return { success: true };
   }),
   // Atualizar status de pagamento
-  markPaid: protectedProcedure.input(z17.object({
-    id: z17.number(),
-    paid: z17.boolean()
+  markPaid: protectedProcedure.input(z18.object({
+    id: z18.number(),
+    paid: z18.boolean()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(collaboratorAttendance).set({
       paymentStatusCa: input.paid ? "pago" : "pendente",
       paidAt: input.paid ? (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") : null
-    }).where(eq17(collaboratorAttendance.id, input.id));
+    }).where(eq18(collaboratorAttendance.id, input.id));
     return { success: true };
   }),
   // Deletar presença
-  delete: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
+  delete: protectedProcedure.input(z18.object({ id: z18.number() })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError14({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    await db.delete(collaboratorAttendance).where(eq17(collaboratorAttendance.id, input.id));
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    await db.delete(collaboratorAttendance).where(eq18(collaboratorAttendance.id, input.id));
     return { success: true };
   }),
   // Verificar e notificar pagamentos pendentes há mais de 7 dias
   checkPendingPayments: protectedProcedure.mutation(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError14({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const sevenDaysAgoDate = /* @__PURE__ */ new Date();
     sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 7);
     const sevenDaysAgo = sevenDaysAgoDate.toISOString().slice(0, 19).replace("T", " ");
@@ -11855,9 +12258,9 @@ Registrado por: ${ctx.user.name}`
       dailyValue: collaboratorAttendance.dailyValue,
       pixKey: collaboratorAttendance.pixKey,
       activity: collaboratorAttendance.activity
-    }).from(collaboratorAttendance).innerJoin(collaborators, eq17(collaboratorAttendance.collaboratorId, collaborators.id)).where(
+    }).from(collaboratorAttendance).innerJoin(collaborators, eq18(collaboratorAttendance.collaboratorId, collaborators.id)).where(
       and8(
-        eq17(collaboratorAttendance.paymentStatusCa, "pendente"),
+        eq18(collaboratorAttendance.paymentStatusCa, "pendente"),
         lt(collaboratorAttendance.date, sevenDaysAgo)
       )
     ).orderBy(collaboratorAttendance.date);
@@ -11887,27 +12290,27 @@ ${lines}`
     return { success: true, count: pendingRecords.length, message: `${pendingRecords.length} pagamento(s) pendente(s) notificados.` };
   }),
   // Atualizar local de uma presença já registrada
-  updateLocation: protectedProcedure.input(z17.object({
-    id: z17.number(),
-    workLocationId: z17.number().nullable().optional(),
-    locationName: z17.string().nullable().optional()
+  updateLocation: protectedProcedure.input(z18.object({
+    id: z18.number(),
+    workLocationId: z18.number().nullable().optional(),
+    locationName: z18.string().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let resolvedWorkLocationId = input.workLocationId || null;
     let resolvedLocationName = input.locationName || null;
     if (resolvedLocationName && !resolvedWorkLocationId) {
-      const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq17(gpsLocations.name, resolvedLocationName));
+      const [loc] = await db.select({ id: gpsLocations.id }).from(gpsLocations).where(eq18(gpsLocations.name, resolvedLocationName));
       if (loc) resolvedWorkLocationId = loc.id;
     }
     if (resolvedWorkLocationId && !resolvedLocationName) {
-      const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq17(gpsLocations.id, resolvedWorkLocationId));
+      const [loc] = await db.select({ name: gpsLocations.name }).from(gpsLocations).where(eq18(gpsLocations.id, resolvedWorkLocationId));
       if (loc) resolvedLocationName = loc.name;
     }
     await db.update(collaboratorAttendance).set({
       workLocationId: resolvedWorkLocationId,
       locationName: resolvedLocationName
-    }).where(eq17(collaboratorAttendance.id, input.id));
+    }).where(eq18(collaboratorAttendance.id, input.id));
     return { success: true };
   })
 });
@@ -11916,9 +12319,9 @@ ${lines}`
 init_trpc();
 init_db();
 init_schema();
-import { z as z18 } from "zod";
-import { TRPCError as TRPCError14 } from "@trpc/server";
-import { eq as eq18, and as and9, desc as desc13, gte as gte2, lte as lte2, sql as sql6 } from "drizzle-orm";
+import { z as z19 } from "zod";
+import { TRPCError as TRPCError15 } from "@trpc/server";
+import { eq as eq19, and as and9, desc as desc13, gte as gte2, lte as lte2, sql as sql7 } from "drizzle-orm";
 function getTraccarUrl() {
   return process.env.TRACCAR_URL || "";
 }
@@ -11975,16 +12378,16 @@ async function checkAndGenerateAlerts(equipmentId, currentHourMeter) {
   const db = await getDb();
   if (!db) return;
   const plans = await db.select().from(preventiveMaintenancePlans).where(and9(
-    eq18(preventiveMaintenancePlans.equipmentId, equipmentId),
-    eq18(preventiveMaintenancePlans.active, 1)
+    eq19(preventiveMaintenancePlans.equipmentId, equipmentId),
+    eq19(preventiveMaintenancePlans.active, 1)
   ));
   for (const plan of plans) {
     const lastDone = parseFloat(plan.lastDoneHours || "0");
     const dueAt = lastDone + plan.intervalHours;
     const alertAt = dueAt - (plan.alertThresholdHours || 10);
     const existingAlert = await db.select().from(preventiveMaintenanceAlerts).where(and9(
-      eq18(preventiveMaintenanceAlerts.planId, plan.id),
-      eq18(preventiveMaintenanceAlerts.status, "pendente")
+      eq19(preventiveMaintenanceAlerts.planId, plan.id),
+      eq19(preventiveMaintenanceAlerts.status, "pendente")
     )).limit(1);
     if (existingAlert.length > 0) continue;
     if (currentHourMeter >= alertAt) {
@@ -12016,17 +12419,17 @@ var traccarRouter = router({
     return traccarFetch("/devices");
   }),
   /** Posicao mais recente de todos os dispositivos */
-  positions: protectedProcedure.input(z18.object({ deviceId: z18.number().optional() }).optional()).query(async ({ input }) => {
+  positions: protectedProcedure.input(z19.object({ deviceId: z19.number().optional() }).optional()).query(async ({ input }) => {
     const params = input?.deviceId ? `?deviceId=${input.deviceId}` : "";
     return traccarFetch(`/positions${params}`);
   }),
   /** Historico de posicoes de um dispositivo em um periodo */
-  history: protectedProcedure.input(z18.object({ deviceId: z18.number(), from: z18.string(), to: z18.string() })).query(async ({ input }) => {
+  history: protectedProcedure.input(z19.object({ deviceId: z19.number(), from: z19.string(), to: z19.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     return traccarFetch(`/reports/route?${params}`);
   }),
   /** Resumo de viagens de um dispositivo - enriquecido com endereços e distância real */
-  trips: protectedProcedure.input(z18.object({ deviceId: z18.number(), from: z18.string(), to: z18.string() })).query(async ({ input }) => {
+  trips: protectedProcedure.input(z19.object({ deviceId: z19.number(), from: z19.string(), to: z19.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     const trips = await traccarFetch(`/reports/trips?${params}`);
     const enriched = await Promise.all(
@@ -12073,12 +12476,12 @@ var traccarRouter = router({
     return enriched;
   }),
   /** Resumo de paradas de um dispositivo */
-  stops: protectedProcedure.input(z18.object({ deviceId: z18.number(), from: z18.string(), to: z18.string() })).query(async ({ input }) => {
+  stops: protectedProcedure.input(z19.object({ deviceId: z19.number(), from: z19.string(), to: z19.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     return traccarFetch(`/reports/stops?${params}`);
   }),
   /** Resumo de km e horas por dispositivo no periodo */
-  summary: protectedProcedure.input(z18.object({ deviceId: z18.number().optional(), from: z18.string(), to: z18.string() })).query(async ({ input }) => {
+  summary: protectedProcedure.input(z19.object({ deviceId: z19.number().optional(), from: z19.string(), to: z19.string() })).query(async ({ input }) => {
     const params = new URLSearchParams({ from: input.from, to: input.to });
     if (input.deviceId) params.set("deviceId", String(input.deviceId));
     return traccarFetch(`/reports/summary?${params}`);
@@ -12088,7 +12491,7 @@ var traccarRouter = router({
     return traccarFetch("/geofences");
   }),
   /** Eventos recentes (alertas de velocidade, ignicao, geofence) */
-  events: protectedProcedure.input(z18.object({ deviceId: z18.number(), from: z18.string(), to: z18.string(), type: z18.string().optional() })).query(async ({ input }) => {
+  events: protectedProcedure.input(z19.object({ deviceId: z19.number(), from: z19.string(), to: z19.string(), type: z19.string().optional() })).query(async ({ input }) => {
     const params = new URLSearchParams({ deviceId: String(input.deviceId), from: input.from, to: input.to });
     if (input.type) params.set("type", input.type);
     return traccarFetch(`/reports/events?${params}`);
@@ -12097,7 +12500,7 @@ var traccarRouter = router({
   /** Lista todos os vinculos GPS-equipamento */
   listDeviceLinks: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     return db.select({
       id: gpsDeviceLinks.id,
       equipmentId: gpsDeviceLinks.equipmentId,
@@ -12107,18 +12510,18 @@ var traccarRouter = router({
       traccarUniqueId: gpsDeviceLinks.traccarUniqueId,
       active: gpsDeviceLinks.active,
       createdAt: gpsDeviceLinks.createdAt
-    }).from(gpsDeviceLinks).innerJoin(equipment, eq18(gpsDeviceLinks.equipmentId, equipment.id)).where(eq18(gpsDeviceLinks.active, 1)).orderBy(equipment.name);
+    }).from(gpsDeviceLinks).innerJoin(equipment, eq19(gpsDeviceLinks.equipmentId, equipment.id)).where(eq19(gpsDeviceLinks.active, 1)).orderBy(equipment.name);
   }),
   /** Vincula um dispositivo GPS a um equipamento */
-  linkDevice: protectedProcedure.input(z18.object({
-    equipmentId: z18.number(),
-    traccarDeviceId: z18.number(),
-    traccarDeviceName: z18.string().optional(),
-    traccarUniqueId: z18.string().optional()
+  linkDevice: protectedProcedure.input(z19.object({
+    equipmentId: z19.number(),
+    traccarDeviceId: z19.number(),
+    traccarDeviceName: z19.string().optional(),
+    traccarUniqueId: z19.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
-    await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq18(gpsDeviceLinks.equipmentId, input.equipmentId));
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq19(gpsDeviceLinks.equipmentId, input.equipmentId));
     const [result] = await db.insert(gpsDeviceLinks).values({
       equipmentId: input.equipmentId,
       traccarDeviceId: input.traccarDeviceId,
@@ -12130,10 +12533,10 @@ var traccarRouter = router({
     return { id: result.insertId };
   }),
   /** Remove vinculo GPS de um equipamento */
-  unlinkDevice: protectedProcedure.input(z18.object({ linkId: z18.number() })).mutation(async ({ input }) => {
+  unlinkDevice: protectedProcedure.input(z19.object({ linkId: z19.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
-    await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq18(gpsDeviceLinks.id, input.linkId));
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq19(gpsDeviceLinks.id, input.linkId));
     return { ok: true };
   }),
   // ─── HORAS AUTOMATICAS VIA GPS ───────────────────────────────────────────────
@@ -12141,15 +12544,15 @@ var traccarRouter = router({
    * Sincroniza as horas de ignicao do dia anterior para todos os equipamentos vinculados.
    * Deve ser chamado diariamente (cron) ou manualmente pelo admin.
    */
-  syncDailyHours: protectedProcedure.input(z18.object({ date: z18.string().optional() })).mutation(async ({ input }) => {
+  syncDailyHours: protectedProcedure.input(z19.object({ date: z19.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
     const from = new Date(targetDate);
     from.setHours(0, 0, 0, 0);
     const to = new Date(targetDate);
     to.setHours(23, 59, 59, 999);
-    const links = await db.select().from(gpsDeviceLinks).where(eq18(gpsDeviceLinks.active, 1));
+    const links = await db.select().from(gpsDeviceLinks).where(eq19(gpsDeviceLinks.active, 1));
     const results = [];
     for (const link of links) {
       try {
@@ -12160,12 +12563,12 @@ var traccarRouter = router({
         );
         if (hours > 0) {
           const existing = await db.select().from(gpsHoursLog).where(and9(
-            eq18(gpsHoursLog.equipmentId, link.equipmentId),
+            eq19(gpsHoursLog.equipmentId, link.equipmentId),
             gte2(gpsHoursLog.date, from.toISOString()),
             lte2(gpsHoursLog.date, to.toISOString())
           )).limit(1);
           if (existing.length === 0) {
-            const prevTotalResult = await db.select({ total: sql6`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq18(gpsHoursLog.equipmentId, link.equipmentId));
+            const prevTotalResult = await db.select({ total: sql7`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq19(gpsHoursLog.equipmentId, link.equipmentId));
             const prevTotal = parseFloat(prevTotalResult[0]?.total || "0");
             const newTotal = prevTotal + hours;
             const startMeter = String(Math.round(prevTotal * 10) / 10);
@@ -12190,9 +12593,9 @@ var traccarRouter = router({
               notes: `Sincronizado automaticamente via GPS em ${dateStr}`,
               source: "gps"
             });
-            await db.update(equipment).set({ accumulatedHours: endMeter }).where(eq18(equipment.id, link.equipmentId));
+            await db.update(equipment).set({ accumulatedHours: endMeter }).where(eq19(equipment.id, link.equipmentId));
           }
-          const totalResult = await db.select({ total: sql6`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq18(gpsHoursLog.equipmentId, link.equipmentId));
+          const totalResult = await db.select({ total: sql7`SUM(CAST(hours_worked AS DECIMAL(10,2)))` }).from(gpsHoursLog).where(eq19(gpsHoursLog.equipmentId, link.equipmentId));
           const totalHours = parseFloat(totalResult[0]?.total || "0");
           await checkAndGenerateAlerts(link.equipmentId, totalHours);
           results.push({ equipmentId: link.equipmentId, hours });
@@ -12203,50 +12606,50 @@ var traccarRouter = router({
     return { synced: results.length, results };
   }),
   /** Horas acumuladas por equipamento (GPS + manual) */
-  equipmentHoursSummary: protectedProcedure.input(z18.object({ equipmentId: z18.number().optional() })).query(async ({ input }) => {
+  equipmentHoursSummary: protectedProcedure.input(z19.object({ equipmentId: z19.number().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const baseQuery = db.select({
       equipmentId: gpsHoursLog.equipmentId,
       equipmentName: equipment.name,
-      totalHours: sql6`SUM(CAST(hours_worked AS DECIMAL(10,2)))`,
-      lastDate: sql6`MAX(date)`,
-      recordCount: sql6`COUNT(*)`
-    }).from(gpsHoursLog).innerJoin(equipment, eq18(gpsHoursLog.equipmentId, equipment.id)).groupBy(gpsHoursLog.equipmentId, equipment.name).orderBy(equipment.name);
+      totalHours: sql7`SUM(CAST(hours_worked AS DECIMAL(10,2)))`,
+      lastDate: sql7`MAX(date)`,
+      recordCount: sql7`COUNT(*)`
+    }).from(gpsHoursLog).innerJoin(equipment, eq19(gpsHoursLog.equipmentId, equipment.id)).groupBy(gpsHoursLog.equipmentId, equipment.name).orderBy(equipment.name);
     if (input?.equipmentId) {
-      return baseQuery.where(eq18(gpsHoursLog.equipmentId, input.equipmentId));
+      return baseQuery.where(eq19(gpsHoursLog.equipmentId, input.equipmentId));
     }
     return baseQuery;
   }),
   /** Log de horas de um equipamento especifico */
-  hoursLog: protectedProcedure.input(z18.object({ equipmentId: z18.number(), limit: z18.number().default(30) })).query(async ({ input }) => {
+  hoursLog: protectedProcedure.input(z19.object({ equipmentId: z19.number(), limit: z19.number().default(30) })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
-    return db.select().from(gpsHoursLog).where(eq18(gpsHoursLog.equipmentId, input.equipmentId)).orderBy(desc13(gpsHoursLog.date)).limit(input.limit);
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    return db.select().from(gpsHoursLog).where(eq19(gpsHoursLog.equipmentId, input.equipmentId)).orderBy(desc13(gpsHoursLog.date)).limit(input.limit);
   }),
   // ─── PLANOS DE MANUTENCAO PREVENTIVA ────────────────────────────────────────
   /** Lista planos de manutencao de um equipamento */
-  listMaintenancePlans: protectedProcedure.input(z18.object({ equipmentId: z18.number() })).query(async ({ input }) => {
+  listMaintenancePlans: protectedProcedure.input(z19.object({ equipmentId: z19.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     return db.select().from(preventiveMaintenancePlans).where(and9(
-      eq18(preventiveMaintenancePlans.equipmentId, input.equipmentId),
-      eq18(preventiveMaintenancePlans.active, 1)
+      eq19(preventiveMaintenancePlans.equipmentId, input.equipmentId),
+      eq19(preventiveMaintenancePlans.active, 1)
     )).orderBy(preventiveMaintenancePlans.name);
   }),
   /** Cria ou atualiza um plano de manutencao preventiva */
-  upsertMaintenancePlan: protectedProcedure.input(z18.object({
-    id: z18.number().optional(),
-    equipmentId: z18.number(),
-    name: z18.string(),
-    type: z18.enum(["troca_oleo", "engraxamento", "filtro_ar", "filtro_combustivel", "correia", "revisao_geral", "abastecimento", "outros"]),
-    intervalHours: z18.number().min(1),
-    lastDoneHours: z18.string().optional(),
-    alertThresholdHours: z18.number().default(10),
-    notes: z18.string().optional()
+  upsertMaintenancePlan: protectedProcedure.input(z19.object({
+    id: z19.number().optional(),
+    equipmentId: z19.number(),
+    name: z19.string(),
+    type: z19.enum(["troca_oleo", "engraxamento", "filtro_ar", "filtro_combustivel", "correia", "revisao_geral", "abastecimento", "outros"]),
+    intervalHours: z19.number().min(1),
+    lastDoneHours: z19.string().optional(),
+    alertThresholdHours: z19.number().default(10),
+    notes: z19.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     if (input.id) {
       await db.update(preventiveMaintenancePlans).set({
         name: input.name,
@@ -12255,7 +12658,7 @@ var traccarRouter = router({
         lastDoneHours: input.lastDoneHours,
         alertThresholdHours: input.alertThresholdHours,
         notes: input.notes
-      }).where(eq18(preventiveMaintenancePlans.id, input.id));
+      }).where(eq19(preventiveMaintenancePlans.id, input.id));
       return { id: input.id };
     }
     const [result] = await db.insert(preventiveMaintenancePlans).values({
@@ -12272,20 +12675,20 @@ var traccarRouter = router({
     return { id: result.insertId };
   }),
   /** Remove um plano de manutencao */
-  deleteMaintenancePlan: protectedProcedure.input(z18.object({ id: z18.number() })).mutation(async ({ input }) => {
+  deleteMaintenancePlan: protectedProcedure.input(z19.object({ id: z19.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
-    await db.update(preventiveMaintenancePlans).set({ active: 0 }).where(eq18(preventiveMaintenancePlans.id, input.id));
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    await db.update(preventiveMaintenancePlans).set({ active: 0 }).where(eq19(preventiveMaintenancePlans.id, input.id));
     return { ok: true };
   }),
   // ─── ALERTAS DE MANUTENCAO PREVENTIVA ───────────────────────────────────────
   /** Lista alertas pendentes (todos ou por equipamento) */
-  listAlerts: protectedProcedure.input(z18.object({ equipmentId: z18.number().optional(), status: z18.string().optional() })).query(async ({ input }) => {
+  listAlerts: protectedProcedure.input(z19.object({ equipmentId: z19.number().optional(), status: z19.string().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const conditions = [];
-    if (input.equipmentId) conditions.push(eq18(preventiveMaintenanceAlerts.equipmentId, input.equipmentId));
-    if (input.status) conditions.push(eq18(preventiveMaintenanceAlerts.status, input.status));
+    if (input.equipmentId) conditions.push(eq19(preventiveMaintenanceAlerts.equipmentId, input.equipmentId));
+    if (input.status) conditions.push(eq19(preventiveMaintenanceAlerts.status, input.status));
     return db.select({
       id: preventiveMaintenanceAlerts.id,
       equipmentId: preventiveMaintenanceAlerts.equipmentId,
@@ -12299,31 +12702,31 @@ var traccarRouter = router({
       generatedAt: preventiveMaintenanceAlerts.generatedAt,
       resolvedAt: preventiveMaintenanceAlerts.resolvedAt,
       notes: preventiveMaintenanceAlerts.notes
-    }).from(preventiveMaintenanceAlerts).innerJoin(equipment, eq18(preventiveMaintenanceAlerts.equipmentId, equipment.id)).innerJoin(preventiveMaintenancePlans, eq18(preventiveMaintenanceAlerts.planId, preventiveMaintenancePlans.id)).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc13(preventiveMaintenanceAlerts.generatedAt));
+    }).from(preventiveMaintenanceAlerts).innerJoin(equipment, eq19(preventiveMaintenanceAlerts.equipmentId, equipment.id)).innerJoin(preventiveMaintenancePlans, eq19(preventiveMaintenanceAlerts.planId, preventiveMaintenancePlans.id)).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc13(preventiveMaintenanceAlerts.generatedAt));
   }),
   /** Resolve (conclui) um alerta e atualiza o horimetro do plano */
-  resolveAlert: protectedProcedure.input(z18.object({
-    alertId: z18.number(),
-    status: z18.enum(["concluido", "ignorado"]),
-    notes: z18.string().optional(),
-    resolvedHourMeter: z18.string().optional()
+  resolveAlert: protectedProcedure.input(z19.object({
+    alertId: z19.number(),
+    status: z19.enum(["concluido", "ignorado"]),
+    notes: z19.string().optional(),
+    resolvedHourMeter: z19.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const now = (/* @__PURE__ */ new Date()).toISOString();
     await db.update(preventiveMaintenanceAlerts).set({
       status: input.status,
       resolvedAt: now,
       resolvedBy: ctx.user.id,
       notes: input.notes
-    }).where(eq18(preventiveMaintenanceAlerts.id, input.alertId));
+    }).where(eq19(preventiveMaintenanceAlerts.id, input.alertId));
     if (input.status === "concluido") {
-      const alert = await db.select().from(preventiveMaintenanceAlerts).where(eq18(preventiveMaintenanceAlerts.id, input.alertId)).limit(1);
+      const alert = await db.select().from(preventiveMaintenanceAlerts).where(eq19(preventiveMaintenanceAlerts.id, input.alertId)).limit(1);
       if (alert.length > 0) {
         await db.update(preventiveMaintenancePlans).set({
           lastDoneHours: input.resolvedHourMeter || alert[0].currentHours,
           lastDoneAt: now
-        }).where(eq18(preventiveMaintenancePlans.id, alert[0].planId));
+        }).where(eq19(preventiveMaintenancePlans.id, alert[0].planId));
       }
     }
     return { ok: true };
@@ -12332,15 +12735,15 @@ var traccarRouter = router({
    * Sincroniza km percorrido do dia para veiculos/caminhoes com GPS.
    * Atualiza accumulated_km no equipment e registra em gps_hours_log.
    */
-  syncDailyOdometer: protectedProcedure.input(z18.object({ date: z18.string().optional() })).mutation(async ({ input }) => {
+  syncDailyOdometer: protectedProcedure.input(z19.object({ date: z19.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
     const from = new Date(targetDate);
     from.setHours(0, 0, 0, 0);
     const to = new Date(targetDate);
     to.setHours(23, 59, 59, 999);
-    const links = await db.select().from(gpsDeviceLinks).where(eq18(gpsDeviceLinks.active, 1));
+    const links = await db.select().from(gpsDeviceLinks).where(eq19(gpsDeviceLinks.active, 1));
     const results = [];
     for (const link of links) {
       try {
@@ -12354,10 +12757,10 @@ var traccarRouter = router({
         const rawDist = summary[0]?.distance || 0;
         const distKm = rawDist > 1e3 ? Math.round(rawDist / 1e3 * 10) / 10 : Math.round(rawDist * 10) / 10;
         if (distKm <= 0) continue;
-        const prevKmResult = await db.select({ total: sql6`COALESCE(SUM(CAST(distance_km AS DECIMAL(10,1))), 0)` }).from(gpsHoursLog).where(eq18(gpsHoursLog.equipmentId, link.equipmentId));
+        const prevKmResult = await db.select({ total: sql7`COALESCE(SUM(CAST(distance_km AS DECIMAL(10,1))), 0)` }).from(gpsHoursLog).where(eq19(gpsHoursLog.equipmentId, link.equipmentId));
         const prevKm = parseFloat(prevKmResult[0]?.total || "0");
         const newKm = Math.round((prevKm + distKm) * 10) / 10;
-        await db.update(equipment).set({ accumulatedKm: String(newKm) }).where(eq18(equipment.id, link.equipmentId));
+        await db.update(equipment).set({ accumulatedKm: String(newKm) }).where(eq19(equipment.id, link.equipmentId));
         results.push({ equipmentId: link.equipmentId, distanceKm: distKm });
       } catch {
       }
@@ -12368,16 +12771,16 @@ var traccarRouter = router({
    * Detecta viagens longas (>50km) do dia e cria auto_freight_trips automaticamente.
    * Vincula combustivel e manutencoes do mesmo dia ao frete.
    */
-  detectFreightTrips: protectedProcedure.input(z18.object({ date: z18.string().optional() })).mutation(async ({ input }) => {
+  detectFreightTrips: protectedProcedure.input(z19.object({ date: z19.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
     const from = new Date(targetDate);
     from.setHours(0, 0, 0, 0);
     const to = new Date(targetDate);
     to.setHours(23, 59, 59, 999);
     const dateStr = from.toISOString().slice(0, 10);
-    const links = await db.select().from(gpsDeviceLinks).where(eq18(gpsDeviceLinks.active, 1));
+    const links = await db.select().from(gpsDeviceLinks).where(eq19(gpsDeviceLinks.active, 1));
     const detected = [];
     for (const link of links) {
       try {
@@ -12394,11 +12797,11 @@ var traccarRouter = router({
           return km >= 50;
         });
         if (longTrips.length === 0) continue;
-        const eqRow = await db.select().from(equipment).where(eq18(equipment.id, link.equipmentId)).limit(1);
+        const eqRow = await db.select().from(equipment).where(eq19(equipment.id, link.equipmentId)).limit(1);
         const eqName = eqRow[0]?.name || `Equipamento #${link.equipmentId}`;
         const existingFreight = await db.select().from(autoFreightTrips).where(and9(
-          eq18(autoFreightTrips.equipmentId, link.equipmentId),
-          eq18(autoFreightTrips.tripDate, dateStr)
+          eq19(autoFreightTrips.equipmentId, link.equipmentId),
+          eq19(autoFreightTrips.tripDate, dateStr)
         )).limit(1);
         if (existingFreight.length > 0) continue;
         const totalDistKm = longTrips.reduce((s, t2) => {
@@ -12408,13 +12811,13 @@ var traccarRouter = router({
         const totalDurationMs = longTrips.reduce((s, t2) => s + (t2.duration || 0), 0);
         const totalDurationMin = Math.round(totalDurationMs / 6e4);
         const fuelRows = await db.select().from(machineFuel).where(and9(
-          eq18(machineFuel.equipmentId, link.equipmentId),
+          eq19(machineFuel.equipmentId, link.equipmentId),
           gte2(machineFuel.date, from.toISOString().slice(0, 19).replace("T", " ")),
           lte2(machineFuel.date, to.toISOString().slice(0, 19).replace("T", " "))
         ));
         const fuelCost = fuelRows.reduce((s, r) => s + parseFloat(r.totalValue || "0"), 0);
         const maintRows = await db.select().from(machineMaintenance).where(and9(
-          eq18(machineMaintenance.equipmentId, link.equipmentId),
+          eq19(machineMaintenance.equipmentId, link.equipmentId),
           gte2(machineMaintenance.date, from.toISOString().slice(0, 19).replace("T", " ")),
           lte2(machineMaintenance.date, to.toISOString().slice(0, 19).replace("T", " "))
         ));
@@ -12456,385 +12859,43 @@ var traccarRouter = router({
     return { detected: detected.length, equipmentIds: detected };
   }),
   /** Lista fretes automaticos detectados pelo GPS */
-  listAutoFreights: protectedProcedure.input(z18.object({
-    equipmentId: z18.number().optional(),
-    dateFrom: z18.string().optional(),
-    dateTo: z18.string().optional(),
-    status: z18.enum(["detectado", "confirmado", "ignorado"]).optional()
+  listAutoFreights: protectedProcedure.input(z19.object({
+    equipmentId: z19.number().optional(),
+    dateFrom: z19.string().optional(),
+    dateTo: z19.string().optional(),
+    status: z19.enum(["detectado", "confirmado", "ignorado"]).optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const conditions = [];
-    if (input.equipmentId) conditions.push(eq18(autoFreightTrips.equipmentId, input.equipmentId));
+    if (input.equipmentId) conditions.push(eq19(autoFreightTrips.equipmentId, input.equipmentId));
     if (input.dateFrom) conditions.push(gte2(autoFreightTrips.tripDate, input.dateFrom));
     if (input.dateTo) conditions.push(lte2(autoFreightTrips.tripDate, input.dateTo));
-    if (input.status) conditions.push(eq18(autoFreightTrips.status, input.status));
+    if (input.status) conditions.push(eq19(autoFreightTrips.status, input.status));
     return db.select().from(autoFreightTrips).where(conditions.length > 0 ? and9(...conditions) : void 0).orderBy(desc13(autoFreightTrips.tripDate));
   }),
   /** Confirma ou ignora um frete automatico */
-  updateAutoFreightStatus: protectedProcedure.input(z18.object({
-    id: z18.number(),
-    status: z18.enum(["confirmado", "ignorado"]),
-    notes: z18.string().optional()
+  updateAutoFreightStatus: protectedProcedure.input(z19.object({
+    id: z19.number(),
+    status: z19.enum(["confirmado", "ignorado"]),
+    notes: z19.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
-    await db.update(autoFreightTrips).set({ status: input.status, notes: input.notes }).where(eq18(autoFreightTrips.id, input.id));
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    await db.update(autoFreightTrips).set({ status: input.status, notes: input.notes }).where(eq19(autoFreightTrips.id, input.id));
     return { ok: true };
   }),
   /** Contagem de alertas pendentes (para badge na sidebar) */
   alertCount: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return { count: 0 };
-    const result = await db.select({ count: sql6`COUNT(*)` }).from(preventiveMaintenanceAlerts).where(eq18(preventiveMaintenanceAlerts.status, "pendente"));
+    const result = await db.select({ count: sql7`COUNT(*)` }).from(preventiveMaintenanceAlerts).where(eq19(preventiveMaintenanceAlerts.status, "pendente"));
     return { count: Number(result[0]?.count || 0) };
   })
 });
 
-// server/routers/permissions.ts
-init_trpc();
-init_db();
-init_schema();
-import { z as z19 } from "zod";
-import { TRPCError as TRPCError15 } from "@trpc/server";
-import { eq as eq19, sql as sql7 } from "drizzle-orm";
-var SYSTEM_MODULES = [
-  // Maquinário
-  { slug: "equipamentos", label: "Equipamentos", group: "Maquin\xE1rio" },
-  { slug: "pecas", label: "Pe\xE7as / Estoque", group: "Maquin\xE1rio" },
-  { slug: "manutencao", label: "Manuten\xE7\xE3o", group: "Maquin\xE1rio" },
-  { slug: "horas-maquina", label: "Horas de M\xE1quina", group: "Maquin\xE1rio" },
-  { slug: "motosserras", label: "Motosserras", group: "Maquin\xE1rio" },
-  // Pessoas
-  { slug: "colaboradores", label: "Colaboradores", group: "Pessoas" },
-  { slug: "presencas", label: "Presen\xE7as", group: "Pessoas" },
-  // Operações
-  { slug: "cargas", label: "Controle de Cargas", group: "Opera\xE7\xF5es" },
-  { slug: "minha-carga", label: "Minha Carga", group: "Opera\xE7\xF5es" },
-  { slug: "abastecimento", label: "Abastecimento", group: "Opera\xE7\xF5es" },
-  { slug: "gastos-extras", label: "Gastos Extras", group: "Opera\xE7\xF5es" },
-  { slug: "reflorestamento", label: "Reflorestamento", group: "Opera\xE7\xF5es" },
-  { slug: "replantios", label: "Replantios", group: "Opera\xE7\xF5es" },
-  { slug: "gps", label: "Rastreamento GPS", group: "Opera\xE7\xF5es" },
-  { slug: "locais-gps", label: "Locais GPS", group: "Opera\xE7\xF5es" },
-  // Comercial
-  { slug: "clientes", label: "Clientes", group: "Comercial" },
-  { slug: "portal-cliente", label: "Portal do Cliente", group: "Comercial" },
-  { slug: "pagamentos-clientes", label: "Pagamentos Clientes", group: "Comercial" },
-  { slug: "compradores", label: "Compradores", group: "Comercial" },
-  { slug: "relatorio-destinos", label: "Relat\xF3rio Destinos", group: "Comercial" },
-  // Administrativo (valores financeiros)
-  { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Administrativo" },
-  { slug: "relatorios", label: "Relat\xF3rios", group: "Administrativo" },
-  { slug: "dashboard-exec", label: "Dashboard Executivo", group: "Administrativo" },
-  { slug: "acesso", label: "Controle de Acesso", group: "Administrativo" },
-  { slug: "corte-terceirizado", label: "Corte Terceirizado", group: "Administrativo" },
-  { slug: "terceirizados", label: "Terceirizados de Corte", group: "Administrativo" },
-  { slug: "dashboard-financeiro", label: "Dashboard Financeiro", group: "Administrativo" },
-  { slug: "fretes", label: "C\xE1lculo de Fretes", group: "Administrativo" },
-  { slug: "fornecedores-combustivel", label: "Fornecedores Combust\xEDvel", group: "Administrativo" },
-  { slug: "relatorios-combustivel", label: "Relat\xF3rios Combust\xEDvel", group: "Administrativo" },
-  { slug: "contas-pagar-combustivel", label: "Contas a Pagar (Combust\xEDvel)", group: "Administrativo" },
-  // Compras
-  { slug: "compras", label: "Solicita\xE7\xF5es de Compras", group: "Compras" },
-  { slug: "fornecedores", label: "Fornecedores", group: "Compras" },
-  { slug: "orcamentos", label: "Or\xE7amentos", group: "Compras" },
-  { slug: "estoque", label: "Estoque", group: "Compras" },
-  // Transporte
-  { slug: "ciclos-frete", label: "Ciclos de Frete (Geofence)", group: "Transporte" },
-  // Notas
-  { slug: "controle-notas", label: "Controle de Notas Fiscais", group: "Notas" }
-];
-var PROFILES = {
-  admin: {
-    label: "Administrador",
-    modules: SYSTEM_MODULES.map((m) => m.slug)
-  },
-  mecanico: {
-    label: "Mec\xE2nico",
-    modules: ["equipamentos", "pecas", "manutencao", "horas-maquina", "motosserras"]
-  },
-  operador: {
-    label: "Operador",
-    modules: ["equipamentos", "horas-maquina", "presencas"]
-  },
-  motorista: {
-    label: "Motorista",
-    modules: ["equipamentos", "minha-carga", "abastecimento"]
-  },
-  motosserrista: {
-    label: "Motosserrista",
-    modules: ["equipamentos", "manutencao", "motosserras"]
-  },
-  encarregado: {
-    label: "Encarregado de Ro\xE7a",
-    modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas", "manutencao"]
-  },
-  lider: {
-    label: "L\xEDder de Equipe",
-    modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"]
-  },
-  equipe: {
-    label: "Equipe de Campo",
-    modules: ["presencas", "equipamentos", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"]
-  },
-  custom: {
-    label: "Personalizado",
-    modules: []
-  }
-};
-var permissionsRouter = router({
-  // Listar módulos disponíveis
-  listModules: protectedProcedure.query(() => {
-    return SYSTEM_MODULES;
-  }),
-  // Listar perfis pré-definidos
-  listProfiles: protectedProcedure.query(() => {
-    return Object.entries(PROFILES).map(([key, val]) => ({
-      key,
-      label: val.label,
-      modules: val.modules
-    }));
-  }),
-  // Listar clientes (para seletor de clientes permitidos)
-  listClients: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
-    const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const allClients = await db.select({ id: clients.id, name: clients.name }).from(clients);
-    return allClients;
-  }),
-  // Listar todos os usuários E colaboradores com suas permissões
-  listUsers: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
-    const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const allUsers = await db.select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      createdAt: users.createdAt
-    }).from(users).orderBy(users.name);
-    const allCollabs = await db.select({
-      id: collaborators.id,
-      name: collaborators.name,
-      email: collaborators.email,
-      phone: collaborators.phone,
-      userId: collaborators.userId,
-      role: collaborators.role,
-      clientId: collaborators.clientId,
-      active: collaborators.active
-    }).from(collaborators).where(eq19(collaborators.active, 1)).orderBy(collaborators.name);
-    let allPerms = [];
-    try {
-      allPerms = await db.select().from(userPermissions);
-    } catch {
-      try {
-        const [rows] = await db.execute(sql7`SELECT * FROM user_permissions`);
-        allPerms = rows;
-      } catch {
-        allPerms = [];
-      }
-    }
-    const permMap = Object.fromEntries(allPerms.map((p) => [p.userId || p.user_id, p]));
-    const result = [];
-    const userIdsFromUsers = new Set(allUsers.map((u) => u.id));
-    for (const u of allUsers) {
-      const collab = allCollabs.find((c) => c.userId === u.id);
-      result.push({
-        id: u.id,
-        name: collab?.name || u.name,
-        email: u.email,
-        role: u.role,
-        createdAt: u.createdAt,
-        isCollaborator: !!collab,
-        collaboratorId: collab?.id || null,
-        collaboratorRole: collab?.role || null,
-        collaboratorClientId: collab?.clientId || null,
-        hasLoggedIn: true,
-        phone: collab?.phone || null,
-        modules: u.role === "admin" ? null : permMap[u.id]?.modules ? typeof permMap[u.id].modules === "string" ? JSON.parse(permMap[u.id].modules) : permMap[u.id].modules : [],
-        profile: permMap[u.id]?.profile || "custom",
-        allowedClientIds: permMap[u.id]?.allowedClientIds || permMap[u.id]?.allowed_client_ids ? JSON.parse(permMap[u.id].allowedClientIds || permMap[u.id].allowed_client_ids) : null,
-        allowedWorkLocationIds: permMap[u.id]?.allowedWorkLocationIds || permMap[u.id]?.allowed_work_location_ids ? JSON.parse(permMap[u.id].allowedWorkLocationIds || permMap[u.id].allowed_work_location_ids) : null
-      });
-    }
-    for (const c of allCollabs) {
-      if (c.userId && userIdsFromUsers.has(c.userId)) continue;
-      result.push({
-        id: -c.id,
-        // ID negativo para diferenciar de users (colaborador sem login)
-        name: c.name,
-        email: c.email,
-        role: null,
-        createdAt: null,
-        isCollaborator: true,
-        collaboratorId: c.id,
-        collaboratorRole: c.role,
-        collaboratorClientId: c.clientId,
-        hasLoggedIn: false,
-        phone: c.phone,
-        modules: [],
-        profile: "custom",
-        allowedClientIds: c.clientId ? [c.clientId] : null,
-        allowedWorkLocationIds: null
-      });
-    }
-    return result;
-  }),
-  // Buscar permissões do usuário atual
-  myPermissions: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role === "admin") return { modules: null, profile: "admin", allowedClientIds: null, allowedWorkLocationIds: null };
-    const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    let perm = null;
-    try {
-      const [permRow] = await db.select().from(userPermissions).where(eq19(userPermissions.userId, ctx.user.id));
-      perm = permRow || null;
-    } catch (e) {
-      try {
-        const [rows] = await db.execute(sql7`SELECT * FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
-        perm = rows?.[0] || null;
-      } catch {
-        perm = null;
-      }
-    }
-    if (!perm) {
-      let collab = null;
-      try {
-        const [collabRow] = await db.select({
-          clientId: collaborators.clientId,
-          role: collaborators.role
-        }).from(collaborators).where(eq19(collaborators.userId, ctx.user.id));
-        collab = collabRow || null;
-      } catch {
-        try {
-          const [rows] = await db.execute(sql7`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${ctx.user.id} LIMIT 1`);
-          collab = rows?.[0] || null;
-        } catch {
-          collab = null;
-        }
-      }
-      if (collab?.clientId) {
-        const collabRole = collab.role || "custom";
-        const profileModules = PROFILES[collabRole]?.modules || [];
-        return {
-          modules: profileModules.length > 0 ? profileModules : [],
-          profile: collabRole,
-          allowedClientIds: [collab.clientId],
-          allowedWorkLocationIds: null
-        };
-      }
-      return { modules: null, profile: "custom", allowedClientIds: null, allowedWorkLocationIds: null };
-    }
-    return {
-      modules: perm.modules ? typeof perm.modules === "string" ? JSON.parse(perm.modules) : perm.modules : [],
-      profile: perm.profile || "custom",
-      allowedClientIds: perm.allowedClientIds || perm.allowed_client_ids ? JSON.parse(perm.allowedClientIds || perm.allowed_client_ids) : null,
-      allowedWorkLocationIds: perm.allowedWorkLocationIds || perm.allowed_work_location_ids ? JSON.parse(perm.allowedWorkLocationIds || perm.allowed_work_location_ids) : null
-    };
-  }),
-  // Definir permissões de um usuário (apenas admin)
-  setPermissions: protectedProcedure.input(z19.object({
-    userId: z19.number(),
-    modules: z19.array(z19.string()).nullable(),
-    profile: z19.string().default("custom"),
-    allowedClientIds: z19.array(z19.number()).nullable().optional(),
-    allowedWorkLocationIds: z19.array(z19.number()).nullable().optional()
-  })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
-    const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    const modulesJson = input.modules === null ? null : JSON.stringify(input.modules);
-    const allowedClientIdsJson = input.allowedClientIds === null || input.allowedClientIds === void 0 ? null : JSON.stringify(input.allowedClientIds);
-    const allowedWorkLocationIdsJson = input.allowedWorkLocationIds === null || input.allowedWorkLocationIds === void 0 ? null : JSON.stringify(input.allowedWorkLocationIds);
-    if (input.userId < 0) {
-      const collabId = Math.abs(input.userId);
-      const clientId = input.allowedClientIds && input.allowedClientIds.length > 0 ? input.allowedClientIds[0] : null;
-      await db.update(collaborators).set({ clientId }).where(eq19(collaborators.id, collabId));
-      return { success: true };
-    }
-    try {
-      const [existing] = await db.select().from(userPermissions).where(eq19(userPermissions.userId, input.userId));
-      if (existing) {
-        await db.update(userPermissions).set({
-          modules: modulesJson,
-          profile: input.profile,
-          allowedClientIds: allowedClientIdsJson,
-          allowedWorkLocationIds: allowedWorkLocationIdsJson,
-          updatedBy: ctx.user.id
-        }).where(eq19(userPermissions.userId, input.userId));
-      } else {
-        await db.insert(userPermissions).values({
-          userId: input.userId,
-          modules: modulesJson,
-          profile: input.profile,
-          allowedClientIds: allowedClientIdsJson,
-          allowedWorkLocationIds: allowedWorkLocationIdsJson,
-          updatedBy: ctx.user.id
-        });
-      }
-    } catch {
-      await db.execute(sql7`INSERT INTO user_permissions (user_id, modules, profile, allowed_client_ids, allowed_work_location_ids, updated_by)
-          VALUES (${input.userId}, ${modulesJson}, ${input.profile}, ${allowedClientIdsJson}, ${allowedWorkLocationIdsJson}, ${ctx.user.id})
-          ON DUPLICATE KEY UPDATE modules = ${modulesJson}, profile = ${input.profile}, allowed_client_ids = ${allowedClientIdsJson}, allowed_work_location_ids = ${allowedWorkLocationIdsJson}, updated_by = ${ctx.user.id}`);
-    }
-    const [collab] = await db.select({ id: collaborators.id }).from(collaborators).where(eq19(collaborators.userId, input.userId));
-    if (collab && input.allowedClientIds && input.allowedClientIds.length > 0) {
-      await db.update(collaborators).set({ clientId: input.allowedClientIds[0] }).where(eq19(collaborators.id, collab.id));
-    }
-    return { success: true };
-  }),
-  // Aplicar perfil pré-definido a um usuário
-  applyProfile: protectedProcedure.input(z19.object({
-    userId: z19.number(),
-    profileKey: z19.string()
-  })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
-    const profile = PROFILES[input.profileKey];
-    if (!profile) throw new TRPCError15({ code: "BAD_REQUEST", message: "Perfil inv\xE1lido" });
-    const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    if (input.userId < 0) {
-      throw new TRPCError15({ code: "BAD_REQUEST", message: "Colaborador precisa fazer login para receber perfil completo" });
-    }
-    const modulesJson = input.profileKey === "admin" ? null : JSON.stringify(profile.modules);
-    try {
-      const [existing] = await db.select().from(userPermissions).where(eq19(userPermissions.userId, input.userId));
-      if (existing) {
-        await db.update(userPermissions).set({
-          modules: modulesJson,
-          profile: input.profileKey,
-          updatedBy: ctx.user.id
-        }).where(eq19(userPermissions.userId, input.userId));
-      } else {
-        await db.insert(userPermissions).values({
-          userId: input.userId,
-          modules: modulesJson,
-          profile: input.profileKey,
-          updatedBy: ctx.user.id
-        });
-      }
-    } catch {
-      await db.execute(sql7`INSERT INTO user_permissions (user_id, modules, profile, updated_by)
-          VALUES (${input.userId}, ${modulesJson}, ${input.profileKey}, ${ctx.user.id})
-          ON DUPLICATE KEY UPDATE modules = ${modulesJson}, profile = ${input.profileKey}, updated_by = ${ctx.user.id}`);
-    }
-    return { success: true };
-  }),
-  // Atualizar client_id de um colaborador
-  setCollaboratorClient: protectedProcedure.input(z19.object({
-    collaboratorId: z19.number(),
-    clientId: z19.number().nullable()
-  })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
-    const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(collaborators).set({ clientId: input.clientId }).where(eq19(collaborators.id, input.collaboratorId));
-    return { success: true };
-  })
-});
+// server/routers.ts
+init_permissions();
 
 // server/routers/chainsaws.ts
 init_trpc();
@@ -13979,6 +14040,7 @@ init_payroll();
 
 // server/routers/financialDashboard.ts
 init_trpc();
+init_permissions();
 init_db();
 init_schema();
 import { z as z25 } from "zod";
@@ -13988,7 +14050,7 @@ function toNum(v) {
   return parseFloat(String(v).replace(",", ".")) || 0;
 }
 var financialDashboardRouter = router({
-  consolidated: protectedProcedure.input(z25.object({
+  consolidated: moduleProcedure("dashboard-financeiro").input(z25.object({
     dateFrom: z25.string().optional(),
     dateTo: z25.string().optional()
   })).query(async ({ input }) => {
@@ -14396,6 +14458,7 @@ var gpsLocationsRouter = router({
 
 // server/routers/reports.ts
 init_trpc();
+init_permissions();
 init_db();
 init_clientAreaScope();
 init_schema();
@@ -14404,7 +14467,7 @@ import { TRPCError as TRPCError17 } from "@trpc/server";
 import { eq as eq26, desc as desc19, and as and16, gte as gte7, lte as lte7, sql as sql14, inArray as inArray7 } from "drizzle-orm";
 var reportsRouter = router({
   // ── Listar todos os locais de trabalho (para filtro) ──────────────────────
-  locations: protectedProcedure.query(async () => {
+  locations: moduleProcedure("dashboard-exec").query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
     return db.select({ id: gpsLocations.id, name: gpsLocations.name, isActive: gpsLocations.isActive }).from(gpsLocations).orderBy(gpsLocations.name);
@@ -14436,7 +14499,7 @@ var reportsRouter = router({
     return results[0]?.map((r) => r.location_name) || [];
   }),
   // ── Relatório completo por local e período ─────────────────────────────────
-  fullReport: protectedProcedure.input(z27.object({
+  fullReport: moduleProcedure("dashboard-exec").input(z27.object({
     locationId: z27.number().optional(),
     dateFrom: z27.string(),
     dateTo: z27.string(),
@@ -14592,7 +14655,7 @@ var reportsRouter = router({
     };
   }),
   // ── Dashboard resumo por local (para a tela executiva) ─────────────────────
-  dashboardByLocation: protectedProcedure.input(z27.object({
+  dashboardByLocation: moduleProcedure("dashboard-exec").input(z27.object({
     dateFrom: z27.string(),
     dateTo: z27.string(),
     locationId: z27.number().optional()
@@ -16474,6 +16537,7 @@ init_notifications();
 
 // server/routers/fuelSuppliers.ts
 init_trpc();
+init_permissions();
 init_db();
 init_schema();
 init_llm();
@@ -16535,12 +16599,12 @@ async function storagePut(relKey, data, contentType = "application/octet-stream"
 
 // server/routers/fuelSuppliers.ts
 var fuelSuppliersRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: moduleProcedure("fornecedores-combustivel", "contas-pagar-combustivel", "relatorios-combustivel").query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).orderBy(desc23(fuelSuppliers.id));
   }),
-  listActive: protectedProcedure.query(async ({ ctx }) => {
+  listActive: moduleProcedure("abastecimento").query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).where(eq31(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
@@ -16577,7 +16641,7 @@ var fuelSuppliersRouter = router({
     )).orderBy(fuelSuppliers.name);
   }),
   // ===== RESUMO DE LOCAIS/PREÇOS POR FORNECEDOR (baseado nas NFs cadastradas) =====
-  getSupplierSummary: protectedProcedure.input(z32.object({ supplierId: z32.number() })).query(async ({ ctx, input }) => {
+  getSupplierSummary: moduleProcedure("fornecedores-combustivel").input(z32.object({ supplierId: z32.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const invoices = await db.select().from(fuelInvoices).where(eq31(fuelInvoices.supplierId, input.supplierId)).orderBy(desc23(fuelInvoices.id));
@@ -16606,7 +16670,7 @@ var fuelSuppliersRouter = router({
     return Object.values(groups).sort((a, b) => a.location.localeCompare(b.location));
   }),
   // ===== PREÇOS POR LOCAL/TIPO (nova tabela multi-preço) =====
-  getPriceBySupplierAndType: protectedProcedure.input(z32.object({
+  getPriceBySupplierAndType: moduleProcedure("abastecimento").input(z32.object({
     supplierId: z32.number(),
     fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
     locationType: z32.enum(["simflor", "astorga", "postos"]).optional()
@@ -16629,12 +16693,12 @@ var fuelSuppliersRouter = router({
     if (supplier) return { pricePerLiter: supplier.pricePerLiter, source: "supplier_default" };
     return null;
   }),
-  listSupplierPrices: protectedProcedure.input(z32.object({ supplierId: z32.number() })).query(async ({ ctx, input }) => {
+  listSupplierPrices: moduleProcedure("fornecedores-combustivel").input(z32.object({ supplierId: z32.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSupplierPrices).where(eq31(fuelSupplierPrices.supplierId, input.supplierId)).orderBy(fuelSupplierPrices.locationType, fuelSupplierPrices.fuelType);
   }),
-  upsertSupplierPrice: protectedProcedure.input(z32.object({
+  upsertSupplierPrice: moduleProcedure("fornecedores-combustivel").input(z32.object({
     supplierId: z32.number(),
     fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
     locationType: z32.enum(["simflor", "astorga", "postos"]),
@@ -16665,13 +16729,13 @@ var fuelSuppliersRouter = router({
       return { success: true };
     }
   }),
-  deleteSupplierPrice: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
+  deleteSupplierPrice: moduleProcedure("fornecedores-combustivel").input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelSupplierPrices).where(eq31(fuelSupplierPrices.id, input.id));
     return { success: true };
   }),
-  create: protectedProcedure.input(z32.object({
+  create: moduleProcedure("fornecedores-combustivel").input(z32.object({
     name: z32.string().min(1),
     tradeName: z32.string().optional(),
     cnpj: z32.string().optional(),
@@ -16717,7 +16781,7 @@ var fuelSuppliersRouter = router({
     });
     return { success: true };
   }),
-  update: protectedProcedure.input(z32.object({
+  update: moduleProcedure("fornecedores-combustivel").input(z32.object({
     id: z32.number(),
     name: z32.string().min(1).optional(),
     tradeName: z32.string().nullable().optional(),
@@ -16778,7 +16842,7 @@ var fuelSuppliersRouter = router({
     await db.update(fuelSuppliers).set(updateData).where(eq31(fuelSuppliers.id, id));
     return { success: true };
   }),
-  priceHistory: protectedProcedure.input(z32.object({ supplierId: z32.number().optional() })).query(async ({ ctx, input }) => {
+  priceHistory: moduleProcedure("fornecedores-combustivel", "relatorios-combustivel").input(z32.object({ supplierId: z32.number().optional() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     if (input.supplierId) {
@@ -16786,7 +16850,7 @@ var fuelSuppliersRouter = router({
     }
     return db.select().from(fuelPriceHistory).orderBy(desc23(fuelPriceHistory.changedAt));
   }),
-  fuelReport: protectedProcedure.input(z32.object({
+  fuelReport: moduleProcedure("relatorios-combustivel").input(z32.object({
     startDate: z32.string().optional(),
     endDate: z32.string().optional()
   })).query(async ({ ctx, input }) => {
@@ -16804,14 +16868,14 @@ var fuelSuppliersRouter = router({
     const records = await db.select().from(vehicleRecords2).where(and20(...conditions)).orderBy(desc23(vehicleRecords2.date));
     return records;
   }),
-  delete: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
+  delete: moduleProcedure("fornecedores-combustivel").input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelSuppliers).where(eq31(fuelSuppliers.id, input.id));
     return { success: true };
   }),
   // ===== OCR - LEITURA AUTOMÁTICA DE NF POR FOTO =====
-  extractInvoiceFromPhoto: protectedProcedure.input(z32.object({
+  extractInvoiceFromPhoto: moduleProcedure("contas-pagar-combustivel").input(z32.object({
     photos: z32.array(z32.object({
       base64: z32.string().min(1),
       mimeType: z32.string().default("image/jpeg"),
@@ -16970,7 +17034,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     };
   }),
   // ===== CONTAS A PAGAR (NOTAS FISCAIS / BOLETOS) =====
-  listInvoices: protectedProcedure.input(z32.object({
+  listInvoices: moduleProcedure("contas-pagar-combustivel", "abastecimento").input(z32.object({
     supplierId: z32.number().optional(),
     status: z32.enum(["pendente", "pago", "vencido", "cancelado"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
@@ -16988,7 +17052,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
       supplierTradeName: supplierMap[inv.supplierId]?.tradeName || null
     }));
   }),
-  createInvoice: protectedProcedure.input(z32.object({
+  createInvoice: moduleProcedure("contas-pagar-combustivel").input(z32.object({
     supplierId: z32.number(),
     invoiceNumber: z32.string().min(1),
     invoiceDate: z32.string().min(1),
@@ -17044,7 +17108,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     }
     return { success: true };
   }),
-  updateInvoice: protectedProcedure.input(z32.object({
+  updateInvoice: moduleProcedure("contas-pagar-combustivel").input(z32.object({
     id: z32.number(),
     supplierId: z32.number().optional(),
     invoiceNumber: z32.string().optional(),
@@ -17075,7 +17139,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     await db.update(fuelInvoices).set(updateData).where(eq31(fuelInvoices.id, id));
     return { success: true };
   }),
-  markInvoicePaid: protectedProcedure.input(z32.object({
+  markInvoicePaid: moduleProcedure("contas-pagar-combustivel").input(z32.object({
     id: z32.number(),
     paidAt: z32.string().min(1),
     paidAmount: z32.string().optional()
@@ -17089,14 +17153,14 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     }).where(eq31(fuelInvoices.id, input.id));
     return { success: true };
   }),
-  deleteInvoice: protectedProcedure.input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
+  deleteInvoice: moduleProcedure("contas-pagar-combustivel").input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelInvoices).where(eq31(fuelInvoices.id, input.id));
     return { success: true };
   }),
   // ===== SALDO DO TANQUE POR LOCAL =====
-  tankStatus: protectedProcedure.query(async ({ ctx }) => {
+  tankStatus: moduleProcedure("contas-pagar-combustivel").query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -17736,6 +17800,7 @@ var freightCyclesRouter = router({
 
 // server/routers/suppliers.ts
 init_trpc();
+init_permissions();
 init_db();
 init_schema();
 import { z as z36 } from "zod";
@@ -17751,7 +17816,7 @@ async function syncSupplierCategories(db, supplierId, categoryIds) {
   }
 }
 var suppliersRouter = router({
-  list: protectedProcedure.input(z36.object({ activeOnly: z36.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
+  list: moduleProcedure("fornecedores", "orcamentos", "compras").input(z36.object({ activeOnly: z36.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     let rows;
@@ -17777,7 +17842,7 @@ var suppliersRouter = router({
       };
     });
   }),
-  getById: protectedProcedure.input(z36.object({ id: z36.number() })).query(async ({ input }) => {
+  getById: moduleProcedure("fornecedores").input(z36.object({ id: z36.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const [supplier] = await db.select().from(suppliers).where(eq35(suppliers.id, input.id));
@@ -17806,7 +17871,7 @@ var suppliersRouter = router({
       categories: categoryLinks.map((c) => ({ id: c.categoryId, name: c.categoryName, color: c.categoryColor }))
     };
   }),
-  create: protectedProcedure.input(z36.object({
+  create: moduleProcedure("fornecedores", "compras").input(z36.object({
     name: z36.string().min(1).max(255),
     cnpj: z36.string().optional(),
     address: z36.string().optional(),
@@ -17854,7 +17919,7 @@ var suppliersRouter = router({
     await syncSupplierCategories(db, insertId, input.categoryIds);
     return { id: insertId, ...input };
   }),
-  update: protectedProcedure.input(z36.object({
+  update: moduleProcedure("fornecedores").input(z36.object({
     id: z36.number(),
     name: z36.string().min(1).max(255),
     cnpj: z36.string().optional(),
@@ -17893,7 +17958,7 @@ var suppliersRouter = router({
     return { success: true };
   }),
   // Permanent delete
-  delete: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
+  delete: moduleProcedure("fornecedores").input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(supplierContacts).where(eq35(supplierContacts.supplierId, input.id));
@@ -17902,7 +17967,7 @@ var suppliersRouter = router({
     return { success: true };
   }),
   // --- Supplier Contacts ---
-  addContact: protectedProcedure.input(z36.object({
+  addContact: moduleProcedure("fornecedores").input(z36.object({
     supplierId: z36.number(),
     contactName: z36.string().min(1).max(255),
     role: z36.string().optional(),
@@ -17923,7 +17988,7 @@ var suppliersRouter = router({
     });
     return { id: result.insertId };
   }),
-  updateContact: protectedProcedure.input(z36.object({
+  updateContact: moduleProcedure("fornecedores").input(z36.object({
     id: z36.number(),
     contactName: z36.string().min(1).max(255),
     role: z36.string().optional(),
@@ -17940,13 +18005,13 @@ var suppliersRouter = router({
     }).where(eq35(supplierContacts.id, id));
     return { success: true };
   }),
-  deleteContact: protectedProcedure.input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
+  deleteContact: moduleProcedure("fornecedores").input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(supplierContacts).where(eq35(supplierContacts.id, input.id));
     return { success: true };
   }),
-  syncFromQuotationResponses: protectedProcedure.mutation(async ({ ctx }) => {
+  syncFromQuotationResponses: moduleProcedure("fornecedores").mutation(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const responses = await db.select().from(quotationResponses);
@@ -18000,6 +18065,7 @@ var suppliersRouter = router({
 
 // server/routers/stock.ts
 init_trpc();
+init_permissions();
 init_db();
 init_notifications();
 import { z as z37 } from "zod";
@@ -18107,17 +18173,17 @@ function contentFactor(productUnit, density, content, contentUnit, itemName) {
 }
 var stockRouter = router({
   // ───────── Locais ─────────
-  listLocations: protectedProcedure.query(async () => {
+  listLocations: moduleProcedure("estoque", "compras").query(async () => {
     const pool = await getPool();
     const [rows] = await pool.execute(`SELECT l.*, e.name AS equipmentName FROM stock_locations l LEFT JOIN equipment e ON e.id = l.equipment_id ORDER BY l.active DESC, l.name`);
     return rows;
   }),
-  createLocation: protectedProcedure.input(z37.object({ name: z37.string().min(1).max(150), type: z37.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z37.number().nullable().optional(), notes: z37.string().optional() })).mutation(async ({ input }) => {
+  createLocation: moduleProcedure("estoque").input(z37.object({ name: z37.string().min(1).max(150), type: z37.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z37.number().nullable().optional(), notes: z37.string().optional() })).mutation(async ({ input }) => {
     const pool = await getPool();
     const [r] = await pool.execute(`INSERT INTO stock_locations (name, type, equipment_id, notes) VALUES (?,?,?,?)`, [input.name.trim(), input.type, input.equipmentId ?? null, input.notes ?? null]);
     return { id: r.insertId };
   }),
-  updateLocation: protectedProcedure.input(z37.object({ id: z37.number(), name: z37.string().min(1).max(150), type: z37.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z37.number().nullable().optional(), notes: z37.string().optional(), active: z37.boolean().optional() })).mutation(async ({ input }) => {
+  updateLocation: moduleProcedure("estoque").input(z37.object({ id: z37.number(), name: z37.string().min(1).max(150), type: z37.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z37.number().nullable().optional(), notes: z37.string().optional(), active: z37.boolean().optional() })).mutation(async ({ input }) => {
     const pool = await getPool();
     await pool.execute(
       `UPDATE stock_locations SET name=?, type=?, equipment_id=?, notes=?, active=COALESCE(?, active) WHERE id=?`,
@@ -18126,7 +18192,7 @@ var stockRouter = router({
     return { success: true };
   }),
   // ───────── Produtos (catálogo) ─────────
-  listProducts: protectedProcedure.query(async () => {
+  listProducts: moduleProcedure("estoque", "compras").query(async () => {
     const pool = await getPool();
     const [rows] = await pool.execute(`
       SELECT p.*, c.name AS categoryName,
@@ -18135,7 +18201,7 @@ var stockRouter = router({
       ORDER BY p.active DESC, p.name`);
     return rows.map((r) => ({ ...r, belowMin: num(r.min_stock) > 0 && num(r.totalQuantity) < num(r.min_stock) }));
   }),
-  createProduct: protectedProcedure.input(z37.object({ name: z37.string().min(1).max(255), code: z37.string().max(50).optional(), brand: z37.string().max(100).optional(), tracksWeight: z37.boolean().optional(), densityKgL: z37.number().positive().nullable().optional(), unit: z37.string().min(1).max(20).default("un"), categoryId: z37.number().nullable().optional(), minStock: z37.number().min(0).default(0), notes: z37.string().optional() })).mutation(async ({ input }) => {
+  createProduct: moduleProcedure("estoque").input(z37.object({ name: z37.string().min(1).max(255), code: z37.string().max(50).optional(), brand: z37.string().max(100).optional(), tracksWeight: z37.boolean().optional(), densityKgL: z37.number().positive().nullable().optional(), unit: z37.string().min(1).max(20).default("un"), categoryId: z37.number().nullable().optional(), minStock: z37.number().min(0).default(0), notes: z37.string().optional() })).mutation(async ({ input }) => {
     const pool = await getPool();
     const [dup] = await pool.execute(`SELECT id, name FROM stock_products`);
     const exists = dup.find((p) => normName(p.name) === normName(input.name));
@@ -18146,7 +18212,7 @@ var stockRouter = router({
     );
     return { id: r.insertId };
   }),
-  updateProduct: protectedProcedure.input(z37.object({ id: z37.number(), name: z37.string().min(1).max(255), code: z37.string().max(50).optional(), brand: z37.string().max(100).optional(), tracksWeight: z37.boolean().optional(), densityKgL: z37.number().positive().nullable().optional(), unit: z37.string().min(1).max(20), categoryId: z37.number().nullable().optional(), minStock: z37.number().min(0), notes: z37.string().optional(), active: z37.boolean().optional() })).mutation(async ({ input }) => {
+  updateProduct: moduleProcedure("estoque").input(z37.object({ id: z37.number(), name: z37.string().min(1).max(255), code: z37.string().max(50).optional(), brand: z37.string().max(100).optional(), tracksWeight: z37.boolean().optional(), densityKgL: z37.number().positive().nullable().optional(), unit: z37.string().min(1).max(20), categoryId: z37.number().nullable().optional(), minStock: z37.number().min(0), notes: z37.string().optional(), active: z37.boolean().optional() })).mutation(async ({ input }) => {
     const pool = await getPool();
     await pool.execute(
       `UPDATE stock_products SET name=?, code=?, brand=?, tracks_weight=COALESCE(?, tracks_weight), density_kg_l=?, unit=?, category_id=?, min_stock=?, notes=?, active=COALESCE(?, active) WHERE id=?`,
@@ -18155,7 +18221,7 @@ var stockRouter = router({
     return { success: true };
   }),
   // Sugere produtos a partir dos itens já comprados (nomes distintos, ainda fora do catálogo) — importação assistida.
-  suggestProductsFromPurchases: protectedProcedure.query(async () => {
+  suggestProductsFromPurchases: moduleProcedure("estoque").query(async () => {
     const pool = await getPool();
     const [items] = await pool.execute(`
       SELECT TRIM(i.name) AS name, MAX(i.unit) AS unit, pr.category_id AS categoryId, COUNT(*) AS times
@@ -18172,7 +18238,7 @@ var stockRouter = router({
     }
     return Array.from(byKey.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }),
-  importProducts: protectedProcedure.input(z37.object({ products: z37.array(z37.object({ name: z37.string().min(1), unit: z37.string().default("un"), categoryId: z37.number().nullable().optional() })).min(1) })).mutation(async ({ input }) => {
+  importProducts: moduleProcedure("estoque").input(z37.object({ products: z37.array(z37.object({ name: z37.string().min(1), unit: z37.string().default("un"), categoryId: z37.number().nullable().optional() })).min(1) })).mutation(async ({ input }) => {
     const pool = await getPool();
     const [existing] = await pool.execute(`SELECT name FROM stock_products`);
     const have = new Set(existing.map((p) => normName(p.name)));
@@ -18187,7 +18253,7 @@ var stockRouter = router({
     return { created };
   }),
   // ───────── Saldos ─────────
-  balances: protectedProcedure.input(z37.object({ productId: z37.number().optional(), locationId: z37.number().optional(), includeZero: z37.boolean().optional() }).optional()).query(async ({ input }) => {
+  balances: moduleProcedure("estoque").input(z37.object({ productId: z37.number().optional(), locationId: z37.number().optional(), includeZero: z37.boolean().optional() }).optional()).query(async ({ input }) => {
     const pool = await getPool();
     const where = [];
     const params = [];
@@ -18209,7 +18275,7 @@ var stockRouter = router({
     return rows;
   }),
   // ───────── Extrato / rastreabilidade ─────────
-  movements: protectedProcedure.input(z37.object({
+  movements: moduleProcedure("estoque").input(z37.object({
     productId: z37.number().optional(),
     locationId: z37.number().optional(),
     purchaseRequestId: z37.number().optional(),
@@ -18267,7 +18333,7 @@ var stockRouter = router({
   }),
   // ───────── Recebimento de compra ─────────
   // Itens da solicitação com o que já foi recebido, quantidade sugerida e produto sugerido (mesmo nome normalizado).
-  pendingReceipt: protectedProcedure.input(z37.object({ purchaseRequestId: z37.number() })).query(async ({ input }) => {
+  pendingReceipt: moduleProcedure("estoque", "compras").input(z37.object({ purchaseRequestId: z37.number() })).query(async ({ input }) => {
     const pool = await getPool();
     const [prs] = await pool.execute(`SELECT id, title, status FROM purchase_requests WHERE id = ?`, [input.purchaseRequestId]);
     if (!prs[0]) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
@@ -18301,7 +18367,7 @@ var stockRouter = router({
       })
     };
   }),
-  receivePurchaseItems: protectedProcedure.input(z37.object({
+  receivePurchaseItems: moduleProcedure("estoque", "compras").input(z37.object({
     purchaseRequestId: z37.number(),
     receivedByCollaboratorId: z37.number({ required_error: "Informe quem recebeu" }),
     items: z37.array(z37.object({ itemId: z37.number(), productId: z37.number(), locationId: z37.number(), quantityReceived: qtyInput, contentPerUnit: z37.number().positive().optional(), contentUnit: z37.enum(["L", "kg", "m"]).optional() })).min(1)
@@ -18385,7 +18451,7 @@ var stockRouter = router({
   // Entrada manual — pra quando o item entra no estoque sem passar por uma Solicitação de
   // Compra (saldo inicial, doação, sobra de obra, item achado na conferência etc.). Se não
   // vier productId, cria o produto no catálogo na hora (mesma dedup por nome do createProduct).
-  manualEntry: protectedProcedure.input(z37.object({
+  manualEntry: moduleProcedure("estoque").input(z37.object({
     productId: z37.number().optional(),
     newProductName: z37.string().min(1).max(255).optional(),
     newProductUnit: z37.string().min(1).max(20).optional(),
@@ -18432,7 +18498,7 @@ var stockRouter = router({
     });
   }),
   // ───────── Saída / transferência / ajuste ─────────
-  registerExit: protectedProcedure.input(z37.object({
+  registerExit: moduleProcedure("estoque").input(z37.object({
     productId: z37.number(),
     locationId: z37.number(),
     quantity: qtyInput.optional(),
@@ -18491,7 +18557,7 @@ var stockRouter = router({
     });
   }),
   // Retiradas de produtos controlados por peso (líquidos/pastas), em aberto ou já devolvidas.
-  loans: protectedProcedure.input(z37.object({ status: z37.enum(["aberta", "devolvida"]).optional(), productId: z37.number().optional() }).optional()).query(async ({ input }) => {
+  loans: moduleProcedure("estoque").input(z37.object({ status: z37.enum(["aberta", "devolvida"]).optional(), productId: z37.number().optional() }).optional()).query(async ({ input }) => {
     const pool = await getPool();
     const where = [];
     const params = [];
@@ -18524,7 +18590,7 @@ var stockRouter = router({
   }),
   // Devolução: consumo = peso na saída − peso na devolução (mesma balança/embalagem, então a tara se anula).
   // Só o consumo baixa do estoque (movimento "Saída" com quem/onde/motivo da retirada).
-  returnLoan: protectedProcedure.input(z37.object({ loanId: z37.number(), grossWeightIn: z37.number().min(0) })).mutation(async ({ input, ctx }) => {
+  returnLoan: moduleProcedure("estoque").input(z37.object({ loanId: z37.number(), grossWeightIn: z37.number().min(0) })).mutation(async ({ input, ctx }) => {
     return withTx(async (conn) => {
       const [ls] = await conn.execute(`SELECT * FROM stock_loans WHERE id = ? FOR UPDATE`, [input.loanId]);
       const loan = ls[0];
@@ -18569,7 +18635,7 @@ var stockRouter = router({
       return { consumed: used, consumedKg: usedKg, unit: unitLabel, balanceAfter: newBalance };
     });
   }),
-  transfer: protectedProcedure.input(z37.object({ productId: z37.number(), fromLocationId: z37.number(), toLocationId: z37.number(), quantity: qtyInput, collaboratorId: z37.number().nullable().optional(), reason: z37.string().optional() })).mutation(async ({ input, ctx }) => {
+  transfer: moduleProcedure("estoque").input(z37.object({ productId: z37.number(), fromLocationId: z37.number(), toLocationId: z37.number(), quantity: qtyInput, collaboratorId: z37.number().nullable().optional(), reason: z37.string().optional() })).mutation(async ({ input, ctx }) => {
     if (input.fromLocationId === input.toLocationId) throw new TRPCError27({ code: "BAD_REQUEST", message: "Origem e destino s\xE3o o mesmo local." });
     return withTx(async (conn) => {
       await requireProductAndLocation(conn, input.productId, [input.fromLocationId, input.toLocationId]);
@@ -18796,6 +18862,7 @@ var quotationsRouter = router({
 
 // server/routers/purchaseRequests.ts
 init_trpc();
+init_permissions();
 init_db();
 init_schema();
 init_cloudinary();
@@ -19046,7 +19113,7 @@ var purchaseRequestsRouter = router({
     const [cols] = await db.execute(`SHOW COLUMNS FROM purchase_requests`);
     return cols.map((c) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
   }),
-  list: protectedProcedure.input(z39.object({
+  list: moduleProcedure("compras").input(z39.object({
     status: statusEnum.optional(),
     urgency: urgencyEnum.optional(),
     categoryId: z39.number().optional()
@@ -19111,7 +19178,7 @@ var purchaseRequestsRouter = router({
     }
     return filtered;
   }),
-  getById: protectedProcedure.input(z39.object({ id: z39.number() })).query(async ({ input }) => {
+  getById: moduleProcedure("compras").input(z39.object({ id: z39.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.execute(sql23`
@@ -19161,7 +19228,7 @@ var purchaseRequestsRouter = router({
     const items = await db.select().from(purchaseRequestItems).where(eq37(purchaseRequestItems.requestId, input.id));
     return { ...normalized, items };
   }),
-  create: protectedProcedure.input(z39.object({
+  create: moduleProcedure("compras").input(z39.object({
     title: z39.string().min(1),
     description: z39.string().optional(),
     linkUrl: z39.string().optional(),
@@ -19182,7 +19249,7 @@ var purchaseRequestsRouter = router({
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     return createPurchaseRequestCore(db, { ...input, userId: ctx.user.id, requesterName: ctx.user.name });
   }),
-  update: protectedProcedure.input(z39.object({
+  update: moduleProcedure("compras").input(z39.object({
     id: z39.number(),
     title: z39.string().optional(),
     description: z39.string().optional(),
@@ -19209,7 +19276,7 @@ var purchaseRequestsRouter = router({
     return { success: true };
   }),
   // Atualizar status diretamente (para a grade de edição)
-  updateStatus: protectedProcedure.input(z39.object({ id: z39.number(), status: statusEnum })).mutation(async ({ input, ctx }) => {
+  updateStatus: moduleProcedure("compras").input(z39.object({ id: z39.number(), status: statusEnum })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const [curRows] = await db.execute(sql23`SELECT status, requested_by FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
@@ -19247,7 +19314,7 @@ var purchaseRequestsRouter = router({
     return { success: true };
   }),
   // Atualizar datas da compra/entrega (edição direta na grade)
-  updateDates: protectedProcedure.input(z39.object({
+  updateDates: moduleProcedure("compras").input(z39.object({
     id: z39.number(),
     purchaseDate: z39.string().optional().nullable(),
     // 'YYYY-MM-DD' ou null
@@ -19261,7 +19328,7 @@ var purchaseRequestsRouter = router({
     return { success: true };
   }),
   // Responsável responde a solicitação (parecer) — também marca como lida
-  respond: protectedProcedure.input(z39.object({
+  respond: moduleProcedure("compras").input(z39.object({
     id: z39.number(),
     responseNotes: z39.string().min(1)
   })).mutation(async ({ input, ctx }) => {
@@ -19275,7 +19342,7 @@ var purchaseRequestsRouter = router({
     return { success: true };
   }),
   // Negar solicitação com motivo
-  deny: protectedProcedure.input(z39.object({
+  deny: moduleProcedure("compras").input(z39.object({
     id: z39.number(),
     denialReason: z39.string().min(1)
   })).mutation(async ({ input, ctx }) => {
@@ -19284,7 +19351,7 @@ var purchaseRequestsRouter = router({
     await db.execute(sql23`UPDATE purchase_requests SET status = 'negada', denial_reason = ${input.denialReason}, responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
-  toggleItemConfirm: protectedProcedure.input(z39.object({ itemId: z39.number(), confirmed: z39.boolean() })).mutation(async ({ input }) => {
+  toggleItemConfirm: moduleProcedure("compras").input(z39.object({ itemId: z39.number(), confirmed: z39.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const [chk] = await db.execute(sql23`SELECT received_quantity FROM purchase_request_items WHERE id = ${input.itemId} LIMIT 1`);
@@ -19294,7 +19361,7 @@ var purchaseRequestsRouter = router({
     await db.execute(sql23`UPDATE purchase_request_items SET confirmed = ${input.confirmed ? 1 : 0} WHERE id = ${input.itemId}`);
     return { success: true };
   }),
-  uploadImage: protectedProcedure.input(z39.object({
+  uploadImage: moduleProcedure("compras").input(z39.object({
     id: z39.number(),
     imageBase64: z39.string(),
     mimeType: z39.string().default("image/jpeg")
@@ -19315,7 +19382,7 @@ var purchaseRequestsRouter = router({
     await db.execute(sql23`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { url, success: true };
   }),
-  removeImage: protectedProcedure.input(z39.object({ id: z39.number(), imageUrl: z39.string() })).mutation(async ({ input }) => {
+  removeImage: moduleProcedure("compras").input(z39.object({ id: z39.number(), imageUrl: z39.string() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
@@ -19330,7 +19397,7 @@ var purchaseRequestsRouter = router({
     await db.execute(sql23`UPDATE purchase_requests SET images = ${JSON.stringify(images)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
-  delete: protectedProcedure.input(z39.object({ id: z39.number() })).mutation(async ({ input }) => {
+  delete: moduleProcedure("compras").input(z39.object({ id: z39.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql23`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
@@ -19339,7 +19406,7 @@ var purchaseRequestsRouter = router({
   }),
   // Dispara um Orçamento a partir desta solicitação, reaproveitando os itens já
   // cadastrados — fecha o ciclo Compra -> Orçamento.
-  requestQuotation: protectedProcedure.input(z39.object({ id: z39.number() })).mutation(async ({ input, ctx }) => {
+  requestQuotation: moduleProcedure("compras").input(z39.object({ id: z39.number() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const [rows] = await db.execute(sql23`SELECT title, requested_by, quotation_request_id, status FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
@@ -19380,7 +19447,7 @@ var purchaseRequestsRouter = router({
   }),
   // Grava a decisão de compra (fornecedor vencedor + preço por item) direto pela tela
   // da Solicitação de Compra — usado pra "Compra Direta" (site/loja, sem orçamento).
-  applyQuotationDecision: protectedProcedure.input(z39.object({
+  applyQuotationDecision: moduleProcedure("compras").input(z39.object({
     id: z39.number(),
     winningSupplierId: z39.number(),
     items: z39.array(z39.object({ itemId: z39.number(), price: z39.string() })).min(1)
@@ -19516,6 +19583,7 @@ var invoiceControlRouter = router({
 
 // server/routers/quotationRequests.ts
 init_trpc();
+init_permissions();
 init_db();
 init_schema();
 init_notification();
@@ -19676,7 +19744,7 @@ function computeBestPriceBreakdown(req, responses) {
 }
 var quotationRequestsRouter = router({
   // Listar todas as solicitações (protegido)
-  list: protectedProcedure.query(async () => {
+  list: moduleProcedure("orcamentos").query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
@@ -19697,7 +19765,7 @@ var quotationRequestsRouter = router({
   }),
   // Tabela de consulta de itens já orçados: uma linha por item cotado por um fornecedor
   // (nome do item, preço, data do orçamento, fornecedor, CNPJ).
-  listItemCatalog: protectedProcedure.query(async () => {
+  listItemCatalog: moduleProcedure("orcamentos").query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
     const requests = await db.select().from(quotationRequests);
@@ -19730,7 +19798,7 @@ var quotationRequestsRouter = router({
     return rows.sort((a, b) => new Date(b.quotationDate).getTime() - new Date(a.quotationDate).getTime());
   }),
   // Buscar por ID com respostas (protegido)
-  getById: protectedProcedure.input(z41.object({ id: z41.number() })).query(async ({ input }) => {
+  getById: moduleProcedure("orcamentos").input(z41.object({ id: z41.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.id, input.id));
@@ -19756,7 +19824,7 @@ var quotationRequestsRouter = router({
     };
   }),
   // Criar nova solicitação (protegido)
-  create: protectedProcedure.input(
+  create: moduleProcedure("orcamentos").input(
     z41.object({
       title: z41.string().min(1),
       requesterId: z41.number().optional(),
@@ -19797,14 +19865,14 @@ var quotationRequestsRouter = router({
     return { id, token };
   }),
   // Cancelar solicitação (protegido)
-  cancel: protectedProcedure.input(z41.object({ id: z41.number() })).mutation(async ({ input }) => {
+  cancel: moduleProcedure("orcamentos").input(z41.object({ id: z41.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(quotationRequests).set({ status: "cancelada" }).where(eq39(quotationRequests.id, input.id));
     return { success: true };
   }),
   // Editar resposta/fornecedor (protegido) — permite corrigir dados e condições
-  adminUpdateResponse: protectedProcedure.input(z41.object({
+  adminUpdateResponse: moduleProcedure("orcamentos").input(z41.object({
     responseId: z41.number(),
     supplierName: z41.string().optional(),
     tradeName: z41.string().optional(),
@@ -19836,7 +19904,7 @@ var quotationRequestsRouter = router({
     return { success: true };
   }),
   // Editar itens de uma resposta (protegido) — corrige preço/embalagem/quantidade que o fornecedor esqueceu
-  adminUpdateResponseItems: protectedProcedure.input(z41.object({
+  adminUpdateResponseItems: moduleProcedure("orcamentos").input(z41.object({
     responseId: z41.number(),
     items: z41.array(z41.object({
       name: z41.string(),
@@ -19854,7 +19922,7 @@ var quotationRequestsRouter = router({
     return { success: true };
   }),
   // Escolher manualmente o vencedor de cada item do comparativo (override do melhor preço)
-  adminSetBestChoice: protectedProcedure.input(z41.object({
+  adminSetBestChoice: moduleProcedure("orcamentos").input(z41.object({
     quotationRequestId: z41.number(),
     // quantity é opcional: quando informada, sobrescreve a quantidade solicitada
     // originalmente (ex: fornecedor não tem tudo, ou decidiu comprar menos/mais).
@@ -19870,7 +19938,7 @@ var quotationRequestsRouter = router({
   // Fecha o ciclo: grava o fornecedor vencedor + preço final na Solicitação de
   // Compra vinculada a este orçamento (se houver) e marca as linhas do catálogo
   // (quotations) daquele fornecedor/categoria como consumidas por esta compra.
-  confirmPurchaseDecision: protectedProcedure.input(z41.object({
+  confirmPurchaseDecision: moduleProcedure("orcamentos").input(z41.object({
     quotationRequestId: z41.number(),
     paymentMethod: z41.enum(["boleto", "pix", "cartao_credito", "cartao_debito", "dinheiro", "transferencia", "outro"]).optional(),
     invoiceUrl: z41.string().url().optional(),
@@ -19910,7 +19978,7 @@ var quotationRequestsRouter = router({
   // Caminho inverso: quando o orçamento foi feito por iniciativa do financeiro
   // (sem uma Solicitação de Compra prévia), gera uma Solicitação de Compra já
   // com o fornecedor vencedor e o preço final preenchidos, pra ficar rastreável.
-  createPurchaseRequestFromDecision: protectedProcedure.input(z41.object({
+  createPurchaseRequestFromDecision: moduleProcedure("orcamentos").input(z41.object({
     quotationRequestId: z41.number()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -19962,7 +20030,7 @@ var quotationRequestsRouter = router({
   // 2. Cria/encontra categoria com o título do orçamento
   // 3. Popula catálogo de preços com todos os itens de todas as respostas
   // 4. Retorna resumo estruturado para mensagem WhatsApp (NÃO cria solicitação de compra)
-  autoProcess: protectedProcedure.input(z41.object({
+  autoProcess: moduleProcedure("orcamentos").input(z41.object({
     quotationRequestId: z41.number()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -21500,6 +21568,7 @@ var freightTripsRouter = router({
 
 // server/routers/financialConsolidated.ts
 init_trpc();
+init_permissions();
 init_db();
 import { z as z46 } from "zod";
 import { sql as sql28 } from "drizzle-orm";
@@ -21522,7 +21591,7 @@ function getLocationName(id) {
 }
 var financialConsolidatedRouter = router({
   // ─── RESUMO GERAL (cards de totais por categoria) ─────────────────────────
-  getSummary: protectedProcedure.input(z46.object({
+  getSummary: moduleProcedure("relatorio-consolidado").input(z46.object({
     dateFrom: z46.string().optional(),
     dateTo: z46.string().optional(),
     workLocationId: z46.number().optional()
@@ -21762,7 +21831,7 @@ var financialConsolidatedRouter = router({
     };
   }),
   // ─── DETALHE POR CATEGORIA (listagem completa com paginação) ─────────────
-  getDetailByCategory: protectedProcedure.input(z46.object({
+  getDetailByCategory: moduleProcedure("relatorio-consolidado").input(z46.object({
     category: z46.string(),
     dateFrom: z46.string().optional(),
     dateTo: z46.string().optional(),
@@ -22217,7 +22286,7 @@ var financialConsolidatedRouter = router({
     };
   }),
   // ─── BREAKDOWN POR LOCAL DE TRABALHO ─────────────────────────────────────
-  getByLocation: protectedProcedure.input(z46.object({
+  getByLocation: moduleProcedure("relatorio-consolidado").input(z46.object({
     dateFrom: z46.string().optional(),
     dateTo: z46.string().optional()
   })).query(async ({ input }) => {

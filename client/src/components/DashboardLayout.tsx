@@ -34,7 +34,7 @@ import {
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight
+  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight, Loader2, ShieldAlert
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -301,7 +301,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
-  const { hasAccess, isAdmin, profile } = usePermissions();
+  const { hasAccess, isAdmin, profile, isLoading: permsLoading } = usePermissions();
   const { data: myPhotoUrl } = trpc.collaborators.getMyPhoto.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
@@ -371,6 +371,16 @@ function DashboardLayoutContent({
     }
     return "/app";
   };
+
+  // Bloqueio real de acesso: até aqui, "Controle de Acesso" só escondia o item do
+  // menu — mas a rota continuava aberta pra quem digitasse a URL direto. Resolve o
+  // item de menu (ou o pai, se for uma sub-página) e nega a página se o usuário não
+  // tiver o módulo liberado. "/app" (Painel) nunca é bloqueado.
+  const guardedMenuItem = activeMenuItem ?? allMenuItems.find(item => item.path === getParentPath());
+  const requiresModuleCheck = location !== "/app" && !!guardedMenuItem;
+  const canAccessCurrentPage = isAdmin
+    || !requiresModuleCheck
+    || (guardedMenuItem!.slug !== null && hasAccess(guardedMenuItem!.slug));
 
   const getPageTitle = () => {
     if (activeMenuItem) return activeMenuItem.label;
@@ -718,7 +728,30 @@ function DashboardLayoutContent({
         </div>
 
         <main className="flex-1 overflow-auto">
-          {children}
+          {requiresModuleCheck && !isAdmin && permsLoading ? (
+            <div className="flex items-center justify-center py-24">
+              <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+            </div>
+          ) : canAccessCurrentPage ? (
+            children
+          ) : (
+            <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <ShieldAlert className="h-8 w-8 text-red-600" />
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900">Acesso não permitido</h2>
+              <p className="text-sm text-gray-500 mt-1 max-w-sm">
+                Você não tem permissão para acessar esta tela. Fale com um administrador se acha que isso é um engano.
+              </p>
+              <button
+                onClick={() => setLocation("/app")}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium transition-colors"
+              >
+                <Home className="h-4 w-4" />
+                Voltar ao Painel
+              </button>
+            </div>
+          )}
         </main>
       </SidebarInset>
     </>
