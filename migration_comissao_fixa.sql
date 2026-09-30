@@ -25,8 +25,12 @@ UPDATE collaborators SET commission_unit = 'fixo'
 UPDATE collaborators SET commission_unit = 'fixo', commission_auto = 1
   WHERE name LIKE '%Paulo%S%rgio%Mota%Silva%';
 
+-- Um INSERT por linha (em vez de UNION ALL) — o editor SQL do phpMyAdmin se confunde
+-- com UNION ALL dentro de INSERT...SELECT...ON DUPLICATE KEY UPDATE.
 INSERT INTO payroll_commission_rates (collaborator_id, chave, valor)
 SELECT id, 'motorista_fixo', '0.00' FROM collaborators WHERE name LIKE '%Everson Moreira dos Santos%'
-UNION ALL
+ON DUPLICATE KEY UPDATE valor = VALUES(valor);
+
+INSERT INTO payroll_commission_rates (collaborator_id, chave, valor)
 SELECT id, 'motorista_fixo', '1000.00' FROM collaborators WHERE name LIKE '%Paulo%S%rgio%Mota%Silva%'
 ON DUPLICATE KEY UPDATE valor = VALUES(valor);
