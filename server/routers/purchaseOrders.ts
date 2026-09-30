@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { purchaseOrders, purchaseOrderItems, parts } from "../../drizzle/schema";
@@ -9,7 +10,7 @@ import { notifyTeam } from "../notifyTeam";
 
 export const purchaseOrdersRouter = router({
   // Listar todos os pedidos
-  listOrders: protectedProcedure
+  listOrders: moduleProcedure("pecas")
     .input(z.object({ status: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
@@ -20,7 +21,7 @@ export const purchaseOrdersRouter = router({
     }),
 
   // Buscar pedido com itens
-  getOrder: protectedProcedure
+  getOrder: moduleProcedure("pecas")
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -32,7 +33,7 @@ export const purchaseOrdersRouter = router({
     }),
 
   // Criar pedido com itens
-  createOrder: protectedProcedure
+  createOrder: moduleProcedure("pecas")
     .input(z.object({
       title: z.string().min(2),
       notes: z.string().optional(),
@@ -93,7 +94,7 @@ export const purchaseOrdersRouter = router({
     }),
 
   // Atualizar status do pedido
-  updateOrderStatus: protectedProcedure
+  updateOrderStatus: moduleProcedure("pecas")
     .input(z.object({
       id: z.number(),
       status: z.enum(["rascunho", "enviado", "aprovado", "rejeitado", "comprado"]),

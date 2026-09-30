@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { fuelSuppliers, fuelPriceHistory, fuelInvoices, fuelSupplierPrices } from "../../drizzle/schema";
@@ -10,13 +11,13 @@ import { storagePut } from "../storage";
 import { sanitizeNumeric } from "../utils/sanitize";
 
 export const fuelSuppliersRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: moduleProcedure("fornecedores-combustivel", "contas-pagar-combustivel", "relatorios-combustivel").query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).orderBy(desc(fuelSuppliers.id));
   }),
 
-  listActive: protectedProcedure.query(async ({ ctx }) => {
+  listActive: moduleProcedure("abastecimento").query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).where(eq(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
@@ -66,7 +67,7 @@ export const fuelSuppliersRouter = router({
     }),
 
   // ===== RESUMO DE LOCAIS/PREÇOS POR FORNECEDOR (baseado nas NFs cadastradas) =====
-  getSupplierSummary: protectedProcedure
+  getSupplierSummary: moduleProcedure("fornecedores-combustivel")
     .input(z.object({ supplierId: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -111,7 +112,7 @@ export const fuelSuppliersRouter = router({
     }),
 
   // ===== PREÇOS POR LOCAL/TIPO (nova tabela multi-preço) =====
-  getPriceBySupplierAndType: protectedProcedure
+  getPriceBySupplierAndType: moduleProcedure("abastecimento")
     .input(z.object({
       supplierId: z.number(),
       fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
@@ -139,7 +140,7 @@ export const fuelSuppliersRouter = router({
       return null;
     }),
 
-  listSupplierPrices: protectedProcedure
+  listSupplierPrices: moduleProcedure("fornecedores-combustivel")
     .input(z.object({ supplierId: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -149,7 +150,7 @@ export const fuelSuppliersRouter = router({
         .orderBy(fuelSupplierPrices.locationType, fuelSupplierPrices.fuelType);
     }),
 
-  upsertSupplierPrice: protectedProcedure
+  upsertSupplierPrice: moduleProcedure("fornecedores-combustivel")
     .input(z.object({
       supplierId: z.number(),
       fuelType: z.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]),
@@ -185,7 +186,7 @@ export const fuelSuppliersRouter = router({
       }
     }),
 
-  deleteSupplierPrice: protectedProcedure
+  deleteSupplierPrice: moduleProcedure("fornecedores-combustivel")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -194,7 +195,7 @@ export const fuelSuppliersRouter = router({
       return { success: true };
     }),
 
-  create: protectedProcedure
+  create: moduleProcedure("fornecedores-combustivel")
     .input(z.object({
       name: z.string().min(1),
       tradeName: z.string().optional(),
@@ -243,7 +244,7 @@ export const fuelSuppliersRouter = router({
       return { success: true };
     }),
 
-  update: protectedProcedure
+  update: moduleProcedure("fornecedores-combustivel")
     .input(z.object({
       id: z.number(),
       name: z.string().min(1).optional(),
@@ -308,7 +309,7 @@ export const fuelSuppliersRouter = router({
       return { success: true };
     }),
 
-  priceHistory: protectedProcedure
+  priceHistory: moduleProcedure("fornecedores-combustivel", "relatorios-combustivel")
     .input(z.object({ supplierId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -321,7 +322,7 @@ export const fuelSuppliersRouter = router({
       return db.select().from(fuelPriceHistory).orderBy(desc(fuelPriceHistory.changedAt));
     }),
 
-  fuelReport: protectedProcedure
+  fuelReport: moduleProcedure("relatorios-combustivel")
     .input(z.object({
       startDate: z.string().optional(),
       endDate: z.string().optional(),
@@ -343,7 +344,7 @@ export const fuelSuppliersRouter = router({
       return records;
     }),
 
-  delete: protectedProcedure
+  delete: moduleProcedure("fornecedores-combustivel")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -353,7 +354,7 @@ export const fuelSuppliersRouter = router({
     }),
 
   // ===== OCR - LEITURA AUTOMÁTICA DE NF POR FOTO =====
-  extractInvoiceFromPhoto: protectedProcedure
+  extractInvoiceFromPhoto: moduleProcedure("contas-pagar-combustivel")
     .input(z.object({
       photos: z.array(z.object({
         base64: z.string().min(1),
@@ -531,7 +532,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
     }),
 
   // ===== CONTAS A PAGAR (NOTAS FISCAIS / BOLETOS) =====
-  listInvoices: protectedProcedure
+  listInvoices: moduleProcedure("contas-pagar-combustivel", "abastecimento")
     .input(z.object({
       supplierId: z.number().optional(),
       status: z.enum(["pendente", "pago", "vencido", "cancelado"]).optional(),
@@ -555,7 +556,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       }));
     }),
 
-  createInvoice: protectedProcedure
+  createInvoice: moduleProcedure("contas-pagar-combustivel")
     .input(z.object({
       supplierId: z.number(),
       invoiceNumber: z.string().min(1),
@@ -613,7 +614,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       return { success: true };
     }),
 
-  updateInvoice: protectedProcedure
+  updateInvoice: moduleProcedure("contas-pagar-combustivel")
     .input(z.object({
       id: z.number(),
       supplierId: z.number().optional(),
@@ -647,7 +648,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       return { success: true };
     }),
 
-  markInvoicePaid: protectedProcedure
+  markInvoicePaid: moduleProcedure("contas-pagar-combustivel")
     .input(z.object({
       id: z.number(),
       paidAt: z.string().min(1),
@@ -664,7 +665,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       return { success: true };
     }),
 
-  deleteInvoice: protectedProcedure
+  deleteInvoice: moduleProcedure("contas-pagar-combustivel")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -674,7 +675,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
     }),
 
   // ===== SALDO DO TANQUE POR LOCAL =====
-  tankStatus: protectedProcedure.query(async ({ ctx }) => {
+  tankStatus: moduleProcedure("contas-pagar-combustivel").query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { vehicleRecords } = await import('../../drizzle/schema');

@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { getDb } from "../db";
 import { notifyUsers } from "./notifications";
 
@@ -124,19 +125,19 @@ function contentFactor(productUnit: string | null, density: number, content: num
 
 export const stockRouter = router({
   // ───────── Locais ─────────
-  listLocations: protectedProcedure.query(async () => {
+  listLocations: moduleProcedure("estoque", "compras").query(async () => {
     const pool = await getPool();
     const [rows] = await pool.execute(`SELECT l.*, e.name AS equipmentName FROM stock_locations l LEFT JOIN equipment e ON e.id = l.equipment_id ORDER BY l.active DESC, l.name`);
     return rows as any[];
   }),
-  createLocation: protectedProcedure
+  createLocation: moduleProcedure("estoque")
     .input(z.object({ name: z.string().min(1).max(150), type: z.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z.number().nullable().optional(), notes: z.string().optional() }))
     .mutation(async ({ input }) => {
       const pool = await getPool();
       const [r] = await pool.execute(`INSERT INTO stock_locations (name, type, equipment_id, notes) VALUES (?,?,?,?)`, [input.name.trim(), input.type, input.equipmentId ?? null, input.notes ?? null]);
       return { id: r.insertId };
     }),
-  updateLocation: protectedProcedure
+  updateLocation: moduleProcedure("estoque")
     .input(z.object({ id: z.number(), name: z.string().min(1).max(150), type: z.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z.number().nullable().optional(), notes: z.string().optional(), active: z.boolean().optional() }))
     .mutation(async ({ input }) => {
       const pool = await getPool();
@@ -146,7 +147,7 @@ export const stockRouter = router({
     }),
 
   // ───────── Produtos (catálogo) ─────────
-  listProducts: protectedProcedure.query(async () => {
+  listProducts: moduleProcedure("estoque", "compras").query(async () => {
     const pool = await getPool();
     const [rows] = await pool.execute(`
       SELECT p.*, c.name AS categoryName,
@@ -155,7 +156,7 @@ export const stockRouter = router({
       ORDER BY p.active DESC, p.name`) as any;
     return (rows as any[]).map(r => ({ ...r, belowMin: num(r.min_stock) > 0 && num(r.totalQuantity) < num(r.min_stock) }));
   }),
-  createProduct: protectedProcedure
+  createProduct: moduleProcedure("estoque")
     .input(z.object({ name: z.string().min(1).max(255), code: z.string().max(50).optional(), brand: z.string().max(100).optional(), tracksWeight: z.boolean().optional(), densityKgL: z.number().positive().nullable().optional(), unit: z.string().min(1).max(20).default("un"), categoryId: z.number().nullable().optional(), minStock: z.number().min(0).default(0), notes: z.string().optional() }))
     .mutation(async ({ input }) => {
       const pool = await getPool();
@@ -166,7 +167,7 @@ export const stockRouter = router({
         [input.name.trim(), input.code || null, input.brand?.trim() || null, input.tracksWeight ? 1 : 0, input.tracksWeight && input.densityKgL ? input.densityKgL.toFixed(3) : null, input.unit, input.categoryId ?? null, input.minStock.toFixed(3), input.notes ?? null]);
       return { id: r.insertId };
     }),
-  updateProduct: protectedProcedure
+  updateProduct: moduleProcedure("estoque")
     .input(z.object({ id: z.number(), name: z.string().min(1).max(255), code: z.string().max(50).optional(), brand: z.string().max(100).optional(), tracksWeight: z.boolean().optional(), densityKgL: z.number().positive().nullable().optional(), unit: z.string().min(1).max(20), categoryId: z.number().nullable().optional(), minStock: z.number().min(0), notes: z.string().optional(), active: z.boolean().optional() }))
     .mutation(async ({ input }) => {
       const pool = await getPool();
@@ -176,7 +177,7 @@ export const stockRouter = router({
     }),
 
   // Sugere produtos a partir dos itens já comprados (nomes distintos, ainda fora do catálogo) — importação assistida.
-  suggestProductsFromPurchases: protectedProcedure.query(async () => {
+  suggestProductsFromPurchases: moduleProcedure("estoque").query(async () => {
     const pool = await getPool();
     const [items] = await pool.execute(`
       SELECT TRIM(i.name) AS name, MAX(i.unit) AS unit, pr.category_id AS categoryId, COUNT(*) AS times
@@ -193,7 +194,7 @@ export const stockRouter = router({
     }
     return Array.from(byKey.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }),
-  importProducts: protectedProcedure
+  importProducts: moduleProcedure("estoque")
     .input(z.object({ products: z.array(z.object({ name: z.string().min(1), unit: z.string().default("un"), categoryId: z.number().nullable().optional() })).min(1) }))
     .mutation(async ({ input }) => {
       const pool = await getPool();
@@ -211,7 +212,7 @@ export const stockRouter = router({
     }),
 
   // ───────── Saldos ─────────
-  balances: protectedProcedure
+  balances: moduleProcedure("estoque")
     .input(z.object({ productId: z.number().optional(), locationId: z.number().optional(), includeZero: z.boolean().optional() }).optional())
     .query(async ({ input }) => {
       const pool = await getPool();
@@ -229,7 +230,7 @@ export const stockRouter = router({
     }),
 
   // ───────── Extrato / rastreabilidade ─────────
-  movements: protectedProcedure
+  movements: moduleProcedure("estoque")
     .input(z.object({
       productId: z.number().optional(), locationId: z.number().optional(), purchaseRequestId: z.number().optional(),
       type: z.string().optional(), from: z.string().optional(), to: z.string().optional(), limit: z.number().max(2000).default(500),
@@ -266,7 +267,7 @@ export const stockRouter = router({
 
   // ───────── Recebimento de compra ─────────
   // Itens da solicitação com o que já foi recebido, quantidade sugerida e produto sugerido (mesmo nome normalizado).
-  pendingReceipt: protectedProcedure
+  pendingReceipt: moduleProcedure("estoque", "compras")
     .input(z.object({ purchaseRequestId: z.number() }))
     .query(async ({ input }) => {
       const pool = await getPool();
@@ -298,7 +299,7 @@ export const stockRouter = router({
       };
     }),
 
-  receivePurchaseItems: protectedProcedure
+  receivePurchaseItems: moduleProcedure("estoque", "compras")
     .input(z.object({
       purchaseRequestId: z.number(),
       receivedByCollaboratorId: z.number({ required_error: "Informe quem recebeu" }),
@@ -376,7 +377,7 @@ export const stockRouter = router({
   // Entrada manual — pra quando o item entra no estoque sem passar por uma Solicitação de
   // Compra (saldo inicial, doação, sobra de obra, item achado na conferência etc.). Se não
   // vier productId, cria o produto no catálogo na hora (mesma dedup por nome do createProduct).
-  manualEntry: protectedProcedure
+  manualEntry: moduleProcedure("estoque")
     .input(z.object({
       productId: z.number().optional(),
       newProductName: z.string().min(1).max(255).optional(),
@@ -419,7 +420,7 @@ export const stockRouter = router({
     }),
 
   // ───────── Saída / transferência / ajuste ─────────
-  registerExit: protectedProcedure
+  registerExit: moduleProcedure("estoque")
     .input(z.object({
       productId: z.number(), locationId: z.number(), quantity: qtyInput.optional(),
       destinationEquipmentId: z.number().nullable().optional(),
@@ -468,7 +469,7 @@ export const stockRouter = router({
     }),
 
   // Retiradas de produtos controlados por peso (líquidos/pastas), em aberto ou já devolvidas.
-  loans: protectedProcedure
+  loans: moduleProcedure("estoque")
     .input(z.object({ status: z.enum(["aberta", "devolvida"]).optional(), productId: z.number().optional() }).optional())
     .query(async ({ input }) => {
       const pool = await getPool();
@@ -497,7 +498,7 @@ export const stockRouter = router({
 
   // Devolução: consumo = peso na saída − peso na devolução (mesma balança/embalagem, então a tara se anula).
   // Só o consumo baixa do estoque (movimento "Saída" com quem/onde/motivo da retirada).
-  returnLoan: protectedProcedure
+  returnLoan: moduleProcedure("estoque")
     .input(z.object({ loanId: z.number(), grossWeightIn: z.number().min(0) }))
     .mutation(async ({ input, ctx }) => {
       return withTx(async (conn) => {
@@ -539,7 +540,7 @@ export const stockRouter = router({
       });
     }),
 
-  transfer: protectedProcedure
+  transfer: moduleProcedure("estoque")
     .input(z.object({ productId: z.number(), fromLocationId: z.number(), toLocationId: z.number(), quantity: qtyInput, collaboratorId: z.number().nullable().optional(), reason: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       if (input.fromLocationId === input.toLocationId) throw new TRPCError({ code: "BAD_REQUEST", message: "Origem e destino são o mesmo local." });

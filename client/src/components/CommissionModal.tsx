@@ -67,7 +67,9 @@ export default function CommissionModal({
   const rate = (key: string): number => parseFloat(rateDrafts[key] ?? "0") || 0;
 
   const motoristaTotal = data?.tipo === "motorista"
-    ? data.items.reduce((s, i) => s + i.quantidade * rate(`motorista_${i.categoria}`), 0)
+    ? (data.unidade === "fixo"
+        ? rate("motorista_fixo")
+        : data.items.reduce((s, i) => s + i.quantidade * rate(`motorista_${i.categoria}`), 0))
     : 0;
 
   const operadorRate = rate("operador_por_tonelada");
@@ -132,9 +134,34 @@ export default function CommissionModal({
                 >
                   Tonelada
                 </Button>
+                <Button
+                  type="button" size="sm"
+                  variant={data.unidade === "fixo" ? "default" : "outline"}
+                  className={data.unidade === "fixo" ? "bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" : "h-7 text-xs"}
+                  disabled={updateUnit.isPending}
+                  onClick={() => data.unidade !== "fixo" && updateUnit.mutate({ collaboratorId: collaboratorId as number, unit: "fixo" })}
+                >
+                  Fixo
+                </Button>
               </div>
             </div>
-            {data.items.length === 0 ? (
+            {data.unidade === "fixo" ? (
+              <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 bg-gray-50">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Valor fixo mensal</p>
+                  <p className="text-xs text-gray-500">Não depende de cargas entregues no período.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-gray-500">R$</Label>
+                  <Input
+                    type="number" step="0.01"
+                    className="h-8 w-28 text-right"
+                    value={rateDrafts.motorista_fixo ?? ""}
+                    onChange={e => setRateDrafts(prev => ({ ...prev, motorista_fixo: e.target.value }))}
+                  />
+                </div>
+              </div>
+            ) : data.items.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-4">Nenhuma carga entregue em destinos com comissão nesse período.</p>
             ) : (
               <div className="space-y-2">
@@ -169,7 +196,7 @@ export default function CommissionModal({
               <span className="text-sm font-semibold text-gray-700">Total da Comissão</span>
               <span className="text-lg font-bold text-emerald-700">R$ {fmtBRL(motoristaTotal)}</span>
             </div>
-            {((data as any).loads?.length > 0 || (data as any).fuels?.length > 0) && (
+            {data.unidade !== "fixo" && ((data as any).loads?.length > 0 || (data as any).fuels?.length > 0) && (
               <details className="rounded-lg border border-gray-200 bg-white p-2.5 text-xs">
                 <summary className="cursor-pointer font-medium text-gray-700">Ver cargas e combustíveis do período</summary>
                 <div className="mt-2 space-y-3">

@@ -407,7 +407,7 @@ export const collaborators = mysqlTable("collaborators", {
 	active: int().default(1).notNull(),
 	clientId: int("client_id"),
 	commissionAuto: int("commission_auto").default(1).notNull(),
-	commissionUnit: mysqlEnum("commission_unit", ['carga', 'tonelada']).default('carga').notNull(), // motorista/terceirizado: comissão por carga entregue ou por tonelada líquida entregue
+	commissionUnit: mysqlEnum("commission_unit", ['carga', 'tonelada', 'fixo']).default('carga').notNull(), // motorista/terceirizado: comissão por carga entregue, por tonelada líquida entregue, ou valor fixo mensal
 	weeklyPeriodAnchor: mysqlEnum("weekly_period_anchor", ['domingo', 'sabado']).default('domingo').notNull(), // dia que inicia a semana de apuração (Ruan: sábado-sexta)
 	paymentLagDays: int("payment_lag_days").default(7).notNull(), // dias após o fim do período (sexta) em que o pagamento efetivamente ocorre (Ruan: 14)
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),

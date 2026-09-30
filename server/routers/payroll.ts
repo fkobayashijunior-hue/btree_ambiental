@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { payrollEntries, collaborators } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { resolveUserPermissions } from "./permissions";
 
 // Folha de pagamento: tabela e lógica próprias, independentes do "Lançar Folha"
 // existente em server/routers/financial.ts (que apenas soma diárias de presença
@@ -140,9 +141,26 @@ async function getCommissionRatesMap(db: any, collaboratorId: number = 0): Promi
   return map;
 }
 
-function requireAdmin(ctx: any) {
-  if (ctx.user.role !== "admin") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem acessar a folha de pagamento." });
+// Comissão fixa (commission_unit = 'fixo'): valor mensal cadastrado por colaborador,
+// sem depender de cargas entregues. Busca todos de uma vez (mesmo padrão de
+// getLiveOperadorCommissionMap) pra não fazer uma query por linha no getMonth.
+async function getFixedCommissionMap(db: any): Promise<Map<number, number>> {
+  const [rows] = await db.execute(
+    sql`SELECT collaborator_id AS collaboratorId, valor FROM payroll_commission_rates WHERE chave = 'motorista_fixo'`
+  ) as any;
+  const map = new Map<number, number>();
+  for (const r of rows as any[]) map.set(Number(r.collaboratorId), parseFloat(r.valor) || 0);
+  return map;
+}
+
+// Antes só liberava para `role === "admin"` — ignorava por completo o módulo
+// "folha-pagamento" do Controle de Acesso, então conceder o módulo pra alguém lá
+// não tinha efeito nenhum aqui (a tela continuava vazia/bloqueada pro usuário).
+async function requireAdmin(ctx: any) {
+  if (ctx.user.role === "admin") return;
+  const perms = await resolveUserPermissions(ctx.user.id, ctx.user.role);
+  if (perms.modules !== null && !perms.modules.includes("folha-pagamento")) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores ou usuários com acesso à Folha de Pagamento." });
   }
 }
 
@@ -358,8 +376,9 @@ async function getWeeklyVehicleCommissionMap(
       const row = (crows as any[])?.[0];
       configCache.set(cid, { unit: row?.unit ?? "carga", anchor: anchorDayOf({ weeklyPeriodAnchor: row?.anchor }) });
     }
-    const rates = ratesCache.get(cid)!;
     const config = configCache.get(cid)!;
+    if (config.unit === "fixo") continue; // comissão fixa não depende de cargas entregues
+    const rates = ratesCache.get(cid)!;
     const porTonelada = config.unit === "tonelada";
     const weekKey = weekStartOf(r.dateStr, config.anchor);
     const rate = rates[`motorista_${r.categoria}`] ?? 0;
@@ -538,7 +557,7 @@ export const payrollRouter = router({
   getMonth: protectedProcedure
     .input(z.object({ referenceMonth: z.string() })) // "YYYY-MM"
     .query(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePayrollTable(db);
@@ -554,6 +573,7 @@ export const payrollRouter = router({
       const weeklyCommissionMap = await getWeeklyVehicleCommissionMap(db, year, month);
       const liveOperadorCommissionMap = await getLiveOperadorCommissionMap(db, year, month, activeCollaborators);
       const liveDiscountMap = await getLiveTerceirizadoDiscountMap(db, year, month);
+      const fixedCommissionMap = await getFixedCommissionMap(db);
 
       const savedEntries = await db.select().from(payrollEntries).where(eq(payrollEntries.referenceMonth, input.referenceMonth));
       const savedMap = new Map<number, any>();
@@ -579,6 +599,7 @@ export const payrollRouter = router({
       const liveCommissionFor = (c: any): number => {
         if (c.commissionAuto === 0) return 0;
         if (c.role === "motorista" || c.role === "terceirizado") {
+          if (c.commissionUnit === "fixo") return fixedCommissionMap.get(c.id) ?? 0;
           const weekMap = weeklyCommissionMap.get(c.id);
           if (!weekMap) return 0;
           let total = 0;
@@ -729,7 +750,7 @@ export const payrollRouter = router({
       commissionPaidAt: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePayrollTable(db);
@@ -800,7 +821,7 @@ export const payrollRouter = router({
   closeMonth: protectedProcedure
     .input(z.object({ referenceMonth: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePayrollTable(db);
@@ -812,6 +833,7 @@ export const payrollRouter = router({
       const weeklyCommissionMap = await getWeeklyVehicleCommissionMap(db, year, month);
       const liveOperadorCommissionMap = await getLiveOperadorCommissionMap(db, year, month, activeCollaborators);
       const liveDiscountMap = await getLiveTerceirizadoDiscountMap(db, year, month);
+      const fixedCommissionMap = await getFixedCommissionMap(db);
 
       const existing = await db.select({ collaboratorId: payrollEntries.collaboratorId })
         .from(payrollEntries).where(eq(payrollEntries.referenceMonth, input.referenceMonth));
@@ -830,8 +852,12 @@ export const payrollRouter = router({
         let commission = 0;
         if (c.commissionAuto !== 0) {
           if (c.role === "motorista" || c.role === "terceirizado") {
-            const weekMap = weeklyCommissionMap.get(c.id);
-            if (weekMap) for (const w of weekMap.values()) commission += w.valor;
+            if (c.commissionUnit === "fixo") {
+              commission = fixedCommissionMap.get(c.id) ?? 0;
+            } else {
+              const weekMap = weeklyCommissionMap.get(c.id);
+              if (weekMap) for (const w of weekMap.values()) commission += w.valor;
+            }
           } else if (c.role === "operador") {
             commission = liveOperadorCommissionMap.get(c.id) ?? 0;
           }
@@ -852,7 +878,7 @@ export const payrollRouter = router({
   markPaid: protectedProcedure
     .input(z.object({ id: z.number(), paidAt: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.update(payrollEntries).set({ status: "pago", paidAt: input.paidAt }).where(eq(payrollEntries.id, input.id));
@@ -862,7 +888,7 @@ export const payrollRouter = router({
   unmarkPaid: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.update(payrollEntries).set({ status: "fechado", paidAt: null }).where(eq(payrollEntries.id, input.id));
@@ -874,7 +900,7 @@ export const payrollRouter = router({
   markCommissionPaid: protectedProcedure
     .input(z.object({ id: z.number(), paidAt: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.update(payrollEntries).set({ commissionStatus: "pago", commissionPaidAt: input.paidAt }).where(eq(payrollEntries.id, input.id));
@@ -884,7 +910,7 @@ export const payrollRouter = router({
   unmarkCommissionPaid: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.update(payrollEntries).set({ commissionStatus: "pendente", commissionPaidAt: null }).where(eq(payrollEntries.id, input.id));
@@ -896,7 +922,7 @@ export const payrollRouter = router({
   markWeeklyPaid: protectedProcedure
     .input(z.object({ collaboratorId: z.number(), weekFriday: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePayrollTable(db);
@@ -911,7 +937,7 @@ export const payrollRouter = router({
   unmarkWeeklyPaid: protectedProcedure
     .input(z.object({ collaboratorId: z.number(), weekFriday: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePayrollTable(db);
@@ -927,7 +953,7 @@ export const payrollRouter = router({
   reopenEntry: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(payrollEntries).where(eq(payrollEntries.id, input.id));
@@ -940,7 +966,7 @@ export const payrollRouter = router({
   getCommissionRates: protectedProcedure
     .input(z.object({ collaboratorId: z.number().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePayrollTable(db);
@@ -950,7 +976,7 @@ export const payrollRouter = router({
   updateCommissionRates: protectedProcedure
     .input(z.object({ rates: z.record(z.string(), z.string()), collaboratorId: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePayrollTable(db);
@@ -968,9 +994,9 @@ export const payrollRouter = router({
   // tonelada líquida entregue. Fica salvo por colaborador (não afeta os outros) — assim, quando
   // um motorista novo entrar, basta trocar aqui em vez de mexer em código.
   updateCommissionUnit: protectedProcedure
-    .input(z.object({ collaboratorId: z.number(), unit: z.enum(["carga", "tonelada"]) }))
+    .input(z.object({ collaboratorId: z.number(), unit: z.enum(["carga", "tonelada", "fixo"]) }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.update(collaborators).set({ commissionUnit: input.unit }).where(eq(collaborators.id, input.collaboratorId));
@@ -982,7 +1008,7 @@ export const payrollRouter = router({
   getCommissionBreakdown: protectedProcedure
     .input(z.object({ collaboratorId: z.number(), referenceMonth: z.string(), numOperadoresOverride: z.number().optional() }))
     .query(async ({ ctx, input }) => {
-      requireAdmin(ctx);
+      await requireAdmin(ctx);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePayrollTable(db);
@@ -1004,6 +1030,12 @@ export const payrollRouter = router({
       const periodoBase = `${String(month).padStart(2, "0")}/${year}`;
 
       if (collab.role === "motorista" || collab.role === "terceirizado") {
+        // Comissão fixa: valor mensal cadastrado por colaborador, sem relação com cargas
+        // entregues (ex: Everson e Paulo Sérgio) — não busca cargas nem categorias.
+        if (collab.commissionUnit === "fixo") {
+          const total = rates.motorista_fixo ?? 0;
+          return { tipo: "motorista" as const, unidade: "fixo" as const, periodoBase, items: [] as any[], total, rates, loads: [] as any[], fuels: [] as DiscountRecord[] };
+        }
         // Terceirizado segue a mesma regra de comissão do motorista (por carga ou por tonelada
         // líquida entregue, conforme a categoria do destino do veículo responsável — configurável
         // por colaborador via commissionUnit, ex: Ruan é por tonelada, Samuel/Isaac por carga).

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import https from "https";
 import fs from "fs";
 import path from "path";
@@ -859,7 +860,7 @@ export const sicoobRouter = router({
 
   // ── Contas a Receber (lê da tabela sicoob_boletos) ──
 
-  listBoletos: protectedProcedure
+  listBoletos: moduleProcedure("contas-a-receber")
     .input(z.object({
       mes: z.number().min(1).max(12),
       ano: z.number().min(2020).max(2100),
@@ -895,7 +896,7 @@ export const sicoobRouter = router({
       }
     }),
 
-  summaryBoletos: protectedProcedure
+  summaryBoletos: moduleProcedure("contas-a-receber")
     .input(z.object({
       mes: z.number().min(1).max(12),
       ano: z.number().min(2020).max(2100),
@@ -945,7 +946,7 @@ export const sicoobRouter = router({
 
   // ── Extrato Movimentações (lê da tabela sicoob_extrato) ──
 
-  listExtrato: protectedProcedure
+  listExtrato: moduleProcedure("extrato-movimentacoes")
     .input(z.object({ mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100) }))
     .query(async ({ input }) => {
       try {
@@ -971,7 +972,7 @@ export const sicoobRouter = router({
       }
     }),
 
-  syncExtrato: protectedProcedure
+  syncExtrato: moduleProcedure("extrato-movimentacoes")
     .input(z.object({ mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100) }))
     .mutation(async ({ input }) => {
       const result = await syncSicoobExtrato(input.mes, input.ano);
@@ -1005,7 +1006,7 @@ export const sicoobRouter = router({
       return { success: true };
     }),
 
-  fluxoCaixaDiario: protectedProcedure
+  fluxoCaixaDiario: moduleProcedure("fluxo-de-caixa")
     .input(z.object({
       mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100),
       modo: z.enum(["projecao", "real"]).optional(),
@@ -1020,7 +1021,7 @@ export const sicoobRouter = router({
   // Visão anual: soma os totais (recebimentos/pagamentos) de cada mês do ano, reaproveitando
   // o mesmo cálculo dia-a-dia usado na visão mensal — sem duplicar nenhuma regra de negócio
   // (Sicoob, boletos, NFs, Folha). O saldo acumulado passa de mês em mês.
-  fluxoCaixaAnual: protectedProcedure
+  fluxoCaixaAnual: moduleProcedure("fluxo-de-caixa")
     .input(z.object({ ano: z.number().min(2020).max(2100), modo: z.enum(["projecao", "real"]).optional() }))
     .query(async ({ input }) => {
       const { getDb } = await import("../db");
@@ -1054,7 +1055,7 @@ export const sicoobRouter = router({
     }),
 
 
-  updateReceipt: protectedProcedure
+  updateReceipt: moduleProcedure("contas-a-receber")
     .input(z.object({ id: z.number(), receiptUrl: z.string().url() }))
     .mutation(async ({ input }) => {
       const { getDb } = await import("../db");
@@ -1064,7 +1065,7 @@ export const sicoobRouter = router({
       return { success: true };
     }),
 
-  updateValor: protectedProcedure
+  updateValor: moduleProcedure("contas-a-receber")
     .input(z.object({ id: z.number(), valor: z.string() }))
     .mutation(async ({ input }) => {
       const { getDb } = await import("../db");
@@ -1079,7 +1080,7 @@ export const sicoobRouter = router({
 
   // ── Lançamentos Futuros (importados do Excel do banco) ──
 
-  importLancamentosFuturos: protectedProcedure
+  importLancamentosFuturos: moduleProcedure("contas-a-pagar", "fluxo-de-caixa")
     .input(z.object({
       lancamentos: z.array(z.object({
         data: z.string(),
@@ -1131,7 +1132,7 @@ export const sicoobRouter = router({
       return { lancamentos: rows ?? [], error: null };
     }),
 
-  deleteLancamentosFuturos: protectedProcedure
+  deleteLancamentosFuturos: moduleProcedure("contas-a-pagar", "fluxo-de-caixa")
     .input(z.object({ mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100) }))
     .mutation(async ({ input }) => {
       const { getDb } = await import("../db");
@@ -1145,7 +1146,7 @@ export const sicoobRouter = router({
       return { success: true };
     }),
 
-  syncBoletos: protectedProcedure
+  syncBoletos: moduleProcedure("contas-a-receber")
     .mutation(async () => {
       try {
         const result = await syncSicoobBoletos();
@@ -1155,7 +1156,7 @@ export const sicoobRouter = router({
       }
     }),
 
-  syncStatus: protectedProcedure.query(async () => {
+  syncStatus: moduleProcedure("contas-a-receber").query(async () => {
     try {
       const { getDb } = await import("../db");
       const db = await getDb();
@@ -1175,7 +1176,7 @@ export const sicoobRouter = router({
 
   // ── Contas a Pagar (débitos do extrato Sicoob + lançamentos futuros negativos) ──
 
-  contasAPagar: protectedProcedure
+  contasAPagar: moduleProcedure("contas-a-pagar")
     .input(z.object({
       mes: z.number().min(1).max(12),
       ano: z.number().min(2020).max(2100),
@@ -1295,7 +1296,7 @@ export const sicoobRouter = router({
   // Dashboard de análise: débitos JÁ REALIZADOS (extrato Sicoob, não pendências/projeção) num
   // período, com a classificação (Grupo/Centro de Custo/Natureza) de cada um — a agregação por
   // grupo/centro de custo/natureza e por mês é feita no frontend em cima dessa lista "achatada".
-  dashboardContasAPagar: protectedProcedure
+  dashboardContasAPagar: moduleProcedure("contas-a-pagar")
     .input(z.object({
       anoInicio: z.number().min(2020).max(2100),
       mesInicio: z.number().min(1).max(12),
@@ -1362,7 +1363,7 @@ export const sicoobRouter = router({
 
   // ── Memória de favorecidos (server/utils/favorecidoCategoria.ts) ──
 
-  listFavorecidosCategoria: protectedProcedure.query(async () => {
+  listFavorecidosCategoria: moduleProcedure("contas-a-pagar").query(async () => {
     const { getDb } = await import("../db");
     const db = await getDb();
     if (!db) return { favorecidos: [], error: "DB indisponível" };
@@ -1378,7 +1379,7 @@ export const sicoobRouter = router({
   // Combinações já usadas de Grupo/Centro de Custo/Natureza/Classificação/Fixo-Variável/
   // Direto-Indireto — o frontend usa isso pra montar os dropdowns em cascata (cada campo só
   // mostra as opções que já apareceram junto com o que foi escolhido nos campos anteriores).
-  listClassificacaoOpcoes: protectedProcedure.query(async () => {
+  listClassificacaoOpcoes: moduleProcedure("contas-a-pagar").query(async () => {
     const { getDb } = await import("../db");
     const db = await getDb();
     if (!db) return { combos: [], error: "DB indisponível" };
@@ -1394,7 +1395,7 @@ export const sicoobRouter = router({
   // Classificação, Fixo/Variável, Direto/Indireto). Como os campos formam uma hierarquia
   // (dropdowns em cascata na tela), mudar um campo limpa os campos abaixo dele nessa mesma
   // linha — evita deixar uma combinação inconsistente com o que passou a estar acima.
-  updateFavorecidoClassificacao: protectedProcedure
+  updateFavorecidoClassificacao: moduleProcedure("contas-a-pagar")
     .input(z.object({
       id: z.number(),
       campo: z.enum(["grupo", "centro_custo", "natureza", "classificacao", "fixo_variavel", "direto_indireto"]),
@@ -1418,7 +1419,7 @@ export const sicoobRouter = router({
   // Mesma edição de campo de classificação, mas endereçada pela CHAVE do favorecido (não pelo
   // id) — usada na aba Lançamentos, onde o favorecido pode ainda nem existir na memória (ex:
   // primeira vez que esse CNPJ aparece). Cria o registro na hora se ainda não existir.
-  upsertFavorecidoClassificacaoPorChave: protectedProcedure
+  upsertFavorecidoClassificacaoPorChave: moduleProcedure("contas-a-pagar")
     .input(z.object({
       chave: z.string(),
       tipoChave: z.enum(["cnpj", "nome", "cpf_fragmento"]),
@@ -1453,7 +1454,7 @@ export const sicoobRouter = router({
       return { success: true };
     }),
 
-  updateFavorecidoNome: protectedProcedure
+  updateFavorecidoNome: moduleProcedure("contas-a-pagar")
     .input(z.object({ id: z.number(), razaoSocial: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const { getDb } = await import("../db");
@@ -1466,7 +1467,7 @@ export const sicoobRouter = router({
       return { success: true };
     }),
 
-  deleteFavorecidoCategoria: protectedProcedure
+  deleteFavorecidoCategoria: moduleProcedure("contas-a-pagar")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const { getDb } = await import("../db");
@@ -1478,7 +1479,7 @@ export const sicoobRouter = router({
 
   // Importa uma planilha de CNPJs (ex: base de razão social/CNAE já levantada externamente)
   // como ponto de partida da memória — cada linha vira (ou atualiza) um favorecido por CNPJ.
-  importFavorecidosCategoriaPlanilha: protectedProcedure
+  importFavorecidosCategoriaPlanilha: moduleProcedure("contas-a-pagar")
     .input(z.object({
       linhas: z.array(z.object({
         cnpj: z.string(),

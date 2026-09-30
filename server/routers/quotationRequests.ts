@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
+import { moduleProcedure } from "./permissions";
 import { getDb } from "../db";
 import { quotationRequests, quotationResponses, suppliers, purchaseCategories, quotations, purchaseRequestItems } from "../../drizzle/schema";
 import { eq, desc, sql } from "drizzle-orm";
@@ -198,7 +199,7 @@ function computeBestPriceBreakdown(req: { title: string; itemsJson: string; best
 
 export const quotationRequestsRouter = router({
   // Listar todas as solicitações (protegido)
-  list: protectedProcedure.query(async () => {
+  list: moduleProcedure("orcamentos").query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(quotationRequests).orderBy(desc(quotationRequests.createdAt));
@@ -220,7 +221,7 @@ export const quotationRequestsRouter = router({
 
   // Tabela de consulta de itens já orçados: uma linha por item cotado por um fornecedor
   // (nome do item, preço, data do orçamento, fornecedor, CNPJ).
-  listItemCatalog: protectedProcedure.query(async () => {
+  listItemCatalog: moduleProcedure("orcamentos").query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const requests = await db.select().from(quotationRequests);
@@ -262,7 +263,7 @@ export const quotationRequestsRouter = router({
   }),
 
   // Buscar por ID com respostas (protegido)
-  getById: protectedProcedure
+  getById: moduleProcedure("orcamentos")
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -295,7 +296,7 @@ export const quotationRequestsRouter = router({
     }),
 
   // Criar nova solicitação (protegido)
-  create: protectedProcedure
+  create: moduleProcedure("orcamentos")
     .input(
       z.object({
         title: z.string().min(1),
@@ -343,7 +344,7 @@ export const quotationRequestsRouter = router({
     }),
 
   // Cancelar solicitação (protegido)
-  cancel: protectedProcedure
+  cancel: moduleProcedure("orcamentos")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -356,7 +357,7 @@ export const quotationRequestsRouter = router({
     }),
 
   // Editar resposta/fornecedor (protegido) — permite corrigir dados e condições
-  adminUpdateResponse: protectedProcedure
+  adminUpdateResponse: moduleProcedure("orcamentos")
     .input(z.object({
       responseId: z.number(),
       supplierName: z.string().optional(),
@@ -391,7 +392,7 @@ export const quotationRequestsRouter = router({
     }),
 
   // Editar itens de uma resposta (protegido) — corrige preço/embalagem/quantidade que o fornecedor esqueceu
-  adminUpdateResponseItems: protectedProcedure
+  adminUpdateResponseItems: moduleProcedure("orcamentos")
     .input(z.object({
       responseId: z.number(),
       items: z.array(z.object({
@@ -414,7 +415,7 @@ export const quotationRequestsRouter = router({
     }),
 
   // Escolher manualmente o vencedor de cada item do comparativo (override do melhor preço)
-  adminSetBestChoice: protectedProcedure
+  adminSetBestChoice: moduleProcedure("orcamentos")
     .input(z.object({
       quotationRequestId: z.number(),
       // quantity é opcional: quando informada, sobrescreve a quantidade solicitada
@@ -433,7 +434,7 @@ export const quotationRequestsRouter = router({
   // Fecha o ciclo: grava o fornecedor vencedor + preço final na Solicitação de
   // Compra vinculada a este orçamento (se houver) e marca as linhas do catálogo
   // (quotations) daquele fornecedor/categoria como consumidas por esta compra.
-  confirmPurchaseDecision: protectedProcedure
+  confirmPurchaseDecision: moduleProcedure("orcamentos")
     .input(z.object({
       quotationRequestId: z.number(),
       paymentMethod: z.enum(['boleto', 'pix', 'cartao_credito', 'cartao_debito', 'dinheiro', 'transferencia', 'outro']).optional(),
@@ -483,7 +484,7 @@ export const quotationRequestsRouter = router({
   // Caminho inverso: quando o orçamento foi feito por iniciativa do financeiro
   // (sem uma Solicitação de Compra prévia), gera uma Solicitação de Compra já
   // com o fornecedor vencedor e o preço final preenchidos, pra ficar rastreável.
-  createPurchaseRequestFromDecision: protectedProcedure
+  createPurchaseRequestFromDecision: moduleProcedure("orcamentos")
     .input(z.object({
       quotationRequestId: z.number(),
     }))
@@ -548,7 +549,7 @@ export const quotationRequestsRouter = router({
   // 2. Cria/encontra categoria com o título do orçamento
   // 3. Popula catálogo de preços com todos os itens de todas as respostas
   // 4. Retorna resumo estruturado para mensagem WhatsApp (NÃO cria solicitação de compra)
-  autoProcess: protectedProcedure
+  autoProcess: moduleProcedure("orcamentos")
     .input(z.object({
       quotationRequestId: z.number(),
     }))
