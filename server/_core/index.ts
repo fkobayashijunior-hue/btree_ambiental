@@ -924,6 +924,9 @@ async function runAutoMigrations() {
     // Conteúdo por embalagem do item pedido (ex: 10 un × 20 L) — usado no recebimento no estoque
     try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN package_size DECIMAL(14,3) NULL`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE purchase_request_items ADD COLUMN package_unit VARCHAR(10) NULL`); } catch(e) {}
+    // Compra direta (sem solicitação prévia) — selo na solicitação e quem comprou
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN is_direct_purchase TINYINT NOT NULL DEFAULT 0`); } catch(e) {}
+    try { await db.execute(/*sql*/`ALTER TABLE purchase_requests ADD COLUMN purchased_by_collaborator_id INT NULL`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE stock_loans ADD COLUMN consumed_stock DECIMAL(14,3) NULL`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE stock_movements MODIFY COLUMN type ENUM('entrada','saida','transferencia','ajuste','estorno','devolucao') NOT NULL`); } catch(e) {}
     try { await db.execute(/*sql*/`ALTER TABLE stock_loans MODIFY COLUMN exit_movement_id INT NULL`); } catch(e) {}

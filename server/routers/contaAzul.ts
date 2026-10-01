@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import axios, { AxiosError } from "axios";
+import zlib from "zlib";
 import { calcularDataPrevisaoPagamento, normalizarCnpj } from "../utils/prazoPagamento";
 import { calcularResumoNFsSemBoleto, type NFParaResumo } from "../utils/resumoNFs";
 
@@ -100,6 +101,81 @@ async function caGetXml(path: string): Promise<string> {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/xml, text/xml, */*" },
   });
   return typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+}
+
+async function caGetBuffer(path: string): Promise<Buffer> {
+  const token = await getContaAzulToken();
+  const res = await axios.get(`${BASE_URL}${path}`, {
+    responseType: "arraybuffer",
+    headers: { Authorization: `Bearer ${token}`, Accept: "*/*" },
+  });
+  return Buffer.from(res.data);
+}
+
+// Lê os arquivos de texto de um .zip (usa o diretório central, porque o zip da Conta Azul grava os
+// tamanhos num "data descriptor" e o cabeçalho local vem zerado). Sem dependência externa.
+export function lerArquivosDoZip(buf: Buffer): { name: string; text: string }[] {
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return [];
+  const total = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const out: { name: string; text: string }[] = [];
+  for (let k = 0; k < total; k++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) break;
+    const method = buf.readUInt16LE(p + 10);
+    const csize = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), commentLen = buf.readUInt16LE(p + 32);
+    const localOffset = buf.readUInt32LE(p + 42);
+    const name = buf.toString("utf8", p + 46, p + 46 + nameLen);
+    const dataStart = localOffset + 30 + buf.readUInt16LE(localOffset + 26) + buf.readUInt16LE(localOffset + 28);
+    const raw = buf.subarray(dataStart, dataStart + csize);
+    out.push({ name, text: (method === 8 ? zlib.inflateRawSync(raw) : raw).toString("utf8") });
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+
+// NF cancelada na SEFAZ: o XML tem um evento de Cancelamento (tpEvento 110111) registrado (cStat 135 ou 155).
+export function temEventoDeCancelamento(xmls: string[]): boolean {
+  return xmls.some(x => x.includes("<tpEvento>110111</tpEvento>") && /<cStat>(135|155)<[/]cStat>/.test(x));
+}
+
+// A listagem da Conta Azul NÃO devolve notas canceladas (só EMITIDA etc.), então o cancelamento nunca era
+// percebido. Aqui, as notas do período que sumiram da listagem têm o detalhe consultado: se vier o evento
+// de cancelamento, a nota é marcada como cancelada (mesmo registro/log da auto-cancelamento). Sumir da
+// listagem sozinho NÃO cancela nada — só a prova do evento.
+export async function reconciliarNotasCanceladas(db: any, chavesListadas: Set<string>, inicioStr: string, fimStr: string) {
+  const [rows] = await db.$client.execute(
+    `SELECT id, chave_acesso, numero_nota, status_nf_interno FROM notas_fiscais
+      WHERE data_emissao BETWEEN ? AND ? AND status_nf_interno != 'cancelado'`,
+    [inicioStr, fimStr]
+  ) as any;
+  const candidatas = (rows as any[]).filter(r => r.chave_acesso && !chavesListadas.has(r.chave_acesso));
+  const canceladas: string[] = [];
+  const erros: string[] = [];
+  for (let i = 0; i < candidatas.length; i += 3) {
+    await Promise.all(candidatas.slice(i, i + 3).map(async (nf: any) => {
+      try {
+        const buf = await caGetBuffer(`/v1/notas-fiscais/${nf.chave_acesso}`);
+        const xmls = buf.subarray(0, 2).toString() === "PK" ? lerArquivosDoZip(buf).map(f => f.text) : [buf.toString("utf8")];
+        if (!temEventoDeCancelamento(xmls)) return;
+        await db.$client.execute(
+          `UPDATE notas_fiscais SET status_nf_interno = 'cancelado', status_fiscal_conta_azul = 'CANCELADA' WHERE id = ?`, [nf.id]);
+        await db.$client.execute(
+          `INSERT INTO notas_fiscais_status_log (nota_fiscal_id, campo, valor_anterior, valor_novo, usuario_id, usuario_nome, alterado_em)
+           VALUES (?, 'status_nf_interno', ?, 'cancelado', NULL, 'Sistema (Conta Azul)', NOW())`,
+          [nf.id, nf.status_nf_interno ?? "em_aberto"]);
+        canceladas.push(String(nf.numero_nota));
+        console.log(`[ContaAzul] NF ${nf.numero_nota} cancelada (evento de cancelamento encontrado no detalhe)`);
+      } catch (e: any) {
+        erros.push(`NF ${nf.numero_nota}: ${e?.response?.data?.message ?? e?.message ?? "Erro"}`);
+      }
+    }));
+  }
+  return { verificadas: candidatas.length, canceladas, erros };
 }
 
 // ── XML parser (NFe / NFS-e padrão) ─────────────────────────────────────────
@@ -298,6 +374,17 @@ export async function syncNotasFiscais(mes: number, ano: number) {
         errors.push(`NF ${chave}: ${msg}`);
       }
     }));
+  }
+
+  // Notas canceladas somem da listagem — confere as do período que não vieram.
+  try {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const listadas = new Set<string>(allNFs.map((nf: any) => nf.chave_acesso ?? nf.chaveAcesso).filter(Boolean));
+    const rec = await reconciliarNotasCanceladas(db, listadas, `${ano}-${pad(mes)}-01`, `${ano}-${pad(mes)}-${pad(fim.getDate())}`);
+    errors.push(...rec.erros);
+    console.log(`[ContaAzul] Cancelamentos: ${rec.verificadas} nota(s) fora da listagem verificada(s), ${rec.canceladas.length} cancelada(s)${rec.canceladas.length ? ` (NF ${rec.canceladas.join(", ")})` : ""}`);
+  } catch (e: any) {
+    errors.push(`Verificação de cancelamentos: ${e?.message ?? "Erro"}`);
   }
 
   console.log(`[ContaAzul] Sync concluído: ${synced} NFs | Erros: ${errors.length}`);

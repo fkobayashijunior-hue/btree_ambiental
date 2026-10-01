@@ -176,6 +176,26 @@ export const stockRouter = router({
       return { success: true };
     }),
 
+  // Exclusão só de produto SEM histórico (movimentação ou empréstimo/devolução): excluir apagaria a
+  // rastreabilidade. Produto que já foi usado deve ser marcado como inativo em "Editar".
+  deleteProduct: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      return withTx(async (conn) => {
+        const [p] = await conn.execute(`SELECT id, name FROM stock_products WHERE id = ? FOR UPDATE`, [input.id]);
+        if (!p[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Produto não encontrado" });
+        const [mv] = await conn.execute(`SELECT COUNT(*) AS n FROM stock_movements WHERE product_id = ?`, [input.id]);
+        const [ln] = await conn.execute(`SELECT COUNT(*) AS n FROM stock_loans WHERE product_id = ?`, [input.id]);
+        if (num(mv[0].n) > 0 || num(ln[0].n) > 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `"${p[0].name}" já tem movimentações no estoque e não pode ser excluído (isso apagaria o histórico). Abra "Editar" e desmarque "Ativo" para tirá-lo de uso.` });
+        }
+        await conn.execute(`UPDATE purchase_request_items SET stock_product_id = NULL WHERE stock_product_id = ?`, [input.id]);
+        await conn.execute(`DELETE FROM stock_balances WHERE product_id = ?`, [input.id]);
+        await conn.execute(`DELETE FROM stock_products WHERE id = ?`, [input.id]);
+        return { success: true };
+      });
+    }),
+
   // Sugere produtos a partir dos itens já comprados (nomes distintos, ainda fora do catálogo) — importação assistida.
   suggestProductsFromPurchases: moduleProcedure("estoque").query(async () => {
     const pool = await getPool();

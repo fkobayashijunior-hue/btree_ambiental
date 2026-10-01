@@ -288,6 +288,13 @@ export default function PurchaseRequestDetailPage() {
                 <div className="text-gray-500 self-center">Previsão de entrega</div>
                 <div><Input type="date" value={editArrival} onChange={e => { setEditArrival(e.target.value); setDirty(true); }} className="h-8 text-xs w-40" /></div>
                 <div className="text-gray-500">Recebido em</div><div className="font-medium">{fmtDate(req.receivedDate) || '—'}</div>
+                {!!req.isDirectPurchase && (<>
+                  <div className="text-gray-500">Origem</div>
+                  <div className="font-medium flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="border-amber-400 text-amber-700 bg-amber-50">Compra direta</Badge>
+                    {req.purchasedByName && <span>comprado por {req.purchasedByName}</span>}
+                  </div>
+                </>)}
                 {req.respondedByName && (<>
                   <div className="text-gray-500">Responsável</div>
                   <div className="font-medium">{req.respondedByName}{req.respondedAt ? ` em ${fmtDate(req.respondedAt)}` : ''}</div>
@@ -440,6 +447,13 @@ export default function PurchaseRequestDetailPage() {
                   <Ban className="w-3.5 h-3.5 mr-1" /> Rejeitar
                 </Button>
               )}
+              <Button size="sm" variant="outline" className="text-gray-500 border-gray-300 hover:bg-gray-50" onClick={() => setShowDeleteDialog(true)}>
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+              </Button>
+            </div>
+          )}
+          {(req.status === 'negada' || req.status === 'cancelada') && (
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" className="text-gray-500 border-gray-300 hover:bg-gray-50" onClick={() => setShowDeleteDialog(true)}>
                 <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
               </Button>

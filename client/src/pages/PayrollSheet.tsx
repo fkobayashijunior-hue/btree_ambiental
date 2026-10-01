@@ -112,7 +112,12 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
 
   // Linha (Motorista/Operador) cujo modal de cálculo de comissão está aberto
   const [commissionModalRow, setCommissionModalRow] = useState<any | null>(null);
-  const [weekDetail, setWeekDetail] = useState<{ collaboratorId: number; weekStart: string } | null>(null);
+  // Detalhamento (cargas/combustível) aparece em TODAS as semanas ao expandir a linha; aqui ficam só as que foram recolhidas
+  const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(new Set());
+  const toggleWeekDetail = (collaboratorId: number, weekStart: string) => {
+    const key = `${collaboratorId}:${weekStart}`;
+    setCollapsedWeeks(prev => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  };
 
   const saveEntry = trpc.payroll.saveEntry.useMutation({
     onSuccess: () => { utils.payroll.getMonth.invalidate({ referenceMonth }); },
@@ -320,6 +325,85 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
       footerCell.value = "Desenvolvido por Kobayashi Desenvolvimento de Sistemas  •  btreeambiental.com";
       footerCell.font = { name: "Arial", size: 9, italic: true, color: { argb: GRAY_TEXT } };
       footerCell.alignment = { horizontal: "center", vertical: "middle" };
+
+      // Aba com o detalhamento semanal (cargas e combustível descontado) de quem tem comissão por semana (ex: Ruan)
+      const detailed = rows.filter((r: any) => (r.weeks || []).some((w: any) => w.cargas !== undefined));
+      if (detailed.length > 0) {
+        const wd = wb.addWorksheet("Detalhe semanal", {
+          properties: { defaultRowHeight: 18 },
+          pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
+        });
+        wd.columns = [14, 12, 14, 36, 12, 16, 18].map((w, i) => ({ key: `d${i}`, width: w }));
+        const COLS = 7;
+        const fmtD = (d: string) => String(d).split("-").reverse().join("/");
+        const fill = (argb: string) => ({ type: "pattern", pattern: "solid", fgColor: { argb } }) as any;
+        const line = { bottom: { style: "thin", color: { argb: GRAY_BORDER } } } as any;
+        let n = 1;
+
+        const banner = (text: string, size: number, bg: string, color: string, height: number, bold = true) => {
+          wd.mergeCells(n, 1, n, COLS);
+          const c = wd.getCell(n, 1);
+          c.value = text;
+          c.font = { name: "Arial", size, bold, color: { argb: color } };
+          c.fill = fill(bg);
+          c.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+          wd.getRow(n).height = height;
+          n++;
+        };
+        const headRow = (labels: string[], rightFrom: number) => {
+          labels.forEach((h, i) => {
+            const c = wd.getCell(n, i + 1);
+            c.value = h;
+            c.font = { name: "Arial", size: 9, bold: true, color: { argb: GRAY_TEXT } };
+            c.alignment = { horizontal: i >= rightFrom ? "right" : "left", vertical: "middle" };
+            c.border = line;
+          });
+          n++;
+        };
+        const dataRow = (vals: any[], rightFrom: number, moneyCols: number[], opts: { bold?: boolean; red?: boolean } = {}) => {
+          vals.forEach((v, i) => {
+            const c = wd.getCell(n, i + 1);
+            c.value = moneyCols.includes(i) && typeof v === "number" ? Math.round(v * 100) / 100 : v;
+            c.font = { name: "Arial", size: 10, bold: !!opts.bold, color: opts.red && i === vals.length - 1 ? { argb: "DC2626" } : undefined };
+            c.alignment = { horizontal: i >= rightFrom ? "right" : "left", vertical: "middle" };
+            c.border = line;
+            if (moneyCols.includes(i) && typeof v === "number") c.numFmt = "#,##0.00";
+          });
+          n++;
+        };
+
+        banner("BTREE AMBIENTAL — DETALHAMENTO SEMANAL DA COMISSÃO", 14, GREEN_DARK, WHITE, 32);
+        banner(`Referência: ${monthLabel}  •  Emitido em ${now}`, 9, GREEN_DARK, WHITE, 20, false);
+        n++;
+
+        for (const r of detailed as any[]) {
+          banner(`${r.name}  —  ${ROLE_LABELS[r.role] || r.role || "-"}`, 12, GREEN_LIGHT, GREEN_DARK, 24);
+          for (const w of (r.weeks as any[]).filter((x: any) => x.cargas !== undefined)) {
+            const loads = w.loads ?? [];
+            const fuels = w.fuels ?? [];
+            const totalCom = loads.reduce((sum: number, l: any) => sum + l.valor, 0);
+            const unitLabel = w.unit === "tonelada" ? "Tarifa (R$/t)" : "Tarifa (R$/carga)";
+            banner(`Semana ${fmtWeekLabel(w.weekStart, w.weekEnd)}`, 10, GRAY_BORDER, "111827", 20);
+
+            headRow(["Entrega", "Carga", "Placa", "Destino", "Ton", unitLabel, "Comissão (R$)"], 4);
+            if (loads.length === 0) dataRow(["Nenhuma carga nessa semana", "", "", "", "", "", ""], 99, []);
+            for (const l of loads) {
+              dataRow([fmtD(l.date), `#${l.loadId}`, l.plate ?? "—", l.dest ?? "—", Number((l.kg / 1000).toFixed(2)), Number(l.rate), Number(l.valor)], 4, [4, 5, 6]);
+            }
+            dataRow(["", "", "", "", "", "Total comissão", Number(totalCom)], 5, [6], { bold: true });
+
+            headRow(["Data", "Veículo", "", "", "Litros", "R$/L cobrado", "Desconto (R$)"], 4);
+            if (fuels.length === 0) dataRow(["Nenhum abastecimento nessa semana", "", "", "", "", "", ""], 99, []);
+            for (const f of fuels) {
+              dataRow([fmtD(f.date), f.equipmentName, "", "", Number(f.liters), Number(f.precoCobrado), -Number(f.subtotal)], 4, [4, 5, 6], { red: true });
+            }
+            dataRow(["", "", "", "", "", "Total desconto", -Number(w.desconto ?? 0)], 5, [6], { bold: true, red: true });
+            dataRow(["", "", "", "", "", "Líquido da semana", Number(w.valor)], 5, [6], { bold: true });
+            n++;
+          }
+          n++;
+        }
+      }
 
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -583,8 +667,8 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                                       <button
                                         type="button"
                                         className="text-gray-600 hover:text-gray-900 underline decoration-dotted"
-                                        title="Ver as cargas e os combustíveis dessa semana"
-                                        onClick={() => setWeekDetail(cur => cur?.collaboratorId === r.collaboratorId && cur?.weekStart === w.weekStart ? null : { collaboratorId: r.collaboratorId, weekStart: w.weekStart })}
+                                        title="Mostrar/ocultar as cargas e os combustíveis dessa semana"
+                                        onClick={() => toggleWeekDetail(r.collaboratorId, w.weekStart)}
                                       >Semana {fmtWeekLabel(w.weekStart, w.weekEnd)}:</button>
                                       <span className="text-gray-500">
                                         {w.unit === "tonelada"
@@ -626,18 +710,16 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                                 </span>
                               ))}
                             </div>
-                            {(() => {
-                              const dw = weekDetail && weekDetail.collaboratorId === r.collaboratorId ? weeks.find((x: any) => x.weekStart === weekDetail.weekStart) : null;
-                              if (!dw) return null;
+                            {weeks.filter((x: any) => x.cargas !== undefined && !collapsedWeeks.has(`${r.collaboratorId}:${x.weekStart}`)).map((dw: any) => {
                               const loads = dw.loads ?? [];
                               const fuels = dw.fuels ?? [];
                               const fmtD = (d: string) => d.split("-").reverse().join("/");
                               const totalCom = loads.reduce((s: number, l: any) => s + l.valor, 0);
                               return (
-                                <div className="mt-3 ml-5 rounded-lg border border-gray-200 bg-white p-3 space-y-3 text-xs">
+                                <div key={dw.weekStart} className="mt-3 ml-5 rounded-lg border border-gray-200 bg-white p-3 space-y-3 text-xs">
                                   <div className="flex items-center justify-between">
                                     <b className="text-gray-800">Semana {fmtWeekLabel(dw.weekStart, dw.weekEnd)} — detalhamento</b>
-                                    <button type="button" className="text-gray-400 hover:text-gray-600" onClick={() => setWeekDetail(null)}>fechar</button>
+                                    <button type="button" className="text-gray-400 hover:text-gray-600" onClick={() => toggleWeekDetail(r.collaboratorId, dw.weekStart)}>recolher</button>
                                   </div>
                                   <div>
                                     <div className="font-medium text-gray-700 mb-1">Cargas entregues (comissão)</div>
@@ -677,7 +759,7 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                                   <div className="text-right font-semibold text-gray-800">Líquido da semana: R$ {fmtBRL(dw.valor)}</div>
                                 </div>
                               );
-                            })()}
+                            })}
                           </td>
                         </tr>
                       )}
