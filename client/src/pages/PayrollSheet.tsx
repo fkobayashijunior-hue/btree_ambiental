@@ -97,6 +97,97 @@ function computeLiveTotal(r: any, commissionStr: string, referenceMonth: string)
   return base * (r.daysWorked || 0) + commission - discount;
 }
 
+// Quadro de detalhamento de uma semana de comissão: cargas entregues e combustível descontado.
+function WeekDetailCard({ dw, onCollapse, title }: { dw: any; onCollapse?: () => void; title?: string }) {
+  const loads = dw.loads ?? [];
+  const fuels = dw.fuels ?? [];
+  const fmtD = (d: string) => d.split("-").reverse().join("/");
+  const totalCom = loads.reduce((s: number, l: any) => s + l.valor, 0);
+  return (
+    <div className="mt-3 ml-5 rounded-lg border border-gray-200 bg-white p-3 space-y-3 text-xs">
+      <div className="flex items-center justify-between">
+        <b className="text-gray-800">{title ?? `Semana ${fmtWeekLabel(dw.weekStart, dw.weekEnd)} — detalhamento`}</b>
+        {onCollapse && <button type="button" className="text-gray-400 hover:text-gray-600" onClick={onCollapse}>recolher</button>}
+      </div>
+      <div>
+        <div className="font-medium text-gray-700 mb-1">Cargas entregues (comissão)</div>
+        {loads.length === 0 ? <div className="text-gray-400">Nenhuma carga.</div> : (
+          <table className="w-full">
+            <thead><tr className="text-left text-gray-500"><th className="py-0.5">Entrega</th><th>Carga</th><th>NF</th><th>Placa</th><th>Destino</th><th className="text-right">Ton</th><th className="text-right">Tarifa</th><th className="text-right">Comissão</th></tr></thead>
+            <tbody>
+              {loads.map((l: any) => (
+                <tr key={l.loadId} className="border-t border-gray-100">
+                  <td className="py-0.5">{fmtD(l.date)}</td><td>#{l.loadId}</td><td>{l.invoice ?? "—"}</td><td className="font-mono">{l.plate ?? "—"}</td><td>{l.dest ?? "—"}</td>
+                  <td className="text-right">{(l.kg / 1000).toFixed(2)}</td><td className="text-right">R$ {fmtBRL(l.rate)}{dw.unit === "tonelada" ? "/t" : ""}</td>
+                  <td className="text-right font-medium">R$ {fmtBRL(l.valor)}</td>
+                </tr>
+              ))}
+              <tr className="border-t border-gray-200 font-semibold"><td colSpan={7} className="py-0.5 text-right">Total comissão</td><td className="text-right">R$ {fmtBRL(totalCom)}</td></tr>
+            </tbody>
+          </table>
+        )}
+      </div>
+      <div>
+        <div className="font-medium text-gray-700 mb-1">Combustível descontado</div>
+        {fuels.length === 0 ? <div className="text-gray-400">Nenhum abastecimento.</div> : (
+          <table className="w-full">
+            <thead><tr className="text-left text-gray-500"><th className="py-0.5">Data</th><th>Veículo</th><th className="text-right">Litros</th><th className="text-right">R$/L cobrado</th><th className="text-right">Desconto</th></tr></thead>
+            <tbody>
+              {fuels.map((f: any, i: number) => (
+                <tr key={i} className="border-t border-gray-100">
+                  <td className="py-0.5">{fmtD(f.date)}</td><td>{f.equipmentName}</td><td className="text-right">{Number(f.liters).toLocaleString("pt-BR")}</td>
+                  <td className="text-right">R$ {fmtBRL(f.precoCobrado)}</td><td className="text-right font-medium text-red-600">- R$ {fmtBRL(f.subtotal)}</td>
+                </tr>
+              ))}
+              <tr className="border-t border-gray-200 font-semibold"><td colSpan={4} className="py-0.5 text-right">Total desconto</td><td className="text-right text-red-600">- R$ {fmtBRL(dw.desconto ?? 0)}</td></tr>
+            </tbody>
+          </table>
+        )}
+      </div>
+      <div className="text-right font-semibold text-gray-800">{title ? "Líquido do mês" : "Líquido da semana"}: R$ {fmtBRL(dw.valor)}</div>
+    </div>
+  );
+}
+
+// Detalhe da comissão de OPERADOR no mês: cargas entregues pro cliente dele (toneladas líquidas) e a conta.
+function OperatorMonthCard({ dm, title }: { dm: any; title: string }) {
+  const fmtD = (d: string) => d.split("-").reverse().join("/");
+  const loads = dm.loads ?? [];
+  return (
+    <div className="mt-3 ml-5 rounded-lg border border-gray-200 bg-white p-3 space-y-3 text-xs">
+      <b className="text-gray-800">{title}{dm.clienteNome ? ` — Cliente: ${dm.clienteNome}` : ""}</b>
+      <div>
+        <div className="font-medium text-gray-700 mb-1">Cargas entregues no mês (toneladas líquidas)</div>
+        {loads.length === 0 ? <div className="text-gray-400">Nenhuma carga entregue.</div> : (
+          <table className="w-full">
+            <thead><tr className="text-left text-gray-500"><th className="py-0.5">Entrega</th><th>Carga</th><th>NF</th><th>Placa</th><th>Destino</th><th className="text-right">Ton líquida</th></tr></thead>
+            <tbody>
+              {loads.map((l: any) => (
+                <tr key={l.loadId} className="border-t border-gray-100">
+                  <td className="py-0.5">{fmtD(l.date)}</td><td>#{l.loadId}</td><td>{l.invoice ?? "—"}</td><td className="font-mono">{l.plate ?? "—"}</td><td>{l.dest ?? "—"}</td>
+                  <td className="text-right">{(l.kg / 1000).toFixed(2)}</td>
+                </tr>
+              ))}
+              <tr className="border-t border-gray-200 font-semibold"><td colSpan={5} className="py-0.5 text-right">Total do mês</td><td className="text-right">{dm.totalTonelada.toFixed(2)} t</td></tr>
+            </tbody>
+          </table>
+        )}
+      </div>
+      <div className="rounded-md bg-gray-50 border border-gray-100 p-2 text-gray-700">
+        {dm.totalTonelada.toFixed(2)} t ÷ {dm.numOperadores} operador{dm.numOperadores !== 1 ? "es" : ""} × R$ {fmtBRL(dm.tarifa)}/t
+      </div>
+      <div className="text-right font-semibold text-gray-800">Comissão do mês: R$ {fmtBRL(dm.valor)}</div>
+    </div>
+  );
+}
+
+// Semanas com detalhamento de cargas de uma linha: as da própria linha semanal (ex: Ruan) ou, para quem
+// recebe a comissão no mês, as semanas de comissão que o servidor calcula à parte.
+const detailWeeksOf = (r: any): any[] => {
+  const own = (r.weeks || []).filter((x: any) => x.cargas !== undefined);
+  return own.length > 0 ? own : (r.commissionMonth ? [{ ...r.commissionMonth, monthly: true }] : []);
+};
+
 export default function PayrollSheet({ referenceMonth }: { referenceMonth: string }) {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.payroll.getMonth.useQuery({ referenceMonth });
@@ -326,15 +417,15 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
       footerCell.font = { name: "Arial", size: 9, italic: true, color: { argb: GRAY_TEXT } };
       footerCell.alignment = { horizontal: "center", vertical: "middle" };
 
-      // Aba com o detalhamento semanal (cargas e combustível descontado) de quem tem comissão por semana (ex: Ruan)
-      const detailed = rows.filter((r: any) => (r.weeks || []).some((w: any) => w.cargas !== undefined));
+      // Aba com o detalhamento semanal (cargas e combustível descontado) de quem tem comissão por carga/tonelada
+      const detailed = rows.filter((r: any) => detailWeeksOf(r).length > 0);
       if (detailed.length > 0) {
-        const wd = wb.addWorksheet("Detalhe semanal", {
+        const wd = wb.addWorksheet("Detalhe comissão", {
           properties: { defaultRowHeight: 18 },
           pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
         });
-        wd.columns = [14, 12, 14, 36, 12, 16, 18].map((w, i) => ({ key: `d${i}`, width: w }));
-        const COLS = 7;
+        wd.columns = [14, 12, 12, 14, 36, 12, 16, 18].map((w, i) => ({ key: `d${i}`, width: w }));
+        const COLS = 8;
         const fmtD = (d: string) => String(d).split("-").reverse().join("/");
         const fill = (argb: string) => ({ type: "pattern", pattern: "solid", fgColor: { argb } }) as any;
         const line = { bottom: { style: "thin", color: { argb: GRAY_BORDER } } } as any;
@@ -372,33 +463,47 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
           n++;
         };
 
-        banner("BTREE AMBIENTAL — DETALHAMENTO SEMANAL DA COMISSÃO", 14, GREEN_DARK, WHITE, 32);
+        banner("BTREE AMBIENTAL — DETALHAMENTO DA COMISSÃO", 14, GREEN_DARK, WHITE, 32);
         banner(`Referência: ${monthLabel}  •  Emitido em ${now}`, 9, GREEN_DARK, WHITE, 20, false);
         n++;
 
         for (const r of detailed as any[]) {
           banner(`${r.name}  —  ${ROLE_LABELS[r.role] || r.role || "-"}`, 12, GREEN_LIGHT, GREEN_DARK, 24);
-          for (const w of (r.weeks as any[]).filter((x: any) => x.cargas !== undefined)) {
+          for (const w of detailWeeksOf(r)) {
+            if (w.kind === "operador") {
+              banner(`Comissão do mês — ${monthLabel}  •  Cliente: ${w.clienteNome ?? "—"}`, 10, GRAY_BORDER, "111827", 20);
+              headRow(["Entrega", "Carga", "NF", "Placa", "Destino", "Ton líquida", "", ""], 5);
+              if ((w.loads ?? []).length === 0) dataRow(["Nenhuma carga entregue no mês", "", "", "", "", "", "", ""], 99, []);
+              for (const l of w.loads ?? []) {
+                dataRow([fmtD(l.date), `#${l.loadId}`, l.invoice ?? "—", l.plate ?? "—", l.dest ?? "—", Number((l.kg / 1000).toFixed(2)), "", ""], 5, [5]);
+              }
+              dataRow(["", "", "", "", "Toneladas líquidas do mês", Number(w.totalTonelada.toFixed(2)), "", ""], 4, [5], { bold: true });
+              dataRow(["", "", "", "", "Nº de operadores", Number(w.numOperadores), "", ""], 4, [], { bold: true });
+              dataRow(["", "", "", "", "Tarifa (R$/ton)", Number(w.tarifa), "", ""], 4, [5]);
+              dataRow(["", "", "", "", "Comissão do mês (R$)", Number(w.valor), "", ""], 4, [5], { bold: true });
+              n++;
+              continue;
+            }
             const loads = w.loads ?? [];
             const fuels = w.fuels ?? [];
             const totalCom = loads.reduce((sum: number, l: any) => sum + l.valor, 0);
             const unitLabel = w.unit === "tonelada" ? "Tarifa (R$/t)" : "Tarifa (R$/carga)";
-            banner(`Semana ${fmtWeekLabel(w.weekStart, w.weekEnd)}`, 10, GRAY_BORDER, "111827", 20);
+            banner(w.monthly ? `Comissão do mês — ${monthLabel}` : `Semana ${fmtWeekLabel(w.weekStart, w.weekEnd)}`, 10, GRAY_BORDER, "111827", 20);
 
-            headRow(["Entrega", "Carga", "Placa", "Destino", "Ton", unitLabel, "Comissão (R$)"], 4);
-            if (loads.length === 0) dataRow(["Nenhuma carga nessa semana", "", "", "", "", "", ""], 99, []);
+            headRow(["Entrega", "Carga", "NF", "Placa", "Destino", "Ton", unitLabel, "Comissão (R$)"], 5);
+            if (loads.length === 0) dataRow([w.monthly ? "Nenhuma carga no mês" : "Nenhuma carga nessa semana", "", "", "", "", "", "", ""], 99, []);
             for (const l of loads) {
-              dataRow([fmtD(l.date), `#${l.loadId}`, l.plate ?? "—", l.dest ?? "—", Number((l.kg / 1000).toFixed(2)), Number(l.rate), Number(l.valor)], 4, [4, 5, 6]);
+              dataRow([fmtD(l.date), `#${l.loadId}`, l.invoice ?? "—", l.plate ?? "—", l.dest ?? "—", Number((l.kg / 1000).toFixed(2)), Number(l.rate), Number(l.valor)], 5, [5, 6, 7]);
             }
-            dataRow(["", "", "", "", "", "Total comissão", Number(totalCom)], 5, [6], { bold: true });
+            dataRow(["", "", "", "", "", "", "Total comissão", Number(totalCom)], 6, [7], { bold: true });
 
-            headRow(["Data", "Veículo", "", "", "Litros", "R$/L cobrado", "Desconto (R$)"], 4);
-            if (fuels.length === 0) dataRow(["Nenhum abastecimento nessa semana", "", "", "", "", "", ""], 99, []);
+            headRow(["Data", "Veículo", "", "", "", "Litros", "R$/L cobrado", "Desconto (R$)"], 5);
+            if (fuels.length === 0) dataRow([w.monthly ? "Nenhum abastecimento no mês" : "Nenhum abastecimento nessa semana", "", "", "", "", "", "", ""], 99, []);
             for (const f of fuels) {
-              dataRow([fmtD(f.date), f.equipmentName, "", "", Number(f.liters), Number(f.precoCobrado), -Number(f.subtotal)], 4, [4, 5, 6], { red: true });
+              dataRow([fmtD(f.date), f.equipmentName, "", "", "", Number(f.liters), Number(f.precoCobrado), -Number(f.subtotal)], 5, [5, 6, 7], { red: true });
             }
-            dataRow(["", "", "", "", "", "Total desconto", -Number(w.desconto ?? 0)], 5, [6], { bold: true, red: true });
-            dataRow(["", "", "", "", "", "Líquido da semana", Number(w.valor)], 5, [6], { bold: true });
+            dataRow(["", "", "", "", "", "", "Total desconto", -Number(w.desconto ?? 0)], 6, [7], { bold: true, red: true });
+            dataRow(["", "", "", "", "", "", w.monthly ? "Líquido do mês" : "Líquido da semana", Number(w.valor)], 6, [7], { bold: true });
             n++;
           }
           n++;
@@ -489,13 +594,14 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                   const isLocked = !isDaily && !isWeeklyFixed && !r.isDraft;
                   const commissionValue = commissionDrafts[r.collaboratorId] ?? r.commission ?? "0";
                   const weeks = r.weeks || [];
+                  const commissionMonth = r.commissionMonth ?? null;
                   const isExpanded = expandedWeeks.has(r.collaboratorId);
                   return (
                     <Fragment key={r.collaboratorId}>
                       <tr className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                         <td className="py-3 px-4 font-medium" translate="no">
                           <div className="flex items-center gap-1">
-                            {(isDaily || isWeeklyFixed) && weeks.length > 0 && (
+                            {(((isDaily || isWeeklyFixed) && weeks.length > 0) || !!commissionMonth) && (
                               <button
                                 type="button"
                                 onClick={() => toggleWeeks(r.collaboratorId)}
@@ -710,56 +816,19 @@ export default function PayrollSheet({ referenceMonth }: { referenceMonth: strin
                                 </span>
                               ))}
                             </div>
-                            {weeks.filter((x: any) => x.cargas !== undefined && !collapsedWeeks.has(`${r.collaboratorId}:${x.weekStart}`)).map((dw: any) => {
-                              const loads = dw.loads ?? [];
-                              const fuels = dw.fuels ?? [];
-                              const fmtD = (d: string) => d.split("-").reverse().join("/");
-                              const totalCom = loads.reduce((s: number, l: any) => s + l.valor, 0);
-                              return (
-                                <div key={dw.weekStart} className="mt-3 ml-5 rounded-lg border border-gray-200 bg-white p-3 space-y-3 text-xs">
-                                  <div className="flex items-center justify-between">
-                                    <b className="text-gray-800">Semana {fmtWeekLabel(dw.weekStart, dw.weekEnd)} — detalhamento</b>
-                                    <button type="button" className="text-gray-400 hover:text-gray-600" onClick={() => toggleWeekDetail(r.collaboratorId, dw.weekStart)}>recolher</button>
-                                  </div>
-                                  <div>
-                                    <div className="font-medium text-gray-700 mb-1">Cargas entregues (comissão)</div>
-                                    {loads.length === 0 ? <div className="text-gray-400">Nenhuma carga.</div> : (
-                                      <table className="w-full">
-                                        <thead><tr className="text-left text-gray-500"><th className="py-0.5">Entrega</th><th>Carga</th><th>Placa</th><th>Destino</th><th className="text-right">Ton</th><th className="text-right">Tarifa</th><th className="text-right">Comissão</th></tr></thead>
-                                        <tbody>
-                                          {loads.map((l: any) => (
-                                            <tr key={l.loadId} className="border-t border-gray-100">
-                                              <td className="py-0.5">{fmtD(l.date)}</td><td>#{l.loadId}</td><td className="font-mono">{l.plate ?? "—"}</td><td>{l.dest ?? "—"}</td>
-                                              <td className="text-right">{(l.kg / 1000).toFixed(2)}</td><td className="text-right">R$ {fmtBRL(l.rate)}{dw.unit === "tonelada" ? "/t" : ""}</td>
-                                              <td className="text-right font-medium">R$ {fmtBRL(l.valor)}</td>
-                                            </tr>
-                                          ))}
-                                          <tr className="border-t border-gray-200 font-semibold"><td colSpan={6} className="py-0.5 text-right">Total comissão</td><td className="text-right">R$ {fmtBRL(totalCom)}</td></tr>
-                                        </tbody>
-                                      </table>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <div className="font-medium text-gray-700 mb-1">Combustível descontado</div>
-                                    {fuels.length === 0 ? <div className="text-gray-400">Nenhum abastecimento.</div> : (
-                                      <table className="w-full">
-                                        <thead><tr className="text-left text-gray-500"><th className="py-0.5">Data</th><th>Veículo</th><th className="text-right">Litros</th><th className="text-right">R$/L cobrado</th><th className="text-right">Desconto</th></tr></thead>
-                                        <tbody>
-                                          {fuels.map((f: any, i: number) => (
-                                            <tr key={i} className="border-t border-gray-100">
-                                              <td className="py-0.5">{fmtD(f.date)}</td><td>{f.equipmentName}</td><td className="text-right">{Number(f.liters).toLocaleString("pt-BR")}</td>
-                                              <td className="text-right">R$ {fmtBRL(f.precoCobrado)}</td><td className="text-right font-medium text-red-600">- R$ {fmtBRL(f.subtotal)}</td>
-                                            </tr>
-                                          ))}
-                                          <tr className="border-t border-gray-200 font-semibold"><td colSpan={4} className="py-0.5 text-right">Total desconto</td><td className="text-right text-red-600">- R$ {fmtBRL(dw.desconto ?? 0)}</td></tr>
-                                        </tbody>
-                                      </table>
-                                    )}
-                                  </div>
-                                  <div className="text-right font-semibold text-gray-800">Líquido da semana: R$ {fmtBRL(dw.valor)}</div>
-                                </div>
-                              );
-                            })}
+                            {weeks.filter((x: any) => x.cargas !== undefined && !collapsedWeeks.has(`${r.collaboratorId}:${x.weekStart}`)).map((dw: any) => (
+                              <WeekDetailCard key={dw.weekStart} dw={dw} onCollapse={() => toggleWeekDetail(r.collaboratorId, dw.weekStart)} />
+                            ))}
+                          </td>
+                        </tr>
+                      )}
+                      {/* Comissão por carga/tonelada paga no mês (não por semana): detalhamento do mês inteiro, só leitura */}
+                      {isExpanded && commissionMonth && (
+                        <tr className="border-b border-gray-50 bg-gray-50/60">
+                          <td colSpan={11} className="px-4 py-2">
+                            {commissionMonth.kind === "operador"
+                              ? <OperatorMonthCard dm={commissionMonth} title={`Detalhamento da comissão — ${monthLabel}`} />
+                              : <WeekDetailCard dw={commissionMonth} title={`Detalhamento da comissão — ${monthLabel}`} />}
                           </td>
                         </tr>
                       )}

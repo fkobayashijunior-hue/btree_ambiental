@@ -268,6 +268,16 @@ export default function ContasAReceberPage() {
     onError: () => toast.error("Falha ao atualizar valor"),
   });
 
+  const updateSituacaoMutation = trpc.sicoob.updateSituacao.useMutation({
+    onSuccess: (_r, vars) => {
+      toast.success(vars.situacao === null
+        ? "Boleto voltou ao automático — a situação do Sicoob será restaurada na próxima sincronização"
+        : "Situação do boleto atualizada");
+      refetchSummary(); refetchList();
+    },
+    onError: (e) => toast.error(`Falha ao atualizar situação: ${e.message}`),
+  });
+
   const updateReceiptBoletoMutation = trpc.sicoob.updateReceipt.useMutation({
     onSuccess: () => { toast.success("Comprovante anexado!"); refetchList(); },
     onError: (e) => toast.error(`Falha ao anexar comprovante: ${e.message}`),
@@ -854,7 +864,25 @@ export default function ContasAReceberPage() {
                       </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">{fmtMoeda(aRec)}</TableCell>
                       <TableCell>
-                        <Badge variant={sit.variant} className="text-xs">{sit.label}</Badge>
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            className={`h-7 rounded-md border px-1.5 text-xs font-medium bg-background cursor-pointer ${b.situacao === 3 ? "border-emerald-300 text-emerald-700" : b.situacao === 2 ? "border-gray-300 text-gray-500" : "border-input"}`}
+                            value={b.situacao}
+                            disabled={updateSituacaoMutation.isPending}
+                            title={b.situacao_editada ? "Situação alterada manualmente — a sincronização não sobrescreve" : "Clique para alterar a situação"}
+                            onChange={e => {
+                              const v = e.target.value;
+                              if (v === "auto") updateSituacaoMutation.mutate({ id: b.id, situacao: null });
+                              else updateSituacaoMutation.mutate({ id: b.id, situacao: Number(v) as 1 | 2 | 3 });
+                            }}
+                          >
+                            <option value={1}>Em Aberto</option>
+                            <option value={2}>Baixado (cancelado)</option>
+                            <option value={3}>Liquidado</option>
+                            {!!b.situacao_editada && <option value="auto">↺ Voltar ao automático (Sicoob)</option>}
+                          </select>
+                          {!!b.situacao_editada && <span className="text-[10px] text-amber-600 font-medium" title="Situação alterada manualmente — a sincronização não sobrescreve">manual</span>}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <ReceiptButton
