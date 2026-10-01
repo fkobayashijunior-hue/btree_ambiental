@@ -240,7 +240,7 @@ function addDaysStr(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-type WeekCommissionItem = { loadId: number; date: string; plate: string | null; dest: string | null; categoria: string; kg: number; rate: number; valor: number };
+type WeekCommissionItem = { loadId: number; date: string; plate: string | null; dest: string | null; invoice: string | null; categoria: string; kg: number; rate: number; valor: number };
 type WeekCommissionAgg = { cargas: number; quantidade: number; valor: number; items: WeekCommissionItem[] };
 type WeekBreakdown = { loads?: WeekCommissionItem[]; fuels?: DiscountRecord[]; weekStart: string; weekEnd: string; friday?: string; days?: number; cargas?: number; quantidade?: number; unit?: string; desconto?: number; valor?: number; allPaid: boolean };
 
@@ -311,9 +311,17 @@ function monthWindow(year: number, month: number): { start: string; end: string 
 // Cargas entregues que geram comissão de motorista/terceirizado naquele mês da folha. Fonte ÚNICA usada
 // pelo cálculo automático (mapa semanal) e pelo detalhamento da janela "Calculadora", pra os dois nunca
 // divergirem. Quem é pago por semana usa a regra da sexta; os demais, o mês calendário da entrega.
+// O invoice_number da carga é o número puro da NF ou "AC-XXXXX — NF ###" — devolve só o número da NF.
+function nfFromInvoiceNumber(v: any): string | null {
+  const t = String(v ?? "").trim();
+  if (!t) return null;
+  const m = t.match(/NF\s*-?\s*(\d+)\s*$/i);
+  return m ? m[1] : t;
+}
+
 async function getCommissionLoadRows(
   db: any, year: number, month: number, onlyCollaboratorId?: number
-): Promise<Array<{ collaboratorId: number; dateStr: string; categoria: string; weightKg: number; loadId: number; plate: string | null; destName: string | null }>> {
+): Promise<Array<{ collaboratorId: number; dateStr: string; categoria: string; weightKg: number; loadId: number; plate: string | null; destName: string | null; invoice: string | null }>> {
   const { start, end } = monthWindow(year, month);
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const weeklyAnchors = await getWeeklyPaidAnchors(db);
@@ -325,7 +333,7 @@ async function getCommissionLoadRows(
     sql`SELECT COALESCE(IF(eq.is_third_party = 1, NULL, cl.driver_collaborator_id), eq.responsible_driver_id) AS collaboratorId,
                cl.delivery_date AS deliveryDate, cd.commission_category AS categoria,
                COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0) AS weightKg,
-               cl.id AS loadId, COALESCE(cl.vehicle_plate, eq.license_plate) AS plate, cd.name AS destName
+               cl.id AS loadId, COALESCE(cl.vehicle_plate, eq.license_plate) AS plate, cd.name AS destName, cl.invoice_number AS invoiceNumber
         FROM cargo_loads cl
         JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
         LEFT JOIN equipment eq ON (cl.vehicle_id IS NOT NULL AND eq.id = cl.vehicle_id)
@@ -335,7 +343,7 @@ async function getCommissionLoadRows(
           AND cd.commission_category != 'nenhuma'
           AND COALESCE(IF(eq.is_third_party = 1, NULL, cl.driver_collaborator_id), eq.responsible_driver_id) IS NOT NULL`
   ) as any;
-  const out: Array<{ collaboratorId: number; dateStr: string; categoria: string; weightKg: number; loadId: number; plate: string | null; destName: string | null }> = [];
+  const out: Array<{ collaboratorId: number; dateStr: string; categoria: string; weightKg: number; loadId: number; plate: string | null; destName: string | null; invoice: string | null }> = [];
   for (const r of rows as any[]) {
     const cid = Number(r.collaboratorId);
     if (onlyCollaboratorId !== undefined && cid !== onlyCollaboratorId) continue;
@@ -345,7 +353,7 @@ async function getCommissionLoadRows(
       ? fridayOfWeekContaining(dateStr, anchor).slice(0, 7) === monthPrefix
       : dateStr.slice(0, 7) === monthPrefix;
     if (!belongs) continue;
-    out.push({ collaboratorId: cid, dateStr, categoria: r.categoria, weightKg: parseFloat(String(r.weightKg ?? 0)) || 0, loadId: Number(r.loadId), plate: r.plate ?? null, destName: r.destName ?? null });
+    out.push({ collaboratorId: cid, dateStr, categoria: r.categoria, weightKg: parseFloat(String(r.weightKg ?? 0)) || 0, loadId: Number(r.loadId), plate: r.plate ?? null, destName: r.destName ?? null, invoice: nfFromInvoiceNumber(r.invoiceNumber) });
   }
   return out;
 }
@@ -390,7 +398,7 @@ async function getWeeklyVehicleCommissionMap(
     w.cargas += 1;
     w.quantidade += quantidadeIncremento;
     w.valor += quantidadeIncremento * rate;
-    w.items.push({ loadId: r.loadId, date: r.dateStr, plate: r.plate, dest: r.destName, categoria: r.categoria, kg: r.weightKg, rate, valor: quantidadeIncremento * rate });
+    w.items.push({ loadId: r.loadId, date: r.dateStr, plate: r.plate, dest: r.destName, invoice: r.invoice, categoria: r.categoria, kg: r.weightKg, rate, valor: quantidadeIncremento * rate });
   }
   return map;
 }
@@ -431,6 +439,51 @@ async function getLiveOperadorCommissionMap(
     const tonelada = tonByClient.get(c.clientId) ?? 0;
     const numOperadores = countByClient.get(c.clientId) || 1;
     map.set(c.id, (tonelada / numOperadores) * tarifa);
+  }
+  return map;
+}
+
+// Detalhe da comissão de OPERADOR no mês: as cargas entregues pro cliente dele (toneladas líquidas) e a conta
+// toneladas ÷ nº de operadores × tarifa/ton — mesma conta de getLiveOperadorCommissionMap, só que mostrando as cargas.
+type OperadorLoad = { loadId: number; date: string; plate: string | null; dest: string | null; invoice: string | null; kg: number };
+async function getOperadorMonthDetailMap(db: any, year: number, month: number, activeCollaborators: any[]): Promise<Map<number, any>> {
+  const operadores = activeCollaborators.filter((c: any) => c.role === "operador" && c.commissionAuto !== 0 && c.clientId);
+  const map = new Map<number, any>();
+  if (operadores.length === 0) return map;
+  const [loadRows] = await db.execute(
+    sql`SELECT cl.client_id AS clientId, cl.id AS loadId, cl.delivery_date AS deliveryDate,
+               COALESCE(cl.vehicle_plate, (SELECT e.license_plate FROM equipment e WHERE e.id = cl.vehicle_id)) AS plate,
+               (SELECT d.name FROM cargo_destinations d WHERE d.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)) AS destName,
+               cl.invoice_number AS invoiceNumber, COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0) AS weightKg
+        FROM cargo_loads cl
+        WHERE cl.status = 'entregue' AND cl.delivery_date IS NOT NULL
+          AND YEAR(cl.delivery_date) = ${year} AND MONTH(cl.delivery_date) = ${month}
+        ORDER BY cl.delivery_date, cl.id`
+  ) as any;
+  const loadsByClient = new Map<number, OperadorLoad[]>();
+  for (const r of loadRows as any[]) {
+    const cid = Number(r.clientId);
+    const d = r.deliveryDate instanceof Date ? r.deliveryDate.toISOString().slice(0, 10) : String(r.deliveryDate).slice(0, 10);
+    if (!loadsByClient.has(cid)) loadsByClient.set(cid, []);
+    loadsByClient.get(cid)!.push({ loadId: Number(r.loadId), date: d, plate: r.plate ?? null, dest: r.destName ?? null, invoice: nfFromInvoiceNumber(r.invoiceNumber), kg: parseFloat(String(r.weightKg ?? 0)) || 0 });
+  }
+  const [opCountRows] = await db.execute(
+    sql`SELECT client_id AS clientId, COUNT(*) AS qtd FROM collaborators WHERE role = 'operador' AND active = 1 AND commission_auto = 1 GROUP BY client_id`
+  ) as any;
+  const countByClient = new Map<number, number>();
+  for (const r of opCountRows as any[]) countByClient.set(Number(r.clientId), Number(r.qtd));
+  const [clientRows] = await db.execute(sql`SELECT id, name FROM clients`) as any;
+  const nameByClient = new Map<number, string>();
+  for (const r of clientRows as any[]) nameByClient.set(Number(r.id), r.name);
+  const tarifa = (await getCommissionRatesMap(db)).operador_por_tonelada ?? 0;
+  for (const c of operadores) {
+    const loads = loadsByClient.get(c.clientId) ?? [];
+    const totalTonelada = loads.reduce((s, l) => s + l.kg, 0) / 1000;
+    const numOperadores = countByClient.get(c.clientId) || 1;
+    map.set(c.id, {
+      kind: "operador", clienteNome: nameByClient.get(c.clientId) ?? null, loads, cargas: loads.length,
+      totalTonelada, numOperadores, tarifa, valor: (totalTonelada / numOperadores) * tarifa,
+    });
   }
   return map;
 }
@@ -572,6 +625,7 @@ export const payrollRouter = router({
       const weeklyPaymentsMap = await getWeeklyPaymentsMap(db, input.referenceMonth);
       const weeklyCommissionMap = await getWeeklyVehicleCommissionMap(db, year, month);
       const liveOperadorCommissionMap = await getLiveOperadorCommissionMap(db, year, month, activeCollaborators);
+      const operadorMonthDetailMap = await getOperadorMonthDetailMap(db, year, month, activeCollaborators);
       const liveDiscountMap = await getLiveTerceirizadoDiscountMap(db, year, month);
       const fixedCommissionMap = await getFixedCommissionMap(db);
 
@@ -689,6 +743,33 @@ export const payrollRouter = router({
           status = weeks.length > 0 && weeks.every(w => w.allPaid) ? "pago" : "pendente";
         }
 
+        // Detalhamento da comissão do MÊS (cargas/toneladas e combustível descontado) para quem tem comissão
+        // por carga/tonelada mas NÃO é pago por semana (ex: motorista CLT/PJ com pagamento mensal). Só leitura —
+        // a forma de pagamento da comissão não muda. Quem já é pago por semana (ex: Ruan) recebe o detalhe
+        // por semana em `weeks`.
+        const hasLoadCommission = (c.role === "motorista" || c.role === "terceirizado") && c.commissionAuto !== 0 && c.commissionUnit !== "fixo";
+        let commissionMonth: any = null;
+        if (hasLoadCommission && !weeklyFixed) {
+          const weekMap = weeklyCommissionMap.get(c.id);
+          const loads = weekMap ? Array.from(weekMap.values()).flatMap(w => w.items).sort((x, y) => String(x.date).localeCompare(String(y.date))) : [];
+          const fuels = c.role === "terceirizado" ? [...(discountInfo?.records ?? [])].sort((x: any, y: any) => String(x.date).localeCompare(String(y.date))) : [];
+          if (loads.length > 0 || fuels.length > 0) {
+            const desconto = c.role === "terceirizado" ? (discountInfo?.total ?? 0) : 0;
+            commissionMonth = {
+              cargas: loads.length,
+              quantidade: loads.reduce((sum, l) => sum + (c.commissionUnit === "tonelada" ? l.kg / 1000 : 1), 0),
+              unit: c.commissionUnit,
+              loads,
+              fuels,
+              desconto,
+              valor: loads.reduce((sum, l) => sum + l.valor, 0) - desconto,
+            };
+          }
+        }
+
+        // Operador: detalhe do mês = cargas do cliente (toneladas líquidas) e a conta da comissão.
+        if (c.role === "operador" && c.commissionAuto !== 0) commissionMonth = operadorMonthDetailMap.get(c.id) ?? null;
+
         return {
           id: saved?.id ?? null,
           collaboratorId: c.id,
@@ -713,6 +794,7 @@ export const payrollRouter = router({
           commissionPaidAt: (daily || weeklyFixed) ? null : (saved?.commissionPaidAt ?? null),
           isDraft: !saved,
           weeks,
+          commissionMonth,
         };
       }).sort((a: any, b: any) => a.name.localeCompare(b.name, "pt-BR"));
 
@@ -1066,7 +1148,7 @@ export const payrollRouter = router({
         const total = items.reduce((s: number, i: any) => s + i.subtotal, 0);
         // Detalhamento cargo a carga e, pra Terceirizado, abastecimentos descontados (mesma fonte do cálculo).
         const loads = [...loadRows].sort((a, b) => a.dateStr.localeCompare(b.dateStr))
-          .map(lr => ({ loadId: lr.loadId, date: lr.dateStr, plate: lr.plate, dest: lr.destName, categoria: lr.categoria, kg: lr.weightKg }));
+          .map(lr => ({ loadId: lr.loadId, date: lr.dateStr, plate: lr.plate, dest: lr.destName, invoice: lr.invoice, categoria: lr.categoria, kg: lr.weightKg }));
         let fuels: DiscountRecord[] = [];
         if (collab.role === "terceirizado") {
           const dm = await getLiveTerceirizadoDiscountMap(db, year, month);
@@ -1096,7 +1178,8 @@ export const payrollRouter = router({
         const numOperadores = input.numOperadoresOverride ?? numOperadoresAuto;
         const tarifa = rates.operador_por_tonelada ?? 0;
         const total = (totalTonelada / numOperadores) * tarifa;
-        return { tipo: "operador" as const, periodoBase, clienteNome, totalTonelada, numOperadores, numOperadoresAuto, tarifa, total, rates };
+        const detalhe = (await getOperadorMonthDetailMap(db, year, month, [collab])).get(collab.id);
+        return { tipo: "operador" as const, periodoBase, clienteNome, totalTonelada, numOperadores, numOperadoresAuto, tarifa, total, rates, loads: (detalhe?.loads ?? []) as OperadorLoad[] };
       }
 
       return { tipo: "outro" as const, periodoBase, rates };

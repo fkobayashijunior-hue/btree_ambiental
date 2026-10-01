@@ -304,10 +304,24 @@ async function autoMarkNfPaidFromBoleto(db: any, nfReferente: string, cnpjPagado
 }
 
 // ── Função de sync reutilizável (usada pelo cron e pelo endpoint manual) ──
+// Situação do boleto alterada manualmente (ex: boleto emitido errado que não dá pra cancelar no Sicoob):
+// a coluna marca que a sincronização NÃO deve sobrescrever a situação daquele boleto. Criada no primeiro
+// uso (idempotente), pra não depender da trava de 6h da migração automática.
+let boletoSituacaoSchemaReady: Promise<void> | null = null;
+function ensureBoletoSituacaoColumn(db: any): Promise<void> {
+  if (!boletoSituacaoSchemaReady) {
+    boletoSituacaoSchemaReady = (async () => {
+      try { await db.$client.execute(`ALTER TABLE sicoob_boletos ADD COLUMN situacao_editada TINYINT NOT NULL DEFAULT 0`); } catch {}
+    })();
+  }
+  return boletoSituacaoSchemaReady;
+}
+
 export async function syncSicoobBoletos() {
   const { getDb } = await import("../db");
   const db = await getDb();
   if (!db) return { synced: 0, errors: [] as string[] };
+  await ensureBoletoSituacaoColumn(db);
 
   // Buscar todos os CNPJs ativos de compradores
   const [rows] = await db.execute(
@@ -400,7 +414,7 @@ export async function syncSicoobBoletos() {
             valor: sql`IF(valor_editado = 1, valor, ${valor})`,
             dataVencimento: dataVenc,
             dataPagamento: dataPag,
-            situacao,
+            situacao: sql`IF(situacao_editada = 1, situacao, ${situacao})`,
             sincronizadoEm: sql`NOW()`,
           },
         });
@@ -410,6 +424,9 @@ export async function syncSicoobBoletos() {
         // automaticamente, sem precisar trocar o Status NF manualmente na tela.
         if (situacao === 3 && nfReferente) {
           try {
+            const [chk] = await db.$client.execute(`SELECT situacao, situacao_editada FROM sicoob_boletos WHERE nosso_numero = ?`, [Number(nossoNumero)]) as any;
+            const atual = (chk as any[])[0];
+            if (atual && Number(atual.situacao_editada) === 1 && Number(atual.situacao) !== 3) continue; // marcado à mão como não liquidado
             await autoMarkNfPaidFromBoleto(db, nfReferente, cnpjPagador, dataPag);
           } catch (e: any) {
             console.warn(`[SicoobSync] Falha ao marcar NF ${nfReferente} como paga automaticamente:`, e?.message);
@@ -882,6 +899,7 @@ export const sicoobRouter = router({
           ? [`%${input.pesquisa}%`, `%${input.pesquisa}%`]
           : [];
 
+        await ensureBoletoSituacaoColumn(db);
         const [rows] = await db.$client.execute(
           `SELECT * FROM sicoob_boletos
            WHERE data_vencimento LIKE ?
@@ -1062,6 +1080,23 @@ export const sicoobRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB indisponível");
       await db.$client.execute(`UPDATE sicoob_boletos SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
+      return { success: true };
+    }),
+
+  // Altera a situação do boleto à mão (1=em aberto, 2=baixado/cancelado, 3=liquidado). `null` devolve o boleto
+  // ao automático: a próxima sincronização volta a seguir a situação que vier do Sicoob.
+  updateSituacao: moduleProcedure("contas-a-receber")
+    .input(z.object({ id: z.number(), situacao: z.union([z.literal(1), z.literal(2), z.literal(3), z.null()]) }))
+    .mutation(async ({ input }) => {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      await ensureBoletoSituacaoColumn(db);
+      if (input.situacao === null) {
+        await db.$client.execute(`UPDATE sicoob_boletos SET situacao_editada = 0 WHERE id = ?`, [input.id]);
+      } else {
+        await db.$client.execute(`UPDATE sicoob_boletos SET situacao = ?, situacao_editada = 1 WHERE id = ?`, [input.situacao, input.id]);
+      }
       return { success: true };
     }),
 
