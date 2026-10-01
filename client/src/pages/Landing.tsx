@@ -3,11 +3,11 @@ import { getLoginUrl } from "@/const";
 
 // CDN Assets
 const BTREE_LOGO = "/icon-btree-512.png";
-const IMG_PARCEIRO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/btree-parceiro-eucalipto_db7a6c0f.jpeg";
-const IMG_JAPAO_PR = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/btree-japao-parana_34091df8.jpeg";
-const IMG_PAGAMENTO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/btree-pagamento-justo_bbae9d14.jpeg";
-const IMG_MUDA = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/btree-muda-futuro_03d08384.jpeg";
-const IMG_CULTIVANDO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663162723291/MXrNdjKBoryW8SZbHmjeHH/btree-cultivando-futuro_02818d3f.jpeg";
+const IMG_PARCEIRO = "/images/btree-parceiro-eucalipto.jpg";
+const IMG_JAPAO_PR = "/images/btree-japao-parana.jpg";
+const IMG_PAGAMENTO = "/images/btree-pagamento-justo.jpg";
+const IMG_MUDA = "/images/btree-muda-futuro.jpg";
+const IMG_CULTIVANDO = "/images/btree-cultivando-futuro.jpg";
 
 export default function Landing() {
   const [scrolled, setScrolled] = useState(false);
@@ -242,8 +242,7 @@ export default function Landing() {
               <img
                 src={IMG_JAPAO_PR}
                 alt="Do Japão para o Paraná"
-                className="rounded-3xl shadow-2xl w-full object-cover"
-                style={{ maxHeight: "500px" }}
+                className="rounded-3xl shadow-2xl w-full max-w-md mx-auto h-auto"
               />
               <div className="absolute -bottom-6 -right-6 bg-[#2e7d32] text-white rounded-2xl p-5 shadow-xl">
                 <div className="text-2xl font-black">Astorga-PR</div>
@@ -284,17 +283,12 @@ export default function Landing() {
 
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { src: IMG_PAGAMENTO, alt: "Pagamento justo", title: "Pagamento justo,\nparceria verdadeira.", sub: "Respeito e transparência em cada negócio" },
-              { src: IMG_MUDA, alt: "De uma muda", title: "De uma muda,\nnasce um futuro verde.", sub: "Cuidamos de cada etapa com respeito à natureza" },
-              { src: IMG_CULTIVANDO, alt: "Cultivando", title: "Cultivando um Futuro\nSustentável Desde a Raiz.", sub: "Da venda de mudas ao corte e reflorestamento" },
+              { src: IMG_PAGAMENTO, alt: "Pagamento justo, parceria verdadeira", pos: "50% 50%" },
+              { src: IMG_MUDA, alt: "De uma muda, nasce um futuro verde", pos: "50% 50%" },
+              { src: IMG_CULTIVANDO, alt: "Cultivando um futuro sustentável desde a raiz. Da venda de mudas ao corte e reflorestamento", pos: "36% 50%" },
             ].map((card) => (
-              <div key={card.alt} className="relative rounded-3xl overflow-hidden group cursor-pointer shadow-lg">
-                <img src={card.src} alt={card.alt} className="w-full h-80 object-cover group-hover:scale-105 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-6">
-                  <h3 className="text-white font-black text-xl mb-1 whitespace-pre-line">{card.title}</h3>
-                  <p className="text-green-300 text-sm">{card.sub}</p>
-                </div>
+              <div key={card.alt} className="rounded-3xl overflow-hidden group shadow-lg aspect-[4/5]">
+                <img src={card.src} alt={card.alt} style={{ objectPosition: card.pos }} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               </div>
             ))}
           </div>
@@ -333,7 +327,7 @@ export default function Landing() {
               </div>
             </div>
             <div className="relative">
-              <img src={IMG_PARCEIRO} alt="Parceiro completo" className="rounded-3xl shadow-2xl w-full object-cover" style={{ maxHeight: "520px" }} />
+              <img src={IMG_PARCEIRO} alt="Parceiro completo" className="rounded-3xl shadow-2xl w-full max-w-md mx-auto h-auto" />
             </div>
           </div>
         </div>
