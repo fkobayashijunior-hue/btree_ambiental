@@ -18220,6 +18220,23 @@ var stockRouter = router({
     );
     return { success: true };
   }),
+  // Exclusão só de produto SEM histórico (movimentação ou empréstimo/devolução): excluir apagaria a
+  // rastreabilidade. Produto que já foi usado deve ser marcado como inativo em "Editar".
+  deleteProduct: adminProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
+    return withTx(async (conn) => {
+      const [p] = await conn.execute(`SELECT id, name FROM stock_products WHERE id = ? FOR UPDATE`, [input.id]);
+      if (!p[0]) throw new TRPCError27({ code: "NOT_FOUND", message: "Produto n\xE3o encontrado" });
+      const [mv] = await conn.execute(`SELECT COUNT(*) AS n FROM stock_movements WHERE product_id = ?`, [input.id]);
+      const [ln] = await conn.execute(`SELECT COUNT(*) AS n FROM stock_loans WHERE product_id = ?`, [input.id]);
+      if (num(mv[0].n) > 0 || num(ln[0].n) > 0) {
+        throw new TRPCError27({ code: "BAD_REQUEST", message: `"${p[0].name}" j\xE1 tem movimenta\xE7\xF5es no estoque e n\xE3o pode ser exclu\xEDdo (isso apagaria o hist\xF3rico). Abra "Editar" e desmarque "Ativo" para tir\xE1-lo de uso.` });
+      }
+      await conn.execute(`UPDATE purchase_request_items SET stock_product_id = NULL WHERE stock_product_id = ?`, [input.id]);
+      await conn.execute(`DELETE FROM stock_balances WHERE product_id = ?`, [input.id]);
+      await conn.execute(`DELETE FROM stock_products WHERE id = ?`, [input.id]);
+      return { success: true };
+    });
+  }),
   // Sugere produtos a partir dos itens já comprados (nomes distintos, ainda fora do catálogo) — importação assistida.
   suggestProductsFromPurchases: moduleProcedure("estoque").query(async () => {
     const pool = await getPool();
@@ -19044,6 +19061,25 @@ async function applyPurchaseQuotationDecision(db, params) {
   }
   return { success: true, status: nextStatus };
 }
+var directPurchaseSchemaReady = null;
+function ensureDirectPurchaseSchema(db) {
+  if (!directPurchaseSchemaReady) {
+    directPurchaseSchemaReady = (async () => {
+      try {
+        await db.execute(sql23`ALTER TABLE purchase_requests ADD COLUMN is_direct_purchase TINYINT NOT NULL DEFAULT 0`);
+      } catch {
+      }
+      try {
+        await db.execute(sql23`ALTER TABLE purchase_requests ADD COLUMN purchased_by_collaborator_id INT NULL`);
+      } catch {
+      }
+    })().catch((e) => {
+      directPurchaseSchemaReady = null;
+      throw e;
+    });
+  }
+  return directPurchaseSchemaReady;
+}
 var URGENCY_TO_DB = {
   baixa: "low",
   media: "medium",
@@ -19113,6 +19149,19 @@ var purchaseRequestsRouter = router({
     const [cols] = await db.execute(`SHOW COLUMNS FROM purchase_requests`);
     return cols.map((c) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
   }),
+  // Todos os equipamentos cadastrados em "Setores e Máquinas" (veículos, máquinas, tratores, implementos...),
+  // pra escolher no formulário de compra. Sem o filtro por cliente de sectors.listEquipment: quem compra
+  // precisa enxergar o equipamento mesmo que ele não pertença a um dos seus clientes liberados.
+  listEquipmentOptions: moduleProcedure("compras").query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    const [rows] = await db.execute(sql23`
+      SELECT e.id, e.name, e.license_plate AS licensePlate, t.name AS typeName
+      FROM equipment e LEFT JOIN equipment_types t ON t.id = e.type_id
+      ORDER BY e.name
+    `);
+    return rows;
+  }),
   list: moduleProcedure("compras").input(z39.object({
     status: statusEnum.optional(),
     urgency: urgencyEnum.optional(),
@@ -19120,6 +19169,7 @@ var purchaseRequestsRouter = router({
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    await ensureDirectPurchaseSchema(db);
     const [rows] = await db.execute(`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
@@ -19149,6 +19199,8 @@ var purchaseRequestsRouter = router({
           pr.payment_method AS paymentMethod,
           pr.invoice_url AS invoiceUrl,
           pr.receipt_url AS receiptUrl,
+          pr.is_direct_purchase AS isDirectPurchase,
+          (SELECT c.name FROM collaborators c WHERE c.id = pr.purchased_by_collaborator_id) AS purchasedByName,
           pr.notes,
           pr.created_at AS createdAt,
           pr.updated_at AS updatedAt
@@ -19181,6 +19233,7 @@ var purchaseRequestsRouter = router({
   getById: moduleProcedure("compras").input(z39.object({ id: z39.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    await ensureDirectPurchaseSchema(db);
     const [rows] = await db.execute(sql23`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
@@ -19210,6 +19263,8 @@ var purchaseRequestsRouter = router({
           pr.payment_method AS paymentMethod,
           pr.invoice_url AS invoiceUrl,
           pr.receipt_url AS receiptUrl,
+          pr.is_direct_purchase AS isDirectPurchase,
+          (SELECT c.name FROM collaborators c WHERE c.id = pr.purchased_by_collaborator_id) AS purchasedByName,
           pr.notes,
           pr.created_at AS createdAt,
           pr.updated_at AS updatedAt
@@ -19400,6 +19455,11 @@ var purchaseRequestsRouter = router({
   delete: moduleProcedure("compras").input(z39.object({ id: z39.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    const [mv] = await db.execute(sql23`SELECT COUNT(*) AS n FROM stock_movements WHERE purchase_request_id = ${input.id}`);
+    if (Number(mv[0]?.n ?? 0) > 0) {
+      throw new TRPCError29({ code: "BAD_REQUEST", message: "Essa solicita\xE7\xE3o j\xE1 deu entrada no estoque e n\xE3o pode ser exclu\xEDda (o hist\xF3rico do estoque aponta pra ela)." });
+    }
+    await db.execute(sql23`UPDATE quotations SET purchase_request_id = NULL WHERE purchase_request_id = ${input.id}`);
     await db.execute(sql23`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
     await db.execute(sql23`DELETE FROM purchase_requests WHERE id = ${input.id}`);
     return { success: true };
@@ -19444,6 +19504,116 @@ var purchaseRequestsRouter = router({
     const nextStatus = ALLOWED_TRANSITIONS[prStatusNorm]?.includes("analisando") ? "analisando" : prStatusNorm;
     await db.execute(sql23`UPDATE purchase_requests SET quotation_request_id = ${quotationRequestId}, status = ${nextStatus}, updated_at = NOW() WHERE id = ${input.id}`);
     return { quotationRequestId, token };
+  }),
+  // Compra feita direto por um colaborador, SEM solicitação prévia — registra tudo de uma vez pra
+  // ficar rastreável: cria a solicitação já como "Comprada" (selo "Compra direta"), com fornecedor,
+  // valor, nota fiscal (obrigatória), quem comprou e equipamento. Depois segue o fluxo normal
+  // (Receber no estoque quando o item chegar).
+  registerDirectPurchase: moduleProcedure("compras").input(z39.object({
+    title: z39.string().max(255).optional(),
+    supplierId: z39.number({ error: "Informe o fornecedor" }),
+    categoryId: z39.number().nullable().optional(),
+    equipmentId: z39.number().nullable().optional(),
+    paymentMethod: z39.enum(["boleto", "pix", "cartao_credito", "cartao_debito", "dinheiro", "transferencia", "outro"]).optional(),
+    purchaseDate: z39.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    purchasedByCollaboratorId: z39.number().optional(),
+    invoiceUrl: z39.string({ error: "Anexe a nota fiscal" }).url("Anexe a nota fiscal"),
+    receiptUrl: z39.string().url().optional(),
+    notes: z39.string().optional(),
+    items: z39.array(z39.object({
+      name: z39.string().min(1),
+      quantity: z39.number().positive(),
+      unit: z39.string().max(50).default("un"),
+      unitPrice: z39.number().min(0)
+    })).min(1, "Adicione ao menos um item")
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    await ensureDirectPurchaseSchema(db);
+    const [supRows] = await db.execute(sql23`SELECT company_name FROM suppliers WHERE id = ${input.supplierId} LIMIT 1`);
+    const supplierName = supRows[0]?.company_name;
+    if (!supplierName) throw new TRPCError29({ code: "NOT_FOUND", message: "Fornecedor n\xE3o encontrado" });
+    const status = "comprada";
+    const total = input.items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+    const nowMs = Date.now();
+    const purchasedMs = input.purchaseDate ? (/* @__PURE__ */ new Date(input.purchaseDate + "T12:00:00")).getTime() : nowMs;
+    const title = input.title?.trim() || `${input.items[0].name}${input.items.length > 1 ? ` (+${input.items.length - 1})` : ""}`;
+    const breakdown = JSON.stringify([{ supplierId: input.supplierId, supplierName, subtotal: total }]);
+    const pool = db.$client;
+    const conn = await pool.getConnection();
+    let requestId;
+    try {
+      await conn.beginTransaction();
+      const [res] = await conn.execute(
+        `INSERT INTO purchase_requests
+             (title, notes, category_id, equipment_id, status, urgency, requested_at, requested_by, purchased_at,
+              winning_supplier_id, final_price, suppliers_breakdown, payment_method, invoice_url, receipt_url,
+              responded_by, responded_at, is_direct_purchase, purchased_by_collaborator_id, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),1,?,NOW(),NOW())`,
+        [
+          title,
+          input.notes || null,
+          input.categoryId ?? null,
+          input.equipmentId ?? null,
+          status,
+          URGENCY_TO_DB.media,
+          nowMs,
+          ctx.user.id,
+          purchasedMs,
+          input.supplierId,
+          total.toFixed(2),
+          breakdown,
+          input.paymentMethod ?? null,
+          input.invoiceUrl,
+          input.receiptUrl ?? null,
+          ctx.user.id,
+          input.purchasedByCollaboratorId ?? null
+        ]
+      );
+      requestId = res.insertId;
+      for (const it of input.items) {
+        await conn.execute(
+          `INSERT INTO purchase_request_items (request_id, name, quantity, unit, confirmed) VALUES (?,?,?,?,0)`,
+          [requestId, it.name.trim(), String(it.quantity), it.unit || "un"]
+        );
+        await conn.execute(
+          `INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, purchase_request_id, created_by, created_at)
+             VALUES (?,?,?,?,?,?,?,'BRL',?,?,?,NOW())`,
+          [
+            input.supplierId,
+            input.categoryId ?? null,
+            it.name.trim(),
+            it.unit || "un",
+            String(it.quantity),
+            it.unitPrice.toFixed(2),
+            (it.unitPrice * it.quantity).toFixed(2),
+            purchasedMs,
+            requestId,
+            ctx.user.id
+          ]
+        );
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback().catch(() => {
+      });
+      throw err;
+    } finally {
+      conn.release();
+    }
+    let buyerName = ctx.user.name || "Um colaborador";
+    if (input.purchasedByCollaboratorId) {
+      const [cr] = await db.execute(sql23`SELECT name FROM collaborators WHERE id = ${input.purchasedByCollaboratorId} LIMIT 1`);
+      buyerName = cr[0]?.name || buyerName;
+    }
+    await notifyFinanceiro({
+      type: "geral",
+      title: `Compra direta registrada: ${title}`,
+      message: `${buyerName} registrou uma compra direta em "${supplierName}" no valor de R$ ${total.toFixed(2).replace(".", ",")} (nota fiscal anexada).`,
+      relatedId: requestId,
+      relatedType: "purchase_request"
+    }).catch((e) => console.error("[registerDirectPurchase] Falha ao notificar financeiro:", e?.message));
+    return { id: requestId, status, success: true };
   }),
   // Grava a decisão de compra (fornecedor vencedor + preço por item) direto pela tela
   // da Solicitação de Compra — usado pra "Compra Direta" (site/loja, sem orçamento).
@@ -19940,8 +20110,8 @@ var quotationRequestsRouter = router({
   // (quotations) daquele fornecedor/categoria como consumidas por esta compra.
   confirmPurchaseDecision: moduleProcedure("orcamentos").input(z41.object({
     quotationRequestId: z41.number(),
-    paymentMethod: z41.enum(["boleto", "pix", "cartao_credito", "cartao_debito", "dinheiro", "transferencia", "outro"]).optional(),
-    invoiceUrl: z41.string().url().optional(),
+    paymentMethod: z41.enum(["boleto", "pix", "cartao_credito", "cartao_debito", "dinheiro", "transferencia", "outro"], { error: "Informe a forma de pagamento" }),
+    invoiceUrl: z41.string({ error: "Anexe a nota fiscal" }).url("Anexe a nota fiscal"),
     receiptUrl: z41.string().url().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -22390,6 +22560,7 @@ init_sicoob();
 init_trpc();
 import { z as z48 } from "zod";
 import axios2 from "axios";
+import zlib from "zlib";
 
 // server/utils/feriadosBrasil.ts
 function toISO(ano, mes, dia) {
@@ -22672,6 +22843,76 @@ async function caGetXml(path4) {
   });
   return typeof res.data === "string" ? res.data : JSON.stringify(res.data);
 }
+async function caGetBuffer(path4) {
+  const token = await getContaAzulToken();
+  const res = await axios2.get(`${BASE_URL}${path4}`, {
+    responseType: "arraybuffer",
+    headers: { Authorization: `Bearer ${token}`, Accept: "*/*" }
+  });
+  return Buffer.from(res.data);
+}
+function lerArquivosDoZip(buf) {
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (buf.readUInt32LE(i) === 101010256) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) return [];
+  const total = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const out = [];
+  for (let k = 0; k < total; k++) {
+    if (buf.readUInt32LE(p) !== 33639248) break;
+    const method = buf.readUInt16LE(p + 10);
+    const csize = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), commentLen = buf.readUInt16LE(p + 32);
+    const localOffset = buf.readUInt32LE(p + 42);
+    const name2 = buf.toString("utf8", p + 46, p + 46 + nameLen);
+    const dataStart = localOffset + 30 + buf.readUInt16LE(localOffset + 26) + buf.readUInt16LE(localOffset + 28);
+    const raw = buf.subarray(dataStart, dataStart + csize);
+    out.push({ name: name2, text: (method === 8 ? zlib.inflateRawSync(raw) : raw).toString("utf8") });
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+function temEventoDeCancelamento(xmls) {
+  return xmls.some((x) => x.includes("<tpEvento>110111</tpEvento>") && /<cStat>(135|155)<[/]cStat>/.test(x));
+}
+async function reconciliarNotasCanceladas(db, chavesListadas, inicioStr, fimStr) {
+  const [rows] = await db.$client.execute(
+    `SELECT id, chave_acesso, numero_nota, status_nf_interno FROM notas_fiscais
+      WHERE data_emissao BETWEEN ? AND ? AND status_nf_interno != 'cancelado'`,
+    [inicioStr, fimStr]
+  );
+  const candidatas = rows.filter((r) => r.chave_acesso && !chavesListadas.has(r.chave_acesso));
+  const canceladas = [];
+  const erros = [];
+  for (let i = 0; i < candidatas.length; i += 3) {
+    await Promise.all(candidatas.slice(i, i + 3).map(async (nf) => {
+      try {
+        const buf = await caGetBuffer(`/v1/notas-fiscais/${nf.chave_acesso}`);
+        const xmls = buf.subarray(0, 2).toString() === "PK" ? lerArquivosDoZip(buf).map((f) => f.text) : [buf.toString("utf8")];
+        if (!temEventoDeCancelamento(xmls)) return;
+        await db.$client.execute(
+          `UPDATE notas_fiscais SET status_nf_interno = 'cancelado', status_fiscal_conta_azul = 'CANCELADA' WHERE id = ?`,
+          [nf.id]
+        );
+        await db.$client.execute(
+          `INSERT INTO notas_fiscais_status_log (nota_fiscal_id, campo, valor_anterior, valor_novo, usuario_id, usuario_nome, alterado_em)
+           VALUES (?, 'status_nf_interno', ?, 'cancelado', NULL, 'Sistema (Conta Azul)', NOW())`,
+          [nf.id, nf.status_nf_interno ?? "em_aberto"]
+        );
+        canceladas.push(String(nf.numero_nota));
+        console.log(`[ContaAzul] NF ${nf.numero_nota} cancelada (evento de cancelamento encontrado no detalhe)`);
+      } catch (e) {
+        erros.push(`NF ${nf.numero_nota}: ${e?.response?.data?.message ?? e?.message ?? "Erro"}`);
+      }
+    }));
+  }
+  return { verificadas: candidatas.length, canceladas, erros };
+}
 function extractTag(xml, tag) {
   const m = xml.match(new RegExp(`<${tag}[^>]*>([^<]+)</${tag}>`));
   return m?.[1]?.trim() ?? null;
@@ -22856,6 +23097,15 @@ async function syncNotasFiscais(mes, ano) {
         errors.push(`NF ${chave}: ${msg}`);
       }
     }));
+  }
+  try {
+    const pad = (n) => String(n).padStart(2, "0");
+    const listadas = new Set(allNFs.map((nf) => nf.chave_acesso ?? nf.chaveAcesso).filter(Boolean));
+    const rec = await reconciliarNotasCanceladas(db, listadas, `${ano}-${pad(mes)}-01`, `${ano}-${pad(mes)}-${pad(fim.getDate())}`);
+    errors.push(...rec.erros);
+    console.log(`[ContaAzul] Cancelamentos: ${rec.verificadas} nota(s) fora da listagem verificada(s), ${rec.canceladas.length} cancelada(s)${rec.canceladas.length ? ` (NF ${rec.canceladas.join(", ")})` : ""}`);
+  } catch (e) {
+    errors.push(`Verifica\xE7\xE3o de cancelamentos: ${e?.message ?? "Erro"}`);
   }
   console.log(`[ContaAzul] Sync conclu\xEDdo: ${synced} NFs | Erros: ${errors.length}`);
   return { synced, errors };
@@ -25909,6 +26159,20 @@ async function runAutoMigrations() {
       await db.execute(
         /*sql*/
         `ALTER TABLE purchase_request_items ADD COLUMN package_unit VARCHAR(10) NULL`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN is_direct_purchase TINYINT NOT NULL DEFAULT 0`
+      );
+    } catch (e) {
+    }
+    try {
+      await db.execute(
+        /*sql*/
+        `ALTER TABLE purchase_requests ADD COLUMN purchased_by_collaborator_id INT NULL`
       );
     } catch (e) {
     }

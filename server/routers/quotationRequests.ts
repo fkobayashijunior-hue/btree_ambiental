@@ -437,8 +437,8 @@ export const quotationRequestsRouter = router({
   confirmPurchaseDecision: moduleProcedure("orcamentos")
     .input(z.object({
       quotationRequestId: z.number(),
-      paymentMethod: z.enum(['boleto', 'pix', 'cartao_credito', 'cartao_debito', 'dinheiro', 'transferencia', 'outro']).optional(),
-      invoiceUrl: z.string().url().optional(),
+      paymentMethod: z.enum(['boleto', 'pix', 'cartao_credito', 'cartao_debito', 'dinheiro', 'transferencia', 'outro'], { error: "Informe a forma de pagamento" }),
+      invoiceUrl: z.string({ error: "Anexe a nota fiscal" }).url("Anexe a nota fiscal"),
       receiptUrl: z.string().url().optional(),
     }))
     .mutation(async ({ input, ctx }) => {

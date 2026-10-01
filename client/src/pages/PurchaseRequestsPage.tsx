@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import ReceiveStockDialog from "@/components/ReceiveStockDialog";
+import DirectPurchaseDialog from "@/components/DirectPurchaseDialog";
 import {
   Plus, ShoppingCart, AlertTriangle, Clock, CheckCircle2, Package,
   ExternalLink, Image, Trash2, ChevronRight, Filter, X, Paperclip, ArrowUp, ArrowDown, ArrowUpDown
@@ -87,6 +88,7 @@ function sortValue(r: any, field: string): string | number | null {
     case 'requester': return txt(r.requestedByName);
     case 'requestDate': return dateMs(r.requestDate);
     case 'status': return STATUS_RANK[r.status] ?? 99;
+    case 'value': { const n = parseFloat(String(r.finalPrice ?? '').replace(',', '.')); return isNaN(n) ? null : n; }
     case 'responsible': return txt(r.respondedByName);
     case 'purchaseDate': return dateMs(r.purchaseDate);
     case 'expectedArrival': return dateMs(r.expectedArrival);
@@ -117,7 +119,7 @@ function SortTh({ label, field, sort, onSort, className = '' }: {
   const active = sort?.field === field;
   return (
     <th
-      className={`px-3 py-2 text-left text-xs font-semibold cursor-pointer select-none hover:bg-green-800/40 ${className}`}
+      className={`sticky top-0 z-10 bg-green-700 px-3 py-2 text-left text-xs font-semibold cursor-pointer select-none hover:bg-green-800 ${className}`}
       onClick={() => onSort(field)}
     >
       <span className="inline-flex items-center gap-1">
@@ -145,10 +147,13 @@ export default function PurchaseRequestsPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [receivingId, setReceivingId] = useState<number | null>(null);
+  const [deletingReq, setDeletingReq] = useState<{ id: number; title: string } | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterUrgency, setFilterUrgency] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterEquipment, setFilterEquipment] = useState<string>('all');
+  const [filterOrigin, setFilterOrigin] = useState<string>('all');
+  const [showDirectPurchase, setShowDirectPurchase] = useState(false);
   const [searchText, setSearchText] = useState<string>('');
   const [sort, setSort] = useState<SortState>(null);
   const toggleSort = (field: string) =>
@@ -167,7 +172,7 @@ export default function PurchaseRequestsPage() {
 
   const { data: requests, isLoading } = trpc.purchaseRequests.list.useQuery();
   const { data: categories } = trpc.purchaseCategories.list.useQuery();
-  const { data: equipmentList } = trpc.cargoLoads.listTrucks.useQuery();
+  const { data: equipmentList } = trpc.purchaseRequests.listEquipmentOptions.useQuery();
 
   const createMutation = trpc.purchaseRequests.create.useMutation({
     onSuccess: async (data) => {
@@ -193,7 +198,9 @@ export default function PurchaseRequestsPage() {
     onSuccess: () => {
       utils.purchaseRequests.list.invalidate();
       toast.success("Solicitação excluída");
+      setDeletingReq(null);
     },
+    onError: (e) => toast.error(e.message || "Erro ao excluir solicitação"),
   });
 
   function fileToBase64(file: File): Promise<string> {
@@ -264,6 +271,8 @@ export default function PurchaseRequestsPage() {
     if (filterUrgency !== 'all' && r.urgency !== filterUrgency) return false;
     if (filterCategory !== 'all' && String(r.categoryId) !== filterCategory) return false;
     if (filterEquipment !== 'all' && String(r.equipmentId || '') !== filterEquipment) return false;
+    if (filterOrigin === 'direta' && !r.isDirectPurchase) return false;
+    if (filterOrigin === 'solicitacao' && r.isDirectPurchase) return false;
     if (searchText.trim()) {
       const s = searchText.toLowerCase();
       const hay = `${r.title || ''} ${r.description || ''} ${r.equipmentName || ''} ${r.categoryName || ''} ${r.requestedByName || ''}`.toLowerCase();
@@ -272,8 +281,6 @@ export default function PurchaseRequestsPage() {
     return true;
   });
 
-  const pendingCount = (requests || []).filter(r => r.status === 'pendente').length;
-  const criticalCount = (requests || []).filter(r => r.urgency === 'critica').length;
 
   return (
     <div className="p-4 space-y-4">
@@ -286,31 +293,14 @@ export default function PurchaseRequestsPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Gerencie pedidos de peças e materiais</p>
         </div>
-        <Button onClick={() => setShowForm(true)} className="bg-green-600 hover:bg-green-700">
-          <Plus className="w-4 h-4 mr-2" /> Nova Solicitação
-        </Button>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardContent className="p-3 text-center">
-            <div className="text-2xl font-bold text-yellow-700">{pendingCount}</div>
-            <div className="text-xs text-yellow-600">Pendentes</div>
-          </CardContent>
-        </Card>
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-3 text-center">
-            <div className="text-2xl font-bold text-red-700">{criticalCount}</div>
-            <div className="text-xs text-red-600">Críticas</div>
-          </CardContent>
-        </Card>
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-3 text-center">
-            <div className="text-2xl font-bold text-green-700">{(requests || []).length}</div>
-            <div className="text-xs text-green-600">Total</div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setShowDirectPurchase(true)} className="border-green-600 text-green-700 hover:bg-green-50">
+            <ShoppingCart className="w-4 h-4 mr-2" /> Registrar compra direta
+          </Button>
+          <Button onClick={() => setShowForm(true)} className="bg-green-600 hover:bg-green-700">
+            <Plus className="w-4 h-4 mr-2" /> Nova Solicitação
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -358,7 +348,7 @@ export default function PurchaseRequestsPage() {
               <SelectContent>
                 <SelectItem value="all">Todos equipamentos</SelectItem>
                 {(equipmentList || []).map((e: any) => (
-                  <SelectItem key={e.id} value={String(e.id)}>{e.name}{e.licensePlate ? ` (${e.licensePlate})` : ''}</SelectItem>
+                  <SelectItem key={e.id} value={String(e.id)}>{e.name}{e.licensePlate ? ` (${e.licensePlate})` : ''}{e.typeName ? ` — ${e.typeName}` : ''}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -368,9 +358,19 @@ export default function PurchaseRequestsPage() {
               placeholder="Buscar..."
               className="w-40 h-8 text-xs"
             />
-            {(filterStatus !== 'all' || filterUrgency !== 'all' || filterCategory !== 'all' || filterEquipment !== 'all' || searchText.trim()) && (
+            <Select value={filterOrigin} onValueChange={setFilterOrigin}>
+              <SelectTrigger className="w-40 h-8 text-xs">
+                <SelectValue placeholder="Origem" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toda origem</SelectItem>
+                <SelectItem value="direta">Compra direta</SelectItem>
+                <SelectItem value="solicitacao">Com solicitação</SelectItem>
+              </SelectContent>
+            </Select>
+            {(filterStatus !== 'all' || filterUrgency !== 'all' || filterCategory !== 'all' || filterEquipment !== 'all' || filterOrigin !== 'all' || searchText.trim()) && (
               <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => {
-                setFilterStatus('all'); setFilterUrgency('all'); setFilterCategory('all'); setFilterEquipment('all'); setSearchText('');
+                setFilterStatus('all'); setFilterUrgency('all'); setFilterCategory('all'); setFilterEquipment('all'); setFilterOrigin('all'); setSearchText('');
               }}>
                 <X className="w-3 h-3 mr-1" /> Limpar
               </Button>
@@ -394,7 +394,7 @@ export default function PurchaseRequestsPage() {
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-0 overflow-x-auto">
+          <CardContent className="p-0 overflow-auto max-h-[calc(100vh-320px)] min-h-[320px]">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-green-700 text-white">
@@ -402,19 +402,16 @@ export default function PurchaseRequestsPage() {
                   <SortTh label="Prioridade" field="urgency" sort={sort} onSort={toggleSort} />
                   <SortTh label="Solicitação" field="title" sort={sort} onSort={toggleSort} />
                   <SortTh label="Itens" field="items" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
-                  <SortTh label="Fotos" field="photos" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
-                  <SortTh label="Link" field="link" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
                   <SortTh label="Equipamento" field="equipment" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" />
                   <SortTh label="Categoria" field="category" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
                   <SortTh label="Solicitante" field="requester" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
                   <SortTh label="Data solicitação" field="requestDate" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" />
                   <SortTh label="Status" field="status" sort={sort} onSort={toggleSort} />
-                  <SortTh label="Responsável" field="responsible" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" />
+                  <SortTh label="Valor" field="value" sort={sort} onSort={toggleSort} />
                   <SortTh label="Data compra" field="purchaseDate" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" />
                   <SortTh label="Entrega prevista" field="expectedArrival" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
                   <SortTh label="Recebido em" field="receivedDate" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
-                  <SortTh label="Observações" field="notes" sort={sort} onSort={toggleSort} className="hidden 2xl:table-cell" />
-                  <th className="px-3 py-2"></th>
+                  <th className="sticky top-0 z-10 bg-green-700 px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -436,6 +433,7 @@ export default function PurchaseRequestsPage() {
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium text-gray-900">{req.title}</span>
+                          {!!req.isDirectPurchase && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-700 bg-amber-50 whitespace-nowrap">Compra direta</Badge>}
                         </div>
                         {req.description && <div className="text-xs text-gray-500 line-clamp-1">{req.description}</div>}
                       </td>
@@ -450,8 +448,6 @@ export default function PurchaseRequestsPage() {
                           </span>
                         ) : '—'}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden 2xl:table-cell">{(() => { try { const imgs = req.images ? JSON.parse(req.images) : []; return imgs.length > 0 ? `${imgs.length} foto(s)` : '—'; } catch { return '—'; } })()}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden 2xl:table-cell">{req.linkUrl ? <a href={req.linkUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-blue-600 hover:underline">Abrir</a> : '—'}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs hidden xl:table-cell">
                         {req.equipmentName ? `${req.equipmentName}${req.equipmentPlate ? ` (${req.equipmentPlate})` : ''}` : '—'}
                       </td>
@@ -463,11 +459,10 @@ export default function PurchaseRequestsPage() {
                           {STATUS_LABELS[req.status]}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs hidden xl:table-cell">{req.respondedByName || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-800">{(() => { const n = parseFloat(String(req.finalPrice ?? '').replace(',', '.')); return isNaN(n) ? '—' : `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; })()}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs hidden xl:table-cell">{req.purchaseDate ? new Date(req.purchaseDate).toLocaleDateString('pt-BR') : '—'}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs hidden 2xl:table-cell">{req.expectedArrival ? new Date(req.expectedArrival).toLocaleDateString('pt-BR') : '—'}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs hidden 2xl:table-cell">{req.receivedDate ? new Date(req.receivedDate).toLocaleDateString('pt-BR') : '—'}</td>
-                      <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px] truncate hidden 2xl:table-cell">{req.notes || '—'}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         {req.status === 'comprada' && (
                           <Button
@@ -478,6 +473,15 @@ export default function PurchaseRequestsPage() {
                             <Package className="w-3.5 h-3.5 mr-1" /> Receber
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 mr-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          title="Excluir solicitação"
+                          onClick={(e) => { e.stopPropagation(); setDeletingReq({ id: req.id, title: req.title }); }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                         <ChevronRight className="w-4 h-4 text-gray-300 inline" />
                       </td>
                     </tr>
@@ -488,6 +492,34 @@ export default function PurchaseRequestsPage() {
           </CardContent>
         </Card>
       )}
+      <DirectPurchaseDialog
+        open={showDirectPurchase}
+        onOpenChange={setShowDirectPurchase}
+        onCreated={(id) => setLocation(`/compras/${id}`)}
+      />
+
+      {/* Delete Request Dialog */}
+      <Dialog open={!!deletingReq} onOpenChange={(o) => !o && setDeletingReq(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir solicitação #{deletingReq?.id}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            Excluir <b>{deletingReq?.title}</b> e todos os seus itens? Essa ação não pode ser desfeita.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingReq(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deletingReq && deleteMutation.mutate({ id: deletingReq.id })}
+            >
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* New Request Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -538,14 +570,15 @@ export default function PurchaseRequestsPage() {
 
             {/* Equipment (optional) */}
             <div>
-              <Label>Equipamento (opcional)</Label>
-              <Select value={equipmentId} onValueChange={setEquipmentId}>
+              <Label>Equipamento</Label>
+              <Select value={equipmentId || 'none'} onValueChange={(v) => setEquipmentId(v === 'none' ? '' : v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Vincular a um equipamento..." />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">— (compra não é de um equipamento específico)</SelectItem>
                   {(equipmentList || []).map((e: any) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.name}{e.licensePlate ? ` (${e.licensePlate})` : ''}</SelectItem>
+                    <SelectItem key={e.id} value={String(e.id)}>{e.name}{e.licensePlate ? ` (${e.licensePlate})` : ''}{e.typeName ? ` — ${e.typeName}` : ''}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

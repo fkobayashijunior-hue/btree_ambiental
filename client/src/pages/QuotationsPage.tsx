@@ -2170,9 +2170,9 @@ export default function QuotationsPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Forma de pagamento</Label>
+              <Label>Forma de pagamento * <span className="text-xs font-normal text-red-600">(obrigatória)</span></Label>
               <Select value={confirmPaymentMethod} onValueChange={setConfirmPaymentMethod}>
-                <SelectTrigger><SelectValue placeholder="Selecionar (opcional)..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="boleto">Boleto</SelectItem>
                   <SelectItem value="pix">PIX</SelectItem>
@@ -2185,7 +2185,7 @@ export default function QuotationsPage() {
               </Select>
             </div>
             <div>
-              <Label className="flex items-center gap-1"><FileText className="w-3.5 h-3.5 text-gray-400" /> Nota Fiscal (opcional)</Label>
+              <Label className="flex items-center gap-1"><FileText className="w-3.5 h-3.5 text-gray-400" /> Nota Fiscal * <span className="text-xs font-normal text-red-600">(obrigatória)</span></Label>
               {confirmInvoiceUrl ? (
                 <div className="flex items-center gap-2 text-sm mt-1">
                   <a href={confirmInvoiceUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline flex items-center gap-1">
@@ -2214,17 +2214,18 @@ export default function QuotationsPage() {
               )}
               {uploadingReceipt && <p className="text-xs text-gray-400 mt-1">Enviando...</p>}
             </div>
-            <p className="text-[11px] text-gray-400">Nada aqui é obrigatório — pode confirmar a compra e anexar depois.</p>
+            <p className="text-[11px] text-gray-400">Forma de pagamento e nota fiscal são obrigatórias para confirmar a compra. O comprovante é opcional.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfirmPurchaseDialog(false)}>Cancelar</Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
-              disabled={confirmPurchaseMutation.isPending || uploadingInvoice || uploadingReceipt}
+              disabled={confirmPurchaseMutation.isPending || uploadingInvoice || uploadingReceipt || !confirmInvoiceUrl || !confirmPaymentMethod}
+              title={!confirmPaymentMethod ? 'Informe a forma de pagamento para confirmar' : !confirmInvoiceUrl ? 'Anexe a nota fiscal para confirmar' : undefined}
               onClick={() => confirmPurchaseMutation.mutate({
                 quotationRequestId: requestDetail.id,
-                paymentMethod: confirmPaymentMethod || undefined,
-                invoiceUrl: confirmInvoiceUrl || undefined,
+                paymentMethod: confirmPaymentMethod as any,
+                invoiceUrl: confirmInvoiceUrl,
                 receiptUrl: confirmReceiptUrl || undefined,
               })}
             >

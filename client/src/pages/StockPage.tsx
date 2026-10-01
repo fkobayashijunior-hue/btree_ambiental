@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { exportMultiSheetExcel } from "@/lib/exportExcel";
 import {
   Boxes, Plus, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, SlidersHorizontal, FileDown,
-  AlertTriangle, Warehouse, Package, Search, Download, PackagePlus, Scale,
+  AlertTriangle, Warehouse, Package, Search, Download, PackagePlus, Scale, Trash2,
 } from "lucide-react";
 
 type Tab = "saldo" | "movimentacoes" | "devolucoes" | "produtos" | "locais";
@@ -119,6 +119,7 @@ export default function StockPage() {
   const adjustMut = trpc.stock.adjust.useMutation({ onSuccess: () => { toast.success("Ajuste registrado"); setDialog(null); refreshAll(); }, onError });
   const createProductMut = trpc.stock.createProduct.useMutation({ onSuccess: () => { toast.success("Produto criado"); setDialog(null); refreshAll(); }, onError });
   const updateProductMut = trpc.stock.updateProduct.useMutation({ onSuccess: () => { toast.success("Produto atualizado"); setDialog(null); refreshAll(); }, onError });
+  const deleteProductMut = trpc.stock.deleteProduct.useMutation({ onSuccess: () => { toast.success("Produto excluído"); setDialog(null); refreshAll(); }, onError });
   const createLocationMut = trpc.stock.createLocation.useMutation({ onSuccess: () => { toast.success("Local criado"); setDialog(null); refreshAll(); }, onError });
   const updateLocationMut = trpc.stock.updateLocation.useMutation({ onSuccess: () => { toast.success("Local atualizado"); setDialog(null); refreshAll(); }, onError });
   const importMut = trpc.stock.importProducts.useMutation({ onSuccess: (r) => { toast.success(`${r.created} produto(s) importado(s)`); setDialog(null); refreshAll(); }, onError });
@@ -313,7 +314,9 @@ export default function StockPage() {
                     <td className="px-3 py-2 text-xs">{p.unit}</td>
                     <td className="px-3 py-2 text-right font-semibold">{fmtQty(p.totalQuantity)} {p.belowMin && <AlertTriangle className="inline w-3.5 h-3.5 text-amber-500" title="Abaixo do mínimo" />}</td>
                     <td className="px-3 py-2 text-right text-xs">{fmtQty(p.min_stock)}</td>
-                    <td className="px-3 py-2 text-right"><Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => openDialog("product", p, { name: p.name, code: p.code ?? "", brand: p.brand ?? "", tracksWeight: !!p.tracks_weight, densityKgL: p.density_kg_l ? String(Number(p.density_kg_l)).replace(".", ",") : "", unit: p.unit, categoryId: p.category_id ?? "", minStock: fmtQty(p.min_stock), notes: p.notes ?? "", active: !!p.active })}>Editar</Button></td>
+                    <td className="px-3 py-2 text-right"><Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => openDialog("product", p, { name: p.name, code: p.code ?? "", brand: p.brand ?? "", tracksWeight: !!p.tracks_weight, densityKgL: p.density_kg_l ? String(Number(p.density_kg_l)).replace(".", ",") : "", unit: p.unit, categoryId: p.category_id ?? "", minStock: fmtQty(p.min_stock), notes: p.notes ?? "", active: !!p.active })}>Editar</Button>
+                      {isAdmin && <Button size="sm" variant="ghost" className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50" title="Excluir produto" onClick={() => openDialog("deleteProduct", p)}><Trash2 className="w-3.5 h-3.5" /></Button>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -618,6 +621,18 @@ export default function StockPage() {
                 if (isNaN(n) || n < 0 || !(form.reason || "").trim()) return toast.error("Informe o saldo contado e o motivo");
                 adjustMut.mutate({ productId: dialog.data.productId, locationId: dialog.data.locationId, newQuantity: n, reason: form.reason.trim() });
               }}>{adjustMut.isPending ? "Salvando..." : "Salvar ajuste"}</Button>
+            </DialogFooter>
+          </>)}
+
+          {dialog?.kind === "deleteProduct" && (<>
+            <DialogHeader><DialogTitle>Excluir produto</DialogTitle></DialogHeader>
+            <div className="space-y-2 text-sm">
+              <p>Excluir <b>{dialog.data?.name}</b> do catálogo? Essa ação não pode ser desfeita.</p>
+              <p className="text-xs text-gray-500">Só é possível excluir produtos que nunca tiveram movimentação no estoque. Se ele já foi usado, desmarque "Ativo" em Editar para tirá-lo de uso sem perder o histórico.</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialog(null)}>Cancelar</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" disabled={deleteProductMut.isPending} onClick={() => deleteProductMut.mutate({ id: dialog.data.id })}>Excluir</Button>
             </DialogFooter>
           </>)}
 

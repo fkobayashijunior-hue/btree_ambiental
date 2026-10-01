@@ -149,6 +149,19 @@ export async function applyPurchaseQuotationDecision(
   return { success: true, status: nextStatus };
 }
 
+// Compra direta (sem solicitação prévia): colunas novas em purchase_requests. Criado de forma idempotente no primeiro uso (além da migração do boot),
+// pra tela de Solicitações não quebrar se o deploy cair na trava de 6h da migração automática.
+let directPurchaseSchemaReady: Promise<void> | null = null;
+export function ensureDirectPurchaseSchema(db: any): Promise<void> {
+  if (!directPurchaseSchemaReady) {
+    directPurchaseSchemaReady = (async () => {
+      try { await db.execute(sql`ALTER TABLE purchase_requests ADD COLUMN is_direct_purchase TINYINT NOT NULL DEFAULT 0`); } catch {}
+      try { await db.execute(sql`ALTER TABLE purchase_requests ADD COLUMN purchased_by_collaborator_id INT NULL`); } catch {}
+    })().catch((e) => { directPurchaseSchemaReady = null; throw e; });
+  }
+  return directPurchaseSchemaReady;
+}
+
 // Mapeamentos entre o padrão do app (português) e o ENUM legado do banco (inglês)
 const URGENCY_TO_DB: Record<string, string> = {
   baixa: 'low', media: 'medium', alta: 'high', critica: 'critical',
@@ -198,6 +211,20 @@ export const purchaseRequestsRouter = router({
     return (cols as any[]).map((c: any) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
   }),
 
+  // Todos os equipamentos cadastrados em "Setores e Máquinas" (veículos, máquinas, tratores, implementos...),
+  // pra escolher no formulário de compra. Sem o filtro por cliente de sectors.listEquipment: quem compra
+  // precisa enxergar o equipamento mesmo que ele não pertença a um dos seus clientes liberados.
+  listEquipmentOptions: moduleProcedure("compras").query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [rows] = await db.execute(sql`
+      SELECT e.id, e.name, e.license_plate AS licensePlate, t.name AS typeName
+      FROM equipment e LEFT JOIN equipment_types t ON t.id = e.type_id
+      ORDER BY e.name
+    `) as any;
+    return rows as Array<{ id: number; name: string; licensePlate: string | null; typeName: string | null }>;
+  }),
+
   list: moduleProcedure("compras")
     .input(z.object({
       status: statusEnum.optional(),
@@ -207,6 +234,7 @@ export const purchaseRequestsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureDirectPurchaseSchema(db);
       const [rows] = await db.execute<any[]>(`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
@@ -236,6 +264,8 @@ export const purchaseRequestsRouter = router({
           pr.payment_method AS paymentMethod,
           pr.invoice_url AS invoiceUrl,
           pr.receipt_url AS receiptUrl,
+          pr.is_direct_purchase AS isDirectPurchase,
+          (SELECT c.name FROM collaborators c WHERE c.id = pr.purchased_by_collaborator_id) AS purchasedByName,
           pr.notes,
           pr.created_at AS createdAt,
           pr.updated_at AS updatedAt
@@ -272,6 +302,7 @@ export const purchaseRequestsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureDirectPurchaseSchema(db);
       const [rows] = await db.execute(sql`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
@@ -301,6 +332,8 @@ export const purchaseRequestsRouter = router({
           pr.payment_method AS paymentMethod,
           pr.invoice_url AS invoiceUrl,
           pr.receipt_url AS receiptUrl,
+          pr.is_direct_purchase AS isDirectPurchase,
+          (SELECT c.name FROM collaborators c WHERE c.id = pr.purchased_by_collaborator_id) AS purchasedByName,
           pr.notes,
           pr.created_at AS createdAt,
           pr.updated_at AS updatedAt
@@ -517,6 +550,13 @@ export const purchaseRequestsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Solicitação que já gerou entrada no estoque não pode sumir: o histórico do estoque aponta pra ela.
+      const [mv] = await db.execute(sql`SELECT COUNT(*) AS n FROM stock_movements WHERE purchase_request_id = ${input.id}`) as any;
+      if (Number((mv as any[])[0]?.n ?? 0) > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Essa solicitação já deu entrada no estoque e não pode ser excluída (o histórico do estoque aponta pra ela)." });
+      }
+      // Cotações guardam o histórico de preços — só desvincula da solicitação, não apaga a cotação.
+      await db.execute(sql`UPDATE quotations SET purchase_request_id = NULL WHERE purchase_request_id = ${input.id}`);
       await db.execute(sql`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
       await db.execute(sql`DELETE FROM purchase_requests WHERE id = ${input.id}`);
       return { success: true };
@@ -573,6 +613,97 @@ export const purchaseRequestsRouter = router({
       await db.execute(sql`UPDATE purchase_requests SET quotation_request_id = ${quotationRequestId}, status = ${nextStatus}, updated_at = NOW() WHERE id = ${input.id}`);
 
       return { quotationRequestId, token };
+    }),
+
+  // Compra feita direto por um colaborador, SEM solicitação prévia — registra tudo de uma vez pra
+  // ficar rastreável: cria a solicitação já como "Comprada" (selo "Compra direta"), com fornecedor,
+  // valor, nota fiscal (obrigatória), quem comprou e equipamento. Depois segue o fluxo normal
+  // (Receber no estoque quando o item chegar).
+  registerDirectPurchase: moduleProcedure("compras")
+    .input(z.object({
+      title: z.string().max(255).optional(),
+      supplierId: z.number({ error: "Informe o fornecedor" }),
+      categoryId: z.number().nullable().optional(),
+      equipmentId: z.number().nullable().optional(),
+      paymentMethod: z.enum(['boleto', 'pix', 'cartao_credito', 'cartao_debito', 'dinheiro', 'transferencia', 'outro']).optional(),
+      purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      purchasedByCollaboratorId: z.number().optional(),
+      invoiceUrl: z.string({ error: "Anexe a nota fiscal" }).url("Anexe a nota fiscal"),
+      receiptUrl: z.string().url().optional(),
+      notes: z.string().optional(),
+      items: z.array(z.object({
+        name: z.string().min(1),
+        quantity: z.number().positive(),
+        unit: z.string().max(50).default('un'),
+        unitPrice: z.number().min(0),
+      })).min(1, "Adicione ao menos um item"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureDirectPurchaseSchema(db);
+
+      const [supRows] = await db.execute(sql`SELECT company_name FROM suppliers WHERE id = ${input.supplierId} LIMIT 1`) as any;
+      const supplierName = (supRows as any[])[0]?.company_name;
+      if (!supplierName) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado" });
+
+      const status = 'comprada';
+      const total = input.items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+      const nowMs = Date.now();
+      const purchasedMs = input.purchaseDate ? new Date(input.purchaseDate + 'T12:00:00').getTime() : nowMs;
+      const title = input.title?.trim() || `${input.items[0].name}${input.items.length > 1 ? ` (+${input.items.length - 1})` : ''}`;
+      const breakdown = JSON.stringify([{ supplierId: input.supplierId, supplierName, subtotal: total }]);
+
+      const pool = (db as any).$client;
+      const conn = await pool.getConnection();
+      let requestId: number;
+      try {
+        await conn.beginTransaction();
+        const [res] = await conn.execute(
+          `INSERT INTO purchase_requests
+             (title, notes, category_id, equipment_id, status, urgency, requested_at, requested_by, purchased_at,
+              winning_supplier_id, final_price, suppliers_breakdown, payment_method, invoice_url, receipt_url,
+              responded_by, responded_at, is_direct_purchase, purchased_by_collaborator_id, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),1,?,NOW(),NOW())`,
+          [title, input.notes || null, input.categoryId ?? null, input.equipmentId ?? null, status, URGENCY_TO_DB.media, nowMs, ctx.user.id, purchasedMs,
+           input.supplierId, total.toFixed(2), breakdown, input.paymentMethod ?? null,
+           input.invoiceUrl, input.receiptUrl ?? null, ctx.user.id, input.purchasedByCollaboratorId ?? null]
+        );
+        requestId = (res as any).insertId;
+        for (const it of input.items) {
+          await conn.execute(
+            `INSERT INTO purchase_request_items (request_id, name, quantity, unit, confirmed) VALUES (?,?,?,?,0)`,
+            [requestId, it.name.trim(), String(it.quantity), it.unit || 'un']
+          );
+          // Histórico de preços do fornecedor + custo unitário usado na entrada de estoque (stock.receivePurchaseItems).
+          await conn.execute(
+            `INSERT INTO quotations (supplier_id, category_id, product_name, unit, quantity, unit_price, total_price, currency, quoted_at, purchase_request_id, created_by, created_at)
+             VALUES (?,?,?,?,?,?,?,'BRL',?,?,?,NOW())`,
+            [input.supplierId, input.categoryId ?? null, it.name.trim(), it.unit || 'un', String(it.quantity), it.unitPrice.toFixed(2),
+             (it.unitPrice * it.quantity).toFixed(2), purchasedMs, requestId, ctx.user.id]
+          );
+        }
+        await conn.commit();
+      } catch (err) {
+        await conn.rollback().catch(() => {});
+        throw err;
+      } finally {
+        conn.release();
+      }
+
+      let buyerName: string = ctx.user.name || 'Um colaborador';
+      if (input.purchasedByCollaboratorId) {
+        const [cr] = await db.execute(sql`SELECT name FROM collaborators WHERE id = ${input.purchasedByCollaboratorId} LIMIT 1`) as any;
+        buyerName = (cr as any[])[0]?.name || buyerName;
+      }
+      await notifyFinanceiro({
+        type: 'geral',
+        title: `Compra direta registrada: ${title}`,
+        message: `${buyerName} registrou uma compra direta em "${supplierName}" no valor de R$ ${total.toFixed(2).replace('.', ',')} (nota fiscal anexada).`,
+        relatedId: requestId,
+        relatedType: 'purchase_request',
+      }).catch((e: any) => console.error('[registerDirectPurchase] Falha ao notificar financeiro:', e?.message));
+      return { id: requestId, status, success: true };
     }),
 
   // Grava a decisão de compra (fornecedor vencedor + preço por item) direto pela tela
