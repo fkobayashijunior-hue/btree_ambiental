@@ -111,6 +111,26 @@ const MONTHS = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
 ];
 
+/**
+ * Dia (YYYY-MM-DD) de um registro. A data é gravada como "YYYY-MM-DD 00:00:00"; registros editados antes da
+ * correção do fuso ficaram como "dia anterior 21:00:00" — horário >= 12h significa que o dia correto é o seguinte.
+ */
+function recordDay(raw: unknown): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const str = String(raw ?? "");
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}))?/);
+  if (!m) {
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? "" : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  if (m[4] && parseInt(m[4]) >= 12) {
+    const d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]) + 1);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+const fmtRecordDate = (raw: unknown) => recordDay(raw).split("-").reverse().join("/");
+
 export default function VehicleControlPage() {
   const now = new Date();
   const [isOpen, setIsOpen] = useState(false);
@@ -145,14 +165,26 @@ export default function VehicleControlPage() {
     { enabled: !!selectedSupplierId && form.recordType === 'abastecimento' }
   );
 
-  // Atualizar pricePerLiter automaticamente quando supplierPriceData mudar (reativo a tipo+local+fornecedor)
+  // NF vinculada (precisa bater com fornecedor e combustível do formulário) — o preço da NF tem prioridade
+  const linkedInvoice = useMemo(() => {
+    if (!form.fuelInvoiceId || !selectedSupplierId || form.fuelLocation === 'postos') return null;
+    const inv = (invoicesList as any[]).find((i: any) => String(i.id) === form.fuelInvoiceId);
+    if (!inv || inv.supplierId !== selectedSupplierId) return null;
+    if (inv.fuelType && form.fuelType && inv.fuelType !== form.fuelType) return null;
+    return inv;
+  }, [form.fuelInvoiceId, form.fuelType, form.fuelLocation, selectedSupplierId, invoicesList]);
+  const invoicePrice = linkedInvoice && parseFloat(String(linkedInvoice.pricePerLiter || '').replace(',', '.')) > 0
+    ? String(parseFloat(String(linkedInvoice.pricePerLiter).replace(',', '.')))
+    : null;
+
+  // Atualizar pricePerLiter automaticamente: 1) preço da NF vinculada, 2) tabela de preços/preço padrão do fornecedor
   useEffect(() => {
-    if (supplierPriceData?.pricePerLiter && form.supplier && form.fuelLocation !== 'postos') {
-      const price = supplierPriceData.pricePerLiter;
+    const price = invoicePrice ?? supplierPriceData?.pricePerLiter;
+    if (price && form.supplier && form.fuelLocation !== 'postos') {
       const total = (parseFloat(form.liters.replace(',', '.')) || 0) * (parseFloat(price) || 0);
       setForm(f => ({ ...f, pricePerLiter: price, fuelCost: total > 0 ? total.toFixed(2) : f.fuelCost }));
     }
-  }, [supplierPriceData, form.supplier, form.fuelLocation]);
+  }, [supplierPriceData, invoicePrice, form.supplier, form.fuelLocation]);
 
   // Auto-selecionar local de trabalho padrão para usuários vinculados a um cliente
   const defaultWorkLocationId = useMemo(() => {
@@ -178,7 +210,7 @@ export default function VehicleControlPage() {
       const rawDate = r.date || r.createdAt;
       let month: number, year: number, dateObj: Date;
       if (typeof rawDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
-        const parts = rawDate.slice(0, 10).split("-");
+        const parts = recordDay(rawDate).split("-");
         year = parseInt(parts[0]);
         month = parseInt(parts[1]) - 1; // 0-indexed
         dateObj = new Date(year, month, parseInt(parts[2]));
@@ -249,7 +281,7 @@ export default function VehicleControlPage() {
     setEditingId(r.id);
     setForm({
       equipmentId: String(r.equipmentId || ""),
-      date: r.date ? new Date(r.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      date: r.date ? recordDay(r.date) : new Date().toISOString().slice(0, 10),
       recordType: r.recordType || "abastecimento",
       fuelType: r.fuelType || "diesel",
       liters: r.liters || "",
@@ -366,7 +398,7 @@ export default function VehicleControlPage() {
 
     const tableRows = filteredRecords.map((r: any) => `
       <tr>
-        <td>${new Date(r.date || r.createdAt).toLocaleDateString("pt-BR")}</td>
+        <td>${fmtRecordDate(r.date || r.createdAt)}</td>
         <td>${equipMap[r.equipmentId] || `#${r.equipmentId}`}</td>
         <td>${RECORD_LABELS[r.recordType as RecordType] || r.recordType}</td>
         <td>${r.recordType === "abastecimento" ? (r.fuelType === 'diesel' ? 'Diesel S500' : r.fuelType === 'diesel_s10' ? 'Diesel S10' : r.fuelType || "-") : "-"}</td>
@@ -549,7 +581,7 @@ export default function VehicleControlPage() {
         const row = ws.getRow(rowNum);
         const isEven = idx % 2 === 0;
         const values = [
-          new Date(r.date || r.createdAt).toLocaleDateString("pt-BR"),
+          fmtRecordDate(r.date || r.createdAt),
           equipMap[r.equipmentId] || `#${r.equipmentId}`,
           RECORD_LABELS[r.recordType as RecordType] || r.recordType,
           r.fuelType || "-",
@@ -907,7 +939,7 @@ export default function VehicleControlPage() {
                     <div className="text-xs text-gray-500 mt-1 flex gap-3 flex-wrap">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {new Date(r.date || r.createdAt).toLocaleDateString("pt-BR")}
+                        {fmtRecordDate(r.date || r.createdAt)}
                       </span>
                       {r.odometer && <span>{r.odometer} km</span>}
                       {r.supplier && <span>{r.supplier}</span>}
@@ -1091,7 +1123,10 @@ export default function VehicleControlPage() {
                   }} placeholder="0,00" readOnly={form.fuelLocation !== 'postos' && form.supplier !== ''} className={form.fuelLocation !== 'postos' && form.supplier !== '' ? 'bg-green-50 font-semibold' : ''} /></div>
                   <div><Label>Total R$</Label><Input value={form.fuelCost} onChange={e => setForm(f => ({ ...f, fuelCost: e.target.value }))} placeholder="0,00" className="bg-gray-50 font-semibold" readOnly /></div>
                 </div>
-                {form.fuelLocation !== 'postos' && form.supplier && supplierPriceData && (
+                {form.fuelLocation !== 'postos' && form.supplier && invoicePrice && (
+                  <p className="text-xs text-green-700">Preço da NF {linkedInvoice.invoiceNumber} (R$ {invoicePrice}/L).</p>
+                )}
+                {form.fuelLocation !== 'postos' && form.supplier && !invoicePrice && supplierPriceData && (
                   <p className="text-xs text-green-700">
                     {supplierPriceData.source === 'price_table'
                       ? `Preço específico para ${form.fuelType === 'diesel_s10' ? 'S10' : 'S500'} em ${form.fuelLocation === 'simflor' ? 'SIMFLOR' : form.fuelLocation === 'astorga' ? 'Astorga' : 'Postos'}.`

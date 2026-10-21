@@ -320,7 +320,8 @@ export const vehicleRecordsRouter = router({
           updateData[field] = sanitizeNumeric(updateData[field] as string);
         }
       }
-      if (date) updateData.date = new Date(date);
+      // Grava como texto (igual ao create) para não deslocar o dia pelo fuso do servidor
+      if (date) updateData.date = date.length === 10 ? `${date} 00:00:00` : new Date(date).toISOString().slice(0, 19).replace('T', ' ');
       if (photoUrl !== undefined) updateData.photoUrl = photoUrl;
       if (photosJson !== undefined) updateData.photosJson = photosJson;
       await db.update(vehicleRecords).set(updateData).where(eq(vehicleRecords.id, id));

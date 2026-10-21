@@ -788,6 +788,95 @@ function WeeklyClosingsView({
 
   const formatCurrency = (v: number) => `R$ ${formatBR(v, 2)}`;
 
+  const closingActions = (closing: any) => (
+      <div className="flex gap-1 mt-1 flex-wrap justify-end">
+        {closing.status === 'fechado' && (
+          <button
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*,application/pdf';
+              input.onchange = async (e: any) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  toast.info('Enviando comprovante...');
+                  const formData = new FormData();
+                  formData.append('file', file);
+                  formData.append('upload_preset', 'btree_ambiental');
+                  formData.append('folder', 'btree-receipts');
+                  const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
+                    method: 'POST', body: formData
+                  });
+                  const data = await res.json();
+                  if (data.secure_url) {
+                    updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago', receiptUrl: data.secure_url });
+                  } else {
+                    toast.error('Erro no upload do comprovante');
+                  }
+                } catch {
+                  toast.error('Erro ao enviar comprovante');
+                }
+              };
+              input.click();
+            }}
+            className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-lg text-[10px] font-semibold hover:bg-green-200 transition-colors"
+          >
+            <Upload className="h-3 w-3" /> Pago
+          </button>
+        )}
+        {closing.status === 'fechado' && (
+          <button
+            onClick={() => updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago' })}
+            className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded-lg text-[10px] font-semibold hover:bg-green-100 transition-colors"
+          >
+            <CheckCircle2 className="h-3 w-3" /> Sem comp.
+          </button>
+        )}
+        {closing.status === 'pago' && !(closing as any).receiptUrl && (
+          <button
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*,application/pdf';
+              input.onchange = async (e: any) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  toast.info('Enviando comprovante...');
+                  const formData = new FormData();
+                  formData.append('file', file);
+                  formData.append('upload_preset', 'btree_ambiental');
+                  formData.append('folder', 'btree-receipts');
+                  const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
+                    method: 'POST', body: formData
+                  });
+                  const data = await res.json();
+                  if (data.secure_url) {
+                    updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago', receiptUrl: data.secure_url });
+                  } else {
+                    toast.error('Erro no upload do comprovante');
+                  }
+                } catch {
+                  toast.error('Erro ao enviar comprovante');
+                }
+              };
+              input.click();
+            }}
+            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-semibold hover:bg-blue-100 transition-colors"
+          >
+            <Upload className="h-3 w-3" /> Comprovante
+          </button>
+        )}
+        <button
+          onClick={() => { if (confirm('Remover este fechamento?')) deleteClosing.mutate({ id: closing.id,areaId:closing.areaId??null }); }}
+          className="inline-flex items-center gap-1 px-2 py-1 text-gray-400 hover:text-red-500 rounded-lg text-[10px] transition-colors"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+  );
+
   return (
     <div className="space-y-5">
       {/* ── RESUMO FINANCEIRO ── */}
@@ -1003,7 +1092,8 @@ function WeeklyClosingsView({
             <FileCheck className="h-3.5 w-3.5" />
             Fechamentos Oficiais ({closings.length})
           </p>
-          {closings.map(closing => {
+          {(() => {
+          const items = closings.map(closing => {
             const isOverdue = closing.status === 'fechado' && closing.dueDate && safeDate(closing.dueDate) < new Date();
             const clientForClosing = clientsList.find(c => c.id === closing.clientId);
             const pricePerTon = parseFloat(closing.pricePerTon || (closing.areaId==null ? (clientForClosing as any)?.pricePerTon : null) || '0');
@@ -1019,7 +1109,52 @@ function WeeklyClosingsView({
             const realWeightKg = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.weightNetKg || l.weightOutKg || '0'), 0);
             const realVolumeM3 = realLoads.reduce((acc: number, l: any) => acc + parseFloat(l.volumeM3 || '0'), 0);
             const realAmount = closing.priceUnit === 'm3' ? realVolumeM3 * pricePerTon : (realWeightKg / 1000) * pricePerTon;
-            return (
+            const statusLabel = closing.status === 'pago'
+              ? ((closing as any).paidViaAdvance ? 'Pago via adiantamento' : 'Pago')
+              : isOverdue ? 'Atrasado' : closing.status === 'fechado' ? 'Aguardando' : 'Aberto';
+            const statusCls = closing.status === 'pago' ? 'bg-green-100 text-green-700' :
+              isOverdue ? 'bg-red-100 text-red-700' :
+              closing.status === 'fechado' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700';
+            const areaLabel = realLoads[0]?.areaName || (closing.areaId==null ? "Área atual (Área 1)" : "Área #"+closing.areaId);
+            const row = (
+              <tr key={closing.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isOverdue ? 'bg-red-50/30' : ''}`}>
+                <td className="px-2 py-2 font-bold text-gray-900" translate="no">{closing.clientName || 'Cliente'}</td>
+                <td className="px-2 py-2 whitespace-nowrap text-gray-600">
+                  {closing.weekStart ? safeDate(closing.weekStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''} a {closing.weekEnd ? safeDate(closing.weekEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                </td>
+                <td className="px-2 py-2 text-gray-600 text-xs">{areaLabel}</td>
+                <td className="px-2 py-2 text-right">{realLoads.length}</td>
+                <td className="px-2 py-2 text-right whitespace-nowrap">{closing.priceUnit==='m3' ? `${formatBR(realVolumeM3,3)} m³` : `${formatBR(realWeightKg/1000)} ton`}</td>
+                <td className="px-2 py-2 text-right whitespace-nowrap text-gray-600">{closing.pricePerTon ? `R$ ${formatBR(parseFloat(closing.pricePerTon))}/${closing.priceUnit==='m3'?'m³':'ton'}` : '-'}</td>
+                <td className="px-2 py-2 whitespace-nowrap text-xs">
+                  {closing.status !== 'pago' && closing.dueDate ? (
+                    <span className={`font-medium ${isOverdue ? 'text-red-600' : 'text-orange-600'}`}>{safeDate(closing.dueDate).toLocaleDateString('pt-BR')}{isOverdue && ' (VENCIDO)'}</span>
+                  ) : closing.status === 'pago' && closing.paidAt ? (
+                    <span className="text-green-700 font-medium">Pago em {safeDate(closing.paidAt).toLocaleDateString('pt-BR')}</span>
+                  ) : '-'}
+                  {(closing as any).receiptUrl && (
+                    <a href={(closing as any).receiptUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-green-700 underline">Comprovante</a>
+                  )}
+                </td>
+                <td className="px-2 py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${statusCls}`}>{statusLabel}</span></td>
+                <td className="px-2 py-2 text-right whitespace-nowrap font-black text-emerald-800">{formatCurrency(realAmount)}</td>
+                <td className="px-2 py-2">
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    <button
+                      onClick={() => {
+                        const clientLoads = loads.filter((l: any) => l.clientId === closing.clientId && (l.areaId??null)===(closing.areaId??null));
+                        generateWeeklyClosingPDF(closing, (closing.clientName || 'Cliente')+' — '+(clientLoads[0]?.areaName || (closing.areaId==null?'Área atual (Área 1)':closingAreas.find(a=>a.id===closing.areaId)?.name||'Área #'+closing.areaId)), clientLoads, pricePerTon);
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-semibold hover:bg-emerald-200 transition-colors"
+                    >
+                      <Download className="h-3 w-3" /> PDF
+                    </button>
+                    {closingActions(closing)}
+                  </div>
+                </td>
+              </tr>
+            );
+            const card = (
               <div key={closing.id} className={`border rounded-xl p-4 transition-all hover:shadow-md ${
                 closing.status === 'pago' ? 'border-green-200 bg-green-50/30' :
                 isOverdue ? 'border-red-200 bg-red-50/30' :
@@ -1100,97 +1235,38 @@ function WeeklyClosingsView({
                       <Download className="h-3 w-3" /> PDF
                     </button>
                     {/* Action buttons */}
-                    <div className="flex gap-1 mt-1 flex-wrap justify-end">
-                      {closing.status === 'fechado' && (
-                        <button
-                          onClick={() => {
-                            const input = document.createElement('input');
-                            input.type = 'file';
-                            input.accept = 'image/*,application/pdf';
-                            input.onchange = async (e: any) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              try {
-                                toast.info('Enviando comprovante...');
-                                const formData = new FormData();
-                                formData.append('file', file);
-                                formData.append('upload_preset', 'btree_ambiental');
-                                formData.append('folder', 'btree-receipts');
-                                const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
-                                  method: 'POST', body: formData
-                                });
-                                const data = await res.json();
-                                if (data.secure_url) {
-                                  updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago', receiptUrl: data.secure_url });
-                                } else {
-                                  toast.error('Erro no upload do comprovante');
-                                }
-                              } catch {
-                                toast.error('Erro ao enviar comprovante');
-                              }
-                            };
-                            input.click();
-                          }}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-lg text-[10px] font-semibold hover:bg-green-200 transition-colors"
-                        >
-                          <Upload className="h-3 w-3" /> Pago
-                        </button>
-                      )}
-                      {closing.status === 'fechado' && (
-                        <button
-                          onClick={() => updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago' })}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded-lg text-[10px] font-semibold hover:bg-green-100 transition-colors"
-                        >
-                          <CheckCircle2 className="h-3 w-3" /> Sem comp.
-                        </button>
-                      )}
-                      {closing.status === 'pago' && !(closing as any).receiptUrl && (
-                        <button
-                          onClick={() => {
-                            const input = document.createElement('input');
-                            input.type = 'file';
-                            input.accept = 'image/*,application/pdf';
-                            input.onchange = async (e: any) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              try {
-                                toast.info('Enviando comprovante...');
-                                const formData = new FormData();
-                                formData.append('file', file);
-                                formData.append('upload_preset', 'btree_ambiental');
-                                formData.append('folder', 'btree-receipts');
-                                const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
-                                  method: 'POST', body: formData
-                                });
-                                const data = await res.json();
-                                if (data.secure_url) {
-                                  updateStatus.mutate({ id: closing.id, areaId:closing.areaId??null, status: 'pago', receiptUrl: data.secure_url });
-                                } else {
-                                  toast.error('Erro no upload do comprovante');
-                                }
-                              } catch {
-                                toast.error('Erro ao enviar comprovante');
-                              }
-                            };
-                            input.click();
-                          }}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-semibold hover:bg-blue-100 transition-colors"
-                        >
-                          <Upload className="h-3 w-3" /> Comprovante
-                        </button>
-                      )}
-                      <button
-                        onClick={() => { if (confirm('Remover este fechamento?')) deleteClosing.mutate({ id: closing.id,areaId:closing.areaId??null }); }}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-gray-400 hover:text-red-500 rounded-lg text-[10px] transition-colors"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
+                    {closingActions(closing)}
                   </div>
                 </div>
               </div>
             );
-          })}
+            return { card, row };
+          });
+          return (
+            <>
+              <div className="hidden md:block overflow-x-auto bg-white rounded-lg border border-gray-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                    <tr>
+                      <th className="px-2 py-2 text-left">Cliente</th>
+                      <th className="px-2 py-2 text-left">Semana</th>
+                      <th className="px-2 py-2 text-left">Área</th>
+                      <th className="px-2 py-2 text-right">Cargas</th>
+                      <th className="px-2 py-2 text-right">Volume / Peso</th>
+                      <th className="px-2 py-2 text-right">Preço</th>
+                      <th className="px-2 py-2 text-left">Vencimento</th>
+                      <th className="px-2 py-2 text-left">Status</th>
+                      <th className="px-2 py-2 text-right">Valor</th>
+                      <th className="px-2 py-2 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>{items.map(i => i.row)}</tbody>
+                </table>
+              </div>
+              <div className="md:hidden space-y-3">{items.map(i => i.card)}</div>
+            </>
+          );
+          })()}
         </div>
       )}
 
@@ -1254,6 +1330,9 @@ export default function CargoControl() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [viewMode, setViewMode] = useState<"cliente" | "lista" | "tracking" | "fechamentos">("cliente");
   const [closingClientId, setClosingClientId] = useState<number>(0);
+  // Acesso rápido por cliente: na aba Fechamentos controla o filtro dos fechamentos; nas demais, o filtro das cargas
+  const activeClientId = viewMode === "fechamentos" ? closingClientId : filterClientId;
+  const setActiveClientId = viewMode === "fechamentos" ? setClosingClientId : setFilterClientId;
   const [closingWeekStart, setClosingWeekStart] = useState("");
   const [closingWeekEnd, setClosingWeekEnd] = useState("");
   const [isClosingFormOpen, setIsClosingFormOpen] = useState(false);
@@ -2249,6 +2328,133 @@ export default function CargoControl() {
     );
   };
 
+  // Linha de tabela (desktop) — mesmas informações e ações do card
+  const renderCargoRow = (cargo: typeof loads[number], colorIdx: number, codeMap?: Map<number, string>) => {
+    const trackStep = TRACKING_STEPS.find(s => s.key === cargo.trackingStatus);
+    const colors = CLIENT_COLORS[colorIdx % CLIENT_COLORS.length];
+    const cargoDeductions = allDeductions.filter((d: any) => d.cargoLoadId === cargo.id);
+    const totalDeducted = cargoDeductions.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0);
+    const client = clientsList.find(c => c.id === cargo.clientId);
+    const pricePerTon = parseFloat((client as any)?.pricePerTon || '0');
+    const loadValue = cargoAreaValue(cargo, pricePerTon) ?? 0;
+    const remaining = Math.max(0, loadValue - totalDeducted);
+    const isPago = (cargo as any).paymentStatus === 'pago';
+    const incompleteReasons = isAdmin && cargo.status === 'entregue' ? getCargoIncompleteReasons(cargo) : [];
+    let displayDest = cargo.destination;
+    if (cargo.destinationId) {
+      const destId = Number(cargo.destinationId);
+      const destObj = destinations.find((d: any) => d.id === destId) as any;
+      const buyerObj = buyersList.find((b: any) => b.id === destId) as any;
+      if (destObj) displayDest = destObj.nickname || destObj.name || cargo.destination;
+      else if (buyerObj) displayDest = buyerObj.nickname || buyerObj.name || cargo.destination;
+    }
+    const netKg = (cargo as any).weightNetKg ? parseFloat((cargo as any).weightNetKg) : (cargo.weightKg ? parseFloat(cargo.weightKg) : 0);
+    const ac = (cargo as any).fiscalNoteActionCode;
+    const acUrl = (cargo as any).fiscalNoteFileUrl || (cargo as any).invoiceUrl;
+    return (
+      <tr key={cargo.id} className={`border-b border-gray-100 hover:bg-gray-50 border-l-4 ${colors.border}`}>
+        <td className="px-2 py-2 whitespace-nowrap text-gray-700">{cargo.date ? safeDate(cargo.date).toLocaleDateString("pt-BR") : "-"}</td>
+        <td className="px-2 py-2 whitespace-nowrap font-bold text-gray-800">
+          {cargo.vehiclePlate || cargo.vehicleName || "Veículo"}
+          {incompleteReasons.length > 0 && (
+            <span title={`Dados incompletos:\n• ${incompleteReasons.join("\n• ")}`} className="ml-1 inline-flex align-middle"><AlertTriangle className="h-3.5 w-3.5 text-amber-600" /></span>
+          )}
+        </td>
+        <td className="px-2 py-2 text-gray-600" translate="no">{cargo.driverName || "-"}</td>
+        <td className="px-2 py-2">{displayDest ? <span className="font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded" translate="no">{displayDest}</span> : "-"}</td>
+        <td className="px-2 py-2 text-right whitespace-nowrap font-semibold text-emerald-700">{cargo.volumeM3 ? formatBR(parseFloat(cargo.volumeM3), 3) : '0'}</td>
+        <td className="px-2 py-2 text-right whitespace-nowrap text-gray-700">{netKg > 0 ? formatBR(netKg, 0) : "-"}</td>
+        <td className="px-2 py-2 text-right whitespace-nowrap font-semibold text-blue-700">
+          {loadValue > 0 ? <>R$ {formatBR(loadValue)}{totalDeducted > 0 && !isPago && <div className="text-[10px] text-orange-600 font-normal">falta R$ {formatBR(remaining)}</div>}</> : "-"}
+        </td>
+        <td className="px-2 py-2">
+          <div className="flex flex-wrap gap-1">
+            <Badge className={`text-[10px] ${STATUS_COLORS[cargo.status]}`}>{cargo.status}</Badge>
+            {isPago ? (
+              <Badge className="text-[10px] bg-green-100 text-green-700 border border-green-300">✅ Pago</Badge>
+            ) : totalDeducted > 0 ? (
+              <Badge className="text-[10px] bg-amber-100 text-amber-700 border border-amber-300">⚡ Abatido R$ {formatBR(totalDeducted)}</Badge>
+            ) : (cargo as any).paymentStatus === 'a_pagar' ? (
+              <Badge className="text-[10px] bg-yellow-100 text-yellow-700 border border-yellow-300">⏳ A Pagar</Badge>
+            ) : null}
+            {trackStep && (
+              <Badge className={`text-[10px] ${TRACKING_COLORS[cargo.trackingStatus as TrackingStatus]}`}>{trackStep.icon} <span translate="no">{trackStep.label}</span></Badge>
+            )}
+          </div>
+        </td>
+        <td className="px-2 py-2 whitespace-nowrap">
+          <span className="font-mono font-bold text-[#0d4f2e] bg-[#0d4f2e]/10 px-1.5 py-0.5 rounded text-[10px]">{getClientCode(cargo.clientName, cargo.id, codeMap)}</span>
+        </td>
+        <td className="px-2 py-2 whitespace-nowrap text-xs">
+          {cargo.invoiceNumber && <span className="mr-1">NF {cargo.invoiceNumber}</span>}
+          {ac && (acUrl
+            ? <a href={acUrl} target="_blank" rel="noopener noreferrer" className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] border border-blue-200" title="Ver nota fiscal">{ac}</a>
+            : <span className="font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded text-[10px] border border-gray-200">{ac}</span>)}
+          {!cargo.invoiceNumber && !ac && "-"}
+        </td>
+        <td className="px-2 py-2 text-emerald-700 text-xs" translate="no">{(cargo as any).locationName || "-"}</td>
+        <td className="px-1 py-1 whitespace-nowrap">
+          <div className="flex items-center">
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Ver detalhes" onClick={() => setDetailId(cargo.id)}><Eye className="h-3.5 w-3.5" /></Button>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" title="Atualizar tracking" onClick={() => { setTrackingCargoId(cargo.id); setTrackingStatus((cargo.trackingStatus as TrackingStatus) || "aguardando"); setTrackingNotes(""); }}><RefreshCw className="h-3.5 w-3.5" /></Button>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Editar" onClick={() => openEdit(cargo)}><Pencil className="h-3.5 w-3.5" /></Button>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" title="Gerar PDF" onClick={() => generateCargoPDF(cargo as unknown as Record<string, unknown>)}><Download className="h-3.5 w-3.5" /></Button>
+            {!isPago ? (
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-green-600" title="Marcar como Pago" onClick={() => openPayModal(cargo, loadValue)} disabled={markAsPaidMutation.isPending}><CheckCircle2 className="h-3.5 w-3.5" /></Button>
+            ) : (
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-500 hover:text-orange-500" title="Desfazer Pagamento" onClick={() => { if (confirm('Desfazer o pagamento desta carga?')) unmarkAsPaidMutation.mutate({ id: cargo.id }); }} disabled={unmarkAsPaidMutation.isPending}><XCircle className="h-3.5 w-3.5" /></Button>
+            )}
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" title="Excluir" onClick={() => { if (confirm("Remover esta carga?")) deleteMutation.mutate({ id: cargo.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  // Tabela (somente desktop). withDateRows: separador por dia (visão Por Cliente)
+  const renderCargoTable = (cargos: typeof loads, colorIdx: number, withDateRows: boolean) => {
+    const codeMap = withDateRows ? buildClientCodeMap(cargos) : undefined;
+    let lastDate = "";
+    const rows: React.ReactNode[] = [];
+    cargos.forEach(cargo => {
+      if (withDateRows) {
+        const d = cargo.date ? safeDate(cargo.date).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }) : "Sem data";
+        if (d !== lastDate) {
+          lastDate = d;
+          rows.push(
+            <tr key={`d-${cargo.id}`} className="bg-gray-100/80">
+              <td colSpan={12} className="px-3 py-1.5 text-xs font-semibold text-gray-600"><Calendar className="h-3 w-3 inline mr-1.5" />{d}</td>
+            </tr>
+          );
+        }
+      }
+      rows.push(renderCargoRow(cargo, colorIdx, codeMap));
+    });
+    return (
+      <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+            <tr>
+              <th className="px-2 py-2 text-left">Data</th>
+              <th className="px-2 py-2 text-left">Placa</th>
+              <th className="px-2 py-2 text-left">Motorista</th>
+              <th className="px-2 py-2 text-left">Destino</th>
+              <th className="px-2 py-2 text-right">m³</th>
+              <th className="px-2 py-2 text-right">Peso líq. (kg)</th>
+              <th className="px-2 py-2 text-right">Valor</th>
+              <th className="px-2 py-2 text-left">Status</th>
+              <th className="px-2 py-2 text-left">Cód.</th>
+              <th className="px-2 py-2 text-left">NF / AC</th>
+              <th className="px-2 py-2 text-left">Local</th>
+              <th className="px-2 py-2 text-left">Ações</th>
+            </tr>
+          </thead>
+          <tbody>{rows}</tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
@@ -2389,9 +2595,9 @@ export default function CargoControl() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Acesso Rápido por Cliente</p>
-            {filterClientId > 0 && (
+            {activeClientId > 0 && (
               <button
-                onClick={() => setFilterClientId(0)}
+                onClick={() => setActiveClientId(0)}
                 className="text-xs text-primary hover:underline flex items-center gap-1"
               >
                 <X className="h-3 w-3" /> Limpar filtro
@@ -2410,10 +2616,10 @@ export default function CargoControl() {
                   key={client.id}
                   onClick={() => {
                     // Filtra pelo cliente no select (mantém a view atual, sem scroll)
-                    setFilterClientId(client.id);
+                    setActiveClientId(client.id);
                   }}
                   className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-card border transition-all cursor-pointer group text-left ${
-                    filterClientId === client.id
+                    activeClientId === client.id
                       ? 'border-primary ring-2 ring-primary/30 shadow-md'
                       : 'border-border hover:border-primary/40 hover:shadow-md'
                   }`}
@@ -2435,6 +2641,7 @@ export default function CargoControl() {
       )}
 
       {/* Filtros */}
+      {viewMode !== "fechamentos" && (
       <div id="cargo-list-section" className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -2513,9 +2720,24 @@ export default function CargoControl() {
           <Download className="h-4 w-4" /> Exportar Excel (Entregues)
         </Button>
       </div>
+      )}
 
       {/* Lista de Cargas */}
-      {isLoading ? (
+      {viewMode === "fechamentos" ? (
+        /* ===== VIEW: FECHAMENTOS SEMANAIS ===== */
+        <WeeklyClosingsView
+          clientsList={clientsList}
+          loads={loads}
+          closingClientId={closingClientId}
+          setClosingClientId={setClosingClientId}
+          closingWeekStart={closingWeekStart}
+          setClosingWeekStart={setClosingWeekStart}
+          closingWeekEnd={closingWeekEnd}
+          setClosingWeekEnd={setClosingWeekEnd}
+          isClosingFormOpen={isClosingFormOpen}
+          setIsClosingFormOpen={setIsClosingFormOpen}
+        />
+      ) : isLoading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
         </div>
@@ -2569,7 +2791,10 @@ export default function CargoControl() {
                 {/* Cargas do cliente */}
                 {!isCollapsed && (
                   <div className="bg-gray-50/50 divide-y divide-gray-100">
-                    {/* Subheader com datas */}
+                    {/* Desktop: tabela */}
+                    <div className="hidden md:block p-2">{renderCargoTable(group.cargas, groupIdx, true)}</div>
+                    {/* Celular: cards */}
+                    <div className="md:hidden divide-y divide-gray-100">
                     {(() => {
                       let lastDate = "";
                       const groupCodeMap = buildClientCodeMap(group.cargas);
@@ -2594,7 +2819,8 @@ export default function CargoControl() {
                         );
                       });
                     })()}
-                    
+                    </div>
+
                     {/* Rodapé do grupo com totais */}
                     <div className={`px-4 py-3 ${colors.bg} flex flex-wrap items-center gap-4 text-xs`}>
                       <span className={`font-semibold ${colors.text}`}>
@@ -2664,20 +2890,6 @@ export default function CargoControl() {
             );
           })}
         </div>
-      ) : viewMode === "fechamentos" ? (
-        /* ===== VIEW: FECHAMENTOS SEMANAIS ===== */
-        <WeeklyClosingsView
-          clientsList={clientsList}
-          loads={loads}
-          closingClientId={closingClientId}
-          setClosingClientId={setClosingClientId}
-          closingWeekStart={closingWeekStart}
-          setClosingWeekStart={setClosingWeekStart}
-          closingWeekEnd={closingWeekEnd}
-          setClosingWeekEnd={setClosingWeekEnd}
-          isClosingFormOpen={isClosingFormOpen}
-          setIsClosingFormOpen={setIsClosingFormOpen}
-        />
       ) : viewMode === "tracking" ? (
         /* ===== VIEW: TRACKING TIMELINE ===== */
         <div className="space-y-4">
@@ -2758,9 +2970,12 @@ export default function CargoControl() {
         </div>
       ) : (
         /* ===== VIEW: LISTA PADRÃO (ordenada por data) ===== */
-        <div className="space-y-3">
-          {filtered.map(cargo => renderCargoCard(cargo, 0))}
-        </div>
+        <>
+          <div className="hidden md:block">{renderCargoTable(filtered, 0, false)}</div>
+          <div className="md:hidden space-y-3">
+            {filtered.map(cargo => renderCargoCard(cargo, 0))}
+          </div>
+        </>
       )}
 
       {/* ===== DIALOG: FORMULÁRIO DE CARGA ===== */}

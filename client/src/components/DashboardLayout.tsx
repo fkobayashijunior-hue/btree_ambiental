@@ -34,7 +34,7 @@ import {
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight, Loader2, ShieldAlert
+  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight, Loader2, ShieldAlert, Target
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -136,6 +136,7 @@ const menuGroups: MenuGroup[] = [
     icon: ClipboardList,
     items: [
       { label: "Controle de Cargas", path: "/cargas", slug: "cargas", icon: Truck },
+      { label: "Metas Semanais", path: "/metas-semanais", slug: "metas-semanais", icon: Target },
       { label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas", icon: FileText },
       { label: "Conferência de Notas", path: "/conferencia-notas", slug: "conferencia-notas", icon: FileCheck },
       { label: "Relatório de Destinos", path: "/relatorio-destinos", slug: "relatorio-destinos", icon: FileBarChart },
@@ -204,6 +205,8 @@ const menuGroups: MenuGroup[] = [
       { label: "Dashboard Financeiro", path: "/dashboard-financeiro", slug: "dashboard-financeiro", icon: TrendingUp },
       { label: "Relatório Consolidado", path: "/relatorio-consolidado", slug: "relatorio-consolidado", icon: BarChart3 },
       { label: "Dashboard Executivo", path: "/dashboard-executivo", slug: "dashboard-exec", icon: BarChart3 },
+      // "Dashboard Financeiro Real" oculto do menu até ser finalizado (a página e a rota seguem no código)
+      // { label: "Dashboard Financeiro Real", path: "/dashboard-financeiro-real", slug: "dashboard-real", icon: Wallet },
       { label: "Contas a Receber",       path: "/contas-a-receber",      slug: "contas-a-receber",      icon: Landmark },
       { label: "Contas a Pagar",         path: "/contas-a-pagar",        slug: "contas-a-pagar",        icon: TrendingDown },
       { label: "Extrato Movimentações",  path: "/extrato-movimentacoes", slug: "extrato-movimentacoes", icon: ArrowLeftRight },

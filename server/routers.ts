@@ -47,6 +47,8 @@ import { geofencesRouter } from "./routers/geofences";
 import { freightTripsRouter } from "./routers/freightTrips";
 import { financialConsolidatedRouter } from "./routers/financialConsolidated";
 import { sicoobRouter } from "./routers/sicoob";
+import { financialRealRouter } from "./routers/financialReal";
+import { weeklyGoalsRouter } from "./routers/weeklyGoals";
 import { contaAzulRouter } from "./routers/contaAzul";
 import { fiscalNotesRouter } from "./routers/fiscalNotes";
 import { notificationSettingsRouter } from "./routers/notificationSettings";
@@ -395,6 +397,8 @@ export const appRouter = router({
   financialConsolidated: financialConsolidatedRouter,
   fiscalNotes: fiscalNotesRouter,
   sicoob: sicoobRouter,
+  financialReal: financialRealRouter,
+  weeklyGoals: weeklyGoalsRouter,
   contaAzul: contaAzulRouter,
   // TODO: add feature routers heree, e.g.
   // todo: router({
