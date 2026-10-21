@@ -67,6 +67,9 @@ import ContasAReceberPage from "./pages/ContasAReceberPage";
 import ContasAPagarPage from "./pages/ContasAPagarPage";
 import ExtratoMovimentacoesPage from "./pages/ExtratoMovimentacoesPage";
 import FluxoCaixaPage from "./pages/FluxoCaixaPage";
+// import FinancialRealDashboard from "./pages/FinancialRealDashboard"; // desativado até a página ser finalizada
+import WeeklyGoals from "./pages/WeeklyGoals";
+import WeeklyGoalDetail from "./pages/WeeklyGoalDetail";
 import NotificationSettings from "./pages/NotificationSettings";
 import { registerAllOfflineHandlers } from "@/lib/offlineSync";
 
@@ -247,6 +250,17 @@ function Router() {
       <Route path={"/extrato-movimentacoes"}>
         {() => <WithLayout component={ExtratoMovimentacoesPage} />}
       </Route>
+      <Route path={"/metas-semanais"}>
+        {() => <WithLayout component={WeeklyGoals} />}
+      </Route>
+      <Route path={"/metas-semanais/:id"}>
+        {() => <WithLayout component={WeeklyGoalDetail} />}
+      </Route>
+      {/* Dashboard Financeiro Real: rota desativada até a página ser finalizada
+      <Route path={"/dashboard-financeiro-real"}>
+        {() => <WithLayout component={FinancialRealDashboard} />}
+      </Route>
+      */}
       <Route path={"/fluxo-de-caixa"}>
         {() => <WithLayout component={FluxoCaixaPage} />}
       </Route>

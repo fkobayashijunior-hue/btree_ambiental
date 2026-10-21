@@ -2286,12 +2286,12 @@ async function getUserByEmail(email) {
     console.error("[getUserByEmail] Cause:", drizzleError.cause?.message || drizzleError.cause?.sqlMessage || "unknown");
     try {
       console.log("[getUserByEmail] Attempting raw SQL fallback...");
-      const rows = await db.execute(
+      const rows2 = await db.execute(
         /*sql*/
         `SELECT * FROM users WHERE email = '${email.replace(/'/g, "''")}' LIMIT 1`
       );
-      if (rows && rows.length > 0) {
-        const row = rows[0];
+      if (rows2 && rows2.length > 0) {
+        const row = rows2[0];
         return {
           id: row.id,
           openId: row.openId || row.open_id || null,
@@ -2400,22 +2400,22 @@ var cloudinary_exports = {};
 __export(cloudinary_exports, {
   cloudinaryUpload: () => cloudinaryUpload
 });
-async function cloudinaryUpload(data, _folder = "btree", originalFileName) {
+async function cloudinaryUpload(data2, _folder = "btree", originalFileName) {
   let base64;
   let contentType = "image/jpeg";
-  if (Buffer.isBuffer(data)) {
-    base64 = data.toString("base64");
+  if (Buffer.isBuffer(data2)) {
+    base64 = data2.toString("base64");
     contentType = "image/jpeg";
-  } else if (data.startsWith("data:")) {
-    const match = data.match(/^data:([^;]+);base64,(.+)$/);
+  } else if (data2.startsWith("data:")) {
+    const match = data2.match(/^data:([^;]+);base64,(.+)$/);
     if (match) {
       contentType = match[1];
       base64 = match[2];
     } else {
-      base64 = data.replace(/^data:[^;]+;base64,/, "");
+      base64 = data2.replace(/^data:[^;]+;base64,/, "");
     }
   } else {
-    base64 = data;
+    base64 = data2;
   }
   const dataUri = `data:${contentType};base64,${base64}`;
   const params = new URLSearchParams();
@@ -2564,7 +2564,7 @@ async function sendWhatsAppText(toPhoneE164, text2) {
     text: { body: text2 }
   });
 }
-async function sendWhatsAppList(toPhoneE164, bodyText, buttonLabel, rows) {
+async function sendWhatsAppList(toPhoneE164, bodyText, buttonLabel, rows2) {
   return sendWhatsAppRaw({
     messaging_product: "whatsapp",
     to: toPhoneE164,
@@ -2574,7 +2574,7 @@ async function sendWhatsAppList(toPhoneE164, bodyText, buttonLabel, rows) {
       body: { text: bodyText },
       action: {
         button: buttonLabel,
-        sections: [{ title: "Op\xE7\xF5es", rows: rows.slice(0, 10) }]
+        sections: [{ title: "Op\xE7\xF5es", rows: rows2.slice(0, 10) }]
       }
     }
   });
@@ -2704,11 +2704,11 @@ async function notifyUsers(params) {
 async function findUsersByRole(role) {
   const conn = await getConnection();
   try {
-    const [rows] = await conn.execute(
+    const [rows2] = await conn.execute(
       `SELECT id FROM users WHERE role = ?`,
       [role]
     );
-    return rows.map((r) => r.id);
+    return rows2.map((r) => r.id);
   } finally {
     await conn.end();
   }
@@ -2716,11 +2716,11 @@ async function findUsersByRole(role) {
 async function findUserByName(name2) {
   const conn = await getConnection();
   try {
-    const [rows] = await conn.execute(
+    const [rows2] = await conn.execute(
       `SELECT id FROM users WHERE name LIKE ? LIMIT 1`,
       [`%${name2}%`]
     );
-    return rows.length > 0 ? rows[0].id : null;
+    return rows2.length > 0 ? rows2[0].id : null;
   } finally {
     await conn.end();
   }
@@ -2756,8 +2756,8 @@ async function notifyAdmComercial(params) {
 async function getNfResponsavelRecipients() {
   const conn = await getConnection();
   try {
-    const [rows] = await conn.execute(`SELECT value FROM notification_settings WHERE \`key\` = 'cargoNfResponsible'`);
-    const raw = rows?.[0]?.value;
+    const [rows2] = await conn.execute(`SELECT value FROM notification_settings WHERE \`key\` = 'cargoNfResponsible'`);
+    const raw = rows2?.[0]?.value;
     if (!raw) return [];
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     const rawRecipients = Array.isArray(parsed?.recipients) ? parsed.recipients : parsed?.collaboratorId || parsed?.manualPhone ? [parsed] : [];
@@ -2809,9 +2809,9 @@ async function notifyResponsavelCargaNfAnexada(params) {
   let phone = null;
   let name2 = "";
   try {
-    const [rows] = await conn.execute(`SELECT phone, name FROM collaborators WHERE id = ? LIMIT 1`, [params.responsavelCargaId]);
-    phone = rows?.[0]?.phone ?? null;
-    name2 = rows?.[0]?.name ?? "";
+    const [rows2] = await conn.execute(`SELECT phone, name FROM collaborators WHERE id = ? LIMIT 1`, [params.responsavelCargaId]);
+    phone = rows2?.[0]?.phone ?? null;
+    name2 = rows2?.[0]?.name ?? "";
   } finally {
     await conn.end();
   }
@@ -2849,8 +2849,8 @@ var init_notifications = __esm({
           }
           query += ` ORDER BY created_at DESC LIMIT ?`;
           params.push(limit);
-          const [rows] = await conn.execute(query, params);
-          return rows;
+          const [rows2] = await conn.execute(query, params);
+          return rows2;
         } finally {
           await conn.end();
         }
@@ -2859,11 +2859,11 @@ var init_notifications = __esm({
       unreadCount: protectedProcedure.query(async ({ ctx }) => {
         const conn = await getConnection();
         try {
-          const [rows] = await conn.execute(
+          const [rows2] = await conn.execute(
             `SELECT COUNT(*) as count FROM notifications WHERE recipient_user_id = ? AND is_read = 0`,
             [ctx.user.id]
           );
-          return { count: rows[0]?.count || 0 };
+          return { count: rows2[0]?.count || 0 };
         } finally {
           await conn.end();
         }
@@ -3231,16 +3231,16 @@ async function extractNfDataFromPdfText(buffer) {
     const itemMatch = text2.match(/\b(TON|M3|M³|KG)\b\s+(\d+(?:[.,]\d+)?)/i);
     if (itemMatch) {
       const rawUnit = itemMatch[1].toUpperCase();
-      const num2 = parseFloat(itemMatch[2].replace(",", "."));
-      if (!isNaN(num2) && num2 > 0) {
+      const num3 = parseFloat(itemMatch[2].replace(",", "."));
+      if (!isNaN(num3) && num3 > 0) {
         if (rawUnit === "TON") {
-          quantity = String(num2);
+          quantity = String(num3);
           unit = "ton";
         } else if (rawUnit === "KG") {
-          quantity = String(num2 / 1e3);
+          quantity = String(num3 / 1e3);
           unit = "ton";
         } else if (rawUnit === "M3" || rawUnit === "M\xB3") {
-          quantity = String(num2);
+          quantity = String(num3);
           unit = "m3";
         }
       }
@@ -3248,9 +3248,9 @@ async function extractNfDataFromPdfText(buffer) {
     if (!quantity) {
       const pesoMatch = text2.match(/PESO\s*L[IÍ]QUIDO[^\d]{0,15}([\d.,]+)/i);
       if (pesoMatch) {
-        const num2 = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
-        if (!isNaN(num2) && num2 > 0) {
-          quantity = num2 > 100 ? String(num2 / 1e3) : String(num2);
+        const num3 = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
+        if (!isNaN(num3) && num3 > 0) {
+          quantity = num3 > 100 ? String(num3 / 1e3) : String(num3);
           unit = "ton";
         }
       }
@@ -3284,8 +3284,8 @@ var nfExtraction_exports = {};
 __export(nfExtraction_exports, {
   extractNfDataFromFile: () => extractNfDataFromFile
 });
-function isComplete(data) {
-  return !!data.invoiceNumber && !!data.quantity && !!data.unit;
+function isComplete(data2) {
+  return !!data2.invoiceNumber && !!data2.quantity && !!data2.unit;
 }
 async function extractNfDataFromFile(fileUrl, mimeType) {
   const fallback = { invoiceNumber: null, quantity: null, unit: null };
@@ -3400,6 +3400,923 @@ var init_nfExtraction = __esm({
   }
 });
 
+// server/utils/extratoClassificacao.ts
+var extratoClassificacao_exports = {};
+__export(extratoClassificacao_exports, {
+  GRUPO_RECEITAS: () => GRUPO_RECEITAS,
+  REGRAS_PADRAO: () => REGRAS_PADRAO,
+  classificarLinha: () => classificarLinha,
+  cnpjsDoTexto: () => cnpjsDoTexto,
+  estaClassificado: () => estaClassificado,
+  normalizarTexto: () => normalizarTexto,
+  regraCasa: () => regraCasa
+});
+function normalizarTexto(s) {
+  return (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+}
+function textoDoCampo(linha, campo) {
+  switch (campo) {
+    case "descricao":
+      return normalizarTexto(linha.descricao);
+    case "complemento":
+      return normalizarTexto(linha.complemento);
+    case "documento":
+      return normalizarTexto(linha.numeroDocumento);
+    default:
+      return normalizarTexto(`${linha.descricao ?? ""} ${linha.complemento ?? ""} ${linha.numeroDocumento ?? ""}`);
+  }
+}
+function regraCasa(regra, linha) {
+  if (!regra.ativa) return false;
+  if (regra.tipoLancamento !== "AMBOS" && regra.tipoLancamento !== linha.tipo) return false;
+  const texto = textoDoCampo(linha, regra.campo);
+  if (regra.padrao.startsWith("re:")) {
+    try {
+      return new RegExp(regra.padrao.slice(3), "i").test(texto);
+    } catch {
+      return false;
+    }
+  }
+  const alvo = normalizarTexto(regra.padrao);
+  return alvo.length > 0 && texto.includes(alvo);
+}
+function cnpjsDoTexto(linha) {
+  const texto = `${linha.descricao ?? ""} ${linha.complemento ?? ""}`;
+  const out = [];
+  const re = new RegExp(CNPJ_REGEX.source, "g");
+  let m;
+  while ((m = re.exec(texto)) !== null) {
+    const d = (m[1] + m[2]).replace(/\D/g, "");
+    if (d.length === 14) out.push(d);
+  }
+  return out;
+}
+function classificarLinha(linha, ctx) {
+  const manual = ctx.manual.get(linha.id);
+  if (manual) {
+    return { ...manual, origem: "manual", regraId: null, regraNome: null };
+  }
+  const regras = [...ctx.regras].sort((a, b) => a.prioridade - b.prioridade || a.id - b.id);
+  for (const r of regras) {
+    if (regraCasa(r, linha)) {
+      return {
+        grupo: r.grupo,
+        centroCusto: r.centroCusto,
+        natureza: r.natureza,
+        tipoResultado: r.tipoResultado,
+        origem: "regra",
+        regraId: r.id,
+        regraNome: r.nome
+      };
+    }
+  }
+  if (linha.tipo === "CREDITO" && ctx.compradoresCnpj.size > 0) {
+    if (cnpjsDoTexto(linha).some((c) => ctx.compradoresCnpj.has(c))) {
+      return {
+        grupo: GRUPO_RECEITAS,
+        centroCusto: "Venda de madeira",
+        natureza: "PIX de comprador",
+        tipoResultado: "resultado",
+        origem: "regra",
+        regraId: null,
+        regraNome: "Comprador cadastrado"
+      };
+    }
+  }
+  const fav = ctx.favorecido;
+  if (linha.tipo === "DEBITO" && fav && (fav.grupo || fav.centroCusto || fav.natureza)) {
+    return {
+      grupo: fav.grupo,
+      centroCusto: fav.centroCusto,
+      natureza: fav.natureza,
+      tipoResultado: "resultado",
+      origem: "favorecido",
+      regraId: null,
+      regraNome: null
+    };
+  }
+  return SEM_CLASSIFICACAO;
+}
+function estaClassificado(c) {
+  return c.origem !== "nenhuma";
+}
+var GRUPO_RECEITAS, REGRAS_PADRAO, CNPJ_REGEX, SEM_CLASSIFICACAO;
+var init_extratoClassificacao = __esm({
+  "server/utils/extratoClassificacao.ts"() {
+    "use strict";
+    GRUPO_RECEITAS = "Receitas";
+    REGRAS_PADRAO = [
+      {
+        nome: "Pagamento de madeira \u2014 Fazenda Simflor",
+        campo: "texto",
+        tipoLancamento: "DEBITO",
+        padrao: "FAZENDA SIMFLOR SPE",
+        grupo: "Produ\xE7\xE3o",
+        centroCusto: "Compra de Madeira",
+        natureza: "Madeira (fornecedor)",
+        tipoResultado: "resultado",
+        prioridade: 10,
+        ativa: true
+      },
+      {
+        nome: "Empr\xE9stimo \u2014 parcela",
+        campo: "descricao",
+        tipoLancamento: "DEBITO",
+        padrao: "EMPRESTIMO",
+        grupo: "Financeiro",
+        centroCusto: "Empr\xE9stimos",
+        natureza: "Parcela de empr\xE9stimo",
+        tipoResultado: "financeiro_nao_resultado",
+        prioridade: 20,
+        ativa: true
+      },
+      {
+        nome: "Ped\xE1gio / TAG",
+        campo: "documento",
+        tipoLancamento: "DEBITO",
+        padrao: "re:^TAG\\.",
+        grupo: "Log\xEDstica",
+        centroCusto: "Frota",
+        natureza: "Ped\xE1gio/TAG",
+        tipoResultado: "resultado",
+        prioridade: 30,
+        ativa: true
+      },
+      {
+        nome: "Boleto liquidado (cobran\xE7a)",
+        campo: "descricao",
+        tipoLancamento: "CREDITO",
+        padrao: "LIQUIDACAO COBRANCA",
+        grupo: GRUPO_RECEITAS,
+        centroCusto: "Venda de madeira",
+        natureza: "Boleto liquidado",
+        tipoResultado: "resultado",
+        prioridade: 40,
+        ativa: true
+      },
+      {
+        nome: "Antecipa\xE7\xE3o de cart\xE3o (loja/mudas)",
+        campo: "descricao",
+        tipoLancamento: "CREDITO",
+        padrao: "re:ANTECIPACAO (VISA|MASTERCARD)",
+        grupo: GRUPO_RECEITAS,
+        centroCusto: "Outras atividades",
+        natureza: "Vendas no cart\xE3o (loja/mudas)",
+        tipoResultado: "resultado",
+        prioridade: 50,
+        ativa: true
+      }
+    ];
+    CNPJ_REGEX = /(\d{2}\.\d{3}\.\d{3})[\/\s](\d{4}-\d{2})/g;
+    SEM_CLASSIFICACAO = {
+      grupo: null,
+      centroCusto: null,
+      natureza: null,
+      tipoResultado: "resultado",
+      origem: "nenhuma",
+      regraId: null,
+      regraNome: null
+    };
+  }
+});
+
+// server/utils/financeiroCanonico.ts
+function diasEntre(a, b) {
+  const da = Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10));
+  const dbb = Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10));
+  return Math.round((dbb - da) / 864e5);
+}
+function casarPagamentos(pagamentos, debitos, toleranciaDias = 7) {
+  const livres = new Map(debitos.map((d) => [d.id, d]));
+  const porCentavos = /* @__PURE__ */ new Map();
+  for (const d of debitos) {
+    const k = Math.round(d.valor * 100);
+    const arr = porCentavos.get(k) ?? [];
+    arr.push(d);
+    porCentavos.set(k, arr);
+  }
+  const casados = [];
+  const semBanco = [];
+  const ordenados = [...pagamentos].sort((a, b) => a.data.localeCompare(b.data) || b.valor - a.valor);
+  for (const p of ordenados) {
+    const candidatos = (porCentavos.get(Math.round(p.valor * 100)) ?? []).filter((d) => livres.has(d.id));
+    let melhor = null;
+    let melhorDif = Infinity;
+    for (const d of candidatos) {
+      const dif = Math.abs(diasEntre(p.data, d.data));
+      if (dif <= toleranciaDias && dif < melhorDif) {
+        melhor = d;
+        melhorDif = dif;
+      }
+    }
+    if (melhor) {
+      livres.delete(melhor.id);
+      casados.push({ pagamento: p, debito: melhor, diasDiferenca: diasEntre(p.data, melhor.data) });
+    } else {
+      semBanco.push(p);
+    }
+  }
+  return { casados, pagamentosSemBanco: semBanco, debitosSemSistema: Array.from(livres.values()) };
+}
+async function rows(db, sql34, params = []) {
+  const [r] = await db.$client.execute(sql34, params);
+  return r;
+}
+function ymDe(data2) {
+  return data2.slice(0, 7);
+}
+async function competenciaCustos(db, inicio, fim) {
+  const blocos = [];
+  const msInicio = Date.UTC(+inicio.slice(0, 4), +inicio.slice(5, 7) - 1, +inicio.slice(8, 10)) + 3 * 36e5;
+  const msFim = Date.UTC(+fim.slice(0, 4), +fim.slice(5, 7) - 1, +fim.slice(8, 10)) + 27 * 36e5 - 1;
+  async function bloco(def, sql34, params) {
+    try {
+      const r = await rows(db, sql34, params);
+      blocos.push({ ...def, valor: r2(Number(r[0]?.total ?? 0)), qtd: Number(r[0]?.qtd ?? 0) });
+    } catch (e) {
+      blocos.push({ ...def, valor: 0, qtd: 0, erro: String(e?.message ?? e).slice(0, 160) });
+    }
+  }
+  const ymIni = ymDe(inicio), ymFim = ymDe(fim);
+  const dRange = (col) => `DATE(${col}) BETWEEN ? AND ?`;
+  await bloco(
+    {
+      chave: "folha_clt_pj",
+      label: "Sal\xE1rios CLT/PJ",
+      grupo: "pessoal",
+      somaNoTotal: true,
+      nota: "Folha salva/fechada do m\xEAs (reference_month). Meses sem folha fechada n\xE3o aparecem."
+    },
+    `SELECT COALESCE(SUM(${sqlNum("base_value")}),0) AS total, COUNT(*) AS qtd FROM payroll_entries
+     WHERE employment_type IN ('clt','pj') AND reference_month BETWEEN ? AND ?`,
+    [ymIni, ymFim]
+  );
+  await bloco(
+    {
+      chave: "comissoes",
+      label: "Comiss\xF5es (l\xEDquidas do desconto)",
+      grupo: "pessoal",
+      somaNoTotal: true,
+      nota: "O desconto de combust\xEDvel de terceirizado \xE9 recupera\xE7\xE3o, n\xE3o despesa."
+    },
+    `SELECT COALESCE(SUM(${sqlNum("commission")} - ${sqlNum("discount")}),0) AS total, COUNT(*) AS qtd FROM payroll_entries
+     WHERE reference_month BETWEEN ? AND ?`,
+    [ymIni, ymFim]
+  );
+  await bloco(
+    {
+      chave: "diaristas",
+      label: "Di\xE1rias (presen\xE7as)",
+      grupo: "pessoal",
+      somaNoTotal: true,
+      nota: "S\xF3 diarista/semanal/terceirizado \u2014 presen\xE7a de CLT \xE9 rateio, n\xE3o custo extra."
+    },
+    `SELECT COALESCE(SUM(${sqlNum("daily_value")}),0) AS total, COUNT(*) AS qtd FROM collaborator_attendance
+     WHERE employment_type_ca IN ('diarista','terceirizado','semanal') AND ${dRange("date")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    {
+      chave: "madeira",
+      label: "Compra de madeira (fechamentos semanais)",
+      grupo: "madeira",
+      somaNoTotal: true,
+      nota: "Fechamento pela data final da semana, com o valor ATUAL das cargas (igual \xE0 tela de Fechamentos). Adiantamentos n\xE3o entram."
+    },
+    `SELECT COALESCE(SUM(t.v),0) AS total, COUNT(*) AS qtd FROM (
+       SELECT ${SQL_FECHAMENTO_VIVO("f", "cc")} AS v FROM cargo_weekly_closings f LEFT JOIN clients cc ON cc.id = f.client_id
+       WHERE f.week_end BETWEEN ? AND ?) t`,
+    [inicio, fim]
+  );
+  await bloco(
+    { chave: "corte_terceirizado", label: "Corte terceirizado", grupo: "madeira", somaNoTotal: true },
+    `SELECT COALESCE(SUM(third_party_cost),0) AS total, COUNT(*) AS qtd FROM cargo_loads
+     WHERE third_party_contractor IS NOT NULL AND third_party_contractor <> '' AND status <> 'cancelado'
+       AND ${dRange("COALESCE(delivery_date, date)")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    {
+      chave: "frete_terceirizado",
+      label: "Frete de caminh\xE3o terceirizado",
+      grupo: "madeira",
+      somaNoTotal: true,
+      nota: "Registrado no momento do pagamento (financial_entries 'frete')."
+    },
+    `SELECT COALESCE(SUM(${sqlNum("amount")}),0) AS total, COUNT(*) AS qtd FROM financial_entries
+     WHERE type = 'despesa' AND BINARY category = 'frete' AND status = 'confirmado' AND auto_generated = 0
+       AND ${dRange("date")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    {
+      chave: "comb_veiculos",
+      label: "Combust\xEDvel \u2014 ve\xEDculos (consumo)",
+      grupo: "combustivel",
+      somaNoTotal: true,
+      nota: "Consumo valorizado (litros \xD7 pre\xE7o), inclusive do tanque. N\xE3o soma com as faturas de combust\xEDvel."
+    },
+    `SELECT COALESCE(SUM(${sqlNum("fuel_cost")}),0) AS total, COUNT(*) AS qtd FROM vehicle_records
+     WHERE record_type = 'abastecimento' AND ${dRange("date")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    { chave: "comb_maquinas", label: "Combust\xEDvel \u2014 m\xE1quinas", grupo: "combustivel", somaNoTotal: true },
+    `SELECT COALESCE(SUM(${sqlNum("total_value")}),0) AS total, COUNT(*) AS qtd FROM machine_fuel WHERE ${dRange("date")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    { chave: "comb_terceiros", label: "Combust\xEDvel \u2014 terceiros", grupo: "combustivel", somaNoTotal: true },
+    `SELECT COALESCE(SUM(${sqlNum("total")}),0) AS total, COUNT(*) AS qtd FROM third_party_fuel WHERE ${dRange("date")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    { chave: "manut_veiculos", label: "Manuten\xE7\xE3o \u2014 ve\xEDculos", grupo: "manutencao", somaNoTotal: true },
+    `SELECT COALESCE(SUM(${sqlNum("maintenance_cost")}),0) AS total, COUNT(*) AS qtd FROM vehicle_records
+     WHERE record_type = 'manutencao' AND ${dRange("date")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    { chave: "manut_maquinas", label: "Manuten\xE7\xE3o \u2014 m\xE1quinas", grupo: "manutencao", somaNoTotal: true },
+    `SELECT COALESCE(SUM(${sqlNum("total_cost")}),0) AS total, COUNT(*) AS qtd FROM machine_maintenance WHERE ${dRange("date")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    {
+      chave: "manut_equipamentos",
+      label: "Manuten\xE7\xE3o \u2014 equipamentos/pe\xE7as",
+      grupo: "manutencao",
+      somaNoTotal: true,
+      nota: "O custo j\xE1 inclui pe\xE7as e m\xE3o de obra (n\xE3o soma pe\xE7as de novo)."
+    },
+    `SELECT COALESCE(SUM(${sqlNum("cost")}),0) AS total, COUNT(*) AS qtd FROM equipment_maintenance WHERE ${dRange("performed_at")}`,
+    [inicio, fim]
+  );
+  await bloco(
+    { chave: "oleos", label: "\xD3leos e lubrificantes", grupo: "manutencao", somaNoTotal: true },
+    `SELECT COALESCE(SUM(${sqlNum("total_value")}),0) AS total, COUNT(*) AS qtd FROM equipment_oil_records WHERE ${dRange("date")}`,
+    [inicio, fim]
+  );
+  const extra = (chave, label, cond, somaNoTotal, nota) => bloco(
+    { chave, label, grupo: "outros", somaNoTotal, nota },
+    `SELECT COALESCE(SUM(${sqlNum("amount")}),0) AS total, COUNT(*) AS qtd FROM extra_expenses WHERE ${dRange("date")} AND ${cond}`,
+    [inicio, fim]
+  );
+  await extra("extras_material", "Extras \u2014 compra de material", `category = 'compra_material' AND ${EXTRA_SEM_EMPRESTIMO}`, true);
+  await extra("extras_refeicao", "Extras \u2014 refei\xE7\xE3o", `category = 'refeicao' AND ${EXTRA_SEM_EMPRESTIMO}`, true);
+  await extra("extras_pedagio", "Extras \u2014 ped\xE1gio", `category = 'pedagio' AND ${EXTRA_SEM_EMPRESTIMO}`, true);
+  await extra(
+    "extras_outros",
+    "Extras \u2014 outros",
+    `category = 'outro' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    true,
+    "Sem empr\xE9stimos. Se houver extrato banc\xE1rio importado aqui, classifique pelo Caixa para n\xE3o duplicar."
+  );
+  await extra(
+    "extras_abastecimento",
+    "Extras \u2014 abastecimento",
+    `category = 'abastecimento' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    false,
+    "Informativo: combust\xEDvel j\xE1 entra no bloco de combust\xEDvel."
+  );
+  await extra(
+    "extras_servico_terceiro",
+    "Extras \u2014 servi\xE7o terceirizado",
+    `category = 'servico_terceiro' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    false,
+    "Informativo: costuma repetir compra de madeira, corte ou frete terceirizado."
+  );
+  await extra(
+    "extras_emprestimo",
+    "Extras \u2014 empr\xE9stimos lan\xE7ados como despesa",
+    `NOT (${EXTRA_SEM_EMPRESTIMO})`,
+    false,
+    "Informativo: empr\xE9stimo \xE9 movimento financeiro, n\xE3o custo da opera\xE7\xE3o."
+  );
+  await bloco(
+    {
+      chave: "compras",
+      label: "Compras aprovadas (compromisso)",
+      grupo: "outros",
+      somaNoTotal: false,
+      nota: "Informativo: o item comprado reaparece como manuten\xE7\xE3o/estoque, ent\xE3o n\xE3o entra no total."
+    },
+    `SELECT COALESCE(SUM(${sqlNum("final_price")}),0) AS total, COUNT(*) AS qtd FROM purchase_requests
+     WHERE status IN ('comprada','recebida') AND purchased_at BETWEEN ? AND ?`,
+    [msInicio, msFim]
+  );
+  let porEquipamento = [];
+  try {
+    const q2 = await rows(
+      db,
+      `SELECT t.equipment_id AS equipamentoId, COALESCE(e.name, CONCAT('#', t.equipment_id)) AS nome,
+              SUM(t.comb) AS combustivel, SUM(t.manut) AS manutencao, SUM(t.extra) AS extras
+       FROM (
+         SELECT equipment_id, ${sqlNum("fuel_cost")} AS comb, 0 AS manut, 0 AS extra FROM vehicle_records WHERE record_type='abastecimento' AND ${dRange("date")}
+         UNION ALL SELECT equipment_id, 0, ${sqlNum("maintenance_cost")}, 0 FROM vehicle_records WHERE record_type='manutencao' AND ${dRange("date")}
+         UNION ALL SELECT equipment_id, ${sqlNum("total_value")}, 0, 0 FROM machine_fuel WHERE ${dRange("date")}
+         UNION ALL SELECT equipment_id, 0, ${sqlNum("total_cost")}, 0 FROM machine_maintenance WHERE ${dRange("date")}
+         UNION ALL SELECT equipment_id, 0, ${sqlNum("cost")}, 0 FROM equipment_maintenance WHERE ${dRange("performed_at")}
+         UNION ALL SELECT equipment_id, 0, ${sqlNum("total_value")}, 0 FROM equipment_oil_records WHERE ${dRange("date")}
+         UNION ALL SELECT equipment_id, 0, 0, ${sqlNum("amount")} FROM extra_expenses WHERE equipment_id IS NOT NULL AND category IN ('compra_material','refeicao','pedagio','outro') AND ${EXTRA_SEM_EMPRESTIMO} AND ${dRange("date")}
+       ) t
+       LEFT JOIN equipment e ON e.id = t.equipment_id
+       WHERE t.equipment_id IS NOT NULL
+       GROUP BY t.equipment_id, e.name
+       ORDER BY SUM(t.comb) + SUM(t.manut) + SUM(t.extra) DESC LIMIT 40`,
+      Array(7).fill([inicio, fim]).flat()
+    );
+    porEquipamento = q2.map((r) => ({
+      equipamentoId: r.equipamentoId,
+      nome: r.nome,
+      combustivel: r2(Number(r.combustivel)),
+      manutencao: r2(Number(r.manutencao)),
+      extras: r2(Number(r.extras)),
+      total: r2(Number(r.combustivel) + Number(r.manutencao) + Number(r.extras))
+    }));
+  } catch {
+  }
+  let porLocal = [];
+  try {
+    const q2 = await rows(
+      db,
+      `SELECT t.loc AS localId, COALESCE(g.name, 'Sem local') AS nome,
+              SUM(t.comb) AS combustivel, SUM(t.manut) AS manutencao, SUM(t.extra) AS extras, SUM(t.dia) AS diarias
+       FROM (
+         SELECT work_location_id AS loc, ${sqlNum("fuel_cost")} AS comb, 0 AS manut, 0 AS extra, 0 AS dia FROM vehicle_records WHERE record_type='abastecimento' AND ${dRange("date")}
+         UNION ALL SELECT work_location_id, 0, ${sqlNum("maintenance_cost")}, 0, 0 FROM vehicle_records WHERE record_type='manutencao' AND ${dRange("date")}
+         UNION ALL SELECT work_location_id, ${sqlNum("total_value")}, 0, 0, 0 FROM machine_fuel WHERE ${dRange("date")}
+         UNION ALL SELECT work_location_id, 0, 0, ${sqlNum("amount")}, 0 FROM extra_expenses WHERE category IN ('compra_material','refeicao','pedagio','outro') AND ${EXTRA_SEM_EMPRESTIMO} AND ${dRange("date")}
+         UNION ALL SELECT work_location_id, 0, 0, 0, ${sqlNum("daily_value")} FROM collaborator_attendance
+           WHERE employment_type_ca IN ('diarista','terceirizado','semanal') AND ${dRange("date")}
+       ) t
+       LEFT JOIN gps_locations g ON g.id = t.loc
+       GROUP BY t.loc, g.name
+       ORDER BY SUM(t.comb) + SUM(t.manut) + SUM(t.extra) + SUM(t.dia) DESC`,
+      Array(5).fill([inicio, fim]).flat()
+    );
+    porLocal = q2.map((r) => ({
+      localId: r.localId ?? null,
+      nome: r.nome,
+      combustivel: r2(Number(r.combustivel)),
+      manutencao: r2(Number(r.manutencao)),
+      extras: r2(Number(r.extras)),
+      diarias: r2(Number(r.diarias)),
+      total: r2(Number(r.combustivel) + Number(r.manutencao) + Number(r.extras) + Number(r.diarias))
+    }));
+  } catch {
+  }
+  const receita = { nfs: 0, nfsQtd: 0, cargasSemNf: 0, cargasSemNfQtd: 0 };
+  try {
+    const nf = await rows(
+      db,
+      `SELECT COALESCE(SUM(${sqlNum("valor_total")}),0) AS total, COUNT(*) AS qtd FROM notas_fiscais
+       WHERE cfop = '5102' AND status_nf_interno <> 'cancelado' AND data_emissao BETWEEN ? AND ?`,
+      [inicio, fim]
+    );
+    receita.nfs = r2(Number(nf[0]?.total ?? 0));
+    receita.nfsQtd = Number(nf[0]?.qtd ?? 0);
+    const cg = await rows(
+      db,
+      `SELECT cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3, cd.price_per_unit, cd.unit
+       FROM cargo_loads cl
+       JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+       WHERE cl.status = 'entregue' AND cd.payment_term_days_after_delivery IS NOT NULL
+         AND ${dRange("COALESCE(cl.delivery_date, cl.date)")}
+         AND NOT EXISTS (
+           SELECT 1 FROM notas_fiscais nf
+           WHERE nf.cfop = '5102' AND nf.numero_nota = TRIM(SUBSTRING_INDEX(cl.invoice_number, 'NF ', -1))
+             AND cl.invoice_number IS NOT NULL AND cl.invoice_number <> ''
+         )`,
+      [inicio, fim]
+    );
+    for (const r of cg) {
+      const peso = parseFloat(r.weight_net_kg || r.weight_out_kg || "0");
+      const vol = parseFloat(r.volume_m3 || "0");
+      const preco = parseFloat(r.price_per_unit || "0");
+      receita.cargasSemNf += (r.unit === "m3" ? vol : peso / 1e3) * preco;
+      receita.cargasSemNfQtd++;
+    }
+    receita.cargasSemNf = r2(receita.cargasSemNf);
+  } catch (e) {
+    receita.erro = String(e?.message ?? e).slice(0, 160);
+  }
+  const custoTotal = r2(blocos.filter((b) => b.somaNoTotal).reduce((s, b) => s + b.valor, 0));
+  const receitaTotal = r2(receita.nfs + receita.cargasSemNf);
+  return { blocos, custoTotal, receita, receitaTotal, resultado: r2(receitaTotal - custoTotal), porEquipamento, porLocal };
+}
+async function pagamentosDoSistema(db, inicio, fim) {
+  const out = [];
+  const erros = [];
+  const dia = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+  async function fonte(nome, fn) {
+    try {
+      await fn();
+    } catch (e) {
+      erros.push(`${nome}: ${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  }
+  const dRange = (col) => `DATE(${col}) BETWEEN ? AND ?`;
+  await fonte("Sal\xE1rios", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT id, collaborator_name, reference_month, DATE(paid_at) AS d, ${sqlNum("base_value")} AS v FROM payroll_entries
+       WHERE status = 'pago' AND employment_type IN ('clt','pj') AND paid_at IS NOT NULL AND ${dRange("paid_at")}`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "folha_salario", tipoLabel: "Sal\xE1rio", refId: r.id, descricao: `${r.collaborator_name} \u2014 ${r.reference_month}`, valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.salario });
+    }
+  });
+  await fonte("Comiss\xF5es", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT id, collaborator_name, reference_month, DATE(commission_paid_at) AS d, (${sqlNum("commission")} - ${sqlNum("discount")}) AS v
+       FROM payroll_entries WHERE commission_status = 'pago' AND commission_paid_at IS NOT NULL AND ${dRange("commission_paid_at")}`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "folha_comissao", tipoLabel: "Comiss\xE3o", refId: r.id, descricao: `${r.collaborator_name} \u2014 ${r.reference_month}`, valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.comissao });
+    }
+  });
+  await fonte("Di\xE1rias", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT a.collaborator_id AS cid, COALESCE(c.name, CONCAT('#', a.collaborator_id)) AS nome, DATE(a.paid_at) AS d, SUM(${sqlNum("a.daily_value")}) AS v
+       FROM collaborator_attendance a LEFT JOIN collaborators c ON c.id = a.collaborator_id
+       WHERE a.payment_status_ca = 'pago' AND a.paid_at IS NOT NULL AND a.employment_type_ca IN ('diarista','terceirizado','semanal')
+         AND ${dRange("a.paid_at")} GROUP BY a.collaborator_id, c.name, DATE(a.paid_at)`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "diarias", tipoLabel: "Di\xE1rias", refId: r.cid, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.diarias });
+    }
+  });
+  await fonte("Fechamentos de madeira", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT f.id, COALESCE(c.name, CONCAT('#', f.client_id)) AS nome, f.week_end, DATE(f.paid_at) AS d, ${SQL_FECHAMENTO_VIVO("f", "c")} AS v
+       FROM cargo_weekly_closings f LEFT JOIN clients c ON c.id = f.client_id
+       WHERE f.status = 'pago' AND f.paid_at IS NOT NULL AND ${dRange("f.paid_at")}`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "fechamento_madeira", tipoLabel: "Fechamento de madeira", refId: r.id, descricao: `${r.nome} \u2014 semana at\xE9 ${dia(r.week_end)}`, valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.madeira });
+    }
+  });
+  await fonte("Faturas de combust\xEDvel", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT i.id, i.invoice_number, COALESCE(s.name, '') AS fornecedor, i.paid_at AS d,
+              IF(i.paid_amount IS NULL OR i.paid_amount = '', ${sqlNum("i.total_amount")}, ${sqlNum("i.paid_amount")}) AS v
+       FROM fuel_invoices i LEFT JOIN fuel_suppliers s ON s.id = i.supplier_id
+       WHERE i.status = 'pago' AND i.paid_at IS NOT NULL AND i.paid_at BETWEEN ? AND ?`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "fatura_combustivel", tipoLabel: "Fatura de combust\xEDvel", refId: r.id, descricao: `NF ${r.invoice_number} \u2014 ${r.fornecedor}`, valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.combustivel });
+    }
+  });
+  await fonte("Corte terceirizado", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT third_party_contractor AS nome, DATE(third_party_paid_at) AS d, SUM(third_party_cost) AS v
+       FROM cargo_loads WHERE third_party_paid = 1 AND third_party_paid_at IS NOT NULL AND third_party_contractor <> ''
+         AND ${dRange("third_party_paid_at")} GROUP BY third_party_contractor, DATE(third_party_paid_at)`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "corte_terceirizado", tipoLabel: "Corte terceirizado", refId: null, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.corte });
+    }
+  });
+  await fonte("Adiantamentos a clientes", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT a.id, COALESCE(c.name, CONCAT('#', a.client_id)) AS nome, DATE(a.date) AS d, ${sqlNum("a.amount")} AS v
+       FROM client_advances a LEFT JOIN clients c ON c.id = a.client_id WHERE ${dRange("a.date")}`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "adiantamento", tipoLabel: "Adiantamento", refId: r.id, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.adiantamento });
+    }
+  });
+  await fonte("Pagamentos a clientes", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT p.id, COALESCE(c.name, CONCAT('#', p.clientId)) AS nome, DATE(p.paidDate) AS d, p.amount AS v
+       FROM client_payments p LEFT JOIN clients c ON c.id = p.clientId
+       WHERE p.status IN ('pago','paid') AND p.paidDate IS NOT NULL AND ${dRange("p.paidDate")}`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "pagamento_cliente", tipoLabel: "Pagamento a cliente", refId: r.id, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.madeira });
+    }
+  });
+  await fonte("Frete terceirizado", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT id, description, DATE(date) AS d, ${sqlNum("amount")} AS v FROM financial_entries
+       WHERE type = 'despesa' AND BINARY category = 'frete' AND status = 'confirmado' AND auto_generated = 0 AND ${dRange("date")}`,
+      [inicio, fim]
+    )) {
+      if (Number(r.v) > 0) out.push({ tipo: "frete_terceirizado", tipoLabel: "Frete terceirizado", refId: r.id, descricao: String(r.description ?? "Frete"), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.frete });
+    }
+  });
+  return { pagamentos: out, erros };
+}
+async function pendencias(db, hoje) {
+  const res = {
+    aReceber: { boletosVencidos: 0, boletosAVencer: 0, nfsSemBoletoVencidas: 0, nfsSemBoletoAVencer: 0, nfsSemBoletoSemPrevisao: 0, cargasVencidas: 0, cargasAVencer: 0, total: 0 },
+    aPagar: { faturasCombustivelVencidas: 0, faturasCombustivelAVencer: 0, fechamentosVencidos: 0, fechamentosAVencer: 0, corteTerceirizado: 0, total: 0 },
+    erros: []
+  };
+  async function fonte(nome, fn) {
+    try {
+      await fn();
+    } catch (e) {
+      res.erros.push(`${nome}: ${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  }
+  await fonte("Boletos", async () => {
+    for (const r of await rows(db, `SELECT data_vencimento AS v, ${sqlNum("valor")} AS valor FROM sicoob_boletos WHERE situacao = 1`)) {
+      if (String(r.v) < hoje) res.aReceber.boletosVencidos += Number(r.valor);
+      else res.aReceber.boletosAVencer += Number(r.valor);
+    }
+  });
+  await fonte("NFs sem boleto", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT nf.data_previsao_pagamento AS prev, ${sqlNum("nf.valor_total")} AS valor FROM notas_fiscais nf
+       LEFT JOIN sicoob_boletos sb ON sb.nf_referente = nf.numero_nota AND sb.cnpj_pagador = nf.cnpj_destinatario
+       WHERE sb.id IS NULL AND nf.cfop = '5102' AND nf.status_nf_interno = 'em_aberto'`
+    )) {
+      if (!r.prev) res.aReceber.nfsSemBoletoSemPrevisao += Number(r.valor);
+      else if (String(r.prev) < hoje) res.aReceber.nfsSemBoletoVencidas += Number(r.valor);
+      else res.aReceber.nfsSemBoletoAVencer += Number(r.valor);
+    }
+  });
+  await fonte("Cargas a receber", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT cl.delivery_date, cl.date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3, cd.price_per_unit, cd.unit, cd.payment_term_days_after_delivery AS prazo
+       FROM cargo_loads cl
+       JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+       WHERE cl.status = 'entregue' AND cd.payment_term_days_after_delivery IS NOT NULL AND cl.buyer_paid_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM notas_fiscais nf WHERE nf.cfop = '5102' AND cl.invoice_number IS NOT NULL AND cl.invoice_number <> ''
+                         AND nf.numero_nota = TRIM(SUBSTRING_INDEX(cl.invoice_number, 'NF ', -1)))`
+    )) {
+      const entrega = r.delivery_date || r.date;
+      const base = entrega instanceof Date ? entrega : new Date(entrega);
+      const venc = new Date(base.getTime());
+      venc.setDate(venc.getDate() + Number(r.prazo));
+      const peso = parseFloat(r.weight_net_kg || r.weight_out_kg || "0");
+      const valor = (r.unit === "m3" ? parseFloat(r.volume_m3 || "0") : peso / 1e3) * parseFloat(r.price_per_unit || "0");
+      if (venc.toISOString().slice(0, 10) < hoje) res.aReceber.cargasVencidas += valor;
+      else res.aReceber.cargasAVencer += valor;
+    }
+  });
+  await fonte("Faturas de combust\xEDvel", async () => {
+    for (const r of await rows(db, `SELECT due_date AS v, ${sqlNum("total_amount")} AS valor FROM fuel_invoices WHERE status IN ('pendente','vencido')`)) {
+      if (String(r.v) < hoje) res.aPagar.faturasCombustivelVencidas += Number(r.valor);
+      else res.aPagar.faturasCombustivelAVencer += Number(r.valor);
+    }
+  });
+  await fonte("Fechamentos", async () => {
+    for (const r of await rows(db, `SELECT due_date AS v, total_amount AS valor FROM cargo_weekly_closings WHERE status IN ('fechado','atrasado')`)) {
+      const v = r.v instanceof Date ? r.v.toISOString().slice(0, 10) : String(r.v).slice(0, 10);
+      if (v < hoje) res.aPagar.fechamentosVencidos += Number(r.valor);
+      else res.aPagar.fechamentosAVencer += Number(r.valor);
+    }
+  });
+  await fonte("Corte terceirizado", async () => {
+    const r = await rows(
+      db,
+      `SELECT COALESCE(SUM(third_party_cost),0) AS valor FROM cargo_loads
+       WHERE third_party_contractor IS NOT NULL AND third_party_contractor <> '' AND status = 'entregue' AND (third_party_paid IS NULL OR third_party_paid = 0)`
+    );
+    res.aPagar.corteTerceirizado = Number(r[0]?.valor ?? 0);
+  });
+  const a = res.aReceber, p = res.aPagar;
+  for (const k of Object.keys(a)) if (k !== "total") a[k] = r2(a[k]);
+  for (const k of Object.keys(p)) if (k !== "total") p[k] = r2(p[k]);
+  a.total = r2(a.boletosVencidos + a.boletosAVencer + a.nfsSemBoletoVencidas + a.nfsSemBoletoAVencer + a.nfsSemBoletoSemPrevisao + a.cargasVencidas + a.cargasAVencer);
+  p.total = r2(p.faturasCombustivelVencidas + p.faturasCombustivelAVencer + p.fechamentosVencidos + p.fechamentosAVencer + p.corteTerceirizado);
+  return res;
+}
+async function entradasDoPeriodo(db, inicio, fim) {
+  const erros = [];
+  const out = {
+    faturadoNF: { valor: 0, qtd: 0 },
+    porCliente: [],
+    boletosLiquidados: { valor: 0, qtd: 0 },
+    boletosSemNF: { valor: 0, qtd: 0 },
+    nfsSemBoleto: { valor: 0, qtd: 0 },
+    erros
+  };
+  const fonte = async (nome, fn) => {
+    try {
+      await fn();
+    } catch (e) {
+      erros.push(`${nome}: ${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  };
+  await fonte("NFs emitidas", async () => {
+    const t2 = await rows(
+      db,
+      `SELECT COALESCE(SUM(${sqlNum("valor_total")}),0) AS v, COUNT(*) AS q FROM notas_fiscais
+       WHERE cfop = '5102' AND status_nf_interno <> 'cancelado' AND data_emissao BETWEEN ? AND ?`,
+      [inicio, fim]
+    );
+    out.faturadoNF = { valor: r2(Number(t2[0]?.v ?? 0)), qtd: Number(t2[0]?.q ?? 0) };
+    const c = await rows(
+      db,
+      `SELECT nome_destinatario AS cliente, SUM(${sqlNum("valor_total")}) AS v, COUNT(*) AS q FROM notas_fiscais
+       WHERE cfop = '5102' AND status_nf_interno <> 'cancelado' AND data_emissao BETWEEN ? AND ?
+       GROUP BY nome_destinatario ORDER BY v DESC LIMIT 15`,
+      [inicio, fim]
+    );
+    out.porCliente = c.map((r) => ({ cliente: String(r.cliente ?? "\u2014"), valor: r2(Number(r.v)), qtd: Number(r.q) }));
+  });
+  await fonte("Boletos liquidados", async () => {
+    const t2 = await rows(
+      db,
+      `SELECT COALESCE(SUM(${sqlNum("valor")}),0) AS v, COUNT(*) AS q FROM sicoob_boletos
+       WHERE situacao = 3 AND data_pagamento BETWEEN ? AND ?`,
+      [inicio, fim]
+    );
+    out.boletosLiquidados = { valor: r2(Number(t2[0]?.v ?? 0)), qtd: Number(t2[0]?.q ?? 0) };
+    const s = await rows(
+      db,
+      `SELECT COALESCE(SUM(${sqlNum("valor")}),0) AS v, COUNT(*) AS q FROM sicoob_boletos
+       WHERE situacao IN (1,3) AND (nf_referente IS NULL OR nf_referente = '') AND data_vencimento BETWEEN ? AND ?`,
+      [inicio, fim]
+    );
+    out.boletosSemNF = { valor: r2(Number(s[0]?.v ?? 0)), qtd: Number(s[0]?.q ?? 0) };
+  });
+  await fonte("NFs sem boleto", async () => {
+    const t2 = await rows(
+      db,
+      `SELECT COALESCE(SUM(${sqlNum("nf.valor_total")}),0) AS v, COUNT(*) AS q FROM notas_fiscais nf
+       LEFT JOIN sicoob_boletos sb ON sb.nf_referente = nf.numero_nota AND sb.cnpj_pagador = nf.cnpj_destinatario
+       WHERE sb.id IS NULL AND nf.cfop = '5102' AND nf.status_nf_interno <> 'cancelado' AND nf.data_emissao BETWEEN ? AND ?`,
+      [inicio, fim]
+    );
+    out.nfsSemBoleto = { valor: r2(Number(t2[0]?.v ?? 0)), qtd: Number(t2[0]?.q ?? 0) };
+  });
+  return out;
+}
+async function contaCorrenteCompradores(db, inicio, fim) {
+  const { cnpjsDoTexto: cnpjsDoTexto2 } = await Promise.resolve().then(() => (init_extratoClassificacao(), extratoClassificacao_exports));
+  const mapa = /* @__PURE__ */ new Map();
+  const digitos = (s) => String(s ?? "").replace(/\D/g, "");
+  const item = (cnpj, nome) => {
+    let x = mapa.get(cnpj);
+    if (!x) {
+      x = { cnpj, nome: nome || cnpj, faturadoNF: 0, faturadoCargas: 0, pix: 0, boletos: 0, nfs: 0 };
+      mapa.set(cnpj, x);
+    } else if (nome && x.nome === x.cnpj) x.nome = nome;
+    return x;
+  };
+  const erros = [];
+  const fonte = async (nome, fn) => {
+    try {
+      await fn();
+    } catch (e) {
+      erros.push(`${nome}: ${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  };
+  await fonte("NFs", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT cnpj_destinatario AS cnpj, MAX(nome_destinatario) AS nome, SUM(${sqlNum("valor_total")}) AS v, COUNT(*) AS q
+       FROM notas_fiscais WHERE cfop = '5102' AND status_nf_interno <> 'cancelado' AND data_emissao BETWEEN ? AND ?
+       GROUP BY cnpj_destinatario`,
+      [inicio, fim]
+    )) {
+      const c = digitos(r.cnpj);
+      if (c.length !== 14) continue;
+      const x = item(c, r.nome);
+      x.faturadoNF += Number(r.v);
+      x.nfs += Number(r.q);
+    }
+  });
+  await fonte("Cargas sem NF", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT cd.cnpj_cpf AS cnpj, cd.name AS nome, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3, cd.price_per_unit, cd.unit
+       FROM cargo_loads cl
+       JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+       WHERE cl.status = 'entregue' AND cd.payment_term_days_after_delivery IS NOT NULL
+         AND DATE(COALESCE(cl.delivery_date, cl.date)) BETWEEN ? AND ?
+         AND NOT EXISTS (SELECT 1 FROM notas_fiscais nf WHERE nf.cfop = '5102' AND cl.invoice_number IS NOT NULL AND cl.invoice_number <> ''
+                         AND nf.numero_nota = TRIM(SUBSTRING_INDEX(cl.invoice_number, 'NF ', -1)))`,
+      [inicio, fim]
+    )) {
+      const c = digitos(r.cnpj);
+      if (c.length !== 14) continue;
+      const peso = parseFloat(r.weight_net_kg || r.weight_out_kg || "0");
+      const qtd = r.unit === "m3" ? parseFloat(r.volume_m3 || "0") : peso / 1e3;
+      item(c, r.nome).faturadoCargas += qtd * parseFloat(r.price_per_unit || "0");
+    }
+  });
+  await fonte("PIX no extrato", async () => {
+    const conhecidos = new Set(mapa.keys());
+    for (const r of await rows(
+      db,
+      `SELECT descricao, complemento, valor FROM sicoob_extrato WHERE tipo_lancamento = 'CREDITO' AND data_lancamento BETWEEN ? AND ?`,
+      [inicio, fim]
+    )) {
+      const linha = { id: 0, dataLancamento: "", descricao: r.descricao, complemento: r.complemento, numeroDocumento: null, tipo: "CREDITO", valor: 0 };
+      for (const c of cnpjsDoTexto2(linha)) {
+        if (conhecidos.has(c) || mapa.has(c)) {
+          item(c).pix += Math.abs(parseFloat(r.valor ?? "0"));
+          break;
+        }
+      }
+    }
+  });
+  await fonte("Boletos liquidados", async () => {
+    for (const r of await rows(
+      db,
+      `SELECT cnpj_pagador AS cnpj, MAX(nome_pagador) AS nome, SUM(${sqlNum("valor")}) AS v FROM sicoob_boletos
+       WHERE situacao = 3 AND data_pagamento BETWEEN ? AND ? GROUP BY cnpj_pagador`,
+      [inicio, fim]
+    )) {
+      const c = digitos(r.cnpj);
+      if (c.length !== 14) continue;
+      item(c, r.nome).boletos += Number(r.v);
+    }
+  });
+  const lista = Array.from(mapa.values()).map((x) => {
+    const faturado = x.faturadoNF + x.faturadoCargas;
+    const recebido = x.pix + x.boletos;
+    return {
+      cnpj: x.cnpj,
+      nome: x.nome,
+      nfs: x.nfs,
+      faturadoNF: r2(x.faturadoNF),
+      faturadoCargas: r2(x.faturadoCargas),
+      faturado: r2(faturado),
+      recebidoPix: r2(x.pix),
+      recebidoBoletos: r2(x.boletos),
+      recebido: r2(recebido),
+      diferenca: r2(faturado - recebido)
+    };
+  }).filter((x) => x.faturado > 0 || x.recebido > 0).sort((a, b) => b.faturado - a.faturado);
+  return { compradores: lista, erros };
+}
+var sqlNum, r2, SQL_CARGAS_FECHAMENTO, SQL_KG, SQL_FECHAMENTO_VIVO, EXTRA_SEM_EMPRESTIMO, SUG;
+var init_financeiroCanonico = __esm({
+  "server/utils/financeiroCanonico.ts"() {
+    "use strict";
+    sqlNum = (col) => `CAST(IF(${col} IS NULL OR ${col} = '', 0, IF(${col} LIKE '%,%', REPLACE(REPLACE(${col}, '.', ''), ',', '.'), ${col})) AS DECIMAL(15,2))`;
+    r2 = (n) => Math.round(n * 100) / 100;
+    SQL_CARGAS_FECHAMENTO = (select, f = "f") => `(SELECT ${select} FROM cargo_loads l WHERE l.client_id = ${f}.client_id AND l.area_id <=> ${f}.area_id AND l.status <> 'cancelado'
+      AND DATE(COALESCE(l.delivery_date, l.date)) BETWEEN ${f}.week_start AND ${f}.week_end)`;
+    SQL_KG = `CAST(IF(NULLIF(l.weight_net_kg, '') IS NOT NULL, l.weight_net_kg, IF(NULLIF(l.weight_out_kg, '') IS NOT NULL, l.weight_out_kg, '0')) AS DECIMAL(15,3))`;
+    SQL_FECHAMENTO_VIVO = (f = "f", cc = "cc") => `ROUND(IF(${f}.price_unit = 'm3',
+      COALESCE(${SQL_CARGAS_FECHAMENTO(`SUM(${sqlNum("l.volume_m3")})`, f)}, 0),
+      COALESCE(${SQL_CARGAS_FECHAMENTO(`SUM(${SQL_KG})`, f)}, 0) / 1000)
+    * COALESCE(NULLIF(${f}.price_per_ton, 0), ${cc}.price_per_ton + 0, 0), 2)`;
+    EXTRA_SEM_EMPRESTIMO = "(description IS NULL OR description NOT LIKE '%EMPR_STIMO%')";
+    SUG = {
+      salario: { grupo: "Pessoal", centroCusto: "Folha de pagamento", natureza: "Sal\xE1rio" },
+      comissao: { grupo: "Pessoal", centroCusto: "Folha de pagamento", natureza: "Comiss\xE3o" },
+      diarias: { grupo: "Pessoal", centroCusto: "Folha de pagamento", natureza: "Di\xE1rias" },
+      madeira: { grupo: "Produ\xE7\xE3o", centroCusto: "Compra de Madeira", natureza: "Madeira (fornecedor)" },
+      combustivel: { grupo: "Produ\xE7\xE3o", centroCusto: "Opera\xE7\xE3o de Produ\xE7\xE3o", natureza: "Combust\xEDvel" },
+      corte: { grupo: "Produ\xE7\xE3o", centroCusto: "Opera\xE7\xE3o de Produ\xE7\xE3o", natureza: "Corte terceirizado" },
+      adiantamento: { grupo: "Produ\xE7\xE3o", centroCusto: "Compra de Madeira", natureza: "Adiantamento a fornecedor" },
+      frete: { grupo: "Log\xEDstica", centroCusto: "Fretes de Produ\xE7\xE3o", natureza: "Frete" }
+    };
+  }
+});
+
+// server/utils/closingRefresh.ts
+var closingRefresh_exports = {};
+__export(closingRefresh_exports, {
+  atualizarTotaisFechamentos: () => atualizarTotaisFechamentos
+});
+async function atualizarTotaisFechamentos(conn, opts = {}) {
+  const semAbatimento = `
+    NOT EXISTS (SELECT 1 FROM client_advance_deductions d WHERE d.weekly_closing_id = f.id)
+    AND NOT EXISTS (
+      SELECT 1 FROM client_advance_deductions d JOIN cargo_loads l2 ON l2.id = d.cargo_load_id
+      WHERE l2.client_id = f.client_id AND l2.area_id <=> f.area_id
+        AND DATE(COALESCE(l2.delivery_date, l2.date)) BETWEEN f.week_start AND f.week_end)`;
+  const sql34 = `
+    UPDATE cargo_weekly_closings f
+    LEFT JOIN clients cc ON cc.id = f.client_id
+    SET f.total_loads = COALESCE(${SQL_CARGAS_FECHAMENTO("COUNT(*)")}, 0),
+        f.total_weight_kg = COALESCE(${SQL_CARGAS_FECHAMENTO(`SUM(${SQL_KG})`)}, 0),
+        f.total_volume_m3 = COALESCE(${SQL_CARGAS_FECHAMENTO(`SUM(${sqlNum("l.volume_m3")})`)}, 0),
+        f.total_amount = ${SQL_FECHAMENTO_VIVO("f", "cc")}
+    WHERE f.status <> 'pago' ${opts.id ? "AND f.id = ?" : ""}
+      AND ${semAbatimento}
+      AND (ABS(${SQL_FECHAMENTO_VIVO("f", "cc")} - f.total_amount) > 0.01
+           OR COALESCE(${SQL_CARGAS_FECHAMENTO("COUNT(*)")}, 0) <> f.total_loads)`;
+  const [res] = await conn.execute(sql34, opts.id ? [opts.id] : []);
+  return Number(res?.affectedRows ?? 0);
+}
+var init_closingRefresh = __esm({
+  "server/utils/closingRefresh.ts"() {
+    "use strict";
+    init_financeiroCanonico();
+  }
+});
+
 // server/routers/permissions.ts
 import { z as z16 } from "zod";
 import { TRPCError as TRPCError12 } from "@trpc/server";
@@ -3414,8 +4331,8 @@ async function resolveUserPermissions(userId, role) {
     perm = permRow || null;
   } catch (e) {
     try {
-      const [rows] = await db.execute(sql5`SELECT * FROM user_permissions WHERE user_id = ${userId} LIMIT 1`);
-      perm = rows?.[0] || null;
+      const [rows2] = await db.execute(sql5`SELECT * FROM user_permissions WHERE user_id = ${userId} LIMIT 1`);
+      perm = rows2?.[0] || null;
     } catch {
       perm = null;
     }
@@ -3430,8 +4347,8 @@ async function resolveUserPermissions(userId, role) {
       collab = collabRow || null;
     } catch {
       try {
-        const [rows] = await db.execute(sql5`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${userId} LIMIT 1`);
-        collab = rows?.[0] || null;
+        const [rows2] = await db.execute(sql5`SELECT client_id as clientId, role FROM collaborators WHERE user_id = ${userId} LIMIT 1`);
+        collab = rows2?.[0] || null;
       } catch {
         collab = null;
       }
@@ -3523,6 +4440,8 @@ var init_permissions = __esm({
       { slug: "estoque", label: "Estoque", group: "Compras" },
       // Transporte
       { slug: "ciclos-frete", label: "Ciclos de Frete (Geofence)", group: "Transporte" },
+      { slug: "metas-semanais", label: "Metas Semanais (respons\xE1vel)", group: "Opera\xE7\xF5es" },
+      { slug: "metas-semanais-gestao", label: "Metas Semanais (criar e supervisionar)", group: "Opera\xE7\xF5es" },
       // Notas
       { slug: "controle-notas", label: "Controle de Notas Fiscais", group: "Notas" },
       // Financeiro
@@ -3531,7 +4450,8 @@ var init_permissions = __esm({
       { slug: "contas-a-pagar", label: "Contas a Pagar", group: "Financeiro" },
       { slug: "extrato-movimentacoes", label: "Extrato Movimenta\xE7\xF5es", group: "Financeiro" },
       { slug: "folha-pagamento", label: "Folha de Pagamento", group: "Financeiro" },
-      { slug: "fluxo-de-caixa", label: "Fluxo de Caixa", group: "Financeiro" }
+      { slug: "fluxo-de-caixa", label: "Fluxo de Caixa", group: "Financeiro" },
+      { slug: "dashboard-real", label: "Dashboard Financeiro Real", group: "Financeiro" }
     ];
     PROFILES = {
       admin: {
@@ -3556,11 +4476,11 @@ var init_permissions = __esm({
       },
       encarregado: {
         label: "Encarregado de Ro\xE7a",
-        modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas", "manutencao"]
+        modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas", "manutencao", "metas-semanais"]
       },
       lider: {
         label: "L\xEDder de Equipe",
-        modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"]
+        modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps", "metas-semanais"]
       },
       equipe: {
         label: "Equipe de Campo",
@@ -3619,8 +4539,8 @@ var init_permissions = __esm({
           allPerms = await db.select().from(userPermissions);
         } catch {
           try {
-            const [rows] = await db.execute(sql5`SELECT * FROM user_permissions`);
-            allPerms = rows;
+            const [rows2] = await db.execute(sql5`SELECT * FROM user_permissions`);
+            allPerms = rows2;
           } catch {
             allPerms = [];
           }
@@ -3893,11 +4813,11 @@ async function getCommissionRatesMap(db, collaboratorId = 0) {
   return map;
 }
 async function getFixedCommissionMap(db) {
-  const [rows] = await db.execute(
+  const [rows2] = await db.execute(
     sql12`SELECT collaborator_id AS collaboratorId, valor FROM payroll_commission_rates WHERE chave = 'motorista_fixo'`
   );
   const map = /* @__PURE__ */ new Map();
-  for (const r of rows) map.set(Number(r.collaboratorId), parseFloat(r.valor) || 0);
+  for (const r of rows2) map.set(Number(r.collaboratorId), parseFloat(r.valor) || 0);
   return map;
 }
 async function requireAdmin(ctx) {
@@ -3931,11 +4851,11 @@ function getFridaysInMonth(year, month) {
   return fridays;
 }
 async function getWeeklyPaymentsMap(db, referenceMonth) {
-  const [rows] = await db.execute(
+  const [rows2] = await db.execute(
     sql12`SELECT collaborator_id, week_friday, paid FROM payroll_weekly_payments WHERE week_friday LIKE ${referenceMonth + "%"}`
   );
   const map = /* @__PURE__ */ new Map();
-  for (const r of rows) {
+  for (const r of rows2) {
     const cid = Number(r.collaborator_id);
     if (!map.has(cid)) map.set(cid, /* @__PURE__ */ new Map());
     map.get(cid).set(String(r.week_friday), !!Number(r.paid));
@@ -3943,11 +4863,11 @@ async function getWeeklyPaymentsMap(db, referenceMonth) {
   return map;
 }
 async function getDaysWorkedMap(db, year, month) {
-  const [rows] = await db.execute(
+  const [rows2] = await db.execute(
     sql12`SELECT collaborator_id, COUNT(*) AS days FROM collaborator_attendance WHERE YEAR(date) = ${year} AND MONTH(date) = ${month} GROUP BY collaborator_id`
   );
   const map = /* @__PURE__ */ new Map();
-  for (const r of rows) map.set(Number(r.collaborator_id), Number(r.days));
+  for (const r of rows2) map.set(Number(r.collaborator_id), Number(r.days));
   return map;
 }
 function weekStartOf(dateStr, anchorDay = 0) {
@@ -3965,13 +4885,13 @@ function addDaysStr(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 async function getWeeklyBreakdownMap(db, year, month) {
-  const [rows] = await db.execute(
+  const [rows2] = await db.execute(
     sql12`SELECT collaborator_id, DATE(date) AS day, payment_status_ca AS status
         FROM collaborator_attendance WHERE YEAR(date) = ${year} AND MONTH(date) = ${month}
         ORDER BY collaborator_id, day`
   );
   const byCollaborator = /* @__PURE__ */ new Map();
-  for (const r of rows) {
+  for (const r of rows2) {
     const collabId = Number(r.collaborator_id);
     const dayStr = String(r.day);
     const wStart = weekStartOf(dayStr);
@@ -3995,12 +4915,12 @@ async function getWeeklyBreakdownMap(db, year, month) {
   return result;
 }
 async function getWeeklyPaidAnchors(db) {
-  const [rows] = await db.execute(
+  const [rows2] = await db.execute(
     sql12`SELECT id, employment_type AS employmentType, weekly_period_anchor AS anchor, payment_lag_days AS lag
         FROM collaborators WHERE role IN ('motorista','terceirizado') AND commission_auto <> 0`
   );
   const m = /* @__PURE__ */ new Map();
-  for (const r of rows) {
+  for (const r of rows2) {
     const weekly = r.employmentType === "semanal" || r.anchor === "sabado" || r.lag !== null && r.lag !== void 0 && Number(r.lag) !== 7;
     if (weekly) m.set(Number(r.id), anchorDayOf({ weeklyPeriodAnchor: r.anchor }));
   }
@@ -4024,7 +4944,7 @@ async function getCommissionLoadRows(db, year, month, onlyCollaboratorId) {
   const { start, end } = monthWindow(year, month);
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const weeklyAnchors = await getWeeklyPaidAnchors(db);
-  const [rows] = await db.execute(
+  const [rows2] = await db.execute(
     sql12`SELECT COALESCE(IF(eq.is_third_party = 1, NULL, cl.driver_collaborator_id), eq.responsible_driver_id) AS collaboratorId,
                cl.delivery_date AS deliveryDate, cd.commission_category AS categoria,
                COALESCE(cl.weight_net_kg, cl.weight_out_kg, 0) AS weightKg,
@@ -4039,7 +4959,7 @@ async function getCommissionLoadRows(db, year, month, onlyCollaboratorId) {
           AND COALESCE(IF(eq.is_third_party = 1, NULL, cl.driver_collaborator_id), eq.responsible_driver_id) IS NOT NULL`
   );
   const out = [];
-  for (const r of rows) {
+  for (const r of rows2) {
     const cid = Number(r.collaboratorId);
     if (onlyCollaboratorId !== void 0 && cid !== onlyCollaboratorId) continue;
     const dateStr = r.deliveryDate instanceof Date ? r.deliveryDate.toISOString().slice(0, 10) : String(r.deliveryDate).slice(0, 10);
@@ -4051,11 +4971,11 @@ async function getCommissionLoadRows(db, year, month, onlyCollaboratorId) {
   return out;
 }
 async function getWeeklyVehicleCommissionMap(db, year, month) {
-  const rows = await getCommissionLoadRows(db, year, month);
+  const rows2 = await getCommissionLoadRows(db, year, month);
   const map = /* @__PURE__ */ new Map();
   const ratesCache = /* @__PURE__ */ new Map();
   const configCache = /* @__PURE__ */ new Map();
-  for (const r of rows) {
+  for (const r of rows2) {
     const cid = Number(r.collaboratorId);
     if (!ratesCache.has(cid)) ratesCache.set(cid, await getCommissionRatesMap(db, cid));
     if (!configCache.has(cid)) {
@@ -4159,7 +5079,7 @@ async function getLiveTerceirizadoDiscountMap(db, year, month) {
   const { start: discStart, end: discEnd } = monthWindow(year, month);
   const discMonthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const discWeeklyAnchors = await getWeeklyPaidAnchors(db);
-  const [rows] = await db.execute(
+  const [rows2] = await db.execute(
     sql12`SELECT eq.responsible_driver_id AS collaboratorId, eq.name AS equipmentName, vr.date AS date,
                vr.liters AS liters, vr.charged_value AS chargedValue
         FROM vehicle_records vr
@@ -4171,7 +5091,7 @@ async function getLiveTerceirizadoDiscountMap(db, year, month) {
   );
   const map = /* @__PURE__ */ new Map();
   const anchorCache = /* @__PURE__ */ new Map();
-  for (const r of rows) {
+  for (const r of rows2) {
     const cid = Number(r.collaboratorId);
     if (!anchorCache.has(cid)) {
       const [crows] = await db.execute(sql12`SELECT weekly_period_anchor AS anchor FROM collaborators WHERE id = ${cid}`);
@@ -4292,7 +5212,7 @@ var init_payroll = __esm({
           return 0;
         };
         const liveDiscountFor = (c) => c.role === "terceirizado" ? liveDiscountMap.get(c.id)?.total ?? 0 : 0;
-        const rows = activeCollaborators.map((c) => {
+        const rows2 = activeCollaborators.map((c) => {
           const employmentType = c.employmentType || "diarista";
           const weeklyCommission = hasWeeklyCommission(c);
           const weeklyFixed = isWeeklyFixed(employmentType) || weeklyCommission;
@@ -4397,7 +5317,7 @@ var init_payroll = __esm({
             commissionMonth
           };
         }).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-        const summary = rows.reduce((acc, r) => {
+        const summary = rows2.reduce((acc, r) => {
           const total = parseFloat(r.totalAmount || "0");
           acc.totalGeral += total;
           acc.totalComissao += parseFloat(r.commission || "0");
@@ -4409,7 +5329,7 @@ var init_payroll = __esm({
           if (parseFloat(r.commission || "0") > 0 && r.commissionStatus === "pago") acc.comissoesPagas++;
           return acc;
         }, { totalGeral: 0, totalComissao: 0, totalDesconto: 0, totalSalarios: 0, totalDiarias: 0, fechados: 0, pagos: 0, comissoesPagas: 0 });
-        return { rows, summary, totalCollaborators: rows.length };
+        return { rows: rows2, summary, totalCollaborators: rows2.length };
       }),
       // Salva/fecha a linha de um colaborador (grava snapshot dos valores no momento).
       // markPaid: já grava salário com status 'pago' (botão "Pagar Salário" na linha em rascunho).
@@ -4660,9 +5580,9 @@ var init_payroll = __esm({
             g.totalKg += lr.weightKg;
             byCat.set(lr.categoria, g);
           }
-          const rows = Array.from(byCat.entries()).map(([categoria, g]) => ({ categoria, qtd: g.qtd, totalKg: g.totalKg }));
+          const rows2 = Array.from(byCat.entries()).map(([categoria, g]) => ({ categoria, qtd: g.qtd, totalKg: g.totalKg }));
           const labels = { enerbio: "Enerbio", mabam: "Mabam (Rebnic)", lider: "L\xEDder", sonoco: "Sonoco" };
-          const items = rows.map((r) => {
+          const items = rows2.map((r) => {
             const rate = rates[`motorista_${r.categoria}`] ?? 0;
             const quantidade = porTonelada ? parseFloat(r.totalKg ?? "0") / 1e3 : Number(r.qtd);
             return {
@@ -4765,10 +5685,10 @@ async function consultarCnpjBrasilApi(cnpj) {
       }
     });
     if (!resp.ok) return null;
-    const data = await resp.json();
-    const razaoSocial = data.razao_social ?? data.nome_fantasia ?? "";
-    const cnaeCodigo = data.cnae_fiscal ? String(data.cnae_fiscal) : "";
-    const cnaeDescricao = data.cnae_fiscal_descricao ?? "";
+    const data2 = await resp.json();
+    const razaoSocial = data2.razao_social ?? data2.nome_fantasia ?? "";
+    const cnaeCodigo = data2.cnae_fiscal ? String(data2.cnae_fiscal) : "";
+    const cnaeDescricao = data2.cnae_fiscal_descricao ?? "";
     if (!razaoSocial && !cnaeDescricao) return null;
     return { razaoSocial, cnaeCodigo, cnaeDescricao };
   } catch (e) {
@@ -4790,7 +5710,7 @@ function extrairIdentificadorFavorecido(descricao, complemento, numeroDocumento)
     const nome = favMatch[1].trim().toUpperCase();
     if (nome) return { tipo: "nome", chave: `nome:${nome}` };
   }
-  const cnpjMatch = texto.match(CNPJ_REGEX);
+  const cnpjMatch = texto.match(CNPJ_REGEX2);
   if (cnpjMatch) {
     const digitos = (cnpjMatch[1] + cnpjMatch[2]).replace(/\D/g, "");
     if (digitos.length === 14) return { tipo: "cnpj", chave: `cnpj:${digitos}` };
@@ -4818,15 +5738,15 @@ function extrairIdentificadorFavorecido(descricao, complemento, numeroDocumento)
   return null;
 }
 async function buscarFavorecido(db, chave) {
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT id FROM favorecido_categoria WHERE chave = ? LIMIT 1`,
     [chave]
   );
-  return rows?.[0] ?? null;
+  return rows2?.[0] ?? null;
 }
 async function herdarClassificacaoPorCnae(db, cnaeCodigo) {
   if (!cnaeCodigo) return null;
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT grupo, centro_custo, natureza, classificacao, fixo_variavel, direto_indireto
      FROM favorecido_categoria
      WHERE cnae_codigo = ?
@@ -4835,7 +5755,7 @@ async function herdarClassificacaoPorCnae(db, cnaeCodigo) {
      ORDER BY updated_at DESC LIMIT 1`,
     [cnaeCodigo]
   );
-  return rows?.[0] ?? null;
+  return rows2?.[0] ?? null;
 }
 async function registrarFavorecido(db, params) {
   const { chave, tipoChave, razaoSocial = null, cnaeCodigo = null, cnaeDescricao = null } = params;
@@ -4892,12 +5812,12 @@ async function descobrirFavorecido(db, descricao, complemento, numeroDocumento) 
     }
   }
 }
-var CNPJ_REGEX, CPF_MASCARADO_REGEX, FAV_NOME_REGEX;
+var CNPJ_REGEX2, CPF_MASCARADO_REGEX, FAV_NOME_REGEX;
 var init_favorecidoCategoria = __esm({
   "server/utils/favorecidoCategoria.ts"() {
     "use strict";
     init_brasilApiCnpj();
-    CNPJ_REGEX = /(\d{2}\.\d{3}\.\d{3})[\/\s](\d{4}-\d{2})/;
+    CNPJ_REGEX2 = /(\d{2}\.\d{3}\.\d{3})[\/\s](\d{4}-\d{2})/;
     CPF_MASCARADO_REGEX = /(\d{3}\.\d{3})-\*{2}/;
     FAV_NOME_REGEX = /FAV\.:\s*(.+?)\s+Transferência Pix/i;
   }
@@ -4997,7 +5917,7 @@ function chaveConteudo(dataLancamento, descricao, valor, numeroDocumento) {
   return `${dataLancamento}|${descricao}|${valor}|${numeroDocumento}`;
 }
 async function detectarDuplicatasSuspeitas(db, mes, ano) {
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT data_lancamento, descricao, valor, numero_documento, COUNT(*) AS qtd,
             GROUP_CONCAT(numero_lancamento) AS ids
      FROM sicoob_extrato
@@ -5007,7 +5927,7 @@ async function detectarDuplicatasSuspeitas(db, mes, ano) {
      HAVING COUNT(*) > 1`,
     [mes, ano]
   );
-  return rows.filter((r) => !NUMERO_DOCUMENTO_GENERICOS.has(String(r.numero_documento).toUpperCase())).map((r) => ({
+  return rows2.filter((r) => !NUMERO_DOCUMENTO_GENERICOS.has(String(r.numero_documento).toUpperCase())).map((r) => ({
     dataLancamento: r.data_lancamento,
     descricao: r.descricao,
     valor: r.valor,
@@ -5023,11 +5943,11 @@ async function syncSicoobExtrato(mes, ano) {
   try {
     const numeroConta = process.env.SICOOB_NUMERO_CONTA ?? String(NUMERO_CONTA);
     console.log(`[SicoobExtrato] Chamando extrato ${mes}/${ano} conta=${numeroConta}`);
-    const data = await sicoobGet(`/conta-corrente/v4/extrato/${mes}/${ano}`, {
+    const data2 = await sicoobGet(`/conta-corrente/v4/extrato/${mes}/${ano}`, {
       numeroContaCorrente: numeroConta
     });
-    console.log(`[SicoobExtrato] Resposta ${mes}/${ano}:`, JSON.stringify(data).slice(0, 400));
-    const resultado = data.resultado ?? {};
+    console.log(`[SicoobExtrato] Resposta ${mes}/${ano}:`, JSON.stringify(data2).slice(0, 400));
+    const resultado = data2.resultado ?? {};
     const transacoes = resultado.transacoes ?? resultado.lancamentos ?? [];
     const saldoAnterior = String(resultado.saldoAnterior ?? resultado.saldoInicial ?? "0");
     const saldoAtual = String(resultado.saldoAtual ?? "0");
@@ -5047,7 +5967,7 @@ async function syncSicoobExtrato(mes, ano) {
       existentesRows.map((r) => chaveConteudo(r.data_lancamento, r.descricao, r.valor, r.numero_documento)).filter((k) => k !== null)
     );
     let duplicatasBloqueadas = 0;
-    const rows = [];
+    const rows2 = [];
     for (let i = 0; i < transacoes.length; i++) {
       const l = transacoes[i];
       const numeroLancamento = String(l.transactionId ?? l.numeroLancamento ?? l.id ?? `${mes}-${ano}-${i}`);
@@ -5064,7 +5984,7 @@ async function syncSicoobExtrato(mes, ano) {
         }
         chavesExistentes.add(chave);
       }
-      rows.push({
+      rows2.push({
         numeroLancamento,
         mes,
         ano,
@@ -5081,8 +6001,8 @@ async function syncSicoobExtrato(mes, ano) {
       console.warn(`[SicoobExtrato] ${duplicatasBloqueadas} lan\xE7amento(s) com mesmo conte\xFAdo j\xE1 existente foram ignorados (Sicoob mandou ID diferente pro mesmo lan\xE7amento).`);
     }
     const CHUNK = 200;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
+    for (let i = 0; i < rows2.length; i += CHUNK) {
+      const chunk = rows2.slice(i, i + CHUNK);
       if (chunk.length === 0) continue;
       await db.insert(sicoobExtrato).values(chunk).onDuplicateKeyUpdate({
         set: {
@@ -5098,7 +6018,7 @@ async function syncSicoobExtrato(mes, ano) {
       });
     }
     void (async () => {
-      for (const r of rows) {
+      for (const r of rows2) {
         try {
           await descobrirFavorecido(db, r.descricao, r.complemento, r.numeroDocumento);
         } catch (e) {
@@ -5110,7 +6030,7 @@ async function syncSicoobExtrato(mes, ano) {
     if (duplicatasSuspeitas.length > 0) {
       console.warn(`[SicoobExtrato] ${duplicatasSuspeitas.length} poss\xEDvel(is) duplicata(s):`, JSON.stringify(duplicatasSuspeitas));
     }
-    return { synced: rows.length, error: null, duplicatasSuspeitas, duplicatasBloqueadas };
+    return { synced: rows2.length, error: null, duplicatasSuspeitas, duplicatasBloqueadas };
   } catch (e) {
     const detail = JSON.stringify(e?.response?.data ?? {});
     console.error(`[SicoobExtrato] Erro ${mes}/${ano}:`, detail);
@@ -5119,11 +6039,11 @@ async function syncSicoobExtrato(mes, ano) {
   }
 }
 async function autoMarkNfPaidFromBoleto(db, nfReferente, cnpjPagador, dataPagamento) {
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT id, status_nf_interno FROM notas_fiscais WHERE numero_nota = ? AND cnpj_destinatario = ? LIMIT 1`,
     [nfReferente, cnpjPagador]
   );
-  const nf = rows?.[0];
+  const nf = rows2?.[0];
   if (!nf || nf.status_nf_interno !== "em_aberto") return;
   const dataConfirmada = dataPagamento ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   await db.$client.execute(
@@ -5152,17 +6072,17 @@ async function syncSicoobBoletos() {
   const db = await getDb2();
   if (!db) return { synced: 0, errors: [] };
   await ensureBoletoSituacaoColumn(db);
-  const [rows] = await db.execute(
+  const [rows2] = await db.execute(
     `SELECT DISTINCT cnpj_cpf FROM buyer_clients WHERE active = 1 AND cnpj_cpf IS NOT NULL AND cnpj_cpf != ''`
   );
-  const cnpjs = (rows ?? []).map((r) => r.cnpj_cpf?.replace(/\D/g, "").slice(0, 14)).filter((c) => c && c.length > 0);
+  const cnpjs = (rows2 ?? []).map((r) => r.cnpj_cpf?.replace(/\D/g, "").slice(0, 14)).filter((c) => c && c.length > 0);
   const errors = [];
   let synced = 0;
   const windowStart = /* @__PURE__ */ new Date();
   windowStart.setMonth(windowStart.getMonth() - 6);
   const windowEnd = /* @__PURE__ */ new Date();
   windowEnd.setMonth(windowEnd.getMonth() + 6);
-  const fmt = (d) => d.toISOString().slice(0, 10);
+  const fmt2 = (d) => d.toISOString().slice(0, 10);
   const chunks = [];
   let cur = new Date(windowStart);
   while (cur <= windowEnd) {
@@ -5175,17 +6095,17 @@ async function syncSicoobBoletos() {
   for (const cnpj of cnpjs) {
     for (const chunk of chunks) {
       try {
-        console.log(`[SicoobSync] Consultando CNPJ ${cnpj} (${fmt(chunk.inicio)} \u2192 ${fmt(chunk.fim)})...`);
-        const data = await sicoobGet(
+        console.log(`[SicoobSync] Consultando CNPJ ${cnpj} (${fmt2(chunk.inicio)} \u2192 ${fmt2(chunk.fim)})...`);
+        const data2 = await sicoobGet(
           `/cobranca-bancaria/v3/pagadores/${cnpj}/boletos`,
           {
             numeroCliente: NUMERO_CLIENTE,
-            dataInicio: fmt(chunk.inicio),
-            dataFim: fmt(chunk.fim)
+            dataInicio: fmt2(chunk.inicio),
+            dataFim: fmt2(chunk.fim)
           }
         );
-        console.log(`[SicoobSync] Resposta CNPJ ${cnpj}:`, JSON.stringify(data).slice(0, 300));
-        const boletos = data.resultado ?? [];
+        console.log(`[SicoobSync] Resposta CNPJ ${cnpj}:`, JSON.stringify(data2).slice(0, 300));
+        const boletos = data2.resultado ?? [];
         console.log(`[SicoobSync] Boletos encontrados: ${boletos.length}`);
         if (boletos.length > 0) console.log(`[SicoobSync] Exemplo boleto:`, JSON.stringify(boletos[0], null, 2));
         for (const b of boletos) {
@@ -5258,7 +6178,7 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
   try {
     const mesStr = String(mes).padStart(2, "0");
     const prefixo = `${ano}-${mesStr}`;
-    const [rows] = await db.$client.execute(
+    const [rows2] = await db.$client.execute(
       `SELECT
              data_lancamento,
              SUM(CASE WHEN CAST(valor AS DECIMAL(15,2)) > 0 THEN CAST(valor AS DECIMAL(15,2)) ELSE 0 END) AS recebimentos,
@@ -5327,7 +6247,7 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
     }).filter((c) => c.data.startsWith(prefixo) && c.valor > 0);
     const prevRef = prevMonthOf(ano, mes);
     const prevRefStr = `${prevRef.year}-${String(prevRef.month).padStart(2, "0")}`;
-    const addDays = (dateStr, days) => {
+    const addDays2 = (dateStr, days) => {
       const d = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
       d.setDate(d.getDate() + days);
       return d.toISOString().slice(0, 10);
@@ -5376,7 +6296,7 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
         const lag = c.payment_lag_days !== null && c.payment_lag_days !== void 0 ? Number(c.payment_lag_days) : 7;
         for (const f of refFridays) {
           if (pagas.has(`${c.id}|${f}`)) continue;
-          const dataPagamento = addDays(f, lag);
+          const dataPagamento = addDays2(f, lag);
           if (!dataPagamento.startsWith(prefixo)) continue;
           folhaSemanalPendente.push({ nome: c.name, data: dataPagamento, valor: valorPorSexta });
         }
@@ -5398,7 +6318,7 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
     };
     const folhaDiariasRows = (folhaDiariasRowsRaw ?? []).map((d) => {
       const dataTrabalho = d.data instanceof Date ? d.data.toISOString().slice(0, 10) : String(d.data).slice(0, 10);
-      const dataPagamento = d.tipo === "diarista" ? addDays(fridayOfWeek(dataTrabalho), 1) : dataTrabalho;
+      const dataPagamento = d.tipo === "diarista" ? addDays2(fridayOfWeek(dataTrabalho), 1) : dataTrabalho;
       return { ...d, dataTrabalho, data: dataPagamento };
     }).filter((d) => d.data.startsWith(prefixo));
     const dataComissao = `${prefixo}-20`;
@@ -5417,7 +6337,7 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
       valor: parseFloat(c.commission) - parseFloat(c.discount || "0")
     }));
     const comissaoPeriodica = await getSpecialWeeklyCommissionCashFlow(db, ano, mes);
-    const diasRealizados = (rows ?? []).map((r) => ({
+    const diasRealizados = (rows2 ?? []).map((r) => ({
       data: r.data_lancamento,
       recebimentos: parseFloat(r.recebimentos ?? 0),
       pagamentos: parseFloat(r.pagamentos ?? 0)
@@ -5547,10 +6467,10 @@ var init_sicoob = __esm({
       // Saldo da conta corrente
       saldo: protectedProcedure.query(async () => {
         try {
-          const data = await sicoobGet("/conta-corrente/v4/saldo", {
+          const data2 = await sicoobGet("/conta-corrente/v4/saldo", {
             numeroContaCorrente: String(NUMERO_CONTA)
           });
-          return { saldo: data.resultado?.saldo ?? 0, error: null };
+          return { saldo: data2.resultado?.saldo ?? 0, error: null };
         } catch (e) {
           return { saldo: 0, error: e?.response?.data?.httpMessage ?? "Erro ao buscar saldo" };
         }
@@ -5558,10 +6478,10 @@ var init_sicoob = __esm({
       // Extrato da conta corrente
       extrato: protectedProcedure.input(z47.object({ mes: z47.number(), ano: z47.number() })).query(async ({ input }) => {
         try {
-          const data = await sicoobGet(`/conta-corrente/v4/extrato/${input.mes}/${input.ano}`, {
+          const data2 = await sicoobGet(`/conta-corrente/v4/extrato/${input.mes}/${input.ano}`, {
             numeroContaCorrente: String(NUMERO_CONTA)
           });
-          return { lancamentos: data.resultado?.lancamentos ?? [], error: null };
+          return { lancamentos: data2.resultado?.lancamentos ?? [], error: null };
         } catch (e) {
           return { lancamentos: [], error: e?.response?.data?.httpMessage ?? "Erro ao buscar extrato" };
         }
@@ -5574,7 +6494,7 @@ var init_sicoob = __esm({
         codigoSituacao: z47.number().optional()
       })).query(async ({ input }) => {
         try {
-          const data = await sicoobGet(
+          const data2 = await sicoobGet(
             `/cobranca-bancaria/v3/pagadores/${input.numeroCpfCnpj}/boletos`,
             {
               numeroCliente: NUMERO_CLIENTE,
@@ -5583,7 +6503,7 @@ var init_sicoob = __esm({
               codigoSituacao: input.codigoSituacao
             }
           );
-          return { boletos: data.resultado ?? [], error: null };
+          return { boletos: data2.resultado ?? [], error: null };
         } catch (e) {
           return { boletos: [], error: e?.response?.data?.httpMessage ?? "Erro ao buscar boletos" };
         }
@@ -5591,12 +6511,12 @@ var init_sicoob = __esm({
       // Boleto individual
       boleto: protectedProcedure.input(z47.object({ nossoNumero: z47.number() })).query(async ({ input }) => {
         try {
-          const data = await sicoobGet("/cobranca-bancaria/v3/boletos", {
+          const data2 = await sicoobGet("/cobranca-bancaria/v3/boletos", {
             numeroCliente: NUMERO_CLIENTE,
             codigoModalidade: CODIGO_MODALIDADE,
             nossoNumero: input.nossoNumero
           });
-          return { boleto: data.resultado ?? null, error: null };
+          return { boleto: data2.resultado ?? null, error: null };
         } catch (e) {
           return { boleto: null, error: e?.response?.data?.httpMessage ?? "Erro ao buscar boleto" };
         }
@@ -5624,14 +6544,14 @@ var init_sicoob = __esm({
           const pesquisaClause = input.pesquisa ? `AND (nome_pagador LIKE ? OR cnpj_pagador LIKE ?)` : "";
           const pesquisaParams = input.pesquisa ? [`%${input.pesquisa}%`, `%${input.pesquisa}%`] : [];
           await ensureBoletoSituacaoColumn(db);
-          const [rows] = await db.$client.execute(
+          const [rows2] = await db.$client.execute(
             `SELECT * FROM sicoob_boletos
            WHERE data_vencimento LIKE ?
            ${pesquisaClause}
            ORDER BY data_vencimento ASC`,
             [`${prefixo}%`, ...pesquisaParams]
           );
-          return { boletos: rows ?? [], error: null };
+          return { boletos: rows2 ?? [], error: null };
         } catch (e) {
           return { boletos: [], error: e.message };
         }
@@ -5647,12 +6567,12 @@ var init_sicoob = __esm({
           const mesStr = String(input.mes).padStart(2, "0");
           const prefixo = `${input.ano}-${mesStr}`;
           const hoje = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-          const [rows] = await db.$client.execute(
+          const [rows2] = await db.$client.execute(
             `SELECT situacao, data_vencimento, valor FROM sicoob_boletos WHERE data_vencimento LIKE ?`,
             [`${prefixo}%`]
           );
           let vencidos = 0, vencemHoje = 0, aVencer = 0, recebidos = 0;
-          for (const r of rows ?? []) {
+          for (const r of rows2 ?? []) {
             const v = parseFloat(r.valor ?? "0");
             if (r.situacao === 2) {
             } else if (r.situacao === 3) {
@@ -5681,7 +6601,7 @@ var init_sicoob = __esm({
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
           const db = await getDb2();
           if (!db) return { lancamentos: [], sincronizadoEm: null, error: "DB indispon\xEDvel" };
-          const [rows] = await db.$client.execute(
+          const [rows2] = await db.$client.execute(
             `SELECT * FROM sicoob_extrato WHERE mes = ? AND ano = ? ORDER BY data_lancamento ASC, id ASC`,
             [input.mes, input.ano]
           );
@@ -5694,7 +6614,7 @@ var init_sicoob = __esm({
             [input.mes, input.ano]
           );
           const saldoInicial = parseFloat(saldoRows?.[0]?.saldo_inicial ?? "0");
-          return { lancamentos: rows ?? [], saldoInicial, sincronizadoEm: meta?.[0]?.ultima ?? null, error: null };
+          return { lancamentos: rows2 ?? [], saldoInicial, sincronizadoEm: meta?.[0]?.ultima ?? null, error: null };
         } catch (e) {
           return { lancamentos: [], sincronizadoEm: null, error: e.message };
         }
@@ -5711,11 +6631,11 @@ var init_sicoob = __esm({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) throw new Error("DB indispon\xEDvel");
-        const [rows] = await db.$client.execute(
+        const [rows2] = await db.$client.execute(
           `SELECT * FROM sicoob_extrato WHERE numero_lancamento = ? AND mes = ? AND ano = ?`,
           [input.numeroLancamento, input.mes, input.ano]
         );
-        const lancamento = rows[0];
+        const lancamento = rows2[0];
         if (!lancamento) throw new Error("Lan\xE7amento n\xE3o encontrado");
         await db.$client.execute(
           `DELETE FROM sicoob_extrato WHERE numero_lancamento = ? AND mes = ? AND ano = ?`,
@@ -5834,11 +6754,11 @@ var init_sicoob = __esm({
         const db = await getDb2();
         if (!db) return { lancamentos: [], error: "DB indispon\xEDvel" };
         const mesStr = String(input.mes).padStart(2, "0");
-        const [rows] = await db.$client.execute(
+        const [rows2] = await db.$client.execute(
           `SELECT * FROM sicoob_lancamentos_futuros WHERE data LIKE ? ORDER BY data ASC`,
           [`${input.ano}-${mesStr}%`]
         );
-        return { lancamentos: rows ?? [], error: null };
+        return { lancamentos: rows2 ?? [], error: null };
       }),
       deleteLancamentosFuturos: moduleProcedure("contas-a-pagar", "fluxo-de-caixa").input(z47.object({ mes: z47.number().min(1).max(12), ano: z47.number().min(2020).max(2100) })).mutation(async ({ input }) => {
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
@@ -5864,10 +6784,10 @@ var init_sicoob = __esm({
           const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
           const db = await getDb2();
           if (!db) return { ultimaSincronizacao: null, totalBoletos: 0 };
-          const [rows] = await db.execute(
+          const [rows2] = await db.execute(
             `SELECT MAX(sincronizado_em) as ultima, COUNT(*) as total FROM sicoob_boletos`
           );
-          const row = rows[0];
+          const row = rows2[0];
           return {
             ultimaSincronizacao: row?.ultima ?? null,
             totalBoletos: Number(row?.total ?? 0)
@@ -5992,14 +6912,14 @@ var init_sicoob = __esm({
           const dataInicio = `${input.anoInicio}-${String(input.mesInicio).padStart(2, "0")}-01`;
           const ultimoDiaFim = new Date(input.anoFim, input.mesFim, 0).getDate();
           const dataFim = `${input.anoFim}-${String(input.mesFim).padStart(2, "0")}-${String(ultimoDiaFim).padStart(2, "0")}`;
-          const [rows] = await db.$client.execute(
+          const [rows2] = await db.$client.execute(
             `SELECT id, data_lancamento, descricao, complemento, numero_documento, valor
            FROM sicoob_extrato
            WHERE tipo_lancamento = 'DEBITO' AND data_lancamento BETWEEN ? AND ?
            ORDER BY data_lancamento ASC`,
             [dataInicio, dataFim]
           );
-          const lancamentos = rows.map((r) => ({
+          const lancamentos = rows2.map((r) => ({
             id: r.id,
             data: r.data_lancamento,
             descricao: r.descricao,
@@ -6039,13 +6959,13 @@ var init_sicoob = __esm({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { favorecidos: [], error: "DB indispon\xEDvel" };
-        const [rows] = await db.$client.execute(
+        const [rows2] = await db.$client.execute(
           `SELECT id, chave, tipo_chave, razao_social, cnae_codigo, cnae_descricao,
               grupo, centro_custo, natureza, classificacao, fixo_variavel, direto_indireto, updated_at
        FROM favorecido_categoria
        ORDER BY updated_at DESC`
         );
-        return { favorecidos: rows ?? [], error: null };
+        return { favorecidos: rows2 ?? [], error: null };
       }),
       // Combinações já usadas de Grupo/Centro de Custo/Natureza/Classificação/Fixo-Variável/
       // Direto-Indireto — o frontend usa isso pra montar os dropdowns em cascata (cada campo só
@@ -6054,12 +6974,12 @@ var init_sicoob = __esm({
         const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const db = await getDb2();
         if (!db) return { combos: [], error: "DB indispon\xEDvel" };
-        const [rows] = await db.$client.execute(
+        const [rows2] = await db.$client.execute(
           `SELECT DISTINCT grupo, centro_custo, natureza, classificacao, fixo_variavel, direto_indireto
        FROM favorecido_categoria
        WHERE grupo IS NOT NULL AND grupo != ''`
         );
-        return { combos: rows ?? [], error: null };
+        return { combos: rows2 ?? [], error: null };
       }),
       // Edita um dos campos de classificação adicional (Grupo, Centro de Custo, Natureza,
       // Classificação, Fixo/Variável, Direto/Indireto). Como os campos formam uma hierarquia
@@ -6190,6 +7110,925 @@ var init_sicoob = __esm({
           importados++;
         }
         return { importados, ignorados };
+      })
+    });
+  }
+});
+
+// server/utils/financeiroCliente.ts
+var financeiroCliente_exports = {};
+__export(financeiroCliente_exports, {
+  resultadoPorCliente: () => resultadoPorCliente
+});
+async function resultadoPorCliente(db, inicio, fim) {
+  const erros = [];
+  const mapa = /* @__PURE__ */ new Map();
+  const item = (id, nome) => {
+    const k = String(id ?? "null");
+    let x = mapa.get(k);
+    if (!x) {
+      x = { clienteId: id, nome, cargas: 0, toneladas: 0, volumeM3: 0, receitaEstimada: 0, cargasSemPreco: 0, compraMadeira: 0, corteTerceirizado: 0, resultadoBruto: 0, margemPct: null };
+      mapa.set(k, x);
+    }
+    return x;
+  };
+  const kg = SQL_KG.replace(/\bl\./g, "cl.");
+  const vol = sqlNum("cl.volume_m3");
+  const precoUnit = sqlNum("cd.price_per_unit");
+  const precoTon = sqlNum("cd.price_per_ton");
+  const precoM3 = sqlNum("cd.price_per_m3");
+  const receita = `CASE
+      WHEN cd.id IS NULL THEN 0
+      WHEN ${precoUnit} > 0 THEN IF(cd.unit = 'm3', ${vol}, ${kg} / 1000) * ${precoUnit}
+      WHEN cd.price_type = 'm3' THEN ${vol} * ${precoM3}
+      ELSE ${kg} / 1000 * ${precoTon}
+    END`;
+  try {
+    const [rows2] = await db.$client.execute(
+      `SELECT cl.client_id AS cid, COALESCE(c.name, 'Sem cliente') AS nome, COUNT(*) AS cargas,
+              SUM(${kg}) / 1000 AS ton, SUM(${vol}) AS m3, SUM(${receita}) AS receita,
+              SUM(IF(${receita} > 0, 0, 1)) AS sem_preco,
+              SUM(IF(cl.third_party_contractor IS NOT NULL AND cl.third_party_contractor <> '', COALESCE(cl.third_party_cost, 0), 0)) AS corte
+       FROM cargo_loads cl
+       LEFT JOIN clients c ON c.id = cl.client_id
+       LEFT JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+       WHERE cl.status = 'entregue' AND DATE(COALESCE(cl.delivery_date, cl.date)) BETWEEN ? AND ?
+       GROUP BY cl.client_id, c.name`,
+      [inicio, fim]
+    );
+    for (const r of rows2) {
+      const x = item(r.cid ?? null, String(r.nome));
+      x.cargas = Number(r.cargas);
+      x.toneladas = Number(r.ton ?? 0);
+      x.volumeM3 = Number(r.m3 ?? 0);
+      x.receitaEstimada = Number(r.receita ?? 0);
+      x.cargasSemPreco = Number(r.sem_preco ?? 0);
+      x.corteTerceirizado = Number(r.corte ?? 0);
+    }
+  } catch (e) {
+    erros.push(`Cargas: ${String(e?.message ?? e).slice(0, 160)}`);
+  }
+  try {
+    const [rows2] = await db.$client.execute(
+      `SELECT f.client_id AS cid, COALESCE(c.name, CONCAT('#', f.client_id)) AS nome, SUM(${SQL_FECHAMENTO_VIVO("f", "c")}) AS v
+       FROM cargo_weekly_closings f LEFT JOIN clients c ON c.id = f.client_id
+       WHERE f.week_end BETWEEN ? AND ? GROUP BY f.client_id, c.name`,
+      [inicio, fim]
+    );
+    for (const r of rows2) item(r.cid ?? null, String(r.nome)).compraMadeira = Number(r.v ?? 0);
+  } catch (e) {
+    erros.push(`Fechamentos: ${String(e?.message ?? e).slice(0, 160)}`);
+  }
+  const lista = Array.from(mapa.values()).map((x) => {
+    const bruto = x.receitaEstimada - x.compraMadeira - x.corteTerceirizado;
+    return {
+      ...x,
+      toneladas: r22(x.toneladas),
+      volumeM3: r22(x.volumeM3),
+      receitaEstimada: r22(x.receitaEstimada),
+      compraMadeira: r22(x.compraMadeira),
+      corteTerceirizado: r22(x.corteTerceirizado),
+      resultadoBruto: r22(bruto),
+      margemPct: x.receitaEstimada > 0 ? r22(bruto / x.receitaEstimada * 100) : null
+    };
+  }).filter((x) => x.cargas > 0 || x.compraMadeira > 0 || x.corteTerceirizado > 0).sort((a, b) => b.receitaEstimada - a.receitaEstimada);
+  const total = lista.reduce((t2, x) => ({
+    cargas: t2.cargas + x.cargas,
+    toneladas: t2.toneladas + x.toneladas,
+    receitaEstimada: t2.receitaEstimada + x.receitaEstimada,
+    compraMadeira: t2.compraMadeira + x.compraMadeira,
+    corteTerceirizado: t2.corteTerceirizado + x.corteTerceirizado
+  }), { cargas: 0, toneladas: 0, receitaEstimada: 0, compraMadeira: 0, corteTerceirizado: 0 });
+  return {
+    clientes: lista,
+    total: {
+      ...total,
+      toneladas: r22(total.toneladas),
+      receitaEstimada: r22(total.receitaEstimada),
+      compraMadeira: r22(total.compraMadeira),
+      corteTerceirizado: r22(total.corteTerceirizado),
+      resultadoBruto: r22(total.receitaEstimada - total.compraMadeira - total.corteTerceirizado)
+    },
+    erros
+  };
+}
+var r22;
+var init_financeiroCliente = __esm({
+  "server/utils/financeiroCliente.ts"() {
+    "use strict";
+    init_financeiroCanonico();
+    r22 = (n) => Math.round(n * 100) / 100;
+  }
+});
+
+// server/utils/financeiroDetalhe.ts
+var financeiroDetalhe_exports = {};
+__export(financeiroDetalhe_exports, {
+  detalheBloco: () => detalheBloco
+});
+async function detalheBloco(db, chave, inicio, fim, limite = 500) {
+  const ms = (d, add) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) + add;
+  const msInicio = ms(inicio, 3 * 36e5);
+  const msFim = ms(fim, 27 * 36e5) - 1;
+  const ymIni = inicio.slice(0, 7), ymFim = fim.slice(0, 7);
+  const dR = (col) => `DATE(${col}) BETWEEN ? AND ?`;
+  const P = [inicio, fim];
+  const extraCond = {
+    extras_material: `x.category = 'compra_material' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    extras_refeicao: `x.category = 'refeicao' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    extras_pedagio: `x.category = 'pedagio' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    extras_outros: `x.category = 'outro' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    extras_abastecimento: `x.category = 'abastecimento' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    extras_servico_terceiro: `x.category = 'servico_terceiro' AND ${EXTRA_SEM_EMPRESTIMO}`,
+    extras_emprestimo: `NOT (${EXTRA_SEM_EMPRESTIMO})`
+  };
+  let sql34 = "";
+  let params = P;
+  switch (chave) {
+    case "folha_clt_pj":
+      sql34 = `SELECT reference_month AS data, collaborator_name AS descricao,
+                    CONCAT(UPPER(employment_type), ' \xB7 folha ', status) AS detalhe, ${sqlNum("base_value")} AS valor
+             FROM payroll_entries WHERE employment_type IN ('clt','pj') AND reference_month BETWEEN ? AND ? ORDER BY collaborator_name`;
+      params = [ymIni, ymFim];
+      break;
+    case "comissoes":
+      sql34 = `SELECT reference_month AS data, collaborator_name AS descricao,
+                    CONCAT('comiss\xE3o ', ${sqlNum("commission")}, ' \u2212 desconto ', ${sqlNum("discount")}, ' \xB7 ', commission_status) AS detalhe,
+                    (${sqlNum("commission")} - ${sqlNum("discount")}) AS valor
+             FROM payroll_entries WHERE reference_month BETWEEN ? AND ? ORDER BY collaborator_name`;
+      params = [ymIni, ymFim];
+      break;
+    case "diaristas":
+      sql34 = `SELECT DATE(a.date) AS data, COALESCE(c.name, CONCAT('#', a.collaborator_id)) AS descricao,
+                    CONCAT_WS(' \xB7 ', a.employment_type_ca, a.activity, a.work_location, a.payment_status_ca) AS detalhe, ${sqlNum("a.daily_value")} AS valor
+             FROM collaborator_attendance a LEFT JOIN collaborators c ON c.id = a.collaborator_id
+             WHERE a.employment_type_ca IN ('diarista','terceirizado','semanal') AND ${dR("a.date")} ORDER BY a.date, c.name`;
+      break;
+    case "madeira":
+      sql34 = `SELECT f.week_end AS data, COALESCE(c.name, CONCAT('#', f.client_id)) AS descricao,
+                    CONCAT('semana ', f.week_start, ' a ', f.week_end, ' \xB7 ',
+                           COALESCE(${SQL_CARGAS_FECHAMENTO("COUNT(*)")}, 0), ' carga(s) \xB7 ',
+                           ROUND(COALESCE(${SQL_CARGAS_FECHAMENTO(`SUM(${SQL_KG})`)}, 0) / 1000, 2), ' t \xB7 ', f.status,
+                           IF(ABS(${SQL_FECHAMENTO_VIVO("f", "c")} - f.total_amount) > 0.01, CONCAT(' \xB7 valor gravado antigo R$ ', f.total_amount), '')) AS detalhe,
+                    ${SQL_FECHAMENTO_VIVO("f", "c")} AS valor
+             FROM cargo_weekly_closings f LEFT JOIN clients c ON c.id = f.client_id WHERE f.week_end BETWEEN ? AND ? ORDER BY f.week_end, c.name`;
+      break;
+    case "corte_terceirizado":
+      sql34 = `SELECT DATE(COALESCE(delivery_date, date)) AS data, third_party_contractor AS descricao,
+                    CONCAT_WS(' \xB7 ', vehicle_plate, client_name, CONCAT(volume_m3, ' m\xB3'), IF(third_party_paid = 1, 'pago', 'a pagar')) AS detalhe,
+                    third_party_cost AS valor
+             FROM cargo_loads WHERE third_party_contractor IS NOT NULL AND third_party_contractor <> '' AND status <> 'cancelado'
+               AND ${dR("COALESCE(delivery_date, date)")} ORDER BY 1`;
+      break;
+    case "frete_terceirizado":
+      sql34 = `SELECT DATE(date) AS data, COALESCE(description, 'Frete') AS descricao,
+                    CONCAT_WS(' \xB7 ', client_name, equipment_name, payment_method) AS detalhe, ${sqlNum("amount")} AS valor
+             FROM financial_entries WHERE type = 'despesa' AND BINARY category = 'frete' AND status = 'confirmado' AND auto_generated = 0
+               AND ${dR("date")} ORDER BY date`;
+      break;
+    case "comb_veiculos":
+      sql34 = `SELECT DATE(v.date) AS data, COALESCE(e.name, CONCAT('#', v.equipment_id)) AS descricao,
+                    CONCAT_WS(' \xB7 ', CONCAT(v.liters, ' L'), CONCAT('R$ ', v.price_per_liter, '/L'), v.supplier, v.fuel_location) AS detalhe,
+                    ${sqlNum("v.fuel_cost")} AS valor
+             FROM vehicle_records v LEFT JOIN equipment e ON e.id = v.equipment_id
+             WHERE v.record_type = 'abastecimento' AND ${dR("v.date")} ORDER BY v.date`;
+      break;
+    case "comb_maquinas":
+      sql34 = `SELECT DATE(m.date) AS data, COALESCE(e.name, CONCAT('#', m.equipment_id)) AS descricao,
+                    CONCAT_WS(' \xB7 ', CONCAT(m.liters, ' L'), m.fuel_type, m.supplier) AS detalhe, ${sqlNum("m.total_value")} AS valor
+             FROM machine_fuel m LEFT JOIN equipment e ON e.id = m.equipment_id WHERE ${dR("m.date")} ORDER BY m.date`;
+      break;
+    case "comb_terceiros":
+      sql34 = `SELECT DATE(t.date) AS data, COALESCE(e.name, CONCAT('#', t.equipment_id)) AS descricao,
+                    CONCAT_WS(' \xB7 ', CONCAT(t.liters, ' L'), t.location) AS detalhe, ${sqlNum("t.total")} AS valor
+             FROM third_party_fuel t LEFT JOIN equipment e ON e.id = t.equipment_id WHERE ${dR("t.date")} ORDER BY t.date`;
+      break;
+    case "manut_veiculos":
+      sql34 = `SELECT DATE(v.date) AS data, COALESCE(e.name, CONCAT('#', v.equipment_id)) AS descricao,
+                    CONCAT_WS(' \xB7 ', v.maintenance_type, v.mechanic_name, v.maintenance_location) AS detalhe, ${sqlNum("v.maintenance_cost")} AS valor
+             FROM vehicle_records v LEFT JOIN equipment e ON e.id = v.equipment_id
+             WHERE v.record_type = 'manutencao' AND ${dR("v.date")} ORDER BY v.date`;
+      break;
+    case "manut_maquinas":
+      sql34 = `SELECT DATE(m.date) AS data, COALESCE(e.name, CONCAT('#', m.equipment_id)) AS descricao,
+                    CONCAT_WS(' \xB7 ', m.type, m.mechanic_name, LEFT(m.description, 80)) AS detalhe, ${sqlNum("m.total_cost")} AS valor
+             FROM machine_maintenance m LEFT JOIN equipment e ON e.id = m.equipment_id WHERE ${dR("m.date")} ORDER BY m.date`;
+      break;
+    case "manut_equipamentos":
+      sql34 = `SELECT DATE(m.performed_at) AS data, COALESCE(e.name, CONCAT('#', m.equipment_id)) AS descricao,
+                    CONCAT_WS(' \xB7 ', m.type, m.performed_by, LEFT(m.description, 80)) AS detalhe, ${sqlNum("m.cost")} AS valor
+             FROM equipment_maintenance m LEFT JOIN equipment e ON e.id = m.equipment_id WHERE ${dR("m.performed_at")} ORDER BY m.performed_at`;
+      break;
+    case "oleos":
+      sql34 = `SELECT DATE(o.date) AS data, COALESCE(e.name, CONCAT('#', o.equipment_id)) AS descricao,
+                    CONCAT_WS(' \xB7 ', o.oil_type, CONCAT(o.quantity_liters, ' L'), o.brand, o.supplier) AS detalhe, ${sqlNum("o.total_value")} AS valor
+             FROM equipment_oil_records o LEFT JOIN equipment e ON e.id = o.equipment_id WHERE ${dR("o.date")} ORDER BY o.date`;
+      break;
+    case "compras":
+      sql34 = `SELECT DATE(FROM_UNIXTIME(purchased_at / 1000)) AS data, title AS descricao,
+                    CONCAT_WS(' \xB7 ', status, payment_method, IF(is_direct_purchase = 1, 'compra direta', NULL)) AS detalhe, ${sqlNum("final_price")} AS valor
+             FROM purchase_requests WHERE status IN ('comprada','recebida') AND purchased_at BETWEEN ? AND ? ORDER BY purchased_at`;
+      params = [msInicio, msFim];
+      break;
+    default:
+      if (extraCond[chave]) {
+        sql34 = `SELECT DATE(x.date) AS data, COALESCE(x.description, '\u2014') AS descricao,
+                      CONCAT_WS(' \xB7 ', x.category, x.registered_by_name, x.payment_method, e.name) AS detalhe, ${sqlNum("x.amount")} AS valor
+               FROM extra_expenses x LEFT JOIN equipment e ON e.id = x.equipment_id
+               WHERE ${dR("x.date")} AND ${extraCond[chave]} ORDER BY x.date`;
+      } else {
+        return { linhas: [], total: 0, qtd: 0, truncado: false, erro: "Bloco desconhecido" };
+      }
+  }
+  try {
+    const [r] = await db.$client.execute(sql34, params);
+    const dia = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? "").slice(0, 10);
+    const todas = r.map((x) => ({
+      data: dia(x.data),
+      descricao: String(x.descricao ?? "\u2014"),
+      detalhe: String(x.detalhe ?? ""),
+      valor: r23(Number(x.valor ?? 0))
+    }));
+    const total = r23(todas.reduce((s, l) => s + l.valor, 0));
+    return { linhas: todas.slice(0, limite), total, qtd: todas.length, truncado: todas.length > limite, erro: null };
+  } catch (e) {
+    return { linhas: [], total: 0, qtd: 0, truncado: false, erro: String(e?.message ?? e).slice(0, 200) };
+  }
+}
+var r23;
+var init_financeiroDetalhe = __esm({
+  "server/utils/financeiroDetalhe.ts"() {
+    "use strict";
+    init_financeiroCanonico();
+    r23 = (n) => Math.round(n * 100) / 100;
+  }
+});
+
+// server/utils/weeklyGoals.ts
+function addDays(date, n) {
+  return fmt(toUtc(date) + n * DIA_MS);
+}
+function weekBounds(date) {
+  const ms = toUtc(date);
+  const dow = new Date(ms).getUTCDay();
+  const desdeSabado = (dow + 1) % 7;
+  const start = fmt(ms - desdeSabado * DIA_MS);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  return { start, end: days[6], days };
+}
+function hojeISO(now = /* @__PURE__ */ new Date()) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
+function papelNaMeta(user, meta, supervisorIds) {
+  if (user.isAdmin) return "admin";
+  if (meta.createdBy === user.id) return "criador";
+  if (meta.responsibleUserId === user.id) return "responsavel";
+  if (supervisorIds.includes(user.id)) return "supervisor";
+  return null;
+}
+function tiposMensagemPermitidos(p) {
+  if (p === "responsavel") return ["resposta", "comentario"];
+  if (p === "admin" || p === "criador" || p === "supervisor") return ["pergunta", "comentario", "resposta"];
+  return [];
+}
+function normalizaDestino(id) {
+  if (id == null) return null;
+  return id >= 1e4 ? id - 1e4 : id;
+}
+function calcularProgresso(itens, cargas, diasSemana) {
+  const validas = cargas.filter((c) => c.status !== "cancelado");
+  const out = itens.map((it) => {
+    const doComprador = validas.filter((c) => normalizaDestino(c.destinationId) === it.destinationId);
+    const porDia = diasSemana.map((d) => {
+      const doDia = doComprador.filter((c) => c.data === d);
+      const plan = it.dias.find((x) => x.data === d);
+      return {
+        data: d,
+        planejado: it.dias.length > 0 ? plan?.target ?? 0 : null,
+        carregadas: doDia.length,
+        entregues: doDia.filter((c) => c.status === "entregue").length
+      };
+    });
+    const carregadas2 = porDia.reduce((s, x) => s + x.carregadas, 0);
+    const entregues2 = porDia.reduce((s, x) => s + x.entregues, 0);
+    return {
+      itemId: it.id,
+      destinationId: it.destinationId,
+      meta: it.targetCargas,
+      carregadas: carregadas2,
+      entregues: entregues2,
+      pct: it.targetCargas > 0 ? Math.round(carregadas2 / it.targetCargas * 100) : 0,
+      porDia
+    };
+  });
+  const meta = out.reduce((s, x) => s + x.meta, 0);
+  const carregadas = out.reduce((s, x) => s + Math.min(x.carregadas, x.meta), 0);
+  const entregues = out.reduce((s, x) => s + x.entregues, 0);
+  return { itens: out, total: { meta, carregadas, entregues, pct: meta > 0 ? Math.round(carregadas / meta * 100) : 0 } };
+}
+function calcularAlertas(p) {
+  if (p.status === "encerrada" || p.status === "cancelada") return [];
+  if (p.status === "em_negociacao") return p.perguntasSemResposta > 0 ? ["em_negociacao", "pergunta_sem_resposta"] : ["em_negociacao"];
+  const out = [];
+  if (p.ack === "pendente") out.push("ciencia_pendente");
+  const hojeNaSemana = p.hoje >= p.semana.start && p.hoje <= p.semana.end;
+  if (hojeNaSemana && p.relatosHoje === 0) out.push("sem_relato_hoje");
+  if (p.problemaHoje) out.push("problema_hoje");
+  if (p.perguntasSemResposta > 0) out.push("pergunta_sem_resposta");
+  if (hojeNaSemana && p.diasDecorridos >= 3 && p.pctMeta < p.diasDecorridos / 7 * 100 - 25) out.push("atrasada_no_ritmo");
+  return out;
+}
+var KINDS_ENTRY, DIA_MS, toUtc, fmt, podeVer, podeEditarMeta, podeEncerrar, podeDarCiencia, podeRelatar;
+var init_weeklyGoals = __esm({
+  "server/utils/weeklyGoals.ts"() {
+    "use strict";
+    KINDS_ENTRY = ["inicio_dia", "andamento", "problema", "fechamento_dia"];
+    DIA_MS = 864e5;
+    toUtc = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
+    fmt = (ms) => new Date(ms).toISOString().slice(0, 10);
+    podeVer = (p) => p !== null;
+    podeEditarMeta = (p) => p === "admin" || p === "criador";
+    podeEncerrar = (p) => p === "admin" || p === "criador" || p === "supervisor";
+    podeDarCiencia = (p) => p === "responsavel";
+    podeRelatar = (p) => p === "responsavel";
+  }
+});
+
+// server/routers/weeklyGoals.ts
+var weeklyGoals_exports = {};
+__export(weeklyGoals_exports, {
+  addDays: () => addDays,
+  enviarLembretesFechamento: () => enviarLembretesFechamento,
+  weeklyGoalsRouter: () => weeklyGoalsRouter
+});
+import { z as z49 } from "zod";
+import { TRPCError as TRPCError37 } from "@trpc/server";
+async function getDbOrThrow2() {
+  const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+  const db = await getDb2();
+  if (!db) throw new TRPCError37({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  return db;
+}
+function ensureTables2(db) {
+  if (!ensurePromise2) {
+    ensurePromise2 = (async () => {
+      const run = (s) => db.$client.execute(s);
+      await run(`CREATE TABLE IF NOT EXISTS weekly_goals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        week_start VARCHAR(10) NOT NULL, week_end VARCHAR(10) NOT NULL,
+        title VARCHAR(200) NOT NULL, description TEXT NULL,
+        responsible_user_id INT NOT NULL, responsible_name VARCHAR(160) NULL,
+        created_by INT NOT NULL, created_by_name VARCHAR(160) NULL,
+        status VARCHAR(24) NOT NULL DEFAULT 'aguardando_ciencia',
+        ack VARCHAR(16) NOT NULL DEFAULT 'pendente', ack_at DATETIME NULL, ack_comment TEXT NULL,
+        closed_at DATETIME NULL, closed_by INT NULL, closing_summary TEXT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX weekly_goals_week_idx (week_start), INDEX weekly_goals_resp_idx (responsible_user_id)
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS weekly_goal_items (
+        id INT AUTO_INCREMENT PRIMARY KEY, goal_id INT NOT NULL, destination_id INT NOT NULL,
+        destination_name VARCHAR(200) NOT NULL, target_cargas INT NOT NULL, observacao VARCHAR(300) NULL,
+        INDEX weekly_goal_items_goal_idx (goal_id)
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS weekly_goal_item_days (
+        id INT AUTO_INCREMENT PRIMARY KEY, item_id INT NOT NULL, plan_date VARCHAR(10) NOT NULL, target_cargas INT NOT NULL,
+        UNIQUE KEY weekly_goal_item_days_unique (item_id, plan_date)
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS weekly_goal_supervisors (
+        goal_id INT NOT NULL, user_id INT NOT NULL, user_name VARCHAR(160) NULL, PRIMARY KEY (goal_id, user_id)
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS weekly_goal_entries (
+        id INT AUTO_INCREMENT PRIMARY KEY, goal_id INT NOT NULL, entry_date VARCHAR(10) NOT NULL,
+        kind VARCHAR(20) NOT NULL, situacao VARCHAR(12) NOT NULL DEFAULT 'ok', body TEXT NOT NULL,
+        photo_urls TEXT NULL, author_user_id INT NOT NULL, author_name VARCHAR(160) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX weekly_goal_entries_goal_idx (goal_id, entry_date)
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS weekly_goal_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY, goal_id INT NOT NULL, entry_id INT NULL, parent_id INT NULL,
+        kind VARCHAR(16) NOT NULL, body TEXT NOT NULL, author_user_id INT NULL, author_name VARCHAR(160) NULL,
+        author_role VARCHAR(16) NULL, answered TINYINT NOT NULL DEFAULT 0, msg_date VARCHAR(10) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX weekly_goal_messages_goal_idx (goal_id, created_at)
+      )`);
+    })().catch((e) => {
+      ensurePromise2 = null;
+      throw e;
+    });
+  }
+  return ensurePromise2;
+}
+async function carregarMeta(db, id) {
+  const [g] = await q(db, `SELECT * FROM weekly_goals WHERE id = ?`, [id]);
+  if (!g) throw new TRPCError37({ code: "NOT_FOUND", message: "Meta n\xE3o encontrada" });
+  const sups = await q(db, `SELECT user_id, user_name FROM weekly_goal_supervisors WHERE goal_id = ? ORDER BY user_name`, [id]);
+  return { goal: mapGoal(g), supervisors: sups.map((s) => ({ userId: s.user_id, name: s.user_name ?? "" })) };
+}
+async function exigirPapel(db, user, id) {
+  const m = await carregarMeta(db, id);
+  const papel = papelNaMeta({ id: user.id, isAdmin: isAdmin(user) }, m.goal, m.supervisors.map((s) => s.userId));
+  if (!podeVer(papel)) throw new TRPCError37({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o participa desta meta" });
+  return { ...m, papel };
+}
+async function nomeDe(db, userId) {
+  const [u] = await q(db, `SELECT name FROM users WHERE id = ?`, [userId]);
+  return String(u?.name ?? `Usu\xE1rio #${userId}`);
+}
+async function avisar(userIds, title, message, goalId, exceto) {
+  const ids = Array.from(new Set(userIds)).filter((id) => id && id !== exceto);
+  if (ids.length === 0) return;
+  try {
+    await notifyUsers({ recipientUserIds: ids, type: "geral", title, message, relatedId: goalId, relatedType: "weekly_goal" });
+  } catch (e) {
+    console.warn("[WeeklyGoals] Falha ao notificar:", e?.message);
+  }
+}
+async function mensagemSistema(db, goalId, body, msgDate) {
+  await db.$client.execute(
+    `INSERT INTO weekly_goal_messages (goal_id, kind, body, author_role, msg_date) VALUES (?, 'sistema', ?, 'sistema', ?)`,
+    [goalId, body, msgDate ?? hojeISO()]
+  );
+}
+async function cargasDaSemana(db, inicio, fim) {
+  const rows2 = await q(
+    db,
+    `SELECT cl.id, DATE_FORMAT(cl.date, '%Y-%m-%d') AS d, cl.destination_id, cl.status, cl.vehicle_plate, cl.driver_name,
+            cl.weight_net_kg, cl.weight_out_kg, cl.created_at, cd.name AS dest_name
+     FROM cargo_loads cl
+     LEFT JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+     WHERE DATE(cl.date) BETWEEN ? AND ? AND cl.status <> 'cancelado' ORDER BY cl.date, cl.id`,
+    [inicio, fim]
+  );
+  return rows2.map((r) => ({
+    id: r.id,
+    data: String(r.d),
+    destinationId: r.destination_id ?? null,
+    status: String(r.status),
+    placa: r.vehicle_plate ?? null,
+    motorista: r.driver_name ?? null,
+    pesoKg: parseFloat(r.weight_net_kg || r.weight_out_kg || "0") || 0,
+    registradoEm: r.created_at,
+    destinoNome: r.dest_name ?? null
+  }));
+}
+async function itensDaMeta(db, goalId) {
+  const itens = await q(db, `SELECT * FROM weekly_goal_items WHERE goal_id = ? ORDER BY id`, [goalId]);
+  const dias = itens.length ? await q(db, `SELECT * FROM weekly_goal_item_days WHERE item_id IN (${itens.map(() => "?").join(",")}) ORDER BY plan_date`, itens.map((i) => i.id)) : [];
+  return itens.map((i) => ({
+    id: i.id,
+    destinationId: i.destination_id,
+    destinationName: i.destination_name,
+    targetCargas: i.target_cargas,
+    observacao: i.observacao ?? null,
+    dias: dias.filter((d) => d.item_id === i.id).map((d) => ({ data: d.plan_date, target: d.target_cargas }))
+  }));
+}
+async function resumoDaMeta(db, g, hoje) {
+  const itens = await itensDaMeta(db, g.id);
+  const sem = weekBounds(g.weekStart);
+  const cargas = await cargasDaSemana(db, sem.start, sem.end);
+  const prog = calcularProgresso(itens, cargas.map((c) => ({ id: c.id, data: c.data, destinationId: c.destinationId, status: c.status })), sem.days);
+  const [rel] = await q(db, `SELECT SUM(entry_date = ?) AS hoje, SUM(entry_date = ? AND kind = 'fechamento_dia') AS fechou,
+                                    SUM(entry_date = ? AND (kind = 'problema' OR situacao = 'problema')) AS prob
+                             FROM weekly_goal_entries WHERE goal_id = ?`, [hoje, hoje, hoje, g.id]);
+  const [pq] = await q(db, `SELECT COUNT(*) AS n FROM weekly_goal_messages WHERE goal_id = ? AND kind = 'pergunta' AND answered = 0`, [g.id]);
+  const decorridos = hoje < sem.start ? 0 : hoje > sem.end ? 7 : sem.days.indexOf(hoje) + 1;
+  const alertas = calcularAlertas({
+    status: g.status,
+    ack: g.ack,
+    hoje,
+    semana: { start: sem.start, end: sem.end },
+    relatosHoje: Number(rel?.hoje ?? 0),
+    fechouHoje: Number(rel?.fechou ?? 0) > 0,
+    problemaHoje: Number(rel?.prob ?? 0) > 0,
+    perguntasSemResposta: Number(pq?.n ?? 0),
+    pctMeta: prog.total.pct,
+    diasDecorridos: decorridos
+  });
+  return {
+    itens,
+    progresso: prog,
+    alertas,
+    dias: sem.days,
+    cargas,
+    hoje: { relatos: Number(rel?.hoje ?? 0), fechou: Number(rel?.fechou ?? 0) > 0, problema: Number(rel?.prob ?? 0) > 0 },
+    perguntasSemResposta: Number(pq?.n ?? 0)
+  };
+}
+async function gravarItens(db, goalId, semana, itens) {
+  for (const it of itens) {
+    const [d] = await q(db, `SELECT id, name, nickname FROM cargo_destinations WHERE id = ?`, [normalizaDestino(it.destinationId) ?? it.destinationId]);
+    if (!d) throw new TRPCError37({ code: "BAD_REQUEST", message: "Comprador n\xE3o encontrado" });
+    const [res] = await db.$client.execute(
+      `INSERT INTO weekly_goal_items (goal_id, destination_id, destination_name, target_cargas, observacao) VALUES (?, ?, ?, ?, ?)`,
+      [goalId, d.id, String(d.nickname || d.name), it.targetCargas, it.observacao ?? null]
+    );
+    for (const dia of it.dias ?? []) {
+      if (!semana.days.includes(dia.data) || dia.target <= 0) continue;
+      await db.$client.execute(`INSERT INTO weekly_goal_item_days (item_id, plan_date, target_cargas) VALUES (?, ?, ?)`, [res.insertId, dia.data, dia.target]);
+    }
+  }
+}
+function mapEntry(e) {
+  let fotos = [];
+  try {
+    fotos = e.photo_urls ? JSON.parse(e.photo_urls) : [];
+  } catch {
+    fotos = [];
+  }
+  return {
+    id: e.id,
+    data: e.entry_date,
+    kind: e.kind,
+    situacao: e.situacao,
+    body: e.body,
+    fotos,
+    autor: e.author_name ?? "",
+    criadoEm: e.created_at
+  };
+}
+function mapMsg(x) {
+  return {
+    id: x.id,
+    entryId: x.entry_id ?? null,
+    parentId: x.parent_id ?? null,
+    kind: x.kind,
+    body: x.body,
+    autor: x.author_name ?? "Sistema",
+    papel: x.author_role ?? "sistema",
+    respondida: Number(x.answered) === 1,
+    data: x.msg_date ?? null,
+    criadoEm: x.created_at
+  };
+}
+async function enviarLembretesFechamento(hoje = hojeISO()) {
+  const db = await getDbOrThrow2();
+  await ensureTables2(db);
+  const metas = await q(
+    db,
+    `SELECT g.id, g.title, g.responsible_user_id FROM weekly_goals g
+     WHERE g.status IN ('aguardando_ciencia','em_andamento') AND ? BETWEEN g.week_start AND g.week_end
+       AND NOT EXISTS (SELECT 1 FROM weekly_goal_entries e WHERE e.goal_id = g.id AND e.entry_date = ? AND e.kind = 'fechamento_dia')
+       AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.recipient_user_id = g.responsible_user_id AND n.related_type = 'weekly_goal'
+                       AND n.related_id = g.id AND n.title = 'Lembrete: fechamento do dia' AND DATE(n.created_at) = ?)`,
+    [hoje, hoje, hoje]
+  );
+  for (const g of metas) {
+    await avisar([g.responsible_user_id], "Lembrete: fechamento do dia", `Registre como foi a opera\xE7\xE3o hoje na meta "${g.title}".`, g.id);
+  }
+  return metas.length;
+}
+var USO, GESTAO, data, q, ensurePromise2, isAdmin, mapGoal, interessados, itemInput, descreveItens, weeklyGoalsRouter;
+var init_weeklyGoals2 = __esm({
+  "server/routers/weeklyGoals.ts"() {
+    "use strict";
+    init_trpc();
+    init_permissions();
+    init_notifications();
+    init_weeklyGoals();
+    USO = "metas-semanais";
+    GESTAO = "metas-semanais-gestao";
+    data = z49.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    q = async (db, sql34, params = []) => (await db.$client.execute(sql34, params))[0];
+    ensurePromise2 = null;
+    isAdmin = (u) => u.role === "admin";
+    mapGoal = (r) => ({
+      id: r.id,
+      weekStart: r.week_start,
+      weekEnd: r.week_end,
+      title: r.title,
+      description: r.description ?? null,
+      responsibleUserId: r.responsible_user_id,
+      responsibleName: r.responsible_name ?? null,
+      createdBy: r.created_by,
+      createdByName: r.created_by_name ?? null,
+      status: r.status,
+      ack: r.ack,
+      ackAt: r.ack_at ?? null,
+      ackComment: r.ack_comment ?? null,
+      closedAt: r.closed_at ?? null,
+      closingSummary: r.closing_summary ?? null,
+      createdAt: r.created_at
+    });
+    interessados = (m) => [m.goal.createdBy, ...m.supervisors.map((s) => s.userId)];
+    itemInput = z49.object({
+      destinationId: z49.number(),
+      targetCargas: z49.number().int().min(1).max(500),
+      observacao: z49.string().max(300).nullable().optional(),
+      dias: z49.array(z49.object({ data, target: z49.number().int().min(0).max(100) })).max(7).optional()
+    });
+    descreveItens = (itens) => itens.map((i) => `${i.targetCargas}x ${i.destinationName}`).join(", ");
+    weeklyGoalsRouter = router({
+      // ── Apoio ao formulário ──
+      opcoes: moduleProcedure(GESTAO).query(async () => {
+        const db = await getDbOrThrow2();
+        await ensureTables2(db);
+        const users3 = await q(db, `SELECT u.id, u.name, u.email, u.role, c.name AS colaborador
+       FROM users u LEFT JOIN collaborators c ON c.user_id = u.id AND (c.active = 1 OR c.active IS NULL) ORDER BY COALESCE(c.name, u.name)`);
+        const comAcesso = [];
+        const vistos = /* @__PURE__ */ new Set();
+        for (const u of users3) {
+          if (vistos.has(u.id)) continue;
+          vistos.add(u.id);
+          if (u.role === "admin") {
+            comAcesso.push(u);
+            continue;
+          }
+          try {
+            const perms = await resolveUserPermissions(u.id, u.role);
+            if (perms.modules === null || perms.modules.includes(USO) || perms.modules.includes(GESTAO)) comAcesso.push(u);
+          } catch {
+          }
+        }
+        const dests = await q(db, `SELECT id, name, nickname FROM cargo_destinations WHERE (is_buyer = 1 OR is_buyer IS NULL) AND (active = 1 OR active IS NULL) ORDER BY COALESCE(NULLIF(nickname,''), name)`);
+        return {
+          usuarios: comAcesso.map((u) => ({
+            id: u.id,
+            nome: u.colaborador && String(u.colaborador).trim().toLowerCase() !== String(u.name).trim().toLowerCase() ? `${String(u.colaborador).trim()} (${String(u.name).trim()})` : String(u.colaborador || u.name).trim(),
+            email: String(u.email),
+            admin: u.role === "admin"
+          })),
+          compradores: dests.map((d) => ({ id: d.id, nome: String(d.nickname || d.name) }))
+        };
+      }),
+      // ── Lista da semana, conforme o papel do usuário ──
+      list: moduleProcedure(USO, GESTAO).input(z49.object({ semana: data.optional() }).optional()).query(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        await ensureTables2(db);
+        const hoje = hojeISO();
+        const sem = weekBounds(input?.semana ?? hoje);
+        const rows2 = await q(db, `SELECT * FROM weekly_goals WHERE week_start = ? ORDER BY responsible_name, id`, [sem.start]);
+        const out = [];
+        for (const r of rows2) {
+          const g = mapGoal(r);
+          const sups = await q(db, `SELECT user_id, user_name FROM weekly_goal_supervisors WHERE goal_id = ?`, [g.id]);
+          const papel = papelNaMeta({ id: ctx.user.id, isAdmin: isAdmin(ctx.user) }, g, sups.map((s) => s.user_id));
+          if (!podeVer(papel)) continue;
+          const res = await resumoDaMeta(db, g, hoje);
+          out.push({
+            ...g,
+            papel,
+            supervisores: sups.map((s) => ({ userId: s.user_id, name: s.user_name ?? "" })),
+            metaResumo: descreveItens(res.itens),
+            progresso: res.progresso,
+            alertas: res.alertas,
+            hoje: res.hoje
+          });
+        }
+        return { semana: sem, hoje, metas: out };
+      }),
+      // ── Detalhe completo: itens, dia a dia, relatos, conversa ──
+      getById: moduleProcedure(USO, GESTAO).input(z49.object({ id: z49.number() })).query(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        await ensureTables2(db);
+        const m = await exigirPapel(db, ctx.user, input.id);
+        const hoje = hojeISO();
+        const res = await resumoDaMeta(db, m.goal, hoje);
+        const entries = await q(db, `SELECT * FROM weekly_goal_entries WHERE goal_id = ? ORDER BY entry_date, created_at, id`, [input.id]);
+        const messages = await q(db, `SELECT * FROM weekly_goal_messages WHERE goal_id = ? ORDER BY created_at, id`, [input.id]);
+        const destinosDaMeta = new Set(res.itens.map((i) => i.destinationId));
+        const dias = res.dias.map((dia) => {
+          const cargasDia = res.cargas.filter((c) => c.data === dia);
+          const doComprador = cargasDia.filter((c) => destinosDaMeta.has(normalizaDestino(c.destinationId) ?? -1));
+          return {
+            data: dia,
+            porComprador: res.progresso.itens.map((p) => {
+              const x = p.porDia.find((d) => d.data === dia);
+              const item = res.itens.find((i) => i.id === p.itemId);
+              return { itemId: p.itemId, comprador: item.destinationName, planejado: x.planejado, carregadas: x.carregadas, entregues: x.entregues };
+            }),
+            cargas: doComprador.map((c) => ({
+              id: c.id,
+              comprador: c.destinoNome ?? "\u2014",
+              placa: c.placa,
+              motorista: c.motorista,
+              pesoKg: c.pesoKg,
+              status: c.status,
+              registradoEm: c.registradoEm
+            })),
+            outrasCargas: cargasDia.length - doComprador.length,
+            relatos: entries.filter((e) => e.entry_date === dia).map((e) => mapEntry(e)),
+            mensagens: messages.filter((x) => x.msg_date === dia).map((x) => mapMsg(x))
+          };
+        });
+        return {
+          goal: m.goal,
+          supervisores: m.supervisors,
+          papel: m.papel,
+          permissoes: {
+            editar: podeEditarMeta(m.papel),
+            encerrar: podeEncerrar(m.papel),
+            ciencia: podeDarCiencia(m.papel) && (m.goal.ack === "pendente" || m.goal.status === "em_negociacao"),
+            resolverRessalva: podeEncerrar(m.papel) && m.goal.status === "em_negociacao",
+            relatar: podeRelatar(m.papel) && m.goal.status === "em_andamento",
+            mensagens: tiposMensagemPermitidos(m.papel)
+          },
+          itens: res.itens,
+          progresso: res.progresso,
+          alertas: res.alertas,
+          hoje,
+          dias,
+          conversaMeta: (() => {
+            const raizes = messages.filter((x) => x.msg_date == null && !x.parent_id && x.kind !== "sistema");
+            const ids = new Set(raizes.map((x) => x.id));
+            return messages.filter((x) => x.msg_date == null && x.kind !== "sistema" || x.parent_id && ids.has(x.parent_id)).map(mapMsg);
+          })(),
+          relatos: entries.map(mapEntry),
+          mensagens: messages.map(mapMsg)
+        };
+      }),
+      // ── Criar meta (gestão) ──
+      create: moduleProcedure(GESTAO).input(z49.object({
+        semana: data,
+        title: z49.string().min(1).max(200),
+        description: z49.string().max(4e3).nullable().optional(),
+        responsibleUserId: z49.number(),
+        supervisorUserIds: z49.array(z49.number()).max(10),
+        itens: z49.array(itemInput).min(1).max(20)
+      })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        await ensureTables2(db);
+        const sem = weekBounds(input.semana);
+        const respNome = await nomeDe(db, input.responsibleUserId);
+        const criador = await nomeDe(db, ctx.user.id);
+        const [res] = await db.$client.execute(
+          `INSERT INTO weekly_goals (week_start, week_end, title, description, responsible_user_id, responsible_name, created_by, created_by_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [sem.start, sem.end, input.title.trim(), input.description?.trim() || null, input.responsibleUserId, respNome, ctx.user.id, criador]
+        );
+        const id = Number(res.insertId);
+        const sups = Array.from(/* @__PURE__ */ new Set([ctx.user.id, ...input.supervisorUserIds])).filter((u) => u !== input.responsibleUserId);
+        for (const uid of sups) {
+          await db.$client.execute(`INSERT IGNORE INTO weekly_goal_supervisors (goal_id, user_id, user_name) VALUES (?, ?, ?)`, [id, uid, await nomeDe(db, uid)]);
+        }
+        await gravarItens(db, id, sem, input.itens);
+        const itens = await itensDaMeta(db, id);
+        await mensagemSistema(db, id, `Meta criada por ${criador}: ${descreveItens(itens)}. Supervisores: ${(await q(db, `SELECT user_name FROM weekly_goal_supervisors WHERE goal_id = ?`, [id])).map((s) => s.user_name).join(", ")}.`);
+        await avisar([input.responsibleUserId], "Nova meta semanal", `${input.title} \u2014 ${descreveItens(itens)} (${sem.start.split("-").reverse().join("/")} a ${sem.end.split("-").reverse().join("/")})`, id);
+        await avisar(sups, "Meta semanal criada", `${respNome}: ${descreveItens(itens)}`, id, ctx.user.id);
+        return { id };
+      }),
+      // ── Editar meta (admin/criador): troca itens e registra o antes/depois na linha do tempo ──
+      update: moduleProcedure(GESTAO).input(z49.object({
+        id: z49.number(),
+        title: z49.string().min(1).max(200),
+        description: z49.string().max(4e3).nullable().optional(),
+        supervisorUserIds: z49.array(z49.number()).max(10),
+        itens: z49.array(itemInput).min(1).max(20)
+      })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        await ensureTables2(db);
+        const m = await exigirPapel(db, ctx.user, input.id);
+        if (!podeEditarMeta(m.papel)) throw new TRPCError37({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador edita a meta" });
+        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError37({ code: "BAD_REQUEST", message: "Meta j\xE1 encerrada" });
+        const antes = descreveItens(await itensDaMeta(db, input.id));
+        await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [input.id]);
+        await db.$client.execute(`DELETE FROM weekly_goal_items WHERE goal_id = ?`, [input.id]);
+        await gravarItens(db, input.id, weekBounds(m.goal.weekStart), input.itens);
+        await db.$client.execute(`UPDATE weekly_goals SET title = ?, description = ?, ack = 'pendente', ack_at = NULL, ack_comment = NULL,
+        status = 'aguardando_ciencia' WHERE id = ?`, [input.title.trim(), input.description?.trim() || null, input.id]);
+        await db.$client.execute(`DELETE FROM weekly_goal_supervisors WHERE goal_id = ?`, [input.id]);
+        const sups = Array.from(/* @__PURE__ */ new Set([m.goal.createdBy, ...input.supervisorUserIds])).filter((u) => u !== m.goal.responsibleUserId);
+        for (const uid of sups) await db.$client.execute(`INSERT IGNORE INTO weekly_goal_supervisors (goal_id, user_id, user_name) VALUES (?, ?, ?)`, [input.id, uid, await nomeDe(db, uid)]);
+        const depois = descreveItens(await itensDaMeta(db, input.id));
+        await mensagemSistema(db, input.id, `Meta alterada por ${await nomeDe(db, ctx.user.id)}. Antes: ${antes}. Agora: ${depois}. A ci\xEAncia do respons\xE1vel foi pedida de novo.`);
+        await avisar([m.goal.responsibleUserId], "Meta semanal alterada", `${input.title} \u2014 ${depois}. Confirme a ci\xEAncia.`, input.id);
+        return { success: true };
+      }),
+      cancel: moduleProcedure(GESTAO).input(z49.object({ id: z49.number(), motivo: z49.string().min(1).max(500) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        const m = await exigirPapel(db, ctx.user, input.id);
+        if (!podeEditarMeta(m.papel)) throw new TRPCError37({ code: "FORBIDDEN" });
+        await db.$client.execute(`UPDATE weekly_goals SET status = 'cancelada', closed_at = NOW(), closed_by = ?, closing_summary = ? WHERE id = ?`, [ctx.user.id, input.motivo, input.id]);
+        await mensagemSistema(db, input.id, `Meta cancelada por ${await nomeDe(db, ctx.user.id)}: ${input.motivo}`);
+        await avisar([m.goal.responsibleUserId], "Meta semanal cancelada", input.motivo, input.id, ctx.user.id);
+        return { success: true };
+      }),
+      // ── Excluir meta de vez (admin/criador): apaga também relatos, conversa e avisos dela ──
+      delete: moduleProcedure(GESTAO).input(z49.object({ id: z49.number() })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        const m = await exigirPapel(db, ctx.user, input.id);
+        if (!podeEditarMeta(m.papel)) throw new TRPCError37({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador exclui a meta" });
+        const id = input.id;
+        await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [id]);
+        for (const t2 of ["weekly_goal_items", "weekly_goal_supervisors", "weekly_goal_entries", "weekly_goal_messages"]) {
+          await db.$client.execute(`DELETE FROM ${t2} WHERE goal_id = ?`, [id]);
+        }
+        await db.$client.execute(`DELETE FROM weekly_goals WHERE id = ?`, [id]);
+        try {
+          await db.$client.execute(`DELETE FROM notifications WHERE related_type = 'weekly_goal' AND related_id = ?`, [id]);
+        } catch {
+        }
+        return { success: true };
+      }),
+      // ── Encerrar a semana com avaliação (supervisor/criador/admin) ──
+      close: moduleProcedure(GESTAO).input(z49.object({ id: z49.number(), avaliacao: z49.string().min(1).max(2e3) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        const m = await exigirPapel(db, ctx.user, input.id);
+        if (!podeEncerrar(m.papel)) throw new TRPCError37({ code: "FORBIDDEN" });
+        const res = await resumoDaMeta(db, m.goal, hojeISO());
+        await db.$client.execute(`UPDATE weekly_goals SET status = 'encerrada', closed_at = NOW(), closed_by = ?, closing_summary = ? WHERE id = ?`, [ctx.user.id, input.avaliacao, input.id]);
+        await mensagemSistema(db, input.id, `Semana encerrada por ${await nomeDe(db, ctx.user.id)}. Resultado: ${res.progresso.total.carregadas} de ${res.progresso.total.meta} cargas (${res.progresso.total.pct}%). Avalia\xE7\xE3o: ${input.avaliacao}`);
+        await avisar([m.goal.responsibleUserId, ...interessados(m)], "Meta semanal encerrada", `${m.goal.title}: ${res.progresso.total.pct}% da meta. ${input.avaliacao}`, input.id, ctx.user.id);
+        return { success: true };
+      }),
+      // ── Ciência do responsável ──
+      acknowledge: moduleProcedure(USO, GESTAO).input(z49.object({ id: z49.number(), ack: z49.enum(["de_acordo", "com_ressalva"]), comentario: z49.string().max(1e3).optional() })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        const m = await exigirPapel(db, ctx.user, input.id);
+        if (!podeDarCiencia(m.papel)) throw new TRPCError37({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel d\xE1 ci\xEAncia" });
+        if (m.goal.ack !== "pendente" && m.goal.status !== "em_negociacao") throw new TRPCError37({ code: "BAD_REQUEST", message: "A ci\xEAncia desta meta j\xE1 foi registrada" });
+        if (input.ack === "com_ressalva" && !input.comentario?.trim()) throw new TRPCError37({ code: "BAD_REQUEST", message: "Explique a ressalva" });
+        const novoStatus = input.ack === "de_acordo" ? "em_andamento" : "em_negociacao";
+        await db.$client.execute(
+          `UPDATE weekly_goals SET ack = ?, ack_at = NOW(), ack_comment = ?, status = ? WHERE id = ? AND status <> 'encerrada' AND status <> 'cancelada'`,
+          [input.ack, input.comentario?.trim() || null, novoStatus, input.id]
+        );
+        const nome = await nomeDe(db, ctx.user.id);
+        const eraNegociacao = m.goal.status === "em_negociacao";
+        await mensagemSistema(db, input.id, input.ack === "de_acordo" ? eraNegociacao ? `${nome} chegou a um acordo: de acordo com a meta. A meta passa a valer (em andamento).` : `${nome} deu ci\xEAncia: de acordo com a meta.` : `${nome} deu ci\xEAncia com ressalvas: ${input.comentario.trim()}. A meta fica em negocia\xE7\xE3o at\xE9 haver acordo.`);
+        await avisar(interessados(m), input.ack === "de_acordo" ? eraNegociacao ? "Acordo fechado na meta" : "Meta aceita" : "Meta com ressalvas: negocia\xE7\xE3o aberta", `${nome}: ${input.ack === "de_acordo" ? "de acordo" : input.comentario.trim()}`, input.id, ctx.user.id);
+        return { success: true };
+      }),
+      // ── Supervisão mantém a meta durante a negociação e pede nova confirmação ──
+      keepGoal: moduleProcedure(USO, GESTAO).input(z49.object({ id: z49.number(), justificativa: z49.string().min(1).max(1500) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        const m = await exigirPapel(db, ctx.user, input.id);
+        if (!podeEncerrar(m.papel)) throw new TRPCError37({ code: "FORBIDDEN", message: "S\xF3 a supervis\xE3o responde \xE0 ressalva" });
+        if (m.goal.status !== "em_negociacao") throw new TRPCError37({ code: "BAD_REQUEST", message: "A meta n\xE3o est\xE1 em negocia\xE7\xE3o" });
+        await db.$client.execute(`UPDATE weekly_goals SET status = 'aguardando_ciencia', ack = 'pendente', ack_at = NULL WHERE id = ?`, [input.id]);
+        const nome = await nomeDe(db, ctx.user.id);
+        await mensagemSistema(db, input.id, `${nome} manteve a meta: ${input.justificativa.trim()}. O respons\xE1vel precisa confirmar (de acordo ou nova ressalva).`);
+        await avisar([m.goal.responsibleUserId], "Meta mantida pela supervis\xE3o", `${nome}: ${input.justificativa.trim().slice(0, 140)}. Confirme a ci\xEAncia.`, input.id, ctx.user.id);
+        return { success: true };
+      }),
+      // ── Relato do responsável ──
+      addEntry: moduleProcedure(USO, GESTAO).input(z49.object({
+        goalId: z49.number(),
+        entryDate: data.optional(),
+        kind: z49.enum(KINDS_ENTRY),
+        situacao: z49.enum(["ok", "atencao", "problema"]).default("ok"),
+        body: z49.string().min(1).max(3e3),
+        photoUrls: z49.array(z49.string().url()).max(5).optional()
+      })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        const m = await exigirPapel(db, ctx.user, input.goalId);
+        if (!podeRelatar(m.papel)) throw new TRPCError37({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel registra relatos" });
+        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError37({ code: "BAD_REQUEST", message: "Meta encerrada" });
+        if (m.goal.status !== "em_andamento") throw new TRPCError37({ code: "BAD_REQUEST", message: 'A meta s\xF3 segue em andamento depois do acordo: d\xEA o "de acordo" (ou resolva a negocia\xE7\xE3o) antes de relatar' });
+        const dia = input.entryDate ?? hojeISO();
+        const sem = weekBounds(m.goal.weekStart);
+        if (dia < sem.start || dia > sem.end) throw new TRPCError37({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
+        const situacao = input.kind === "problema" ? "problema" : input.situacao;
+        const nome = await nomeDe(db, ctx.user.id);
+        const [res] = await db.$client.execute(
+          `INSERT INTO weekly_goal_entries (goal_id, entry_date, kind, situacao, body, photo_urls, author_user_id, author_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [input.goalId, dia, input.kind, situacao, input.body.trim(), input.photoUrls?.length ? JSON.stringify(input.photoUrls) : null, ctx.user.id, nome]
+        );
+        if (input.kind === "problema" || situacao === "problema") {
+          await avisar(interessados(m), "Problema informado", `${nome}: ${input.body.trim().slice(0, 140)}`, input.goalId, ctx.user.id);
+        } else if (input.kind === "fechamento_dia") {
+          await avisar(interessados(m), "Fechamento do dia", `${nome}: ${input.body.trim().slice(0, 140)}`, input.goalId, ctx.user.id);
+        }
+        return { id: Number(res.insertId) };
+      }),
+      // ── Conversa (perguntas, respostas, comentários) ──
+      addMessage: moduleProcedure(USO, GESTAO).input(z49.object({
+        goalId: z49.number(),
+        kind: z49.enum(["pergunta", "resposta", "comentario"]),
+        body: z49.string().min(1).max(3e3),
+        entryId: z49.number().optional(),
+        parentId: z49.number().optional(),
+        dia: data.optional(),
+        geral: z49.boolean().optional()
+      })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow2();
+        const m = await exigirPapel(db, ctx.user, input.goalId);
+        if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError37({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode enviar este tipo de mensagem" });
+        const nome = await nomeDe(db, ctx.user.id);
+        const papel = m.papel === "responsavel" ? "responsavel" : m.papel === "admin" ? "admin" : "supervisor";
+        let dia = input.geral ? null : input.dia ?? hojeISO();
+        if (input.entryId) {
+          const [e] = await q(db, `SELECT entry_date FROM weekly_goal_entries WHERE id = ? AND goal_id = ?`, [input.entryId, input.goalId]);
+          if (e) dia = e.entry_date;
+        }
+        if (input.parentId) {
+          const [pm] = await q(db, `SELECT msg_date FROM weekly_goal_messages WHERE id = ? AND goal_id = ?`, [input.parentId, input.goalId]);
+          if (pm) dia = pm.msg_date ?? null;
+        }
+        const [res] = await db.$client.execute(
+          `INSERT INTO weekly_goal_messages (goal_id, entry_id, parent_id, kind, body, author_user_id, author_name, author_role, msg_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [input.goalId, input.entryId ?? null, input.parentId ?? null, input.kind, input.body.trim(), ctx.user.id, nome, papel, dia]
+        );
+        if (input.kind === "resposta" && input.parentId) {
+          await db.$client.execute(`UPDATE weekly_goal_messages SET answered = 1 WHERE id = ? AND goal_id = ?`, [input.parentId, input.goalId]);
+        }
+        const destinatarios = m.papel === "responsavel" ? interessados(m) : [m.goal.responsibleUserId];
+        const titulo = input.kind === "pergunta" ? "Pergunta na meta semanal" : input.kind === "resposta" ? "Resposta na meta semanal" : "Coment\xE1rio na meta semanal";
+        await avisar(destinatarios, titulo, `${nome}: ${input.body.trim().slice(0, 140)}`, input.goalId, ctx.user.id);
+        return { id: Number(res.insertId) };
       })
     });
   }
@@ -6397,7 +8236,7 @@ __export(heartbeat_exports, {
   listHeartbeatJobs: () => listHeartbeatJobs,
   updateHeartbeatJob: () => updateHeartbeatJob
 });
-import { TRPCError as TRPCError36 } from "@trpc/server";
+import { TRPCError as TRPCError38 } from "@trpc/server";
 async function createHeartbeatJob(job, userSession) {
   validateCallbackPath(job.path);
   return callForge(
@@ -6447,13 +8286,13 @@ var init_heartbeat = __esm({
     SERVICE = "webdevtoken.v1.WebDevService";
     buildEndpoint = (rpc) => {
       if (!ENV.forgeApiUrl) {
-        throw new TRPCError36({
+        throw new TRPCError38({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service URL is not configured (BUILT_IN_FORGE_API_URL)."
         });
       }
       if (!ENV.forgeApiKey) {
-        throw new TRPCError36({
+        throw new TRPCError38({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service API key is not configured (BUILT_IN_FORGE_API_KEY)."
         });
@@ -6481,7 +8320,7 @@ var init_heartbeat = __esm({
           body: JSON.stringify(body)
         });
       } catch (error) {
-        throw new TRPCError36({
+        throw new TRPCError38({
           code: "INTERNAL_SERVER_ERROR",
           message: `Heartbeat ${rpc} network error: ${String(error)}`
         });
@@ -6501,7 +8340,7 @@ var init_heartbeat = __esm({
       else if (status === 400 || status === 422) code = "BAD_REQUEST";
       else if (status === 409) code = "CONFLICT";
       else if (status === 429) code = "TOO_MANY_REQUESTS";
-      return new TRPCError36({
+      return new TRPCError38({
         code,
         message: `Heartbeat ${rpc} failed (${status})${detail ? `: ${detail}` : ""}`
       });
@@ -6513,7 +8352,7 @@ var init_heartbeat = __esm({
     };
     validateCallbackPath = (path4) => {
       if (!path4 || !path4.startsWith("/api/scheduled/")) {
-        throw new TRPCError36({
+        throw new TRPCError38({
           code: "BAD_REQUEST",
           message: "callback path must start with /api/scheduled/"
         });
@@ -6597,8 +8436,8 @@ async function resolveAllowedClientIds(db, ctx) {
     }
   } catch {
     try {
-      const [rows] = await db.execute(sql`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
-      const row = rows?.[0];
+      const [rows2] = await db.execute(sql`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+      const row = rows2?.[0];
       if (row?.allowed_client_ids) {
         allowedClientIds = JSON.parse(row.allowed_client_ids);
       }
@@ -6975,8 +8814,8 @@ var sectorsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const { id, ...data } = input;
-    await db.update(sectors).set(data).where(eq3(sectors.id, id));
+    const { id, ...data2 } = input;
+    await db.update(sectors).set(data2).where(eq3(sectors.id, id));
     return { success: true };
   }),
   deleteSector: protectedProcedure.input(z4.object({ id: z4.number() })).mutation(async ({ input }) => {
@@ -7019,7 +8858,7 @@ var sectorsRouter = router({
         }
       }
     }
-    const rows = await db.select({
+    const rows2 = await db.select({
       id: equipment.id,
       name: equipment.name,
       brand: equipment.brand,
@@ -7049,7 +8888,7 @@ var sectorsRouter = router({
       responsibleDriverId: equipment.responsibleDriverId,
       responsibleDriverName: driverAlias.name
     }).from(equipment).leftJoin(equipmentTypes, eq3(equipment.typeId, equipmentTypes.id)).leftJoin(clients, eq3(equipment.clientId, clients.id)).leftJoin(driverAlias, eq3(equipment.responsibleDriverId, driverAlias.id)).orderBy(equipment.name);
-    return rows.filter((r) => {
+    return rows2.filter((r) => {
       if (userAllowedClientIds && userAllowedClientIds.length > 0) {
         if (!r.clientId || !userAllowedClientIds.includes(r.clientId)) return false;
       }
@@ -7141,24 +8980,24 @@ var sectorsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const { id, ...data } = input;
-    if (data.imageUrl && data.imageUrl.startsWith("data:")) {
-      const uploaded = await cloudinaryUpload(data.imageUrl, "btree/equipment");
-      data.imageUrl = uploaded.url;
+    const { id, ...data2 } = input;
+    if (data2.imageUrl && data2.imageUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data2.imageUrl, "btree/equipment");
+      data2.imageUrl = uploaded.url;
     }
-    if (data.invoiceUrl && data.invoiceUrl.startsWith("data:")) {
-      const uploaded = await cloudinaryUpload(data.invoiceUrl, "btree/docs");
-      data.invoiceUrl = uploaded.url;
+    if (data2.invoiceUrl && data2.invoiceUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data2.invoiceUrl, "btree/docs");
+      data2.invoiceUrl = uploaded.url;
     }
-    if (data.documentUrl && data.documentUrl.startsWith("data:")) {
-      const uploaded = await cloudinaryUpload(data.documentUrl, "btree/docs");
-      data.documentUrl = uploaded.url;
+    if (data2.documentUrl && data2.documentUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data2.documentUrl, "btree/docs");
+      data2.documentUrl = uploaded.url;
     }
-    if (data.insuranceUrl && data.insuranceUrl.startsWith("data:")) {
-      const uploaded = await cloudinaryUpload(data.insuranceUrl, "btree/docs");
-      data.insuranceUrl = uploaded.url;
+    if (data2.insuranceUrl && data2.insuranceUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data2.insuranceUrl, "btree/docs");
+      data2.insuranceUrl = uploaded.url;
     }
-    await db.update(equipment).set(data).where(eq3(equipment.id, id));
+    await db.update(equipment).set(data2).where(eq3(equipment.id, id));
     return { success: true };
   }),
   deleteEquipment: protectedProcedure.input(z4.object({ id: z4.number() })).mutation(async ({ input }) => {
@@ -7187,21 +9026,21 @@ async function hashPassword(password) {
 async function verifyPassword(password, hash) {
   return bcrypt2.compare(password, hash);
 }
-async function registerUser(data) {
-  const existingUser = await getUserByEmail(data.email);
+async function registerUser(data2) {
+  const existingUser = await getUserByEmail(data2.email);
   if (existingUser) {
     throw new Error("Email j\xE1 cadastrado");
   }
-  const passwordHash = await hashPassword(data.password);
+  const passwordHash = await hashPassword(data2.password);
   const user = {
-    name: data.name,
-    email: data.email,
+    name: data2.name,
+    email: data2.email,
     passwordHash,
     loginMethod: "email",
-    role: data.role || "user"
+    role: data2.role || "user"
   };
   await createUser(user);
-  const newUser = await getUserByEmail(data.email);
+  const newUser = await getUserByEmail(data2.email);
   if (!newUser) {
     throw new Error("Erro ao criar usu\xE1rio");
   }
@@ -8071,10 +9910,10 @@ var cargoLoadsRouter = router({
         const [row] = await db.execute(sql2`
             SELECT action_code FROM fiscal_notes ORDER BY id DESC LIMIT 1
           `);
-        const rows = row;
-        if (rows && rows.length > 0 && rows[0]?.action_code) {
-          const num2 = parseInt(String(rows[0].action_code).replace("AC-", ""), 10);
-          if (!isNaN(num2)) actionCode = `AC-${String(num2 + 1).padStart(5, "0")}`;
+        const rows2 = row;
+        if (rows2 && rows2.length > 0 && rows2[0]?.action_code) {
+          const num3 = parseInt(String(rows2[0].action_code).replace("AC-", ""), 10);
+          if (!isNaN(num3)) actionCode = `AC-${String(num3 + 1).padStart(5, "0")}`;
         }
       } catch {
       }
@@ -8935,6 +10774,12 @@ var cargoLoadsRouter = router({
   listWeeklyClosings: protectedProcedure.input(z7.object({ clientId: z7.number().optional(), areaId: z7.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    try {
+      const { atualizarTotaisFechamentos: atualizarTotaisFechamentos2 } = await Promise.resolve().then(() => (init_closingRefresh(), closingRefresh_exports));
+      await atualizarTotaisFechamentos2(db.$client);
+    } catch (e) {
+      console.warn("[WeeklyClosing] Falha ao atualizar totais:", e?.message);
+    }
     let query = db.select({
       id: cargoWeeklyClosings.id,
       clientId: cargoWeeklyClosings.clientId,
@@ -8967,7 +10812,7 @@ var cargoLoadsRouter = router({
         if (!weekStartStr || !weekEndStr || !closing.totalLoads || closing.totalLoads === 0) {
           return { ...closing, paidViaAdvance: false };
         }
-        const [rows] = await conn.execute(
+        const [rows2] = await conn.execute(
           `SELECT 
               COUNT(*) as total,
               SUM(CASE WHEN id IN (
@@ -8980,8 +10825,8 @@ var cargoLoadsRouter = router({
               AND DATE(COALESCE(delivery_date, date)) <= ?`,
           [closing.clientId, closing.clientId, normalizeAreaId(closing.areaId), weekStartStr, weekEndStr]
         );
-        const total = parseInt(rows[0]?.total || "0");
-        const abatidas = parseInt(rows[0]?.abatidas || "0");
+        const total = parseInt(rows2[0]?.total || "0");
+        const abatidas = parseInt(rows2[0]?.abatidas || "0");
         const allPaidViaAdvance = total > 0 && abatidas === total;
         if (allPaidViaAdvance) {
           try {
@@ -9088,6 +10933,14 @@ var cargoLoadsRouter = router({
     if (!scopeClosing) throw new TRPCError5({ code: "NOT_FOUND", message: "Fechamento n\xE3o encontrado." });
     if (hasField(input, "areaId") && !sameArea(scopeClosing.areaId, inputArea(input))) throw new TRPCError5({ code: "BAD_REQUEST", message: "Fechamento pertence a outra \xE1rea." });
     if (normalizeAreaId(scopeClosing.areaId) !== null) await checkedArea(db, scopeClosing.clientId, normalizeAreaId(scopeClosing.areaId), true);
+    if (input.status === "pago") {
+      try {
+        const { atualizarTotaisFechamentos: atualizarTotaisFechamentos2 } = await Promise.resolve().then(() => (init_closingRefresh(), closingRefresh_exports));
+        await atualizarTotaisFechamentos2(db.$client, { id: input.id });
+      } catch (e) {
+        console.warn("[WeeklyClosing] Falha ao atualizar total antes de pagar:", e?.message);
+      }
+    }
     const updateData = { status: input.status };
     if (input.status === "pago") updateData.paidAt = input.paidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     if (input.receiptUrl) updateData.receiptUrl = input.receiptUrl;
@@ -9205,11 +11058,11 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
         `);
       const documentAreaClause = hasField(input, "areaId") ? " AND area_id <=> ?" : "";
       const documentParams = hasField(input, "areaId") ? [input.clientId, inputArea(input)] : [input.clientId];
-      const [rows] = await conn.execute(
+      const [rows2] = await conn.execute(
         `SELECT id, client_id as clientId, area_id as areaId, \`type\`, title, file_url as fileUrl, file_type as fileType, notes, uploaded_by as uploadedBy, created_at as createdAt FROM client_documents WHERE client_id = ?${documentAreaClause} ORDER BY created_at DESC`,
         documentParams
       );
-      return rows || [];
+      return rows2 || [];
     } catch (err) {
       console.error("[listClientDocuments] Error:", err?.message, err?.code, err?.errno);
       throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao listar documentos: ${err?.message || "Desconhecido"}` });
@@ -9737,8 +11590,8 @@ async function resolveAllowedClientIds2(db, ctx) {
     }
   } catch {
     try {
-      const [rows] = await db.execute(sql3`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
-      const row = rows?.[0];
+      const [rows2] = await db.execute(sql3`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+      const row = rows2?.[0];
       if (row?.allowed_client_ids) {
         allowedClientIds = JSON.parse(row.allowed_client_ids);
       }
@@ -10204,7 +12057,7 @@ var machineHoursRouter = router({
       const res2 = await cloudinaryUpload(input.photoBase64, "btree/oil-stock");
       photoUrl = res2.url;
     }
-    const existing = await db.select().from(oilStock).where(eq8(oilStock.oilType, input.oilType)).then((rows) => rows.find((r) => r.brand.toLowerCase() === input.brand.toLowerCase()));
+    const existing = await db.select().from(oilStock).where(eq8(oilStock.oilType, input.oilType)).then((rows2) => rows2.find((r) => r.brand.toLowerCase() === input.brand.toLowerCase()));
     if (existing) {
       const newQty = (parseFloat(existing.quantityLiters) + parseFloat(input.purchaseQuantityLiters)).toFixed(2);
       await db.update(oilStock).set({
@@ -10338,7 +12191,7 @@ var EVENT_LABELS = {
 };
 function buildHtml(payload) {
   const meta = EVENT_LABELS[payload.event];
-  const rows = Object.entries(payload.details).filter(([, v]) => v !== null && v !== void 0 && v !== "").map(([k, v]) => `
+  const rows2 = Object.entries(payload.details).filter(([, v]) => v !== null && v !== void 0 && v !== "").map(([k, v]) => `
       <tr>
         <td style="padding:8px 12px;font-weight:600;color:#374151;background:#f9fafb;border-bottom:1px solid #e5e7eb;white-space:nowrap;">${k}</td>
         <td style="padding:8px 12px;color:#111827;border-bottom:1px solid #e5e7eb;">${v}</td>
@@ -10358,7 +12211,7 @@ function buildHtml(payload) {
     <div style="padding:24px 32px;">
       <p style="color:#374151;margin:0 0 20px;">${payload.title}</p>
       <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-        ${rows}
+        ${rows2}
       </table>
       ${payload.registeredBy ? `<p style="margin:16px 0 0;font-size:13px;color:#6b7280;">Registrado por: <strong>${payload.registeredBy}</strong></p>` : ""}
     </div>
@@ -10411,9 +12264,9 @@ Registrado por: ${payload.registeredBy}` : ""
 function sanitizeNumeric(value) {
   if (value === null || value === void 0 || value === "") return null;
   const str = String(value).trim().replace(",", ".");
-  const num2 = parseFloat(str);
-  if (isNaN(num2)) return null;
-  return String(num2);
+  const num3 = parseFloat(str);
+  if (isNaN(num3)) return null;
+  return String(num3);
 }
 
 // server/routers/vehicleRecords.ts
@@ -10433,8 +12286,8 @@ var vehicleRecordsRouter = router({
         }
       } catch {
         try {
-          const [rows] = await db.execute(sql4`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
-          const row = rows?.[0];
+          const [rows2] = await db.execute(sql4`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+          const row = rows2?.[0];
           if (row?.allowed_client_ids) {
             allowedClientIds = JSON.parse(row.allowed_client_ids);
           }
@@ -10688,7 +12541,7 @@ var vehicleRecordsRouter = router({
         updateData[field] = sanitizeNumeric(updateData[field]);
       }
     }
-    if (date) updateData.date = new Date(date);
+    if (date) updateData.date = date.length === 10 ? `${date} 00:00:00` : new Date(date).toISOString().slice(0, 19).replace("T", " ");
     if (photoUrl !== void 0) updateData.photoUrl = photoUrl;
     if (photosJson !== void 0) updateData.photosJson = photosJson;
     await db.update(vehicleRecords).set(updateData).where(eq9(vehicleRecords.id, id));
@@ -10942,8 +12795,8 @@ async function database() {
 var clientAreasRouter = router({
   list: protectedProcedure.input(z12.object({ clientId: z12.number().int().positive() })).query(async ({ input, ctx }) => {
     const db = await database();
-    const rows = await db.select().from(clientAreas).where(eq12(clientAreas.clientId, input.clientId)).orderBy(clientAreas.id);
-    if (ctx.user.role === "admin") return rows;
+    const rows2 = await db.select().from(clientAreas).where(eq12(clientAreas.clientId, input.clientId)).orderBy(clientAreas.id);
+    if (ctx.user.role === "admin") return rows2;
     const [perm] = await db.select().from(userPermissions).where(eq12(userPermissions.userId, ctx.user.id)).limit(1);
     if (perm?.allowedClientIds) {
       const ids = JSON.parse(perm.allowedClientIds);
@@ -10951,9 +12804,9 @@ var clientAreasRouter = router({
     }
     if (perm?.allowedWorkLocationIds) {
       const ids = JSON.parse(perm.allowedWorkLocationIds);
-      return rows.filter((a) => ids.includes(a.workLocationId));
+      return rows2.filter((a) => ids.includes(a.workLocationId));
     }
-    return rows;
+    return rows2;
   }),
   create: adminProcedure.input(z12.object({ clientId: z12.number().int().positive(), name, fieldName: optionalText, notes: z12.string().trim().max(5e3).optional() })).mutation(async ({ input, ctx }) => {
     const db = await database();
@@ -10984,14 +12837,14 @@ var clientAreasRouter = router({
       const [existing] = await tx.select().from(clientAreas).where(eq12(clientAreas.id, input.id)).limit(1);
       if (!existing) throw new TRPCError10({ code: "NOT_FOUND", message: "\xC1rea n\xE3o encontrada." });
       const { id, ...patch } = input;
-      const data = { ...patch, ...patch.fieldName !== void 0 ? { fieldName: patch.fieldName || null } : {}, ...patch.unitPrice !== void 0 ? { unitPrice: patch.unitPrice.replace(",", ".") } : {} };
-      const merged = { ...existing, ...data };
+      const data2 = { ...patch, ...patch.fieldName !== void 0 ? { fieldName: patch.fieldName || null } : {}, ...patch.unitPrice !== void 0 ? { unitPrice: patch.unitPrice.replace(",", ".") } : {} };
+      const merged = { ...existing, ...data2 };
       if (merged.agreementStatus === "confirmed") requireConfirmedArea(merged);
       if (patch.name && patch.name !== existing.name || patch.fieldName !== void 0 && (patch.fieldName || null) !== existing.fieldName) {
         const [dup] = await tx.select({ id: clientAreas.id }).from(clientAreas).where(and5(eq12(clientAreas.clientId, existing.clientId), eq12(clientAreas.name, merged.name), merged.fieldName ? eq12(clientAreas.fieldName, merged.fieldName) : isNull2(clientAreas.fieldName))).limit(1);
         if (dup) throw new TRPCError10({ code: "CONFLICT", message: "J\xE1 existe uma \xE1rea com esse nome." });
       }
-      await tx.update(clientAreas).set(data).where(eq12(clientAreas.id, id));
+      await tx.update(clientAreas).set(data2).where(eq12(clientAreas.id, id));
       if (merged.agreementStatus === "confirmed") {
         await tx.update(cargoLoads).set({
           agreedUnit: merged.unit,
@@ -11161,8 +13014,8 @@ function publicArea(area) {
 }
 async function listAreas(db, clientId) {
   const condition = clientId === void 0 ? void 0 : eq13(clientAreas.clientId, clientId);
-  const rows = await db.select().from(clientAreas).where(condition).orderBy(clientAreas.name);
-  return rows.map(publicArea);
+  const rows2 = await db.select().from(clientAreas).where(condition).orderBy(clientAreas.name);
+  return rows2.map(publicArea);
 }
 async function getAreaTerms(client, area) {
   return getAreaPriceTerms(client, area);
@@ -11423,9 +13276,9 @@ var clientPortalRouter = router({
     if (!db) throw new Error("Database not available");
     const areaId = input?.areaId === void 0 ? void 0 : normalizePortalAreaId(input.areaId);
     const scope = areaId === void 0 ? void 0 : await areaCondition(replantingRecords, areaId);
-    const rows = await db.select({ record: replantingRecords, clientName: clients.name }).from(replantingRecords).leftJoin(clients, eq13(replantingRecords.clientId, clients.id)).where(scope).orderBy(desc8(replantingRecords.date));
+    const rows2 = await db.select({ record: replantingRecords, clientName: clients.name }).from(replantingRecords).leftJoin(clients, eq13(replantingRecords.clientId, clients.id)).where(scope).orderBy(desc8(replantingRecords.date));
     const labels = await areaLabelMap(db);
-    return rows.map(({ record, clientName }) => ({ ...record, clientName, areaId: normalizePortalAreaId(record.areaId), areaLabel: labels.get(normalizePortalAreaId(record.areaId)) ?? null }));
+    return rows2.map(({ record, clientName }) => ({ ...record, clientName, areaId: normalizePortalAreaId(record.areaId), areaLabel: labels.get(normalizePortalAreaId(record.areaId)) ?? null }));
   }),
   listAllPayments: protectedProcedure.input(z13.object({ areaId: z13.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
@@ -11436,9 +13289,9 @@ var clientPortalRouter = router({
       if (!area) throw new TRPCError11({ code: "NOT_FOUND", message: "\xC1rea n\xE3o encontrada." });
     }
     const scope = areaId === void 0 ? void 0 : await areaCondition(clientPayments, areaId);
-    const rows = await db.select({ payment: clientPayments, clientName: clients.name }).from(clientPayments).leftJoin(clients, eq13(clientPayments.clientId, clients.id)).where(scope).orderBy(desc8(clientPayments.dueDate));
+    const rows2 = await db.select({ payment: clientPayments, clientName: clients.name }).from(clientPayments).leftJoin(clients, eq13(clientPayments.clientId, clients.id)).where(scope).orderBy(desc8(clientPayments.dueDate));
     const labels = await areaLabelMap(db);
-    return rows.map(({ payment, clientName }) => {
+    return rows2.map(({ payment, clientName }) => {
       const row = payment;
       const normalized = normalizePortalAreaId(row.areaId);
       return {
@@ -11483,7 +13336,7 @@ var clientPortalRouter = router({
   deleteReplanting: protectedProcedure.input(z13.object({ id: z13.number(), areaId: z13.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const existing = await db.select().from(replantingRecords).where(eq13(replantingRecords.id, input.id)).limit(1).then((rows) => rows[0]);
+    const existing = await db.select().from(replantingRecords).where(eq13(replantingRecords.id, input.id)).limit(1).then((rows2) => rows2[0]);
     if (!existing) return { success: true };
     await assertExistingAreaScope(db, replantingRecords, input.id, input.areaId, existing.clientId);
     await db.delete(replantingRecords).where(eq13(replantingRecords.id, input.id));
@@ -12130,8 +13983,8 @@ var attendanceRouter = router({
           }
         } catch {
           try {
-            const [rows] = await db.execute(sql6`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
-            const row = rows?.[0];
+            const [rows2] = await db.execute(sql6`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+            const row = rows2?.[0];
             if (row?.allowed_client_ids) {
               allowedClientIds = JSON.parse(row.allowed_client_ids);
             }
@@ -12383,7 +14236,7 @@ Registrado por: ${ctx.user.name}`
       byCollaborator[name2].count++;
       byCollaborator[name2].total += parseFloat(r.dailyValue || "0");
     }
-    const lines = Object.entries(byCollaborator).map(([name2, data]) => `\u2022 ${name2}: ${data.count} dia(s) \u2014 R$ ${data.total.toFixed(2)} (desde ${data.oldest})`).join("\n");
+    const lines = Object.entries(byCollaborator).map(([name2, data2]) => `\u2022 ${name2}: ${data2.count} dia(s) \u2014 R$ ${data2.total.toFixed(2)} (desde ${data2.oldest})`).join("\n");
     const totalGeral = pendingRecords.reduce((sum, r) => sum + parseFloat(r.dailyValue || "0"), 0);
     await notifyOwner({
       title: `\u26A0\uFE0F ${pendingRecords.length} pagamento(s) pendente(s) h\xE1 mais de 7 dias`,
@@ -13058,14 +14911,14 @@ var chainsawsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const { id, imageUrl: rawImageUrl, ...data } = input;
+    const { id, imageUrl: rawImageUrl, ...data2 } = input;
     let imageUrl = rawImageUrl;
     if (imageUrl && imageUrl.startsWith("data:")) {
       const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
       const result = await cloudinaryUpload2(imageUrl, "btree/chainsaws");
       imageUrl = result.url;
     }
-    await db.update(chainsaws).set({ ...data, ...imageUrl !== void 0 ? { imageUrl } : {} }).where(eq20(chainsaws.id, id));
+    await db.update(chainsaws).set({ ...data2, ...imageUrl !== void 0 ? { imageUrl } : {} }).where(eq20(chainsaws.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z20.object({ id: z20.number() })).mutation(async ({ input }) => {
@@ -13222,15 +15075,15 @@ var chainsChainRouter = router({
   listStock: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
-    if (rows.length === 0) {
+    const rows2 = await db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
+    if (rows2.length === 0) {
       await db.insert(chainsawChainStock).values([
         { chainType: "30", sharpenedInBox: 0, inField: 0, inWorkshop: 0, totalStock: 0 },
         { chainType: "34", sharpenedInBox: 0, inField: 0, inWorkshop: 0, totalStock: 0 }
       ]);
       return db.select().from(chainsawChainStock).orderBy(chainsawChainStock.chainType);
     }
-    return rows;
+    return rows2;
   }),
   upsertStock: protectedProcedure.input(z20.object({
     chainType: z20.string(),
@@ -13369,14 +15222,14 @@ var chainsawPartsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const { id, imageUrl: rawImageUrl, ...data } = input;
+    const { id, imageUrl: rawImageUrl, ...data2 } = input;
     let imageUrl = rawImageUrl;
     if (imageUrl && imageUrl.startsWith("data:")) {
       const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
       const result = await cloudinaryUpload2(imageUrl, "btree/chainsaw-parts");
       imageUrl = result.url;
     }
-    const updateData = { ...data, ...imageUrl !== void 0 ? { imageUrl } : {} };
+    const updateData = { ...data2, ...imageUrl !== void 0 ? { imageUrl } : {} };
     await db.update(chainsawParts).set(updateData).where(eq20(chainsawParts.id, id));
     return { success: true };
   }),
@@ -13425,7 +15278,7 @@ var chainsawOSRouter = router({
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select({
+    const rows2 = await db.select({
       id: chainsawServiceOrders.id,
       chainsawId: chainsawServiceOrders.chainsawId,
       problemType: chainsawServiceOrders.problemType,
@@ -13441,15 +15294,15 @@ var chainsawOSRouter = router({
     }).from(chainsawServiceOrders).leftJoin(chainsaws, eq20(chainsawServiceOrders.chainsawId, chainsaws.id)).where(
       input.status === "todas" ? void 0 : eq20(chainsawServiceOrders.status, input.status)
     ).orderBy(desc14(chainsawServiceOrders.openedAt));
-    return rows;
+    return rows2;
   }),
   getById: protectedProcedure.input(z20.object({ id: z20.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const rows = await db.select().from(chainsawServiceOrders).where(eq20(chainsawServiceOrders.id, input.id));
-    if (rows.length === 0) throw new Error("OS n\xE3o encontrada");
+    const rows2 = await db.select().from(chainsawServiceOrders).where(eq20(chainsawServiceOrders.id, input.id));
+    if (rows2.length === 0) throw new Error("OS n\xE3o encontrada");
     const parts3 = await db.select().from(chainsawServiceParts).where(eq20(chainsawServiceParts.serviceOrderId, input.id));
-    return { ...rows[0], parts: parts3 };
+    return { ...rows2[0], parts: parts3 };
   }),
   open: protectedProcedure.input(z20.object({
     chainsawId: z20.number(),
@@ -13591,8 +15444,8 @@ var extraExpensesRouter = router({
         }
       } catch {
         try {
-          const [rows2] = await db.execute(sql9`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
-          const row = rows2?.[0];
+          const [rows3] = await db.execute(sql9`SELECT allowed_client_ids FROM user_permissions WHERE user_id = ${ctx.user.id} LIMIT 1`);
+          const row = rows3?.[0];
           if (row?.allowed_client_ids) {
             allowedClientIds = JSON.parse(row.allowed_client_ids);
           }
@@ -13609,7 +15462,7 @@ var extraExpensesRouter = router({
         }
       }
     }
-    const rows = await db.select({
+    const rows2 = await db.select({
       id: extraExpenses.id,
       date: extraExpenses.date,
       category: extraExpenses.category,
@@ -13628,12 +15481,12 @@ var extraExpensesRouter = router({
       locationClientId: gpsLocations.clientId
     }).from(extraExpenses).leftJoin(gpsLocations, eq21(extraExpenses.workLocationId, gpsLocations.id)).where(conditions.length > 0 ? and11(...conditions) : void 0).orderBy(desc15(extraExpenses.date));
     if (allowedClientIds && allowedClientIds.length > 0) {
-      return rows.filter((r) => {
+      return rows2.filter((r) => {
         const cId = r.clientId || r.locationClientId;
         return cId && allowedClientIds.includes(cId);
       });
     }
-    return rows;
+    return rows2;
   }),
   create: protectedProcedure.input(z21.object({
     date: z21.string(),
@@ -13955,7 +15808,7 @@ var financialRouter = router({
     const [year, month] = input.referenceMonth.split("-").map(Number);
     const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDate = `${year}-${String(month).padStart(2, "0")}-31 23:59:59`;
-    const rows = await db.select({
+    const rows2 = await db.select({
       category: financialEntries.category,
       total: sql11`coalesce(sum(cast(amount as decimal(10,2))), 0)`,
       count: sql11`count(*)`
@@ -13965,7 +15818,7 @@ var financialRouter = router({
       lte5(financialEntries.date, endDate),
       eq22(financialEntries.status, "confirmado")
     )).groupBy(financialEntries.category).orderBy(sql11`total desc`);
-    return rows.map((r) => ({
+    return rows2.map((r) => ({
       category: r.category,
       total: Number(r.total),
       count: Number(r.count)
@@ -13976,7 +15829,7 @@ var financialRouter = router({
     const db = await getDb();
     if (!db) return [];
     await ensureFinancialTable(db);
-    const rows = await db.select({
+    const rows2 = await db.select({
       referenceMonth: financialEntries.referenceMonth,
       type: financialEntries.type,
       total: sql11`coalesce(sum(cast(amount as decimal(10,2))), 0)`
@@ -13985,7 +15838,7 @@ var financialRouter = router({
       sql11`reference_month >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 MONTH), '%Y-%m')`
     )).groupBy(financialEntries.referenceMonth, financialEntries.type).orderBy(financialEntries.referenceMonth);
     const byMonth = {};
-    for (const r of rows) {
+    for (const r of rows2) {
       const m = r.referenceMonth || "desconhecido";
       if (!byMonth[m]) byMonth[m] = { month: m, receitas: 0, despesas: 0, saldo: 0 };
       if (r.type === "receita") byMonth[m].receitas += Number(r.total);
@@ -14166,7 +16019,7 @@ var financialDashboardRouter = router({
     const { dateFrom, dateTo } = input;
     const transactions = [];
     try {
-      const rows = await db.select().from(extraExpenses).where(and14(
+      const rows2 = await db.select().from(extraExpenses).where(and14(
         dateFrom ? gte6(extraExpenses.date, dateFrom) : void 0,
         dateTo ? lte6(extraExpenses.date, dateTo + " 23:59:59") : void 0
       )).orderBy(desc17(extraExpenses.date));
@@ -14178,7 +16031,7 @@ var financialDashboardRouter = router({
         pedagio: "Ped\xE1gio",
         outro: "Outros"
       };
-      for (const e of rows) {
+      for (const e of rows2) {
         transactions.push({
           id: `extra_${e.id}`,
           date: String(e.date).slice(0, 10),
@@ -14195,11 +16048,11 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(fuelRecords).where(and14(
+      const rows2 = await db.select().from(fuelRecords).where(and14(
         dateFrom ? gte6(fuelRecords.date, dateFrom) : void 0,
         dateTo ? lte6(fuelRecords.date, dateTo + " 23:59:59") : void 0
       )).orderBy(desc17(fuelRecords.date));
-      for (const f of rows) {
+      for (const f of rows2) {
         transactions.push({
           id: `fuel_${f.id}`,
           date: String(f.date).slice(0, 10),
@@ -14215,11 +16068,11 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(machineFuel).where(and14(
+      const rows2 = await db.select().from(machineFuel).where(and14(
         dateFrom ? gte6(machineFuel.date, dateFrom) : void 0,
         dateTo ? lte6(machineFuel.date, dateTo + " 23:59:59") : void 0
       )).orderBy(desc17(machineFuel.date));
-      for (const f of rows) {
+      for (const f of rows2) {
         transactions.push({
           id: `mfuel_${f.id}`,
           date: String(f.date).slice(0, 10),
@@ -14235,11 +16088,11 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(equipmentMaintenance).where(and14(
+      const rows2 = await db.select().from(equipmentMaintenance).where(and14(
         dateFrom ? gte6(equipmentMaintenance.performedAt, dateFrom) : void 0,
         dateTo ? lte6(equipmentMaintenance.performedAt, dateTo + " 23:59:59") : void 0
       )).orderBy(desc17(equipmentMaintenance.performedAt));
-      for (const m of rows) {
+      for (const m of rows2) {
         const cost = toNum(m.cost);
         if (cost > 0) {
           transactions.push({
@@ -14258,11 +16111,11 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(machineMaintenance).where(and14(
+      const rows2 = await db.select().from(machineMaintenance).where(and14(
         dateFrom ? gte6(machineMaintenance.date, dateFrom) : void 0,
         dateTo ? lte6(machineMaintenance.date, dateTo + " 23:59:59") : void 0
       )).orderBy(desc17(machineMaintenance.date));
-      for (const m of rows) {
+      for (const m of rows2) {
         const cost = toNum(m.totalCost);
         if (cost > 0) {
           transactions.push({
@@ -14281,11 +16134,11 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(equipmentOilRecords).where(and14(
+      const rows2 = await db.select().from(equipmentOilRecords).where(and14(
         dateFrom ? gte6(equipmentOilRecords.date, dateFrom) : void 0,
         dateTo ? lte6(equipmentOilRecords.date, dateTo + " 23:59:59") : void 0
       )).orderBy(desc17(equipmentOilRecords.date));
-      for (const o of rows) {
+      for (const o of rows2) {
         const cost = toNum(o.totalValue);
         if (cost > 0) {
           transactions.push({
@@ -14304,11 +16157,11 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(cargoLoads).where(and14(
+      const rows2 = await db.select().from(cargoLoads).where(and14(
         dateFrom ? gte6(cargoLoads.date, dateFrom) : void 0,
         dateTo ? lte6(cargoLoads.date, dateTo + " 23:59:59") : void 0
       )).orderBy(desc17(cargoLoads.date));
-      for (const c of rows) {
+      for (const c of rows2) {
         const revenue = toNum(c.boletoAmount);
         if (revenue > 0) {
           transactions.push({
@@ -14342,12 +16195,12 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(buyerPayments).where(and14(
+      const rows2 = await db.select().from(buyerPayments).where(and14(
         dateFrom ? gte6(buyerPayments.paymentDate, dateFrom) : void 0,
         dateTo ? lte6(buyerPayments.paymentDate, dateTo) : void 0,
         eq24(buyerPayments.status, "pago")
       )).orderBy(desc17(buyerPayments.paymentDate));
-      for (const p of rows) {
+      for (const p of rows2) {
         transactions.push({
           id: `bpay_${p.id}`,
           date: String(p.paymentDate).slice(0, 10),
@@ -14363,11 +16216,11 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(collaboratorAttendance).where(and14(
+      const rows2 = await db.select().from(collaboratorAttendance).where(and14(
         dateFrom ? gte6(collaboratorAttendance.date, dateFrom) : void 0,
         dateTo ? lte6(collaboratorAttendance.date, dateTo + " 23:59:59") : void 0
       )).orderBy(desc17(collaboratorAttendance.date));
-      for (const a of rows) {
+      for (const a of rows2) {
         const val = toNum(a.dailyValue);
         if (val > 0) {
           transactions.push({
@@ -14386,11 +16239,11 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(fuelInvoices).where(and14(
+      const rows2 = await db.select().from(fuelInvoices).where(and14(
         dateFrom ? gte6(fuelInvoices.invoiceDate, dateFrom) : void 0,
         dateTo ? lte6(fuelInvoices.invoiceDate, dateTo) : void 0
       )).orderBy(desc17(fuelInvoices.invoiceDate));
-      for (const inv of rows) {
+      for (const inv of rows2) {
         const total = toNum(inv.totalAmount);
         if (total > 0) {
           transactions.push({
@@ -14409,13 +16262,13 @@ var financialDashboardRouter = router({
     } catch (_) {
     }
     try {
-      const rows = await db.select().from(financialEntries).where(and14(
+      const rows2 = await db.select().from(financialEntries).where(and14(
         dateFrom ? gte6(financialEntries.date, dateFrom) : void 0,
         dateTo ? lte6(financialEntries.date, dateTo + " 23:59:59") : void 0,
         eq24(financialEntries.status, "confirmado"),
         eq24(financialEntries.autoGenerated, 0)
       )).orderBy(desc17(financialEntries.date));
-      for (const e of rows) {
+      for (const e of rows2) {
         transactions.push({
           id: `fin_${e.id}`,
           date: String(e.date).slice(0, 10),
@@ -14471,33 +16324,33 @@ var gpsLocationsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const rows = await db.select().from(gpsLocations).orderBy(desc18(gpsLocations.createdAt));
+    const rows2 = await db.select().from(gpsLocations).orderBy(desc18(gpsLocations.createdAt));
     if (ctx.user.role !== "admin") {
       const [perm] = await db.select().from(userPermissions).where(eq25(userPermissions.userId, ctx.user.id));
       if (perm?.allowedClientIds) {
         const allowedIds = JSON.parse(perm.allowedClientIds);
         if (allowedIds.length > 0) {
-          return rows.filter((r) => r.clientId && allowedIds.includes(r.clientId));
+          return rows2.filter((r) => r.clientId && allowedIds.includes(r.clientId));
         }
       }
     }
-    return rows;
+    return rows2;
   }),
   // ── Listar apenas ativos (para uso na detecção de presença) ──────────────
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const rows = await db.select().from(gpsLocations).where(eq25(gpsLocations.isActive, 1)).orderBy(gpsLocations.name);
+    const rows2 = await db.select().from(gpsLocations).where(eq25(gpsLocations.isActive, 1)).orderBy(gpsLocations.name);
     if (ctx.user.role !== "admin") {
       const [perm] = await db.select().from(userPermissions).where(eq25(userPermissions.userId, ctx.user.id));
       if (perm?.allowedClientIds) {
         const allowedIds = JSON.parse(perm.allowedClientIds);
         if (allowedIds.length > 0) {
-          return rows.filter((r) => r.clientId && allowedIds.includes(r.clientId));
+          return rows2.filter((r) => r.clientId && allowedIds.includes(r.clientId));
         }
       }
     }
-    return rows;
+    return rows2;
   }),
   // ── Criar local ──────────────────────────────────────────────────────────
   create: protectedProcedure.input(z26.object({
@@ -15108,7 +16961,7 @@ var auditDataRouter = router({
     if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
     const dateFrom = input.dateFrom + " 00:00:00";
     const dateTo = input.dateTo + " 23:59:59";
-    const rows = [];
+    const rows2 = [];
     const allLocations = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations);
     const locMap = {};
     for (const l of allLocations) locMap[l.id] = l.name;
@@ -15131,7 +16984,7 @@ var auditDataRouter = router({
         if (!matchLocal(locId)) continue;
         const cat = "M\xE3o de Obra";
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `att-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15171,7 +17024,7 @@ var auditDataRouter = router({
         const cat = "Combust\xEDvel";
         if (!matchCat(cat)) continue;
         const sub = r.serviceType === "terceirizado" ? "Ve\xEDculo Terceirizado" : "Ve\xEDculo Pr\xF3prio";
-        rows.push({
+        rows2.push({
           id: `vf-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15208,7 +17061,7 @@ var auditDataRouter = router({
         if (!matchLocal(locId)) continue;
         const cat = "Manuten\xE7\xE3o";
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `vm-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15241,7 +17094,7 @@ var auditDataRouter = router({
         if (!matchLocal(locId)) continue;
         const cat = "Combust\xEDvel";
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `mf-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15273,7 +17126,7 @@ var auditDataRouter = router({
         const cat = "Manuten\xE7\xE3o";
         if (!matchLocal(null)) continue;
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `mm-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15315,7 +17168,7 @@ var auditDataRouter = router({
         if (!matchLocal(locId)) continue;
         const cat = "Despesa Extra";
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `ee-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15347,7 +17200,7 @@ var auditDataRouter = router({
         if (input.localId) continue;
         const cat = "Combust\xEDvel";
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `tpf-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15384,7 +17237,7 @@ var auditDataRouter = router({
         if (!matchLocal(locId)) continue;
         const cat = "Corte Terceirizado";
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `ct-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15434,7 +17287,7 @@ var auditDataRouter = router({
         if (input.localId) continue;
         const cat = catMap[r.category] ?? r.category ?? "Despesa";
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `fe-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "custo",
@@ -15469,7 +17322,7 @@ var auditDataRouter = router({
         if (input.localId) continue;
         const cat = "Receita \u2014 Venda de Madeira";
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `bp-${r.id}`,
           date: r.paymentDate?.slice(0, 10) ?? "",
           tipo: "receita",
@@ -15515,7 +17368,7 @@ var auditDataRouter = router({
         if (input.localId) continue;
         const cat = catMap[r.category] ?? `Receita \u2014 ${r.category ?? "Outro"}`;
         if (!matchCat(cat)) continue;
-        rows.push({
+        rows2.push({
           id: `fr-${r.id}`,
           date: r.date.slice(0, 10),
           tipo: "receita",
@@ -15533,22 +17386,22 @@ var auditDataRouter = router({
         });
       }
     }
-    rows.sort((a, b) => b.date.localeCompare(a.date));
-    const totalCusto = rows.filter((r) => r.tipo === "custo").reduce((s, r) => s + r.valor, 0);
-    const totalReceita = rows.filter((r) => r.tipo === "receita").reduce((s, r) => s + r.valor, 0);
+    rows2.sort((a, b) => b.date.localeCompare(a.date));
+    const totalCusto = rows2.filter((r) => r.tipo === "custo").reduce((s, r) => s + r.valor, 0);
+    const totalReceita = rows2.filter((r) => r.tipo === "receita").reduce((s, r) => s + r.valor, 0);
     const byCat = {};
-    for (const r of rows) {
+    for (const r of rows2) {
       if (!byCat[r.categoria]) byCat[r.categoria] = { tipo: r.tipo, total: 0, qtd: 0 };
       byCat[r.categoria].total += r.valor;
       byCat[r.categoria].qtd += 1;
     }
     return {
-      rows,
+      rows: rows2,
       summary: {
         totalCusto,
         totalReceita,
         lucro: totalReceita - totalCusto,
-        totalRegistros: rows.length,
+        totalRegistros: rows2.length,
         byCat: Object.entries(byCat).map(([cat, v]) => ({ categoria: cat, ...v })).sort((a, b) => b.total - a.total)
       }
     };
@@ -15572,7 +17425,7 @@ var BTREE_LOGO = "https://btreeambiental.com/icon-btree-512.png";
 var KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 var BTREE_SITE = "btreeambiental.com";
 var BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
-function generatePdfHtml(data, locationName2, periodo, sections) {
+function generatePdfHtml(data2, locationName2, periodo, sections) {
   const styles = `
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15637,26 +17490,26 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
     <div class="summary-grid">
       <div class="summary-card">
         <div class="label">Custo Total</div>
-        <div class="value red">${formatCurrency(data.resumo.custoTotal)}</div>
+        <div class="value red">${formatCurrency(data2.resumo.custoTotal)}</div>
       </div>
       <div class="summary-card">
         <div class="label">M\xE3o de Obra</div>
-        <div class="value blue">${formatCurrency(data.resumo.totalMaoDeObra)}</div>
+        <div class="value blue">${formatCurrency(data2.resumo.totalMaoDeObra)}</div>
       </div>
       <div class="summary-card">
         <div class="label">Consumo</div>
-        <div class="value amber">${formatCurrency(data.resumo.totalConsumo)}</div>
+        <div class="value amber">${formatCurrency(data2.resumo.totalConsumo)}</div>
       </div>
       <div class="summary-card">
         <div class="label">Cargas</div>
-        <div class="value green">${data.resumo.totalCargas} (${data.resumo.totalVolumeM3.toFixed(1)}m\xB3)</div>
+        <div class="value green">${data2.resumo.totalCargas} (${data2.resumo.totalVolumeM3.toFixed(1)}m\xB3)</div>
       </div>
     </div>
   `;
-  if (sections.maoDeObra && data.maoDeObra.registros.length > 0) {
+  if (sections.maoDeObra && data2.maoDeObra.registros.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">M\xE3o de Obra \u2014 ${data.maoDeObra.totalDias} registros</div>
+        <div class="section-title">M\xE3o de Obra \u2014 ${data2.maoDeObra.totalDias} registros</div>
         <table>
           <thead>
             <tr>
@@ -15670,7 +17523,7 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data.maoDeObra.registros) {
+    for (const r of data2.maoDeObra.registros) {
       const empBadge = r.employmentType === "clt" ? "badge-clt" : r.employmentType === "terceirizado" ? "badge-terceirizado" : "badge-diarista";
       const empLabel = r.employmentType === "clt" ? "CLT" : r.employmentType === "terceirizado" ? "Terceirizado" : "Diarista";
       const payBadge = r.paymentStatus === "pago" ? "badge-pago" : "badge-pendente";
@@ -15689,16 +17542,16 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
     html += `
         <tr class="total-row">
           <td colspan="4">Total M\xE3o de Obra</td>
-          <td class="text-right">${formatCurrency(data.maoDeObra.totalValor)}</td>
-          <td class="text-center">${data.maoDeObra.pendentes} pend. / ${data.maoDeObra.pagos} pagos</td>
+          <td class="text-right">${formatCurrency(data2.maoDeObra.totalValor)}</td>
+          <td class="text-center">${data2.maoDeObra.pendentes} pend. / ${data2.maoDeObra.pagos} pagos</td>
         </tr>
       </tbody></table></div>
     `;
   }
-  if (sections.consumo && data.consumo.veiculos.length > 0) {
+  if (sections.consumo && data2.consumo.veiculos.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">Combust\xEDvel \u2014 Ve\xEDculos (${data.consumo.veiculos.length} registros)</div>
+        <div class="section-title">Combust\xEDvel \u2014 Ve\xEDculos (${data2.consumo.veiculos.length} registros)</div>
         <table>
           <thead>
             <tr>
@@ -15712,7 +17565,7 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data.consumo.veiculos) {
+    for (const r of data2.consumo.veiculos) {
       html += `
         <tr>
           <td>${formatDate(r.date)}</td>
@@ -15726,10 +17579,10 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
     }
     html += `</tbody></table></div>`;
   }
-  if (sections.consumo && data.consumo.maquinas.length > 0) {
+  if (sections.consumo && data2.consumo.maquinas.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">Combust\xEDvel \u2014 M\xE1quinas (${data.consumo.maquinas.length} registros)</div>
+        <div class="section-title">Combust\xEDvel \u2014 M\xE1quinas (${data2.consumo.maquinas.length} registros)</div>
         <table>
           <thead>
             <tr>
@@ -15743,7 +17596,7 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data.consumo.maquinas) {
+    for (const r of data2.consumo.maquinas) {
       html += `
         <tr>
           <td>${formatDate(r.date)}</td>
@@ -15757,10 +17610,10 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
     }
     html += `</tbody></table></div>`;
   }
-  if (sections.consumo && data.consumo.despesasExtras.length > 0) {
+  if (sections.consumo && data2.consumo.despesasExtras.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">Despesas Extras (${data.consumo.despesasExtras.length} registros)</div>
+        <div class="section-title">Despesas Extras (${data2.consumo.despesasExtras.length} registros)</div>
         <table>
           <thead>
             <tr>
@@ -15773,7 +17626,7 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data.consumo.despesasExtras) {
+    for (const r of data2.consumo.despesasExtras) {
       html += `
         <tr>
           <td>${formatDate(r.date)}</td>
@@ -15786,10 +17639,10 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
     }
     html += `</tbody></table></div>`;
   }
-  if (sections.cargas && data.cargas.registros.length > 0) {
+  if (sections.cargas && data2.cargas.registros.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">Cargas (${data.cargas.totalCargas} registros \u2014 ${data.cargas.totalVolumeM3.toFixed(1)}m\xB3)</div>
+        <div class="section-title">Cargas (${data2.cargas.totalCargas} registros \u2014 ${data2.cargas.totalVolumeM3.toFixed(1)}m\xB3)</div>
         <table>
           <thead>
             <tr>
@@ -15803,7 +17656,7 @@ function generatePdfHtml(data, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data.cargas.registros) {
+    for (const r of data2.cargas.registros) {
       html += `
         <tr>
           <td>${formatDate(r.date)}</td>
@@ -16023,15 +17876,15 @@ var buyerClientsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(cargoDestinations).orderBy(desc21(cargoDestinations.id));
-    return rows.map(destToBuyer);
+    const rows2 = await db.select().from(cargoDestinations).orderBy(desc21(cargoDestinations.id));
+    return rows2.map(destToBuyer);
   }),
   // listActive: retorna todos os destinos ativos (para seleção em cargas, relatórios, etc.)
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(cargoDestinations).where(eq29(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
-    return rows.map(destToBuyer);
+    const rows2 = await db.select().from(cargoDestinations).where(eq29(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
+    return rows2.map(destToBuyer);
   }),
   getById: protectedProcedure.input(z30.object({ id: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
@@ -16171,7 +18024,7 @@ var buyerClientsRouter = router({
   listCargasAReceber: protectedProcedure.input(z30.object({ mes: z30.number().min(1).max(12), ano: z30.number().min(2020).max(2100), pesquisa: z30.string().optional() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.$client.execute(
+    const [rows2] = await db.$client.execute(
       `SELECT cl.id, cl.date, cl.delivery_date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3,
                 cl.buyer_paid_at, cl.invoice_number, cl.buyer_receipt_url,
                 cd.id AS destino_id, cd.name AS destino_nome, cd.cnpj_cpf, cd.price_per_unit, cd.unit,
@@ -16182,7 +18035,7 @@ var buyerClientsRouter = router({
     );
     const toDateStr = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
     const hoje = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    const cargas = (rows ?? []).map((r) => {
+    const cargas = (rows2 ?? []).map((r) => {
       const entrega = toDateStr(r.delivery_date || r.date);
       const dueDate = /* @__PURE__ */ new Date(entrega + "T12:00:00");
       dueDate.setDate(dueDate.getDate() + Number(r.payment_term_days_after_delivery));
@@ -16487,15 +18340,15 @@ var freightRouter = router({
     if (input?.startDate && input?.endDate) {
       query = `SELECT * FROM freight_calculations WHERE date >= '${input.startDate}' AND date <= '${input.endDate}' ORDER BY id DESC`;
     }
-    const [rows] = await db.execute(sql17.raw(query));
-    return rows || [];
+    const [rows2] = await db.execute(sql17.raw(query));
+    return rows2 || [];
   }),
   getById: protectedProcedure.input(z31.object({ id: z31.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.execute(sql17`SELECT * FROM freight_calculations WHERE id = ${input.id}`);
-    if (!rows || rows.length === 0) throw new TRPCError21({ code: "NOT_FOUND" });
-    return rows[0];
+    const [rows2] = await db.execute(sql17`SELECT * FROM freight_calculations WHERE id = ${input.id}`);
+    if (!rows2 || rows2.length === 0) throw new TRPCError21({ code: "NOT_FOUND" });
+    return rows2[0];
   }),
   create: protectedProcedure.input(z31.object({
     cargoLoadId: z31.number().optional(),
@@ -16579,32 +18432,32 @@ var freightRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data } = input;
+    const { id, ...data2 } = input;
     await db.update(freightCalculations).set({
-      cargoLoadId: data.cargoLoadId || null,
-      date: data.date || void 0,
-      vehiclePlate: data.vehiclePlate || null,
-      driverName: data.driverName || null,
-      driverType: data.driverType || "proprio",
-      origin: data.origin || null,
-      destination: data.destination || null,
-      distanceKm: data.distanceKm || null,
-      fuelLiters: data.fuelLiters || null,
-      fuelCostPerLiter: data.fuelCostPerLiter || null,
-      fuelTotalCost: data.fuelTotalCost || null,
-      driverCost: data.driverCost || null,
-      tollCost: data.tollCost || null,
-      maintenanceCost: data.maintenanceCost || null,
-      otherCosts: data.otherCosts || null,
-      otherCostsDescription: data.otherCostsDescription || null,
-      totalCost: data.totalCost || null,
-      costPerKm: data.costPerKm || null,
-      costPerTon: data.costPerTon || null,
-      weightTon: data.weightTon || null,
-      revenuePerTon: data.revenuePerTon || null,
-      totalRevenue: data.totalRevenue || null,
-      profit: data.profit || null,
-      notes: data.notes || null
+      cargoLoadId: data2.cargoLoadId || null,
+      date: data2.date || void 0,
+      vehiclePlate: data2.vehiclePlate || null,
+      driverName: data2.driverName || null,
+      driverType: data2.driverType || "proprio",
+      origin: data2.origin || null,
+      destination: data2.destination || null,
+      distanceKm: data2.distanceKm || null,
+      fuelLiters: data2.fuelLiters || null,
+      fuelCostPerLiter: data2.fuelCostPerLiter || null,
+      fuelTotalCost: data2.fuelTotalCost || null,
+      driverCost: data2.driverCost || null,
+      tollCost: data2.tollCost || null,
+      maintenanceCost: data2.maintenanceCost || null,
+      otherCosts: data2.otherCosts || null,
+      otherCostsDescription: data2.otherCostsDescription || null,
+      totalCost: data2.totalCost || null,
+      costPerKm: data2.costPerKm || null,
+      costPerTon: data2.costPerTon || null,
+      weightTon: data2.weightTon || null,
+      revenuePerTon: data2.revenuePerTon || null,
+      totalRevenue: data2.totalRevenue || null,
+      profit: data2.profit || null,
+      notes: data2.notes || null
     }).where(eq30(freightCalculations.id, id));
     return { success: true };
   }),
@@ -16625,7 +18478,7 @@ var freightRouter = router({
     if (input?.startDate && input?.endDate) {
       whereClause = `WHERE date >= '${input.startDate}' AND date <= '${input.endDate}'`;
     }
-    const [rows] = await db.execute(sql17.raw(`
+    const [rows2] = await db.execute(sql17.raw(`
         SELECT 
           COUNT(*) as totalTrips,
           COALESCE(SUM(CAST(total_cost AS DECIMAL(10,2))), 0) as totalCost,
@@ -16635,7 +18488,7 @@ var freightRouter = router({
           COALESCE(SUM(CAST(fuel_liters AS DECIMAL(10,2))), 0) as totalFuel
         FROM freight_calculations ${whereClause}
       `));
-    return rows?.[0] || { totalTrips: 0, totalCost: 0, totalRevenue: 0, totalProfit: 0, totalKm: 0, totalFuel: 0 };
+    return rows2?.[0] || { totalTrips: 0, totalCost: 0, totalRevenue: 0, totalProfit: 0, totalKm: 0, totalFuel: 0 };
   })
 });
 
@@ -16675,8 +18528,8 @@ function ensureTrailingSlash(value) {
 function normalizeKey(relKey) {
   return relKey.replace(/^\/+/, "");
 }
-function toFormData(data, contentType, fileName) {
-  const blob = typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data], { type: contentType });
+function toFormData(data2, contentType, fileName) {
+  const blob = typeof data2 === "string" ? new Blob([data2], { type: contentType }) : new Blob([data2], { type: contentType });
   const form = new FormData();
   form.append("file", blob, fileName || "file");
   return form;
@@ -16684,11 +18537,11 @@ function toFormData(data, contentType, fileName) {
 function buildAuthHeaders(apiKey) {
   return { Authorization: `Bearer ${apiKey}` };
 }
-async function storagePut(relKey, data, contentType = "application/octet-stream") {
+async function storagePut(relKey, data2, contentType = "application/octet-stream") {
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
   const uploadUrl = buildUploadUrl(baseUrl, key);
-  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
+  const formData = toFormData(data2, contentType, key.split("/").pop() ?? key);
   const response = await fetch(uploadUrl, {
     method: "POST",
     headers: buildAuthHeaders(apiKey),
@@ -16913,35 +18766,35 @@ var fuelSuppliersRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data } = input;
+    const { id, ...data2 } = input;
     const updateData = {};
-    if (data.name !== void 0) updateData.name = data.name;
-    if (data.tradeName !== void 0) updateData.tradeName = data.tradeName;
-    if (data.cnpj !== void 0) updateData.cnpj = data.cnpj;
-    if (data.phone !== void 0) updateData.phone = data.phone;
-    if (data.email !== void 0) updateData.email = data.email;
-    if (data.contactName !== void 0) updateData.contactName = data.contactName;
-    if (data.address !== void 0) updateData.address = data.address;
-    if (data.city !== void 0) updateData.city = data.city;
-    if (data.state !== void 0) updateData.state = data.state;
-    if (data.fuelType !== void 0) updateData.fuelType = data.fuelType;
-    if (data.pricePerLiter !== void 0) updateData.pricePerLiter = sanitizeNumeric(data.pricePerLiter) ?? data.pricePerLiter;
-    if (data.locationType !== void 0) updateData.locationType = data.locationType;
-    if (data.location !== void 0) updateData.location = data.location;
-    if (data.workLocationId !== void 0) updateData.workLocationId = data.workLocationId;
-    if (data.isActive !== void 0) updateData.isActive = data.isActive;
-    if (data.notes !== void 0) updateData.notes = data.notes;
-    if (data.tankCapacity !== void 0) updateData.tankCapacity = data.tankCapacity;
-    if (data.tankAlertThreshold !== void 0) updateData.tankAlertThreshold = data.tankAlertThreshold;
-    if (data.vendorName !== void 0) updateData.vendorName = data.vendorName;
-    if (data.managerName !== void 0) updateData.managerName = data.managerName;
-    if (data.pricePerLiter !== void 0) {
+    if (data2.name !== void 0) updateData.name = data2.name;
+    if (data2.tradeName !== void 0) updateData.tradeName = data2.tradeName;
+    if (data2.cnpj !== void 0) updateData.cnpj = data2.cnpj;
+    if (data2.phone !== void 0) updateData.phone = data2.phone;
+    if (data2.email !== void 0) updateData.email = data2.email;
+    if (data2.contactName !== void 0) updateData.contactName = data2.contactName;
+    if (data2.address !== void 0) updateData.address = data2.address;
+    if (data2.city !== void 0) updateData.city = data2.city;
+    if (data2.state !== void 0) updateData.state = data2.state;
+    if (data2.fuelType !== void 0) updateData.fuelType = data2.fuelType;
+    if (data2.pricePerLiter !== void 0) updateData.pricePerLiter = sanitizeNumeric(data2.pricePerLiter) ?? data2.pricePerLiter;
+    if (data2.locationType !== void 0) updateData.locationType = data2.locationType;
+    if (data2.location !== void 0) updateData.location = data2.location;
+    if (data2.workLocationId !== void 0) updateData.workLocationId = data2.workLocationId;
+    if (data2.isActive !== void 0) updateData.isActive = data2.isActive;
+    if (data2.notes !== void 0) updateData.notes = data2.notes;
+    if (data2.tankCapacity !== void 0) updateData.tankCapacity = data2.tankCapacity;
+    if (data2.tankAlertThreshold !== void 0) updateData.tankAlertThreshold = data2.tankAlertThreshold;
+    if (data2.vendorName !== void 0) updateData.vendorName = data2.vendorName;
+    if (data2.managerName !== void 0) updateData.managerName = data2.managerName;
+    if (data2.pricePerLiter !== void 0) {
       const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq31(fuelSuppliers.id, id));
-      if (existing && existing.pricePerLiter !== data.pricePerLiter) {
+      if (existing && existing.pricePerLiter !== data2.pricePerLiter) {
         await db.insert(fuelPriceHistory).values({
           supplierId: id,
           oldPrice: existing.pricePerLiter,
-          newPrice: data.pricePerLiter,
+          newPrice: data2.pricePerLiter,
           changedBy: ctx.user?.id || null
         });
       }
@@ -17238,9 +19091,9 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data } = input;
+    const { id, ...data2 } = input;
     const updateData = {};
-    for (const [key, val] of Object.entries(data)) {
+    for (const [key, val] of Object.entries(data2)) {
       if (val !== void 0) updateData[key] = val;
     }
     await db.update(fuelInvoices).set(updateData).where(eq31(fuelInvoices.id, id));
@@ -17404,14 +19257,14 @@ var thirdPartyContractorsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const rows = await db.select().from(thirdPartyContractors).orderBy(asc3(thirdPartyContractors.name));
-    return rows;
+    const rows2 = await db.select().from(thirdPartyContractors).orderBy(asc3(thirdPartyContractors.name));
+    return rows2;
   }),
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
-    const rows = await db.select().from(thirdPartyContractors).where(eq32(thirdPartyContractors.isActive, 1)).orderBy(asc3(thirdPartyContractors.name));
-    return rows;
+    const rows2 = await db.select().from(thirdPartyContractors).where(eq32(thirdPartyContractors.isActive, 1)).orderBy(asc3(thirdPartyContractors.name));
+    return rows2;
   }),
   create: protectedProcedure.input(z33.object({
     name: z33.string().min(1, "Nome obrigat\xF3rio"),
@@ -17926,11 +19779,11 @@ var suppliersRouter = router({
   list: moduleProcedure("fornecedores", "orcamentos", "compras").input(z36.object({ activeOnly: z36.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
-    let rows;
+    let rows2;
     if (input?.activeOnly !== false) {
-      rows = await db.select().from(suppliers).where(eq35(suppliers.active, 1)).orderBy(suppliers.companyName);
+      rows2 = await db.select().from(suppliers).where(eq35(suppliers.active, 1)).orderBy(suppliers.companyName);
     } else {
-      rows = await db.select().from(suppliers).orderBy(suppliers.companyName);
+      rows2 = await db.select().from(suppliers).orderBy(suppliers.companyName);
     }
     const allContacts = await db.select().from(supplierContacts);
     const allCategoryLinks = await db.select({
@@ -17939,7 +19792,7 @@ var suppliersRouter = router({
       categoryName: purchaseCategories.name,
       categoryColor: purchaseCategories.color
     }).from(supplierCategories).innerJoin(purchaseCategories, eq35(supplierCategories.categoryId, purchaseCategories.id));
-    return rows.map((s) => {
+    return rows2.map((s) => {
       const cats = allCategoryLinks.filter((c) => c.supplierId === s.id);
       return {
         ...s,
@@ -18131,24 +19984,24 @@ var suppliersRouter = router({
       const normPhone = (resp.sellerPhone || "").replace(/\D/g, "");
       let existing = [];
       if (normCnpj) {
-        const rows = await db.execute(
+        const rows2 = await db.execute(
           sql20`SELECT id FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`
         );
-        existing = rows[0] || [];
+        existing = rows2[0] || [];
       }
       if (existing.length === 0 && normPhone.length >= 8) {
-        const rows = await db.execute(
+        const rows2 = await db.execute(
           sql20`SELECT id FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''),' ',''),'-',''),'(',''),')',''),'.','') = ${normPhone}
                    OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),' ',''),'-',''),'(',''),')',''),'.','') = ${normPhone}
                  LIMIT 1`
         );
-        existing = rows[0] || [];
+        existing = rows2[0] || [];
       }
       if (existing.length === 0) {
-        const rows = await db.execute(
+        const rows2 = await db.execute(
           sql20`SELECT id FROM suppliers WHERE company_name = ${trimmedName} LIMIT 1`
         );
-        existing = rows[0] || [];
+        existing = rows2[0] || [];
       }
       if (existing.length > 0) {
         skipped++;
@@ -18212,11 +20065,11 @@ async function lockBalance(conn, productId, locationId) {
     `INSERT IGNORE INTO stock_balances (product_id, location_id, quantity) VALUES (?, ?, 0)`,
     [productId, locationId]
   );
-  const [rows] = await conn.execute(
+  const [rows2] = await conn.execute(
     `SELECT quantity FROM stock_balances WHERE product_id = ? AND location_id = ? FOR UPDATE`,
     [productId, locationId]
   );
-  return num(rows[0]?.quantity);
+  return num(rows2[0]?.quantity);
 }
 async function setBalance(conn, productId, locationId, quantity) {
   await conn.execute(
@@ -18282,8 +20135,8 @@ var stockRouter = router({
   // ───────── Locais ─────────
   listLocations: moduleProcedure("estoque", "compras").query(async () => {
     const pool = await getPool();
-    const [rows] = await pool.execute(`SELECT l.*, e.name AS equipmentName FROM stock_locations l LEFT JOIN equipment e ON e.id = l.equipment_id ORDER BY l.active DESC, l.name`);
-    return rows;
+    const [rows2] = await pool.execute(`SELECT l.*, e.name AS equipmentName FROM stock_locations l LEFT JOIN equipment e ON e.id = l.equipment_id ORDER BY l.active DESC, l.name`);
+    return rows2;
   }),
   createLocation: moduleProcedure("estoque").input(z37.object({ name: z37.string().min(1).max(150), type: z37.enum(["almoxarifado", "oficina", "veiculo", "obra", "outro"]), equipmentId: z37.number().nullable().optional(), notes: z37.string().optional() })).mutation(async ({ input }) => {
     const pool = await getPool();
@@ -18301,12 +20154,12 @@ var stockRouter = router({
   // ───────── Produtos (catálogo) ─────────
   listProducts: moduleProcedure("estoque", "compras").query(async () => {
     const pool = await getPool();
-    const [rows] = await pool.execute(`
+    const [rows2] = await pool.execute(`
       SELECT p.*, c.name AS categoryName,
         COALESCE((SELECT SUM(b.quantity) FROM stock_balances b JOIN stock_locations l ON l.id = b.location_id WHERE b.product_id = p.id), 0) AS totalQuantity
       FROM stock_products p LEFT JOIN purchase_categories c ON c.id = p.category_id
       ORDER BY p.active DESC, p.name`);
-    return rows.map((r) => ({ ...r, belowMin: num(r.min_stock) > 0 && num(r.totalQuantity) < num(r.min_stock) }));
+    return rows2.map((r) => ({ ...r, belowMin: num(r.min_stock) > 0 && num(r.totalQuantity) < num(r.min_stock) }));
   }),
   createProduct: moduleProcedure("estoque").input(z37.object({ name: z37.string().min(1).max(255), code: z37.string().max(50).optional(), brand: z37.string().max(100).optional(), tracksWeight: z37.boolean().optional(), densityKgL: z37.number().positive().nullable().optional(), unit: z37.string().min(1).max(20).default("un"), categoryId: z37.number().nullable().optional(), minStock: z37.number().min(0).default(0), notes: z37.string().optional() })).mutation(async ({ input }) => {
     const pool = await getPool();
@@ -18390,13 +20243,13 @@ var stockRouter = router({
       where.push("b.location_id = ?");
       params.push(input.locationId);
     }
-    const [rows] = await pool.execute(`
+    const [rows2] = await pool.execute(`
         SELECT b.product_id AS productId, b.location_id AS locationId, b.quantity, p.name AS productName, p.unit, p.code,
                p.min_stock AS minStock, c.name AS categoryName, l.name AS locationName, l.type AS locationType
         FROM stock_balances b JOIN stock_products p ON p.id = b.product_id JOIN stock_locations l ON l.id = b.location_id
         LEFT JOIN purchase_categories c ON c.id = p.category_id
         ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY p.name, l.name`, params);
-    return rows;
+    return rows2;
   }),
   // ───────── Extrato / rastreabilidade ─────────
   movements: moduleProcedure("estoque").input(z37.object({
@@ -18435,7 +20288,7 @@ var stockRouter = router({
       where.push("m.created_at <= ?");
       params.push(input.to + " 23:59:59");
     }
-    const [rows] = await pool.execute(`
+    const [rows2] = await pool.execute(`
         SELECT m.id, m.product_id AS productId, m.type, m.quantity, m.unit_cost AS unitCost, m.balance_after AS balanceAfter,
                m.reason, m.destination_note AS destinationNote, m.created_at AS createdAt,
                m.purchase_request_id AS purchaseRequestId, pr.title AS purchaseRequestTitle,
@@ -18453,7 +20306,7 @@ var stockRouter = router({
         LEFT JOIN purchase_requests pr ON pr.id = m.purchase_request_id
         ${where.length ? "WHERE " + where.join(" AND ") : ""}
         ORDER BY m.created_at DESC, m.id DESC LIMIT ${Number(input?.limit ?? 500)}`, params);
-    return rows;
+    return rows2;
   }),
   // ───────── Recebimento de compra ─────────
   // Itens da solicitação com o que já foi recebido, quantidade sugerida e produto sugerido (mesmo nome normalizado).
@@ -18507,8 +20360,8 @@ var stockRouter = router({
       if (!collabRows[0]) throw new TRPCError27({ code: "NOT_FOUND", message: "Colaborador (quem recebeu) n\xE3o encontrado" });
       const nowMs = Date.now();
       for (const it of input.items) {
-        const [rows] = await conn.execute(`SELECT * FROM purchase_request_items WHERE id = ? AND request_id = ? FOR UPDATE`, [it.itemId, input.purchaseRequestId]);
-        const item = rows[0];
+        const [rows2] = await conn.execute(`SELECT * FROM purchase_request_items WHERE id = ? AND request_id = ? FOR UPDATE`, [it.itemId, input.purchaseRequestId]);
+        const item = rows2[0];
         if (!item) throw new TRPCError27({ code: "NOT_FOUND", message: `Item ${it.itemId} n\xE3o pertence a esta solicita\xE7\xE3o` });
         const requested = parseQuantity(item.quantity) ?? 1;
         const already = num(item.received_quantity);
@@ -18518,12 +20371,12 @@ var stockRouter = router({
           throw new TRPCError27({ code: "BAD_REQUEST", message: `"${item.name}": faltam receber ${remaining}, n\xE3o ${it.quantityReceived}.` });
         }
         await requireProductAndLocation(conn, it.productId, [it.locationId]);
-        const [q] = await conn.execute(
+        const [q2] = await conn.execute(
           `SELECT supplier_id, unit_price FROM quotations WHERE purchase_request_id = ? AND product_name = ? ORDER BY id DESC LIMIT 1`,
           [input.purchaseRequestId, item.name]
         );
-        const unitCost = q[0] ? num(q[0].unit_price) : null;
-        const supplierId = q[0]?.supplier_id ?? null;
+        const unitCost = q2[0] ? num(q2[0].unit_price) : null;
+        const supplierId = q2[0]?.supplier_id ?? null;
         const [pInfo] = await conn.execute(`SELECT unit, density_kg_l FROM stock_products WHERE id = ?`, [it.productId]);
         const factor = contentFactor(pInfo[0]?.unit, num(pInfo[0]?.density_kg_l), it.contentPerUnit, it.contentUnit, item.name);
         const stockQty = Number((it.quantityReceived * factor).toFixed(3));
@@ -18693,7 +20546,7 @@ var stockRouter = router({
       where.push("l.product_id = ?");
       params.push(input.productId);
     }
-    const [rows] = await pool.execute(`
+    const [rows2] = await pool.execute(`
         SELECT l.id, l.product_id AS productId, l.location_id AS locationId,
                l.gross_weight_out AS grossWeightOut, l.status, l.gross_weight_in AS grossWeightIn, l.consumed, l.consumed_stock AS consumedStock, p.density_kg_l AS densityKgL,
                l.created_at AS createdAt, l.returned_at AS returnedAt, p.name AS productName, p.unit,
@@ -18710,7 +20563,7 @@ var stockRouter = router({
         LEFT JOIN equipment de ON de.id = l.destination_equipment_id
         ${where.length ? "WHERE " + where.join(" AND ") : ""}
         ORDER BY l.status = 'aberta' DESC, l.created_at DESC LIMIT 500`, params);
-    return rows;
+    return rows2;
   }),
   // Devolução: consumo = peso na saída − peso na devolução (mesma balança/embalagem, então a tara se anula).
   // Só o consumo baixa do estoque (movimento "Saída" com quem/onde/motivo da retirada).
@@ -18823,7 +20676,7 @@ var quotationsRouter = router({
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select({
+    const rows2 = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
       supplierName: suppliers.companyName,
@@ -18842,13 +20695,13 @@ var quotationsRouter = router({
       notes: quotations.notes,
       createdAt: quotations.createdAt
     }).from(quotations).leftJoin(suppliers, eq36(quotations.supplierId, suppliers.id)).leftJoin(purchaseCategories, eq36(quotations.categoryId, purchaseCategories.id)).orderBy(desc27(quotations.quotedAt));
-    return rows;
+    return rows2;
   }),
   // List by product name — price history across suppliers, lowest price first
   listByProduct: protectedProcedure.input(z38.object({ productName: z38.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select({
+    const rows2 = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
       supplierName: suppliers.companyName,
@@ -18863,13 +20716,13 @@ var quotationsRouter = router({
       quotedAt: quotations.quotedAt,
       notes: quotations.notes
     }).from(quotations).leftJoin(suppliers, eq36(quotations.supplierId, suppliers.id)).where(eq36(quotations.productName, input.productName)).orderBy(asc4(sql21`CAST(${quotations.unitPrice} AS DECIMAL(10,2))`), desc27(quotations.quotedAt));
-    return rows;
+    return rows2;
   }),
   // List grouped by category — returns categories with their products and price history
   listByCategory: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select({
+    const rows2 = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
       supplierName: suppliers.companyName,
@@ -18891,7 +20744,7 @@ var quotationsRouter = router({
       asc4(sql21`CAST(${quotations.unitPrice} AS DECIMAL(10,2))`)
     );
     const grouped = {};
-    for (const row of rows) {
+    for (const row of rows2) {
       const catKey = row.categoryId?.toString() ?? "sem_categoria";
       const catName = row.categoryName ?? "Sem Categoria";
       const catColor = row.categoryColor ?? "#6B7280";
@@ -18972,8 +20825,8 @@ var quotationsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data } = input;
-    await db.update(quotations).set(data).where(eq36(quotations.id, id));
+    const { id, ...data2 } = input;
+    await db.update(quotations).set(data2).where(eq36(quotations.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z38.object({ id: z38.number() })).mutation(async ({ input }) => {
@@ -19007,10 +20860,10 @@ function formatItemsList(items) {
   return items.map((i) => `${i.name} (${i.quantity || "1"} ${i.unit || "un"})`).join(", ");
 }
 async function getPurchaseRequestNewResponsiblePhones(db) {
-  const [rows] = await db.execute(sql22`
+  const [rows2] = await db.execute(sql22`
     SELECT value FROM notification_settings WHERE \`key\` = 'purchaseRequestNewResponsible'
   `);
-  const row = rows[0];
+  const row = rows2[0];
   if (!row?.value) return [];
   let parsed;
   try {
@@ -19134,8 +20987,8 @@ var ALLOWED_TRANSITIONS = {
   comprando: ["comprada", "negada", "cancelada"]
 };
 async function applyPurchaseQuotationDecision(db, params) {
-  const [rows] = await db.execute(sql23`SELECT status, requested_by FROM purchase_requests WHERE id = ${params.purchaseRequestId} LIMIT 1`);
-  const pr = rows[0];
+  const [rows2] = await db.execute(sql23`SELECT status, requested_by FROM purchase_requests WHERE id = ${params.purchaseRequestId} LIMIT 1`);
+  const pr = rows2[0];
   if (!pr) throw new TRPCError29({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o de compra n\xE3o encontrada" });
   const currentStatus = STATUS_FROM_DB[pr.status] || pr.status;
   const terminalStates = ["negada", "cancelada", "recebida"];
@@ -19262,12 +21115,12 @@ var purchaseRequestsRouter = router({
   listEquipmentOptions: moduleProcedure("compras").query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.execute(sql23`
+    const [rows2] = await db.execute(sql23`
       SELECT e.id, e.name, e.license_plate AS licensePlate, t.name AS typeName
       FROM equipment e LEFT JOIN equipment_types t ON t.id = e.type_id
       ORDER BY e.name
     `);
-    return rows;
+    return rows2;
   }),
   list: moduleProcedure("compras").input(z39.object({
     status: statusEnum.optional(),
@@ -19277,7 +21130,7 @@ var purchaseRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     await ensureDirectPurchaseSchema(db);
-    const [rows] = await db.execute(`
+    const [rows2] = await db.execute(`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
           pr.link AS linkUrl,
@@ -19322,7 +21175,7 @@ var purchaseRequestsRouter = router({
           FIELD(pr.urgency, 'critical','critica','high','alta','medium','media','low','baixa'),
           pr.created_at DESC
       `);
-    let filtered = rows.map(normalizeRow);
+    let filtered = rows2.map(normalizeRow);
     if (input?.status) filtered = filtered.filter((r) => r.status === input.status);
     if (input?.urgency) filtered = filtered.filter((r) => r.urgency === input.urgency);
     if (input?.categoryId) filtered = filtered.filter((r) => r.categoryId === input.categoryId);
@@ -19341,7 +21194,7 @@ var purchaseRequestsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     await ensureDirectPurchaseSchema(db);
-    const [rows] = await db.execute(sql23`
+    const [rows2] = await db.execute(sql23`
         SELECT
           pr.id, pr.title, pr.description, pr.images,
           pr.link AS linkUrl,
@@ -19384,7 +21237,7 @@ var purchaseRequestsRouter = router({
         WHERE pr.id = ${input.id}
         LIMIT 1
       `);
-    const row = rows[0];
+    const row = rows2[0];
     if (!row) throw new TRPCError29({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const normalized = normalizeRow(row);
     const items = await db.select().from(purchaseRequestItems).where(eq37(purchaseRequestItems.requestId, input.id));
@@ -19532,8 +21385,8 @@ var purchaseRequestsRouter = router({
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const dataUri = `data:${input.mimeType};base64,${input.imageBase64}`;
     const { url } = await cloudinaryUpload(dataUri, `btree/purchase-requests/${input.id}`, `foto-${Date.now()}.jpg`);
-    const [rows] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
-    const current = rows[0]?.images;
+    const [rows2] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
+    const current = rows2[0]?.images;
     let images = [];
     try {
       images = current ? JSON.parse(current) : [];
@@ -19547,8 +21400,8 @@ var purchaseRequestsRouter = router({
   removeImage: moduleProcedure("compras").input(z39.object({ id: z39.number(), imageUrl: z39.string() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
-    const current = rows[0]?.images;
+    const [rows2] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
+    const current = rows2[0]?.images;
     let images = [];
     try {
       images = current ? JSON.parse(current) : [];
@@ -19576,8 +21429,8 @@ var purchaseRequestsRouter = router({
   requestQuotation: moduleProcedure("compras").input(z39.object({ id: z39.number() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
-    const [rows] = await db.execute(sql23`SELECT title, requested_by, quotation_request_id, status FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
-    const pr = rows[0];
+    const [rows2] = await db.execute(sql23`SELECT title, requested_by, quotation_request_id, status FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
+    const pr = rows2[0];
     if (!pr) throw new TRPCError29({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     if (pr.quotation_request_id) throw new TRPCError29({ code: "BAD_REQUEST", message: "Esta solicita\xE7\xE3o j\xE1 tem um or\xE7amento vinculado" });
     const items = await db.select().from(purchaseRequestItems).where(eq37(purchaseRequestItems.requestId, input.id));
@@ -20024,7 +21877,7 @@ var quotationRequestsRouter = router({
   list: moduleProcedure("orcamentos").query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
+    const rows2 = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
     const allResponses = await db.select({
       id: quotationResponses.id,
       quotationRequestId: quotationResponses.quotationRequestId
@@ -20033,7 +21886,7 @@ var quotationRequestsRouter = router({
     for (const r of allResponses) {
       countByRequest.set(r.quotationRequestId, (countByRequest.get(r.quotationRequestId) || 0) + 1);
     }
-    return rows.map((r) => ({
+    return rows2.map((r) => ({
       ...r,
       items: JSON.parse(r.itemsJson || "[]"),
       isExpired: Date.now() > r.expiresAt,
@@ -20048,7 +21901,7 @@ var quotationRequestsRouter = router({
     const requests = await db.select().from(quotationRequests);
     const requestTitleById = new Map(requests.map((r) => [r.id, r.title]));
     const responses = await db.select().from(quotationResponses).orderBy(desc29(quotationResponses.createdAt));
-    const rows = [];
+    const rows2 = [];
     for (const resp of responses) {
       let items = [];
       try {
@@ -20061,7 +21914,7 @@ var quotationRequestsRouter = router({
         if (!rawName || !it?.price) continue;
         const priceNum = parseFloat(String(it.price).replace(",", "."));
         if (isNaN(priceNum)) continue;
-        rows.push({
+        rows2.push({
           itemName: rawName,
           price: priceNum,
           unit: it.unit || "",
@@ -20072,7 +21925,7 @@ var quotationRequestsRouter = router({
         });
       }
     }
-    return rows.sort((a, b) => new Date(b.quotationDate).getTime() - new Date(a.quotationDate).getTime());
+    return rows2.sort((a, b) => new Date(b.quotationDate).getTime() - new Date(a.quotationDate).getTime());
   }),
   // Buscar por ID com respostas (protegido)
   getById: moduleProcedure("orcamentos").input(z41.object({ id: z41.number() })).query(async ({ input }) => {
@@ -20498,16 +22351,16 @@ var quotationRequestsRouter = router({
     const normCnpj = (input.cnpj || "").replace(/\D/g, "");
     const name2 = (input.supplierName || "").trim();
     if (!normCnpj && !name2) return { found: false };
-    let rows = [];
+    let rows2 = [];
     if (normCnpj) {
       const [r] = await db.execute(sql25`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-',''),' ','') = ${normCnpj} LIMIT 1`);
-      rows = r || [];
+      rows2 = r || [];
     }
-    if (rows.length === 0 && name2) {
+    if (rows2.length === 0 && name2) {
       const [r] = await db.execute(sql25`SELECT id, company_name, trade_name, cnpj, city, state, phone, whatsapp, email, address, seller_name, pix_key, products_sold FROM suppliers WHERE LOWER(TRIM(company_name)) = LOWER(${name2}) OR LOWER(TRIM(COALESCE(trade_name,''))) = LOWER(${name2}) LIMIT 1`);
-      rows = r || [];
+      rows2 = r || [];
     }
-    const s = rows[0];
+    const s = rows2[0];
     if (!s) return { found: false };
     return {
       found: true,
@@ -21592,14 +23445,14 @@ var geofencesRouter = router({
   // Listar todas as porteiras virtuais
   list: protectedProcedure.query(async () => {
     const db = await requireDb();
-    const rows = await db.select().from(geofences).orderBy(geofences.name);
-    return rows;
+    const rows2 = await db.select().from(geofences).orderBy(geofences.name);
+    return rows2;
   }),
   // Buscar uma porteira por ID
   getById: protectedProcedure.input(z44.object({ id: z44.number() })).query(async ({ input }) => {
     const db = await requireDb();
-    const rows = await db.select().from(geofences).where(eq42(geofences.id, input.id));
-    return rows[0] ?? null;
+    const rows2 = await db.select().from(geofences).where(eq42(geofences.id, input.id));
+    return rows2[0] ?? null;
   }),
   // Criar nova porteira virtual
   create: protectedProcedure.input(
@@ -21709,14 +23562,14 @@ var freightTripsRouter = router({
     if (input.geofenceId) {
       conditions.push(eq43(freightTrips.geofenceId, input.geofenceId));
     }
-    const rows = await db.select().from(freightTrips).where(conditions.length > 0 ? and25(...conditions) : void 0).orderBy(desc32(freightTrips.entryAt));
-    return rows;
+    const rows2 = await db.select().from(freightTrips).where(conditions.length > 0 ? and25(...conditions) : void 0).orderBy(desc32(freightTrips.entryAt));
+    return rows2;
   }),
   // Buscar frete por ID
   getById: protectedProcedure.input(z45.object({ id: z45.number() })).query(async ({ input }) => {
     const db = await requireDb2();
-    const rows = await db.select().from(freightTrips).where(eq43(freightTrips.id, input.id));
-    return rows[0] ?? null;
+    const rows2 = await db.select().from(freightTrips).where(eq43(freightTrips.id, input.id));
+    return rows2[0] ?? null;
   }),
   // Abrir frete manualmente
   open: protectedProcedure.input(
@@ -21813,8 +23666,8 @@ var freightTripsRouter = router({
   // Buscar frete aberto para uma porteira específica
   getOpenTrip: protectedProcedure.input(z45.object({ geofenceId: z45.number() })).query(async ({ input }) => {
     const db = await requireDb2();
-    const rows = await db.select().from(freightTrips).where(and25(eq43(freightTrips.geofenceId, input.geofenceId), eq43(freightTrips.status, "open"))).orderBy(desc32(freightTrips.entryAt)).limit(1);
-    return rows[0] ?? null;
+    const rows2 = await db.select().from(freightTrips).where(and25(eq43(freightTrips.geofenceId, input.geofenceId), eq43(freightTrips.status, "open"))).orderBy(desc32(freightTrips.entryAt)).limit(1);
+    return rows2[0] ?? null;
   }),
   // Estatísticas de fretes
   stats: protectedProcedure.input(
@@ -21833,12 +23686,12 @@ var freightTripsRouter = router({
       conditions.push(lte12(freightTrips.entryAt, dateTo.toISOString().slice(0, 10)));
     }
     if (input.geofenceId) conditions.push(eq43(freightTrips.geofenceId, input.geofenceId));
-    const rows = await db.select().from(freightTrips).where(conditions.length > 0 ? and25(...conditions) : void 0);
-    const total = rows.length;
-    const open = rows.filter((r) => r.status === "open").length;
-    const closed = rows.filter((r) => r.status === "closed").length;
-    const totalKm = rows.reduce((acc, r) => acc + (parseFloat(r.distanceKm ?? "0") || 0), 0);
-    const totalCost = rows.reduce((acc, r) => acc + (parseFloat(r.totalCost ?? "0") || 0), 0);
+    const rows2 = await db.select().from(freightTrips).where(conditions.length > 0 ? and25(...conditions) : void 0);
+    const total = rows2.length;
+    const open = rows2.filter((r) => r.status === "open").length;
+    const closed = rows2.filter((r) => r.status === "closed").length;
+    const totalKm = rows2.reduce((acc, r) => acc + (parseFloat(r.distanceKm ?? "0") || 0), 0);
+    const totalCost = rows2.reduce((acc, r) => acc + (parseFloat(r.totalCost ?? "0") || 0), 0);
     return { total, open, closed, totalKm: totalKm.toFixed(1), totalCost: totalCost.toFixed(2) };
   })
 });
@@ -21901,16 +23754,16 @@ var financialConsolidatedRouter = router({
       categories[cat].subcategories[subcat].count++;
     }
     try {
-      let q = `SELECT vr.*, e.name as equipment_name, e.client_id as equip_client_id
+      let q2 = `SELECT vr.*, e.name as equipment_name, e.client_id as equip_client_id
                  FROM vehicle_records vr
                  LEFT JOIN equipment e ON vr.equipment_id = e.id
                  WHERE vr.record_type = 'abastecimento'
                    AND vr.fuel_cost IS NOT NULL AND vr.fuel_cost != '' AND vr.fuel_cost != '0'`;
-      if (dateFrom) q += ` AND vr.date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND vr.date <= '${dateTo} 23:59:59'`;
-      if (workLocationId) q += ` AND vr.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      if (dateFrom) q2 += ` AND vr.date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND vr.date <= '${dateTo} 23:59:59'`;
+      if (workLocationId) q2 += ` AND vr.work_location_id = ${workLocationId}`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         const fuelTypeLabel = {
           diesel: "Diesel",
           diesel_s10: "Diesel S10",
@@ -21925,12 +23778,12 @@ var financialConsolidatedRouter = router({
       console.error("vehicle_records fuel:", e);
     }
     try {
-      let q = `SELECT mf.*, e.name as equipment_name FROM machine_fuel mf LEFT JOIN equipment e ON mf.equipment_id = e.id WHERE 1=1`;
-      if (dateFrom) q += ` AND mf.date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND mf.date <= '${dateTo} 23:59:59'`;
-      if (workLocationId) q += ` AND mf.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      let q2 = `SELECT mf.*, e.name as equipment_name FROM machine_fuel mf LEFT JOIN equipment e ON mf.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q2 += ` AND mf.date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND mf.date <= '${dateTo} 23:59:59'`;
+      if (workLocationId) q2 += ` AND mf.work_location_id = ${workLocationId}`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         const fuelTypeLabel = {
           diesel: "Diesel",
           diesel_s10: "Diesel S10",
@@ -21945,11 +23798,11 @@ var financialConsolidatedRouter = router({
       console.error("machine_fuel:", e);
     }
     try {
-      let q = `SELECT mm.*, e.name as equipment_name FROM machine_maintenance mm LEFT JOIN equipment e ON mm.equipment_id = e.id WHERE 1=1`;
-      if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      let q2 = `SELECT mm.*, e.name as equipment_name FROM machine_maintenance mm LEFT JOIN equipment e ON mm.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q2 += ` AND mm.date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND mm.date <= '${dateTo} 23:59:59'`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         const cost = toNum2(r.total_cost);
         if (cost > 0) addToCategory("manutencao", "Manuten\xE7\xE3o M\xE1quinas", cost);
       }
@@ -21957,11 +23810,11 @@ var financialConsolidatedRouter = router({
       console.error("machine_maintenance:", e);
     }
     try {
-      let q = `SELECT em.*, e.name as equipment_name FROM equipment_maintenance em LEFT JOIN equipment e ON em.equipment_id = e.id WHERE 1=1`;
-      if (dateFrom) q += ` AND em.performed_at >= '${dateFrom}'`;
-      if (dateTo) q += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      let q2 = `SELECT em.*, e.name as equipment_name FROM equipment_maintenance em LEFT JOIN equipment e ON em.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q2 += ` AND em.performed_at >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         const cost = toNum2(r.cost) + toNum2(r.labor_cost);
         if (cost > 0) addToCategory("manutencao", "Manuten\xE7\xE3o Equipamentos", cost);
       }
@@ -21969,8 +23822,8 @@ var financialConsolidatedRouter = router({
       console.error("equipment_maintenance:", e);
     }
     try {
-      const [rows] = await db.execute(sql28.raw(`SELECT mp.*, em.performed_at FROM maintenance_parts mp LEFT JOIN equipment_maintenance em ON mp.maintenance_id = em.id WHERE 1=1`));
-      for (const r of rows) {
+      const [rows2] = await db.execute(sql28.raw(`SELECT mp.*, em.performed_at FROM maintenance_parts mp LEFT JOIN equipment_maintenance em ON mp.maintenance_id = em.id WHERE 1=1`));
+      for (const r of rows2) {
         const cost = toNum2(r.total_cost);
         if (cost > 0) addToCategory("pecas", "Pe\xE7as de Manuten\xE7\xE3o", cost);
       }
@@ -21978,11 +23831,11 @@ var financialConsolidatedRouter = router({
       console.error("maintenance_parts:", e);
     }
     try {
-      let q = `SELECT cpm.*, cp.name as part_name FROM chainsaw_part_movements cpm LEFT JOIN chainsaw_parts cp ON cpm.part_id = cp.id WHERE cpm.type = 'saida'`;
-      if (dateFrom) q += ` AND cpm.created_at >= '${dateFrom}'`;
-      if (dateTo) q += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      let q2 = `SELECT cpm.*, cp.name as part_name FROM chainsaw_part_movements cpm LEFT JOIN chainsaw_parts cp ON cpm.part_id = cp.id WHERE cpm.type = 'saida'`;
+      if (dateFrom) q2 += ` AND cpm.created_at >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
         const cost = toNum2(r.unit_cost) * qty;
         if (cost > 0) addToCategory("pecas", "Pe\xE7as Motosserra", cost);
@@ -21991,11 +23844,11 @@ var financialConsolidatedRouter = router({
       console.error("chainsaw_part_movements:", e);
     }
     try {
-      let q = `SELECT csp.* FROM chainsaw_service_parts csp WHERE 1=1`;
-      if (dateFrom) q += ` AND csp.created_at >= '${dateFrom}'`;
-      if (dateTo) q += ` AND csp.created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      let q2 = `SELECT csp.* FROM chainsaw_service_parts csp WHERE 1=1`;
+      if (dateFrom) q2 += ` AND csp.created_at >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND csp.created_at <= '${dateTo} 23:59:59'`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
         const cost = toNum2(r.unit_cost) * qty;
         if (cost > 0) addToCategory("pecas", "Pe\xE7as OS Motosserra", cost);
@@ -22004,10 +23857,10 @@ var financialConsolidatedRouter = router({
       console.error("chainsaw_service_parts:", e);
     }
     try {
-      let q = `SELECT eor.*, e.name as equipment_name FROM equipment_oil_records eor LEFT JOIN equipment e ON eor.equipment_id = e.id WHERE 1=1`;
-      if (dateFrom) q += ` AND eor.date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND eor.date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql28.raw(q));
+      let q2 = `SELECT eor.*, e.name as equipment_name FROM equipment_oil_records eor LEFT JOIN equipment e ON eor.equipment_id = e.id WHERE 1=1`;
+      if (dateFrom) q2 += ` AND eor.date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND eor.date <= '${dateTo} 23:59:59'`;
+      const [rows2] = await db.execute(sql28.raw(q2));
       const oilTypeLabel = {
         hidraulico: "\xD3leo Hidr\xE1ulico",
         motor: "\xD3leo Motor",
@@ -22015,7 +23868,7 @@ var financialConsolidatedRouter = router({
         diferencial: "\xD3leo Diferencial",
         outros: "Outros \xD3leos"
       };
-      for (const r of rows) {
+      for (const r of rows2) {
         const cost = toNum2(r.total_value);
         if (cost > 0) addToCategory("oleos", oilTypeLabel[r.oil_type] || r.oil_type, cost);
       }
@@ -22023,11 +23876,11 @@ var financialConsolidatedRouter = router({
       console.error("equipment_oil_records:", e);
     }
     try {
-      let q = `SELECT * FROM extra_expenses WHERE 1=1`;
-      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-      if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql28.raw(q));
+      let q2 = `SELECT * FROM extra_expenses WHERE 1=1`;
+      if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+      if (workLocationId) q2 += ` AND work_location_id = ${workLocationId}`;
+      const [rows2] = await db.execute(sql28.raw(q2));
       const catMap = {
         abastecimento: "combustivel",
         refeicao: "refeicao",
@@ -22044,7 +23897,7 @@ var financialConsolidatedRouter = router({
         pedagio: "Ped\xE1gio",
         outro: "Outros"
       };
-      for (const r of rows) {
+      for (const r of rows2) {
         const cat = catMap[r.category] || "outros";
         const label = catLabel[r.category] || r.category;
         addToCategory(cat, label, toNum2(r.amount));
@@ -22053,12 +23906,12 @@ var financialConsolidatedRouter = router({
       console.error("extra_expenses:", e);
     }
     try {
-      let q = `SELECT ca.*, c.name as collaborator_name FROM collaborator_attendance ca LEFT JOIN collaborators c ON ca.collaborator_id = c.id WHERE 1=1`;
-      if (dateFrom) q += ` AND ca.date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND ca.date <= '${dateTo} 23:59:59'`;
-      if (workLocationId) q += ` AND ca.work_location_id = ${workLocationId}`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      let q2 = `SELECT ca.*, c.name as collaborator_name FROM collaborator_attendance ca LEFT JOIN collaborators c ON ca.collaborator_id = c.id WHERE 1=1`;
+      if (dateFrom) q2 += ` AND ca.date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND ca.date <= '${dateTo} 23:59:59'`;
+      if (workLocationId) q2 += ` AND ca.work_location_id = ${workLocationId}`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         const val = toNum2(r.daily_value);
         if (val > 0) addToCategory("folha", "Di\xE1rias Colaboradores", val);
       }
@@ -22066,21 +23919,21 @@ var financialConsolidatedRouter = router({
       console.error("collaborator_attendance:", e);
     }
     try {
-      let q = `SELECT * FROM cargo_loads WHERE third_party_cost IS NOT NULL AND third_party_cost > 0`;
-      if (dateFrom) q += ` AND created_at >= '${dateFrom}'`;
-      if (dateTo) q += ` AND created_at <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      let q2 = `SELECT * FROM cargo_loads WHERE third_party_cost IS NOT NULL AND third_party_cost > 0`;
+      if (dateFrom) q2 += ` AND created_at >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND created_at <= '${dateTo} 23:59:59'`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         addToCategory("frete", "Frete Terceirizado", toNum2(r.third_party_cost));
       }
     } catch (e) {
       console.error("cargo_loads third_party:", e);
     }
     try {
-      let q = `SELECT * FROM financial_entries WHERE type = 'despesa' AND status = 'confirmado' AND (auto_generated IS NULL OR auto_generated = 0)`;
-      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-      const [rows] = await db.execute(sql28.raw(q));
+      let q2 = `SELECT * FROM financial_entries WHERE type = 'despesa' AND status = 'confirmado' AND (auto_generated IS NULL OR auto_generated = 0)`;
+      if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+      const [rows2] = await db.execute(sql28.raw(q2));
       const catMap = {
         combustivel: "combustivel",
         manutencao: "manutencao",
@@ -22090,7 +23943,7 @@ var financialConsolidatedRouter = router({
         folha_pagamento: "folha",
         outro_despesa: "outros"
       };
-      for (const r of rows) {
+      for (const r of rows2) {
         const cat = catMap[r.category] || "financeiro";
         addToCategory(cat, `Financeiro: ${r.category}`, toNum2(r.amount));
       }
@@ -22120,21 +23973,21 @@ var financialConsolidatedRouter = router({
     if (!db) throw new Error("Banco de dados n\xE3o dispon\xEDvel");
     const { category, dateFrom, dateTo, workLocationId, page, pageSize } = input;
     const offset = (page - 1) * pageSize;
-    const rows = [];
+    const rows2 = [];
     if (category === "combustivel") {
       try {
-        let q = `SELECT vr.id, vr.date, vr.fuel_type, vr.liters, vr.fuel_cost, vr.price_per_liter,
+        let q2 = `SELECT vr.id, vr.date, vr.fuel_type, vr.liters, vr.fuel_cost, vr.price_per_liter,
                           vr.supplier, vr.fuel_location, vr.work_location_id, vr.notes,
                           e.name as equipment_name
                    FROM vehicle_records vr
                    LEFT JOIN equipment e ON vr.equipment_id = e.id
                    WHERE vr.record_type = 'abastecimento'
                      AND vr.fuel_cost IS NOT NULL AND vr.fuel_cost != '' AND vr.fuel_cost != '0'`;
-        if (dateFrom) q += ` AND vr.date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND vr.date <= '${dateTo} 23:59:59'`;
-        if (workLocationId) q += ` AND vr.work_location_id = ${workLocationId}`;
-        q += ` ORDER BY vr.date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        if (dateFrom) q2 += ` AND vr.date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND vr.date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q2 += ` AND vr.work_location_id = ${workLocationId}`;
+        q2 += ` ORDER BY vr.date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         const fuelTypeLabel = {
           diesel: "Diesel",
           diesel_s10: "Diesel S10",
@@ -22143,7 +23996,7 @@ var financialConsolidatedRouter = router({
           gnv: "GNV"
         };
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `vr_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: `${r.equipment_name || "Ve\xEDculo"} \u2014 ${toNum2(r.liters).toFixed(1)}L @ R$ ${toNum2(r.price_per_liter).toFixed(3)}/L${r.supplier ? ` (${r.supplier})` : ""}`,
@@ -22159,17 +24012,17 @@ var financialConsolidatedRouter = router({
         console.error(e);
       }
       try {
-        let q = `SELECT mf.id, mf.date, mf.fuel_type, mf.liters, mf.total_value, mf.price_per_liter,
+        let q2 = `SELECT mf.id, mf.date, mf.fuel_type, mf.liters, mf.total_value, mf.price_per_liter,
                           mf.supplier, mf.work_location_id, mf.notes,
                           e.name as equipment_name
                    FROM machine_fuel mf
                    LEFT JOIN equipment e ON mf.equipment_id = e.id
                    WHERE 1=1`;
-        if (dateFrom) q += ` AND mf.date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND mf.date <= '${dateTo} 23:59:59'`;
-        if (workLocationId) q += ` AND mf.work_location_id = ${workLocationId}`;
-        q += ` ORDER BY mf.date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        if (dateFrom) q2 += ` AND mf.date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND mf.date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q2 += ` AND mf.work_location_id = ${workLocationId}`;
+        q2 += ` ORDER BY mf.date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         const fuelTypeLabel = {
           diesel: "Diesel",
           diesel_s10: "Diesel S10",
@@ -22178,7 +24031,7 @@ var financialConsolidatedRouter = router({
           arla: "Arla"
         };
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `mf_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: `${r.equipment_name || "M\xE1quina"} \u2014 ${toNum2(r.liters).toFixed(1)}L${r.supplier ? ` (${r.supplier})` : ""}`,
@@ -22194,13 +24047,13 @@ var financialConsolidatedRouter = router({
         console.error(e);
       }
       try {
-        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'abastecimento'`;
-        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        let q2 = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'abastecimento'`;
+        if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q2 += ` AND work_location_id = ${workLocationId}`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `ee_fuel_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: r.description,
@@ -22217,21 +24070,21 @@ var financialConsolidatedRouter = router({
     }
     if (category === "manutencao") {
       try {
-        let q = `SELECT mm.id, mm.date, mm.description, mm.total_cost, mm.labor_cost,
+        let q2 = `SELECT mm.id, mm.date, mm.description, mm.total_cost, mm.labor_cost,
                           mm.type, mm.service_type, mm.mechanic_name, mm.third_party_company,
                           e.name as equipment_name, e.client_id
                    FROM machine_maintenance mm
                    LEFT JOIN equipment e ON mm.equipment_id = e.id
                    WHERE 1=1`;
-        if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
-        q += ` ORDER BY mm.date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        if (dateFrom) q2 += ` AND mm.date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND mm.date <= '${dateTo} 23:59:59'`;
+        q2 += ` ORDER BY mm.date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         const typeLabel = { preventiva: "Preventiva", corretiva: "Corretiva", revisao: "Revis\xE3o" };
         for (const r of dbRows) {
           const cost = toNum2(r.total_cost);
           if (cost > 0) {
-            rows.push({
+            rows2.push({
               id: `mm_${r.id}`,
               date: String(r.date).slice(0, 10),
               description: `${r.equipment_name || "M\xE1quina"} \u2014 ${typeLabel[r.type] || r.type}${r.mechanic_name ? ` (${r.mechanic_name})` : ""}${r.third_party_company ? ` / ${r.third_party_company}` : ""}`,
@@ -22248,20 +24101,20 @@ var financialConsolidatedRouter = router({
         console.error(e);
       }
       try {
-        let q = `SELECT em.id, em.performed_at as date, em.description, em.cost, em.labor_cost,
+        let q2 = `SELECT em.id, em.performed_at as date, em.description, em.cost, em.labor_cost,
                           em.type, em.mechanic_name, em.third_party_company,
                           e.name as equipment_name, e.client_id
                    FROM equipment_maintenance em
                    LEFT JOIN equipment e ON em.equipment_id = e.id
                    WHERE 1=1`;
-        if (dateFrom) q += ` AND em.performed_at >= '${dateFrom}'`;
-        if (dateTo) q += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
-        q += ` ORDER BY em.performed_at DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        if (dateFrom) q2 += ` AND em.performed_at >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND em.performed_at <= '${dateTo} 23:59:59'`;
+        q2 += ` ORDER BY em.performed_at DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
           const cost = toNum2(r.cost) + toNum2(r.labor_cost);
           if (cost > 0) {
-            rows.push({
+            rows2.push({
               id: `em_${r.id}`,
               date: String(r.date).slice(0, 10),
               description: `${r.equipment_name || "Equipamento"} \u2014 ${r.type || "Manuten\xE7\xE3o"}${r.mechanic_name ? ` (${r.mechanic_name})` : ""}`,
@@ -22280,16 +24133,16 @@ var financialConsolidatedRouter = router({
     }
     if (category === "oleos") {
       try {
-        let q = `SELECT eor.id, eor.date, eor.oil_type, eor.quantity_liters, eor.total_value,
+        let q2 = `SELECT eor.id, eor.date, eor.oil_type, eor.quantity_liters, eor.total_value,
                           eor.brand, eor.supplier, eor.price_per_liter, eor.notes,
                           e.name as equipment_name
                    FROM equipment_oil_records eor
                    LEFT JOIN equipment e ON eor.equipment_id = e.id
                    WHERE 1=1`;
-        if (dateFrom) q += ` AND eor.date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND eor.date <= '${dateTo} 23:59:59'`;
-        q += ` ORDER BY eor.date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        if (dateFrom) q2 += ` AND eor.date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND eor.date <= '${dateTo} 23:59:59'`;
+        q2 += ` ORDER BY eor.date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         const oilTypeLabel = {
           hidraulico: "\xD3leo Hidr\xE1ulico",
           motor: "\xD3leo Motor",
@@ -22300,7 +24153,7 @@ var financialConsolidatedRouter = router({
         for (const r of dbRows) {
           const cost = toNum2(r.total_value);
           if (cost > 0) {
-            rows.push({
+            rows2.push({
               id: `oil_${r.id}`,
               date: String(r.date).slice(0, 10),
               description: `${r.equipment_name || "Equipamento"} \u2014 ${oilTypeLabel[r.oil_type] || r.oil_type} ${toNum2(r.quantity_liters).toFixed(1)}L${r.brand ? ` (${r.brand})` : ""}${r.supplier ? ` / ${r.supplier}` : ""}`,
@@ -22330,7 +24183,7 @@ var financialConsolidatedRouter = router({
         for (const r of dbRows) {
           const cost = toNum2(r.total_cost);
           if (cost > 0) {
-            rows.push({
+            rows2.push({
               id: `mp_${r.id}`,
               date: r.date ? String(r.date).slice(0, 10) : "\u2014",
               description: `${r.part_name} x${r.quantity} \u2014 ${r.equipment_name || "Equipamento"}`,
@@ -22346,20 +24199,20 @@ var financialConsolidatedRouter = router({
         console.error(e);
       }
       try {
-        let q = `SELECT cpm.id, cpm.created_at as date, cpm.quantity, cpm.unit_cost, cpm.reason,
+        let q2 = `SELECT cpm.id, cpm.created_at as date, cpm.quantity, cpm.unit_cost, cpm.reason,
                           cp.name as part_name
                    FROM chainsaw_part_movements cpm
                    LEFT JOIN chainsaw_parts cp ON cpm.part_id = cp.id
                    WHERE cpm.type = 'saida'`;
-        if (dateFrom) q += ` AND cpm.created_at >= '${dateFrom}'`;
-        if (dateTo) q += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
-        q += ` ORDER BY cpm.created_at DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        if (dateFrom) q2 += ` AND cpm.created_at >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND cpm.created_at <= '${dateTo} 23:59:59'`;
+        q2 += ` ORDER BY cpm.created_at DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
           const qty = parseFloat(String(r.quantity).replace(",", ".")) || 1;
           const cost = toNum2(r.unit_cost) * qty;
           if (cost > 0) {
-            rows.push({
+            rows2.push({
               id: `cpm_${r.id}`,
               date: String(r.date).slice(0, 10),
               description: `${r.part_name || "Pe\xE7a"} x${r.quantity}${r.reason ? ` \u2014 ${r.reason}` : ""}`,
@@ -22376,14 +24229,14 @@ var financialConsolidatedRouter = router({
     }
     if (category === "pedagio") {
       try {
-        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'pedagio'`;
-        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-        q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        let q2 = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'pedagio'`;
+        if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q2 += ` AND work_location_id = ${workLocationId}`;
+        q2 += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `ped_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: r.description,
@@ -22400,14 +24253,14 @@ var financialConsolidatedRouter = router({
     }
     if (category === "refeicao") {
       try {
-        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'refeicao'`;
-        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-        q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        let q2 = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'refeicao'`;
+        if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q2 += ` AND work_location_id = ${workLocationId}`;
+        q2 += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `ref_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: r.description,
@@ -22424,14 +24277,14 @@ var financialConsolidatedRouter = router({
     }
     if (category === "servico_terceiro") {
       try {
-        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'servico_terceiro'`;
-        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-        q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        let q2 = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'servico_terceiro'`;
+        if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q2 += ` AND work_location_id = ${workLocationId}`;
+        q2 += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `st_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: r.description,
@@ -22448,14 +24301,14 @@ var financialConsolidatedRouter = router({
     }
     if (category === "compra_material") {
       try {
-        let q = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'compra_material'`;
-        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-        if (workLocationId) q += ` AND work_location_id = ${workLocationId}`;
-        q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        let q2 = `SELECT id, date, description, amount, work_location_id, notes FROM extra_expenses WHERE category = 'compra_material'`;
+        if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q2 += ` AND work_location_id = ${workLocationId}`;
+        q2 += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `cm_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: r.description,
@@ -22472,21 +24325,21 @@ var financialConsolidatedRouter = router({
     }
     if (category === "folha") {
       try {
-        let q = `SELECT ca.id, ca.date, ca.daily_value, ca.employment_type_ca, ca.activity,
+        let q2 = `SELECT ca.id, ca.date, ca.daily_value, ca.employment_type_ca, ca.activity,
                           ca.work_location_id, ca.location_name, ca.payment_status_ca,
                           c.name as collaborator_name
                    FROM collaborator_attendance ca
                    LEFT JOIN collaborators c ON ca.collaborator_id = c.id
                    WHERE 1=1`;
-        if (dateFrom) q += ` AND ca.date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND ca.date <= '${dateTo} 23:59:59'`;
-        if (workLocationId) q += ` AND ca.work_location_id = ${workLocationId}`;
-        q += ` ORDER BY ca.date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        if (dateFrom) q2 += ` AND ca.date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND ca.date <= '${dateTo} 23:59:59'`;
+        if (workLocationId) q2 += ` AND ca.work_location_id = ${workLocationId}`;
+        q2 += ` ORDER BY ca.date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
           const val = toNum2(r.daily_value);
           if (val > 0) {
-            rows.push({
+            rows2.push({
               id: `att_${r.id}`,
               date: String(r.date).slice(0, 10),
               description: `${r.collaborator_name || "Colaborador"} \u2014 ${r.activity || "Di\xE1ria"}`,
@@ -22504,16 +24357,16 @@ var financialConsolidatedRouter = router({
     }
     if (category === "frete") {
       try {
-        let q = `SELECT cl.id, cl.created_at as date, cl.destination, cl.third_party_cost,
+        let q2 = `SELECT cl.id, cl.created_at as date, cl.destination, cl.third_party_cost,
                           cl.third_party_contractor, cl.client_name
                    FROM cargo_loads cl
                    WHERE cl.third_party_cost IS NOT NULL AND cl.third_party_cost > 0`;
-        if (dateFrom) q += ` AND cl.created_at >= '${dateFrom}'`;
-        if (dateTo) q += ` AND cl.created_at <= '${dateTo} 23:59:59'`;
-        q += ` ORDER BY cl.created_at DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        if (dateFrom) q2 += ` AND cl.created_at >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND cl.created_at <= '${dateTo} 23:59:59'`;
+        q2 += ` ORDER BY cl.created_at DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `frete_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: `Frete Carga #${r.id} \u2192 ${r.destination || "Destino"}${r.third_party_contractor ? ` (${r.third_party_contractor})` : ""}`,
@@ -22529,13 +24382,13 @@ var financialConsolidatedRouter = router({
     }
     if (category === "financeiro" || category === "outros") {
       try {
-        let q = `SELECT * FROM financial_entries WHERE type = 'despesa' AND status = 'confirmado' AND (auto_generated IS NULL OR auto_generated = 0)`;
-        if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-        if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-        q += ` ORDER BY date DESC`;
-        const [dbRows] = await db.execute(sql28.raw(q));
+        let q2 = `SELECT * FROM financial_entries WHERE type = 'despesa' AND status = 'confirmado' AND (auto_generated IS NULL OR auto_generated = 0)`;
+        if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+        if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+        q2 += ` ORDER BY date DESC`;
+        const [dbRows] = await db.execute(sql28.raw(q2));
         for (const r of dbRows) {
-          rows.push({
+          rows2.push({
             id: `fin_${r.id}`,
             date: String(r.date).slice(0, 10),
             description: r.description,
@@ -22550,16 +24403,16 @@ var financialConsolidatedRouter = router({
         console.error(e);
       }
     }
-    rows.sort((a, b) => b.date.localeCompare(a.date));
-    const total = rows.length;
-    const paginated = rows.slice(offset, offset + pageSize);
+    rows2.sort((a, b) => b.date.localeCompare(a.date));
+    const total = rows2.length;
+    const paginated = rows2.slice(offset, offset + pageSize);
     return {
       rows: paginated,
       total,
       page,
       pageSize,
       totalPages: Math.ceil(total / pageSize),
-      totalAmount: rows.reduce((s, r) => s + r.amount, 0)
+      totalAmount: rows2.reduce((s, r) => s + r.amount, 0)
     };
   }),
   // ─── BREAKDOWN POR LOCAL DE TRABALHO ─────────────────────────────────────
@@ -22581,36 +24434,36 @@ var financialConsolidatedRouter = router({
       locations[key].categories[category] += amount;
     }
     try {
-      let q = `SELECT work_location_id, SUM(CAST(REPLACE(REPLACE(IFNULL(fuel_cost,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+      let q2 = `SELECT work_location_id, SUM(CAST(REPLACE(REPLACE(IFNULL(fuel_cost,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
                  FROM vehicle_records WHERE record_type='abastecimento' AND fuel_cost IS NOT NULL AND fuel_cost != '' AND fuel_cost != '0'`;
-      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-      q += ` GROUP BY work_location_id`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+      q2 += ` GROUP BY work_location_id`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         addToLocation(r.work_location_id, getLocationName(r.work_location_id), "Combust\xEDvel", toNum2(String(r.total)));
       }
     } catch (e) {
     }
     try {
-      let q = `SELECT work_location_id, SUM(CAST(REPLACE(REPLACE(IFNULL(total_value,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+      let q2 = `SELECT work_location_id, SUM(CAST(REPLACE(REPLACE(IFNULL(total_value,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
                  FROM machine_fuel WHERE 1=1`;
-      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-      q += ` GROUP BY work_location_id`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+      q2 += ` GROUP BY work_location_id`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         addToLocation(r.work_location_id, getLocationName(r.work_location_id), "Combust\xEDvel", toNum2(String(r.total)));
       }
     } catch (e) {
     }
     try {
-      let q = `SELECT work_location_id, category, SUM(CAST(REPLACE(REPLACE(IFNULL(amount,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+      let q2 = `SELECT work_location_id, category, SUM(CAST(REPLACE(REPLACE(IFNULL(amount,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
                  FROM extra_expenses WHERE 1=1`;
-      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-      q += ` GROUP BY work_location_id, category`;
-      const [rows] = await db.execute(sql28.raw(q));
+      if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+      q2 += ` GROUP BY work_location_id, category`;
+      const [rows2] = await db.execute(sql28.raw(q2));
       const catMap = {
         abastecimento: "Combust\xEDvel",
         refeicao: "Refei\xE7\xE3o",
@@ -22619,33 +24472,33 @@ var financialConsolidatedRouter = router({
         pedagio: "Ped\xE1gio",
         outro: "Outros"
       };
-      for (const r of rows) {
+      for (const r of rows2) {
         const cat = catMap[r.category] || "Outros";
         addToLocation(r.work_location_id, getLocationName(r.work_location_id), cat, toNum2(String(r.total)));
       }
     } catch (e) {
     }
     try {
-      let q = `SELECT work_location_id, location_name, SUM(CAST(REPLACE(REPLACE(IFNULL(daily_value,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+      let q2 = `SELECT work_location_id, location_name, SUM(CAST(REPLACE(REPLACE(IFNULL(daily_value,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
                  FROM collaborator_attendance WHERE 1=1`;
-      if (dateFrom) q += ` AND date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND date <= '${dateTo} 23:59:59'`;
-      q += ` GROUP BY work_location_id, location_name`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      if (dateFrom) q2 += ` AND date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND date <= '${dateTo} 23:59:59'`;
+      q2 += ` GROUP BY work_location_id, location_name`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         const locName = r.location_name || getLocationName(r.work_location_id);
         addToLocation(r.work_location_id, locName, "Folha de Pagamento", toNum2(String(r.total)));
       }
     } catch (e) {
     }
     try {
-      let q = `SELECT e.client_id, SUM(CAST(REPLACE(REPLACE(IFNULL(mm.total_cost,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
+      let q2 = `SELECT e.client_id, SUM(CAST(REPLACE(REPLACE(IFNULL(mm.total_cost,'0'),'R$',''),',','.') AS DECIMAL(12,2))) as total
                  FROM machine_maintenance mm LEFT JOIN equipment e ON mm.equipment_id = e.id WHERE 1=1`;
-      if (dateFrom) q += ` AND mm.date >= '${dateFrom}'`;
-      if (dateTo) q += ` AND mm.date <= '${dateTo} 23:59:59'`;
-      q += ` GROUP BY e.client_id`;
-      const [rows] = await db.execute(sql28.raw(q));
-      for (const r of rows) {
+      if (dateFrom) q2 += ` AND mm.date >= '${dateFrom}'`;
+      if (dateTo) q2 += ` AND mm.date <= '${dateTo} 23:59:59'`;
+      q2 += ` GROUP BY e.client_id`;
+      const [rows2] = await db.execute(sql28.raw(q2));
+      for (const r of rows2) {
         addToLocation(r.client_id, getLocationName(r.client_id), "Manuten\xE7\xE3o", toNum2(String(r.total)));
       }
     } catch (e) {
@@ -22663,9 +24516,878 @@ var financialConsolidatedRouter = router({
 // server/routers.ts
 init_sicoob();
 
+// server/routers/financialReal.ts
+init_trpc();
+init_permissions();
+init_favorecidoCategoria();
+import { z as z48 } from "zod";
+import { TRPCError as TRPCError36 } from "@trpc/server";
+
+// server/utils/bankImport.ts
+import { createHash } from "crypto";
+function semAcento(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+function normalizaDescricao(s) {
+  return semAcento(s).toUpperCase().replace(/\s+/g, " ").trim();
+}
+function comHash(base) {
+  const vistos = /* @__PURE__ */ new Map();
+  return base.map((t2) => {
+    const chave = `${t2.data}|${t2.valor.toFixed(2)}|${normalizaDescricao(t2.descricao)}|${t2.documento ?? ""}`;
+    const n = (vistos.get(chave) ?? 0) + 1;
+    vistos.set(chave, n);
+    return { ...t2, hash: createHash("sha1").update(`${chave}|${n}`).digest("hex") };
+  });
+}
+function parseValorBR(raw) {
+  let s = raw.trim();
+  if (!s) return null;
+  let negativo = false;
+  if (/^\(.*\)$/.test(s)) {
+    negativo = true;
+    s = s.slice(1, -1);
+  }
+  if (/[dD]$/.test(s)) {
+    negativo = true;
+    s = s.slice(0, -1);
+  } else if (/[cC]$/.test(s)) {
+    s = s.slice(0, -1);
+  }
+  if (s.trim().endsWith("-")) {
+    negativo = true;
+    s = s.trim().slice(0, -1);
+  }
+  s = s.replace(/R\$/gi, "").replace(/\s/g, "");
+  if (s.startsWith("-")) {
+    negativo = !negativo ? true : negativo;
+    s = s.slice(1);
+  }
+  if (s.startsWith("+")) s = s.slice(1);
+  if (s.includes(",") && s.includes(".")) {
+    s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  } else if (s.includes(",")) {
+    s = s.replace(",", ".");
+  }
+  const n = parseFloat(s);
+  if (!Number.isFinite(n)) return null;
+  return negativo ? -Math.abs(n) : n;
+}
+function parseDataFlex(raw) {
+  const s = raw.trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  m = s.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{2})$/);
+  if (m) return `20${m[3]}-${m[2]}-${m[1]}`;
+  m = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}
+function parseOfx(texto) {
+  const avisos = [];
+  const blocos = texto.split(/<STMTTRN>/i).slice(1);
+  const base = [];
+  const tag = (bloco, nome) => {
+    const m = bloco.match(new RegExp(`<${nome}>([^<\\r\\n]*)`, "i"));
+    return m ? m[1].trim() : null;
+  };
+  for (const b of blocos) {
+    const data2 = parseDataFlex(tag(b, "DTPOSTED") ?? "");
+    const valor = parseValorBR(tag(b, "TRNAMT") ?? "");
+    if (!data2 || valor === null) {
+      avisos.push("Transa\xE7\xE3o OFX ignorada (data ou valor inv\xE1lido).");
+      continue;
+    }
+    const nome = tag(b, "NAME");
+    const memo = tag(b, "MEMO");
+    const descricao = [nome, memo && memo !== nome ? memo : null].filter(Boolean).join(" \u2014 ") || "(sem descri\xE7\xE3o)";
+    base.push({ data: data2, descricao, valor, documento: tag(b, "FITID") || tag(b, "CHECKNUM") });
+  }
+  return { transacoes: comHash(base), formato: "ofx", avisos };
+}
+function dividirLinhaCsv(linha, sep) {
+  const out = [];
+  let atual = "";
+  let aspas = false;
+  for (let i = 0; i < linha.length; i++) {
+    const ch = linha[i];
+    if (ch === '"') {
+      if (aspas && linha[i + 1] === '"') {
+        atual += '"';
+        i++;
+      } else aspas = !aspas;
+    } else if (ch === sep && !aspas) {
+      out.push(atual);
+      atual = "";
+    } else atual += ch;
+  }
+  out.push(atual);
+  return out.map((c) => c.trim());
+}
+function parseCsv(texto) {
+  const avisos = [];
+  const linhas = texto.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim() !== "");
+  if (linhas.length < 2) return { transacoes: [], formato: "csv", avisos: ["Arquivo CSV sem linhas de dados."] };
+  const cont = (c) => (linhas[0].match(new RegExp(`\\${c}`, "g")) ?? []).length;
+  const sep = [";", "	", ","].sort((a, b) => cont(b) - cont(a))[0];
+  const norm = (s) => semAcento(s).toLowerCase().trim();
+  let idxCab = -1;
+  let cab = [];
+  for (let i = 0; i < Math.min(linhas.length, 15); i++) {
+    const cols = dividirLinhaCsv(linhas[i], sep).map(norm);
+    if (cols.some((c) => c.startsWith("data")) && cols.some((c) => /valor|debito|credito|saida|entrada/.test(c))) {
+      idxCab = i;
+      cab = cols;
+      break;
+    }
+  }
+  if (idxCab < 0) return { transacoes: [], formato: "csv", avisos: ["Cabe\xE7alho n\xE3o reconhecido. O CSV precisa ter colunas Data e Valor (ou D\xE9bito/Cr\xE9dito)."] };
+  const achar = (re) => cab.findIndex((c) => re.test(c));
+  const iData = achar(/^data/);
+  const iDesc = achar(/descri|historico|lancamento|estabelecimento|memo/);
+  const iValor = achar(/^valor/);
+  const iDeb = achar(/debito|saida/);
+  const iCred = achar(/credito|entrada/);
+  const iDoc = achar(/documento|^doc|^id$|numero/);
+  const base = [];
+  for (let i = idxCab + 1; i < linhas.length; i++) {
+    const cols = dividirLinhaCsv(linhas[i], sep);
+    const data2 = parseDataFlex(cols[iData] ?? "");
+    if (!data2) continue;
+    let valor = null;
+    if (iValor >= 0) valor = parseValorBR(cols[iValor] ?? "");
+    if (valor === null && (iDeb >= 0 || iCred >= 0)) {
+      const d = iDeb >= 0 ? parseValorBR(cols[iDeb] ?? "") : null;
+      const c = iCred >= 0 ? parseValorBR(cols[iCred] ?? "") : null;
+      if (d) valor = -Math.abs(d);
+      else if (c) valor = Math.abs(c);
+    }
+    if (valor === null || valor === 0) continue;
+    base.push({
+      data: data2,
+      valor,
+      descricao: (iDesc >= 0 ? cols[iDesc] : "") || "(sem descri\xE7\xE3o)",
+      documento: iDoc >= 0 ? cols[iDoc] || null : null
+    });
+  }
+  if (base.length === 0) avisos.push("Nenhuma transa\xE7\xE3o v\xE1lida encontrada no CSV.");
+  return { transacoes: comHash(base), formato: "csv", avisos };
+}
+function parseExtrato(texto, nomeArquivo) {
+  const ehOfx = /<OFX>|<STMTTRN>/i.test(texto) || /\.ofx$/i.test(nomeArquivo ?? "");
+  return ehOfx ? parseOfx(texto) : parseCsv(texto);
+}
+
+// server/routers/financialReal.ts
+init_financeiroCanonico();
+init_extratoClassificacao();
+var SLUG = "dashboard-real";
+var TIPOS_RESULTADO = ["resultado", "financeiro_nao_resultado", "transferencia_propria"];
+async function getDbOrThrow() {
+  const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+  const db = await getDb2();
+  if (!db) throw new TRPCError36({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  return db;
+}
+var ensurePromise = null;
+function ensureTables(db) {
+  if (!ensurePromise) {
+    ensurePromise = (async () => {
+      const [existia] = await db.$client.execute(
+        `SELECT COUNT(*) AS n FROM information_schema.tables
+         WHERE table_schema = DATABASE() AND table_name = 'extrato_regras'`
+      );
+      const regrasJaExistiam = Number(existia[0]?.n ?? 0) > 0;
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS extrato_classificacao (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          fonte VARCHAR(20) NOT NULL DEFAULT 'sicoob',
+          lancamento_id INT NOT NULL,
+          grupo VARCHAR(120) NULL,
+          centro_custo VARCHAR(120) NULL,
+          natureza VARCHAR(120) NULL,
+          tipo_resultado VARCHAR(40) NOT NULL DEFAULT 'resultado',
+          atualizado_por INT NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY extrato_classificacao_unique (fonte, lancamento_id)
+        )
+      `);
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS extrato_regras (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          nome VARCHAR(160) NOT NULL,
+          campo VARCHAR(20) NOT NULL DEFAULT 'texto',
+          tipo_lancamento VARCHAR(10) NOT NULL DEFAULT 'AMBOS',
+          padrao VARCHAR(255) NOT NULL,
+          grupo VARCHAR(120) NULL,
+          centro_custo VARCHAR(120) NULL,
+          natureza VARCHAR(120) NULL,
+          tipo_resultado VARCHAR(40) NOT NULL DEFAULT 'resultado',
+          prioridade INT NOT NULL DEFAULT 100,
+          ativa TINYINT NOT NULL DEFAULT 1,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS bank_accounts (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          nome VARCHAR(120) NOT NULL,
+          banco VARCHAR(80) NULL,
+          tipo VARCHAR(20) NOT NULL DEFAULT 'conta',
+          ativa TINYINT NOT NULL DEFAULT 1,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS bank_transactions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          account_id INT NOT NULL,
+          data_lancamento VARCHAR(10) NOT NULL,
+          descricao VARCHAR(500) NOT NULL,
+          documento VARCHAR(100) NULL,
+          valor DECIMAL(15,2) NOT NULL,
+          hash CHAR(40) NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY bank_transactions_unique (account_id, hash),
+          INDEX bank_transactions_data_idx (data_lancamento)
+        )
+      `);
+      if (!regrasJaExistiam) {
+        for (const r of REGRAS_PADRAO) {
+          await db.$client.execute(
+            `INSERT INTO extrato_regras (nome, campo, tipo_lancamento, padrao, grupo, centro_custo, natureza, tipo_resultado, prioridade, ativa)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [r.nome, r.campo, r.tipoLancamento, r.padrao, r.grupo, r.centroCusto, r.natureza, r.tipoResultado, r.prioridade, r.ativa ? 1 : 0]
+          );
+        }
+      }
+    })().catch((e) => {
+      ensurePromise = null;
+      throw e;
+    });
+  }
+  return ensurePromise;
+}
+function num2(v) {
+  const s = String(v ?? "0").trim();
+  const n = s.includes(",") ? parseFloat(s.replace(/\./g, "").replace(",", ".")) : parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+function rowParaRegra(r) {
+  return {
+    id: r.id,
+    nome: r.nome,
+    campo: r.campo,
+    tipoLancamento: r.tipo_lancamento,
+    padrao: r.padrao,
+    grupo: r.grupo ?? null,
+    centroCusto: r.centro_custo ?? null,
+    natureza: r.natureza ?? null,
+    tipoResultado: TIPOS_RESULTADO.includes(r.tipo_resultado) ? r.tipo_resultado : "resultado",
+    prioridade: Number(r.prioridade ?? 100),
+    ativa: Number(r.ativa) === 1
+  };
+}
+var IMPORT_OFFSET = 1e9;
+var ehImportado = (id) => id >= IMPORT_OFFSET;
+var idReal = (id) => ehImportado(id) ? id - IMPORT_OFFSET : id;
+var contaInput = z48.union([z48.literal("todas"), z48.literal("sicoob"), z48.number()]).default("todas");
+async function carregarLinhasClassificadas(db, dataInicio, dataFim, conta = "todas") {
+  await ensureTables(db);
+  const linhas = [];
+  if (conta === "todas" || conta === "sicoob") {
+    const [rows2] = await db.$client.execute(
+      `SELECT id, data_lancamento, descricao, complemento, numero_documento, valor, tipo_lancamento
+       FROM sicoob_extrato WHERE data_lancamento BETWEEN ? AND ? ORDER BY data_lancamento ASC, id ASC`,
+      [dataInicio, dataFim]
+    );
+    for (const r of rows2) {
+      linhas.push({
+        id: r.id,
+        dataLancamento: r.data_lancamento,
+        descricao: r.descricao,
+        complemento: r.complemento,
+        numeroDocumento: r.numero_documento,
+        tipo: r.tipo_lancamento === "CREDITO" ? "CREDITO" : "DEBITO",
+        valor: Math.abs(num2(r.valor)),
+        conta: "Sicoob"
+      });
+    }
+  }
+  if (conta === "todas" || typeof conta === "number") {
+    const [rows2] = await db.$client.execute(
+      `SELECT t.id, t.data_lancamento, t.descricao, t.documento, t.valor, a.nome AS conta
+       FROM bank_transactions t JOIN bank_accounts a ON a.id = t.account_id
+       WHERE t.data_lancamento BETWEEN ? AND ? ${typeof conta === "number" ? "AND t.account_id = ?" : ""}
+       ORDER BY t.data_lancamento ASC, t.id ASC`,
+      typeof conta === "number" ? [dataInicio, dataFim, conta] : [dataInicio, dataFim]
+    );
+    for (const r of rows2) {
+      const v = num2(r.valor);
+      linhas.push({
+        id: IMPORT_OFFSET + r.id,
+        dataLancamento: r.data_lancamento,
+        descricao: r.descricao,
+        complemento: null,
+        numeroDocumento: r.documento,
+        tipo: v >= 0 ? "CREDITO" : "DEBITO",
+        valor: Math.abs(v),
+        conta: r.conta
+      });
+    }
+    linhas.sort((a, b) => a.dataLancamento.localeCompare(b.dataLancamento) || a.id - b.id);
+  }
+  const manual = /* @__PURE__ */ new Map();
+  if (linhas.length > 0) {
+    const [man] = await db.$client.execute(
+      `SELECT c.lancamento_id AS lid, c.grupo, c.centro_custo, c.natureza, c.tipo_resultado
+       FROM extrato_classificacao c
+       JOIN sicoob_extrato e ON e.id = c.lancamento_id AND c.fonte = 'sicoob'
+       WHERE e.data_lancamento BETWEEN ? AND ?
+       UNION ALL
+       SELECT c.lancamento_id + ${IMPORT_OFFSET} AS lid, c.grupo, c.centro_custo, c.natureza, c.tipo_resultado
+       FROM extrato_classificacao c
+       JOIN bank_transactions t ON t.id = c.lancamento_id AND c.fonte = 'import'
+       WHERE t.data_lancamento BETWEEN ? AND ?`,
+      [dataInicio, dataFim, dataInicio, dataFim]
+    );
+    for (const m of man) {
+      manual.set(Number(m.lid), {
+        grupo: m.grupo ?? null,
+        centroCusto: m.centro_custo ?? null,
+        natureza: m.natureza ?? null,
+        tipoResultado: TIPOS_RESULTADO.includes(m.tipo_resultado) ? m.tipo_resultado : "resultado"
+      });
+    }
+  }
+  const [regrasRows] = await db.$client.execute(`SELECT * FROM extrato_regras WHERE ativa = 1`);
+  const regras = regrasRows.map(rowParaRegra);
+  const chavePorLinha = /* @__PURE__ */ new Map();
+  for (const l of linhas) {
+    if (l.tipo !== "DEBITO") continue;
+    const ident = extrairIdentificadorFavorecido(l.descricao, l.complemento, l.numeroDocumento);
+    if (ident) chavePorLinha.set(l.id, ident.chave);
+  }
+  const favMap = /* @__PURE__ */ new Map();
+  const chaves = Array.from(new Set(chavePorLinha.values()));
+  for (let i = 0; i < chaves.length; i += 500) {
+    const lote = chaves.slice(i, i + 500);
+    const [favRows] = await db.$client.execute(
+      `SELECT chave, grupo, centro_custo, natureza FROM favorecido_categoria WHERE chave IN (${lote.map(() => "?").join(",")})`,
+      lote
+    );
+    for (const f of favRows) {
+      favMap.set(f.chave, { grupo: f.grupo ?? null, centroCusto: f.centro_custo ?? null, natureza: f.natureza ?? null });
+    }
+  }
+  const compradoresCnpj = /* @__PURE__ */ new Set();
+  try {
+    const [cd] = await db.$client.execute(
+      `SELECT cnpj_cpf FROM cargo_destinations WHERE is_buyer = 1 AND cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''`
+    );
+    for (const r of cd) {
+      const d = String(r.cnpj_cpf).replace(/\D/g, "");
+      if (d.length === 14) compradoresCnpj.add(d);
+    }
+  } catch {
+  }
+  try {
+    const [nf] = await db.$client.execute(
+      `SELECT DISTINCT cnpj_destinatario FROM notas_fiscais WHERE cnpj_destinatario IS NOT NULL AND cnpj_destinatario <> ''`
+    );
+    for (const r of nf) {
+      const d = String(r.cnpj_destinatario).replace(/\D/g, "");
+      if (d.length === 14) compradoresCnpj.add(d);
+    }
+  } catch {
+  }
+  return linhas.map((linha) => ({
+    linha,
+    c: classificarLinha(linha, {
+      manual,
+      regras,
+      compradoresCnpj,
+      favorecido: favMap.get(chavePorLinha.get(linha.id) ?? "") ?? null
+    })
+  }));
+}
+var periodoInput = z48.object({
+  dataInicio: z48.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dataFim: z48.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  conta: contaInput
+});
+var soPeriodo = z48.object({
+  dataInicio: z48.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dataFim: z48.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+});
+var SEM = "Sem classifica\xE7\xE3o";
+var financialRealRouter = router({
+  // ── Resumo de caixa do período ──
+  resumo: moduleProcedure(SLUG).input(periodoInput).query(async ({ input }) => {
+    const db = await getDbOrThrow();
+    const itens = await carregarLinhasClassificadas(db, input.dataInicio, input.dataFim, input.conta);
+    const tot = { entradasResultado: 0, saidasResultado: 0, entradasFinanceiro: 0, saidasFinanceiro: 0, transferencias: 0 };
+    const porMes = /* @__PURE__ */ new Map();
+    const arvore = /* @__PURE__ */ new Map();
+    const sem = { debitoQtd: 0, debitoValor: 0, creditoQtd: 0, creditoValor: 0 };
+    let movimentoSicoob = 0;
+    for (const { linha, c } of itens) {
+      if (!ehImportado(linha.id)) movimentoSicoob += linha.tipo === "CREDITO" ? linha.valor : -linha.valor;
+      const mes = linha.dataLancamento.slice(0, 7);
+      const m = porMes.get(mes) ?? { mes, entradas: 0, saidas: 0, entradasFin: 0, saidasFin: 0 };
+      const entrada = linha.tipo === "CREDITO";
+      const v = linha.valor;
+      if (c.tipoResultado === "resultado") {
+        if (entrada) {
+          tot.entradasResultado += v;
+          m.entradas += v;
+        } else {
+          tot.saidasResultado += v;
+          m.saidas += v;
+        }
+        const g = c.grupo ?? SEM, cc = c.centroCusto ?? SEM, n = c.natureza ?? SEM;
+        const k = `${entrada ? "e" : "s"}|${g}|${cc}|${n}`;
+        const a = arvore.get(k) ?? { tipo: entrada ? "entrada" : "saida", grupo: g, centroCusto: cc, natureza: n, valor: 0, qtd: 0 };
+        a.valor += v;
+        a.qtd += 1;
+        arvore.set(k, a);
+      } else if (c.tipoResultado === "financeiro_nao_resultado") {
+        if (entrada) {
+          tot.entradasFinanceiro += v;
+          m.entradasFin += v;
+        } else {
+          tot.saidasFinanceiro += v;
+          m.saidasFin += v;
+        }
+      } else {
+        tot.transferencias += entrada ? v : -v;
+      }
+      porMes.set(mes, m);
+      if (!estaClassificado(c)) {
+        if (entrada) {
+          sem.creditoQtd++;
+          sem.creditoValor += v;
+        } else {
+          sem.debitoQtd++;
+          sem.debitoValor += v;
+        }
+      }
+    }
+    const [ai, mi] = input.dataInicio.split("-").map(Number).slice(0, 2);
+    const [af, mf] = input.dataFim.split("-").map(Number).slice(0, 2);
+    let saldoInicial = null;
+    let saldoFinal = null;
+    try {
+      const [sI] = await db.$client.execute(`SELECT saldo_inicial FROM sicoob_saldo_mes WHERE ano = ? AND mes = ? LIMIT 1`, [ai, mi]);
+      const [sF] = await db.$client.execute(`SELECT saldo_final FROM sicoob_saldo_mes WHERE ano = ? AND mes = ? LIMIT 1`, [af, mf]);
+      if (sI[0]) saldoInicial = num2(sI[0].saldo_inicial);
+      if (sF[0]) saldoFinal = num2(sF[0].saldo_final);
+    } catch {
+    }
+    const r24 = (n) => Math.round(n * 100) / 100;
+    const variacaoSaldo = saldoInicial != null && saldoFinal != null ? saldoFinal - saldoInicial : null;
+    const incluiSicoob = input.conta === "todas" || input.conta === "sicoob";
+    return {
+      conciliacaoSaldo: variacaoSaldo != null && incluiSicoob ? { variacaoSaldo: r24(variacaoSaldo), variacaoLancamentos: r24(movimentoSicoob), diferenca: r24(variacaoSaldo - movimentoSicoob) } : null,
+      totais: {
+        entradasResultado: r24(tot.entradasResultado),
+        saidasResultado: r24(tot.saidasResultado),
+        resultadoCaixa: r24(tot.entradasResultado - tot.saidasResultado),
+        entradasFinanceiro: r24(tot.entradasFinanceiro),
+        saidasFinanceiro: r24(tot.saidasFinanceiro),
+        transferenciasLiquidas: r24(tot.transferencias),
+        lancamentos: itens.length
+      },
+      saldo: { inicial: saldoInicial, final: saldoFinal },
+      porMes: Array.from(porMes.values()).sort((a, b) => a.mes.localeCompare(b.mes)).map((m) => ({
+        mes: m.mes,
+        entradas: r24(m.entradas),
+        saidas: r24(m.saidas),
+        resultado: r24(m.entradas - m.saidas),
+        entradasFin: r24(m.entradasFin),
+        saidasFin: r24(m.saidasFin)
+      })),
+      arvore: Array.from(arvore.values()).map((a) => ({ ...a, valor: r24(a.valor) })),
+      semClassificacao: { ...sem, debitoValor: r24(sem.debitoValor), creditoValor: r24(sem.creditoValor) }
+    };
+  }),
+  // ── Lançamentos classificados (drill-down e fila "sem classificação") ──
+  lancamentos: moduleProcedure(SLUG).input(periodoInput.extend({
+    tipo: z48.enum(["todos", "DEBITO", "CREDITO"]).default("todos"),
+    situacao: z48.enum(["todas", "sem", "classificadas"]).default("todas"),
+    busca: z48.string().max(100).optional(),
+    grupo: z48.string().max(120).optional(),
+    centroCusto: z48.string().max(120).optional(),
+    natureza: z48.string().max(120).optional(),
+    tipoResultado: z48.enum(TIPOS_RESULTADO).optional(),
+    limit: z48.number().min(1).max(500).default(200),
+    offset: z48.number().min(0).default(0)
+  })).query(async ({ input }) => {
+    const db = await getDbOrThrow();
+    const itens = await carregarLinhasClassificadas(db, input.dataInicio, input.dataFim, input.conta);
+    const busca = input.busca ? input.busca.toUpperCase() : null;
+    const filtrados = itens.filter(({ linha, c }) => {
+      if (input.tipo !== "todos" && linha.tipo !== input.tipo) return false;
+      if (input.situacao === "sem" && estaClassificado(c)) return false;
+      if (input.situacao === "classificadas" && !estaClassificado(c)) return false;
+      if (input.tipoResultado && c.tipoResultado !== input.tipoResultado) return false;
+      if (input.grupo && (c.grupo ?? SEM) !== input.grupo) return false;
+      if (input.centroCusto && (c.centroCusto ?? SEM) !== input.centroCusto) return false;
+      if (input.natureza && (c.natureza ?? SEM) !== input.natureza) return false;
+      if (busca) {
+        const t2 = `${linha.descricao ?? ""} ${linha.complemento ?? ""} ${linha.numeroDocumento ?? ""}`.toUpperCase();
+        if (!t2.includes(busca)) return false;
+      }
+      return true;
+    });
+    const soma = filtrados.reduce((s, { linha }) => s + linha.valor, 0);
+    const pagina = filtrados.slice(input.offset, input.offset + input.limit);
+    return {
+      total: filtrados.length,
+      soma: Math.round(soma * 100) / 100,
+      itens: pagina.map(({ linha, c }) => ({
+        id: linha.id,
+        data: linha.dataLancamento,
+        tipo: linha.tipo,
+        descricao: linha.descricao,
+        complemento: linha.complemento,
+        numeroDocumento: linha.numeroDocumento,
+        valor: linha.valor,
+        conta: linha.conta ?? null,
+        grupo: c.grupo,
+        centroCusto: c.centroCusto,
+        natureza: c.natureza,
+        tipoResultado: c.tipoResultado,
+        origem: c.origem,
+        regraNome: c.regraNome
+      }))
+    };
+  }),
+  // ── Classificação manual por lançamento ──
+  classificar: moduleProcedure(SLUG).input(z48.object({
+    ids: z48.array(z48.number()).min(1).max(500),
+    grupo: z48.string().max(120).nullable(),
+    centroCusto: z48.string().max(120).nullable(),
+    natureza: z48.string().max(120).nullable(),
+    tipoResultado: z48.enum(TIPOS_RESULTADO).default("resultado")
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    const limpa = (s) => s && s.trim() ? s.trim() : null;
+    for (const id of input.ids) {
+      await db.$client.execute(
+        `INSERT INTO extrato_classificacao (fonte, lancamento_id, grupo, centro_custo, natureza, tipo_resultado, atualizado_por)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE grupo = VALUES(grupo), centro_custo = VALUES(centro_custo),
+             natureza = VALUES(natureza), tipo_resultado = VALUES(tipo_resultado), atualizado_por = VALUES(atualizado_por)`,
+        [ehImportado(id) ? "import" : "sicoob", idReal(id), limpa(input.grupo), limpa(input.centroCusto), limpa(input.natureza), input.tipoResultado, ctx.user.id ?? null]
+      );
+    }
+    return { atualizados: input.ids.length };
+  }),
+  removerClassificacaoManual: moduleProcedure(SLUG).input(z48.object({ ids: z48.array(z48.number()).min(1).max(500) })).mutation(async ({ input }) => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    for (const id of input.ids) {
+      await db.$client.execute(
+        `DELETE FROM extrato_classificacao WHERE fonte = ? AND lancamento_id = ?`,
+        [ehImportado(id) ? "import" : "sicoob", idReal(id)]
+      );
+    }
+    return { removidos: input.ids.length };
+  }),
+  // ── Opções de Grupo / Centro de custo / Natureza (favorecidos + regras + ajustes) ──
+  opcoes: moduleProcedure(SLUG).query(async () => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    const [rows2] = await db.$client.execute(
+      `SELECT DISTINCT grupo, centro_custo, natureza FROM (
+         SELECT grupo, centro_custo, natureza FROM favorecido_categoria
+         UNION SELECT grupo, centro_custo, natureza FROM extrato_regras
+         UNION SELECT grupo, centro_custo, natureza FROM extrato_classificacao
+       ) t WHERE grupo IS NOT NULL AND grupo <> '' ORDER BY grupo, centro_custo, natureza`
+    );
+    return {
+      combinacoes: rows2.map((r) => ({
+        grupo: r.grupo,
+        centroCusto: r.centro_custo ?? null,
+        natureza: r.natureza ?? null
+      }))
+    };
+  }),
+  // ── Regras ──
+  listRegras: moduleProcedure(SLUG).query(async () => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM extrato_regras ORDER BY prioridade ASC, id ASC`);
+    return rows2.map(rowParaRegra);
+  }),
+  salvarRegra: moduleProcedure(SLUG).input(z48.object({
+    id: z48.number().optional(),
+    nome: z48.string().min(1).max(160),
+    campo: z48.enum(["descricao", "complemento", "documento", "texto"]),
+    tipoLancamento: z48.enum(["DEBITO", "CREDITO", "AMBOS"]),
+    padrao: z48.string().min(1).max(255),
+    grupo: z48.string().max(120).nullable(),
+    centroCusto: z48.string().max(120).nullable(),
+    natureza: z48.string().max(120).nullable(),
+    tipoResultado: z48.enum(TIPOS_RESULTADO),
+    prioridade: z48.number().min(1).max(1e4).default(100),
+    ativa: z48.boolean().default(true)
+  })).mutation(async ({ input }) => {
+    if (input.padrao.startsWith("re:")) {
+      try {
+        new RegExp(input.padrao.slice(3), "i");
+      } catch {
+        throw new TRPCError36({ code: "BAD_REQUEST", message: "Express\xE3o regular inv\xE1lida" });
+      }
+    }
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    const p = [
+      input.nome,
+      input.campo,
+      input.tipoLancamento,
+      input.padrao,
+      input.grupo,
+      input.centroCusto,
+      input.natureza,
+      input.tipoResultado,
+      input.prioridade,
+      input.ativa ? 1 : 0
+    ];
+    if (input.id) {
+      await db.$client.execute(
+        `UPDATE extrato_regras SET nome=?, campo=?, tipo_lancamento=?, padrao=?, grupo=?, centro_custo=?, natureza=?,
+             tipo_resultado=?, prioridade=?, ativa=? WHERE id = ?`,
+        [...p, input.id]
+      );
+      return { id: input.id };
+    }
+    const [res] = await db.$client.execute(
+      `INSERT INTO extrato_regras (nome, campo, tipo_lancamento, padrao, grupo, centro_custo, natureza, tipo_resultado, prioridade, ativa)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      p
+    );
+    return { id: Number(res.insertId) };
+  }),
+  excluirRegra: moduleProcedure(SLUG).input(z48.object({ id: z48.number() })).mutation(async ({ input }) => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    await db.$client.execute(`DELETE FROM extrato_regras WHERE id = ?`, [input.id]);
+    return { success: true };
+  }),
+  // ── Entradas: faturado × recebido, boletos e NFs ──
+  entradas: moduleProcedure(SLUG).input(soPeriodo).query(async ({ input }) => {
+    const db = await getDbOrThrow();
+    return entradasDoPeriodo(db, input.dataInicio, input.dataFim);
+  }),
+  // ── Conta corrente dos compradores: faturado × recebido (PIX por CNPJ + boletos) ──
+  compradores: moduleProcedure(SLUG).input(soPeriodo).query(async ({ input }) => {
+    const db = await getDbOrThrow();
+    return contaCorrenteCompradores(db, input.dataInicio, input.dataFim);
+  }),
+  // ── Pendências de hoje: a receber e a pagar (somente o que ainda não foi baixado) ──
+  pendencias: moduleProcedure(SLUG).query(async () => {
+    const db = await getDbOrThrow();
+    return pendencias(db, (/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
+  }),
+  // ── Competência: custo da operação por bloco, equipamento e local (só tabelas do sistema) ──
+  competencia: moduleProcedure(SLUG).input(soPeriodo).query(async ({ input }) => {
+    const db = await getDbOrThrow();
+    return competenciaCustos(db, input.dataInicio, input.dataFim);
+  }),
+  // ── Resultado por cliente (origem da madeira): receita estimada × compra da madeira ──
+  resultadoPorCliente: moduleProcedure(SLUG).input(soPeriodo).query(async ({ input }) => {
+    const db = await getDbOrThrow();
+    const { resultadoPorCliente: resultadoPorCliente2 } = await Promise.resolve().then(() => (init_financeiroCliente(), financeiroCliente_exports));
+    return resultadoPorCliente2(db, input.dataInicio, input.dataFim);
+  }),
+  // ── Detalhe de um bloco de custo (os registros que formam o valor) ──
+  competenciaDetalhe: moduleProcedure(SLUG).input(soPeriodo.extend({ chave: z48.string().max(60) })).query(async ({ input }) => {
+    const db = await getDbOrThrow();
+    const { detalheBloco: detalheBloco2 } = await Promise.resolve().then(() => (init_financeiroDetalhe(), financeiroDetalhe_exports));
+    return detalheBloco2(db, input.chave, input.dataInicio, input.dataFim);
+  }),
+  // ── Conciliação: pagamentos marcados no sistema × débitos do banco ──
+  conciliacao: moduleProcedure(SLUG).input(periodoInput).query(async ({ input }) => {
+    const db = await getDbOrThrow();
+    const folga = (d, dias) => {
+      const x = /* @__PURE__ */ new Date(d + "T12:00:00");
+      x.setDate(x.getDate() + dias);
+      return x.toISOString().slice(0, 10);
+    };
+    const ini = folga(input.dataInicio, -7), fim = folga(input.dataFim, 7);
+    const [linhas, sistema] = await Promise.all([
+      carregarLinhasClassificadas(db, ini, fim, input.conta),
+      pagamentosDoSistema(db, ini, fim)
+    ]);
+    const debitos = linhas.filter((x) => x.linha.tipo === "DEBITO").map(({ linha, c }) => ({
+      id: linha.id,
+      data: linha.dataLancamento,
+      valor: linha.valor,
+      descricao: linha.descricao,
+      complemento: linha.complemento,
+      classificado: estaClassificado(c),
+      grupo: c.grupo,
+      centroCusto: c.centroCusto,
+      natureza: c.natureza,
+      tipoResultado: c.tipoResultado
+    }));
+    const m = casarPagamentos(sistema.pagamentos, debitos, 7);
+    const dentro = (d) => d >= input.dataInicio && d <= input.dataFim;
+    const r24 = (n) => Math.round(n * 100) / 100;
+    const soma = (a) => r24(a.reduce((s, x) => s + x.valor, 0));
+    const casados = m.casados.filter((c) => dentro(c.pagamento.data));
+    const pagamentosSemBanco = m.pagamentosSemBanco.filter((p) => dentro(p.data));
+    const debitosSemSistema = m.debitosSemSistema.filter((d) => dentro(d.data));
+    const debitosNoPeriodo = debitos.filter((d) => dentro(d.data));
+    const pagamentosNoPeriodo = sistema.pagamentos.filter((p) => dentro(p.data));
+    return {
+      resumo: {
+        debitosBanco: soma(debitosNoPeriodo),
+        pagamentosSistema: soma(pagamentosNoPeriodo),
+        casadosValor: r24(casados.reduce((s, c) => s + c.pagamento.valor, 0)),
+        casadosQtd: casados.length,
+        pagamentosSemBancoValor: soma(pagamentosSemBanco),
+        pagamentosSemBancoQtd: pagamentosSemBanco.length,
+        debitosSemSistemaValor: soma(debitosSemSistema),
+        debitosSemSistemaQtd: debitosSemSistema.length
+      },
+      casados: casados.map((c) => ({
+        tipoLabel: c.pagamento.tipoLabel,
+        descricao: c.pagamento.descricao,
+        valor: c.pagamento.valor,
+        dataSistema: c.pagamento.data,
+        dataBanco: c.debito.data,
+        diasDiferenca: c.diasDiferenca,
+        debitoId: c.debito.id,
+        debitoDescricao: c.debito.descricao,
+        debitoComplemento: c.debito.complemento,
+        classificado: c.debito.classificado,
+        sugestao: c.pagamento.sugestao
+      })),
+      pagamentosSemBanco: pagamentosSemBanco.map((p) => ({
+        tipoLabel: p.tipoLabel,
+        descricao: p.descricao,
+        valor: p.valor,
+        data: p.data
+      })),
+      debitosSemSistema: debitosSemSistema.sort((a, b) => b.valor - a.valor).slice(0, 100).map((d) => ({
+        id: d.id,
+        data: d.data,
+        valor: d.valor,
+        descricao: d.descricao,
+        complemento: d.complemento,
+        classificado: d.classificado,
+        grupo: d.grupo,
+        centroCusto: d.centroCusto,
+        natureza: d.natureza,
+        tipoResultado: d.tipoResultado
+      })),
+      erros: sistema.erros
+    };
+  }),
+  // ── Outras contas/cartões (importação OFX/CSV) ──
+  listContas: moduleProcedure(SLUG).query(async () => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    const [rows2] = await db.$client.execute(
+      `SELECT a.id, a.nome, a.banco, a.tipo, a.ativa,
+              (SELECT COUNT(*) FROM bank_transactions t WHERE t.account_id = a.id) AS qtd,
+              (SELECT MIN(data_lancamento) FROM bank_transactions t WHERE t.account_id = a.id) AS primeira,
+              (SELECT MAX(data_lancamento) FROM bank_transactions t WHERE t.account_id = a.id) AS ultima
+       FROM bank_accounts a ORDER BY a.nome`
+    );
+    return rows2.map((r) => ({
+      id: r.id,
+      nome: r.nome,
+      banco: r.banco ?? null,
+      tipo: r.tipo,
+      ativa: Number(r.ativa) === 1,
+      qtd: Number(r.qtd),
+      primeira: r.primeira ?? null,
+      ultima: r.ultima ?? null
+    }));
+  }),
+  criarConta: moduleProcedure(SLUG).input(z48.object({ nome: z48.string().min(1).max(120), banco: z48.string().max(80).nullable(), tipo: z48.enum(["conta", "cartao"]).default("conta") })).mutation(async ({ input }) => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    const [res] = await db.$client.execute(
+      `INSERT INTO bank_accounts (nome, banco, tipo) VALUES (?, ?, ?)`,
+      [input.nome.trim(), input.banco?.trim() || null, input.tipo]
+    );
+    return { id: Number(res.insertId) };
+  }),
+  excluirConta: moduleProcedure(SLUG).input(z48.object({ id: z48.number() })).mutation(async ({ input }) => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    await db.$client.execute(
+      `DELETE FROM extrato_classificacao WHERE fonte = 'import' AND lancamento_id IN (SELECT id FROM bank_transactions WHERE account_id = ?)`,
+      [input.id]
+    );
+    await db.$client.execute(`DELETE FROM bank_transactions WHERE account_id = ?`, [input.id]);
+    await db.$client.execute(`DELETE FROM bank_accounts WHERE id = ?`, [input.id]);
+    return { success: true };
+  }),
+  importarExtrato: moduleProcedure(SLUG).input(z48.object({
+    contaId: z48.number(),
+    nomeArquivo: z48.string().max(200).optional(),
+    conteudo: z48.string().min(1).max(8e6)
+  })).mutation(async ({ input }) => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    const [c] = await db.$client.execute(`SELECT id FROM bank_accounts WHERE id = ?`, [input.contaId]);
+    if (!c[0]) throw new TRPCError36({ code: "NOT_FOUND", message: "Conta n\xE3o encontrada" });
+    const parsed = parseExtrato(input.conteudo, input.nomeArquivo);
+    let novos = 0;
+    for (const t2 of parsed.transacoes) {
+      const [res] = await db.$client.execute(
+        `INSERT IGNORE INTO bank_transactions (account_id, data_lancamento, descricao, documento, valor, hash)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        [input.contaId, t2.data, t2.descricao.slice(0, 500), t2.documento?.slice(0, 100) ?? null, t2.valor.toFixed(2), t2.hash]
+      );
+      novos += Number(res.affectedRows ?? 0);
+    }
+    return {
+      formato: parsed.formato,
+      lidos: parsed.transacoes.length,
+      novos,
+      duplicados: parsed.transacoes.length - novos,
+      avisos: parsed.avisos.slice(0, 5)
+    };
+  }),
+  // ── Sincronização do extrato (backfill de meses) — somente administrador ──
+  sincronizarPeriodo: adminProcedure.input(z48.object({
+    anoInicio: z48.number().min(2020).max(2100),
+    mesInicio: z48.number().min(1).max(12),
+    anoFim: z48.number().min(2020).max(2100),
+    mesFim: z48.number().min(1).max(12)
+  })).mutation(async ({ input }) => {
+    const inicio = input.anoInicio * 12 + (input.mesInicio - 1);
+    const fim = input.anoFim * 12 + (input.mesFim - 1);
+    if (fim < inicio) throw new TRPCError36({ code: "BAD_REQUEST", message: "Per\xEDodo inv\xE1lido" });
+    if (fim - inicio + 1 > 24) throw new TRPCError36({ code: "BAD_REQUEST", message: "M\xE1ximo de 24 meses por vez" });
+    const { syncSicoobExtrato: syncSicoobExtrato2 } = await Promise.resolve().then(() => (init_sicoob(), sicoob_exports));
+    const resultado = [];
+    for (let k = inicio; k <= fim; k++) {
+      const ano = Math.floor(k / 12), mes = k % 12 + 1;
+      const r = await syncSicoobExtrato2(mes, ano);
+      resultado.push({ mes, ano, synced: r.synced ?? 0, error: r.error ?? null });
+      await new Promise((res) => setTimeout(res, 1e3));
+    }
+    return { resultado };
+  })
+});
+
+// server/routers.ts
+init_weeklyGoals2();
+
 // server/routers/contaAzul.ts
 init_trpc();
-import { z as z48 } from "zod";
+import { z as z50 } from "zod";
 import axios2 from "axios";
 import zlib from "zlib";
 
@@ -22774,8 +25496,8 @@ function somarDiasUteis(dataISO, dias) {
 function normalizarCnpj(cnpj) {
   return (cnpj ?? "").replace(/\D/g, "");
 }
-function parseDataISO(data) {
-  const [ano, mes, dia] = data.split("-").map(Number);
+function parseDataISO(data2) {
+  const [ano, mes, dia] = data2.split("-").map(Number);
   return { ano, mes, dia };
 }
 function toISO2(ano, mes, dia) {
@@ -22844,7 +25566,7 @@ function pertenceAoPeriodo(dataISO, mes, ano) {
   const [a, m] = dataISO.split("-").map(Number);
   return a === ano && m === mes;
 }
-function calcularResumoNFsSemBoleto(nfs, mes, ano, hojeISO) {
+function calcularResumoNFsSemBoleto(nfs, mes, ano, hojeISO2) {
   let vencidos = 0, vencemHoje = 0, aVencer = 0, recebidos = 0;
   for (const nf of nfs) {
     if (nf.statusNfInterno === "cancelado") continue;
@@ -22856,8 +25578,8 @@ function calcularResumoNFsSemBoleto(nfs, mes, ano, hojeISO) {
     }
     if (!nf.dataPrevisaoPagamento) continue;
     if (!pertenceAoPeriodo(nf.dataPrevisaoPagamento, mes, ano)) continue;
-    if (nf.dataPrevisaoPagamento < hojeISO) vencidos += nf.valor;
-    else if (nf.dataPrevisaoPagamento === hojeISO) vencemHoje += nf.valor;
+    if (nf.dataPrevisaoPagamento < hojeISO2) vencidos += nf.valor;
+    else if (nf.dataPrevisaoPagamento === hojeISO2) vencemHoje += nf.valor;
     else aVencer += nf.valor;
   }
   return {
@@ -22885,10 +25607,10 @@ async function getDbInstance() {
   return getDb2();
 }
 async function getStoredRefreshToken(db) {
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT refresh_token FROM contaazul_tokens ORDER BY id DESC LIMIT 1`
   );
-  return rows?.[0]?.refresh_token ?? null;
+  return rows2?.[0]?.refresh_token ?? null;
 }
 async function persistTokens(db, refreshToken, accessToken, expiresAt) {
   await db.$client.execute(
@@ -22988,12 +25710,12 @@ function temEventoDeCancelamento(xmls) {
   return xmls.some((x) => x.includes("<tpEvento>110111</tpEvento>") && /<cStat>(135|155)<[/]cStat>/.test(x));
 }
 async function reconciliarNotasCanceladas(db, chavesListadas, inicioStr, fimStr) {
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT id, chave_acesso, numero_nota, status_nf_interno FROM notas_fiscais
       WHERE data_emissao BETWEEN ? AND ? AND status_nf_interno != 'cancelado'`,
     [inicioStr, fimStr]
   );
-  const candidatas = rows.filter((r) => r.chave_acesso && !chavesListadas.has(r.chave_acesso));
+  const candidatas = rows2.filter((r) => r.chave_acesso && !chavesListadas.has(r.chave_acesso));
   const canceladas = [];
   const erros = [];
   for (let i = 0; i < candidatas.length; i += 3) {
@@ -23041,26 +25763,26 @@ function isStatusCancelamento(statusFiscal) {
   return /cancel/i.test(statusFiscal ?? "");
 }
 async function carregarRegrasPrazo(db) {
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT cnpj, tipo_regra as tipoRegra, parametros FROM cliente_prazo_pagamento WHERE ativo = 1`
   );
-  return rows ?? [];
+  return rows2 ?? [];
 }
 async function temBoletoCorrespondente(db, numeroNota, cnpj) {
   if (!numeroNota || !cnpj) return false;
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT id FROM sicoob_boletos WHERE nf_referente = ? AND cnpj_pagador = ? LIMIT 1`,
     [numeroNota, cnpj]
   );
-  return (rows ?? []).length > 0;
+  return (rows2 ?? []).length > 0;
 }
 async function buscarDataEntregaCarga(db, numeroNota) {
   if (!numeroNota) return null;
-  const [rows] = await db.$client.execute(
+  const [rows2] = await db.$client.execute(
     `SELECT delivery_date FROM cargo_loads WHERE TRIM(SUBSTRING_INDEX(invoice_number, 'NF ', -1)) = ? LIMIT 1`,
     [numeroNota]
   );
-  const deliveryDate = rows?.[0]?.delivery_date ?? null;
+  const deliveryDate = rows2?.[0]?.delivery_date ?? null;
   if (!deliveryDate) return null;
   return deliveryDate instanceof Date ? deliveryDate.toISOString().slice(0, 10) : String(deliveryDate).slice(0, 10);
 }
@@ -23218,7 +25940,7 @@ async function syncNotasFiscais(mes, ano) {
   return { synced, errors };
 }
 var contaAzulRouter = router({
-  setRefreshToken: protectedProcedure.input(z48.object({ refreshToken: z48.string().min(10) })).mutation(async ({ input }) => {
+  setRefreshToken: protectedProcedure.input(z50.object({ refreshToken: z50.string().min(10) })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(
@@ -23242,18 +25964,18 @@ var contaAzulRouter = router({
       configurado: Number(tokenRows?.[0]?.cnt ?? 0) > 0
     };
   }),
-  listNotasFiscais: protectedProcedure.input(z48.object({
-    mes: z48.number().min(1).max(12),
-    ano: z48.number().min(2020).max(2100),
-    pesquisa: z48.string().optional(),
-    incluirCanceladas: z48.boolean().optional()
+  listNotasFiscais: protectedProcedure.input(z50.object({
+    mes: z50.number().min(1).max(12),
+    ano: z50.number().min(2020).max(2100),
+    pesquisa: z50.string().optional(),
+    incluirCanceladas: z50.boolean().optional()
   })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { notas: [], error: "DB indispon\xEDvel" };
     const pClause = input.pesquisa ? `AND (nf.nome_destinatario LIKE ? OR nf.cnpj_destinatario LIKE ? OR nf.numero_nota LIKE ?)` : "";
     const pParams = input.pesquisa ? [`%${input.pesquisa}%`, `%${input.pesquisa}%`, `%${input.pesquisa}%`] : [];
     const canceladasClause = input.incluirCanceladas ? "" : `AND nf.status_nf_interno != 'cancelado'`;
-    const [rows] = await db.$client.execute(
+    const [rows2] = await db.$client.execute(
       `SELECT nf.*,
            CASE WHEN sb.id IS NOT NULL THEN 1 ELSE 0 END AS tem_boleto,
            sb.nosso_numero                                AS boleto_nosso_numero,
@@ -23279,14 +26001,14 @@ var contaAzulRouter = router({
          ORDER BY nf.data_emissao ASC`,
       [input.mes, input.ano, ...pParams]
     );
-    return { notas: rows ?? [], error: null };
+    return { notas: rows2 ?? [], error: null };
   }),
   // Resumo (Vencidos/Vencem hoje/A vencer/Recebidos/Total) apenas das NFs sem boleto correspondente.
   // O frontend soma este resultado ao summaryBoletos (Sicoob) para formar os cards finais.
-  summaryNFsSemBoleto: protectedProcedure.input(z48.object({ mes: z48.number().min(1).max(12), ano: z48.number().min(2020).max(2100) })).query(async ({ input }) => {
+  summaryNFsSemBoleto: protectedProcedure.input(z50.object({ mes: z50.number().min(1).max(12), ano: z50.number().min(2020).max(2100) })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { vencidos: 0, vencemHoje: 0, aVencer: 0, recebidos: 0, total: 0, error: "DB indispon\xEDvel" };
-    const [rows] = await db.$client.execute(
+    const [rows2] = await db.$client.execute(
       `SELECT nf.valor_total, nf.status_nf_interno, nf.data_pagamento_confirmado, nf.data_previsao_pagamento
          FROM notas_fiscais nf
          LEFT JOIN sicoob_boletos sb
@@ -23300,7 +26022,7 @@ var contaAzulRouter = router({
            )`,
       [`${input.ano}-${String(input.mes).padStart(2, "0")}%`, `${input.ano}-${String(input.mes).padStart(2, "0")}%`]
     );
-    const nfs = (rows ?? []).map((r) => ({
+    const nfs = (rows2 ?? []).map((r) => ({
       valor: parseFloat(r.valor_total ?? "0"),
       statusNfInterno: r.status_nf_interno,
       dataPagamentoConfirmado: r.data_pagamento_confirmado,
@@ -23311,19 +26033,19 @@ var contaAzulRouter = router({
     return { ...resumo, error: null };
   }),
   // Altera o Status NF (manual). Registra auditoria e, se "pago", a data de pagamento confirmado.
-  updateStatusNf: protectedProcedure.input(z48.object({
-    id: z48.number(),
-    novoStatus: z48.enum(["em_aberto", "pago", "cancelado"]),
-    dataPagamentoConfirmado: z48.string().optional()
+  updateStatusNf: protectedProcedure.input(z50.object({
+    id: z50.number(),
+    novoStatus: z50.enum(["em_aberto", "pago", "cancelado"]),
+    dataPagamentoConfirmado: z50.string().optional()
     // "YYYY-MM-DD" — obrigatório apenas quando novoStatus = pago (default: hoje)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
-    const [rows] = await db.$client.execute(
+    const [rows2] = await db.$client.execute(
       `SELECT status_nf_interno FROM notas_fiscais WHERE id = ?`,
       [input.id]
     );
-    const atual = rows?.[0];
+    const atual = rows2?.[0];
     if (!atual) throw new Error("NF n\xE3o encontrada");
     const statusAnterior = atual.status_nf_interno;
     const hoje = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -23343,7 +26065,7 @@ var contaAzulRouter = router({
   // Guarda o valor original (só na primeira edição) e registra no log de auditoria com o
   // Anexa/troca o comprovante de pagamento da NF. O upload em si (Cloudinary) acontece no
   // cliente; aqui só grava a URL já pronta.
-  updateReceiptNF: protectedProcedure.input(z48.object({ id: z48.number(), receiptUrl: z48.string().url() })).mutation(async ({ input }) => {
+  updateReceiptNF: protectedProcedure.input(z50.object({ id: z50.number(), receiptUrl: z50.string().url() })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(`UPDATE notas_fiscais SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
@@ -23351,14 +26073,14 @@ var contaAzulRouter = router({
   }),
   // motivo — comum quando o cliente desconta na hora de pagar por divergência de peso
   // entre o que a NF declara e o que foi efetivamente entregue/pesado.
-  updateValorNF: protectedProcedure.input(z48.object({ id: z48.number(), valor: z48.string(), observacao: z48.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
+  updateValorNF: protectedProcedure.input(z50.object({ id: z50.number(), valor: z50.string(), observacao: z50.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
-    const [rows] = await db.$client.execute(
+    const [rows2] = await db.$client.execute(
       `SELECT valor_total, valor_original FROM notas_fiscais WHERE id = ?`,
       [input.id]
     );
-    const atual = rows?.[0];
+    const atual = rows2?.[0];
     if (!atual) throw new Error("NF n\xE3o encontrada");
     await db.$client.execute(
       `UPDATE notas_fiscais SET valor_total = ?, valor_editado = 1, valor_original = COALESCE(valor_original, ?) WHERE id = ?`,
@@ -23372,16 +26094,16 @@ var contaAzulRouter = router({
     return { success: true };
   }),
   // Histórico de alterações de uma NF (auditoria)
-  historicoStatusNf: protectedProcedure.input(z48.object({ notaFiscalId: z48.number() })).query(async ({ input }) => {
+  historicoStatusNf: protectedProcedure.input(z50.object({ notaFiscalId: z50.number() })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { historico: [], error: "DB indispon\xEDvel" };
-    const [rows] = await db.$client.execute(
+    const [rows2] = await db.$client.execute(
       `SELECT * FROM notas_fiscais_status_log WHERE nota_fiscal_id = ? ORDER BY alterado_em DESC`,
       [input.notaFiscalId]
     );
-    return { historico: rows ?? [], error: null };
+    return { historico: rows2 ?? [], error: null };
   }),
-  syncNotasFiscais: protectedProcedure.input(z48.object({ mes: z48.number().min(1).max(12), ano: z48.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+  syncNotasFiscais: protectedProcedure.input(z50.object({ mes: z50.number().min(1).max(12), ano: z50.number().min(2020).max(2100) })).mutation(async ({ input }) => {
     try {
       return { success: true, ...await syncNotasFiscais(input.mes, input.ano) };
     } catch (e) {
@@ -23395,7 +26117,7 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z49 } from "zod";
+import { z as z51 } from "zod";
 import { desc as desc33, eq as eq44, and as and26, sql as sql30 } from "drizzle-orm";
 async function getNextActionCode(db) {
   if (!db) return "AC-00001";
@@ -23403,12 +26125,12 @@ async function getNextActionCode(db) {
     const [row] = await db.execute(sql30`
       SELECT action_code FROM fiscal_notes ORDER BY id DESC LIMIT 1
     `);
-    const rows = row;
-    if (!rows || rows.length === 0) return "AC-00001";
-    const last = rows[0]?.action_code;
+    const rows2 = row;
+    if (!rows2 || rows2.length === 0) return "AC-00001";
+    const last = rows2[0]?.action_code;
     if (!last) return "AC-00001";
-    const num2 = parseInt(last.replace("AC-", ""), 10);
-    return `AC-${String(num2 + 1).padStart(5, "0")}`;
+    const num3 = parseInt(last.replace("AC-", ""), 10);
+    return `AC-${String(num3 + 1).padStart(5, "0")}`;
   } catch {
     return "AC-00001";
   }
@@ -23420,9 +26142,9 @@ var fiscalNotesRouter = router({
     return { actionCode: await getNextActionCode(db) };
   }),
   // Listar todas as notas com filtros
-  list: protectedProcedure.input(z49.object({
-    quantityType: z49.enum(["m3", "ton", "all"]).optional(),
-    status: z49.enum(["available", "used", "all"]).optional()
+  list: protectedProcedure.input(z51.object({
+    quantityType: z51.enum(["m3", "ton", "all"]).optional(),
+    status: z51.enum(["available", "used", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -23433,12 +26155,12 @@ var fiscalNotesRouter = router({
     if (input?.status && input.status !== "all") {
       conditions.push(eq44(fiscalNotes.status, input.status));
     }
-    const rows = await db.select().from(fiscalNotes).where(conditions.length > 0 ? and26(...conditions) : void 0).orderBy(desc33(fiscalNotes.id));
-    return rows;
+    const rows2 = await db.select().from(fiscalNotes).where(conditions.length > 0 ? and26(...conditions) : void 0).orderBy(desc33(fiscalNotes.id));
+    return rows2;
   }),
   // Listar apenas notas disponíveis para o select no Controle de Cargas
-  getAvailable: protectedProcedure.input(z49.object({
-    quantityType: z49.enum(["m3", "ton", "all"]).optional()
+  getAvailable: protectedProcedure.input(z51.object({
+    quantityType: z51.enum(["m3", "ton", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -23446,20 +26168,20 @@ var fiscalNotesRouter = router({
     if (input?.quantityType && input.quantityType !== "all") {
       conditions.push(eq44(fiscalNotes.quantityType, input.quantityType));
     }
-    const rows = await db.select().from(fiscalNotes).where(and26(...conditions)).orderBy(desc33(fiscalNotes.id));
-    return rows;
+    const rows2 = await db.select().from(fiscalNotes).where(and26(...conditions)).orderBy(desc33(fiscalNotes.id));
+    return rows2;
   }),
   // Criar nova nota/ação
-  create: protectedProcedure.input(z49.object({
-    invoiceNumber: z49.string().optional(),
-    issueDate: z49.string(),
-    quantityType: z49.enum(["m3", "ton"]),
-    quantity: z49.string(),
-    fileBase64: z49.string().optional(),
+  create: protectedProcedure.input(z51.object({
+    invoiceNumber: z51.string().optional(),
+    issueDate: z51.string(),
+    quantityType: z51.enum(["m3", "ton"]),
+    quantity: z51.string(),
+    fileBase64: z51.string().optional(),
     // base64 do arquivo
-    fileName: z49.string().optional(),
-    fileMimeType: z49.string().optional(),
-    notes: z49.string().optional()
+    fileName: z51.string().optional(),
+    fileMimeType: z51.string().optional(),
+    notes: z51.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -23489,13 +26211,13 @@ var fiscalNotesRouter = router({
     return { success: true, actionCode };
   }),
   // Marcar nota como utilizada (chamado ao salvar uma carga)
-  markAsUsed: protectedProcedure.input(z49.object({
-    id: z49.number(),
-    cargoId: z49.number().optional(),
-    clientId: z49.number().optional(),
-    clientName: z49.string().optional(),
-    destination: z49.string().optional(),
-    workLocation: z49.string().optional()
+  markAsUsed: protectedProcedure.input(z51.object({
+    id: z51.number(),
+    cargoId: z51.number().optional(),
+    clientId: z51.number().optional(),
+    clientName: z51.string().optional(),
+    destination: z51.string().optional(),
+    workLocation: z51.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -23516,16 +26238,16 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Editar nota/ação (data, quantidade, NF, observações, arquivo)
-  update: protectedProcedure.input(z49.object({
-    id: z49.number(),
-    invoiceNumber: z49.string().optional(),
-    issueDate: z49.string().optional(),
-    quantityType: z49.enum(["m3", "ton"]).optional(),
-    quantity: z49.string().optional(),
-    fileBase64: z49.string().optional(),
-    fileName: z49.string().optional(),
-    fileMimeType: z49.string().optional(),
-    notes: z49.string().optional()
+  update: protectedProcedure.input(z51.object({
+    id: z51.number(),
+    invoiceNumber: z51.string().optional(),
+    issueDate: z51.string().optional(),
+    quantityType: z51.enum(["m3", "ton"]).optional(),
+    quantity: z51.string().optional(),
+    fileBase64: z51.string().optional(),
+    fileName: z51.string().optional(),
+    fileMimeType: z51.string().optional(),
+    notes: z51.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -23552,7 +26274,7 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Liberar nota (desfazer uso — admin)
-  release: protectedProcedure.input(z49.object({ id: z49.number() })).mutation(async ({ input }) => {
+  release: protectedProcedure.input(z51.object({ id: z51.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.update(fiscalNotes).set({
@@ -23565,24 +26287,24 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Deletar nota (somente disponíveis)
-  delete: protectedProcedure.input(z49.object({ id: z49.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z51.object({ id: z51.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.delete(fiscalNotes).where(eq44(fiscalNotes.id, input.id));
     return { success: true };
   }),
   // Relatório-planilha: notas com dados da carga, local e destino
-  report: protectedProcedure.input(z49.object({
-    workLocationId: z49.number().optional(),
-    destinationId: z49.number().optional(),
-    dateFrom: z49.string().optional(),
-    dateTo: z49.string().optional(),
-    search: z49.string().optional(),
-    limit: z49.number().optional().default(500)
+  report: protectedProcedure.input(z51.object({
+    workLocationId: z51.number().optional(),
+    destinationId: z51.number().optional(),
+    dateFrom: z51.string().optional(),
+    dateTo: z51.string().optional(),
+    search: z51.string().optional(),
+    limit: z51.number().optional().default(500)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select({
+    const rows2 = await db.select({
       noteId: fiscalNotes.id,
       actionCode: fiscalNotes.actionCode,
       noteInvoiceNumber: fiscalNotes.invoiceNumber,
@@ -23614,7 +26336,7 @@ var fiscalNotesRouter = router({
       destinationNickname: cargoDestinations.nickname,
       destinationPriceType: cargoDestinations.priceType
     }).from(fiscalNotes).leftJoin(cargoLoads, eq44(fiscalNotes.usedByCargoId, cargoLoads.id)).leftJoin(gpsLocations, eq44(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(cargoDestinations, eq44(cargoLoads.destinationId, cargoDestinations.id)).orderBy(desc33(fiscalNotes.id)).limit(input?.limit ?? 500);
-    let filtered = rows;
+    let filtered = rows2;
     if (input?.workLocationId) filtered = filtered.filter((r) => r.cargoWorkLocationId === input.workLocationId);
     if (input?.destinationId) {
       const rawId = input.destinationId;
@@ -23649,7 +26371,7 @@ var fiscalNotesRouter = router({
     const db = await getDb();
     if (!db) return { total: 0, available: 0, used: 0, m3Available: 0, tonAvailable: 0 };
     try {
-      const [rows] = await db.execute(sql30`
+      const [rows2] = await db.execute(sql30`
         SELECT
           COUNT(*) as total,
           SUM(status = 'available') as available,
@@ -23658,7 +26380,7 @@ var fiscalNotesRouter = router({
           SUM(status = 'available' AND quantity_type = 'ton') as tonAvailable
         FROM fiscal_notes
       `);
-      const r = rows[0] || {};
+      const r = rows2[0] || {};
       return {
         total: Number(r.total) || 0,
         available: Number(r.available) || 0,
@@ -23675,7 +26397,7 @@ var fiscalNotesRouter = router({
 // server/routers/notificationSettings.ts
 init_trpc();
 init_db();
-import { z as z50 } from "zod";
+import { z as z52 } from "zod";
 import { sql as sql31 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
@@ -23732,10 +26454,10 @@ async function ensureTable(db) {
   `);
 }
 async function getSetting(db, key) {
-  const rows = await db.execute(sql31`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
-  const data = Array.isArray(rows[0]) ? rows[0] : rows;
-  if (!data || data.length === 0) return null;
-  const val = data[0]?.value;
+  const rows2 = await db.execute(sql31`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
+  const data2 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
+  if (!data2 || data2.length === 0) return null;
+  const val = data2[0]?.value;
   if (!val) return null;
   return typeof val === "string" ? JSON.parse(val) : val;
 }
@@ -23788,16 +26510,16 @@ var notificationSettingsRouter = router({
     }
     let collaborators5 = [];
     try {
-      const rows = await db.execute(sql31`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
-      const data = Array.isArray(rows[0]) ? rows[0] : rows;
-      collaborators5 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
+      const rows2 = await db.execute(sql31`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
+      const data2 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
+      collaborators5 = (data2 || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
     }
     let clients3 = [];
     try {
-      const rows = await db.execute(sql31`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
-      const data = Array.isArray(rows[0]) ? rows[0] : rows;
-      clients3 = (data || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
+      const rows2 = await db.execute(sql31`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
+      const data2 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
+      clients3 = (data2 || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
     }
     return {
@@ -23816,11 +26538,11 @@ var notificationSettingsRouter = router({
   // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
   // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
   // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
-  updateCargoNfResponsible: protectedProcedure.input(z50.object({
-    recipients: z50.array(z50.object({
-      collaboratorId: z50.number().nullable(),
-      manualName: z50.string().nullable().optional(),
-      manualPhone: z50.string().nullable().optional()
+  updateCargoNfResponsible: protectedProcedure.input(z52.object({
+    recipients: z52.array(z52.object({
+      collaboratorId: z52.number().nullable(),
+      manualName: z52.string().nullable().optional(),
+      manualPhone: z52.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -23830,11 +26552,11 @@ var notificationSettingsRouter = router({
     return { ok: true };
   }),
   // Idem, pra quem recebe o aviso de "nova solicitação de compra".
-  updatePurchaseRequestNewResponsible: protectedProcedure.input(z50.object({
-    recipients: z50.array(z50.object({
-      collaboratorId: z50.number().nullable(),
-      manualName: z50.string().nullable().optional(),
-      manualPhone: z50.string().nullable().optional()
+  updatePurchaseRequestNewResponsible: protectedProcedure.input(z52.object({
+    recipients: z52.array(z52.object({
+      collaboratorId: z52.number().nullable(),
+      manualName: z52.string().nullable().optional(),
+      manualPhone: z52.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -23843,12 +26565,12 @@ var notificationSettingsRouter = router({
     await setSetting(db, "purchaseRequestNewResponsible", input);
     return { ok: true };
   }),
-  update: protectedProcedure.input(z50.record(z50.string(), z50.object({
-    enabled: z50.boolean(),
-    hour: z50.number().int().min(0).max(23),
-    minute: z50.number().int().min(0).max(59),
-    weekday: z50.number().int().min(0).max(6).nullable(),
-    whatsappCollaboratorIds: z50.array(z50.number())
+  update: protectedProcedure.input(z52.record(z52.string(), z52.object({
+    enabled: z52.boolean(),
+    hour: z52.number().int().min(0).max(23),
+    minute: z52.number().int().min(0).max(59),
+    weekday: z52.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z52.array(z52.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -23856,9 +26578,9 @@ var notificationSettingsRouter = router({
     await setSetting(db, "jobConfig", input);
     return { ok: true };
   }),
-  updateClientConfig: protectedProcedure.input(z50.record(z50.string(), z50.object({
-    enabled: z50.boolean(),
-    clientIds: z50.array(z50.number())
+  updateClientConfig: protectedProcedure.input(z52.record(z52.string(), z52.object({
+    enabled: z52.boolean(),
+    clientIds: z52.array(z52.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -23869,7 +26591,7 @@ var notificationSettingsRouter = router({
 });
 
 // server/routers.ts
-import { z as z51 } from "zod";
+import { z as z53 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -24051,10 +26773,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z51.object({
-      name: z51.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z51.string().email("Email inv\xE1lido"),
-      password: z51.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z53.object({
+      name: z53.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z53.string().email("Email inv\xE1lido"),
+      password: z53.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -24069,9 +26791,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z51.object({
-      email: z51.string().email("Email inv\xE1lido"),
-      password: z51.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z53.object({
+      email: z53.string().email("Email inv\xE1lido"),
+      password: z53.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -24090,11 +26812,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z51.object({
-      seedKey: z51.string(),
-      email: z51.string().email(),
-      name: z51.string(),
-      password: z51.string().min(4)
+    seedAdmin: publicProcedure.input(z53.object({
+      seedKey: z53.string(),
+      email: z53.string().email(),
+      name: z53.string(),
+      password: z53.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -24104,9 +26826,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z51.object({
-      email: z51.string().email("Email inv\xE1lido"),
-      origin: z51.string().url().optional()
+    forgotPassword: publicProcedure.input(z53.object({
+      email: z53.string().email("Email inv\xE1lido"),
+      origin: z53.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -24120,9 +26842,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z51.object({
-      token: z51.string().min(1),
-      password: z51.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z53.object({
+      token: z53.string().min(1),
+      password: z53.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -24191,7 +26913,7 @@ var appRouter = router({
   notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z51.object({ key: z51.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z53.object({ key: z53.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -24243,6 +26965,8 @@ var appRouter = router({
   financialConsolidated: financialConsolidatedRouter,
   fiscalNotes: fiscalNotesRouter,
   sicoob: sicoobRouter,
+  financialReal: financialRealRouter,
+  weeklyGoals: weeklyGoalsRouter,
   contaAzul: contaAzulRouter
   // TODO: add feature routers heree, e.g.
   // todo: router({
@@ -24424,8 +27148,8 @@ function isValidSignature(req) {
   }
 }
 async function getState(db, phone) {
-  const [rows] = await db.execute(sql32`SELECT flow, step, payload FROM whatsapp_conversation_state WHERE phone = ${phone} LIMIT 1`);
-  const row = rows[0];
+  const [rows2] = await db.execute(sql32`SELECT flow, step, payload FROM whatsapp_conversation_state WHERE phone = ${phone} LIMIT 1`);
+  const row = rows2[0];
   if (!row) return null;
   let payload = {};
   try {
@@ -24452,12 +27176,12 @@ async function sendMainMenu(toPhone) {
 }
 async function sendCategoryList(toPhone, db) {
   const [cats] = await db.execute(sql32`SELECT id, name FROM purchase_categories ORDER BY name LIMIT 10`);
-  const rows = cats.map((c) => ({ id: `cat_${c.id}`, title: c.name.slice(0, 24) }));
-  if (rows.length === 0) {
+  const rows2 = cats.map((c) => ({ id: `cat_${c.id}`, title: c.name.slice(0, 24) }));
+  if (rows2.length === 0) {
     await sendWhatsAppText(toPhone, "Nenhuma categoria cadastrada no sistema ainda. Pe\xE7a pro financeiro cadastrar uma categoria antes de pedir por aqui.");
     return;
   }
-  await sendWhatsAppList(toPhone, "Qual a categoria do que voc\xEA precisa comprar?", "Escolher categoria", rows);
+  await sendWhatsAppList(toPhone, "Qual a categoria do que voc\xEA precisa comprar?", "Escolher categoria", rows2);
 }
 function formatSummary(payload) {
   const lines = (payload.items || []).map((it, i) => `${i + 1}. ${it.name} \u2014 ${it.quantity} ${it.unit}${it.packageSize ? ` de ${String(it.packageSize).replace(".", ",")} ${it.packageUnit}` : ""}`);
@@ -24539,8 +27263,8 @@ async function handleMenuChoice(db, toPhone, stateKey, replyId) {
 }
 async function searchStockProducts(db, query) {
   const like4 = `%${query.trim()}%`;
-  const [rows] = await db.execute(sql32`SELECT id, name, unit FROM stock_products WHERE active = 1 AND name LIKE ${like4} ORDER BY name LIMIT 10`);
-  return rows;
+  const [rows2] = await db.execute(sql32`SELECT id, name, unit FROM stock_products WHERE active = 1 AND name LIKE ${like4} ORDER BY name LIMIT 10`);
+  return rows2;
 }
 async function sendStockBalance(db, toPhone, productId) {
   const [prodRows] = await db.execute(sql32`SELECT name, unit FROM stock_products WHERE id = ${productId} LIMIT 1`);
@@ -24555,14 +27279,14 @@ async function sendStockBalance(db, toPhone, productId) {
     WHERE b.product_id = ${productId} AND b.quantity <> 0
     ORDER BY l.name
   `);
-  const rows = balRows;
-  if (rows.length === 0) {
+  const rows2 = balRows;
+  if (rows2.length === 0) {
     await sendWhatsAppText(toPhone, `*${p.name}*
 Sem estoque em nenhum local no momento.`);
     return;
   }
-  const total = rows.reduce((s, r) => s + Number(r.quantity), 0);
-  const lines = rows.map((r) => `\u2022 ${r.locationName}: ${Number(r.quantity).toLocaleString("pt-BR")} ${p.unit}`);
+  const total = rows2.reduce((s, r) => s + Number(r.quantity), 0);
+  const lines = rows2.map((r) => `\u2022 ${r.locationName}: ${Number(r.quantity).toLocaleString("pt-BR")} ${p.unit}`);
   await sendWhatsAppText(toPhone, [`*${p.name}* \u2014 saldo total: ${total.toLocaleString("pt-BR")} ${p.unit}`, ...lines].join("\n"));
 }
 async function askStockAgain(db, toPhone, stateKey) {
@@ -24628,8 +27352,8 @@ async function handleStockInteractiveStep(db, toPhone, stateKey, step, payload, 
 async function handleInteractiveStep(db, toPhone, stateKey, step, payload, replyId, collaborator) {
   if (step === "awaiting_category" && replyId.startsWith("cat_")) {
     const categoryId = Number(replyId.replace("cat_", ""));
-    const [rows] = await db.execute(sql32`SELECT name FROM purchase_categories WHERE id = ${categoryId} LIMIT 1`);
-    const cat = rows[0];
+    const [rows2] = await db.execute(sql32`SELECT name FROM purchase_categories WHERE id = ${categoryId} LIMIT 1`);
+    const cat = rows2[0];
     if (!cat) {
       await sendWhatsAppText(toPhone, "Categoria inv\xE1lida, tente de novo.");
       return;
@@ -24724,8 +27448,8 @@ async function whatsappWebhookHandler(req, res) {
     }
     let state = await getState(db, localPhone);
     if (state) {
-      const [rows] = await db.execute(sql32`SELECT TIMESTAMPDIFF(MINUTE, updated_at, NOW()) AS mins FROM whatsapp_conversation_state WHERE phone = ${localPhone}`);
-      const mins = rows[0]?.mins ?? 0;
+      const [rows2] = await db.execute(sql32`SELECT TIMESTAMPDIFF(MINUTE, updated_at, NOW()) AS mins FROM whatsapp_conversation_state WHERE phone = ${localPhone}`);
+      const mins = rows2[0]?.mins ?? 0;
       if (mins > 30) {
         await clearState(db, localPhone);
         state = null;
@@ -26425,11 +29149,11 @@ async function startServer() {
           `destination LIKE '${k.replace(/'/g, "''")} \u2014 %'`,
           `destination LIKE '${k.replace(/'/g, "''")} - %'`
         ]).join(" OR ");
-        const [rows] = await db.execute(
+        const [rows2] = await db.execute(
           /*sql*/
           `SELECT destination, COUNT(*) AS total FROM cargo_loads WHERE ${likes} GROUP BY destination`
         );
-        byName = rows;
+        byName = rows2;
       }
       const [sample] = await db.execute(
         /*sql*/
@@ -26456,8 +29180,8 @@ async function startServer() {
         const conditions = [or4(...orClauses)];
         conditions.push(sql34`${cargoLoads2.date} >= ${startDate}`);
         conditions.push(sql34`${cargoLoads2.date} <= ${endDate + " 23:59:59"}`);
-        const rows = await db.select({ id: cargoLoads2.id, date: cargoLoads2.date, destination: cargoLoads2.destination, status: cargoLoads2.status, photosJson: cargoLoads2.photosJson }).from(cargoLoads2).where(and28(...conditions)).orderBy(asc6(cargoLoads2.date)).limit(50);
-        drizzleSim = { keys, startDate, endDate, total: rows.length, rows: rows.slice(0, 10).map((r) => ({ ...r, photosJson: r.photosJson ? String(r.photosJson).slice(0, 80) : null })) };
+        const rows2 = await db.select({ id: cargoLoads2.id, date: cargoLoads2.date, destination: cargoLoads2.destination, status: cargoLoads2.status, photosJson: cargoLoads2.photosJson }).from(cargoLoads2).where(and28(...conditions)).orderBy(asc6(cargoLoads2.date)).limit(50);
+        drizzleSim = { keys, startDate, endDate, total: rows2.length, rows: rows2.slice(0, 10).map((r) => ({ ...r, photosJson: r.photosJson ? String(r.photosJson).slice(0, 80) : null })) };
       } catch (e) {
         drizzleSim = { error: e.message, stack: String(e.stack).slice(0, 500) };
       }
@@ -26703,7 +29427,7 @@ function scheduleFuelInvoiceDueCheck() {
         });
         const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
         const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1e3).toISOString().slice(0, 10);
-        const [rows] = await conn.execute(
+        const [rows2] = await conn.execute(
           `SELECT fi.*, fs.name as supplier_name, fs.trade_name as supplier_trade_name
            FROM fuel_invoices fi
            LEFT JOIN fuel_suppliers fs ON fi.supplier_id = fs.id
@@ -26713,9 +29437,9 @@ function scheduleFuelInvoiceDueCheck() {
           [threeDaysLater]
         );
         await conn.end();
-        if (rows.length > 0) {
-          const overdue = rows.filter((r) => r.due_date < today);
-          const dueSoon = rows.filter((r) => r.due_date >= today && r.due_date <= threeDaysLater);
+        if (rows2.length > 0) {
+          const overdue = rows2.filter((r) => r.due_date < today);
+          const dueSoon = rows2.filter((r) => r.due_date >= today && r.due_date <= threeDaysLater);
           let message = "";
           if (overdue.length > 0) {
             const totalOverdue = overdue.reduce((s, r) => s + parseFloat(r.total_amount || "0"), 0);
@@ -26759,7 +29483,7 @@ function scheduleFuelInvoiceDueCheck() {
           } catch (e) {
             console.warn("[CronJob-Fuel] Error notifying owner:", e);
           }
-          console.log(`[CronJob-Fuel] Notificou ${rows.length} boletos (${overdue.length} vencidos, ${dueSoon.length} pr\xF3ximos).`);
+          console.log(`[CronJob-Fuel] Notificou ${rows2.length} boletos (${overdue.length} vencidos, ${dueSoon.length} pr\xF3ximos).`);
         } else {
           console.log("[CronJob-Fuel] Nenhum boleto de combust\xEDvel pendente ou pr\xF3ximo do vencimento.");
         }
@@ -26922,6 +29646,19 @@ function scheduleSicoobSync() {
         const result = await syncSicoobBoletos2();
         console.log(`[SicoobSync] Conclu\xEDdo: ${result.synced} boleto(s) sincronizados. Erros: ${result.errors.length}`);
         if (result.errors.length) console.warn("[SicoobSync] Erros:", result.errors);
+        if ((/* @__PURE__ */ new Date()).getHours() < 9) {
+          const { syncSicoobExtrato: syncSicoobExtrato2 } = await Promise.resolve().then(() => (init_sicoob(), sicoob_exports));
+          const hoje = /* @__PURE__ */ new Date();
+          const alvos = [{ mes: hoje.getMonth() + 1, ano: hoje.getFullYear() }];
+          if (hoje.getDate() <= 5) {
+            const ant = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+            alvos.push({ mes: ant.getMonth() + 1, ano: ant.getFullYear() });
+          }
+          for (const a of alvos) {
+            const r = await syncSicoobExtrato2(a.mes, a.ano);
+            console.log(`[SicoobSync] Extrato ${a.mes}/${a.ano}: ${r.synced ?? 0} lan\xE7amento(s)${r.error ? " | erro: " + String(r.error).slice(0, 200) : ""}`);
+          }
+        }
       } catch (err) {
         console.error("[SicoobSync] Erro na sincroniza\xE7\xE3o:", err);
       }
@@ -26932,3 +29669,27 @@ function scheduleSicoobSync() {
   scheduleNext();
 }
 scheduleSicoobSync();
+function scheduleWeeklyGoalReminder() {
+  const HORA = 17;
+  const scheduleNext = () => {
+    const now = /* @__PURE__ */ new Date();
+    const next = new Date(now);
+    next.setHours(HORA, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+    const msUntilNext = Math.max(next.getTime() - now.getTime(), 6e4);
+    setTimeout(async () => {
+      try {
+        if ((/* @__PURE__ */ new Date()).getDay() !== 0) {
+          const { enviarLembretesFechamento: enviarLembretesFechamento2 } = await Promise.resolve().then(() => (init_weeklyGoals2(), weeklyGoals_exports));
+          const n = await enviarLembretesFechamento2();
+          if (n > 0) console.log(`[WeeklyGoals] ${n} lembrete(s) de fechamento do dia enviados.`);
+        }
+      } catch (err) {
+        console.error("[WeeklyGoals] Erro no lembrete di\xE1rio:", err);
+      }
+      scheduleNext();
+    }, msUntilNext);
+  };
+  scheduleNext();
+}
+scheduleWeeklyGoalReminder();

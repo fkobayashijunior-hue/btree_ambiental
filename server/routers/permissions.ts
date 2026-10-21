@@ -57,6 +57,8 @@ export const SYSTEM_MODULES = [
   { slug: "estoque",      label: "Estoque",                  group: "Compras" },
   // Transporte
   { slug: "ciclos-frete",    label: "Ciclos de Frete (Geofence)",   group: "Transporte" },
+  { slug: "metas-semanais",         label: "Metas Semanais (responsável)",  group: "Operações" },
+  { slug: "metas-semanais-gestao",  label: "Metas Semanais (criar e supervisionar)", group: "Operações" },
   // Notas
   { slug: "controle-notas", label: "Controle de Notas Fiscais",    group: "Notas" },
   // Financeiro
@@ -66,13 +68,14 @@ export const SYSTEM_MODULES = [
   { slug: "extrato-movimentacoes",   label: "Extrato Movimentações",   group: "Financeiro" },
   { slug: "folha-pagamento",         label: "Folha de Pagamento",      group: "Financeiro" },
   { slug: "fluxo-de-caixa",          label: "Fluxo de Caixa",          group: "Financeiro" },
+  { slug: "dashboard-real",          label: "Dashboard Financeiro Real", group: "Financeiro" },
 ] as const;
 
 export type ModuleSlug = typeof SYSTEM_MODULES[number]["slug"];
 
 // Módulos que contêm informações financeiras sensíveis
 export const FINANCIAL_MODULES: ModuleSlug[] = [
-  "financeiro", "relatorios", "dashboard-exec", "pagamentos-clientes",
+  "financeiro", "relatorios", "dashboard-exec", "pagamentos-clientes", "dashboard-real",
 ];
 
 export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> = {
@@ -98,11 +101,11 @@ export const PROFILES: Record<string, { label: string; modules: ModuleSlug[] }> 
   },
   encarregado: {
     label: "Encarregado de Roça",
-    modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas", "manutencao"],
+    modules: ["cargas", "minha-carga", "gastos-extras", "abastecimento", "equipamentos", "colaboradores", "presencas", "manutencao", "metas-semanais"],
   },
   lider: {
     label: "Líder de Equipe",
-    modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps"],
+    modules: ["presencas", "colaboradores", "equipamentos", "cargas", "minha-carga", "gastos-extras", "horas-maquina", "motosserras", "abastecimento", "locais-gps", "metas-semanais"],
   },
   equipe: {
     label: "Equipe de Campo",

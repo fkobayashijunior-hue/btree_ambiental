@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Bell, Check, CheckCheck, Trash2, X } from "lucide-react";
 
@@ -28,6 +29,7 @@ function timeAgo(dateStr: string): string {
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [, navigate] = useLocation();
   
   const { data: unreadData } = trpc.notifications.unreadCount.useQuery(undefined, {
     refetchInterval: 30000, // Poll every 30 seconds
@@ -135,7 +137,16 @@ export function NotificationBell() {
                     </div>
                     
                     {/* Content */}
-                    <div className="flex-1 min-w-0">
+                    <div
+                      className={`flex-1 min-w-0 ${notif.related_type === "weekly_goal" ? "cursor-pointer" : ""}`}
+                      onClick={() => {
+                        if (notif.related_type === "weekly_goal" && notif.related_id) {
+                          if (!notif.is_read) markAsRead.mutate({ id: notif.id });
+                          setIsOpen(false);
+                          navigate(`/metas-semanais/${notif.related_id}`);
+                        }
+                      }}
+                    >
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${typeLabels[notif.type]?.color || "bg-gray-100 text-gray-600"}`}>
                           {typeLabels[notif.type]?.label || notif.type}

@@ -1696,6 +1696,11 @@ export const cargoLoadsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Mantém o valor gravado dos fechamentos em aberto igual ao das cargas atuais (nunca mexe nos pagos)
+      try {
+        const { atualizarTotaisFechamentos } = await import("../utils/closingRefresh");
+        await atualizarTotaisFechamentos(db.$client);
+      } catch (e) { console.warn("[WeeklyClosing] Falha ao atualizar totais:", e?.message); }
       let query = db.select({
         id: cargoWeeklyClosings.id,
         clientId: cargoWeeklyClosings.clientId,
@@ -1859,6 +1864,13 @@ export const cargoLoadsRouter = router({
       if (!scopeClosing) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
       if (hasField(input, "areaId") && !sameArea(scopeClosing.areaId, inputArea(input))) throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento pertence a outra área." });
       if (normalizeAreaId(scopeClosing.areaId) !== null) await checkedArea(db, scopeClosing.clientId, normalizeAreaId(scopeClosing.areaId), true);
+      // Ao pagar, grava o valor ATUAL das cargas (o total gravado na criação pode estar defasado)
+      if (input.status === 'pago') {
+        try {
+          const { atualizarTotaisFechamentos } = await import("../utils/closingRefresh");
+          await atualizarTotaisFechamentos(db.$client, { id: input.id });
+        } catch (e) { console.warn("[WeeklyClosing] Falha ao atualizar total antes de pagar:", e?.message); }
+      }
       const updateData: any = { status: input.status };
       if (input.status === 'pago') updateData.paidAt = input.paidAt || new Date().toISOString().slice(0, 19).replace('T', ' ');
       if (input.receiptUrl) updateData.receiptUrl = input.receiptUrl;

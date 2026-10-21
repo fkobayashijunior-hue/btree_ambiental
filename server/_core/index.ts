@@ -1598,6 +1598,20 @@ function scheduleSicoobSync() {
         const result = await syncSicoobBoletos();
         console.log(`[SicoobSync] Concluído: ${result.synced} boleto(s) sincronizados. Erros: ${result.errors.length}`);
         if (result.errors.length) console.warn('[SicoobSync] Erros:', result.errors);
+        // Extrato bancário (base do Dashboard Financeiro Real): 1x ao dia, mês atual + anterior nos primeiros dias
+        if (new Date().getHours() < 9) {
+          const { syncSicoobExtrato } = await import('../routers/sicoob');
+          const hoje = new Date();
+          const alvos = [{ mes: hoje.getMonth() + 1, ano: hoje.getFullYear() }];
+          if (hoje.getDate() <= 5) {
+            const ant = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+            alvos.push({ mes: ant.getMonth() + 1, ano: ant.getFullYear() });
+          }
+          for (const a of alvos) {
+            const r: any = await syncSicoobExtrato(a.mes, a.ano);
+            console.log(`[SicoobSync] Extrato ${a.mes}/${a.ano}: ${r.synced ?? 0} lançamento(s)${r.error ? ' | erro: ' + String(r.error).slice(0, 200) : ''}`);
+          }
+        }
       } catch (err) {
         console.error('[SicoobSync] Erro na sincronização:', err);
       }
@@ -1610,3 +1624,29 @@ function scheduleSicoobSync() {
   scheduleNext();
 }
 scheduleSicoobSync();
+
+// ── Cron job: lembrete diário do fechamento do dia (metas semanais) — 17:00, segunda a sábado ──
+function scheduleWeeklyGoalReminder() {
+  const HORA = 17;
+  const scheduleNext = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(HORA, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+    const msUntilNext = Math.max(next.getTime() - now.getTime(), 60_000);
+    setTimeout(async () => {
+      try {
+        if (new Date().getDay() !== 0) { // domingo não tem lembrete
+          const { enviarLembretesFechamento } = await import('../routers/weeklyGoals');
+          const n = await enviarLembretesFechamento();
+          if (n > 0) console.log(`[WeeklyGoals] ${n} lembrete(s) de fechamento do dia enviados.`);
+        }
+      } catch (err) {
+        console.error('[WeeklyGoals] Erro no lembrete diário:', err);
+      }
+      scheduleNext();
+    }, msUntilNext);
+  };
+  scheduleNext();
+}
+scheduleWeeklyGoalReminder();
