@@ -2400,22 +2400,22 @@ var cloudinary_exports = {};
 __export(cloudinary_exports, {
   cloudinaryUpload: () => cloudinaryUpload
 });
-async function cloudinaryUpload(data2, _folder = "btree", originalFileName) {
+async function cloudinaryUpload(data3, _folder = "btree", originalFileName) {
   let base64;
   let contentType = "image/jpeg";
-  if (Buffer.isBuffer(data2)) {
-    base64 = data2.toString("base64");
+  if (Buffer.isBuffer(data3)) {
+    base64 = data3.toString("base64");
     contentType = "image/jpeg";
-  } else if (data2.startsWith("data:")) {
-    const match = data2.match(/^data:([^;]+);base64,(.+)$/);
+  } else if (data3.startsWith("data:")) {
+    const match = data3.match(/^data:([^;]+);base64,(.+)$/);
     if (match) {
       contentType = match[1];
       base64 = match[2];
     } else {
-      base64 = data2.replace(/^data:[^;]+;base64,/, "");
+      base64 = data3.replace(/^data:[^;]+;base64,/, "");
     }
   } else {
-    base64 = data2;
+    base64 = data3;
   }
   const dataUri = `data:${contentType};base64,${base64}`;
   const params = new URLSearchParams();
@@ -3231,16 +3231,16 @@ async function extractNfDataFromPdfText(buffer) {
     const itemMatch = text2.match(/\b(TON|M3|M³|KG)\b\s+(\d+(?:[.,]\d+)?)/i);
     if (itemMatch) {
       const rawUnit = itemMatch[1].toUpperCase();
-      const num3 = parseFloat(itemMatch[2].replace(",", "."));
-      if (!isNaN(num3) && num3 > 0) {
+      const num4 = parseFloat(itemMatch[2].replace(",", "."));
+      if (!isNaN(num4) && num4 > 0) {
         if (rawUnit === "TON") {
-          quantity = String(num3);
+          quantity = String(num4);
           unit = "ton";
         } else if (rawUnit === "KG") {
-          quantity = String(num3 / 1e3);
+          quantity = String(num4 / 1e3);
           unit = "ton";
         } else if (rawUnit === "M3" || rawUnit === "M\xB3") {
-          quantity = String(num3);
+          quantity = String(num4);
           unit = "m3";
         }
       }
@@ -3248,9 +3248,9 @@ async function extractNfDataFromPdfText(buffer) {
     if (!quantity) {
       const pesoMatch = text2.match(/PESO\s*L[IÍ]QUIDO[^\d]{0,15}([\d.,]+)/i);
       if (pesoMatch) {
-        const num3 = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
-        if (!isNaN(num3) && num3 > 0) {
-          quantity = num3 > 100 ? String(num3 / 1e3) : String(num3);
+        const num4 = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
+        if (!isNaN(num4) && num4 > 0) {
+          quantity = num4 > 100 ? String(num4 / 1e3) : String(num4);
           unit = "ton";
         }
       }
@@ -3284,8 +3284,8 @@ var nfExtraction_exports = {};
 __export(nfExtraction_exports, {
   extractNfDataFromFile: () => extractNfDataFromFile
 });
-function isComplete(data2) {
-  return !!data2.invoiceNumber && !!data2.quantity && !!data2.unit;
+function isComplete(data3) {
+  return !!data3.invoiceNumber && !!data3.quantity && !!data3.unit;
 }
 async function extractNfDataFromFile(fileUrl, mimeType) {
   const fallback = { invoiceNumber: null, quantity: null, unit: null };
@@ -3622,8 +3622,8 @@ async function rows(db, sql34, params = []) {
   const [r] = await db.$client.execute(sql34, params);
   return r;
 }
-function ymDe(data2) {
-  return data2.slice(0, 7);
+function ymDe(data3) {
+  return data3.slice(0, 7);
 }
 async function competenciaCustos(db, inicio, fim) {
   const blocos = [];
@@ -3908,7 +3908,7 @@ async function competenciaCustos(db, inicio, fim) {
 async function pagamentosDoSistema(db, inicio, fim) {
   const out = [];
   const erros = [];
-  const dia = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+  const dia2 = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
   async function fonte(nome, fn) {
     try {
       await fn();
@@ -3924,7 +3924,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
        WHERE status = 'pago' AND employment_type IN ('clt','pj') AND paid_at IS NOT NULL AND ${dRange("paid_at")}`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "folha_salario", tipoLabel: "Sal\xE1rio", refId: r.id, descricao: `${r.collaborator_name} \u2014 ${r.reference_month}`, valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.salario });
+      if (Number(r.v) > 0) out.push({ tipo: "folha_salario", tipoLabel: "Sal\xE1rio", refId: r.id, descricao: `${r.collaborator_name} \u2014 ${r.reference_month}`, valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.salario });
     }
   });
   await fonte("Comiss\xF5es", async () => {
@@ -3934,7 +3934,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
        FROM payroll_entries WHERE commission_status = 'pago' AND commission_paid_at IS NOT NULL AND ${dRange("commission_paid_at")}`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "folha_comissao", tipoLabel: "Comiss\xE3o", refId: r.id, descricao: `${r.collaborator_name} \u2014 ${r.reference_month}`, valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.comissao });
+      if (Number(r.v) > 0) out.push({ tipo: "folha_comissao", tipoLabel: "Comiss\xE3o", refId: r.id, descricao: `${r.collaborator_name} \u2014 ${r.reference_month}`, valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.comissao });
     }
   });
   await fonte("Di\xE1rias", async () => {
@@ -3946,7 +3946,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
          AND ${dRange("a.paid_at")} GROUP BY a.collaborator_id, c.name, DATE(a.paid_at)`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "diarias", tipoLabel: "Di\xE1rias", refId: r.cid, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.diarias });
+      if (Number(r.v) > 0) out.push({ tipo: "diarias", tipoLabel: "Di\xE1rias", refId: r.cid, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.diarias });
     }
   });
   await fonte("Fechamentos de madeira", async () => {
@@ -3957,7 +3957,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
        WHERE f.status = 'pago' AND f.paid_at IS NOT NULL AND ${dRange("f.paid_at")}`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "fechamento_madeira", tipoLabel: "Fechamento de madeira", refId: r.id, descricao: `${r.nome} \u2014 semana at\xE9 ${dia(r.week_end)}`, valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.madeira });
+      if (Number(r.v) > 0) out.push({ tipo: "fechamento_madeira", tipoLabel: "Fechamento de madeira", refId: r.id, descricao: `${r.nome} \u2014 semana at\xE9 ${dia2(r.week_end)}`, valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.madeira });
     }
   });
   await fonte("Faturas de combust\xEDvel", async () => {
@@ -3969,7 +3969,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
        WHERE i.status = 'pago' AND i.paid_at IS NOT NULL AND i.paid_at BETWEEN ? AND ?`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "fatura_combustivel", tipoLabel: "Fatura de combust\xEDvel", refId: r.id, descricao: `NF ${r.invoice_number} \u2014 ${r.fornecedor}`, valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.combustivel });
+      if (Number(r.v) > 0) out.push({ tipo: "fatura_combustivel", tipoLabel: "Fatura de combust\xEDvel", refId: r.id, descricao: `NF ${r.invoice_number} \u2014 ${r.fornecedor}`, valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.combustivel });
     }
   });
   await fonte("Corte terceirizado", async () => {
@@ -3980,7 +3980,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
          AND ${dRange("third_party_paid_at")} GROUP BY third_party_contractor, DATE(third_party_paid_at)`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "corte_terceirizado", tipoLabel: "Corte terceirizado", refId: null, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.corte });
+      if (Number(r.v) > 0) out.push({ tipo: "corte_terceirizado", tipoLabel: "Corte terceirizado", refId: null, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.corte });
     }
   });
   await fonte("Adiantamentos a clientes", async () => {
@@ -3990,7 +3990,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
        FROM client_advances a LEFT JOIN clients c ON c.id = a.client_id WHERE ${dRange("a.date")}`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "adiantamento", tipoLabel: "Adiantamento", refId: r.id, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.adiantamento });
+      if (Number(r.v) > 0) out.push({ tipo: "adiantamento", tipoLabel: "Adiantamento", refId: r.id, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.adiantamento });
     }
   });
   await fonte("Pagamentos a clientes", async () => {
@@ -4001,7 +4001,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
        WHERE p.status IN ('pago','paid') AND p.paidDate IS NOT NULL AND ${dRange("p.paidDate")}`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "pagamento_cliente", tipoLabel: "Pagamento a cliente", refId: r.id, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.madeira });
+      if (Number(r.v) > 0) out.push({ tipo: "pagamento_cliente", tipoLabel: "Pagamento a cliente", refId: r.id, descricao: String(r.nome), valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.madeira });
     }
   });
   await fonte("Frete terceirizado", async () => {
@@ -4011,7 +4011,7 @@ async function pagamentosDoSistema(db, inicio, fim) {
        WHERE type = 'despesa' AND BINARY category = 'frete' AND status = 'confirmado' AND auto_generated = 0 AND ${dRange("date")}`,
       [inicio, fim]
     )) {
-      if (Number(r.v) > 0) out.push({ tipo: "frete_terceirizado", tipoLabel: "Frete terceirizado", refId: r.id, descricao: String(r.description ?? "Frete"), valor: r2(Number(r.v)), data: dia(r.d), sugestao: SUG.frete });
+      if (Number(r.v) > 0) out.push({ tipo: "frete_terceirizado", tipoLabel: "Frete terceirizado", refId: r.id, descricao: String(r.description ?? "Frete"), valor: r2(Number(r.v)), data: dia2(r.d), sugestao: SUG.frete });
     }
   });
   return { pagamentos: out, erros };
@@ -5685,10 +5685,10 @@ async function consultarCnpjBrasilApi(cnpj) {
       }
     });
     if (!resp.ok) return null;
-    const data2 = await resp.json();
-    const razaoSocial = data2.razao_social ?? data2.nome_fantasia ?? "";
-    const cnaeCodigo = data2.cnae_fiscal ? String(data2.cnae_fiscal) : "";
-    const cnaeDescricao = data2.cnae_fiscal_descricao ?? "";
+    const data3 = await resp.json();
+    const razaoSocial = data3.razao_social ?? data3.nome_fantasia ?? "";
+    const cnaeCodigo = data3.cnae_fiscal ? String(data3.cnae_fiscal) : "";
+    const cnaeDescricao = data3.cnae_fiscal_descricao ?? "";
     if (!razaoSocial && !cnaeDescricao) return null;
     return { razaoSocial, cnaeCodigo, cnaeDescricao };
   } catch (e) {
@@ -5943,11 +5943,11 @@ async function syncSicoobExtrato(mes, ano) {
   try {
     const numeroConta = process.env.SICOOB_NUMERO_CONTA ?? String(NUMERO_CONTA);
     console.log(`[SicoobExtrato] Chamando extrato ${mes}/${ano} conta=${numeroConta}`);
-    const data2 = await sicoobGet(`/conta-corrente/v4/extrato/${mes}/${ano}`, {
+    const data3 = await sicoobGet(`/conta-corrente/v4/extrato/${mes}/${ano}`, {
       numeroContaCorrente: numeroConta
     });
-    console.log(`[SicoobExtrato] Resposta ${mes}/${ano}:`, JSON.stringify(data2).slice(0, 400));
-    const resultado = data2.resultado ?? {};
+    console.log(`[SicoobExtrato] Resposta ${mes}/${ano}:`, JSON.stringify(data3).slice(0, 400));
+    const resultado = data3.resultado ?? {};
     const transacoes = resultado.transacoes ?? resultado.lancamentos ?? [];
     const saldoAnterior = String(resultado.saldoAnterior ?? resultado.saldoInicial ?? "0");
     const saldoAtual = String(resultado.saldoAtual ?? "0");
@@ -6096,7 +6096,7 @@ async function syncSicoobBoletos() {
     for (const chunk of chunks) {
       try {
         console.log(`[SicoobSync] Consultando CNPJ ${cnpj} (${fmt2(chunk.inicio)} \u2192 ${fmt2(chunk.fim)})...`);
-        const data2 = await sicoobGet(
+        const data3 = await sicoobGet(
           `/cobranca-bancaria/v3/pagadores/${cnpj}/boletos`,
           {
             numeroCliente: NUMERO_CLIENTE,
@@ -6104,8 +6104,8 @@ async function syncSicoobBoletos() {
             dataFim: fmt2(chunk.fim)
           }
         );
-        console.log(`[SicoobSync] Resposta CNPJ ${cnpj}:`, JSON.stringify(data2).slice(0, 300));
-        const boletos = data2.resultado ?? [];
+        console.log(`[SicoobSync] Resposta CNPJ ${cnpj}:`, JSON.stringify(data3).slice(0, 300));
+        const boletos = data3.resultado ?? [];
         console.log(`[SicoobSync] Boletos encontrados: ${boletos.length}`);
         if (boletos.length > 0) console.log(`[SicoobSync] Exemplo boleto:`, JSON.stringify(boletos[0], null, 2));
         for (const b of boletos) {
@@ -6467,10 +6467,10 @@ var init_sicoob = __esm({
       // Saldo da conta corrente
       saldo: protectedProcedure.query(async () => {
         try {
-          const data2 = await sicoobGet("/conta-corrente/v4/saldo", {
+          const data3 = await sicoobGet("/conta-corrente/v4/saldo", {
             numeroContaCorrente: String(NUMERO_CONTA)
           });
-          return { saldo: data2.resultado?.saldo ?? 0, error: null };
+          return { saldo: data3.resultado?.saldo ?? 0, error: null };
         } catch (e) {
           return { saldo: 0, error: e?.response?.data?.httpMessage ?? "Erro ao buscar saldo" };
         }
@@ -6478,10 +6478,10 @@ var init_sicoob = __esm({
       // Extrato da conta corrente
       extrato: protectedProcedure.input(z47.object({ mes: z47.number(), ano: z47.number() })).query(async ({ input }) => {
         try {
-          const data2 = await sicoobGet(`/conta-corrente/v4/extrato/${input.mes}/${input.ano}`, {
+          const data3 = await sicoobGet(`/conta-corrente/v4/extrato/${input.mes}/${input.ano}`, {
             numeroContaCorrente: String(NUMERO_CONTA)
           });
-          return { lancamentos: data2.resultado?.lancamentos ?? [], error: null };
+          return { lancamentos: data3.resultado?.lancamentos ?? [], error: null };
         } catch (e) {
           return { lancamentos: [], error: e?.response?.data?.httpMessage ?? "Erro ao buscar extrato" };
         }
@@ -6494,7 +6494,7 @@ var init_sicoob = __esm({
         codigoSituacao: z47.number().optional()
       })).query(async ({ input }) => {
         try {
-          const data2 = await sicoobGet(
+          const data3 = await sicoobGet(
             `/cobranca-bancaria/v3/pagadores/${input.numeroCpfCnpj}/boletos`,
             {
               numeroCliente: NUMERO_CLIENTE,
@@ -6503,7 +6503,7 @@ var init_sicoob = __esm({
               codigoSituacao: input.codigoSituacao
             }
           );
-          return { boletos: data2.resultado ?? [], error: null };
+          return { boletos: data3.resultado ?? [], error: null };
         } catch (e) {
           return { boletos: [], error: e?.response?.data?.httpMessage ?? "Erro ao buscar boletos" };
         }
@@ -6511,12 +6511,12 @@ var init_sicoob = __esm({
       // Boleto individual
       boleto: protectedProcedure.input(z47.object({ nossoNumero: z47.number() })).query(async ({ input }) => {
         try {
-          const data2 = await sicoobGet("/cobranca-bancaria/v3/boletos", {
+          const data3 = await sicoobGet("/cobranca-bancaria/v3/boletos", {
             numeroCliente: NUMERO_CLIENTE,
             codigoModalidade: CODIGO_MODALIDADE,
             nossoNumero: input.nossoNumero
           });
-          return { boleto: data2.resultado ?? null, error: null };
+          return { boleto: data3.resultado ?? null, error: null };
         } catch (e) {
           return { boleto: null, error: e?.response?.data?.httpMessage ?? "Erro ao buscar boleto" };
         }
@@ -6533,6 +6533,9 @@ var init_sicoob = __esm({
       listBoletos: moduleProcedure("contas-a-receber").input(z47.object({
         mes: z47.number().min(1).max(12),
         ano: z47.number().min(2020).max(2100),
+        // período de emissão do boleto (substitui o mês de vencimento quando os dois são informados)
+        dataInicio: z47.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        dataFim: z47.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         pesquisa: z47.string().optional()
       })).query(async ({ input }) => {
         try {
@@ -6544,12 +6547,13 @@ var init_sicoob = __esm({
           const pesquisaClause = input.pesquisa ? `AND (nome_pagador LIKE ? OR cnpj_pagador LIKE ?)` : "";
           const pesquisaParams = input.pesquisa ? [`%${input.pesquisa}%`, `%${input.pesquisa}%`] : [];
           await ensureBoletoSituacaoColumn(db);
+          const porIntervalo = !!(input.dataInicio && input.dataFim);
           const [rows2] = await db.$client.execute(
             `SELECT * FROM sicoob_boletos
-           WHERE data_vencimento LIKE ?
+           WHERE ${porIntervalo ? "COALESCE(NULLIF(data_emissao, ''), data_vencimento) BETWEEN ? AND ?" : "data_vencimento LIKE ?"}
            ${pesquisaClause}
            ORDER BY data_vencimento ASC`,
-            [`${prefixo}%`, ...pesquisaParams]
+            [...porIntervalo ? [input.dataInicio, input.dataFim] : [`${prefixo}%`], ...pesquisaParams]
           );
           return { boletos: rows2 ?? [], error: null };
         } catch (e) {
@@ -7342,9 +7346,9 @@ async function detalheBloco(db, chave, inicio, fim, limite = 500) {
   }
   try {
     const [r] = await db.$client.execute(sql34, params);
-    const dia = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? "").slice(0, 10);
+    const dia2 = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? "").slice(0, 10);
     const todas = r.map((x) => ({
-      data: dia(x.data),
+      data: dia2(x.data),
       descricao: String(x.descricao ?? "\u2014"),
       detalhe: String(x.detalhe ?? ""),
       valor: r23(Number(x.valor ?? 0))
@@ -7625,9 +7629,9 @@ async function gravarItens(db, goalId, semana, itens) {
       `INSERT INTO weekly_goal_items (goal_id, destination_id, destination_name, target_cargas, observacao) VALUES (?, ?, ?, ?, ?)`,
       [goalId, d.id, String(d.nickname || d.name), it.targetCargas, it.observacao ?? null]
     );
-    for (const dia of it.dias ?? []) {
-      if (!semana.days.includes(dia.data) || dia.target <= 0) continue;
-      await db.$client.execute(`INSERT INTO weekly_goal_item_days (item_id, plan_date, target_cargas) VALUES (?, ?, ?)`, [res.insertId, dia.data, dia.target]);
+    for (const dia2 of it.dias ?? []) {
+      if (!semana.days.includes(dia2.data) || dia2.target <= 0) continue;
+      await db.$client.execute(`INSERT INTO weekly_goal_item_days (item_id, plan_date, target_cargas) VALUES (?, ?, ?)`, [res.insertId, dia2.data, dia2.target]);
     }
   }
 }
@@ -7789,13 +7793,13 @@ var init_weeklyGoals2 = __esm({
         const entries = await q(db, `SELECT * FROM weekly_goal_entries WHERE goal_id = ? ORDER BY entry_date, created_at, id`, [input.id]);
         const messages = await q(db, `SELECT * FROM weekly_goal_messages WHERE goal_id = ? ORDER BY created_at, id`, [input.id]);
         const destinosDaMeta = new Set(res.itens.map((i) => i.destinationId));
-        const dias = res.dias.map((dia) => {
-          const cargasDia = res.cargas.filter((c) => c.data === dia);
+        const dias = res.dias.map((dia2) => {
+          const cargasDia = res.cargas.filter((c) => c.data === dia2);
           const doComprador = cargasDia.filter((c) => destinosDaMeta.has(normalizaDestino(c.destinationId) ?? -1));
           return {
-            data: dia,
+            data: dia2,
             porComprador: res.progresso.itens.map((p) => {
-              const x = p.porDia.find((d) => d.data === dia);
+              const x = p.porDia.find((d) => d.data === dia2);
               const item = res.itens.find((i) => i.id === p.itemId);
               return { itemId: p.itemId, comprador: item.destinationName, planejado: x.planejado, carregadas: x.carregadas, entregues: x.entregues };
             }),
@@ -7809,8 +7813,8 @@ var init_weeklyGoals2 = __esm({
               registradoEm: c.registradoEm
             })),
             outrasCargas: cargasDia.length - doComprador.length,
-            relatos: entries.filter((e) => e.entry_date === dia).map((e) => mapEntry(e)),
-            mensagens: messages.filter((x) => x.msg_date === dia).map((x) => mapMsg(x))
+            relatos: entries.filter((e) => e.entry_date === dia2).map((e) => mapEntry(e)),
+            mensagens: messages.filter((x) => x.msg_date === dia2).map((x) => mapMsg(x))
           };
         });
         return {
@@ -7978,14 +7982,14 @@ var init_weeklyGoals2 = __esm({
         if (!podeRelatar(m.papel)) throw new TRPCError37({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel registra relatos" });
         if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError37({ code: "BAD_REQUEST", message: "Meta encerrada" });
         if (m.goal.status !== "em_andamento") throw new TRPCError37({ code: "BAD_REQUEST", message: 'A meta s\xF3 segue em andamento depois do acordo: d\xEA o "de acordo" (ou resolva a negocia\xE7\xE3o) antes de relatar' });
-        const dia = input.entryDate ?? hojeISO();
+        const dia2 = input.entryDate ?? hojeISO();
         const sem = weekBounds(m.goal.weekStart);
-        if (dia < sem.start || dia > sem.end) throw new TRPCError37({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
+        if (dia2 < sem.start || dia2 > sem.end) throw new TRPCError37({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
         const situacao = input.kind === "problema" ? "problema" : input.situacao;
         const nome = await nomeDe(db, ctx.user.id);
         const [res] = await db.$client.execute(
           `INSERT INTO weekly_goal_entries (goal_id, entry_date, kind, situacao, body, photo_urls, author_user_id, author_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [input.goalId, dia, input.kind, situacao, input.body.trim(), input.photoUrls?.length ? JSON.stringify(input.photoUrls) : null, ctx.user.id, nome]
+          [input.goalId, dia2, input.kind, situacao, input.body.trim(), input.photoUrls?.length ? JSON.stringify(input.photoUrls) : null, ctx.user.id, nome]
         );
         if (input.kind === "problema" || situacao === "problema") {
           await avisar(interessados(m), "Problema informado", `${nome}: ${input.body.trim().slice(0, 140)}`, input.goalId, ctx.user.id);
@@ -8009,18 +8013,18 @@ var init_weeklyGoals2 = __esm({
         if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError37({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode enviar este tipo de mensagem" });
         const nome = await nomeDe(db, ctx.user.id);
         const papel = m.papel === "responsavel" ? "responsavel" : m.papel === "admin" ? "admin" : "supervisor";
-        let dia = input.geral ? null : input.dia ?? hojeISO();
+        let dia2 = input.geral ? null : input.dia ?? hojeISO();
         if (input.entryId) {
           const [e] = await q(db, `SELECT entry_date FROM weekly_goal_entries WHERE id = ? AND goal_id = ?`, [input.entryId, input.goalId]);
-          if (e) dia = e.entry_date;
+          if (e) dia2 = e.entry_date;
         }
         if (input.parentId) {
           const [pm] = await q(db, `SELECT msg_date FROM weekly_goal_messages WHERE id = ? AND goal_id = ?`, [input.parentId, input.goalId]);
-          if (pm) dia = pm.msg_date ?? null;
+          if (pm) dia2 = pm.msg_date ?? null;
         }
         const [res] = await db.$client.execute(
           `INSERT INTO weekly_goal_messages (goal_id, entry_id, parent_id, kind, body, author_user_id, author_name, author_role, msg_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [input.goalId, input.entryId ?? null, input.parentId ?? null, input.kind, input.body.trim(), ctx.user.id, nome, papel, dia]
+          [input.goalId, input.entryId ?? null, input.parentId ?? null, input.kind, input.body.trim(), ctx.user.id, nome, papel, dia2]
         );
         if (input.kind === "resposta" && input.parentId) {
           await db.$client.execute(`UPDATE weekly_goal_messages SET answered = 1 WHERE id = ? AND goal_id = ?`, [input.parentId, input.goalId]);
@@ -8031,6 +8035,205 @@ var init_weeklyGoals2 = __esm({
         return { id: Number(res.insertId) };
       })
     });
+  }
+});
+
+// server/utils/feriadosBrasil.ts
+function toISO(ano, mes, dia2) {
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(dia2).padStart(2, "0")}`;
+}
+function pascoa(ano) {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia2 = (h + l - 7 * m + 114) % 31 + 1;
+  return { mes, dia: dia2 };
+}
+function addDiasData(ano, mes, dia2, offset) {
+  const d = new Date(Date.UTC(ano, mes - 1, dia2));
+  d.setUTCDate(d.getUTCDate() + offset);
+  return { ano: d.getUTCFullYear(), mes: d.getUTCMonth() + 1, dia: d.getUTCDate() };
+}
+function feriadosDoAno(ano) {
+  const datas = /* @__PURE__ */ new Set();
+  const fixos = [
+    [1, 1],
+    // Confraternização Universal
+    [4, 21],
+    // Tiradentes
+    [5, 1],
+    // Dia do Trabalho
+    [9, 7],
+    // Independência
+    [10, 12],
+    // Nossa Senhora Aparecida
+    [11, 2],
+    // Finados
+    [11, 15],
+    // Proclamação da República
+    [11, 20],
+    // Consciência Negra (feriado nacional desde a Lei 14.759/2023)
+    [12, 25]
+    // Natal
+  ];
+  for (const [mes, dia2] of fixos) datas.add(toISO(ano, mes, dia2));
+  const p = pascoa(ano);
+  const sextaSanta = addDiasData(ano, p.mes, p.dia, -2);
+  const corpusChristi = addDiasData(ano, p.mes, p.dia, 60);
+  const carnavalSegunda = addDiasData(ano, p.mes, p.dia, -48);
+  const carnavalTerca = addDiasData(ano, p.mes, p.dia, -47);
+  datas.add(toISO(sextaSanta.ano, sextaSanta.mes, sextaSanta.dia));
+  datas.add(toISO(corpusChristi.ano, corpusChristi.mes, corpusChristi.dia));
+  datas.add(toISO(carnavalSegunda.ano, carnavalSegunda.mes, carnavalSegunda.dia));
+  datas.add(toISO(carnavalTerca.ano, carnavalTerca.mes, carnavalTerca.dia));
+  return datas;
+}
+function ehFeriado(dataISO) {
+  const ano = parseInt(dataISO.slice(0, 4));
+  if (!cacheAnos.has(ano)) cacheAnos.set(ano, feriadosDoAno(ano));
+  return cacheAnos.get(ano).has(dataISO);
+}
+function ehDiaUtil(dataISO) {
+  const [ano, mes, dia2] = dataISO.split("-").map(Number);
+  const dow = new Date(Date.UTC(ano, mes - 1, dia2)).getUTCDay();
+  if (dow === 0 || dow === 6) return false;
+  return !ehFeriado(dataISO);
+}
+function proximoDiaUtil(dataISO) {
+  let [ano, mes, dia2] = dataISO.split("-").map(Number);
+  let atual = dataISO;
+  while (!ehDiaUtil(atual)) {
+    const d = new Date(Date.UTC(ano, mes - 1, dia2));
+    d.setUTCDate(d.getUTCDate() + 1);
+    ano = d.getUTCFullYear();
+    mes = d.getUTCMonth() + 1;
+    dia2 = d.getUTCDate();
+    atual = toISO(ano, mes, dia2);
+  }
+  return atual;
+}
+function somarDiasUteis(dataISO, dias) {
+  let [ano, mes, dia2] = dataISO.split("-").map(Number);
+  let atual = dataISO;
+  let restantes = dias;
+  while (restantes > 0) {
+    const d = new Date(Date.UTC(ano, mes - 1, dia2));
+    d.setUTCDate(d.getUTCDate() + 1);
+    ano = d.getUTCFullYear();
+    mes = d.getUTCMonth() + 1;
+    dia2 = d.getUTCDate();
+    atual = toISO(ano, mes, dia2);
+    if (ehDiaUtil(atual)) restantes--;
+  }
+  return atual;
+}
+var cacheAnos;
+var init_feriadosBrasil = __esm({
+  "server/utils/feriadosBrasil.ts"() {
+    "use strict";
+    cacheAnos = /* @__PURE__ */ new Map();
+  }
+});
+
+// server/utils/prazoPagamento.ts
+var prazoPagamento_exports = {};
+__export(prazoPagamento_exports, {
+  calcularDataPrevisaoPagamento: () => calcularDataPrevisaoPagamento,
+  normalizarCnpj: () => normalizarCnpj,
+  somarDiasCorridos: () => somarDiasCorridos
+});
+function somarDiasCorridos(dataISO, dias) {
+  const { ano, mes, dia: dia2 } = parseDataISO(dataISO);
+  const d = new Date(Date.UTC(ano, mes - 1, dia2));
+  d.setUTCDate(d.getUTCDate() + dias);
+  return toISO2(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+}
+function normalizarCnpj(cnpj) {
+  return (cnpj ?? "").replace(/\D/g, "");
+}
+function parseDataISO(data3) {
+  const [ano, mes, dia2] = data3.split("-").map(Number);
+  return { ano, mes, dia: dia2 };
+}
+function toISO2(ano, mes, dia2) {
+  const mm = String(mes).padStart(2, "0");
+  const dd = String(dia2).padStart(2, "0");
+  return `${ano}-${mm}-${dd}`;
+}
+function ultimoDiaDoMes(ano, mes) {
+  return new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+}
+function calcularFaixaMensalRebnic(dataEmissaoISO) {
+  const { ano, mes, dia: dia2 } = parseDataISO(dataEmissaoISO);
+  if (dia2 >= 20) {
+    let anoPagamento = ano;
+    let mesPagamento = mes + 1;
+    if (mesPagamento > 12) {
+      mesPagamento = 1;
+      anoPagamento++;
+    }
+    return toISO2(anoPagamento, mesPagamento, 10);
+  }
+  if (dia2 <= 9) {
+    return toISO2(ano, mes, 20);
+  }
+  const ultimoDia = ultimoDiaDoMes(ano, mes);
+  const diaPagamento = Math.min(30, ultimoDia);
+  return toISO2(ano, mes, diaPagamento);
+}
+function calcularQuartaSemanaSeguinte(dataReferenciaISO) {
+  const { ano, mes, dia: dia2 } = parseDataISO(dataReferenciaISO);
+  const d = new Date(Date.UTC(ano, mes - 1, dia2));
+  const domingoDaSemana = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - domingoDaSemana);
+  d.setUTCDate(d.getUTCDate() + 10);
+  const quarta = toISO2(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  return proximoDiaUtil(quarta);
+}
+function calcularDataPrevisaoPagamento(cnpj, dataEmissao, regras, dataEntregaCarga) {
+  if (!dataEmissao) return null;
+  const cnpjNorm = normalizarCnpj(cnpj);
+  if (!cnpjNorm) return null;
+  const regra = regras.find((r) => normalizarCnpj(r.cnpj) === cnpjNorm);
+  if (!regra) return null;
+  if (regra.tipoRegra === "dias_corridos") {
+    let dias = 0;
+    let modo = "uteis";
+    let extra = 0;
+    try {
+      const p = JSON.parse(regra.parametros);
+      dias = p?.dias ?? 0;
+      if (p?.modo === "corridos") modo = "corridos";
+      extra = Number(p?.extra ?? 0) || 0;
+    } catch {
+      dias = 0;
+    }
+    const baseISO = (dataEntregaCarga ?? dataEmissao).slice(0, 10);
+    if (modo === "corridos") return proximoDiaUtil(somarDiasCorridos(baseISO, dias + extra));
+    return somarDiasUteis(baseISO, dias);
+  }
+  if (regra.tipoRegra === "faixa_mensal") {
+    return calcularFaixaMensalRebnic(dataEmissao.slice(0, 10));
+  }
+  if (regra.tipoRegra === "semanal_quarta") {
+    return calcularQuartaSemanaSeguinte(dataEmissao.slice(0, 10));
+  }
+  return null;
+}
+var init_prazoPagamento = __esm({
+  "server/utils/prazoPagamento.ts"() {
+    "use strict";
+    init_feriadosBrasil();
   }
 });
 
@@ -8814,8 +9017,8 @@ var sectorsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const { id, ...data2 } = input;
-    await db.update(sectors).set(data2).where(eq3(sectors.id, id));
+    const { id, ...data3 } = input;
+    await db.update(sectors).set(data3).where(eq3(sectors.id, id));
     return { success: true };
   }),
   deleteSector: protectedProcedure.input(z4.object({ id: z4.number() })).mutation(async ({ input }) => {
@@ -8980,24 +9183,24 @@ var sectorsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const { id, ...data2 } = input;
-    if (data2.imageUrl && data2.imageUrl.startsWith("data:")) {
-      const uploaded = await cloudinaryUpload(data2.imageUrl, "btree/equipment");
-      data2.imageUrl = uploaded.url;
+    const { id, ...data3 } = input;
+    if (data3.imageUrl && data3.imageUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data3.imageUrl, "btree/equipment");
+      data3.imageUrl = uploaded.url;
     }
-    if (data2.invoiceUrl && data2.invoiceUrl.startsWith("data:")) {
-      const uploaded = await cloudinaryUpload(data2.invoiceUrl, "btree/docs");
-      data2.invoiceUrl = uploaded.url;
+    if (data3.invoiceUrl && data3.invoiceUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data3.invoiceUrl, "btree/docs");
+      data3.invoiceUrl = uploaded.url;
     }
-    if (data2.documentUrl && data2.documentUrl.startsWith("data:")) {
-      const uploaded = await cloudinaryUpload(data2.documentUrl, "btree/docs");
-      data2.documentUrl = uploaded.url;
+    if (data3.documentUrl && data3.documentUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data3.documentUrl, "btree/docs");
+      data3.documentUrl = uploaded.url;
     }
-    if (data2.insuranceUrl && data2.insuranceUrl.startsWith("data:")) {
-      const uploaded = await cloudinaryUpload(data2.insuranceUrl, "btree/docs");
-      data2.insuranceUrl = uploaded.url;
+    if (data3.insuranceUrl && data3.insuranceUrl.startsWith("data:")) {
+      const uploaded = await cloudinaryUpload(data3.insuranceUrl, "btree/docs");
+      data3.insuranceUrl = uploaded.url;
     }
-    await db.update(equipment).set(data2).where(eq3(equipment.id, id));
+    await db.update(equipment).set(data3).where(eq3(equipment.id, id));
     return { success: true };
   }),
   deleteEquipment: protectedProcedure.input(z4.object({ id: z4.number() })).mutation(async ({ input }) => {
@@ -9026,21 +9229,21 @@ async function hashPassword(password) {
 async function verifyPassword(password, hash) {
   return bcrypt2.compare(password, hash);
 }
-async function registerUser(data2) {
-  const existingUser = await getUserByEmail(data2.email);
+async function registerUser(data3) {
+  const existingUser = await getUserByEmail(data3.email);
   if (existingUser) {
     throw new Error("Email j\xE1 cadastrado");
   }
-  const passwordHash = await hashPassword(data2.password);
+  const passwordHash = await hashPassword(data3.password);
   const user = {
-    name: data2.name,
-    email: data2.email,
+    name: data3.name,
+    email: data3.email,
     passwordHash,
     loginMethod: "email",
-    role: data2.role || "user"
+    role: data3.role || "user"
   };
   await createUser(user);
-  const newUser = await getUserByEmail(data2.email);
+  const newUser = await getUserByEmail(data3.email);
   if (!newUser) {
     throw new Error("Erro ao criar usu\xE1rio");
   }
@@ -9912,8 +10115,8 @@ var cargoLoadsRouter = router({
           `);
         const rows2 = row;
         if (rows2 && rows2.length > 0 && rows2[0]?.action_code) {
-          const num3 = parseInt(String(rows2[0].action_code).replace("AC-", ""), 10);
-          if (!isNaN(num3)) actionCode = `AC-${String(num3 + 1).padStart(5, "0")}`;
+          const num4 = parseInt(String(rows2[0].action_code).replace("AC-", ""), 10);
+          if (!isNaN(num4)) actionCode = `AC-${String(num4 + 1).padStart(5, "0")}`;
         }
       } catch {
       }
@@ -12264,9 +12467,9 @@ Registrado por: ${payload.registeredBy}` : ""
 function sanitizeNumeric(value) {
   if (value === null || value === void 0 || value === "") return null;
   const str = String(value).trim().replace(",", ".");
-  const num3 = parseFloat(str);
-  if (isNaN(num3)) return null;
-  return String(num3);
+  const num4 = parseFloat(str);
+  if (isNaN(num4)) return null;
+  return String(num4);
 }
 
 // server/routers/vehicleRecords.ts
@@ -12837,14 +13040,14 @@ var clientAreasRouter = router({
       const [existing] = await tx.select().from(clientAreas).where(eq12(clientAreas.id, input.id)).limit(1);
       if (!existing) throw new TRPCError10({ code: "NOT_FOUND", message: "\xC1rea n\xE3o encontrada." });
       const { id, ...patch } = input;
-      const data2 = { ...patch, ...patch.fieldName !== void 0 ? { fieldName: patch.fieldName || null } : {}, ...patch.unitPrice !== void 0 ? { unitPrice: patch.unitPrice.replace(",", ".") } : {} };
-      const merged = { ...existing, ...data2 };
+      const data3 = { ...patch, ...patch.fieldName !== void 0 ? { fieldName: patch.fieldName || null } : {}, ...patch.unitPrice !== void 0 ? { unitPrice: patch.unitPrice.replace(",", ".") } : {} };
+      const merged = { ...existing, ...data3 };
       if (merged.agreementStatus === "confirmed") requireConfirmedArea(merged);
       if (patch.name && patch.name !== existing.name || patch.fieldName !== void 0 && (patch.fieldName || null) !== existing.fieldName) {
         const [dup] = await tx.select({ id: clientAreas.id }).from(clientAreas).where(and5(eq12(clientAreas.clientId, existing.clientId), eq12(clientAreas.name, merged.name), merged.fieldName ? eq12(clientAreas.fieldName, merged.fieldName) : isNull2(clientAreas.fieldName))).limit(1);
         if (dup) throw new TRPCError10({ code: "CONFLICT", message: "J\xE1 existe uma \xE1rea com esse nome." });
       }
-      await tx.update(clientAreas).set(data2).where(eq12(clientAreas.id, id));
+      await tx.update(clientAreas).set(data3).where(eq12(clientAreas.id, id));
       if (merged.agreementStatus === "confirmed") {
         await tx.update(cargoLoads).set({
           agreedUnit: merged.unit,
@@ -14236,7 +14439,7 @@ Registrado por: ${ctx.user.name}`
       byCollaborator[name2].count++;
       byCollaborator[name2].total += parseFloat(r.dailyValue || "0");
     }
-    const lines = Object.entries(byCollaborator).map(([name2, data2]) => `\u2022 ${name2}: ${data2.count} dia(s) \u2014 R$ ${data2.total.toFixed(2)} (desde ${data2.oldest})`).join("\n");
+    const lines = Object.entries(byCollaborator).map(([name2, data3]) => `\u2022 ${name2}: ${data3.count} dia(s) \u2014 R$ ${data3.total.toFixed(2)} (desde ${data3.oldest})`).join("\n");
     const totalGeral = pendingRecords.reduce((sum, r) => sum + parseFloat(r.dailyValue || "0"), 0);
     await notifyOwner({
       title: `\u26A0\uFE0F ${pendingRecords.length} pagamento(s) pendente(s) h\xE1 mais de 7 dias`,
@@ -14911,14 +15114,14 @@ var chainsawsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const { id, imageUrl: rawImageUrl, ...data2 } = input;
+    const { id, imageUrl: rawImageUrl, ...data3 } = input;
     let imageUrl = rawImageUrl;
     if (imageUrl && imageUrl.startsWith("data:")) {
       const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
       const result = await cloudinaryUpload2(imageUrl, "btree/chainsaws");
       imageUrl = result.url;
     }
-    await db.update(chainsaws).set({ ...data2, ...imageUrl !== void 0 ? { imageUrl } : {} }).where(eq20(chainsaws.id, id));
+    await db.update(chainsaws).set({ ...data3, ...imageUrl !== void 0 ? { imageUrl } : {} }).where(eq20(chainsaws.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z20.object({ id: z20.number() })).mutation(async ({ input }) => {
@@ -15222,14 +15425,14 @@ var chainsawPartsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const { id, imageUrl: rawImageUrl, ...data2 } = input;
+    const { id, imageUrl: rawImageUrl, ...data3 } = input;
     let imageUrl = rawImageUrl;
     if (imageUrl && imageUrl.startsWith("data:")) {
       const { cloudinaryUpload: cloudinaryUpload2 } = await Promise.resolve().then(() => (init_cloudinary(), cloudinary_exports));
       const result = await cloudinaryUpload2(imageUrl, "btree/chainsaw-parts");
       imageUrl = result.url;
     }
-    const updateData = { ...data2, ...imageUrl !== void 0 ? { imageUrl } : {} };
+    const updateData = { ...data3, ...imageUrl !== void 0 ? { imageUrl } : {} };
     await db.update(chainsawParts).set(updateData).where(eq20(chainsawParts.id, id));
     return { success: true };
   }),
@@ -17425,7 +17628,7 @@ var BTREE_LOGO = "https://btreeambiental.com/icon-btree-512.png";
 var KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
 var BTREE_SITE = "btreeambiental.com";
 var BTREE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://btreeambiental.com";
-function generatePdfHtml(data2, locationName2, periodo, sections) {
+function generatePdfHtml(data3, locationName2, periodo, sections) {
   const styles = `
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -17490,26 +17693,26 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
     <div class="summary-grid">
       <div class="summary-card">
         <div class="label">Custo Total</div>
-        <div class="value red">${formatCurrency(data2.resumo.custoTotal)}</div>
+        <div class="value red">${formatCurrency(data3.resumo.custoTotal)}</div>
       </div>
       <div class="summary-card">
         <div class="label">M\xE3o de Obra</div>
-        <div class="value blue">${formatCurrency(data2.resumo.totalMaoDeObra)}</div>
+        <div class="value blue">${formatCurrency(data3.resumo.totalMaoDeObra)}</div>
       </div>
       <div class="summary-card">
         <div class="label">Consumo</div>
-        <div class="value amber">${formatCurrency(data2.resumo.totalConsumo)}</div>
+        <div class="value amber">${formatCurrency(data3.resumo.totalConsumo)}</div>
       </div>
       <div class="summary-card">
         <div class="label">Cargas</div>
-        <div class="value green">${data2.resumo.totalCargas} (${data2.resumo.totalVolumeM3.toFixed(1)}m\xB3)</div>
+        <div class="value green">${data3.resumo.totalCargas} (${data3.resumo.totalVolumeM3.toFixed(1)}m\xB3)</div>
       </div>
     </div>
   `;
-  if (sections.maoDeObra && data2.maoDeObra.registros.length > 0) {
+  if (sections.maoDeObra && data3.maoDeObra.registros.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">M\xE3o de Obra \u2014 ${data2.maoDeObra.totalDias} registros</div>
+        <div class="section-title">M\xE3o de Obra \u2014 ${data3.maoDeObra.totalDias} registros</div>
         <table>
           <thead>
             <tr>
@@ -17523,7 +17726,7 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data2.maoDeObra.registros) {
+    for (const r of data3.maoDeObra.registros) {
       const empBadge = r.employmentType === "clt" ? "badge-clt" : r.employmentType === "terceirizado" ? "badge-terceirizado" : "badge-diarista";
       const empLabel = r.employmentType === "clt" ? "CLT" : r.employmentType === "terceirizado" ? "Terceirizado" : "Diarista";
       const payBadge = r.paymentStatus === "pago" ? "badge-pago" : "badge-pendente";
@@ -17542,16 +17745,16 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
     html += `
         <tr class="total-row">
           <td colspan="4">Total M\xE3o de Obra</td>
-          <td class="text-right">${formatCurrency(data2.maoDeObra.totalValor)}</td>
-          <td class="text-center">${data2.maoDeObra.pendentes} pend. / ${data2.maoDeObra.pagos} pagos</td>
+          <td class="text-right">${formatCurrency(data3.maoDeObra.totalValor)}</td>
+          <td class="text-center">${data3.maoDeObra.pendentes} pend. / ${data3.maoDeObra.pagos} pagos</td>
         </tr>
       </tbody></table></div>
     `;
   }
-  if (sections.consumo && data2.consumo.veiculos.length > 0) {
+  if (sections.consumo && data3.consumo.veiculos.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">Combust\xEDvel \u2014 Ve\xEDculos (${data2.consumo.veiculos.length} registros)</div>
+        <div class="section-title">Combust\xEDvel \u2014 Ve\xEDculos (${data3.consumo.veiculos.length} registros)</div>
         <table>
           <thead>
             <tr>
@@ -17565,7 +17768,7 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data2.consumo.veiculos) {
+    for (const r of data3.consumo.veiculos) {
       html += `
         <tr>
           <td>${formatDate(r.date)}</td>
@@ -17579,10 +17782,10 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
     }
     html += `</tbody></table></div>`;
   }
-  if (sections.consumo && data2.consumo.maquinas.length > 0) {
+  if (sections.consumo && data3.consumo.maquinas.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">Combust\xEDvel \u2014 M\xE1quinas (${data2.consumo.maquinas.length} registros)</div>
+        <div class="section-title">Combust\xEDvel \u2014 M\xE1quinas (${data3.consumo.maquinas.length} registros)</div>
         <table>
           <thead>
             <tr>
@@ -17596,7 +17799,7 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data2.consumo.maquinas) {
+    for (const r of data3.consumo.maquinas) {
       html += `
         <tr>
           <td>${formatDate(r.date)}</td>
@@ -17610,10 +17813,10 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
     }
     html += `</tbody></table></div>`;
   }
-  if (sections.consumo && data2.consumo.despesasExtras.length > 0) {
+  if (sections.consumo && data3.consumo.despesasExtras.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">Despesas Extras (${data2.consumo.despesasExtras.length} registros)</div>
+        <div class="section-title">Despesas Extras (${data3.consumo.despesasExtras.length} registros)</div>
         <table>
           <thead>
             <tr>
@@ -17626,7 +17829,7 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data2.consumo.despesasExtras) {
+    for (const r of data3.consumo.despesasExtras) {
       html += `
         <tr>
           <td>${formatDate(r.date)}</td>
@@ -17639,10 +17842,10 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
     }
     html += `</tbody></table></div>`;
   }
-  if (sections.cargas && data2.cargas.registros.length > 0) {
+  if (sections.cargas && data3.cargas.registros.length > 0) {
     html += `
       <div class="section">
-        <div class="section-title">Cargas (${data2.cargas.totalCargas} registros \u2014 ${data2.cargas.totalVolumeM3.toFixed(1)}m\xB3)</div>
+        <div class="section-title">Cargas (${data3.cargas.totalCargas} registros \u2014 ${data3.cargas.totalVolumeM3.toFixed(1)}m\xB3)</div>
         <table>
           <thead>
             <tr>
@@ -17656,7 +17859,7 @@ function generatePdfHtml(data2, locationName2, periodo, sections) {
           </thead>
           <tbody>
     `;
-    for (const r of data2.cargas.registros) {
+    for (const r of data3.cargas.registros) {
       html += `
         <tr>
           <td>${formatDate(r.date)}</td>
@@ -18021,7 +18224,14 @@ var buyerClientsRouter = router({
   // Vencimento = data de entrega + payment_term_days_after_delivery do comprador.
   // Usa cargo_loads.buyer_paid_at (campo próprio) — NÃO usa payment_status, que controla o
   // pagamento da BTREE ao cliente/fornecedor daquela carga (fluxo de dinheiro oposto).
-  listCargasAReceber: protectedProcedure.input(z30.object({ mes: z30.number().min(1).max(12), ano: z30.number().min(2020).max(2100), pesquisa: z30.string().optional() })).query(async ({ input }) => {
+  listCargasAReceber: protectedProcedure.input(z30.object({
+    mes: z30.number().min(1).max(12),
+    ano: z30.number().min(2020).max(2100),
+    pesquisa: z30.string().optional(),
+    // período de entrega (substitui o mês de vencimento quando os dois são informados)
+    dataInicio: z30.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    dataFim: z30.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
     const [rows2] = await db.$client.execute(
@@ -18063,8 +18273,12 @@ var buyerClientsRouter = router({
         receiptUrl: r.buyer_receipt_url || null
       };
     }).filter((c) => {
-      const [ay, am] = c.vencimento.split("-").map(Number);
-      if (ay !== input.ano || am !== input.mes) return false;
+      if (input.dataInicio && input.dataFim) {
+        if (c.dataEntrega < input.dataInicio || c.dataEntrega > input.dataFim) return false;
+      } else {
+        const [ay, am] = c.vencimento.split("-").map(Number);
+        if (ay !== input.ano || am !== input.mes) return false;
+      }
       if (input.pesquisa) {
         const s = input.pesquisa.toLowerCase();
         if (!c.destinoNome?.toLowerCase().includes(s) && !c.cnpj?.includes(input.pesquisa)) return false;
@@ -18432,32 +18646,32 @@ var freightRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data2 } = input;
+    const { id, ...data3 } = input;
     await db.update(freightCalculations).set({
-      cargoLoadId: data2.cargoLoadId || null,
-      date: data2.date || void 0,
-      vehiclePlate: data2.vehiclePlate || null,
-      driverName: data2.driverName || null,
-      driverType: data2.driverType || "proprio",
-      origin: data2.origin || null,
-      destination: data2.destination || null,
-      distanceKm: data2.distanceKm || null,
-      fuelLiters: data2.fuelLiters || null,
-      fuelCostPerLiter: data2.fuelCostPerLiter || null,
-      fuelTotalCost: data2.fuelTotalCost || null,
-      driverCost: data2.driverCost || null,
-      tollCost: data2.tollCost || null,
-      maintenanceCost: data2.maintenanceCost || null,
-      otherCosts: data2.otherCosts || null,
-      otherCostsDescription: data2.otherCostsDescription || null,
-      totalCost: data2.totalCost || null,
-      costPerKm: data2.costPerKm || null,
-      costPerTon: data2.costPerTon || null,
-      weightTon: data2.weightTon || null,
-      revenuePerTon: data2.revenuePerTon || null,
-      totalRevenue: data2.totalRevenue || null,
-      profit: data2.profit || null,
-      notes: data2.notes || null
+      cargoLoadId: data3.cargoLoadId || null,
+      date: data3.date || void 0,
+      vehiclePlate: data3.vehiclePlate || null,
+      driverName: data3.driverName || null,
+      driverType: data3.driverType || "proprio",
+      origin: data3.origin || null,
+      destination: data3.destination || null,
+      distanceKm: data3.distanceKm || null,
+      fuelLiters: data3.fuelLiters || null,
+      fuelCostPerLiter: data3.fuelCostPerLiter || null,
+      fuelTotalCost: data3.fuelTotalCost || null,
+      driverCost: data3.driverCost || null,
+      tollCost: data3.tollCost || null,
+      maintenanceCost: data3.maintenanceCost || null,
+      otherCosts: data3.otherCosts || null,
+      otherCostsDescription: data3.otherCostsDescription || null,
+      totalCost: data3.totalCost || null,
+      costPerKm: data3.costPerKm || null,
+      costPerTon: data3.costPerTon || null,
+      weightTon: data3.weightTon || null,
+      revenuePerTon: data3.revenuePerTon || null,
+      totalRevenue: data3.totalRevenue || null,
+      profit: data3.profit || null,
+      notes: data3.notes || null
     }).where(eq30(freightCalculations.id, id));
     return { success: true };
   }),
@@ -18528,8 +18742,8 @@ function ensureTrailingSlash(value) {
 function normalizeKey(relKey) {
   return relKey.replace(/^\/+/, "");
 }
-function toFormData(data2, contentType, fileName) {
-  const blob = typeof data2 === "string" ? new Blob([data2], { type: contentType }) : new Blob([data2], { type: contentType });
+function toFormData(data3, contentType, fileName) {
+  const blob = typeof data3 === "string" ? new Blob([data3], { type: contentType }) : new Blob([data3], { type: contentType });
   const form = new FormData();
   form.append("file", blob, fileName || "file");
   return form;
@@ -18537,11 +18751,11 @@ function toFormData(data2, contentType, fileName) {
 function buildAuthHeaders(apiKey) {
   return { Authorization: `Bearer ${apiKey}` };
 }
-async function storagePut(relKey, data2, contentType = "application/octet-stream") {
+async function storagePut(relKey, data3, contentType = "application/octet-stream") {
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
   const uploadUrl = buildUploadUrl(baseUrl, key);
-  const formData = toFormData(data2, contentType, key.split("/").pop() ?? key);
+  const formData = toFormData(data3, contentType, key.split("/").pop() ?? key);
   const response = await fetch(uploadUrl, {
     method: "POST",
     headers: buildAuthHeaders(apiKey),
@@ -18766,35 +18980,35 @@ var fuelSuppliersRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data2 } = input;
+    const { id, ...data3 } = input;
     const updateData = {};
-    if (data2.name !== void 0) updateData.name = data2.name;
-    if (data2.tradeName !== void 0) updateData.tradeName = data2.tradeName;
-    if (data2.cnpj !== void 0) updateData.cnpj = data2.cnpj;
-    if (data2.phone !== void 0) updateData.phone = data2.phone;
-    if (data2.email !== void 0) updateData.email = data2.email;
-    if (data2.contactName !== void 0) updateData.contactName = data2.contactName;
-    if (data2.address !== void 0) updateData.address = data2.address;
-    if (data2.city !== void 0) updateData.city = data2.city;
-    if (data2.state !== void 0) updateData.state = data2.state;
-    if (data2.fuelType !== void 0) updateData.fuelType = data2.fuelType;
-    if (data2.pricePerLiter !== void 0) updateData.pricePerLiter = sanitizeNumeric(data2.pricePerLiter) ?? data2.pricePerLiter;
-    if (data2.locationType !== void 0) updateData.locationType = data2.locationType;
-    if (data2.location !== void 0) updateData.location = data2.location;
-    if (data2.workLocationId !== void 0) updateData.workLocationId = data2.workLocationId;
-    if (data2.isActive !== void 0) updateData.isActive = data2.isActive;
-    if (data2.notes !== void 0) updateData.notes = data2.notes;
-    if (data2.tankCapacity !== void 0) updateData.tankCapacity = data2.tankCapacity;
-    if (data2.tankAlertThreshold !== void 0) updateData.tankAlertThreshold = data2.tankAlertThreshold;
-    if (data2.vendorName !== void 0) updateData.vendorName = data2.vendorName;
-    if (data2.managerName !== void 0) updateData.managerName = data2.managerName;
-    if (data2.pricePerLiter !== void 0) {
+    if (data3.name !== void 0) updateData.name = data3.name;
+    if (data3.tradeName !== void 0) updateData.tradeName = data3.tradeName;
+    if (data3.cnpj !== void 0) updateData.cnpj = data3.cnpj;
+    if (data3.phone !== void 0) updateData.phone = data3.phone;
+    if (data3.email !== void 0) updateData.email = data3.email;
+    if (data3.contactName !== void 0) updateData.contactName = data3.contactName;
+    if (data3.address !== void 0) updateData.address = data3.address;
+    if (data3.city !== void 0) updateData.city = data3.city;
+    if (data3.state !== void 0) updateData.state = data3.state;
+    if (data3.fuelType !== void 0) updateData.fuelType = data3.fuelType;
+    if (data3.pricePerLiter !== void 0) updateData.pricePerLiter = sanitizeNumeric(data3.pricePerLiter) ?? data3.pricePerLiter;
+    if (data3.locationType !== void 0) updateData.locationType = data3.locationType;
+    if (data3.location !== void 0) updateData.location = data3.location;
+    if (data3.workLocationId !== void 0) updateData.workLocationId = data3.workLocationId;
+    if (data3.isActive !== void 0) updateData.isActive = data3.isActive;
+    if (data3.notes !== void 0) updateData.notes = data3.notes;
+    if (data3.tankCapacity !== void 0) updateData.tankCapacity = data3.tankCapacity;
+    if (data3.tankAlertThreshold !== void 0) updateData.tankAlertThreshold = data3.tankAlertThreshold;
+    if (data3.vendorName !== void 0) updateData.vendorName = data3.vendorName;
+    if (data3.managerName !== void 0) updateData.managerName = data3.managerName;
+    if (data3.pricePerLiter !== void 0) {
       const [existing] = await db.select({ pricePerLiter: fuelSuppliers.pricePerLiter }).from(fuelSuppliers).where(eq31(fuelSuppliers.id, id));
-      if (existing && existing.pricePerLiter !== data2.pricePerLiter) {
+      if (existing && existing.pricePerLiter !== data3.pricePerLiter) {
         await db.insert(fuelPriceHistory).values({
           supplierId: id,
           oldPrice: existing.pricePerLiter,
-          newPrice: data2.pricePerLiter,
+          newPrice: data3.pricePerLiter,
           changedBy: ctx.user?.id || null
         });
       }
@@ -19091,9 +19305,9 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data2 } = input;
+    const { id, ...data3 } = input;
     const updateData = {};
-    for (const [key, val] of Object.entries(data2)) {
+    for (const [key, val] of Object.entries(data3)) {
       if (val !== void 0) updateData[key] = val;
     }
     await db.update(fuelInvoices).set(updateData).where(eq31(fuelInvoices.id, id));
@@ -20825,8 +21039,8 @@ var quotationsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data2 } = input;
-    await db.update(quotations).set(data2).where(eq36(quotations.id, id));
+    const { id, ...data3 } = input;
+    await db.update(quotations).set(data3).where(eq36(quotations.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z38.object({ id: z38.number() })).mutation(async ({ input }) => {
@@ -24594,16 +24808,16 @@ function parseOfx(texto) {
     return m ? m[1].trim() : null;
   };
   for (const b of blocos) {
-    const data2 = parseDataFlex(tag(b, "DTPOSTED") ?? "");
+    const data3 = parseDataFlex(tag(b, "DTPOSTED") ?? "");
     const valor = parseValorBR(tag(b, "TRNAMT") ?? "");
-    if (!data2 || valor === null) {
+    if (!data3 || valor === null) {
       avisos.push("Transa\xE7\xE3o OFX ignorada (data ou valor inv\xE1lido).");
       continue;
     }
     const nome = tag(b, "NAME");
     const memo = tag(b, "MEMO");
     const descricao = [nome, memo && memo !== nome ? memo : null].filter(Boolean).join(" \u2014 ") || "(sem descri\xE7\xE3o)";
-    base.push({ data: data2, descricao, valor, documento: tag(b, "FITID") || tag(b, "CHECKNUM") });
+    base.push({ data: data3, descricao, valor, documento: tag(b, "FITID") || tag(b, "CHECKNUM") });
   }
   return { transacoes: comHash(base), formato: "ofx", avisos };
 }
@@ -24654,8 +24868,8 @@ function parseCsv(texto) {
   const base = [];
   for (let i = idxCab + 1; i < linhas.length; i++) {
     const cols = dividirLinhaCsv(linhas[i], sep);
-    const data2 = parseDataFlex(cols[iData] ?? "");
-    if (!data2) continue;
+    const data3 = parseDataFlex(cols[iData] ?? "");
+    if (!data3) continue;
     let valor = null;
     if (iValor >= 0) valor = parseValorBR(cols[iValor] ?? "");
     if (valor === null && (iDeb >= 0 || iCred >= 0)) {
@@ -24666,7 +24880,7 @@ function parseCsv(texto) {
     }
     if (valor === null || valor === 0) continue;
     base.push({
-      data: data2,
+      data: data3,
       valor,
       descricao: (iDesc >= 0 ? cols[iDesc] : "") || "(sem descri\xE7\xE3o)",
       documento: iDoc >= 0 ? cols[iDoc] || null : null
@@ -24937,10 +25151,10 @@ var financialRealRouter = router({
       if (!ehImportado(linha.id)) movimentoSicoob += linha.tipo === "CREDITO" ? linha.valor : -linha.valor;
       const mes = linha.dataLancamento.slice(0, 7);
       const m = porMes.get(mes) ?? { mes, entradas: 0, saidas: 0, entradasFin: 0, saidasFin: 0 };
-      const entrada = linha.tipo === "CREDITO";
+      const entrada2 = linha.tipo === "CREDITO";
       const v = linha.valor;
       if (c.tipoResultado === "resultado") {
-        if (entrada) {
+        if (entrada2) {
           tot.entradasResultado += v;
           m.entradas += v;
         } else {
@@ -24948,13 +25162,13 @@ var financialRealRouter = router({
           m.saidas += v;
         }
         const g = c.grupo ?? SEM, cc = c.centroCusto ?? SEM, n = c.natureza ?? SEM;
-        const k = `${entrada ? "e" : "s"}|${g}|${cc}|${n}`;
-        const a = arvore.get(k) ?? { tipo: entrada ? "entrada" : "saida", grupo: g, centroCusto: cc, natureza: n, valor: 0, qtd: 0 };
+        const k = `${entrada2 ? "e" : "s"}|${g}|${cc}|${n}`;
+        const a = arvore.get(k) ?? { tipo: entrada2 ? "entrada" : "saida", grupo: g, centroCusto: cc, natureza: n, valor: 0, qtd: 0 };
         a.valor += v;
         a.qtd += 1;
         arvore.set(k, a);
       } else if (c.tipoResultado === "financeiro_nao_resultado") {
-        if (entrada) {
+        if (entrada2) {
           tot.entradasFinanceiro += v;
           m.entradasFin += v;
         } else {
@@ -24962,11 +25176,11 @@ var financialRealRouter = router({
           m.saidasFin += v;
         }
       } else {
-        tot.transferencias += entrada ? v : -v;
+        tot.transferencias += entrada2 ? v : -v;
       }
       porMes.set(mes, m);
       if (!estaClassificado(c)) {
-        if (entrada) {
+        if (entrada2) {
           sem.creditoQtd++;
           sem.creditoValor += v;
         } else {
@@ -24986,31 +25200,31 @@ var financialRealRouter = router({
       if (sF[0]) saldoFinal = num2(sF[0].saldo_final);
     } catch {
     }
-    const r24 = (n) => Math.round(n * 100) / 100;
+    const r25 = (n) => Math.round(n * 100) / 100;
     const variacaoSaldo = saldoInicial != null && saldoFinal != null ? saldoFinal - saldoInicial : null;
     const incluiSicoob = input.conta === "todas" || input.conta === "sicoob";
     return {
-      conciliacaoSaldo: variacaoSaldo != null && incluiSicoob ? { variacaoSaldo: r24(variacaoSaldo), variacaoLancamentos: r24(movimentoSicoob), diferenca: r24(variacaoSaldo - movimentoSicoob) } : null,
+      conciliacaoSaldo: variacaoSaldo != null && incluiSicoob ? { variacaoSaldo: r25(variacaoSaldo), variacaoLancamentos: r25(movimentoSicoob), diferenca: r25(variacaoSaldo - movimentoSicoob) } : null,
       totais: {
-        entradasResultado: r24(tot.entradasResultado),
-        saidasResultado: r24(tot.saidasResultado),
-        resultadoCaixa: r24(tot.entradasResultado - tot.saidasResultado),
-        entradasFinanceiro: r24(tot.entradasFinanceiro),
-        saidasFinanceiro: r24(tot.saidasFinanceiro),
-        transferenciasLiquidas: r24(tot.transferencias),
+        entradasResultado: r25(tot.entradasResultado),
+        saidasResultado: r25(tot.saidasResultado),
+        resultadoCaixa: r25(tot.entradasResultado - tot.saidasResultado),
+        entradasFinanceiro: r25(tot.entradasFinanceiro),
+        saidasFinanceiro: r25(tot.saidasFinanceiro),
+        transferenciasLiquidas: r25(tot.transferencias),
         lancamentos: itens.length
       },
       saldo: { inicial: saldoInicial, final: saldoFinal },
       porMes: Array.from(porMes.values()).sort((a, b) => a.mes.localeCompare(b.mes)).map((m) => ({
         mes: m.mes,
-        entradas: r24(m.entradas),
-        saidas: r24(m.saidas),
-        resultado: r24(m.entradas - m.saidas),
-        entradasFin: r24(m.entradasFin),
-        saidasFin: r24(m.saidasFin)
+        entradas: r25(m.entradas),
+        saidas: r25(m.saidas),
+        resultado: r25(m.entradas - m.saidas),
+        entradasFin: r25(m.entradasFin),
+        saidasFin: r25(m.saidasFin)
       })),
-      arvore: Array.from(arvore.values()).map((a) => ({ ...a, valor: r24(a.valor) })),
-      semClassificacao: { ...sem, debitoValor: r24(sem.debitoValor), creditoValor: r24(sem.creditoValor) }
+      arvore: Array.from(arvore.values()).map((a) => ({ ...a, valor: r25(a.valor) })),
+      semClassificacao: { ...sem, debitoValor: r25(sem.debitoValor), creditoValor: r25(sem.creditoValor) }
     };
   }),
   // ── Lançamentos classificados (drill-down e fila "sem classificação") ──
@@ -25238,8 +25452,8 @@ var financialRealRouter = router({
     }));
     const m = casarPagamentos(sistema.pagamentos, debitos, 7);
     const dentro = (d) => d >= input.dataInicio && d <= input.dataFim;
-    const r24 = (n) => Math.round(n * 100) / 100;
-    const soma = (a) => r24(a.reduce((s, x) => s + x.valor, 0));
+    const r25 = (n) => Math.round(n * 100) / 100;
+    const soma = (a) => r25(a.reduce((s, x) => s + x.valor, 0));
     const casados = m.casados.filter((c) => dentro(c.pagamento.data));
     const pagamentosSemBanco = m.pagamentosSemBanco.filter((p) => dentro(p.data));
     const debitosSemSistema = m.debitosSemSistema.filter((d) => dentro(d.data));
@@ -25249,7 +25463,7 @@ var financialRealRouter = router({
       resumo: {
         debitosBanco: soma(debitosNoPeriodo),
         pagamentosSistema: soma(pagamentosNoPeriodo),
-        casadosValor: r24(casados.reduce((s, c) => s + c.pagamento.valor, 0)),
+        casadosValor: r25(casados.reduce((s, c) => s + c.pagamento.valor, 0)),
         casadosQtd: casados.length,
         pagamentosSemBancoValor: soma(pagamentosSemBanco),
         pagamentosSemBancoQtd: pagamentosSemBanco.length,
@@ -25385,180 +25599,213 @@ var financialRealRouter = router({
 // server/routers.ts
 init_weeklyGoals2();
 
+// server/routers/contasReceber.ts
+init_trpc();
+init_permissions();
+import { z as z50 } from "zod";
+
+// server/utils/contasReceberResumo.ts
+var r24 = (n) => Math.round(n * 100) / 100;
+function calcularCards(itens, hoje, status = "todos") {
+  let vencidos = 0, vencemHoje = 0, aVencer = 0, recebidos = 0;
+  const semPrevisao = { qtd: 0, valor: 0 };
+  const porFonte = { boleto: 0, nf: 0, carga: 0 };
+  for (const it of itens) {
+    if (it.cancelado) continue;
+    if (status === "cancelado") continue;
+    if (it.recebido) {
+      if (status === "em_aberto") continue;
+      recebidos += it.valor;
+      porFonte[it.fonte] += it.valor;
+      continue;
+    }
+    if (status === "pago") continue;
+    if (!it.vencimento) {
+      semPrevisao.qtd++;
+      semPrevisao.valor += it.valor;
+      continue;
+    }
+    if (it.vencimento < hoje) vencidos += it.valor;
+    else if (it.vencimento === hoje) vencemHoje += it.valor;
+    else aVencer += it.valor;
+    porFonte[it.fonte] += it.valor;
+  }
+  return {
+    vencidos: r24(vencidos),
+    vencemHoje: r24(vencemHoje),
+    aVencer: r24(aVencer),
+    recebidos: r24(recebidos),
+    total: r24(vencidos + vencemHoje + aVencer + recebidos),
+    semPrevisao: { qtd: semPrevisao.qtd, valor: r24(semPrevisao.valor) },
+    porFonte: { boleto: r24(porFonte.boleto), nf: r24(porFonte.nf), carga: r24(porFonte.carga) }
+  };
+}
+function soDigitos(s) {
+  return (s ?? "").replace(/\D/g, "");
+}
+
+// server/routers/contasReceber.ts
+var data2 = z50.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+var entrada = z50.object({
+  mes: z50.number().min(1).max(12),
+  ano: z50.number().min(2020).max(2100),
+  /** período de emissão (NF/boleto) ou entrega (carga); quando informado, substitui o mês */
+  dataInicio: data2.optional(),
+  dataFim: data2.optional(),
+  cnpj: z50.string().optional(),
+  pesquisa: z50.string().optional(),
+  statusFiltro: z50.enum(["todos", "em_aberto", "pago", "cancelado"]).default("todos")
+});
+function num3(v) {
+  const s = String(v ?? "0").trim();
+  const n = s.includes(",") ? parseFloat(s.replace(/\./g, "").replace(",", ".")) : parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+var dia = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? "").slice(0, 10);
+var SQL_DIGITOS = (col) => `REPLACE(REPLACE(REPLACE(REPLACE(${col}, '.', ''), '/', ''), '-', ''), ' ', '')`;
+async function getDbOrNull() {
+  const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+  return getDb2();
+}
+var contasReceberRouter = router({
+  // ── Cards: Vencidos / Vencem hoje / A vencer / Recebidos / Total ──
+  cards: moduleProcedure("contas-a-receber").input(entrada).query(async ({ input }) => {
+    const db = await getDbOrNull();
+    const vazio = calcularCards([], "1970-01-01");
+    if (!db) return { ...vazio, error: "DB indispon\xEDvel" };
+    const hoje = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const prefixo = `${input.ano}-${String(input.mes).padStart(2, "0")}`;
+    const intervalo = input.dataInicio && input.dataFim ? { ini: input.dataInicio, fim: input.dataFim } : null;
+    const cnpj = soDigitos(input.cnpj);
+    const itens = [];
+    const erros = [];
+    try {
+      const where = [];
+      const params = [];
+      if (intervalo) {
+        where.push(`COALESCE(NULLIF(data_emissao, ''), data_vencimento) BETWEEN ? AND ?`);
+        params.push(intervalo.ini, intervalo.fim);
+      } else {
+        where.push(`data_vencimento LIKE ?`);
+        params.push(`${prefixo}%`);
+      }
+      if (cnpj) {
+        where.push(`${SQL_DIGITOS("cnpj_pagador")} = ?`);
+        params.push(cnpj);
+      }
+      if (input.pesquisa) {
+        where.push(`(nome_pagador LIKE ? OR cnpj_pagador LIKE ?)`);
+        params.push(`%${input.pesquisa}%`, `%${input.pesquisa}%`);
+      }
+      const [rows2] = await db.$client.execute(`SELECT situacao, data_vencimento, valor FROM sicoob_boletos WHERE ${where.join(" AND ")}`, params);
+      for (const r of rows2) {
+        itens.push({ fonte: "boleto", valor: num3(r.valor), recebido: r.situacao === 3, cancelado: r.situacao === 2, vencimento: dia(r.data_vencimento) || null });
+      }
+    } catch (e) {
+      erros.push(`Boletos: ${e.message}`);
+    }
+    try {
+      const where = [`sb.id IS NULL`, `nf.cfop = '5102'`];
+      const params = [];
+      if (intervalo) {
+        where.push(`nf.data_emissao BETWEEN ? AND ?`);
+        params.push(intervalo.ini, intervalo.fim);
+      } else {
+        where.push(`(nf.data_previsao_pagamento LIKE ? OR nf.data_pagamento_confirmado LIKE ?)`);
+        params.push(`${prefixo}%`, `${prefixo}%`);
+      }
+      if (cnpj) {
+        where.push(`${SQL_DIGITOS("nf.cnpj_destinatario")} = ?`);
+        params.push(cnpj);
+      }
+      if (input.pesquisa) {
+        where.push(`(nf.nome_destinatario LIKE ? OR nf.cnpj_destinatario LIKE ? OR nf.numero_nota LIKE ?)`);
+        params.push(`%${input.pesquisa}%`, `%${input.pesquisa}%`, `%${input.pesquisa}%`);
+      }
+      const [rows2] = await db.$client.execute(
+        `SELECT nf.valor_total, nf.status_nf_interno, nf.data_pagamento_confirmado, nf.data_previsao_pagamento
+           FROM notas_fiscais nf
+           LEFT JOIN sicoob_boletos sb ON sb.nf_referente = nf.numero_nota AND sb.cnpj_pagador = nf.cnpj_destinatario
+           WHERE ${where.join(" AND ")}`,
+        params
+      );
+      for (const r of rows2) {
+        const cancelado = r.status_nf_interno === "cancelado";
+        const pago = r.status_nf_interno === "pago";
+        if (!intervalo && !cancelado) {
+          if (pago && !String(r.data_pagamento_confirmado ?? "").startsWith(prefixo)) continue;
+          if (!pago && !String(r.data_previsao_pagamento ?? "").startsWith(prefixo)) continue;
+        }
+        itens.push({ fonte: "nf", valor: num3(r.valor_total), recebido: pago, cancelado, vencimento: r.data_previsao_pagamento ? dia(r.data_previsao_pagamento) : null });
+      }
+    } catch (e) {
+      erros.push(`NFs: ${e.message}`);
+    }
+    try {
+      const where = [`cl.status = 'entregue'`, `cd.payment_term_days_after_delivery IS NOT NULL`];
+      const params = [];
+      if (cnpj) {
+        where.push(`${SQL_DIGITOS("cd.cnpj_cpf")} = ?`);
+        params.push(cnpj);
+      }
+      const [rows2] = await db.$client.execute(
+        `SELECT cl.date, cl.delivery_date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3, cl.buyer_paid_at, cl.invoice_number,
+                  cd.name AS destino_nome, cd.cnpj_cpf, cd.price_per_unit, cd.unit, cd.payment_term_days_after_delivery
+           FROM cargo_loads cl
+           JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+           WHERE ${where.join(" AND ")}`,
+        params
+      );
+      const pesq = input.pesquisa?.toLowerCase();
+      for (const r of rows2) {
+        if (pesq && !String(r.destino_nome ?? "").toLowerCase().includes(pesq) && !String(r.cnpj_cpf ?? "").includes(input.pesquisa)) continue;
+        const entrega = dia(r.delivery_date || r.date);
+        const venc = /* @__PURE__ */ new Date(entrega + "T12:00:00");
+        venc.setDate(venc.getDate() + Number(r.payment_term_days_after_delivery));
+        const vencimento = venc.toISOString().slice(0, 10);
+        if (intervalo ? entrega < intervalo.ini || entrega > intervalo.fim : !vencimento.startsWith(prefixo)) continue;
+        const peso = parseFloat(r.weight_net_kg || r.weight_out_kg || "0");
+        const volume = parseFloat(r.volume_m3 || "0");
+        const quantidade = r.unit === "m3" ? volume : peso / 1e3;
+        itens.push({ fonte: "carga", valor: quantidade * parseFloat(r.price_per_unit || "0"), recebido: !!r.buyer_paid_at, cancelado: false, vencimento });
+      }
+    } catch (e) {
+      erros.push(`Cargas: ${e.message}`);
+    }
+    return { ...calcularCards(itens, hoje, input.statusFiltro), error: erros.length ? erros.join(" | ") : null };
+  }),
+  // ── Destinatários disponíveis para o filtro (NFs + boletos + compradores), por CNPJ ──
+  destinatarios: moduleProcedure("contas-a-receber").query(async () => {
+    const db = await getDbOrNull();
+    if (!db) return [];
+    const mapa = /* @__PURE__ */ new Map();
+    const add = (cnpj, nome) => {
+      const c = soDigitos(String(cnpj ?? ""));
+      const n = String(nome ?? "").trim();
+      if (c.length < 11 || !n) return;
+      if (!mapa.has(c)) mapa.set(c, n);
+    };
+    const tentar = async (sql34) => {
+      try {
+        const [r] = await db.$client.execute(sql34);
+        return r;
+      } catch {
+        return [];
+      }
+    };
+    for (const r of await tentar(`SELECT cnpj_destinatario AS cnpj, MAX(nome_destinatario) AS nome FROM notas_fiscais WHERE cfop = '5102' AND cnpj_destinatario <> '' GROUP BY cnpj_destinatario`)) add(r.cnpj, r.nome);
+    for (const r of await tentar(`SELECT cnpj_pagador AS cnpj, MAX(nome_pagador) AS nome FROM sicoob_boletos WHERE cnpj_pagador <> '' GROUP BY cnpj_pagador`)) add(r.cnpj, r.nome);
+    for (const r of await tentar(`SELECT cnpj_cpf AS cnpj, name AS nome FROM cargo_destinations WHERE payment_term_days_after_delivery IS NOT NULL AND cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''`)) add(r.cnpj, r.nome);
+    return Array.from(mapa.entries()).map(([cnpj, nome]) => ({ cnpj, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  })
+});
+
 // server/routers/contaAzul.ts
 init_trpc();
-import { z as z50 } from "zod";
+init_prazoPagamento();
+import { z as z51 } from "zod";
 import axios2 from "axios";
 import zlib from "zlib";
-
-// server/utils/feriadosBrasil.ts
-function toISO(ano, mes, dia) {
-  return `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-}
-function pascoa(ano) {
-  const a = ano % 19;
-  const b = Math.floor(ano / 100);
-  const c = ano % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const mes = Math.floor((h + l - 7 * m + 114) / 31);
-  const dia = (h + l - 7 * m + 114) % 31 + 1;
-  return { mes, dia };
-}
-function addDiasData(ano, mes, dia, offset) {
-  const d = new Date(Date.UTC(ano, mes - 1, dia));
-  d.setUTCDate(d.getUTCDate() + offset);
-  return { ano: d.getUTCFullYear(), mes: d.getUTCMonth() + 1, dia: d.getUTCDate() };
-}
-function feriadosDoAno(ano) {
-  const datas = /* @__PURE__ */ new Set();
-  const fixos = [
-    [1, 1],
-    // Confraternização Universal
-    [4, 21],
-    // Tiradentes
-    [5, 1],
-    // Dia do Trabalho
-    [9, 7],
-    // Independência
-    [10, 12],
-    // Nossa Senhora Aparecida
-    [11, 2],
-    // Finados
-    [11, 15],
-    // Proclamação da República
-    [11, 20],
-    // Consciência Negra (feriado nacional desde a Lei 14.759/2023)
-    [12, 25]
-    // Natal
-  ];
-  for (const [mes, dia] of fixos) datas.add(toISO(ano, mes, dia));
-  const p = pascoa(ano);
-  const sextaSanta = addDiasData(ano, p.mes, p.dia, -2);
-  const corpusChristi = addDiasData(ano, p.mes, p.dia, 60);
-  const carnavalSegunda = addDiasData(ano, p.mes, p.dia, -48);
-  const carnavalTerca = addDiasData(ano, p.mes, p.dia, -47);
-  datas.add(toISO(sextaSanta.ano, sextaSanta.mes, sextaSanta.dia));
-  datas.add(toISO(corpusChristi.ano, corpusChristi.mes, corpusChristi.dia));
-  datas.add(toISO(carnavalSegunda.ano, carnavalSegunda.mes, carnavalSegunda.dia));
-  datas.add(toISO(carnavalTerca.ano, carnavalTerca.mes, carnavalTerca.dia));
-  return datas;
-}
-var cacheAnos = /* @__PURE__ */ new Map();
-function ehFeriado(dataISO) {
-  const ano = parseInt(dataISO.slice(0, 4));
-  if (!cacheAnos.has(ano)) cacheAnos.set(ano, feriadosDoAno(ano));
-  return cacheAnos.get(ano).has(dataISO);
-}
-function ehDiaUtil(dataISO) {
-  const [ano, mes, dia] = dataISO.split("-").map(Number);
-  const dow = new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay();
-  if (dow === 0 || dow === 6) return false;
-  return !ehFeriado(dataISO);
-}
-function proximoDiaUtil(dataISO) {
-  let [ano, mes, dia] = dataISO.split("-").map(Number);
-  let atual = dataISO;
-  while (!ehDiaUtil(atual)) {
-    const d = new Date(Date.UTC(ano, mes - 1, dia));
-    d.setUTCDate(d.getUTCDate() + 1);
-    ano = d.getUTCFullYear();
-    mes = d.getUTCMonth() + 1;
-    dia = d.getUTCDate();
-    atual = toISO(ano, mes, dia);
-  }
-  return atual;
-}
-function somarDiasUteis(dataISO, dias) {
-  let [ano, mes, dia] = dataISO.split("-").map(Number);
-  let atual = dataISO;
-  let restantes = dias;
-  while (restantes > 0) {
-    const d = new Date(Date.UTC(ano, mes - 1, dia));
-    d.setUTCDate(d.getUTCDate() + 1);
-    ano = d.getUTCFullYear();
-    mes = d.getUTCMonth() + 1;
-    dia = d.getUTCDate();
-    atual = toISO(ano, mes, dia);
-    if (ehDiaUtil(atual)) restantes--;
-  }
-  return atual;
-}
-
-// server/utils/prazoPagamento.ts
-function normalizarCnpj(cnpj) {
-  return (cnpj ?? "").replace(/\D/g, "");
-}
-function parseDataISO(data2) {
-  const [ano, mes, dia] = data2.split("-").map(Number);
-  return { ano, mes, dia };
-}
-function toISO2(ano, mes, dia) {
-  const mm = String(mes).padStart(2, "0");
-  const dd = String(dia).padStart(2, "0");
-  return `${ano}-${mm}-${dd}`;
-}
-function ultimoDiaDoMes(ano, mes) {
-  return new Date(Date.UTC(ano, mes, 0)).getUTCDate();
-}
-function calcularFaixaMensalRebnic(dataEmissaoISO) {
-  const { ano, mes, dia } = parseDataISO(dataEmissaoISO);
-  if (dia >= 20) {
-    let anoPagamento = ano;
-    let mesPagamento = mes + 1;
-    if (mesPagamento > 12) {
-      mesPagamento = 1;
-      anoPagamento++;
-    }
-    return toISO2(anoPagamento, mesPagamento, 10);
-  }
-  if (dia <= 9) {
-    return toISO2(ano, mes, 20);
-  }
-  const ultimoDia = ultimoDiaDoMes(ano, mes);
-  const diaPagamento = Math.min(30, ultimoDia);
-  return toISO2(ano, mes, diaPagamento);
-}
-function calcularQuartaSemanaSeguinte(dataReferenciaISO) {
-  const { ano, mes, dia } = parseDataISO(dataReferenciaISO);
-  const d = new Date(Date.UTC(ano, mes - 1, dia));
-  const domingoDaSemana = d.getUTCDay();
-  d.setUTCDate(d.getUTCDate() - domingoDaSemana);
-  d.setUTCDate(d.getUTCDate() + 10);
-  const quarta = toISO2(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
-  return proximoDiaUtil(quarta);
-}
-function calcularDataPrevisaoPagamento(cnpj, dataEmissao, regras, dataEntregaCarga) {
-  if (!dataEmissao) return null;
-  const cnpjNorm = normalizarCnpj(cnpj);
-  if (!cnpjNorm) return null;
-  const regra = regras.find((r) => normalizarCnpj(r.cnpj) === cnpjNorm);
-  if (!regra) return null;
-  if (regra.tipoRegra === "dias_corridos") {
-    let dias = 0;
-    try {
-      dias = JSON.parse(regra.parametros)?.dias ?? 0;
-    } catch {
-      dias = 0;
-    }
-    const baseISO = (dataEntregaCarga ?? dataEmissao).slice(0, 10);
-    return somarDiasUteis(baseISO, dias);
-  }
-  if (regra.tipoRegra === "faixa_mensal") {
-    return calcularFaixaMensalRebnic(dataEmissao.slice(0, 10));
-  }
-  if (regra.tipoRegra === "semanal_quarta") {
-    return calcularQuartaSemanaSeguinte(dataEmissao.slice(0, 10));
-  }
-  return null;
-}
 
 // server/utils/resumoNFs.ts
 function pertenceAoPeriodo(dataISO, mes, ano) {
@@ -25940,7 +26187,7 @@ async function syncNotasFiscais(mes, ano) {
   return { synced, errors };
 }
 var contaAzulRouter = router({
-  setRefreshToken: protectedProcedure.input(z50.object({ refreshToken: z50.string().min(10) })).mutation(async ({ input }) => {
+  setRefreshToken: protectedProcedure.input(z51.object({ refreshToken: z51.string().min(10) })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(
@@ -25964,17 +26211,23 @@ var contaAzulRouter = router({
       configurado: Number(tokenRows?.[0]?.cnt ?? 0) > 0
     };
   }),
-  listNotasFiscais: protectedProcedure.input(z50.object({
-    mes: z50.number().min(1).max(12),
-    ano: z50.number().min(2020).max(2100),
-    pesquisa: z50.string().optional(),
-    incluirCanceladas: z50.boolean().optional()
+  listNotasFiscais: protectedProcedure.input(z51.object({
+    mes: z51.number().min(1).max(12),
+    ano: z51.number().min(2020).max(2100),
+    // período de emissão (substitui o mês quando os dois são informados)
+    dataInicio: z51.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    dataFim: z51.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    pesquisa: z51.string().optional(),
+    incluirCanceladas: z51.boolean().optional()
   })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { notas: [], error: "DB indispon\xEDvel" };
     const pClause = input.pesquisa ? `AND (nf.nome_destinatario LIKE ? OR nf.cnpj_destinatario LIKE ? OR nf.numero_nota LIKE ?)` : "";
     const pParams = input.pesquisa ? [`%${input.pesquisa}%`, `%${input.pesquisa}%`, `%${input.pesquisa}%`] : [];
     const canceladasClause = input.incluirCanceladas ? "" : `AND nf.status_nf_interno != 'cancelado'`;
+    const porIntervalo = !!(input.dataInicio && input.dataFim);
+    const periodoClause = porIntervalo ? "nf.data_emissao BETWEEN ? AND ?" : "nf.mes = ? AND nf.ano = ?";
+    const periodoParams = porIntervalo ? [input.dataInicio, input.dataFim] : [input.mes, input.ano];
     const [rows2] = await db.$client.execute(
       `SELECT nf.*,
            CASE WHEN sb.id IS NOT NULL THEN 1 ELSE 0 END AS tem_boleto,
@@ -25995,17 +26248,17 @@ var contaAzulRouter = router({
           AND sb.cnpj_pagador = nf.cnpj_destinatario
          LEFT JOIN cargo_loads cl
            ON TRIM(SUBSTRING_INDEX(cl.invoice_number, 'NF ', -1)) = nf.numero_nota
-         WHERE nf.mes = ? AND nf.ano = ? AND nf.cfop = '5102'
+         WHERE ${periodoClause} AND nf.cfop = '5102'
          ${canceladasClause}
          ${pClause}
          ORDER BY nf.data_emissao ASC`,
-      [input.mes, input.ano, ...pParams]
+      [...periodoParams, ...pParams]
     );
     return { notas: rows2 ?? [], error: null };
   }),
   // Resumo (Vencidos/Vencem hoje/A vencer/Recebidos/Total) apenas das NFs sem boleto correspondente.
   // O frontend soma este resultado ao summaryBoletos (Sicoob) para formar os cards finais.
-  summaryNFsSemBoleto: protectedProcedure.input(z50.object({ mes: z50.number().min(1).max(12), ano: z50.number().min(2020).max(2100) })).query(async ({ input }) => {
+  summaryNFsSemBoleto: protectedProcedure.input(z51.object({ mes: z51.number().min(1).max(12), ano: z51.number().min(2020).max(2100) })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { vencidos: 0, vencemHoje: 0, aVencer: 0, recebidos: 0, total: 0, error: "DB indispon\xEDvel" };
     const [rows2] = await db.$client.execute(
@@ -26033,10 +26286,10 @@ var contaAzulRouter = router({
     return { ...resumo, error: null };
   }),
   // Altera o Status NF (manual). Registra auditoria e, se "pago", a data de pagamento confirmado.
-  updateStatusNf: protectedProcedure.input(z50.object({
-    id: z50.number(),
-    novoStatus: z50.enum(["em_aberto", "pago", "cancelado"]),
-    dataPagamentoConfirmado: z50.string().optional()
+  updateStatusNf: protectedProcedure.input(z51.object({
+    id: z51.number(),
+    novoStatus: z51.enum(["em_aberto", "pago", "cancelado"]),
+    dataPagamentoConfirmado: z51.string().optional()
     // "YYYY-MM-DD" — obrigatório apenas quando novoStatus = pago (default: hoje)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
@@ -26065,7 +26318,7 @@ var contaAzulRouter = router({
   // Guarda o valor original (só na primeira edição) e registra no log de auditoria com o
   // Anexa/troca o comprovante de pagamento da NF. O upload em si (Cloudinary) acontece no
   // cliente; aqui só grava a URL já pronta.
-  updateReceiptNF: protectedProcedure.input(z50.object({ id: z50.number(), receiptUrl: z50.string().url() })).mutation(async ({ input }) => {
+  updateReceiptNF: protectedProcedure.input(z51.object({ id: z51.number(), receiptUrl: z51.string().url() })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(`UPDATE notas_fiscais SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
@@ -26073,7 +26326,7 @@ var contaAzulRouter = router({
   }),
   // motivo — comum quando o cliente desconta na hora de pagar por divergência de peso
   // entre o que a NF declara e o que foi efetivamente entregue/pesado.
-  updateValorNF: protectedProcedure.input(z50.object({ id: z50.number(), valor: z50.string(), observacao: z50.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
+  updateValorNF: protectedProcedure.input(z51.object({ id: z51.number(), valor: z51.string(), observacao: z51.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     const [rows2] = await db.$client.execute(
@@ -26094,7 +26347,7 @@ var contaAzulRouter = router({
     return { success: true };
   }),
   // Histórico de alterações de uma NF (auditoria)
-  historicoStatusNf: protectedProcedure.input(z50.object({ notaFiscalId: z50.number() })).query(async ({ input }) => {
+  historicoStatusNf: protectedProcedure.input(z51.object({ notaFiscalId: z51.number() })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { historico: [], error: "DB indispon\xEDvel" };
     const [rows2] = await db.$client.execute(
@@ -26103,7 +26356,7 @@ var contaAzulRouter = router({
     );
     return { historico: rows2 ?? [], error: null };
   }),
-  syncNotasFiscais: protectedProcedure.input(z50.object({ mes: z50.number().min(1).max(12), ano: z50.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+  syncNotasFiscais: protectedProcedure.input(z51.object({ mes: z51.number().min(1).max(12), ano: z51.number().min(2020).max(2100) })).mutation(async ({ input }) => {
     try {
       return { success: true, ...await syncNotasFiscais(input.mes, input.ano) };
     } catch (e) {
@@ -26117,7 +26370,7 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z51 } from "zod";
+import { z as z52 } from "zod";
 import { desc as desc33, eq as eq44, and as and26, sql as sql30 } from "drizzle-orm";
 async function getNextActionCode(db) {
   if (!db) return "AC-00001";
@@ -26129,8 +26382,8 @@ async function getNextActionCode(db) {
     if (!rows2 || rows2.length === 0) return "AC-00001";
     const last = rows2[0]?.action_code;
     if (!last) return "AC-00001";
-    const num3 = parseInt(last.replace("AC-", ""), 10);
-    return `AC-${String(num3 + 1).padStart(5, "0")}`;
+    const num4 = parseInt(last.replace("AC-", ""), 10);
+    return `AC-${String(num4 + 1).padStart(5, "0")}`;
   } catch {
     return "AC-00001";
   }
@@ -26142,9 +26395,9 @@ var fiscalNotesRouter = router({
     return { actionCode: await getNextActionCode(db) };
   }),
   // Listar todas as notas com filtros
-  list: protectedProcedure.input(z51.object({
-    quantityType: z51.enum(["m3", "ton", "all"]).optional(),
-    status: z51.enum(["available", "used", "all"]).optional()
+  list: protectedProcedure.input(z52.object({
+    quantityType: z52.enum(["m3", "ton", "all"]).optional(),
+    status: z52.enum(["available", "used", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -26159,8 +26412,8 @@ var fiscalNotesRouter = router({
     return rows2;
   }),
   // Listar apenas notas disponíveis para o select no Controle de Cargas
-  getAvailable: protectedProcedure.input(z51.object({
-    quantityType: z51.enum(["m3", "ton", "all"]).optional()
+  getAvailable: protectedProcedure.input(z52.object({
+    quantityType: z52.enum(["m3", "ton", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -26172,16 +26425,16 @@ var fiscalNotesRouter = router({
     return rows2;
   }),
   // Criar nova nota/ação
-  create: protectedProcedure.input(z51.object({
-    invoiceNumber: z51.string().optional(),
-    issueDate: z51.string(),
-    quantityType: z51.enum(["m3", "ton"]),
-    quantity: z51.string(),
-    fileBase64: z51.string().optional(),
+  create: protectedProcedure.input(z52.object({
+    invoiceNumber: z52.string().optional(),
+    issueDate: z52.string(),
+    quantityType: z52.enum(["m3", "ton"]),
+    quantity: z52.string(),
+    fileBase64: z52.string().optional(),
     // base64 do arquivo
-    fileName: z51.string().optional(),
-    fileMimeType: z51.string().optional(),
-    notes: z51.string().optional()
+    fileName: z52.string().optional(),
+    fileMimeType: z52.string().optional(),
+    notes: z52.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -26211,13 +26464,13 @@ var fiscalNotesRouter = router({
     return { success: true, actionCode };
   }),
   // Marcar nota como utilizada (chamado ao salvar uma carga)
-  markAsUsed: protectedProcedure.input(z51.object({
-    id: z51.number(),
-    cargoId: z51.number().optional(),
-    clientId: z51.number().optional(),
-    clientName: z51.string().optional(),
-    destination: z51.string().optional(),
-    workLocation: z51.string().optional()
+  markAsUsed: protectedProcedure.input(z52.object({
+    id: z52.number(),
+    cargoId: z52.number().optional(),
+    clientId: z52.number().optional(),
+    clientName: z52.string().optional(),
+    destination: z52.string().optional(),
+    workLocation: z52.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -26238,16 +26491,16 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Editar nota/ação (data, quantidade, NF, observações, arquivo)
-  update: protectedProcedure.input(z51.object({
-    id: z51.number(),
-    invoiceNumber: z51.string().optional(),
-    issueDate: z51.string().optional(),
-    quantityType: z51.enum(["m3", "ton"]).optional(),
-    quantity: z51.string().optional(),
-    fileBase64: z51.string().optional(),
-    fileName: z51.string().optional(),
-    fileMimeType: z51.string().optional(),
-    notes: z51.string().optional()
+  update: protectedProcedure.input(z52.object({
+    id: z52.number(),
+    invoiceNumber: z52.string().optional(),
+    issueDate: z52.string().optional(),
+    quantityType: z52.enum(["m3", "ton"]).optional(),
+    quantity: z52.string().optional(),
+    fileBase64: z52.string().optional(),
+    fileName: z52.string().optional(),
+    fileMimeType: z52.string().optional(),
+    notes: z52.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -26274,7 +26527,7 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Liberar nota (desfazer uso — admin)
-  release: protectedProcedure.input(z51.object({ id: z51.number() })).mutation(async ({ input }) => {
+  release: protectedProcedure.input(z52.object({ id: z52.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.update(fiscalNotes).set({
@@ -26287,20 +26540,20 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Deletar nota (somente disponíveis)
-  delete: protectedProcedure.input(z51.object({ id: z51.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z52.object({ id: z52.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.delete(fiscalNotes).where(eq44(fiscalNotes.id, input.id));
     return { success: true };
   }),
   // Relatório-planilha: notas com dados da carga, local e destino
-  report: protectedProcedure.input(z51.object({
-    workLocationId: z51.number().optional(),
-    destinationId: z51.number().optional(),
-    dateFrom: z51.string().optional(),
-    dateTo: z51.string().optional(),
-    search: z51.string().optional(),
-    limit: z51.number().optional().default(500)
+  report: protectedProcedure.input(z52.object({
+    workLocationId: z52.number().optional(),
+    destinationId: z52.number().optional(),
+    dateFrom: z52.string().optional(),
+    dateTo: z52.string().optional(),
+    search: z52.string().optional(),
+    limit: z52.number().optional().default(500)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -26397,7 +26650,7 @@ var fiscalNotesRouter = router({
 // server/routers/notificationSettings.ts
 init_trpc();
 init_db();
-import { z as z52 } from "zod";
+import { z as z53 } from "zod";
 import { sql as sql31 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
@@ -26455,9 +26708,9 @@ async function ensureTable(db) {
 }
 async function getSetting(db, key) {
   const rows2 = await db.execute(sql31`SELECT value FROM notification_settings WHERE \`key\` = ${key}`);
-  const data2 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
-  if (!data2 || data2.length === 0) return null;
-  const val = data2[0]?.value;
+  const data3 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
+  if (!data3 || data3.length === 0) return null;
+  const val = data3[0]?.value;
   if (!val) return null;
   return typeof val === "string" ? JSON.parse(val) : val;
 }
@@ -26511,15 +26764,15 @@ var notificationSettingsRouter = router({
     let collaborators5 = [];
     try {
       const rows2 = await db.execute(sql31`SELECT id, name, phone FROM collaborators WHERE active = 1 ORDER BY name`);
-      const data2 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
-      collaborators5 = (data2 || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
+      const data3 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
+      collaborators5 = (data3 || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
     }
     let clients3 = [];
     try {
       const rows2 = await db.execute(sql31`SELECT id, name, phone FROM clients WHERE active = 1 ORDER BY name`);
-      const data2 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
-      clients3 = (data2 || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
+      const data3 = Array.isArray(rows2[0]) ? rows2[0] : rows2;
+      clients3 = (data3 || []).map((r) => ({ id: r.id, name: r.name, phone: r.phone || null }));
     } catch {
     }
     return {
@@ -26538,11 +26791,11 @@ var notificationSettingsRouter = router({
   // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
   // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
   // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
-  updateCargoNfResponsible: protectedProcedure.input(z52.object({
-    recipients: z52.array(z52.object({
-      collaboratorId: z52.number().nullable(),
-      manualName: z52.string().nullable().optional(),
-      manualPhone: z52.string().nullable().optional()
+  updateCargoNfResponsible: protectedProcedure.input(z53.object({
+    recipients: z53.array(z53.object({
+      collaboratorId: z53.number().nullable(),
+      manualName: z53.string().nullable().optional(),
+      manualPhone: z53.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -26552,11 +26805,11 @@ var notificationSettingsRouter = router({
     return { ok: true };
   }),
   // Idem, pra quem recebe o aviso de "nova solicitação de compra".
-  updatePurchaseRequestNewResponsible: protectedProcedure.input(z52.object({
-    recipients: z52.array(z52.object({
-      collaboratorId: z52.number().nullable(),
-      manualName: z52.string().nullable().optional(),
-      manualPhone: z52.string().nullable().optional()
+  updatePurchaseRequestNewResponsible: protectedProcedure.input(z53.object({
+    recipients: z53.array(z53.object({
+      collaboratorId: z53.number().nullable(),
+      manualName: z53.string().nullable().optional(),
+      manualPhone: z53.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -26565,12 +26818,12 @@ var notificationSettingsRouter = router({
     await setSetting(db, "purchaseRequestNewResponsible", input);
     return { ok: true };
   }),
-  update: protectedProcedure.input(z52.record(z52.string(), z52.object({
-    enabled: z52.boolean(),
-    hour: z52.number().int().min(0).max(23),
-    minute: z52.number().int().min(0).max(59),
-    weekday: z52.number().int().min(0).max(6).nullable(),
-    whatsappCollaboratorIds: z52.array(z52.number())
+  update: protectedProcedure.input(z53.record(z53.string(), z53.object({
+    enabled: z53.boolean(),
+    hour: z53.number().int().min(0).max(23),
+    minute: z53.number().int().min(0).max(59),
+    weekday: z53.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z53.array(z53.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -26578,9 +26831,9 @@ var notificationSettingsRouter = router({
     await setSetting(db, "jobConfig", input);
     return { ok: true };
   }),
-  updateClientConfig: protectedProcedure.input(z52.record(z52.string(), z52.object({
-    enabled: z52.boolean(),
-    clientIds: z52.array(z52.number())
+  updateClientConfig: protectedProcedure.input(z53.record(z53.string(), z53.object({
+    enabled: z53.boolean(),
+    clientIds: z53.array(z53.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -26591,7 +26844,7 @@ var notificationSettingsRouter = router({
 });
 
 // server/routers.ts
-import { z as z53 } from "zod";
+import { z as z54 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -26773,10 +27026,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z53.object({
-      name: z53.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z53.string().email("Email inv\xE1lido"),
-      password: z53.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z54.object({
+      name: z54.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z54.string().email("Email inv\xE1lido"),
+      password: z54.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -26791,9 +27044,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z53.object({
-      email: z53.string().email("Email inv\xE1lido"),
-      password: z53.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z54.object({
+      email: z54.string().email("Email inv\xE1lido"),
+      password: z54.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -26812,11 +27065,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z53.object({
-      seedKey: z53.string(),
-      email: z53.string().email(),
-      name: z53.string(),
-      password: z53.string().min(4)
+    seedAdmin: publicProcedure.input(z54.object({
+      seedKey: z54.string(),
+      email: z54.string().email(),
+      name: z54.string(),
+      password: z54.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -26826,9 +27079,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z53.object({
-      email: z53.string().email("Email inv\xE1lido"),
-      origin: z53.string().url().optional()
+    forgotPassword: publicProcedure.input(z54.object({
+      email: z54.string().email("Email inv\xE1lido"),
+      origin: z54.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -26842,9 +27095,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z53.object({
-      token: z53.string().min(1),
-      password: z53.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z54.object({
+      token: z54.string().min(1),
+      password: z54.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -26913,7 +27166,7 @@ var appRouter = router({
   notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z53.object({ key: z53.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z54.object({ key: z54.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -26967,6 +27220,7 @@ var appRouter = router({
   sicoob: sicoobRouter,
   financialReal: financialRealRouter,
   weeklyGoals: weeklyGoalsRouter,
+  contasReceber: contasReceberRouter,
   contaAzul: contaAzulRouter
   // TODO: add feature routers heree, e.g.
   // todo: router({
@@ -28313,7 +28567,7 @@ async function runAutoMigrations() {
         `
         INSERT INTO cliente_prazo_pagamento (cnpj, nome, tipo_regra, parametros)
         VALUES
-          ('00496586000631', 'Sonoco', 'dias_corridos', '{"dias":7}'),
+          ('00496586000631', 'Sonoco', 'dias_corridos', '{"dias":7,"modo":"corridos","extra":1}'),
           ('72274095000142', 'Rebnic', 'semanal_quarta', '{}'),
           ('43328496000130', 'Enerbio', 'dias_corridos', '{"dias":1}'),
           ('11609581000422', 'A. R. C. Logistica e Alimentos Ltda', 'dias_corridos', '{"dias":21}')
@@ -28322,6 +28576,48 @@ async function runAutoMigrations() {
       );
     } catch (e) {
       console.log("[AutoMigration] Seed cliente_prazo_pagamento:", e?.message);
+    }
+    try {
+      const [r1] = await db.execute(
+        /*sql*/
+        `
+        UPDATE cliente_prazo_pagamento SET parametros = '{"dias":7,"modo":"corridos","extra":1}'
+        WHERE cnpj = '00496586000631' AND parametros <> '{"dias":7,"modo":"corridos","extra":1}'
+      `
+      );
+      const { calcularDataPrevisaoPagamento: calcularDataPrevisaoPagamento2 } = await Promise.resolve().then(() => (init_prazoPagamento(), prazoPagamento_exports));
+      const [rg] = await db.execute(
+        /*sql*/
+        `SELECT cnpj, tipo_regra AS tipoRegra, parametros FROM cliente_prazo_pagamento WHERE ativo = 1`
+      );
+      const [nfs] = await db.execute(
+        /*sql*/
+        `
+        SELECT nf.id, nf.cnpj_destinatario, nf.data_emissao, nf.data_previsao_pagamento, cl.entrega
+        FROM notas_fiscais nf
+        LEFT JOIN sicoob_boletos sb ON sb.nf_referente = nf.numero_nota AND sb.cnpj_pagador = nf.cnpj_destinatario
+        LEFT JOIN (
+          SELECT TRIM(SUBSTRING_INDEX(invoice_number, 'NF ', -1)) AS numero, DATE_FORMAT(MAX(delivery_date), '%Y-%m-%d') AS entrega
+          FROM cargo_loads WHERE invoice_number IS NOT NULL AND invoice_number <> '' AND delivery_date IS NOT NULL GROUP BY 1
+        ) cl ON cl.numero = nf.numero_nota
+        WHERE sb.id IS NULL AND nf.cnpj_destinatario = '00496586000631' AND nf.status_nf_interno = 'em_aberto'
+          AND nf.data_emissao IS NOT NULL AND nf.data_emissao <> ''
+      `
+      );
+      let recalculadas = 0;
+      for (const nf of nfs) {
+        const nova = calcularDataPrevisaoPagamento2(nf.cnpj_destinatario, nf.data_emissao, rg, nf.entrega ?? null);
+        if (nova && nova !== nf.data_previsao_pagamento) {
+          await db.execute(
+            /*sql*/
+            `UPDATE notas_fiscais SET data_previsao_pagamento = '${nova}' WHERE id = ${Number(nf.id)}`
+          );
+          recalculadas++;
+        }
+      }
+      console.log("[AutoMigration] Sonoco: regra de prazo (7 corridos + 1, pr\xF3ximo dia \xFAtil) aplicada; NFs recalculadas:", recalculadas);
+    } catch (e) {
+      console.log("[AutoMigration] Sonoco prazo:", e?.message);
     }
     try {
       await db.execute(

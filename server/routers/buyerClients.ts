@@ -214,7 +214,12 @@ export const buyerClientsRouter = router({
   // Usa cargo_loads.buyer_paid_at (campo próprio) — NÃO usa payment_status, que controla o
   // pagamento da BTREE ao cliente/fornecedor daquela carga (fluxo de dinheiro oposto).
   listCargasAReceber: protectedProcedure
-    .input(z.object({ mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100), pesquisa: z.string().optional() }))
+    .input(z.object({
+      mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100), pesquisa: z.string().optional(),
+      // período de entrega (substitui o mês de vencimento quando os dois são informados)
+      dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -264,8 +269,12 @@ export const buyerClientsRouter = router({
           };
         })
         .filter((c: any) => {
-          const [ay, am] = c.vencimento.split("-").map(Number);
-          if (ay !== input.ano || am !== input.mes) return false;
+          if (input.dataInicio && input.dataFim) {
+            if (c.dataEntrega < input.dataInicio || c.dataEntrega > input.dataFim) return false;
+          } else {
+            const [ay, am] = c.vencimento.split("-").map(Number);
+            if (ay !== input.ano || am !== input.mes) return false;
+          }
           if (input.pesquisa) {
             const s = input.pesquisa.toLowerCase();
             if (!c.destinoNome?.toLowerCase().includes(s) && !c.cnpj?.includes(input.pesquisa)) return false;

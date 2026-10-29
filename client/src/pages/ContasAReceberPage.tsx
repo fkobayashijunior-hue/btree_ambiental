@@ -90,6 +90,20 @@ function calcDiferencaNfCarga(nf: any): { diff: number | null; unidade: string }
 }
 const TOLERANCIA_DIFERENCA = 0.01;
 
+const soDigitos = (v?: string | null) => (v ?? "").replace(/\D/g, "");
+// data local de hoje (YYYY-MM-DD) — não usa UTC para não virar o dia às 21h
+function hojeLocalISO() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+// vencido e não pago -> vermelho
+function atrasado(venc?: string | Date | null, resolvido?: boolean) {
+  if (!venc || resolvido) return false;
+  const iso = venc instanceof Date ? venc.toISOString().slice(0, 10) : String(venc).slice(0, 10);
+  return iso < hojeLocalISO();
+}
+
 function fmtMoeda(valor: string | number) {
   const n = typeof valor === "string" ? parseFloat(valor) : valor;
   return isNaN(n) ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -235,7 +249,13 @@ export default function ContasAReceberPage() {
   const [tab, setTab] = useState<Tab>("boletos");
   const [showSetup, setShowSetup] = useState(false);
   const [setupToken, setSetupToken] = useState("");
-  const [filtroDestinatario, setFiltroDestinatario] = useState("todos");
+  // Filtro de destinatário/pagador (por CNPJ) e período de emissão — valem para as 3 abas e para os cards
+  const [filtroCnpj, setFiltroCnpj] = useState("todos");
+  const [dataDe, setDataDe] = useState("");
+  const [dataAte, setDataAte] = useState("");
+  const intervaloAtivo = !!dataDe && !!dataAte && dataDe <= dataAte;
+  const periodoQuery = intervaloAtivo ? { dataInicio: dataDe, dataFim: dataAte } : {};
+  const { data: destinatariosLista = [] } = trpc.contasReceber.destinatarios.useQuery(undefined, { refetchOnWindowFocus: false });
   const [filtroStatusNf, setFiltroStatusNf] = useState<"todos" | "em_aberto" | "pago" | "cancelado">("todos");
 
   // Ordenação — um estado por aba, alterna asc/desc ao clicar de novo na mesma coluna
@@ -255,11 +275,8 @@ export default function ContasAReceberPage() {
   };
 
   // ── Sicoob ──────────────────────────────────────────────────────────────────
-  const { data: summary, refetch: refetchSummary } = trpc.sicoob.summaryBoletos.useQuery(
-    { mes, ano }, { refetchOnWindowFocus: false }
-  );
   const { data: listData, refetch: refetchList, isLoading } = trpc.sicoob.listBoletos.useQuery(
-    { mes, ano, pesquisa: pesquisa || undefined }, { refetchOnWindowFocus: false }
+    { mes, ano, ...periodoQuery, pesquisa: pesquisa || undefined }, { refetchOnWindowFocus: false }
   );
   const { data: statusData } = trpc.sicoob.syncStatus.useQuery(undefined, { refetchOnWindowFocus: false });
 
@@ -308,7 +325,10 @@ export default function ContasAReceberPage() {
     onError: () => toast.error("Falha ao sincronizar Sicoob"),
   });
 
-  const boletosBrutos = listData?.boletos ?? [];
+  const boletosBrutos = useMemo(() => {
+    const todos = listData?.boletos ?? [];
+    return filtroCnpj === "todos" ? todos : todos.filter((b: any) => soDigitos(b.cnpj_pagador) === filtroCnpj);
+  }, [listData, filtroCnpj]);
   const getBoletoValue = (b: any, field: string): string | number | null => {
     switch (field) {
       case "data_emissao": case "data_vencimento": case "data_pagamento": return b[field] ?? null;
@@ -329,12 +349,22 @@ export default function ContasAReceberPage() {
     undefined, { refetchOnWindowFocus: false }
   );
   const { data: nfData, isLoading: nfLoading, refetch: refetchNFs } = trpc.contaAzul.listNotasFiscais.useQuery(
-    { mes, ano, pesquisa: pesquisa || undefined, incluirCanceladas: true },
+    { mes, ano, ...periodoQuery, pesquisa: pesquisa || undefined, incluirCanceladas: true },
     { refetchOnWindowFocus: false, enabled: tab === "nfs" }
   );
-  const { data: nfSummary, refetch: refetchNFSummary } = trpc.contaAzul.summaryNFsSemBoleto.useQuery(
-    { mes, ano }, { refetchOnWindowFocus: false }
+
+  // Cards: seguem os MESMOS filtros das tabelas (período, destinatário, pesquisa e, na aba NFs, o status)
+  const { data: cardsData, refetch: refetchCards } = trpc.contasReceber.cards.useQuery(
+    {
+      mes, ano, ...periodoQuery,
+      cnpj: filtroCnpj === "todos" ? undefined : filtroCnpj,
+      pesquisa: pesquisa || undefined,
+      statusFiltro: tab === "nfs" ? filtroStatusNf : "todos",
+    },
+    { refetchOnWindowFocus: false }
   );
+  const refetchSummary = () => { refetchCards(); };
+  const refetchNFSummary = () => { refetchCards(); };
 
   const syncCaMutation = trpc.contaAzul.syncNotasFiscais.useMutation({
     onSuccess: (res) => {
@@ -413,19 +443,13 @@ export default function ContasAReceberPage() {
 
   const todasNotas = nfData?.notas ?? [];
 
-  const destinatarios = useMemo(() => {
-    const nomes = new Set<string>();
-    for (const nf of todasNotas) if (nf.nome_destinatario) nomes.add(nf.nome_destinatario);
-    return Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [todasNotas]);
-
   const notasFiltradas = useMemo(() => {
     return todasNotas.filter((nf: any) => {
-      if (filtroDestinatario !== "todos" && nf.nome_destinatario !== filtroDestinatario) return false;
+      if (filtroCnpj !== "todos" && soDigitos(nf.cnpj_destinatario) !== filtroCnpj) return false;
       if (filtroStatusNf !== "todos" && nf.status_nf_interno !== filtroStatusNf) return false;
       return true;
     });
-  }, [todasNotas, filtroDestinatario, filtroStatusNf]);
+  }, [todasNotas, filtroCnpj, filtroStatusNf]);
 
   const getNfValue = (nf: any, field: string): string | number | null => {
     switch (field) {
@@ -478,9 +502,12 @@ export default function ContasAReceberPage() {
 
   // ── Cargas Entregues a Receber (compradores sem boleto/NF, ex: Enerbio) ──────
   const { data: cargasData, isLoading: cargasLoading, refetch: refetchCargas } = trpc.buyerClients.listCargasAReceber.useQuery(
-    { mes, ano, pesquisa: pesquisa || undefined }, { refetchOnWindowFocus: false }
+    { mes, ano, ...periodoQuery, pesquisa: pesquisa || undefined }, { refetchOnWindowFocus: false }
   );
-  const cargasBrutas = cargasData?.cargas ?? [];
+  const cargasBrutas = useMemo(() => {
+    const todas = cargasData?.cargas ?? [];
+    return filtroCnpj === "todos" ? todas : todas.filter((c: any) => soDigitos(c.cnpj) === filtroCnpj);
+  }, [cargasData, filtroCnpj]);
   const getCargaValue = (c: any, field: string): string | number | null => {
     switch (field) {
       case "invoiceNumber": return c.invoiceNumber || `#${c.id}`;
@@ -495,7 +522,6 @@ export default function ContasAReceberPage() {
     }
   };
   const cargas = useMemo(() => sortRows(cargasBrutas, sortCargas, getCargaValue), [cargasBrutas, sortCargas]);
-  const cargasSummary = cargasData?.summary;
 
   // Campo próprio (buyer_paid_at) — não tem relação com o "Marcar como Pago" de Controle de
   // Cargas, que controla o pagamento da BTREE ao cliente/fornecedor daquela carga.
@@ -517,7 +543,7 @@ export default function ContasAReceberPage() {
       toast.error("Nenhum dado para exportar neste período");
       return;
     }
-    const periodo = `${MESES[mes - 1]}/${ano}`;
+    const periodo = intervaloAtivo ? `${fmtData(dataDe)} a ${fmtData(dataAte)} (emissão)` : `${MESES[mes - 1]}/${ano}`;
     const emitido = new Date().toLocaleString("pt-BR");
     const subtitleBase = `BTREE Empreendimentos LTDA  •  btreeambiental.com  •  Período: ${periodo}  •  Emitido em ${emitido}`;
 
@@ -625,11 +651,11 @@ export default function ContasAReceberPage() {
 
   // ── Cards (Sicoob + NFs sem boleto correspondente + Cargas entregues sem boleto/NF) ──
   const cards = [
-    { label: "Vencidos (R$)",        value: (summary?.vencidos   ?? 0) + (nfSummary?.vencidos   ?? 0) + (cargasSummary?.vencidos   ?? 0), color: "text-red-600"     },
-    { label: "Vencem hoje (R$)",      value: (summary?.vencemHoje ?? 0) + (nfSummary?.vencemHoje ?? 0) + (cargasSummary?.vencemHoje ?? 0), color: "text-orange-500"  },
-    { label: "A vencer (R$)",         value: (summary?.aVencer    ?? 0) + (nfSummary?.aVencer    ?? 0) + (cargasSummary?.aVencer    ?? 0), color: "text-blue-600"    },
-    { label: "Recebidos (R$)",        value: (summary?.recebidos  ?? 0) + (nfSummary?.recebidos  ?? 0) + (cargasSummary?.recebidos  ?? 0), color: "text-emerald-600" },
-    { label: "Total do período (R$)", value: (summary?.total      ?? 0) + (nfSummary?.total       ?? 0) + (cargasSummary?.total      ?? 0), color: "text-foreground",  highlight: true },
+    { label: "Vencidos (R$)",        value: cardsData?.vencidos   ?? 0, color: "text-red-600"     },
+    { label: "Vencem hoje (R$)",      value: cardsData?.vencemHoje ?? 0, color: "text-orange-500"  },
+    { label: "A vencer (R$)",         value: cardsData?.aVencer    ?? 0, color: "text-blue-600"    },
+    { label: "Recebidos (R$)",        value: cardsData?.recebidos  ?? 0, color: "text-emerald-600" },
+    { label: intervaloAtivo || filtroCnpj !== "todos" ? "Total do filtro (R$)" : "Total do período (R$)", value: cardsData?.total ?? 0, color: "text-foreground",  highlight: true },
   ];
 
   return (
@@ -729,21 +755,40 @@ export default function ContasAReceberPage() {
             className="pl-9 h-9"
           />
         </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Destinatário:</span>
+          <select
+            className="h-9 text-sm bg-background border rounded-md px-2 focus:outline-none focus:ring-1 focus:ring-primary max-w-[220px]"
+            value={filtroCnpj}
+            onChange={e => setFiltroCnpj(e.target.value)}
+          >
+            <option value="todos">Todos</option>
+            {destinatariosLista.map(d => (
+              <option key={d.cnpj} value={d.cnpj}>{d.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2" title="Filtra pela data de emissão da NF e do boleto (e pela data de entrega nas cargas). Quando preenchido, substitui o mês.">
+          <span className="text-sm text-muted-foreground">Emissão de:</span>
+          <Input type="date" value={dataDe} onChange={e => setDataDe(e.target.value)} className="h-9 w-[150px]" />
+          <span className="text-sm text-muted-foreground">até:</span>
+          <Input type="date" value={dataAte} onChange={e => setDataAte(e.target.value)} className="h-9 w-[150px]" />
+          {(dataDe || dataAte || filtroCnpj !== "todos" || filtroStatusNf !== "todos") && (
+            <Button
+              variant="ghost" size="sm" className="h-9 px-2 text-muted-foreground"
+              title="Limpa o período de emissão, o destinatário e o status da NF"
+              onClick={() => { setDataDe(""); setDataAte(""); setFiltroCnpj("todos"); setFiltroStatusNf("todos"); }}
+            >Limpar filtros</Button>
+          )}
+        </div>
+        {(dataDe || dataAte) && !intervaloAtivo && (
+          <span className="text-xs text-amber-600">Preencha as duas datas (a inicial não pode ser maior que a final).</span>
+        )}
+        {intervaloAtivo && (
+          <span className="text-xs text-muted-foreground">Período ativo: o mês acima é ignorado.</span>
+        )}
         {tab === "nfs" && (
           <>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Destinatário:</span>
-              <select
-                className="h-9 text-sm bg-background border rounded-md px-2 focus:outline-none focus:ring-1 focus:ring-primary max-w-[220px]"
-                value={filtroDestinatario}
-                onChange={e => setFiltroDestinatario(e.target.value)}
-              >
-                <option value="todos">Todos</option>
-                {destinatarios.map(nome => (
-                  <option key={nome} value={nome}>{nome}</option>
-                ))}
-              </select>
-            </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Status NF:</span>
               <select
@@ -761,7 +806,7 @@ export default function ContasAReceberPage() {
         )}
       </div>
 
-      {/* Cards de resumo (boletos + NFs sem boleto) */}
+      {/* Cards de resumo (boletos + NFs sem boleto + cargas), no mesmo filtro das tabelas */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {cards.map(c => (
           <div key={c.label} className={`rounded-lg border bg-card p-4 ${(c as any).highlight ? "border-primary/40 bg-primary/5" : ""}`}>
@@ -770,6 +815,12 @@ export default function ContasAReceberPage() {
           </div>
         ))}
       </div>
+      {cardsData && cardsData.semPrevisao.qtd > 0 && (
+        <p className="text-xs text-muted-foreground -mt-3">
+          {cardsData.semPrevisao.qtd} NF(s) em aberto sem previsão de pagamento ({fmtMoeda(cardsData.semPrevisao.valor)}) não entram nos cards acima.
+        </p>
+      )}
+      {cardsData?.error && <p className="text-xs text-red-600 -mt-3">Cards: {cardsData.error}</p>}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
@@ -837,9 +888,9 @@ export default function ContasAReceberPage() {
                   const valor  = parseFloat(b.valor ?? "0");
                   const aRec   = (b.situacao === 3 || b.situacao === 2) ? 0 : valor;
                   return (
-                    <TableRow key={b.id} className="hover:bg-muted/30">
+                    <TableRow key={b.id} className={atrasado(b.data_vencimento, b.situacao !== 1) ? "bg-red-50 hover:bg-red-100/70 dark:bg-red-950/20 dark:hover:bg-red-950/30" : "hover:bg-muted/30"}>
                       <TableCell className="text-sm">{fmtData(b.data_emissao)}</TableCell>
-                      <TableCell className="text-sm">{fmtData(b.data_vencimento)}</TableCell>
+                      <TableCell className={`text-sm ${atrasado(b.data_vencimento, b.situacao !== 1) ? "text-red-600 font-semibold" : ""}`}>{fmtData(b.data_vencimento)}</TableCell>
                       <TableCell className="text-sm">{fmtData(b.data_pagamento)}</TableCell>
                       <TableCell><div className="font-medium text-sm">{b.nome_pagador ?? "—"}</div></TableCell>
                       <TableCell className="text-sm text-muted-foreground font-mono text-xs">{fmtCnpj(b.cnpj_pagador)}</TableCell>
@@ -958,6 +1009,7 @@ export default function ContasAReceberPage() {
                 )}
                 {notas.map((nf: any) => {
                   const isCancelada = nf.status_nf_interno === "cancelado";
+                  const previsaoVencida = !isCancelada && !nf.tem_boleto && atrasado(nf.data_previsao_pagamento, nf.status_nf_interno !== "em_aberto");
                   // "valor_editado" só fica true pra sempre, mesmo se o usuário editar e voltar pro
                   // valor original — por isso comparamos os dois valores aqui em vez de confiar só na flag.
                   const valorDivergeDoOriginal = !!nf.valor_editado && nf.valor_original != null
@@ -965,7 +1017,7 @@ export default function ContasAReceberPage() {
                   return (
                     <TableRow
                       key={nf.id}
-                      className={`${!isCancelada && valorDivergeDoOriginal ? "bg-amber-50 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30" : "hover:bg-muted/30"} ${isCancelada ? "opacity-50" : ""}`}
+                      className={`${previsaoVencida ? "bg-red-50 hover:bg-red-100/70 dark:bg-red-950/20 dark:hover:bg-red-950/30" : !isCancelada && valorDivergeDoOriginal ? "bg-amber-50 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30" : "hover:bg-muted/30"} ${isCancelada ? "opacity-50" : ""}`}
                     >
                       <TableCell className={`text-sm ${isCancelada ? "line-through" : ""}`}>{fmtData(nf.data_emissao)}</TableCell>
                       <TableCell><div className={`font-medium text-sm ${isCancelada ? "line-through" : ""}`}>{nf.nome_destinatario ?? "—"}</div></TableCell>
@@ -1000,11 +1052,13 @@ export default function ContasAReceberPage() {
                           <p className="text-[10px] text-muted-foreground mt-0.5">em {fmtData(nf.data_pagamento_confirmado)}</p>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className={`text-xs ${!nf.tem_boleto && atrasado(nf.data_previsao_pagamento, nf.status_nf_interno !== "em_aberto") ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
                         {nf.tem_boleto ? (
                           <span title="Usa o vencimento do boleto Sicoob">—</span>
                         ) : (
-                          fmtData(nf.data_previsao_pagamento)
+                          <span title={atrasado(nf.data_previsao_pagamento, nf.status_nf_interno !== "em_aberto") ? "Previsão vencida e NF ainda não paga" : undefined}>
+                            {fmtData(nf.data_previsao_pagamento)}
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="text-xs">{fmtDataCarga(nf.carga_data_carregamento)}</TableCell>
@@ -1104,7 +1158,7 @@ export default function ContasAReceberPage() {
                         : { label: "A vencer", variant: "secondary" as const };
                   const qtd = c.unit === "m3" ? c.volumeM3 : c.pesoKg / 1000;
                   return (
-                    <TableRow key={c.id} className="hover:bg-muted/30">
+                    <TableRow key={c.id} className={atrasado(c.vencimento, c.recebido) ? "bg-red-50 hover:bg-red-100/70 dark:bg-red-950/20 dark:hover:bg-red-950/30" : "hover:bg-muted/30"}>
                       <TableCell className="text-sm text-muted-foreground font-mono text-xs">{c.invoiceNumber || `#${c.id}`}</TableCell>
                       <TableCell className="text-sm">{fmtData(c.dataEntrega)}</TableCell>
                       <TableCell><div className="font-medium text-sm">{c.destinoNome}</div></TableCell>
@@ -1112,7 +1166,7 @@ export default function ContasAReceberPage() {
                       <TableCell className="text-right text-sm">{qtd.toFixed(2)} {c.unit === "m3" ? "m³" : "ton"}</TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">{fmtMoeda(c.precoUnit)}</TableCell>
                       <TableCell className="text-right font-medium text-sm">{fmtMoeda(c.valor)}</TableCell>
-                      <TableCell className="text-sm">{fmtData(c.vencimento)}</TableCell>
+                      <TableCell className={`text-sm ${atrasado(c.vencimento, c.recebido) ? "text-red-600 font-semibold" : ""}`}>{fmtData(c.vencimento)}</TableCell>
                       <TableCell>
                         <Badge variant={situacao.variant} className="text-xs">{situacao.label}</Badge>
                         {recebido && c.buyerPaidAt && (
