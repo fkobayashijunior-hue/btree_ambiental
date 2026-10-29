@@ -602,13 +602,45 @@ async function runAutoMigrations() {
       await db.execute(/*sql*/`
         INSERT INTO cliente_prazo_pagamento (cnpj, nome, tipo_regra, parametros)
         VALUES
-          ('00496586000631', 'Sonoco', 'dias_corridos', '{"dias":7}'),
+          ('00496586000631', 'Sonoco', 'dias_corridos', '{"dias":7,"modo":"corridos","extra":1}'),
           ('72274095000142', 'Rebnic', 'semanal_quarta', '{}'),
           ('43328496000130', 'Enerbio', 'dias_corridos', '{"dias":1}'),
           ('11609581000422', 'A. R. C. Logistica e Alimentos Ltda', 'dias_corridos', '{"dias":21}')
         ON DUPLICATE KEY UPDATE nome = VALUES(nome)
       `);
     } catch (e: any) { console.log('[AutoMigration] Seed cliente_prazo_pagamento:', e?.message); }
+
+    // Sonoco: previsão = ENTREGA da carga + 7 dias corridos + 1 (antes eram 7 dias úteis).
+    // Atualiza a regra já cadastrada e recalcula só as NFs em aberto, sem boleto correspondente.
+    try {
+      const [r1]: any = await db.execute(/*sql*/`
+        UPDATE cliente_prazo_pagamento SET parametros = '{"dias":7,"modo":"corridos","extra":1}'
+        WHERE cnpj = '00496586000631' AND parametros <> '{"dias":7,"modo":"corridos","extra":1}'
+      `);
+      // Recalcula (em JS, para respeitar fim de semana e feriados) as NFs em aberto, sem boleto
+      const { calcularDataPrevisaoPagamento } = await import('../utils/prazoPagamento');
+      const [rg]: any = await db.execute(/*sql*/`SELECT cnpj, tipo_regra AS tipoRegra, parametros FROM cliente_prazo_pagamento WHERE ativo = 1`);
+      const [nfs]: any = await db.execute(/*sql*/`
+        SELECT nf.id, nf.cnpj_destinatario, nf.data_emissao, nf.data_previsao_pagamento, cl.entrega
+        FROM notas_fiscais nf
+        LEFT JOIN sicoob_boletos sb ON sb.nf_referente = nf.numero_nota AND sb.cnpj_pagador = nf.cnpj_destinatario
+        LEFT JOIN (
+          SELECT TRIM(SUBSTRING_INDEX(invoice_number, 'NF ', -1)) AS numero, DATE_FORMAT(MAX(delivery_date), '%Y-%m-%d') AS entrega
+          FROM cargo_loads WHERE invoice_number IS NOT NULL AND invoice_number <> '' AND delivery_date IS NOT NULL GROUP BY 1
+        ) cl ON cl.numero = nf.numero_nota
+        WHERE sb.id IS NULL AND nf.cnpj_destinatario = '00496586000631' AND nf.status_nf_interno = 'em_aberto'
+          AND nf.data_emissao IS NOT NULL AND nf.data_emissao <> ''
+      `);
+      let recalculadas = 0;
+      for (const nf of (nfs as any[])) {
+        const nova = calcularDataPrevisaoPagamento(nf.cnpj_destinatario, nf.data_emissao, rg as any[], nf.entrega ?? null);
+        if (nova && nova !== nf.data_previsao_pagamento) {
+          await db.execute(/*sql*/`UPDATE notas_fiscais SET data_previsao_pagamento = '${nova}' WHERE id = ${Number(nf.id)}`);
+          recalculadas++;
+        }
+      }
+      console.log('[AutoMigration] Sonoco: regra de prazo (7 corridos + 1, próximo dia útil) aplicada; NFs recalculadas:', recalculadas);
+    } catch (e: any) { console.log('[AutoMigration] Sonoco prazo:', e?.message); }
 
     // Backfill: recalcular Data Previsão de Pagamento das NFs da A.R.C. Logística que já
     // haviam sido sincronizadas antes da regra existir (só quando não há boleto correspondente)

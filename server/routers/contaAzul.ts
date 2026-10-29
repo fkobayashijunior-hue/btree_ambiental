@@ -426,6 +426,9 @@ export const contaAzulRouter = router({
     .input(z.object({
       mes:                z.number().min(1).max(12),
       ano:                z.number().min(2020).max(2100),
+      // período de emissão (substitui o mês quando os dois são informados)
+      dataInicio:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      dataFim:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       pesquisa:           z.string().optional(),
       incluirCanceladas:  z.boolean().optional(),
     }))
@@ -439,6 +442,9 @@ export const contaAzulRouter = router({
         ? [`%${input.pesquisa}%`, `%${input.pesquisa}%`, `%${input.pesquisa}%`]
         : [];
       const canceladasClause = input.incluirCanceladas ? "" : `AND nf.status_nf_interno != 'cancelado'`;
+      const porIntervalo = !!(input.dataInicio && input.dataFim);
+      const periodoClause = porIntervalo ? "nf.data_emissao BETWEEN ? AND ?" : "nf.mes = ? AND nf.ano = ?";
+      const periodoParams = porIntervalo ? [input.dataInicio, input.dataFim] : [input.mes, input.ano];
       const [rows] = await db.$client.execute(
         `SELECT nf.*,
            CASE WHEN sb.id IS NOT NULL THEN 1 ELSE 0 END AS tem_boleto,
@@ -459,11 +465,11 @@ export const contaAzulRouter = router({
           AND sb.cnpj_pagador = nf.cnpj_destinatario
          LEFT JOIN cargo_loads cl
            ON TRIM(SUBSTRING_INDEX(cl.invoice_number, 'NF ', -1)) = nf.numero_nota
-         WHERE nf.mes = ? AND nf.ano = ? AND nf.cfop = '5102'
+         WHERE ${periodoClause} AND nf.cfop = '5102'
          ${canceladasClause}
          ${pClause}
          ORDER BY nf.data_emissao ASC`,
-        [input.mes, input.ano, ...pParams]
+        [...periodoParams, ...pParams]
       ) as any;
       return { notas: rows ?? [], error: null };
     }),

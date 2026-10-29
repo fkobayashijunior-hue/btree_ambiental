@@ -7,6 +7,14 @@ export type RegraPrazo =
   | { tipoRegra: "faixa_mensal"; parametros: Record<string, never> }
   | { tipoRegra: "semanal_quarta"; parametros: Record<string, never> };
 
+/** Soma dias CORRIDOS (calendário) a uma data ISO, sem pular fim de semana nem feriado. */
+export function somarDiasCorridos(dataISO: string, dias: number): string {
+  const { ano, mes, dia } = parseDataISO(dataISO);
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  d.setUTCDate(d.getUTCDate() + dias);
+  return toISO(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+}
+
 export function normalizarCnpj(cnpj: string | null | undefined): string {
   return (cnpj ?? "").replace(/\D/g, "");
 }
@@ -85,12 +93,22 @@ export function calcularDataPrevisaoPagamento(
 
   if (regra.tipoRegra === "dias_corridos") {
     let dias = 0;
-    try { dias = JSON.parse(regra.parametros)?.dias ?? 0; } catch { dias = 0; }
+    let modo: string = "uteis";
+    let extra = 0;
+    try {
+      const p = JSON.parse(regra.parametros);
+      dias = p?.dias ?? 0;
+      if (p?.modo === "corridos") modo = "corridos";
+      extra = Number(p?.extra ?? 0) || 0;
+    } catch { dias = 0; }
     // Sonoco/Enerbio/A.R.C. Logística: o prazo conta a partir da ENTREGA da carga vinculada à NF,
     // não da emissão da NF (que pode sair antes ou depois da entrega efetiva). Sem carga vinculada
     // (ou sem data de entrega registrada), cai de volta pra data de emissão. Os dias são ÚTEIS
     // (pula sábado/domingo/feriado nacional), não corridos.
     const baseISO = (dataEntregaCarga ?? dataEmissao).slice(0, 10);
+    // modo "corridos" (ex.: Sonoco = 7 dias corridos + 1): conta dias do calendário; se a data cair em
+    // sábado, domingo ou feriado nacional, empurra para o próximo dia útil
+    if (modo === "corridos") return proximoDiaUtil(somarDiasCorridos(baseISO, dias + extra));
     return somarDiasUteis(baseISO, dias);
   }
   if (regra.tipoRegra === "faixa_mensal") {

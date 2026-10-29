@@ -881,6 +881,9 @@ export const sicoobRouter = router({
     .input(z.object({
       mes: z.number().min(1).max(12),
       ano: z.number().min(2020).max(2100),
+      // período de emissão do boleto (substitui o mês de vencimento quando os dois são informados)
+      dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       pesquisa: z.string().optional(),
     }))
     .query(async ({ input }) => {
@@ -900,12 +903,13 @@ export const sicoobRouter = router({
           : [];
 
         await ensureBoletoSituacaoColumn(db);
+        const porIntervalo = !!(input.dataInicio && input.dataFim);
         const [rows] = await db.$client.execute(
           `SELECT * FROM sicoob_boletos
-           WHERE data_vencimento LIKE ?
+           WHERE ${porIntervalo ? "COALESCE(NULLIF(data_emissao, ''), data_vencimento) BETWEEN ? AND ?" : "data_vencimento LIKE ?"}
            ${pesquisaClause}
            ORDER BY data_vencimento ASC`,
-          [`${prefixo}%`, ...pesquisaParams]
+          [...(porIntervalo ? [input.dataInicio, input.dataFim] : [`${prefixo}%`]), ...pesquisaParams]
         ) as any;
 
         return { boletos: rows ?? [], error: null };

@@ -49,6 +49,7 @@ import { financialConsolidatedRouter } from "./routers/financialConsolidated";
 import { sicoobRouter } from "./routers/sicoob";
 import { financialRealRouter } from "./routers/financialReal";
 import { weeklyGoalsRouter } from "./routers/weeklyGoals";
+import { contasReceberRouter } from "./routers/contasReceber";
 import { contaAzulRouter } from "./routers/contaAzul";
 import { fiscalNotesRouter } from "./routers/fiscalNotes";
 import { notificationSettingsRouter } from "./routers/notificationSettings";
@@ -399,6 +400,7 @@ export const appRouter = router({
   sicoob: sicoobRouter,
   financialReal: financialRealRouter,
   weeklyGoals: weeklyGoalsRouter,
+  contasReceber: contasReceberRouter,
   contaAzul: contaAzulRouter,
   // TODO: add feature routers heree, e.g.
   // todo: router({
