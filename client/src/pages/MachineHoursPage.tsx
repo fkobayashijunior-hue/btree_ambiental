@@ -1406,6 +1406,11 @@ export default function MachineHoursPage() {
                   value={fuelForm.workLocationId}
                   onChange={(id) => setFuelForm(f => ({ ...f, workLocationId: id }))}
                 />
+                {!fuelForm.workLocationId && (
+              <p role="alert" className="-mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                ⚠ Sem local de trabalho. Sem ele, este abastecimento não entra no custo de nenhuma planta.
+              </p>
+            )}
                 <div>
                   <Label>Fornecedor / Posto</Label>
                   <Input value={fuelForm.supplier} onChange={e => setFuelForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Nome do posto" />

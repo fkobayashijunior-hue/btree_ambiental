@@ -111,15 +111,22 @@ export function WeeklyGoalForm({ semanaInicio, inicial, onDone, onCancel }: {
           return (
             <div key={i} className="rounded-lg border p-3 space-y-2">
               <div className="flex items-center gap-2">
-                <select value={l.destinationId} onChange={e => setLinha(i, { destinationId: e.target.value ? Number(e.target.value) : "" })} className="h-10 flex-1 rounded-md border border-input bg-background px-2 text-sm">
+                <select value={l.destinationId} onChange={e => setLinha(i, { destinationId: e.target.value ? Number(e.target.value) : "" })} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm">
                   <option value="">Comprador...</option>
                   {(opcoes.data?.compradores ?? []).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
-                <Input type="number" min={1} value={l.targetCargas} onChange={e => setLinha(i, { targetCargas: Number(e.target.value) })} className="w-20" />
-                <span className="text-xs text-gray-500">cargas</span>
                 {linhas.length > 1 && (
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-red-500" onClick={() => setLinhas(ls => ls.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4" /></Button>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 p-0 text-gray-400 hover:text-red-500" onClick={() => setLinhas(ls => ls.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4" /></Button>
                 )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600" htmlFor={`qtd-cargas-${i}`}>Qtd. de cargas</label>
+                <Input
+                  id={`qtd-cargas-${i}`} type="number" inputMode="numeric" min={1} step={1}
+                  value={l.targetCargas > 0 ? l.targetCargas : ""}
+                  onChange={e => setLinha(i, { targetCargas: e.target.value === "" ? 0 : Math.max(0, Math.floor(Number(e.target.value))) })}
+                  className="h-10 w-24 shrink-0 text-center"
+                />
               </div>
               <Input placeholder="Observação (opcional)" value={l.observacao} onChange={e => setLinha(i, { observacao: e.target.value })} className="h-9 text-sm" />
               <label className="flex items-center gap-2 text-xs text-gray-600">
@@ -130,7 +137,7 @@ export function WeeklyGoalForm({ semanaInicio, inicial, onDone, onCancel }: {
                   <div className="grid grid-cols-7 gap-1">
                     {dias.map((d, k) => (
                       <div key={d} className="text-center">
-                        <div className="text-[10px] text-gray-500">{DIAS_ABREV[k]} {fmt(d)}</div>
+                        <div className="text-[10px] leading-tight text-gray-500"><span className="block font-medium">{DIAS_ABREV[k]}</span><span className="block">{fmt(d)}</span></div>
                         <Input type="number" min={0} value={l.dias[d] ?? ""} onChange={e => setLinha(i, { dias: { ...l.dias, [d]: Number(e.target.value) } })} className="h-8 px-1 text-center text-sm" />
                       </div>
                     ))}
