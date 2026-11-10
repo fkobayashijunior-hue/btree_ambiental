@@ -136,6 +136,7 @@ const menuGroups: MenuGroup[] = [
     icon: ClipboardList,
     items: [
       { label: "Controle de Cargas", path: "/cargas", slug: "cargas", icon: Truck },
+      { label: "Meus Gastos", path: "/meus-gastos", slug: "meus-gastos", icon: Receipt },
       { label: "Metas Semanais", path: "/metas-semanais", slug: "metas-semanais", icon: Target },
       { label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas", icon: FileText },
       { label: "Conferência de Notas", path: "/conferencia-notas", slug: "conferencia-notas", icon: FileCheck },
@@ -307,13 +308,15 @@ function DashboardLayoutContent({
   const { hasAccess, isAdmin, profile, isLoading: permsLoading } = usePermissions();
   const { data: myPhotoUrl } = trpc.collaborators.getMyPhoto.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
   const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const [showDevContact, setShowDevContact] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const [didRedirect, setDidRedirect] = useState(false);
+  // No celular o menu lateral abre por cima da tela: fecha sozinho ao escolher uma página.
+  useEffect(() => { if (isMobile) setOpenMobile(false); }, [location, isMobile]);
   const { canInstall, isIOS, isInstalled, install, dismiss } = useDashboardInstallPrompt();
   const [showIOSGuide, setShowIOSGuide] = useState(false);
 

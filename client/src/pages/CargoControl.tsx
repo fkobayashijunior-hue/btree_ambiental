@@ -1672,6 +1672,8 @@ export default function CargoControl() {
       thirdPartyContractor: form.thirdPartyContractor || undefined,
       thirdPartyCost: form.thirdPartyCost || undefined,
       responsavelCargaId: form.responsavelCargaId || undefined,
+      // "" (unidade da nota não informada) não é um valor válido no servidor: só envia quando preenchida
+      noteUnit: form.noteUnit || undefined,
       origin: window.location.origin,
     };
     if (editId) {

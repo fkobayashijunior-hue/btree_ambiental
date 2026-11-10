@@ -233,7 +233,8 @@ export default function VehicleControlPage() {
         }
       }
       // Filtro por local de trabalho
-      if (filterLocation && String(r.workLocationId) !== filterLocation) return false;
+      if (filterLocation === "sem-local") { if (r.recordType !== "abastecimento" || r.workLocationId) return false; }
+      else if (filterLocation && String(r.workLocationId) !== filterLocation) return false;
       return true;
     });
   }, [records, filterMonth, filterYear, filterLocation, filterDateFrom, filterDateTo, filterMode]);
@@ -690,6 +691,16 @@ export default function VehicleControlPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      {(() => {
+        const semLocal = (filteredRecords as any[]).filter((r: any) => r.recordType === "abastecimento" && !r.workLocationId).length;
+        if (filterLocation === "sem-local" || semLocal === 0) return null;
+        return (
+          <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <span className="flex-1">⚠ <b>{semLocal}</b> abastecimento(s) deste período estão sem local de trabalho e não entram no custo de nenhuma planta.</span>
+            <Button size="sm" variant="outline" className="border-amber-400 bg-white" onClick={() => setFilterLocation("sem-local")}>Ver quais</Button>
+          </div>
+        );
+      })()}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-emerald-800 flex items-center gap-2">
@@ -807,6 +818,7 @@ export default function VehicleControlPage() {
               className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Todos os locais</option>
+              <option value="sem-local">⚠ Abastecimentos sem local</option>
               {locations.map((loc: any) => (
                 <option key={loc.id} value={loc.id}>{loc.name}</option>
               ))}
@@ -1256,6 +1268,11 @@ export default function VehicleControlPage() {
               value={form.workLocationId}
               onChange={(id) => setForm(f => ({ ...f, workLocationId: id }))}
             />
+            {form.recordType === "abastecimento" && !form.workLocationId && (
+              <p role="alert" className="-mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                ⚠ Sem local de trabalho. Sem ele, este abastecimento não entra no custo de nenhuma planta.
+              </p>
+            )}
 
             <div>
               <Label>Observações</Label>

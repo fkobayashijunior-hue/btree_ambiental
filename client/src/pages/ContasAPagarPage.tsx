@@ -72,7 +72,8 @@ function parseExcelValor(raw: any): string | null {
   return String(n);
 }
 
-export default function ContasAPagarPage() {
+// Tela antiga (extrato + previsões). Fora do menu desde a reestruturação; mantida para consulta/rollback.
+export function ContasAPagarExtratoLegado() {
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
@@ -1205,6 +1206,32 @@ function DashboardContasAPagarTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Nova tela: custos lançados à mão, por planta ──
+import { useAuth } from "@/_core/hooks/useAuth";
+import CustosTab from "@/components/custos/CustosTab";
+import CadastrosCustosTab from "@/components/custos/CadastrosCustosTab";
+import DashboardPlantaTab from "@/components/custos/DashboardPlantaTab";
+
+export default function ContasAPagarPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  return (
+    <div className="p-4 md:p-6 space-y-4">
+      <h1 className="text-2xl font-bold">Contas a pagar</h1>
+      <Tabs defaultValue="custos">
+        <TabsList>
+          <TabsTrigger value="custos">Custos</TabsTrigger>
+          <TabsTrigger value="dashboard-planta">Dashboard por planta</TabsTrigger>
+          {isAdmin && <TabsTrigger value="cadastros">Cadastros</TabsTrigger>}
+        </TabsList>
+        <TabsContent value="custos" className="pt-3"><CustosTab /></TabsContent>
+        <TabsContent value="dashboard-planta" className="pt-3"><DashboardPlantaTab /></TabsContent>
+        {isAdmin && <TabsContent value="cadastros" className="pt-3"><CadastrosCustosTab /></TabsContent>}
+      </Tabs>
     </div>
   );
 }
