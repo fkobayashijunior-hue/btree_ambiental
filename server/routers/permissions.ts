@@ -3,6 +3,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
+import { modulosInativos } from "../utils/modulosAtivos";
 import { userPermissions, users, collaborators, clients } from "../../drizzle/schema";
 import { eq, isNotNull, sql } from "drizzle-orm";
 
@@ -200,6 +201,12 @@ export async function resolveUserPermissions(userId: number, role: string | null
 // "Contas a Pagar" quanto em "Fluxo de Caixa").
 export function moduleProcedure(...slugs: ModuleSlug[]) {
   return protectedProcedure.use(async ({ ctx, next }) => {
+    // Módulo desativado pelo administrador (Administração > Módulos do Sistema): recusa para todos, inclusive admin.
+    // Em procedures compartilhadas por mais de um módulo, só recusa se TODOS os módulos listados estiverem inativos.
+    const inativos = await modulosInativos();
+    if (inativos.size > 0 && slugs.every((s) => inativos.has(s))) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Módulo desativado pelo administrador" });
+    }
     if (ctx.user.role !== "admin") {
       const perms = await resolveUserPermissions(ctx.user.id, ctx.user.role);
       if (perms.modules !== null && !slugs.some(slug => perms.modules!.includes(slug))) {
@@ -212,8 +219,10 @@ export function moduleProcedure(...slugs: ModuleSlug[]) {
 
 export const permissionsRouter = router({
   // Listar módulos disponíveis
-  listModules: protectedProcedure.query(() => {
-    return SYSTEM_MODULES;
+  // Módulos inativos não aparecem no Controle de Acesso (as permissões já salvas dos usuários são preservadas).
+  listModules: protectedProcedure.query(async () => {
+    const inativos = await modulosInativos();
+    return SYSTEM_MODULES.filter((m) => !inativos.has(m.slug));
   }),
 
   // Listar perfis pré-definidos

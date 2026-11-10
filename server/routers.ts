@@ -49,6 +49,7 @@ import { financialConsolidatedRouter } from "./routers/financialConsolidated";
 import { sicoobRouter } from "./routers/sicoob";
 import { financialRealRouter } from "./routers/financialReal";
 import { custosRouter } from "./routers/custos";
+import { modulosConfigRouter } from "./routers/modulosConfig";
 import { quickAccessRouter } from "./routers/quickAccess";
 import { weeklyGoalsRouter } from "./routers/weeklyGoals";
 import { contasReceberRouter } from "./routers/contasReceber";
@@ -402,6 +403,7 @@ export const appRouter = router({
   sicoob: sicoobRouter,
   financialReal: financialRealRouter,
   custos: custosRouter,
+  modulosConfig: modulosConfigRouter,
   quickAccess: quickAccessRouter,
   weeklyGoals: weeklyGoalsRouter,
   contasReceber: contasReceberRouter,

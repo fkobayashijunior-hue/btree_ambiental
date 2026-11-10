@@ -4317,6 +4317,54 @@ var init_closingRefresh = __esm({
   }
 });
 
+// server/utils/modulosAtivos.ts
+function ensureModuloConfig(db) {
+  if (!ensurePromise) {
+    ensurePromise = (async () => {
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS modulo_config (
+          slug VARCHAR(60) PRIMARY KEY,
+          ativo TINYINT(1) NOT NULL DEFAULT 1,
+          atualizado_por INT NULL,
+          atualizado_por_nome VARCHAR(120) NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+    })().catch((e) => {
+      ensurePromise = null;
+      throw e;
+    });
+  }
+  return ensurePromise;
+}
+function limparCacheModulos() {
+  cache = null;
+}
+async function modulosInativos() {
+  if (cache && Date.now() - cache.em < TTL_MS) return cache.inativos;
+  try {
+    const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+    const db = await getDb2();
+    if (!db) return /* @__PURE__ */ new Set();
+    await ensureModuloConfig(db);
+    const [rows2] = await db.$client.execute(`SELECT slug FROM modulo_config WHERE ativo = 0`);
+    const inativos = new Set(rows2.map((r) => String(r.slug)));
+    cache = { em: Date.now(), inativos };
+    return inativos;
+  } catch {
+    return /* @__PURE__ */ new Set();
+  }
+}
+var ensurePromise, cache, TTL_MS;
+var init_modulosAtivos = __esm({
+  "server/utils/modulosAtivos.ts"() {
+    "use strict";
+    ensurePromise = null;
+    cache = null;
+    TTL_MS = 15e3;
+  }
+});
+
 // server/routers/permissions.ts
 import { z as z16 } from "zod";
 import { TRPCError as TRPCError12 } from "@trpc/server";
@@ -4374,6 +4422,10 @@ async function resolveUserPermissions(userId, role) {
 }
 function moduleProcedure(...slugs) {
   return protectedProcedure.use(async ({ ctx, next }) => {
+    const inativos = await modulosInativos();
+    if (inativos.size > 0 && slugs.every((s) => inativos.has(s))) {
+      throw new TRPCError12({ code: "FORBIDDEN", message: "M\xF3dulo desativado pelo administrador" });
+    }
     if (ctx.user.role !== "admin") {
       const perms = await resolveUserPermissions(ctx.user.id, ctx.user.role);
       if (perms.modules !== null && !slugs.some((slug) => perms.modules.includes(slug))) {
@@ -4389,6 +4441,7 @@ var init_permissions = __esm({
     "use strict";
     init_trpc();
     init_db();
+    init_modulosAtivos();
     init_schema();
     SYSTEM_MODULES = [
       // Pessoas
@@ -4495,8 +4548,10 @@ var init_permissions = __esm({
     };
     permissionsRouter = router({
       // Listar módulos disponíveis
-      listModules: protectedProcedure.query(() => {
-        return SYSTEM_MODULES;
+      // Módulos inativos não aparecem no Controle de Acesso (as permissões já salvas dos usuários são preservadas).
+      listModules: protectedProcedure.query(async () => {
+        const inativos = await modulosInativos();
+        return SYSTEM_MODULES.filter((m) => !inativos.has(m.slug));
       }),
       // Listar perfis pré-definidos
       listProfiles: protectedProcedure.query(() => {
@@ -7473,17 +7528,17 @@ __export(weeklyGoals_exports, {
   enviarLembretesFechamento: () => enviarLembretesFechamento,
   weeklyGoalsRouter: () => weeklyGoalsRouter
 });
-import { z as z51 } from "zod";
-import { TRPCError as TRPCError39 } from "@trpc/server";
-async function getDbOrThrow4() {
+import { z as z52 } from "zod";
+import { TRPCError as TRPCError40 } from "@trpc/server";
+async function getDbOrThrow5() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError39({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError40({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
 function ensureTables3(db) {
-  if (!ensurePromise4) {
-    ensurePromise4 = (async () => {
+  if (!ensurePromise5) {
+    ensurePromise5 = (async () => {
       const run = (s) => db.$client.execute(s);
       await run(`CREATE TABLE IF NOT EXISTS weekly_goals (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -7525,22 +7580,22 @@ function ensureTables3(db) {
         INDEX weekly_goal_messages_goal_idx (goal_id, created_at)
       )`);
     })().catch((e) => {
-      ensurePromise4 = null;
+      ensurePromise5 = null;
       throw e;
     });
   }
-  return ensurePromise4;
+  return ensurePromise5;
 }
 async function carregarMeta(db, id) {
   const [g] = await q2(db, `SELECT * FROM weekly_goals WHERE id = ?`, [id]);
-  if (!g) throw new TRPCError39({ code: "NOT_FOUND", message: "Meta n\xE3o encontrada" });
+  if (!g) throw new TRPCError40({ code: "NOT_FOUND", message: "Meta n\xE3o encontrada" });
   const sups = await q2(db, `SELECT user_id, user_name FROM weekly_goal_supervisors WHERE goal_id = ? ORDER BY user_name`, [id]);
   return { goal: mapGoal(g), supervisors: sups.map((s) => ({ userId: s.user_id, name: s.user_name ?? "" })) };
 }
 async function exigirPapel(db, user, id) {
   const m = await carregarMeta(db, id);
   const papel = papelNaMeta({ id: user.id, isAdmin: isAdmin(user) }, m.goal, m.supervisors.map((s) => s.userId));
-  if (!podeVer(papel)) throw new TRPCError39({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o participa desta meta" });
+  if (!podeVer(papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o participa desta meta" });
   return { ...m, papel };
 }
 async function nomeDe(db, userId) {
@@ -7631,7 +7686,7 @@ async function resumoDaMeta(db, g, hoje) {
 async function gravarItens(db, goalId, semana, itens) {
   for (const it of itens) {
     const [d] = await q2(db, `SELECT id, name, nickname FROM cargo_destinations WHERE id = ?`, [normalizaDestino(it.destinationId) ?? it.destinationId]);
-    if (!d) throw new TRPCError39({ code: "BAD_REQUEST", message: "Comprador n\xE3o encontrado" });
+    if (!d) throw new TRPCError40({ code: "BAD_REQUEST", message: "Comprador n\xE3o encontrado" });
     const [res] = await db.$client.execute(
       `INSERT INTO weekly_goal_items (goal_id, destination_id, destination_name, target_cargas, observacao) VALUES (?, ?, ?, ?, ?)`,
       [goalId, d.id, String(d.nickname || d.name), it.targetCargas, it.observacao ?? null]
@@ -7675,7 +7730,7 @@ function mapMsg(x) {
   };
 }
 async function enviarLembretesFechamento(hoje = hojeISO()) {
-  const db = await getDbOrThrow4();
+  const db = await getDbOrThrow5();
   await ensureTables3(db);
   const metas = await q2(
     db,
@@ -7691,7 +7746,7 @@ async function enviarLembretesFechamento(hoje = hojeISO()) {
   }
   return metas.length;
 }
-var USO, GESTAO, data, q2, ensurePromise4, isAdmin, mapGoal, interessados, itemInput, descreveItens, weeklyGoalsRouter;
+var USO, GESTAO, data, q2, ensurePromise5, isAdmin, mapGoal, interessados, itemInput, descreveItens, weeklyGoalsRouter;
 var init_weeklyGoals2 = __esm({
   "server/routers/weeklyGoals.ts"() {
     "use strict";
@@ -7701,9 +7756,9 @@ var init_weeklyGoals2 = __esm({
     init_weeklyGoals();
     USO = "metas-semanais";
     GESTAO = "metas-semanais-gestao";
-    data = z51.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    data = z52.string().regex(/^\d{4}-\d{2}-\d{2}$/);
     q2 = async (db, sql34, params = []) => (await db.$client.execute(sql34, params))[0];
-    ensurePromise4 = null;
+    ensurePromise5 = null;
     isAdmin = (u) => u.role === "admin";
     mapGoal = (r) => ({
       id: r.id,
@@ -7724,17 +7779,17 @@ var init_weeklyGoals2 = __esm({
       createdAt: r.created_at
     });
     interessados = (m) => [m.goal.createdBy, ...m.supervisors.map((s) => s.userId)];
-    itemInput = z51.object({
-      destinationId: z51.number(),
-      targetCargas: z51.number().int().min(1).max(500),
-      observacao: z51.string().max(300).nullable().optional(),
-      dias: z51.array(z51.object({ data, target: z51.number().int().min(0).max(100) })).max(7).optional()
+    itemInput = z52.object({
+      destinationId: z52.number(),
+      targetCargas: z52.number().int().min(1).max(500),
+      observacao: z52.string().max(300).nullable().optional(),
+      dias: z52.array(z52.object({ data, target: z52.number().int().min(0).max(100) })).max(7).optional()
     });
     descreveItens = (itens) => itens.map((i) => `${i.targetCargas}x ${i.destinationName}`).join(", ");
     weeklyGoalsRouter = router({
       // ── Apoio ao formulário ──
       opcoes: moduleProcedure(GESTAO).query(async () => {
-        const db = await getDbOrThrow4();
+        const db = await getDbOrThrow5();
         await ensureTables3(db);
         const users3 = await q2(db, `SELECT u.id, u.name, u.email, u.role, c.name AS colaborador
        FROM users u LEFT JOIN collaborators c ON c.user_id = u.id AND (c.active = 1 OR c.active IS NULL) ORDER BY COALESCE(c.name, u.name)`);
@@ -7765,8 +7820,8 @@ var init_weeklyGoals2 = __esm({
         };
       }),
       // ── Lista da semana, conforme o papel do usuário ──
-      list: moduleProcedure(USO, GESTAO).input(z51.object({ semana: data.optional() }).optional()).query(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+      list: moduleProcedure(USO, GESTAO).input(z52.object({ semana: data.optional() }).optional()).query(async ({ ctx, input }) => {
+        const db = await getDbOrThrow5();
         await ensureTables3(db);
         const hoje = hojeISO();
         const sem = weekBounds(input?.semana ?? hoje);
@@ -7791,8 +7846,8 @@ var init_weeklyGoals2 = __esm({
         return { semana: sem, hoje, metas: out };
       }),
       // ── Detalhe completo: itens, dia a dia, relatos, conversa ──
-      getById: moduleProcedure(USO, GESTAO).input(z51.object({ id: z51.number() })).query(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+      getById: moduleProcedure(USO, GESTAO).input(z52.object({ id: z52.number() })).query(async ({ ctx, input }) => {
+        const db = await getDbOrThrow5();
         await ensureTables3(db);
         const m = await exigirPapel(db, ctx.user, input.id);
         const hoje = hojeISO();
@@ -7851,15 +7906,15 @@ var init_weeklyGoals2 = __esm({
         };
       }),
       // ── Criar meta (gestão) ──
-      create: moduleProcedure(GESTAO).input(z51.object({
+      create: moduleProcedure(GESTAO).input(z52.object({
         semana: data,
-        title: z51.string().min(1).max(200),
-        description: z51.string().max(4e3).nullable().optional(),
-        responsibleUserId: z51.number(),
-        supervisorUserIds: z51.array(z51.number()).max(10),
-        itens: z51.array(itemInput).min(1).max(20)
+        title: z52.string().min(1).max(200),
+        description: z52.string().max(4e3).nullable().optional(),
+        responsibleUserId: z52.number(),
+        supervisorUserIds: z52.array(z52.number()).max(10),
+        itens: z52.array(itemInput).min(1).max(20)
       })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+        const db = await getDbOrThrow5();
         await ensureTables3(db);
         const sem = weekBounds(input.semana);
         const respNome = await nomeDe(db, input.responsibleUserId);
@@ -7882,18 +7937,18 @@ var init_weeklyGoals2 = __esm({
         return { id };
       }),
       // ── Editar meta (admin/criador): troca itens e registra o antes/depois na linha do tempo ──
-      update: moduleProcedure(GESTAO).input(z51.object({
-        id: z51.number(),
-        title: z51.string().min(1).max(200),
-        description: z51.string().max(4e3).nullable().optional(),
-        supervisorUserIds: z51.array(z51.number()).max(10),
-        itens: z51.array(itemInput).min(1).max(20)
+      update: moduleProcedure(GESTAO).input(z52.object({
+        id: z52.number(),
+        title: z52.string().min(1).max(200),
+        description: z52.string().max(4e3).nullable().optional(),
+        supervisorUserIds: z52.array(z52.number()).max(10),
+        itens: z52.array(itemInput).min(1).max(20)
       })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+        const db = await getDbOrThrow5();
         await ensureTables3(db);
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador edita a meta" });
-        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError39({ code: "BAD_REQUEST", message: "Meta j\xE1 encerrada" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador edita a meta" });
+        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError40({ code: "BAD_REQUEST", message: "Meta j\xE1 encerrada" });
         const antes = descreveItens(await itensDaMeta(db, input.id));
         await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [input.id]);
         await db.$client.execute(`DELETE FROM weekly_goal_items WHERE goal_id = ?`, [input.id]);
@@ -7908,20 +7963,20 @@ var init_weeklyGoals2 = __esm({
         await avisar([m.goal.responsibleUserId], "Meta semanal alterada", `${input.title} \u2014 ${depois}. Confirme a ci\xEAncia.`, input.id);
         return { success: true };
       }),
-      cancel: moduleProcedure(GESTAO).input(z51.object({ id: z51.number(), motivo: z51.string().min(1).max(500) })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+      cancel: moduleProcedure(GESTAO).input(z52.object({ id: z52.number(), motivo: z52.string().min(1).max(500) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow5();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError39({ code: "FORBIDDEN" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError40({ code: "FORBIDDEN" });
         await db.$client.execute(`UPDATE weekly_goals SET status = 'cancelada', closed_at = NOW(), closed_by = ?, closing_summary = ? WHERE id = ?`, [ctx.user.id, input.motivo, input.id]);
         await mensagemSistema(db, input.id, `Meta cancelada por ${await nomeDe(db, ctx.user.id)}: ${input.motivo}`);
         await avisar([m.goal.responsibleUserId], "Meta semanal cancelada", input.motivo, input.id, ctx.user.id);
         return { success: true };
       }),
       // ── Excluir meta de vez (admin/criador): apaga também relatos, conversa e avisos dela ──
-      delete: moduleProcedure(GESTAO).input(z51.object({ id: z51.number() })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+      delete: moduleProcedure(GESTAO).input(z52.object({ id: z52.number() })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow5();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador exclui a meta" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador exclui a meta" });
         const id = input.id;
         await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [id]);
         for (const t2 of ["weekly_goal_items", "weekly_goal_supervisors", "weekly_goal_entries", "weekly_goal_messages"]) {
@@ -7935,10 +7990,10 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Encerrar a semana com avaliação (supervisor/criador/admin) ──
-      close: moduleProcedure(GESTAO).input(z51.object({ id: z51.number(), avaliacao: z51.string().min(1).max(2e3) })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+      close: moduleProcedure(GESTAO).input(z52.object({ id: z52.number(), avaliacao: z52.string().min(1).max(2e3) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow5();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEncerrar(m.papel)) throw new TRPCError39({ code: "FORBIDDEN" });
+        if (!podeEncerrar(m.papel)) throw new TRPCError40({ code: "FORBIDDEN" });
         const res = await resumoDaMeta(db, m.goal, hojeISO());
         await db.$client.execute(`UPDATE weekly_goals SET status = 'encerrada', closed_at = NOW(), closed_by = ?, closing_summary = ? WHERE id = ?`, [ctx.user.id, input.avaliacao, input.id]);
         await mensagemSistema(db, input.id, `Semana encerrada por ${await nomeDe(db, ctx.user.id)}. Resultado: ${res.progresso.total.carregadas} de ${res.progresso.total.meta} cargas (${res.progresso.total.pct}%). Avalia\xE7\xE3o: ${input.avaliacao}`);
@@ -7946,12 +8001,12 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Ciência do responsável ──
-      acknowledge: moduleProcedure(USO, GESTAO).input(z51.object({ id: z51.number(), ack: z51.enum(["de_acordo", "com_ressalva"]), comentario: z51.string().max(1e3).optional() })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+      acknowledge: moduleProcedure(USO, GESTAO).input(z52.object({ id: z52.number(), ack: z52.enum(["de_acordo", "com_ressalva"]), comentario: z52.string().max(1e3).optional() })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow5();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeDarCiencia(m.papel)) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel d\xE1 ci\xEAncia" });
-        if (m.goal.ack !== "pendente" && m.goal.status !== "em_negociacao") throw new TRPCError39({ code: "BAD_REQUEST", message: "A ci\xEAncia desta meta j\xE1 foi registrada" });
-        if (input.ack === "com_ressalva" && !input.comentario?.trim()) throw new TRPCError39({ code: "BAD_REQUEST", message: "Explique a ressalva" });
+        if (!podeDarCiencia(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel d\xE1 ci\xEAncia" });
+        if (m.goal.ack !== "pendente" && m.goal.status !== "em_negociacao") throw new TRPCError40({ code: "BAD_REQUEST", message: "A ci\xEAncia desta meta j\xE1 foi registrada" });
+        if (input.ack === "com_ressalva" && !input.comentario?.trim()) throw new TRPCError40({ code: "BAD_REQUEST", message: "Explique a ressalva" });
         const novoStatus = input.ack === "de_acordo" ? "em_andamento" : "em_negociacao";
         await db.$client.execute(
           `UPDATE weekly_goals SET ack = ?, ack_at = NOW(), ack_comment = ?, status = ? WHERE id = ? AND status <> 'encerrada' AND status <> 'cancelada'`,
@@ -7964,11 +8019,11 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Supervisão mantém a meta durante a negociação e pede nova confirmação ──
-      keepGoal: moduleProcedure(USO, GESTAO).input(z51.object({ id: z51.number(), justificativa: z51.string().min(1).max(1500) })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+      keepGoal: moduleProcedure(USO, GESTAO).input(z52.object({ id: z52.number(), justificativa: z52.string().min(1).max(1500) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow5();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEncerrar(m.papel)) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 a supervis\xE3o responde \xE0 ressalva" });
-        if (m.goal.status !== "em_negociacao") throw new TRPCError39({ code: "BAD_REQUEST", message: "A meta n\xE3o est\xE1 em negocia\xE7\xE3o" });
+        if (!podeEncerrar(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 a supervis\xE3o responde \xE0 ressalva" });
+        if (m.goal.status !== "em_negociacao") throw new TRPCError40({ code: "BAD_REQUEST", message: "A meta n\xE3o est\xE1 em negocia\xE7\xE3o" });
         await db.$client.execute(`UPDATE weekly_goals SET status = 'aguardando_ciencia', ack = 'pendente', ack_at = NULL WHERE id = ?`, [input.id]);
         const nome = await nomeDe(db, ctx.user.id);
         await mensagemSistema(db, input.id, `${nome} manteve a meta: ${input.justificativa.trim()}. O respons\xE1vel precisa confirmar (de acordo ou nova ressalva).`);
@@ -7976,22 +8031,22 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Relato do responsável ──
-      addEntry: moduleProcedure(USO, GESTAO).input(z51.object({
-        goalId: z51.number(),
+      addEntry: moduleProcedure(USO, GESTAO).input(z52.object({
+        goalId: z52.number(),
         entryDate: data.optional(),
-        kind: z51.enum(KINDS_ENTRY),
-        situacao: z51.enum(["ok", "atencao", "problema"]).default("ok"),
-        body: z51.string().min(1).max(3e3),
-        photoUrls: z51.array(z51.string().url()).max(5).optional()
+        kind: z52.enum(KINDS_ENTRY),
+        situacao: z52.enum(["ok", "atencao", "problema"]).default("ok"),
+        body: z52.string().min(1).max(3e3),
+        photoUrls: z52.array(z52.string().url()).max(5).optional()
       })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+        const db = await getDbOrThrow5();
         const m = await exigirPapel(db, ctx.user, input.goalId);
-        if (!podeRelatar(m.papel)) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel registra relatos" });
-        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError39({ code: "BAD_REQUEST", message: "Meta encerrada" });
-        if (m.goal.status !== "em_andamento") throw new TRPCError39({ code: "BAD_REQUEST", message: 'A meta s\xF3 segue em andamento depois do acordo: d\xEA o "de acordo" (ou resolva a negocia\xE7\xE3o) antes de relatar' });
+        if (!podeRelatar(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel registra relatos" });
+        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError40({ code: "BAD_REQUEST", message: "Meta encerrada" });
+        if (m.goal.status !== "em_andamento") throw new TRPCError40({ code: "BAD_REQUEST", message: 'A meta s\xF3 segue em andamento depois do acordo: d\xEA o "de acordo" (ou resolva a negocia\xE7\xE3o) antes de relatar' });
         const dia2 = input.entryDate ?? hojeISO();
         const sem = weekBounds(m.goal.weekStart);
-        if (dia2 < sem.start || dia2 > sem.end) throw new TRPCError39({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
+        if (dia2 < sem.start || dia2 > sem.end) throw new TRPCError40({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
         const situacao = input.kind === "problema" ? "problema" : input.situacao;
         const nome = await nomeDe(db, ctx.user.id);
         const [res] = await db.$client.execute(
@@ -8006,18 +8061,18 @@ var init_weeklyGoals2 = __esm({
         return { id: Number(res.insertId) };
       }),
       // ── Conversa (perguntas, respostas, comentários) ──
-      addMessage: moduleProcedure(USO, GESTAO).input(z51.object({
-        goalId: z51.number(),
-        kind: z51.enum(["pergunta", "resposta", "comentario"]),
-        body: z51.string().min(1).max(3e3),
-        entryId: z51.number().optional(),
-        parentId: z51.number().optional(),
+      addMessage: moduleProcedure(USO, GESTAO).input(z52.object({
+        goalId: z52.number(),
+        kind: z52.enum(["pergunta", "resposta", "comentario"]),
+        body: z52.string().min(1).max(3e3),
+        entryId: z52.number().optional(),
+        parentId: z52.number().optional(),
         dia: data.optional(),
-        geral: z51.boolean().optional()
+        geral: z52.boolean().optional()
       })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow4();
+        const db = await getDbOrThrow5();
         const m = await exigirPapel(db, ctx.user, input.goalId);
-        if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError39({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode enviar este tipo de mensagem" });
+        if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError40({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode enviar este tipo de mensagem" });
         const nome = await nomeDe(db, ctx.user.id);
         const papel = m.papel === "responsavel" ? "responsavel" : m.papel === "admin" ? "admin" : "supervisor";
         let dia2 = input.geral ? null : input.dia ?? hojeISO();
@@ -8446,7 +8501,7 @@ __export(heartbeat_exports, {
   listHeartbeatJobs: () => listHeartbeatJobs,
   updateHeartbeatJob: () => updateHeartbeatJob
 });
-import { TRPCError as TRPCError40 } from "@trpc/server";
+import { TRPCError as TRPCError41 } from "@trpc/server";
 async function createHeartbeatJob(job, userSession) {
   validateCallbackPath(job.path);
   return callForge(
@@ -8496,13 +8551,13 @@ var init_heartbeat = __esm({
     SERVICE = "webdevtoken.v1.WebDevService";
     buildEndpoint = (rpc) => {
       if (!ENV.forgeApiUrl) {
-        throw new TRPCError40({
+        throw new TRPCError41({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service URL is not configured (BUILT_IN_FORGE_API_URL)."
         });
       }
       if (!ENV.forgeApiKey) {
-        throw new TRPCError40({
+        throw new TRPCError41({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service API key is not configured (BUILT_IN_FORGE_API_KEY)."
         });
@@ -8530,7 +8585,7 @@ var init_heartbeat = __esm({
           body: JSON.stringify(body)
         });
       } catch (error) {
-        throw new TRPCError40({
+        throw new TRPCError41({
           code: "INTERNAL_SERVER_ERROR",
           message: `Heartbeat ${rpc} network error: ${String(error)}`
         });
@@ -8550,7 +8605,7 @@ var init_heartbeat = __esm({
       else if (status === 400 || status === 422) code = "BAD_REQUEST";
       else if (status === 409) code = "CONFLICT";
       else if (status === 429) code = "TOO_MANY_REQUESTS";
-      return new TRPCError40({
+      return new TRPCError41({
         code,
         message: `Heartbeat ${rpc} failed (${status})${detail ? `: ${detail}` : ""}`
       });
@@ -8562,7 +8617,7 @@ var init_heartbeat = __esm({
     };
     validateCallbackPath = (path4) => {
       if (!path4 || !path4.startsWith("/api/scheduled/")) {
-        throw new TRPCError40({
+        throw new TRPCError41({
           code: "BAD_REQUEST",
           message: "callback path must start with /api/scheduled/"
         });
@@ -24995,10 +25050,10 @@ async function getDbOrThrow() {
   if (!db) throw new TRPCError36({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
-var ensurePromise = null;
+var ensurePromise2 = null;
 function ensureTables(db) {
-  if (!ensurePromise) {
-    ensurePromise = (async () => {
+  if (!ensurePromise2) {
+    ensurePromise2 = (async () => {
       const [existia] = await db.$client.execute(
         `SELECT COUNT(*) AS n FROM information_schema.tables
          WHERE table_schema = DATABASE() AND table_name = 'extrato_regras'`
@@ -25068,11 +25123,11 @@ function ensureTables(db) {
         }
       }
     })().catch((e) => {
-      ensurePromise = null;
+      ensurePromise2 = null;
       throw e;
     });
   }
-  return ensurePromise;
+  return ensurePromise2;
 }
 function num3(v) {
   const s = String(v ?? "0").trim();
@@ -26169,10 +26224,10 @@ async function getDbOrThrow2() {
   if (!db) throw new TRPCError37({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
-var ensurePromise2 = null;
+var ensurePromise3 = null;
 function ensureTables2(db) {
-  if (!ensurePromise2) {
-    ensurePromise2 = (async () => {
+  if (!ensurePromise3) {
+    ensurePromise3 = (async () => {
       await db.$client.execute(`
         CREATE TABLE IF NOT EXISTS custo_categorias (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -26301,11 +26356,11 @@ function ensureTables2(db) {
         }
       }
     })().catch((e) => {
-      ensurePromise2 = null;
+      ensurePromise3 = null;
       throw e;
     });
   }
-  return ensurePromise2;
+  return ensurePromise3;
 }
 var ultimaSync = /* @__PURE__ */ new Map();
 async function sincronizarPedagios(db, ini, fim, forcar = false) {
@@ -27359,8 +27414,10 @@ var custosRouter = router({
   })
 });
 
-// server/routers/quickAccess.ts
+// server/routers/modulosConfig.ts
 init_trpc();
+init_permissions();
+init_modulosAtivos();
 import { z as z50 } from "zod";
 import { TRPCError as TRPCError38 } from "@trpc/server";
 async function getDbOrThrow3() {
@@ -27369,10 +27426,59 @@ async function getDbOrThrow3() {
   if (!db) throw new TRPCError38({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
-var ensurePromise3 = null;
+var modulosConfigRouter = router({
+  // Qualquer usuário logado: quais módulos estão desativados (a tela usa para esconder menu e atalhos).
+  inativos: protectedProcedure.query(async () => Array.from(await modulosInativos())),
+  // Administrador: todos os módulos com o estado de cada um.
+  listar: adminProcedure.query(async () => {
+    const db = await getDbOrThrow3();
+    await ensureModuloConfig(db);
+    const [rows2] = await db.$client.execute(`SELECT slug, ativo, atualizado_por_nome, updated_at FROM modulo_config`);
+    const mapa = /* @__PURE__ */ new Map();
+    for (const r of rows2) {
+      mapa.set(String(r.slug), {
+        ativo: !!r.ativo,
+        por: r.atualizado_por_nome ?? null,
+        em: r.updated_at ? r.updated_at instanceof Date ? r.updated_at.toISOString() : String(r.updated_at) : null
+      });
+    }
+    return SYSTEM_MODULES.map((m) => ({
+      slug: m.slug,
+      label: m.label,
+      grupo: m.group,
+      ativo: mapa.get(m.slug)?.ativo ?? true,
+      atualizadoPor: mapa.get(m.slug)?.por ?? null,
+      atualizadoEm: mapa.get(m.slug)?.em ?? null
+    }));
+  }),
+  definir: adminProcedure.input(z50.object({ slug: z50.string().max(60), ativo: z50.boolean() })).mutation(async ({ input, ctx }) => {
+    if (!SYSTEM_MODULES.some((m) => m.slug === input.slug)) throw new TRPCError38({ code: "BAD_REQUEST", message: "M\xF3dulo desconhecido" });
+    const db = await getDbOrThrow3();
+    await ensureModuloConfig(db);
+    await db.$client.execute(
+      `INSERT INTO modulo_config (slug, ativo, atualizado_por, atualizado_por_nome) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE ativo = VALUES(ativo), atualizado_por = VALUES(atualizado_por), atualizado_por_nome = VALUES(atualizado_por_nome)`,
+      [input.slug, input.ativo ? 1 : 0, ctx.user.id ?? null, ctx.user.name ?? null]
+    );
+    limparCacheModulos();
+    return { ok: true };
+  })
+});
+
+// server/routers/quickAccess.ts
+init_trpc();
+import { z as z51 } from "zod";
+import { TRPCError as TRPCError39 } from "@trpc/server";
+async function getDbOrThrow4() {
+  const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+  const db = await getDb2();
+  if (!db) throw new TRPCError39({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  return db;
+}
+var ensurePromise4 = null;
 function ensureTable(db) {
-  if (!ensurePromise3) {
-    ensurePromise3 = (async () => {
+  if (!ensurePromise4) {
+    ensurePromise4 = (async () => {
       await db.$client.execute(`
         CREATE TABLE IF NOT EXISTS user_quick_access (
           user_id INT PRIMARY KEY,
@@ -27381,17 +27487,17 @@ function ensureTable(db) {
         )
       `);
     })().catch((e) => {
-      ensurePromise3 = null;
+      ensurePromise4 = null;
       throw e;
     });
   }
-  return ensurePromise3;
+  return ensurePromise4;
 }
 var quickAccessRouter = router({
   // null = sem personalização (usa o padrão)
   get: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user.role !== "admin") return { itens: null };
-    const db = await getDbOrThrow3();
+    const db = await getDbOrThrow4();
     await ensureTable(db);
     const [rows2] = await db.$client.execute(`SELECT itens_json FROM user_quick_access WHERE user_id = ?`, [ctx.user.id]);
     const r = rows2[0];
@@ -27403,9 +27509,9 @@ var quickAccessRouter = router({
       return { itens: null };
     }
   }),
-  save: protectedProcedure.input(z50.object({ itens: z50.array(z50.string().max(80)).max(60) })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 administradores podem personalizar o Painel" });
-    const db = await getDbOrThrow3();
+  save: protectedProcedure.input(z51.object({ itens: z51.array(z51.string().max(80)).max(60) })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 administradores podem personalizar o Painel" });
+    const db = await getDbOrThrow4();
     await ensureTable(db);
     await db.$client.execute(
       `INSERT INTO user_quick_access (user_id, itens_json) VALUES (?, ?) ON DUPLICATE KEY UPDATE itens_json = VALUES(itens_json)`,
@@ -27415,8 +27521,8 @@ var quickAccessRouter = router({
   }),
   // Volta ao padrão
   reset: protectedProcedure.mutation(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError38({ code: "FORBIDDEN" });
-    const db = await getDbOrThrow3();
+    if (ctx.user.role !== "admin") throw new TRPCError39({ code: "FORBIDDEN" });
+    const db = await getDbOrThrow4();
     await ensureTable(db);
     await db.$client.execute(`DELETE FROM user_quick_access WHERE user_id = ?`, [ctx.user.id]);
     return { ok: true };
@@ -27427,7 +27533,7 @@ var quickAccessRouter = router({
 init_weeklyGoals2();
 
 // server/routers/contasReceber.ts
-import { z as z52 } from "zod";
+import { z as z53 } from "zod";
 init_trpc();
 init_permissions();
 
@@ -27472,16 +27578,16 @@ function soDigitos(s) {
 }
 
 // server/routers/contasReceber.ts
-var data2 = z52.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-var entrada = z52.object({
-  mes: z52.number().min(1).max(12),
-  ano: z52.number().min(2020).max(2100),
+var data2 = z53.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+var entrada = z53.object({
+  mes: z53.number().min(1).max(12),
+  ano: z53.number().min(2020).max(2100),
   /** período de emissão (NF/boleto) ou entrega (carga); quando informado, substitui o mês */
   dataInicio: data2.optional(),
   dataFim: data2.optional(),
-  cnpj: z52.string().optional(),
-  pesquisa: z52.string().optional(),
-  statusFiltro: z52.enum(["todos", "em_aberto", "pago", "cancelado"]).default("todos")
+  cnpj: z53.string().optional(),
+  pesquisa: z53.string().optional(),
+  statusFiltro: z53.enum(["todos", "em_aberto", "pago", "cancelado"]).default("todos")
 });
 function num4(v) {
   const s = String(v ?? "0").trim();
@@ -27631,7 +27737,7 @@ var contasReceberRouter = router({
 // server/routers/contaAzul.ts
 init_trpc();
 init_prazoPagamento();
-import { z as z53 } from "zod";
+import { z as z54 } from "zod";
 import axios2 from "axios";
 import zlib from "zlib";
 
@@ -28015,7 +28121,7 @@ async function syncNotasFiscais(mes, ano) {
   return { synced, errors };
 }
 var contaAzulRouter = router({
-  setRefreshToken: protectedProcedure.input(z53.object({ refreshToken: z53.string().min(10) })).mutation(async ({ input }) => {
+  setRefreshToken: protectedProcedure.input(z54.object({ refreshToken: z54.string().min(10) })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(
@@ -28039,14 +28145,14 @@ var contaAzulRouter = router({
       configurado: Number(tokenRows?.[0]?.cnt ?? 0) > 0
     };
   }),
-  listNotasFiscais: protectedProcedure.input(z53.object({
-    mes: z53.number().min(1).max(12),
-    ano: z53.number().min(2020).max(2100),
+  listNotasFiscais: protectedProcedure.input(z54.object({
+    mes: z54.number().min(1).max(12),
+    ano: z54.number().min(2020).max(2100),
     // período de emissão (substitui o mês quando os dois são informados)
-    dataInicio: z53.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    dataFim: z53.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    pesquisa: z53.string().optional(),
-    incluirCanceladas: z53.boolean().optional()
+    dataInicio: z54.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    dataFim: z54.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    pesquisa: z54.string().optional(),
+    incluirCanceladas: z54.boolean().optional()
   })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { notas: [], error: "DB indispon\xEDvel" };
@@ -28086,7 +28192,7 @@ var contaAzulRouter = router({
   }),
   // Resumo (Vencidos/Vencem hoje/A vencer/Recebidos/Total) apenas das NFs sem boleto correspondente.
   // O frontend soma este resultado ao summaryBoletos (Sicoob) para formar os cards finais.
-  summaryNFsSemBoleto: protectedProcedure.input(z53.object({ mes: z53.number().min(1).max(12), ano: z53.number().min(2020).max(2100) })).query(async ({ input }) => {
+  summaryNFsSemBoleto: protectedProcedure.input(z54.object({ mes: z54.number().min(1).max(12), ano: z54.number().min(2020).max(2100) })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { vencidos: 0, vencemHoje: 0, aVencer: 0, recebidos: 0, total: 0, error: "DB indispon\xEDvel" };
     const [rows2] = await db.$client.execute(
@@ -28114,10 +28220,10 @@ var contaAzulRouter = router({
     return { ...resumo, error: null };
   }),
   // Altera o Status NF (manual). Registra auditoria e, se "pago", a data de pagamento confirmado.
-  updateStatusNf: protectedProcedure.input(z53.object({
-    id: z53.number(),
-    novoStatus: z53.enum(["em_aberto", "pago", "cancelado"]),
-    dataPagamentoConfirmado: z53.string().optional()
+  updateStatusNf: protectedProcedure.input(z54.object({
+    id: z54.number(),
+    novoStatus: z54.enum(["em_aberto", "pago", "cancelado"]),
+    dataPagamentoConfirmado: z54.string().optional()
     // "YYYY-MM-DD" — obrigatório apenas quando novoStatus = pago (default: hoje)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
@@ -28146,7 +28252,7 @@ var contaAzulRouter = router({
   // Guarda o valor original (só na primeira edição) e registra no log de auditoria com o
   // Anexa/troca o comprovante de pagamento da NF. O upload em si (Cloudinary) acontece no
   // cliente; aqui só grava a URL já pronta.
-  updateReceiptNF: protectedProcedure.input(z53.object({ id: z53.number(), receiptUrl: z53.string().url() })).mutation(async ({ input }) => {
+  updateReceiptNF: protectedProcedure.input(z54.object({ id: z54.number(), receiptUrl: z54.string().url() })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(`UPDATE notas_fiscais SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
@@ -28154,7 +28260,7 @@ var contaAzulRouter = router({
   }),
   // motivo — comum quando o cliente desconta na hora de pagar por divergência de peso
   // entre o que a NF declara e o que foi efetivamente entregue/pesado.
-  updateValorNF: protectedProcedure.input(z53.object({ id: z53.number(), valor: z53.string(), observacao: z53.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
+  updateValorNF: protectedProcedure.input(z54.object({ id: z54.number(), valor: z54.string(), observacao: z54.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     const [rows2] = await db.$client.execute(
@@ -28175,7 +28281,7 @@ var contaAzulRouter = router({
     return { success: true };
   }),
   // Histórico de alterações de uma NF (auditoria)
-  historicoStatusNf: protectedProcedure.input(z53.object({ notaFiscalId: z53.number() })).query(async ({ input }) => {
+  historicoStatusNf: protectedProcedure.input(z54.object({ notaFiscalId: z54.number() })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { historico: [], error: "DB indispon\xEDvel" };
     const [rows2] = await db.$client.execute(
@@ -28184,7 +28290,7 @@ var contaAzulRouter = router({
     );
     return { historico: rows2 ?? [], error: null };
   }),
-  syncNotasFiscais: protectedProcedure.input(z53.object({ mes: z53.number().min(1).max(12), ano: z53.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+  syncNotasFiscais: protectedProcedure.input(z54.object({ mes: z54.number().min(1).max(12), ano: z54.number().min(2020).max(2100) })).mutation(async ({ input }) => {
     try {
       return { success: true, ...await syncNotasFiscais(input.mes, input.ano) };
     } catch (e) {
@@ -28198,7 +28304,7 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z54 } from "zod";
+import { z as z55 } from "zod";
 import { desc as desc33, eq as eq44, and as and26, sql as sql30 } from "drizzle-orm";
 async function getNextActionCode(db) {
   if (!db) return "AC-00001";
@@ -28223,9 +28329,9 @@ var fiscalNotesRouter = router({
     return { actionCode: await getNextActionCode(db) };
   }),
   // Listar todas as notas com filtros
-  list: protectedProcedure.input(z54.object({
-    quantityType: z54.enum(["m3", "ton", "all"]).optional(),
-    status: z54.enum(["available", "used", "all"]).optional()
+  list: protectedProcedure.input(z55.object({
+    quantityType: z55.enum(["m3", "ton", "all"]).optional(),
+    status: z55.enum(["available", "used", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -28240,8 +28346,8 @@ var fiscalNotesRouter = router({
     return rows2;
   }),
   // Listar apenas notas disponíveis para o select no Controle de Cargas
-  getAvailable: protectedProcedure.input(z54.object({
-    quantityType: z54.enum(["m3", "ton", "all"]).optional()
+  getAvailable: protectedProcedure.input(z55.object({
+    quantityType: z55.enum(["m3", "ton", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -28253,16 +28359,16 @@ var fiscalNotesRouter = router({
     return rows2;
   }),
   // Criar nova nota/ação
-  create: protectedProcedure.input(z54.object({
-    invoiceNumber: z54.string().optional(),
-    issueDate: z54.string(),
-    quantityType: z54.enum(["m3", "ton"]),
-    quantity: z54.string(),
-    fileBase64: z54.string().optional(),
+  create: protectedProcedure.input(z55.object({
+    invoiceNumber: z55.string().optional(),
+    issueDate: z55.string(),
+    quantityType: z55.enum(["m3", "ton"]),
+    quantity: z55.string(),
+    fileBase64: z55.string().optional(),
     // base64 do arquivo
-    fileName: z54.string().optional(),
-    fileMimeType: z54.string().optional(),
-    notes: z54.string().optional()
+    fileName: z55.string().optional(),
+    fileMimeType: z55.string().optional(),
+    notes: z55.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -28292,13 +28398,13 @@ var fiscalNotesRouter = router({
     return { success: true, actionCode };
   }),
   // Marcar nota como utilizada (chamado ao salvar uma carga)
-  markAsUsed: protectedProcedure.input(z54.object({
-    id: z54.number(),
-    cargoId: z54.number().optional(),
-    clientId: z54.number().optional(),
-    clientName: z54.string().optional(),
-    destination: z54.string().optional(),
-    workLocation: z54.string().optional()
+  markAsUsed: protectedProcedure.input(z55.object({
+    id: z55.number(),
+    cargoId: z55.number().optional(),
+    clientId: z55.number().optional(),
+    clientName: z55.string().optional(),
+    destination: z55.string().optional(),
+    workLocation: z55.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -28319,16 +28425,16 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Editar nota/ação (data, quantidade, NF, observações, arquivo)
-  update: protectedProcedure.input(z54.object({
-    id: z54.number(),
-    invoiceNumber: z54.string().optional(),
-    issueDate: z54.string().optional(),
-    quantityType: z54.enum(["m3", "ton"]).optional(),
-    quantity: z54.string().optional(),
-    fileBase64: z54.string().optional(),
-    fileName: z54.string().optional(),
-    fileMimeType: z54.string().optional(),
-    notes: z54.string().optional()
+  update: protectedProcedure.input(z55.object({
+    id: z55.number(),
+    invoiceNumber: z55.string().optional(),
+    issueDate: z55.string().optional(),
+    quantityType: z55.enum(["m3", "ton"]).optional(),
+    quantity: z55.string().optional(),
+    fileBase64: z55.string().optional(),
+    fileName: z55.string().optional(),
+    fileMimeType: z55.string().optional(),
+    notes: z55.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -28355,7 +28461,7 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Liberar nota (desfazer uso — admin)
-  release: protectedProcedure.input(z54.object({ id: z54.number() })).mutation(async ({ input }) => {
+  release: protectedProcedure.input(z55.object({ id: z55.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.update(fiscalNotes).set({
@@ -28368,20 +28474,20 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Deletar nota (somente disponíveis)
-  delete: protectedProcedure.input(z54.object({ id: z54.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z55.object({ id: z55.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.delete(fiscalNotes).where(eq44(fiscalNotes.id, input.id));
     return { success: true };
   }),
   // Relatório-planilha: notas com dados da carga, local e destino
-  report: protectedProcedure.input(z54.object({
-    workLocationId: z54.number().optional(),
-    destinationId: z54.number().optional(),
-    dateFrom: z54.string().optional(),
-    dateTo: z54.string().optional(),
-    search: z54.string().optional(),
-    limit: z54.number().optional().default(500)
+  report: protectedProcedure.input(z55.object({
+    workLocationId: z55.number().optional(),
+    destinationId: z55.number().optional(),
+    dateFrom: z55.string().optional(),
+    dateTo: z55.string().optional(),
+    search: z55.string().optional(),
+    limit: z55.number().optional().default(500)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -28478,7 +28584,7 @@ var fiscalNotesRouter = router({
 // server/routers/notificationSettings.ts
 init_trpc();
 init_db();
-import { z as z55 } from "zod";
+import { z as z56 } from "zod";
 import { sql as sql31 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
@@ -28619,11 +28725,11 @@ var notificationSettingsRouter = router({
   // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
   // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
   // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
-  updateCargoNfResponsible: protectedProcedure.input(z55.object({
-    recipients: z55.array(z55.object({
-      collaboratorId: z55.number().nullable(),
-      manualName: z55.string().nullable().optional(),
-      manualPhone: z55.string().nullable().optional()
+  updateCargoNfResponsible: protectedProcedure.input(z56.object({
+    recipients: z56.array(z56.object({
+      collaboratorId: z56.number().nullable(),
+      manualName: z56.string().nullable().optional(),
+      manualPhone: z56.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -28633,11 +28739,11 @@ var notificationSettingsRouter = router({
     return { ok: true };
   }),
   // Idem, pra quem recebe o aviso de "nova solicitação de compra".
-  updatePurchaseRequestNewResponsible: protectedProcedure.input(z55.object({
-    recipients: z55.array(z55.object({
-      collaboratorId: z55.number().nullable(),
-      manualName: z55.string().nullable().optional(),
-      manualPhone: z55.string().nullable().optional()
+  updatePurchaseRequestNewResponsible: protectedProcedure.input(z56.object({
+    recipients: z56.array(z56.object({
+      collaboratorId: z56.number().nullable(),
+      manualName: z56.string().nullable().optional(),
+      manualPhone: z56.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -28646,12 +28752,12 @@ var notificationSettingsRouter = router({
     await setSetting(db, "purchaseRequestNewResponsible", input);
     return { ok: true };
   }),
-  update: protectedProcedure.input(z55.record(z55.string(), z55.object({
-    enabled: z55.boolean(),
-    hour: z55.number().int().min(0).max(23),
-    minute: z55.number().int().min(0).max(59),
-    weekday: z55.number().int().min(0).max(6).nullable(),
-    whatsappCollaboratorIds: z55.array(z55.number())
+  update: protectedProcedure.input(z56.record(z56.string(), z56.object({
+    enabled: z56.boolean(),
+    hour: z56.number().int().min(0).max(23),
+    minute: z56.number().int().min(0).max(59),
+    weekday: z56.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z56.array(z56.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -28659,9 +28765,9 @@ var notificationSettingsRouter = router({
     await setSetting(db, "jobConfig", input);
     return { ok: true };
   }),
-  updateClientConfig: protectedProcedure.input(z55.record(z55.string(), z55.object({
-    enabled: z55.boolean(),
-    clientIds: z55.array(z55.number())
+  updateClientConfig: protectedProcedure.input(z56.record(z56.string(), z56.object({
+    enabled: z56.boolean(),
+    clientIds: z56.array(z56.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -28672,7 +28778,7 @@ var notificationSettingsRouter = router({
 });
 
 // server/routers.ts
-import { z as z56 } from "zod";
+import { z as z57 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -28854,10 +28960,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z56.object({
-      name: z56.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z56.string().email("Email inv\xE1lido"),
-      password: z56.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z57.object({
+      name: z57.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z57.string().email("Email inv\xE1lido"),
+      password: z57.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -28872,9 +28978,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z56.object({
-      email: z56.string().email("Email inv\xE1lido"),
-      password: z56.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z57.object({
+      email: z57.string().email("Email inv\xE1lido"),
+      password: z57.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -28893,11 +28999,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z56.object({
-      seedKey: z56.string(),
-      email: z56.string().email(),
-      name: z56.string(),
-      password: z56.string().min(4)
+    seedAdmin: publicProcedure.input(z57.object({
+      seedKey: z57.string(),
+      email: z57.string().email(),
+      name: z57.string(),
+      password: z57.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -28907,9 +29013,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z56.object({
-      email: z56.string().email("Email inv\xE1lido"),
-      origin: z56.string().url().optional()
+    forgotPassword: publicProcedure.input(z57.object({
+      email: z57.string().email("Email inv\xE1lido"),
+      origin: z57.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -28923,9 +29029,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z56.object({
-      token: z56.string().min(1),
-      password: z56.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z57.object({
+      token: z57.string().min(1),
+      password: z57.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -28994,7 +29100,7 @@ var appRouter = router({
   notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z56.object({ key: z56.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z57.object({ key: z57.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -29048,6 +29154,7 @@ var appRouter = router({
   sicoob: sicoobRouter,
   financialReal: financialRealRouter,
   custos: custosRouter,
+  modulosConfig: modulosConfigRouter,
   quickAccess: quickAccessRouter,
   weeklyGoals: weeklyGoalsRouter,
   contasReceber: contasReceberRouter,

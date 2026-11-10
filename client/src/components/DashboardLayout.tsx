@@ -34,7 +34,7 @@ import {
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight, Loader2, ShieldAlert, Target
+  ToggleRight, LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight, Loader2, ShieldAlert, Target
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -223,6 +223,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { label: "Usuários", path: "/usuarios", slug: null, icon: Users },
       { label: "Controle de Acesso", path: "/controle-acesso", slug: null, icon: ShieldCheck },
+      { label: "Módulos do Sistema", path: "/modulos", slug: null, icon: ToggleRight },
       { label: "Config. Notificações", path: "/config-notificacoes", slug: null, icon: Bell },
       { label: "Auditoria de Dados", path: "/auditoria-dados", slug: null, icon: Database },
     ],
@@ -305,7 +306,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
-  const { hasAccess, isAdmin, profile, isLoading: permsLoading } = usePermissions();
+  const { hasAccess, isAdmin, profile, isLoading: permsLoading, modulosInativos } = usePermissions();
   const { data: myPhotoUrl } = trpc.collaborators.getMyPhoto.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar, setOpenMobile } = useSidebar();
@@ -384,9 +385,11 @@ function DashboardLayoutContent({
   // tiver o módulo liberado. "/app" (Painel) nunca é bloqueado.
   const guardedMenuItem = activeMenuItem ?? allMenuItems.find(item => item.path === getParentPath());
   const requiresModuleCheck = location !== "/app" && !!guardedMenuItem;
-  const canAccessCurrentPage = isAdmin
+  // módulo desativado em Administração > Módulos do Sistema: a página fica bloqueada para todos, inclusive admin
+  const moduloInativoAtual = !!guardedMenuItem?.slug && modulosInativos.has(guardedMenuItem.slug);
+  const canAccessCurrentPage = !moduloInativoAtual && (isAdmin
     || !requiresModuleCheck
-    || (guardedMenuItem!.slug !== null && hasAccess(guardedMenuItem!.slug));
+    || (guardedMenuItem!.slug !== null && hasAccess(guardedMenuItem!.slug)));
 
   const getPageTitle = () => {
     if (activeMenuItem) return activeMenuItem.label;
