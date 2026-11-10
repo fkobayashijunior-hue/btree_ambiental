@@ -527,8 +527,11 @@ export default function ContasAReceberPage() {
 
   // Campo próprio (buyer_paid_at) — não tem relação com o "Marcar como Pago" de Controle de
   // Cargas, que controla o pagamento da BTREE ao cliente/fornecedor daquela carga.
+  const hojeLocalRec = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  // Janelinha para informar (ou corrigir) a data em que a carga foi recebida
+  const [recebendoCarga, setRecebendoCarga] = useState<{ c: any; data: string } | null>(null);
   const markCargaRecebidaMutation = trpc.buyerClients.markCargaRecebida.useMutation({
-    onSuccess: () => { refetchCargas(); toast.success("Carga marcada como recebida"); },
+    onSuccess: () => { refetchCargas(); setRecebendoCarga(null); toast.success("Recebimento registrado"); },
     onError: (e) => toast.error(`Falha: ${e.message}`),
   });
   const unmarkCargaRecebidaMutation = trpc.buyerClients.unmarkCargaRecebida.useMutation({
@@ -1175,7 +1178,7 @@ export default function ContasAReceberPage() {
                       <TableCell>
                         <Badge variant={situacao.variant} className="text-xs">{situacao.label}</Badge>
                         {recebido && c.buyerPaidAt && (
-                          <p className="text-[10px] text-muted-foreground mt-0.5">em {fmtData(c.buyerPaidAt)}</p>
+                          <button type="button" className="block text-left text-[10px] text-muted-foreground mt-0.5 underline decoration-dotted hover:text-foreground" title="Clique para corrigir a data de recebimento" onClick={() => setRecebendoCarga({ c, data: c.buyerPaidAt })}>em {fmtData(c.buyerPaidAt)}</button>
                         )}
                       </TableCell>
                       <TableCell>
@@ -1191,7 +1194,7 @@ export default function ContasAReceberPage() {
                             Desfazer
                           </Button>
                         ) : (
-                          <Button size="sm" variant="outline" className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50" onClick={() => markCargaRecebidaMutation.mutate({ id: c.id })} disabled={markCargaRecebidaMutation.isPending}>
+                          <Button size="sm" variant="outline" className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50" onClick={() => setRecebendoCarga({ c, data: hojeLocalRec() })} disabled={markCargaRecebidaMutation.isPending}>
                             Marcar Recebido
                           </Button>
                         )}
@@ -1209,6 +1212,25 @@ export default function ContasAReceberPage() {
       )}
 
       {/* Ajuste manual de valor da NF — com motivo obrigatório e histórico de alterações */}
+      <Dialog open={!!recebendoCarga} onOpenChange={(open) => !open && setRecebendoCarga(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{recebendoCarga?.c?.recebido ? "Corrigir data do recebimento" : "Marcar como recebido"}</DialogTitle></DialogHeader>
+          {recebendoCarga && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground"><b>{recebendoCarga.c.destinoNome}</b> · {recebendoCarga.c.invoiceNumber || `#${recebendoCarga.c.id}`}<br />{fmtMoeda(recebendoCarga.c.valor)} · entrega {fmtData(recebendoCarga.c.dataEntrega)}</p>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Data do recebimento</label>
+                <Input type="date" value={recebendoCarga.data} max={hojeLocalRec()} onChange={(e) => setRecebendoCarga({ ...recebendoCarga, data: e.target.value })} className="h-10" />
+              </div>
+              <div className="flex gap-2">
+                <Button className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={!recebendoCarga.data || markCargaRecebidaMutation.isPending}
+                  onClick={() => markCargaRecebidaMutation.mutate({ id: recebendoCarga.c.id, buyerPaidAt: recebendoCarga.data })}>Confirmar</Button>
+                <Button variant="outline" onClick={() => setRecebendoCarga(null)}>Cancelar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!valorDialogNf} onOpenChange={(open) => !open && setValorDialogNf(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
