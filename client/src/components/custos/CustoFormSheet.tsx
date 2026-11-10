@@ -37,6 +37,22 @@ type Props = { open: boolean; onClose: () => void; onSaved: () => void; item?: a
 
 export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: Props) {
   const colab = modo === "colaborador";
+  // Celular (toque): não abre o teclado sozinho ao abrir o formulário e acompanha a área visível,
+  // para a janela não ficar escondida atrás do teclado.
+  const toque = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+  const [vv, setVv] = useState<{ h: number; bottom: number } | null>(null);
+  useEffect(() => {
+    if (!open || !toque || typeof window === "undefined" || !window.visualViewport) return;
+    const v = window.visualViewport;
+    const atualizar = () => setVv({ h: v.height, bottom: Math.max(0, window.innerHeight - v.height - v.offsetTop) });
+    atualizar();
+    // Ao fechar o teclado o iPhone costuma deixar a página deslocada: volta ao topo e recalcula a área visível.
+    let t: any;
+    const aoSairDoCampo = () => { clearTimeout(t); t = setTimeout(() => { window.scrollTo(0, 0); atualizar(); }, 120); };
+    v.addEventListener("resize", atualizar); v.addEventListener("scroll", atualizar);
+    document.addEventListener("focusout", aoSairDoCampo);
+    return () => { clearTimeout(t); v.removeEventListener("resize", atualizar); v.removeEventListener("scroll", atualizar); document.removeEventListener("focusout", aoSairDoCampo); setVv(null); };
+  }, [open, toque]);
   const { user } = useAuth();
   const utils = trpc.useUtils();
   const { openFilePicker } = useFilePicker();
@@ -222,12 +238,14 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="bottom" className="max-h-[94vh] overflow-y-auto rounded-t-2xl p-0 md:mx-auto md:max-w-xl">
-        <SheetHeader className="px-4 pt-4 pb-0">
+      <SheetContent side="bottom" className="flex max-h-[94dvh] flex-col overflow-hidden rounded-t-2xl p-0 md:mx-auto md:max-w-xl"
+        onOpenAutoFocus={(e) => { if (toque) e.preventDefault(); }}
+        style={vv ? { maxHeight: vv.h * 0.96, bottom: vv.bottom } : undefined}>
+        <SheetHeader className="shrink-0 border-b px-4 pb-3 pr-12 pt-4">
           <SheetTitle className="text-xl">{item ? "Alterar gasto" : "Novo gasto"}</SheetTitle>
         </SheetHeader>
 
-        <div className="space-y-5 px-4 pb-4 pt-2">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4 pt-3">
           {bloqueado && (
             <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">Este pedágio veio do extrato do banco. Valor, data e tipo não mudam; você pode informar a planta, a nota e observações.</p>
           )}
@@ -237,7 +255,7 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
             <div className="flex items-center gap-2">
               <span className="text-2xl font-semibold text-gray-500">R$</span>
               <Input
-                id="custo-valor" autoFocus inputMode="decimal" placeholder="0,00" value={valor}
+                id="custo-valor" autoFocus={!toque} inputMode="decimal" placeholder="0,00" value={valor}
                 onChange={(e) => setValor(e.target.value.replace(/[^\d.,]/g, ""))}
                 className="h-14 text-2xl font-semibold" disabled={bloqueado}
               />
