@@ -3,6 +3,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
+import { moduleProcedure } from "./permissions";
+import { ensureBuyerPriceOverride, precoDaCarga, temPrecoEditado, normalizarPreco } from "../utils/precoCarga";
 import { cargoDestinations, buyerPriceHistory, buyerPayments, financialEntries, buyerProductPrices } from "../../drizzle/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 
@@ -224,9 +226,10 @@ export const buyerClientsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      await ensureBuyerPriceOverride(db);
       const [rows] = await db.$client.execute(
         `SELECT cl.id, cl.date, cl.delivery_date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3,
-                cl.buyer_paid_at, cl.invoice_number, cl.buyer_receipt_url,
+                cl.buyer_paid_at, cl.invoice_number, cl.buyer_receipt_url, cl.buyer_price_override,
                 cd.id AS destino_id, cd.name AS destino_nome, cd.cnpj_cpf, cd.price_per_unit, cd.unit,
                 cd.payment_term_days_after_delivery
          FROM cargo_loads cl
@@ -247,7 +250,7 @@ export const buyerClientsRouter = router({
           const vencimento = dueDate.toISOString().slice(0, 10);
           const peso = parseFloat(r.weight_net_kg || r.weight_out_kg || "0");
           const volume = parseFloat(r.volume_m3 || "0");
-          const preco = parseFloat(r.price_per_unit || "0");
+          const preco = precoDaCarga(r); // preço editado da carga, ou o do comprador
           const quantidade = r.unit === "m3" ? volume : peso / 1000;
           const valor = quantidade * preco;
           return {
@@ -261,6 +264,8 @@ export const buyerClientsRouter = router({
             volumeM3: volume,
             unit: r.unit,
             precoUnit: preco,
+            precoPadrao: parseFloat(r.price_per_unit || "0"),
+            precoEditado: temPrecoEditado(r),
             valor,
             invoiceNumber: r.invoice_number,
             recebido: !!r.buyer_paid_at,
@@ -295,6 +300,46 @@ export const buyerClientsRouter = router({
         cargas,
         summary: { vencidos, vencemHoje, aVencer, recebidos, total: vencidos + vencemHoje + aVencer + recebidos },
       };
+    }),
+
+  // Edita o preço de UMA carga (preco vazio = volta ao preço do comprador). Vale só para Contas a Receber.
+  setCargaPreco: moduleProcedure("contas-a-receber")
+    .input(z.object({ id: z.number().int().positive(), preco: z.string().nullable() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      let preco: string | null;
+      try { preco = normalizarPreco(input.preco); } catch (e: any) { throw new TRPCError({ code: "BAD_REQUEST", message: e.message }); }
+      await ensureBuyerPriceOverride(db);
+      await db.$client.execute(`UPDATE cargo_loads SET buyer_price_override = ? WHERE id = ?`, [preco, input.id]);
+      return { success: true };
+    }),
+
+  // Aplica um preço às cargas ENTREGUES de um comprador num período de entrega (só as ainda não recebidas).
+  // Ex.: de 11/06 até hoje a R$ 250,00; as anteriores seguem em R$ 240,00. preco vazio = volta ao preço do comprador.
+  setPrecoPeriodo: moduleProcedure("contas-a-receber")
+    .input(z.object({
+      destinoId: z.number().int().positive(),
+      inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      preco: z.string().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.fim < input.inicio) throw new TRPCError({ code: "BAD_REQUEST", message: "A data final é anterior à inicial" });
+      let preco: string | null;
+      try { preco = normalizarPreco(input.preco); } catch (e: any) { throw new TRPCError({ code: "BAD_REQUEST", message: e.message }); }
+      await ensureBuyerPriceOverride(db);
+      const [res] = (await db.$client.execute(
+        `UPDATE cargo_loads cl
+         JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
+         SET cl.buyer_price_override = ?
+         WHERE cl.status = 'entregue' AND cl.buyer_paid_at IS NULL AND cd.id = ?
+           AND DATE(COALESCE(cl.delivery_date, cl.date)) BETWEEN ? AND ?`,
+        [preco, input.destinoId, input.inicio, input.fim]
+      )) as any;
+      return { atualizadas: Number((res as any).affectedRows ?? 0) };
     }),
 
   // Marca/desmarca o recebimento do COMPRADOR para esta carga — campo próprio (buyer_paid_at),

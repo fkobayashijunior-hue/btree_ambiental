@@ -1,5 +1,7 @@
 import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import PrecoCargaCell from "@/components/PrecoCargaCell";
+import PrecoPeriodoDialog from "@/components/PrecoPeriodoDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -1122,6 +1124,9 @@ export default function ContasAReceberPage() {
               "Prazo de pagamento após entrega"). Vencimento = data da entrega + esse prazo.
             </p>
           </div>
+          <div className="flex justify-end">
+            <PrecoPeriodoDialog cargas={cargasData?.cargas ?? []} onChanged={refetchCargas} />
+          </div>
           <div className="rounded-lg border overflow-hidden">
             <Table>
               <TableHeader>
@@ -1164,7 +1169,7 @@ export default function ContasAReceberPage() {
                       <TableCell><div className="font-medium text-sm">{c.destinoNome}</div></TableCell>
                       <TableCell className="text-sm text-muted-foreground font-mono text-xs">{fmtCnpj(c.cnpj)}</TableCell>
                       <TableCell className="text-right text-sm">{qtd.toFixed(2)} {c.unit === "m3" ? "m³" : "ton"}</TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">{fmtMoeda(c.precoUnit)}</TableCell>
+                      <PrecoCargaCell c={c} onChanged={refetchCargas} />
                       <TableCell className="text-right font-medium text-sm">{fmtMoeda(c.valor)}</TableCell>
                       <TableCell className={`text-sm ${atrasado(c.vencimento, c.recebido) ? "text-red-600 font-semibold" : ""}`}>{fmtData(c.vencimento)}</TableCell>
                       <TableCell>

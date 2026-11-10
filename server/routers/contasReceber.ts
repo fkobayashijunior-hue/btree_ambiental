@@ -1,6 +1,7 @@
 // Cards e filtros de "Contas a Receber": junta boletos Sicoob, NFs sem boleto e cargas a receber
 // seguindo os MESMOS filtros das tabelas (período, destinatário, pesquisa e status).
 import { z } from "zod";
+import { ensureBuyerPriceOverride, precoDaCarga } from "../utils/precoCarga";
 import { router } from "../_core/trpc";
 import { moduleProcedure } from "./permissions";
 import { calcularCards, soDigitos, type ItemReceber } from "../utils/contasReceberResumo";
@@ -88,12 +89,13 @@ export const contasReceberRouter = router({
 
       // 3) Cargas entregues a compradores sem boleto/NF (ex.: Enerbio) — mês: vencimento; intervalo: entrega
       try {
+        await ensureBuyerPriceOverride(db);
         const where: string[] = [`cl.status = 'entregue'`, `cd.payment_term_days_after_delivery IS NOT NULL`];
         const params: any[] = [];
         if (cnpj) { where.push(`${SQL_DIGITOS("cd.cnpj_cpf")} = ?`); params.push(cnpj); }
         const [rows] = (await db.$client.execute(
           `SELECT cl.date, cl.delivery_date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3, cl.buyer_paid_at, cl.invoice_number,
-                  cd.name AS destino_nome, cd.cnpj_cpf, cd.price_per_unit, cd.unit, cd.payment_term_days_after_delivery
+                  cl.buyer_price_override, cd.name AS destino_nome, cd.cnpj_cpf, cd.price_per_unit, cd.unit, cd.payment_term_days_after_delivery
            FROM cargo_loads cl
            JOIN cargo_destinations cd ON cd.id = IF(cl.destination_id >= 10000, cl.destination_id - 10000, cl.destination_id)
            WHERE ${where.join(" AND ")}`, params)) as any;
@@ -108,7 +110,7 @@ export const contasReceberRouter = router({
           const peso = parseFloat(r.weight_net_kg || r.weight_out_kg || "0");
           const volume = parseFloat(r.volume_m3 || "0");
           const quantidade = r.unit === "m3" ? volume : peso / 1000;
-          itens.push({ fonte: "carga", valor: quantidade * parseFloat(r.price_per_unit || "0"), recebido: !!r.buyer_paid_at, cancelado: false, vencimento });
+          itens.push({ fonte: "carga", valor: quantidade * precoDaCarga(r), recebido: !!r.buyer_paid_at, cancelado: false, vencimento });
         }
       } catch (e: any) { erros.push(`Cargas: ${e.message}`); }
 
