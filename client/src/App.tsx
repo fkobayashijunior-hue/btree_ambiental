@@ -19,6 +19,7 @@ import AttendanceList from "./pages/AttendanceList";
 import Landing from "./pages/Landing";
 import SectorsEquipment from "./pages/SectorsEquipment";
 import AccessControl from "./pages/AccessControl";
+import ModulosPage from "./pages/ModulosPage";
 import CargoControl from "./pages/CargoControl";
 import MachineHoursPage from "./pages/MachineHoursPage";
 import EquipmentHistoryPage from "./pages/EquipmentHistoryPage";
@@ -117,6 +118,9 @@ function Router() {
       </Route>
       <Route path={"/setores"}>
         {() => <WithLayout component={SectorsEquipment} />}
+      </Route>
+      <Route path={"/modulos"}>
+        {() => <WithLayout component={ModulosPage} />}
       </Route>
       <Route path={"/controle-acesso"}>
         {() => <WithLayout component={AccessControl} />}
