@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { CATALOGO_PAINEL, PADRAO_PAINEL } from "@/lib/quickAccessCatalog";
+import PersonalizarPainelDialog from "@/components/PersonalizarPainelDialog";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -71,20 +73,16 @@ export default function Home() {
   const { user } = useAuth();
   const { hasAccess, isAdmin } = usePermissions();
 
-  const quickModules = [
-    { icon: ClipboardList, label: "Presenças", path: "/presencas", color: "bg-blue-500", slug: "presencas" },
-    { icon: Truck, label: "Cargas", path: "/cargas", color: "bg-teal-500", slug: "cargas" },
-    { icon: UserCheck, label: "Colaboradores", path: "/colaboradores", color: "bg-emerald-500", slug: "colaboradores" },
-    { icon: Users, label: "Clientes", path: "/clientes", color: "bg-green-500", slug: "clientes" },
-    { icon: Layers, label: "Equipamentos", path: "/setores", color: "bg-orange-500", slug: "equipamentos" },
-    { icon: Car, label: "Abastecimento", path: "/veiculos", color: "bg-yellow-500", slug: "abastecimento" },
-    { icon: Package, label: "Peças", path: "/pecas", color: "bg-purple-500", slug: "pecas" },
-    { icon: Scissors, label: "Motosserras", path: "/motosserras", color: "bg-red-500", slug: "motosserras" },
-    { icon: Wrench, label: "Máquinas", path: "/maquinas", color: "bg-gray-500", slug: "manutencao" },
-    { icon: Receipt, label: "Gastos Extras", path: "/gastos-extras", color: "bg-pink-500", slug: null },
-    { icon: Wallet, label: "Financeiro", path: "/financeiro", color: "bg-indigo-500", slug: "financeiro" },
-    { icon: Globe, label: "Portal Cliente", path: "/client-portal", color: "bg-cyan-500", slug: "portal-cliente" },
-  ];
+  // Atalhos: administrador pode personalizar (salvo no servidor); os demais veem o padrão.
+  // Em qualquer caso só aparece o que o usuário tem permissão de abrir.
+  const [personalizando, setPersonalizando] = useState(false);
+  const { data: salvos } = trpc.quickAccess.get.useQuery(undefined, { enabled: !!user && isAdmin });
+  // Sem personalização: administrador vê o padrão curto; os demais veem TODOS os módulos a que têm acesso.
+  const idsPainel: string[] = salvos?.itens ?? (isAdmin ? PADRAO_PAINEL : CATALOGO_PAINEL.map((c) => c.id));
+  const quickModules = idsPainel
+    .map((id) => CATALOGO_PAINEL.find((c) => c.id === id))
+    .filter((c): c is NonNullable<typeof c> => !!c)
+    .filter((c) => c.slug === null || hasAccess(c.slug));
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -101,9 +99,14 @@ export default function Home() {
 
       {/* Acesso Rápido */}
       <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido</p>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Acesso Rápido</p>
+          {isAdmin && (
+            <button type="button" onClick={() => setPersonalizando(true)} className="text-xs font-medium text-primary hover:underline">Personalizar</button>
+          )}
+        </div>
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-          {quickModules.filter(mod => mod.slug === null ? true : hasAccess(mod.slug)).map((mod) => (
+          {quickModules.map((mod) => (
             <Link key={mod.path} href={mod.path}>
               <div className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
                 <div className={`w-12 h-12 rounded-xl ${mod.color} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
@@ -115,6 +118,8 @@ export default function Home() {
           ))}
         </div>
       </div>
+
+      {isAdmin && <PersonalizarPainelDialog open={personalizando} onClose={() => setPersonalizando(false)} atuais={idsPainel} />}
 
       {/* Seletor de Período */}
       {isAdmin && (
