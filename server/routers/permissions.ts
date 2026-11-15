@@ -28,6 +28,8 @@ export const SYSTEM_MODULES = [
   { slug: "meus-gastos",                label: "Meus Gastos (lançar despesas)", group: "Operações" },
   { slug: "metas-semanais",             label: "Metas Semanais (responsável)", group: "Operações" },
   { slug: "metas-semanais-gestao",      label: "Metas Semanais (criar e supervisionar)", group: "Operações" },
+  { slug: "tarefas",                    label: "Tarefas (minhas)", group: "Operações" },
+  { slug: "tarefas-gestao",             label: "Tarefas (equipe: ver e atribuir)", group: "Operações" },
   { slug: "controle-notas",             label: "Controle de Notas Fiscais", group: "Operações" },
   { slug: "conferencia-notas",          label: "Conferência de Notas", group: "Operações" },
   { slug: "relatorio-destinos",         label: "Relatório Destinos", group: "Operações" },

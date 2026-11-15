@@ -138,12 +138,16 @@ export function NotificationBell() {
                     
                     {/* Content */}
                     <div
-                      className={`flex-1 min-w-0 ${notif.related_type === "weekly_goal" ? "cursor-pointer" : ""}`}
+                      className={`flex-1 min-w-0 ${["weekly_goal", "tarefa", "tarefa_equipe"].includes(notif.related_type) ? "cursor-pointer" : ""}`}
                       onClick={() => {
                         if (notif.related_type === "weekly_goal" && notif.related_id) {
                           if (!notif.is_read) markAsRead.mutate({ id: notif.id });
                           setIsOpen(false);
                           navigate(`/metas-semanais/${notif.related_id}`);
+                        } else if ((notif.related_type === "tarefa" || notif.related_type === "tarefa_equipe") && notif.related_id) {
+                          if (!notif.is_read) markAsRead.mutate({ id: notif.id });
+                          setIsOpen(false);
+                          navigate(`${notif.related_type === "tarefa" ? "/tarefas" : "/tarefas-equipe"}?abrir=${notif.related_id}`);
                         }
                       }}
                     >

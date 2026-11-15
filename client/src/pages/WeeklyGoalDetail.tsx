@@ -13,6 +13,7 @@ import { WeeklyGoalForm } from "@/components/WeeklyGoalForm";
 import { BarraProgresso, ALERTA_LABEL, STATUS_LABEL } from "./WeeklyGoals";
 import {
   ArrowLeft, AlertTriangle, ChevronDown, ChevronRight, Camera, Send, Pencil, XCircle, Flag, MessageCircleQuestion, Truck, Trash2,
+  Paperclip, FileText, X, Loader2,
 } from "lucide-react";
 
 const DIA_NOME = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -39,17 +40,79 @@ async function enviarFoto(file: File): Promise<string> {
   return j.secure_url;
 }
 
-export default function WeeklyGoalDetail() {
+const ehImagem = (nome: string, url: string) => /\.(jpe?g|png|gif|webp|heic)$/i.test(nome) || /\/image\/upload\//.test(url);
+
+/** Mostra os anexos de uma mensagem: fotos em miniatura e arquivos como link. */
+function AnexosMsg({ anexos, claro = false }: { anexos?: { url: string; nome: string }[]; claro?: boolean }) {
+  if (!anexos?.length) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-2">
+      {anexos.map(a => ehImagem(a.nome, a.url)
+        ? <a key={a.url} href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt={a.nome} className="h-24 w-24 rounded-lg border object-cover" /></a>
+        : <a key={a.url} href={a.url} target="_blank" rel="noreferrer" className={`flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1.5 text-sm ${claro ? "bg-white/20 text-white" : "bg-white text-emerald-800"}`}><FileText className="h-4 w-4 shrink-0" /><span className="truncate">{a.nome}</span></a>)}
+    </div>
+  );
+}
+
+/** Botão "Anexar" (foto ou arquivo, até 10 MB cada, no máximo 5 por mensagem). */
+function BotaoAnexar({ anexos, setAnexos, className = "" }: { anexos: { url: string; nome: string }[]; setAnexos: (a: { url: string; nome: string }[]) => void; className?: string }) {
+  const arq = useRef<HTMLInputElement>(null);
+  const [enviando, setEnviando] = useState(false);
+  const aoEscolher = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).slice(0, 5 - anexos.length);
+    e.target.value = "";
+    if (!files.length) return;
+    const grandes = files.filter(f => f.size > 10 * 1024 * 1024);
+    if (grandes.length) toast.error("Arquivo muito grande. Máximo 10 MB.");
+    const ok = files.filter(f => f.size <= 10 * 1024 * 1024);
+    if (!ok.length) return;
+    setEnviando(true);
+    try {
+      const novos = await Promise.all(ok.map(async f => ({ url: await enviarFoto(f), nome: f.name.slice(0, 255) })));
+      setAnexos([...anexos, ...novos]);
+    } catch { toast.error("Não foi possível enviar o arquivo."); }
+    finally { setEnviando(false); }
+  };
+  return (
+    <div className={className}>
+      {anexos.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
+          {anexos.map(a => (
+            <span key={a.url} className="flex max-w-full items-center gap-1 rounded-full border bg-white px-2 py-1 text-xs">
+              <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{a.nome}</span>
+              <button type="button" aria-label="Remover anexo" onClick={() => setAnexos(anexos.filter(x => x.url !== a.url))}><X className="h-3 w-3" /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      <Button type="button" variant="outline" className="h-11 gap-1 px-3" disabled={enviando || anexos.length >= 5} onClick={() => arq.current?.click()}>
+        {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}<span className="text-sm">{enviando ? "Enviando..." : "Anexar"}</span>
+      </Button>
+      <input ref={arq} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip" className="hidden" onChange={aoEscolher} />
+    </div>
+  );
+}
+
+// Como página (rota /metas-semanais/:id) ou embutida numa janela das Tarefas (props goalId + onVoltar).
+export default function WeeklyGoalDetail({ goalId: goalIdProp, onVoltar }: { goalId?: number; onVoltar?: () => void } = {}) {
   const { id } = useParams();
-  const goalId = Number(id);
-  const [, navigate] = useLocation();
+  const goalId = goalIdProp ?? Number(id);
+  const [, navigateReal] = useLocation();
+  const navigate = (p: string) => (onVoltar ? onVoltar() : navigateReal(p));
   const utils = trpc.useUtils();
   const q = trpc.weeklyGoals.getById.useQuery({ id: goalId }, { refetchInterval: 30000 });
   const [editar, setEditar] = useState(false);
   const d = q.data;
   const invalida = () => utils.weeklyGoals.invalidate();
 
-  const ack = trpc.weeklyGoals.acknowledge.useMutation({ onSuccess: () => { toast.success("Ciência registrada."); invalida(); }, onError: e => toast.error(e.message) });
+  const ack = trpc.weeklyGoals.acknowledge.useMutation({
+    onSuccess: (_r, v) => {
+      toast.success(v.ack === "com_ressalva" ? "Ressalva enviada." : "Ciência registrada.");
+      setMostraRessalva(false); setRessalva(""); // fecha e limpa o campo depois de enviar
+      invalida();
+    },
+    onError: e => toast.error(e.message),
+  });
   const cancelar = trpc.weeklyGoals.cancel.useMutation({ onSuccess: () => { toast.success("Meta cancelada."); invalida(); }, onError: e => toast.error(e.message) });
   const manter = trpc.weeklyGoals.keepGoal.useMutation({ onSuccess: () => { toast.success("Meta mantida. Aguardando confirmação do responsável."); invalida(); }, onError: e => toast.error(e.message) });
   const excluir = trpc.weeklyGoals.delete.useMutation({
@@ -59,6 +122,16 @@ export default function WeeklyGoalDetail() {
   const encerrar = trpc.weeklyGoals.close.useMutation({ onSuccess: () => { toast.success("Semana encerrada."); invalida(); }, onError: e => toast.error(e.message) });
   const [ressalva, setRessalva] = useState("");
   const [mostraRessalva, setMostraRessalva] = useState(false);
+  // Visão simples do responsável: resumo + conversa. "Ver detalhes por dia" abre a tela completa.
+  const [verDetalhes, setVerDetalhes] = useState(false);
+  const [msgSimples, setMsgSimples] = useState("");
+  const [diaChat, setDiaChat] = useState<string | null>(null); // null = hoje
+  const [anexosSimples, setAnexosSimples] = useState<{ url: string; nome: string }[]>([]);
+  const [respondendoId, setRespondendoId] = useState<number | null>(null);
+  const enviarMsg = trpc.weeklyGoals.addMessage.useMutation({
+    onSuccess: () => { setMsgSimples(""); setAnexosSimples([]); setRespondendoId(null); invalida(); },
+    onError: e => toast.error(e.message),
+  });
 
   if (q.isLoading) return <div className="p-6"><div className="h-40 rounded-xl bg-gray-100 animate-pulse" /></div>;
   if (q.isError || !d) {
@@ -72,9 +145,152 @@ export default function WeeklyGoalDetail() {
   const g = d.goal;
   const encerrada = ["encerrada", "cancelada"].includes(g.status);
 
+  if (!verDetalhes) {
+    const souResp = d.papel === "responsavel";
+    const tot = d.progresso.total;
+    const comecou = g.weekStart <= d.hoje;
+    const situacao = souResp
+      ? (g.status === "aguardando_ciencia" ? "Falta você dar o seu de acordo."
+        : g.status === "em_negociacao" ? "Você fez uma ressalva. A supervisão vai responder."
+        : g.status === "encerrada" ? "Esta semana já foi encerrada."
+        : g.status === "cancelada" ? "Esta meta foi cancelada."
+        : !comecou ? `A meta começa no dia ${fmtBR(g.weekStart).slice(0, 5)}.` : "Meta em andamento. Boa semana!")
+      : (g.status === "aguardando_ciencia" ? `Aguardando o de acordo de ${g.responsibleName}.`
+        : g.status === "em_negociacao" ? `${g.responsibleName} fez uma ressalva. Responda na conversa ou ajuste a meta.`
+        : g.status === "encerrada" ? "Esta semana já foi encerrada."
+        : g.status === "cancelada" ? "Esta meta foi cancelada."
+        : !comecou ? `A meta começa no dia ${fmtBR(g.weekStart).slice(0, 5)}.` : "Meta em andamento.");
+    // A conversa é separada por dia: cada dia começa em branco e o histórico fica guardado no dia em que aconteceu.
+    const diaDe = (m: any): string => m.data ?? new Date(m.criadoEm).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    const todas = [...d.mensagens].filter((m: any) => m.kind !== "sistema").sort((a: any, b: any) => new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime());
+    const diaSel = diaChat ?? d.hoje;
+    const ehHojeChat = diaSel === d.hoje;
+    const diasComConversa = Array.from(new Set<string>([d.hoje, ...todas.map(diaDe)])).sort().reverse();
+    const conversa = todas.filter((m: any) => diaDe(m) === diaSel);
+    const nomeDiaCurto = (iso: string) => iso === d.hoje ? "Hoje" : `${nomeDia(iso)}`;
+    return (
+      <div className="mx-auto max-w-xl space-y-4 p-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{souResp ? "Sua meta da semana" : `Meta de ${g.responsibleName}`}</h1>
+          <p className="text-base text-gray-600">De {fmtBR(g.weekStart).slice(0, 5)} a {fmtBR(g.weekEnd).slice(0, 5)}</p>
+        </div>
+
+        <p className={`rounded-xl p-3 text-base font-medium ${g.status === "aguardando_ciencia" ? "bg-amber-50 text-amber-900" : g.status === "em_negociacao" ? "bg-orange-50 text-orange-900" : "bg-emerald-50 text-emerald-900"}`}>{situacao}</p>
+
+        {d.ultimaAlteracao && g.status === "aguardando_ciencia" && (
+          <div className="rounded-xl border-2 border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
+            <p className="font-semibold">{souResp ? "A supervisão alterou a sua meta. Confira abaixo." : "A meta foi alterada. O responsável precisa dar o de acordo de novo."}</p>
+            <p className="mt-1">{d.ultimaAlteracao.texto.replace(/ A ciência do responsável foi pedida de novo\.$/, "")}</p>
+          </div>
+        )}
+
+        <div className="space-y-3 rounded-xl border bg-card p-4">
+          <p className="text-lg font-semibold">Meta: {tot.meta} {tot.meta === 1 ? "carga" : "cargas"} para {d.itens.length} {d.itens.length === 1 ? "cliente" : "clientes"}</p>
+          {d.itens.map((it: any, i: number) => {
+            const p = d.progresso.itens[i];
+            return (
+              <div key={it.id} className="space-y-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-base font-semibold">{it.destinationName}</span>
+                  <span className="text-base">{p.meta} {p.meta === 1 ? "carga" : "cargas"}</span>
+                </div>
+                <BarraProgresso pct={p.pct} cor={p.pct >= 100 ? "bg-emerald-500" : "bg-blue-500"} />
+                <p className="text-sm text-gray-600">{comecou ? `Já saíram ${p.carregadas} de ${p.meta}${p.carregadas < p.meta ? ` · faltam ${p.meta - p.carregadas}` : " · meta cumprida!"}` : "Ainda não começou"}</p>
+              </div>
+            );
+          })}
+          {comecou && <p className="border-t pt-2 text-sm text-gray-600">No total: saíram {tot.carregadas} de {tot.meta} cargas.</p>}
+          {g.description && <p className="whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-sm"><b>Orientações:</b> {g.description}</p>}
+        </div>
+
+        {d.permissoes.ciencia && (
+          <div className="space-y-2 rounded-xl border-2 border-emerald-300 p-4">
+            <p className="text-base font-semibold">{g.status === "em_negociacao" ? "Chegaram a um acordo?" : "Você concorda com esta meta?"}</p>
+            <Button className="h-12 w-full bg-emerald-600 text-base text-white hover:bg-emerald-700" disabled={ack.isPending} onClick={() => ack.mutate({ id: goalId, ack: "de_acordo" })}>Sim, estou de acordo</Button>
+            <Button variant="outline" className="h-12 w-full text-base" onClick={() => setMostraRessalva(v => !v)}>Não concordo ou tenho dúvida</Button>
+            {mostraRessalva && (
+              <div className="space-y-2">
+                <Textarea rows={3} value={ressalva} onChange={e => setRessalva(e.target.value)} placeholder="Explique o que não está certo. Ex.: o trator está quebrado." />
+                <Button className="h-11 w-full" disabled={!ressalva.trim() || ack.isPending} onClick={() => ack.mutate({ id: goalId, ack: "com_ressalva", comentario: ressalva })}>Enviar</Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!encerrada && (d.permissoes.editar || d.permissoes.encerrar) && (
+          <div className="flex flex-wrap gap-2">
+            {d.permissoes.editar && <Button variant="outline" className="h-11 gap-1" onClick={() => setEditar(true)}><Pencil className="h-4 w-4" /> Editar meta</Button>}
+            {d.permissoes.resolverRessalva && g.status === "em_negociacao" && (
+              <Button variant="outline" className="h-11" disabled={manter.isPending} onClick={() => {
+                const j = window.prompt("Justificativa para manter a meta (o responsável será pedido para confirmar):");
+                if (j && j.trim()) manter.mutate({ id: goalId, justificativa: j.trim() });
+              }}>Manter a meta</Button>
+            )}
+            {d.permissoes.encerrar && (
+              <Button variant="outline" className="h-11 gap-1" onClick={() => {
+                const a = window.prompt("Avaliação final da semana (obrigatória):");
+                if (a && a.trim()) encerrar.mutate({ id: goalId, avaliacao: a.trim() });
+              }}><Flag className="h-4 w-4" /> Encerrar semana</Button>
+            )}
+            {d.permissoes.editar && (
+              <Button variant="ghost" className="h-11 gap-1 text-red-600" onClick={() => {
+                const m = window.prompt("Motivo do cancelamento:");
+                if (m && m.trim()) cancelar.mutate({ id: goalId, motivo: m.trim() });
+              }}><XCircle className="h-4 w-4" /> Cancelar meta</Button>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-2 rounded-xl border p-3">
+          <p className="text-base font-semibold">{souResp ? "Conversa com a supervisão" : `Conversa com ${g.responsibleName}`}</p>
+          {diasComConversa.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {diasComConversa.map(iso => (
+                <button key={iso} type="button" onClick={() => { setDiaChat(iso === d.hoje ? null : iso); setRespondendoId(null); }}
+                  className={`shrink-0 rounded-full border px-3 py-1 text-sm ${iso === diaSel ? "border-emerald-600 bg-emerald-600 text-white" : "bg-white text-gray-700"}`}>{nomeDiaCurto(iso)}</button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-gray-500">{ehHojeChat ? "Conversa de hoje. Amanhã começa uma conversa nova; esta fica guardada neste dia." : `Conversa de ${fmtBR(diaSel).slice(0, 5)} (somente leitura).`}</p>
+          <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg bg-gray-50 p-2">
+            {conversa.length === 0 && <p className="py-4 text-center text-sm text-gray-500">{ehHojeChat ? "Nenhuma mensagem hoje. Escreva abaixo se tiver alguma dúvida." : "Nenhuma mensagem neste dia."}</p>}
+            {conversa.map((m: any) => {
+              const minha = souResp ? m.papel === "responsavel" : m.papel !== "responsavel";
+              return (
+                <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-base ${minha ? "rounded-br-sm bg-emerald-600 text-white" : "rounded-bl-sm border bg-white"}`}>
+                    <p className={`text-xs ${minha ? "text-emerald-100" : "text-gray-500"}`}>{minha ? "Você" : m.autor} · {hora(m.criadoEm)}</p>
+                    {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                    <AnexosMsg anexos={m.anexos} claro={minha} />
+                    {!minha && m.kind === "pergunta" && !m.respondida && d.permissoes.mensagens.includes("resposta") && (
+                      <button type="button" onClick={() => setRespondendoId(m.id)} className="mt-1 rounded-md bg-blue-50 px-2 py-1 text-sm font-medium text-blue-800">Responder esta pergunta</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {respondendoId && <p className="text-sm text-blue-800">Respondendo a uma pergunta. <button type="button" className="underline" onClick={() => setRespondendoId(null)}>cancelar</button></p>}
+          {ehHojeChat && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input value={msgSimples} onChange={e => setMsgSimples(e.target.value)} placeholder="Escreva sua mensagem..." className="h-11 text-base" />
+                <Button className="h-11 bg-emerald-600 px-4 text-white hover:bg-emerald-700" disabled={(!msgSimples.trim() && !anexosSimples.length) || enviarMsg.isPending}
+                  onClick={() => enviarMsg.mutate(respondendoId ? { goalId, kind: "resposta", body: msgSimples, parentId: respondendoId, anexos: anexosSimples } : { goalId, kind: "comentario", body: msgSimples, dia: d.hoje, anexos: anexosSimples })}><Send className="h-4 w-4" /></Button>
+              </div>
+              <BotaoAnexar anexos={anexosSimples} setAnexos={setAnexosSimples} />
+            </div>
+          )}
+        </div>
+
+        <button type="button" onClick={() => setVerDetalhes(true)} className="w-full py-2 text-center text-sm text-gray-500 underline">Ver detalhes dia a dia</button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
-      <Button variant="ghost" className="gap-1 -ml-2" onClick={() => navigate("/metas-semanais")}><ArrowLeft className="h-4 w-4" /> Metas da semana</Button>
+      <Button variant="ghost" className="gap-1 -ml-2" onClick={() => setVerDetalhes(false)}><ArrowLeft className="h-4 w-4" /> Voltar ao resumo</Button>
 
       {/* Cabeçalho */}
       <div className="rounded-xl border bg-card p-4 space-y-3">
@@ -86,12 +302,21 @@ export default function WeeklyGoalDetail() {
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <Badge className={STATUS_LABEL[g.status]?.cls}>{STATUS_LABEL[g.status]?.label}</Badge>
+            {g.status === "em_andamento" && g.weekStart > new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })
+              ? <Badge className="bg-sky-100 text-sky-800">Começa em {fmtBR(g.weekStart).slice(0, 5)}</Badge>
+              : <Badge className={STATUS_LABEL[g.status]?.cls}>{STATUS_LABEL[g.status]?.label}</Badge>}
             {g.ack === "de_acordo" && <Badge className="bg-emerald-100 text-emerald-800">De acordo</Badge>}
             {g.ack === "com_ressalva" && <Badge className="bg-amber-100 text-amber-800">Com ressalvas</Badge>}
           </div>
         </div>
 
+        {d.ultimaAlteracao && g.status === "aguardando_ciencia" && (
+          <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
+            <p className="flex items-center gap-1.5 font-semibold"><Pencil className="h-4 w-4" /> A supervisão alterou esta meta{d.ultimaAlteracao.criadoEm ? ` em ${new Date(d.ultimaAlteracao.criadoEm).toLocaleDateString("pt-BR")} às ${new Date(d.ultimaAlteracao.criadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+            <p className="mt-1">{d.ultimaAlteracao.texto.replace(/ A ciência do responsável foi pedida de novo.$/, "")}</p>
+            {d.permissoes.ciencia && <p className="mt-1 font-medium">Confira as mudanças e dê a sua ciência abaixo.</p>}
+          </div>
+        )}
         {g.description && <p className="text-sm bg-gray-50 rounded-lg p-3 whitespace-pre-wrap">{g.description}</p>}
         {g.ack === "com_ressalva" && g.ackComment && <p className="text-sm bg-amber-50 border border-amber-200 rounded-lg p-3"><b>Ressalva do responsável:</b> {g.ackComment}</p>}
         {g.closingSummary && <p className="text-sm bg-gray-50 border rounded-lg p-3"><b>{g.status === "cancelada" ? "Motivo do cancelamento" : "Avaliação final"}:</b> {g.closingSummary}</p>}
@@ -204,7 +429,7 @@ export default function WeeklyGoalDetail() {
       </Tabs>
 
       <Sheet open={editar} onOpenChange={setEditar}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+        <SheetContent className="z-[80] w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader><SheetTitle className="text-emerald-800">Editar meta</SheetTitle></SheetHeader>
           <p className="text-xs text-amber-700 mt-1">Ao salvar, o responsável precisa dar ciência de novo e a alteração fica registrada na linha do tempo.</p>
           <div className="pt-4">
@@ -222,7 +447,9 @@ export default function WeeklyGoalDetail() {
 
 // ───────────────────────── Dia a dia ─────────────────────────
 
-function CartaoDia({ dia, d, goalId, onChange }: { dia: any; d: any; goalId: number; onChange: () => void }) {
+function CartaoDia({ dia: diaBruto, d, goalId, onChange }: { dia: any; d: any; goalId: number; onChange: () => void }) {
+  // As movimentações do sistema (meta criada, alterada, ciência, encerrada...) ficam só na "Linha do tempo".
+  const dia = { ...diaBruto, mensagens: diaBruto.mensagens.filter((m: any) => m.kind !== "sistema") };
   const ehHoje = dia.data === d.hoje;
   const futuro = dia.data > d.hoje;
   const temAtividade = dia.relatos.length > 0 || dia.cargas.length > 0 || dia.mensagens.length > 0;
@@ -292,10 +519,8 @@ function CartaoDia({ dia, d, goalId, onChange }: { dia: any; d: any; goalId: num
           {/* Relatos e conversa do dia */}
           <RelatosEConversa dia={dia} d={d} goalId={goalId} onChange={onChange} />
 
-          {/* Novo relato (responsável) */}
-          {d.permissoes.relatar && !futuro && <NovoRelato goalId={goalId} data={dia.data} onChange={onChange} />}
-          {/* Pergunta/comentário (supervisão) */}
-          {d.permissoes.mensagens.includes("pergunta") && <NovaMensagem goalId={goalId} dia={dia.data} onChange={onChange} />}
+          {/* Conversa do dia: o que se escreve aqui conta como o relato do dia */}
+          {!futuro && d.permissoes.mensagens.length > 0 && <NovaMensagem goalId={goalId} dia={dia.data} permitePergunta={d.permissoes.mensagens.includes("pergunta")} onChange={onChange} />}
         </div>
       )}
     </div>
@@ -343,11 +568,13 @@ function RelatosEConversa({ dia, d, goalId, onChange }: any) {
                 <MessageCircleQuestion className="h-3.5 w-3.5" /> <b>{e.m.autor}</b> · {e.m.papel === "responsavel" ? "responsável" : "supervisão"} · {hora(e.m.criadoEm)}
                 {e.m.kind === "pergunta" && <Badge className={e.m.respondida ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}>{e.m.respondida ? "Respondida" : "Sem resposta"}</Badge>}
               </div>
-              <p className="mt-1 whitespace-pre-wrap">{e.m.body}</p>
+              {e.m.body && <p className="mt-1 whitespace-pre-wrap">{e.m.body}</p>}
+              <AnexosMsg anexos={e.m.anexos} />
               {respostasDe(e.m.id).map(r => (
                 <div key={r.id} className="mt-2 ml-4 rounded bg-white border px-3 py-1.5">
                   <div className="text-xs text-gray-600"><b>{r.autor}</b> · {hora(r.criadoEm)}</div>
-                  <p className="whitespace-pre-wrap">{r.body}</p>
+                  {r.body && <p className="whitespace-pre-wrap">{r.body}</p>}
+                  <AnexosMsg anexos={r.anexos} />
                 </div>
               ))}
               {podeResponder && (e.m.kind === "pergunta" || e.m.kind === "comentario") && (
@@ -368,7 +595,7 @@ function RelatosEConversa({ dia, d, goalId, onChange }: any) {
   );
 }
 
-function NovoRelato({ goalId, data, onChange }: { goalId: number; data: string; onChange: () => void }) {
+function NovoRelato({ goalId, data, onChange, simples = false }: { goalId: number; data: string; onChange: () => void; simples?: boolean }) {
   const [kind, setKind] = useState<string>("andamento");
   const [situacao, setSituacao] = useState("ok");
   const [body, setBody] = useState("");
@@ -392,13 +619,13 @@ function NovoRelato({ goalId, data, onChange }: { goalId: number; data: string; 
 
   return (
     <div className="rounded-lg border bg-gray-50 p-3 space-y-2">
-      <p className="text-sm font-medium">Registrar relato de {nomeDia(data)}</p>
-      <div className="flex flex-wrap gap-1.5">
+      <p className="text-sm font-medium">{simples ? "Conte como está o dia de hoje" : `Registrar relato de ${nomeDia(data)}`}</p>
+      {!simples && <div className="flex flex-wrap gap-1.5">
         {Object.entries(KIND).map(([k, v]) => (
           <button key={k} onClick={() => setKind(k)} className={`text-xs rounded-md border px-2.5 py-1.5 ${kind === k ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-medium" : "bg-white"}`}>{v.label}</button>
         ))}
-      </div>
-      {kind !== "problema" && (
+      </div>}
+      {!simples && kind !== "problema" && (
         <div className="flex gap-1.5">
           {Object.entries(SITUACAO).map(([k, v]) => (
             <button key={k} onClick={() => setSituacao(k)} className={`text-xs rounded-md border px-2 py-1 ${situacao === k ? "border-gray-700 bg-white font-medium" : "bg-white text-gray-500"}`}>{v}</button>
@@ -417,18 +644,22 @@ function NovoRelato({ goalId, data, onChange }: { goalId: number; data: string; 
   );
 }
 
-function NovaMensagem({ goalId, dia, onChange }: { goalId: number; dia: string; onChange: () => void }) {
-  const [kind, setKind] = useState<"pergunta" | "comentario">("pergunta");
+function NovaMensagem({ goalId, dia, permitePergunta = true, onChange }: { goalId: number; dia: string; permitePergunta?: boolean; onChange: () => void }) {
+  const [kind, setKind] = useState<"pergunta" | "comentario">(permitePergunta ? "pergunta" : "comentario");
   const [body, setBody] = useState("");
-  const msg = trpc.weeklyGoals.addMessage.useMutation({ onSuccess: () => { setBody(""); onChange(); }, onError: e => toast.error(e.message) });
+  const [anexos, setAnexos] = useState<{ url: string; nome: string }[]>([]);
+  const msg = trpc.weeklyGoals.addMessage.useMutation({ onSuccess: () => { setBody(""); setAnexos([]); onChange(); }, onError: e => toast.error(e.message) });
   return (
     <div className="space-y-2">
+      <BotaoAnexar anexos={anexos} setAnexos={setAnexos} className="[&_button]:h-9" />
       <div className="flex items-center gap-2">
-        <select value={kind} onChange={e => setKind(e.target.value as any)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-          <option value="pergunta">Perguntar</option><option value="comentario">Comentar</option>
-        </select>
-        <Input value={body} onChange={e => setBody(e.target.value)} placeholder={`${kind === "pergunta" ? "Pergunta" : "Comentário"} sobre ${nomeDia(dia)}`} className="h-9" />
-        <Button size="sm" disabled={!body.trim() || msg.isPending} onClick={() => msg.mutate({ goalId, kind, body, dia })}><Send className="h-3.5 w-3.5" /></Button>
+        {permitePergunta && (
+          <select value={kind} onChange={e => setKind(e.target.value as any)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+            <option value="pergunta">Perguntar</option><option value="comentario">Comentar</option>
+          </select>
+        )}
+        <Input value={body} onChange={e => setBody(e.target.value)} placeholder={permitePergunta ? `${kind === "pergunta" ? "Pergunta" : "Comentário"} sobre ${nomeDia(dia)}` : `Como está a operação em ${nomeDia(dia)}?`} className="h-9" />
+        <Button size="sm" disabled={(!body.trim() && !anexos.length) || msg.isPending} onClick={() => msg.mutate({ goalId, kind, body, dia, anexos })}><Send className="h-3.5 w-3.5" /></Button>
       </div>
     </div>
   );

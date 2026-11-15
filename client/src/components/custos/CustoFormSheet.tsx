@@ -40,18 +40,24 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
   // Celular (toque): não abre o teclado sozinho ao abrir o formulário e acompanha a área visível,
   // para a janela não ficar escondida atrás do teclado.
   const toque = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
-  const [vv, setVv] = useState<{ h: number; bottom: number } | null>(null);
+  const [vv, setVv] = useState<{ h: number; top: number } | null>(null);
   useEffect(() => {
     if (!open || !toque || typeof window === "undefined" || !window.visualViewport) return;
     const v = window.visualViewport;
-    const atualizar = () => setVv({ h: v.height, bottom: Math.max(0, window.innerHeight - v.height - v.offsetTop) });
+    const atualizar = () => setVv({ h: v.height, top: v.offsetTop });
     atualizar();
     // Ao fechar o teclado o iPhone costuma deixar a página deslocada: volta ao topo e recalcula a área visível.
     let t: any;
     const aoSairDoCampo = () => { clearTimeout(t); t = setTimeout(() => { window.scrollTo(0, 0); atualizar(); }, 120); };
     v.addEventListener("resize", atualizar); v.addEventListener("scroll", atualizar);
     document.addEventListener("focusout", aoSairDoCampo);
-    return () => { clearTimeout(t); v.removeEventListener("resize", atualizar); v.removeEventListener("scroll", atualizar); document.removeEventListener("focusout", aoSairDoCampo); setVv(null); };
+    const aoEntrarNoCampo = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      setTimeout(() => el.scrollIntoView?.({ block: "center", behavior: "smooth" }), 320); // espera o teclado terminar de abrir
+    };
+    document.addEventListener("focusin", aoEntrarNoCampo);
+    return () => { clearTimeout(t); v.removeEventListener("resize", atualizar); v.removeEventListener("scroll", atualizar); document.removeEventListener("focusout", aoSairDoCampo); document.removeEventListener("focusin", aoEntrarNoCampo); setVv(null); };
   }, [open, toque]);
   const { user } = useAuth();
   const utils = trpc.useUtils();
@@ -238,11 +244,15 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="bottom" className="flex max-h-[94dvh] flex-col overflow-hidden rounded-t-2xl p-0 md:mx-auto md:max-w-xl"
+      <SheetContent side="bottom" showClose={false}
+        className={toque ? "z-[60] flex flex-col overflow-hidden rounded-none border-0 p-0" : "flex max-h-[94dvh] flex-col overflow-hidden rounded-t-2xl p-0 md:mx-auto md:max-w-xl"}
         onOpenAutoFocus={(e) => { if (toque) e.preventDefault(); }}
-        style={vv ? { maxHeight: vv.h * 0.96, bottom: vv.bottom } : undefined}>
-        <SheetHeader className="shrink-0 border-b px-4 pb-3 pr-12 pt-4">
-          <SheetTitle className="text-xl">{item ? "Alterar gasto" : "Novo gasto"}</SheetTitle>
+        style={toque ? { top: vv?.top ?? 0, bottom: "auto", height: vv?.h ?? "100dvh", maxHeight: "none" } : undefined}>
+        <SheetHeader className="flex shrink-0 flex-row items-center justify-between gap-2 border-b px-4 py-2.5">
+          <SheetTitle className="text-lg">{item ? "Alterar gasto" : "Novo gasto"}</SheetTitle>
+          <button type="button" onClick={onClose} aria-label="Fechar" className="flex h-10 shrink-0 items-center gap-1 rounded-lg border px-3 text-sm font-medium text-gray-700 active:bg-gray-100">
+            <X className="h-4 w-4" /> Fechar
+          </button>
         </SheetHeader>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4 pt-3">
@@ -409,13 +419,13 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
 
           {erro && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{erro}</p>}
 
-          <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t bg-white px-4 pb-1 pt-3">
-            <Button type="button" disabled={salvando || enviando} onClick={() => salvar(false)} className="h-12 bg-emerald-600 text-base text-white hover:bg-emerald-700">
+          <div className="flex gap-2 border-t pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+            <Button type="button" disabled={salvando || enviando} onClick={() => salvar(false)} className="h-11 flex-1 bg-emerald-600 text-base text-white hover:bg-emerald-700">
               {salvando ? "Salvando..." : item ? "Salvar alterações" : "Salvar"}
             </Button>
             {!item && (
-              <Button type="button" variant="outline" disabled={salvando || enviando} onClick={() => salvar(true)} className="h-11">
-                Salvar e lançar outro
+              <Button type="button" variant="outline" disabled={salvando || enviando} onClick={() => salvar(true)} className="h-11 px-3 text-sm">
+                Salvar e novo
               </Button>
             )}
           </div>

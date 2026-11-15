@@ -3446,8 +3446,8 @@ function cnpjsDoTexto(linha) {
   const re = new RegExp(CNPJ_REGEX.source, "g");
   let m;
   while ((m = re.exec(texto)) !== null) {
-    const d = (m[1] + m[2]).replace(/\D/g, "");
-    if (d.length === 14) out.push(d);
+    const d2 = (m[1] + m[2]).replace(/\D/g, "");
+    if (d2.length === 14) out.push(d2);
   }
   return out;
 }
@@ -3587,25 +3587,25 @@ function diasEntre(a, b) {
   return Math.round((dbb - da) / 864e5);
 }
 function casarPagamentos(pagamentos, debitos, toleranciaDias = 7) {
-  const livres = new Map(debitos.map((d) => [d.id, d]));
+  const livres = new Map(debitos.map((d2) => [d2.id, d2]));
   const porCentavos = /* @__PURE__ */ new Map();
-  for (const d of debitos) {
-    const k = Math.round(d.valor * 100);
+  for (const d2 of debitos) {
+    const k = Math.round(d2.valor * 100);
     const arr = porCentavos.get(k) ?? [];
-    arr.push(d);
+    arr.push(d2);
     porCentavos.set(k, arr);
   }
   const casados = [];
   const semBanco = [];
   const ordenados = [...pagamentos].sort((a, b) => a.data.localeCompare(b.data) || b.valor - a.valor);
   for (const p of ordenados) {
-    const candidatos = (porCentavos.get(Math.round(p.valor * 100)) ?? []).filter((d) => livres.has(d.id));
+    const candidatos = (porCentavos.get(Math.round(p.valor * 100)) ?? []).filter((d2) => livres.has(d2.id));
     let melhor = null;
     let melhorDif = Infinity;
-    for (const d of candidatos) {
-      const dif = Math.abs(diasEntre(p.data, d.data));
+    for (const d2 of candidatos) {
+      const dif = Math.abs(diasEntre(p.data, d2.data));
       if (dif <= toleranciaDias && dif < melhorDif) {
-        melhor = d;
+        melhor = d2;
         melhorDif = dif;
       }
     }
@@ -4463,6 +4463,8 @@ var init_permissions = __esm({
       { slug: "meus-gastos", label: "Meus Gastos (lan\xE7ar despesas)", group: "Opera\xE7\xF5es" },
       { slug: "metas-semanais", label: "Metas Semanais (respons\xE1vel)", group: "Opera\xE7\xF5es" },
       { slug: "metas-semanais-gestao", label: "Metas Semanais (criar e supervisionar)", group: "Opera\xE7\xF5es" },
+      { slug: "tarefas", label: "Tarefas (minhas)", group: "Opera\xE7\xF5es" },
+      { slug: "tarefas-gestao", label: "Tarefas (equipe: ver e atribuir)", group: "Opera\xE7\xF5es" },
       { slug: "controle-notas", label: "Controle de Notas Fiscais", group: "Opera\xE7\xF5es" },
       { slug: "conferencia-notas", label: "Confer\xEAncia de Notas", group: "Opera\xE7\xF5es" },
       { slug: "relatorio-destinos", label: "Relat\xF3rio Destinos", group: "Opera\xE7\xF5es" },
@@ -4905,9 +4907,9 @@ function countFridaysInMonth(year, month) {
 function getFridaysInMonth(year, month) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const fridays = [];
-  for (let d = 1; d <= daysInMonth; d++) {
-    if (new Date(year, month - 1, d).getDay() === 5) {
-      fridays.push(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  for (let d2 = 1; d2 <= daysInMonth; d2++) {
+    if (new Date(year, month - 1, d2).getDay() === 5) {
+      fridays.push(`${year}-${String(month).padStart(2, "0")}-${String(d2).padStart(2, "0")}`);
     }
   }
   return fridays;
@@ -4933,18 +4935,18 @@ async function getDaysWorkedMap(db, year, month) {
   return map;
 }
 function weekStartOf(dateStr, anchorDay = 0) {
-  const d = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
-  const offset = (d.getDay() - anchorDay + 7) % 7;
-  d.setDate(d.getDate() - offset);
-  return d.toISOString().slice(0, 10);
+  const d2 = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
+  const offset = (d2.getDay() - anchorDay + 7) % 7;
+  d2.setDate(d2.getDate() - offset);
+  return d2.toISOString().slice(0, 10);
 }
 function anchorDayOf(collab) {
   return collab.weeklyPeriodAnchor === "sabado" ? 6 : 0;
 }
 function addDaysStr(dateStr, days) {
-  const d = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const d2 = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
+  d2.setDate(d2.getDate() + days);
+  return d2.toISOString().slice(0, 10);
 }
 async function getWeeklyBreakdownMap(db, year, month) {
   const [rows2] = await db.execute(
@@ -5107,9 +5109,9 @@ async function getOperadorMonthDetailMap(db, year, month, activeCollaborators) {
   const loadsByClient = /* @__PURE__ */ new Map();
   for (const r of loadRows) {
     const cid = Number(r.clientId);
-    const d = r.deliveryDate instanceof Date ? r.deliveryDate.toISOString().slice(0, 10) : String(r.deliveryDate).slice(0, 10);
+    const d2 = r.deliveryDate instanceof Date ? r.deliveryDate.toISOString().slice(0, 10) : String(r.deliveryDate).slice(0, 10);
     if (!loadsByClient.has(cid)) loadsByClient.set(cid, []);
-    loadsByClient.get(cid).push({ loadId: Number(r.loadId), date: d, plate: r.plate ?? null, dest: r.destName ?? null, invoice: nfFromInvoiceNumber(r.invoiceNumber), kg: parseFloat(String(r.weightKg ?? 0)) || 0 });
+    loadsByClient.get(cid).push({ loadId: Number(r.loadId), date: d2, plate: r.plate ?? null, dest: r.destName ?? null, invoice: nfFromInvoiceNumber(r.invoiceNumber), kg: parseFloat(String(r.weightKg ?? 0)) || 0 });
   }
   const [opCountRows] = await db.execute(
     sql12`SELECT client_id AS clientId, COUNT(*) AS qtd FROM collaborators WHERE role = 'operador' AND active = 1 AND commission_auto = 1 GROUP BY client_id`
@@ -5697,7 +5699,7 @@ var init_payroll = __esm({
 
 // server/utils/fluxoCaixaProjecao.ts
 function mergeDiasFluxoCaixa(diasRealizados, diasFuturosExcel, diasContasAReceber, saldoInicial, diasFolhaPendente = []) {
-  const datasRealizadas = new Set(diasRealizados.map((d) => d.data));
+  const datasRealizadas = new Set(diasRealizados.map((d2) => d2.data));
   const mapa = /* @__PURE__ */ new Map();
   for (const r of diasRealizados) {
     mapa.set(r.data, { data: r.data, recebimentos: r.recebimentos, pagamentos: r.pagamentos, projetado: false });
@@ -5724,9 +5726,9 @@ function mergeDiasFluxoCaixa(diasRealizados, diasFuturosExcel, diasContasARecebe
   }
   const dias = Array.from(mapa.values()).sort((a, b) => a.data.localeCompare(b.data));
   let acumulado = saldoInicial;
-  return dias.map((d) => {
-    acumulado += d.recebimentos - d.pagamentos;
-    return { ...d, saldoAcumulado: acumulado };
+  return dias.map((d2) => {
+    acumulado += d2.recebimentos - d2.pagamentos;
+    return { ...d2, saldoAcumulado: acumulado };
   });
 }
 var init_fluxoCaixaProjecao = __esm({
@@ -6144,7 +6146,7 @@ async function syncSicoobBoletos() {
   windowStart.setMonth(windowStart.getMonth() - 6);
   const windowEnd = /* @__PURE__ */ new Date();
   windowEnd.setMonth(windowEnd.getMonth() + 6);
-  const fmt2 = (d) => d.toISOString().slice(0, 10);
+  const fmt2 = (d2) => d2.toISOString().slice(0, 10);
   const chunks = [];
   let cur = new Date(windowStart);
   while (cur <= windowEnd) {
@@ -6310,15 +6312,15 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
     const prevRef = prevMonthOf(ano, mes);
     const prevRefStr = `${prevRef.year}-${String(prevRef.month).padStart(2, "0")}`;
     const addDays2 = (dateStr, days) => {
-      const d = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
-      d.setDate(d.getDate() + days);
-      return d.toISOString().slice(0, 10);
+      const d2 = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
+      d2.setDate(d2.getDate() + days);
+      return d2.toISOString().slice(0, 10);
     };
     const fridaysOfMonth = (year, month) => {
       const list = [];
       const daysInMonth = new Date(year, month, 0).getDate();
-      for (let d = 1; d <= daysInMonth; d++) {
-        if (new Date(year, month - 1, d).getDay() === 5) list.push(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+      for (let d2 = 1; d2 <= daysInMonth; d2++) {
+        if (new Date(year, month - 1, d2).getDay() === 5) list.push(`${year}-${String(month).padStart(2, "0")}-${String(d2).padStart(2, "0")}`);
       }
       return list;
     };
@@ -6374,15 +6376,15 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
       [ano, mes, prevRef.year, prevRef.month]
     );
     const fridayOfWeek = (dateStr) => {
-      const d = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
-      d.setDate(d.getDate() + (5 - d.getDay()));
-      return d.toISOString().slice(0, 10);
+      const d2 = /* @__PURE__ */ new Date(dateStr + "T12:00:00");
+      d2.setDate(d2.getDate() + (5 - d2.getDay()));
+      return d2.toISOString().slice(0, 10);
     };
-    const folhaDiariasRows = (folhaDiariasRowsRaw ?? []).map((d) => {
-      const dataTrabalho = d.data instanceof Date ? d.data.toISOString().slice(0, 10) : String(d.data).slice(0, 10);
-      const dataPagamento = d.tipo === "diarista" ? addDays2(fridayOfWeek(dataTrabalho), 1) : dataTrabalho;
-      return { ...d, dataTrabalho, data: dataPagamento };
-    }).filter((d) => d.data.startsWith(prefixo));
+    const folhaDiariasRows = (folhaDiariasRowsRaw ?? []).map((d2) => {
+      const dataTrabalho = d2.data instanceof Date ? d2.data.toISOString().slice(0, 10) : String(d2.data).slice(0, 10);
+      const dataPagamento = d2.tipo === "diarista" ? addDays2(fridayOfWeek(dataTrabalho), 1) : dataTrabalho;
+      return { ...d2, dataTrabalho, data: dataPagamento };
+    }).filter((d2) => d2.data.startsWith(prefixo));
     const dataComissao = `${prefixo}-20`;
     const [comissaoRows] = await db.$client.execute(
       `SELECT c.name, pe.commission, pe.discount
@@ -6416,7 +6418,7 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
     ];
     const diasFolhaPendente = [
       ...folhaCltPjPendente.map((c) => ({ data: dataSalarioCltPj, valor: c.valor })),
-      ...(folhaDiariasRows ?? []).map((d) => ({ data: d.data, valor: parseFloat(d.daily_value ?? 0) })),
+      ...(folhaDiariasRows ?? []).map((d2) => ({ data: d2.data, valor: parseFloat(d2.daily_value ?? 0) })),
       ...folhaSemanalPendente.map((c) => ({ data: c.data, valor: c.valor })),
       ...folhaComissaoPendente.map((c) => ({ data: dataComissao, valor: c.valor })),
       ...comissaoPeriodica.map((c) => ({ data: c.date, valor: c.valor }))
@@ -6467,15 +6469,15 @@ async function computeFluxoCaixaMes(db, ano, mes, modo = "projecao") {
       };
       (pendenciasPorDia[c.data] ??= []).push(item);
     }
-    for (const d of folhaDiariasRows ?? []) {
-      const [ay, am, ad] = d.dataTrabalho.split("-");
+    for (const d2 of folhaDiariasRows ?? []) {
+      const [ay, am, ad] = d2.dataTrabalho.split("-");
       const item = {
         tipo: "folha",
-        cliente: d.name ?? "\u2014",
-        referencia: d.tipo === "diarista" ? `Folha \u2014 Di\xE1ria de ${ad}/${am} (paga no s\xE1bado da semana)` : "Folha \u2014 Di\xE1ria (Presen\xE7a)",
-        valor: parseFloat(d.daily_value ?? 0)
+        cliente: d2.name ?? "\u2014",
+        referencia: d2.tipo === "diarista" ? `Folha \u2014 Di\xE1ria de ${ad}/${am} (paga no s\xE1bado da semana)` : "Folha \u2014 Di\xE1ria (Presen\xE7a)",
+        valor: parseFloat(d2.daily_value ?? 0)
       };
-      (pendenciasPorDia[d.data] ??= []).push(item);
+      (pendenciasPorDia[d2.data] ??= []).push(item);
     }
     for (const c of folhaComissaoPendente) {
       const item = {
@@ -6739,8 +6741,8 @@ var init_sicoob = __esm({
           if (erro) return { meses: [], saldoInicialAno: 0, error: erro.error };
           const saldoInicialAno = resultados[0].saldoInicial ?? 0;
           const meses = resultados.map((resultado, i) => {
-            const recebimentos = resultado.dias.reduce((s, d) => s + d.recebimentos, 0);
-            const pagamentos = resultado.dias.reduce((s, d) => s + d.pagamentos, 0);
+            const recebimentos = resultado.dias.reduce((s, d2) => s + d2.recebimentos, 0);
+            const pagamentos = resultado.dias.reduce((s, d2) => s + d2.pagamentos, 0);
             const saldoAcumulado = resultado.dias.length > 0 ? resultado.dias[resultado.dias.length - 1].saldoAcumulado : resultado.saldoInicial ?? 0;
             return { mes: i + 1, recebimentos, pagamentos, saldoAcumulado };
           });
@@ -7293,7 +7295,7 @@ __export(financeiroDetalhe_exports, {
   detalheBloco: () => detalheBloco
 });
 async function detalheBloco(db, chave2, inicio, fim, limite = 500) {
-  const ms = (d, add) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) + add;
+  const ms = (d2, add) => Date.UTC(+d2.slice(0, 4), +d2.slice(5, 7) - 1, +d2.slice(8, 10)) + add;
   const msInicio = ms(inicio, 3 * 36e5);
   const msFim = ms(fim, 27 * 36e5) - 1;
   const ymIni = inicio.slice(0, 7), ymFim = fim.slice(0, 7);
@@ -7466,11 +7468,11 @@ function calcularProgresso(itens, cargas, diasSemana) {
   const validas = cargas.filter((c) => c.status !== "cancelado");
   const out = itens.map((it) => {
     const doComprador = validas.filter((c) => normalizaDestino(c.destinationId) === it.destinationId);
-    const porDia = diasSemana.map((d) => {
-      const doDia = doComprador.filter((c) => c.data === d);
-      const plan = it.dias.find((x) => x.data === d);
+    const porDia = diasSemana.map((d2) => {
+      const doDia = doComprador.filter((c) => c.data === d2);
+      const plan = it.dias.find((x) => x.data === d2);
       return {
-        data: d,
+        data: d2,
         planejado: it.dias.length > 0 ? plan?.target ?? 0 : null,
         carregadas: doDia.length,
         entregues: doDia.filter((c) => c.status === "entregue").length
@@ -7511,7 +7513,7 @@ var init_weeklyGoals = __esm({
     "use strict";
     KINDS_ENTRY = ["inicio_dia", "andamento", "problema", "fechamento_dia"];
     DIA_MS = 864e5;
-    toUtc = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
+    toUtc = (d2) => Date.UTC(+d2.slice(0, 4), +d2.slice(5, 7) - 1, +d2.slice(8, 10));
     fmt = (ms) => new Date(ms).toISOString().slice(0, 10);
     podeVer = (p) => p !== null;
     podeEditarMeta = (p) => p === "admin" || p === "criador";
@@ -7528,17 +7530,17 @@ __export(weeklyGoals_exports, {
   enviarLembretesFechamento: () => enviarLembretesFechamento,
   weeklyGoalsRouter: () => weeklyGoalsRouter
 });
-import { z as z52 } from "zod";
-import { TRPCError as TRPCError40 } from "@trpc/server";
-async function getDbOrThrow5() {
+import { z as z53 } from "zod";
+import { TRPCError as TRPCError41 } from "@trpc/server";
+async function getDbOrThrow6() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError40({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError41({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
-function ensureTables3(db) {
-  if (!ensurePromise5) {
-    ensurePromise5 = (async () => {
+function ensureTables4(db) {
+  if (!ensurePromise6) {
+    ensurePromise6 = (async () => {
       const run = (s) => db.$client.execute(s);
       await run(`CREATE TABLE IF NOT EXISTS weekly_goals (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -7579,23 +7581,28 @@ function ensureTables3(db) {
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX weekly_goal_messages_goal_idx (goal_id, created_at)
       )`);
+      try {
+        await run(`ALTER TABLE weekly_goal_messages ADD COLUMN anexos TEXT NULL`);
+      } catch (e) {
+        if (!/duplicate column/i.test(String(e?.message ?? e))) throw e;
+      }
     })().catch((e) => {
-      ensurePromise5 = null;
+      ensurePromise6 = null;
       throw e;
     });
   }
-  return ensurePromise5;
+  return ensurePromise6;
 }
 async function carregarMeta(db, id) {
   const [g] = await q2(db, `SELECT * FROM weekly_goals WHERE id = ?`, [id]);
-  if (!g) throw new TRPCError40({ code: "NOT_FOUND", message: "Meta n\xE3o encontrada" });
+  if (!g) throw new TRPCError41({ code: "NOT_FOUND", message: "Meta n\xE3o encontrada" });
   const sups = await q2(db, `SELECT user_id, user_name FROM weekly_goal_supervisors WHERE goal_id = ? ORDER BY user_name`, [id]);
   return { goal: mapGoal(g), supervisors: sups.map((s) => ({ userId: s.user_id, name: s.user_name ?? "" })) };
 }
 async function exigirPapel(db, user, id) {
   const m = await carregarMeta(db, id);
   const papel = papelNaMeta({ id: user.id, isAdmin: isAdmin(user) }, m.goal, m.supervisors.map((s) => s.userId));
-  if (!podeVer(papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o participa desta meta" });
+  if (!podeVer(papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o participa desta meta" });
   return { ...m, papel };
 }
 async function nomeDe(db, userId) {
@@ -7648,7 +7655,7 @@ async function itensDaMeta(db, goalId) {
     destinationName: i.destination_name,
     targetCargas: i.target_cargas,
     observacao: i.observacao ?? null,
-    dias: dias.filter((d) => d.item_id === i.id).map((d) => ({ data: d.plan_date, target: d.target_cargas }))
+    dias: dias.filter((d2) => d2.item_id === i.id).map((d2) => ({ data: d2.plan_date, target: d2.target_cargas }))
   }));
 }
 async function resumoDaMeta(db, g, hoje) {
@@ -7660,13 +7667,14 @@ async function resumoDaMeta(db, g, hoje) {
                                     SUM(entry_date = ? AND (kind = 'problema' OR situacao = 'problema')) AS prob
                              FROM weekly_goal_entries WHERE goal_id = ?`, [hoje, hoje, hoje, g.id]);
   const [pq] = await q2(db, `SELECT COUNT(*) AS n FROM weekly_goal_messages WHERE goal_id = ? AND kind = 'pergunta' AND answered = 0`, [g.id]);
+  const [msgHoje] = await q2(db, `SELECT COUNT(*) AS n FROM weekly_goal_messages WHERE goal_id = ? AND author_role = 'responsavel' AND kind <> 'sistema' AND msg_date = ?`, [g.id, hoje]);
   const decorridos = hoje < sem.start ? 0 : hoje > sem.end ? 7 : sem.days.indexOf(hoje) + 1;
   const alertas = calcularAlertas({
     status: g.status,
     ack: g.ack,
     hoje,
     semana: { start: sem.start, end: sem.end },
-    relatosHoje: Number(rel?.hoje ?? 0),
+    relatosHoje: Number(rel?.hoje ?? 0) + Number(msgHoje?.n ?? 0),
     fechouHoje: Number(rel?.fechou ?? 0) > 0,
     problemaHoje: Number(rel?.prob ?? 0) > 0,
     perguntasSemResposta: Number(pq?.n ?? 0),
@@ -7685,11 +7693,11 @@ async function resumoDaMeta(db, g, hoje) {
 }
 async function gravarItens(db, goalId, semana, itens) {
   for (const it of itens) {
-    const [d] = await q2(db, `SELECT id, name, nickname FROM cargo_destinations WHERE id = ?`, [normalizaDestino(it.destinationId) ?? it.destinationId]);
-    if (!d) throw new TRPCError40({ code: "BAD_REQUEST", message: "Comprador n\xE3o encontrado" });
+    const [d2] = await q2(db, `SELECT id, name, nickname FROM cargo_destinations WHERE id = ?`, [normalizaDestino(it.destinationId) ?? it.destinationId]);
+    if (!d2) throw new TRPCError41({ code: "BAD_REQUEST", message: "Comprador n\xE3o encontrado" });
     const [res] = await db.$client.execute(
       `INSERT INTO weekly_goal_items (goal_id, destination_id, destination_name, target_cargas, observacao) VALUES (?, ?, ?, ?, ?)`,
-      [goalId, d.id, String(d.nickname || d.name), it.targetCargas, it.observacao ?? null]
+      [goalId, d2.id, String(d2.nickname || d2.name), it.targetCargas, it.observacao ?? null]
     );
     for (const dia2 of it.dias ?? []) {
       if (!semana.days.includes(dia2.data) || dia2.target <= 0) continue;
@@ -7716,7 +7724,14 @@ function mapEntry(e) {
   };
 }
 function mapMsg(x) {
+  let anexos = [];
+  try {
+    anexos = x.anexos ? JSON.parse(x.anexos) : [];
+  } catch {
+    anexos = [];
+  }
   return {
+    anexos,
     id: x.id,
     entryId: x.entry_id ?? null,
     parentId: x.parent_id ?? null,
@@ -7730,8 +7745,8 @@ function mapMsg(x) {
   };
 }
 async function enviarLembretesFechamento(hoje = hojeISO()) {
-  const db = await getDbOrThrow5();
-  await ensureTables3(db);
+  const db = await getDbOrThrow6();
+  await ensureTables4(db);
   const metas = await q2(
     db,
     `SELECT g.id, g.title, g.responsible_user_id FROM weekly_goals g
@@ -7746,7 +7761,7 @@ async function enviarLembretesFechamento(hoje = hojeISO()) {
   }
   return metas.length;
 }
-var USO, GESTAO, data, q2, ensurePromise5, isAdmin, mapGoal, interessados, itemInput, descreveItens, weeklyGoalsRouter;
+var USO2, GESTAO2, data, q2, ensurePromise6, isAdmin, mapGoal, interessados, itemInput, descreveItens, weeklyGoalsRouter;
 var init_weeklyGoals2 = __esm({
   "server/routers/weeklyGoals.ts"() {
     "use strict";
@@ -7754,11 +7769,11 @@ var init_weeklyGoals2 = __esm({
     init_permissions();
     init_notifications();
     init_weeklyGoals();
-    USO = "metas-semanais";
-    GESTAO = "metas-semanais-gestao";
-    data = z52.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    USO2 = "metas-semanais";
+    GESTAO2 = "metas-semanais-gestao";
+    data = z53.string().regex(/^\d{4}-\d{2}-\d{2}$/);
     q2 = async (db, sql34, params = []) => (await db.$client.execute(sql34, params))[0];
-    ensurePromise5 = null;
+    ensurePromise6 = null;
     isAdmin = (u) => u.role === "admin";
     mapGoal = (r) => ({
       id: r.id,
@@ -7779,18 +7794,18 @@ var init_weeklyGoals2 = __esm({
       createdAt: r.created_at
     });
     interessados = (m) => [m.goal.createdBy, ...m.supervisors.map((s) => s.userId)];
-    itemInput = z52.object({
-      destinationId: z52.number(),
-      targetCargas: z52.number().int().min(1).max(500),
-      observacao: z52.string().max(300).nullable().optional(),
-      dias: z52.array(z52.object({ data, target: z52.number().int().min(0).max(100) })).max(7).optional()
+    itemInput = z53.object({
+      destinationId: z53.number(),
+      targetCargas: z53.number().int().min(1).max(500),
+      observacao: z53.string().max(300).nullable().optional(),
+      dias: z53.array(z53.object({ data, target: z53.number().int().min(0).max(100) })).max(7).optional()
     });
     descreveItens = (itens) => itens.map((i) => `${i.targetCargas}x ${i.destinationName}`).join(", ");
     weeklyGoalsRouter = router({
       // ── Apoio ao formulário ──
-      opcoes: moduleProcedure(GESTAO).query(async () => {
-        const db = await getDbOrThrow5();
-        await ensureTables3(db);
+      opcoes: moduleProcedure(GESTAO2).query(async () => {
+        const db = await getDbOrThrow6();
+        await ensureTables4(db);
         const users3 = await q2(db, `SELECT u.id, u.name, u.email, u.role, c.name AS colaborador
        FROM users u LEFT JOIN collaborators c ON c.user_id = u.id AND (c.active = 1 OR c.active IS NULL) ORDER BY COALESCE(c.name, u.name)`);
         const comAcesso = [];
@@ -7804,7 +7819,7 @@ var init_weeklyGoals2 = __esm({
           }
           try {
             const perms = await resolveUserPermissions(u.id, u.role);
-            if (perms.modules === null || perms.modules.includes(USO) || perms.modules.includes(GESTAO)) comAcesso.push(u);
+            if (perms.modules === null || perms.modules.includes(USO2) || perms.modules.includes(GESTAO2)) comAcesso.push(u);
           } catch {
           }
         }
@@ -7816,13 +7831,13 @@ var init_weeklyGoals2 = __esm({
             email: String(u.email),
             admin: u.role === "admin"
           })),
-          compradores: dests.map((d) => ({ id: d.id, nome: String(d.nickname || d.name) }))
+          compradores: dests.map((d2) => ({ id: d2.id, nome: String(d2.nickname || d2.name) }))
         };
       }),
       // ── Lista da semana, conforme o papel do usuário ──
-      list: moduleProcedure(USO, GESTAO).input(z52.object({ semana: data.optional() }).optional()).query(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
-        await ensureTables3(db);
+      list: moduleProcedure(USO2, GESTAO2).input(z53.object({ semana: data.optional() }).optional()).query(async ({ ctx, input }) => {
+        const db = await getDbOrThrow6();
+        await ensureTables4(db);
         const hoje = hojeISO();
         const sem = weekBounds(input?.semana ?? hoje);
         const rows2 = await q2(db, `SELECT * FROM weekly_goals WHERE week_start = ? ORDER BY responsible_name, id`, [sem.start]);
@@ -7846,9 +7861,9 @@ var init_weeklyGoals2 = __esm({
         return { semana: sem, hoje, metas: out };
       }),
       // ── Detalhe completo: itens, dia a dia, relatos, conversa ──
-      getById: moduleProcedure(USO, GESTAO).input(z52.object({ id: z52.number() })).query(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
-        await ensureTables3(db);
+      getById: moduleProcedure(USO2, GESTAO2).input(z53.object({ id: z53.number() })).query(async ({ ctx, input }) => {
+        const db = await getDbOrThrow6();
+        await ensureTables4(db);
         const m = await exigirPapel(db, ctx.user, input.id);
         const hoje = hojeISO();
         const res = await resumoDaMeta(db, m.goal, hoje);
@@ -7861,7 +7876,7 @@ var init_weeklyGoals2 = __esm({
           return {
             data: dia2,
             porComprador: res.progresso.itens.map((p) => {
-              const x = p.porDia.find((d) => d.data === dia2);
+              const x = p.porDia.find((d2) => d2.data === dia2);
               const item = res.itens.find((i) => i.id === p.itemId);
               return { itemId: p.itemId, comprador: item.destinationName, planejado: x.planejado, carregadas: x.carregadas, entregues: x.entregues };
             }),
@@ -7896,6 +7911,11 @@ var init_weeklyGoals2 = __esm({
           alertas: res.alertas,
           hoje,
           dias,
+          // última alteração feita pela supervisão (para avisar o responsável em destaque enquanto ele não der ciência)
+          ultimaAlteracao: (() => {
+            const a = messages.filter((x) => x.kind === "sistema" && String(x.body).startsWith("Meta alterada por")).pop();
+            return a ? { texto: String(a.body), criadoEm: a.created_at } : null;
+          })(),
           conversaMeta: (() => {
             const raizes = messages.filter((x) => x.msg_date == null && !x.parent_id && x.kind !== "sistema");
             const ids = new Set(raizes.map((x) => x.id));
@@ -7906,16 +7926,16 @@ var init_weeklyGoals2 = __esm({
         };
       }),
       // ── Criar meta (gestão) ──
-      create: moduleProcedure(GESTAO).input(z52.object({
+      create: moduleProcedure(GESTAO2).input(z53.object({
         semana: data,
-        title: z52.string().min(1).max(200),
-        description: z52.string().max(4e3).nullable().optional(),
-        responsibleUserId: z52.number(),
-        supervisorUserIds: z52.array(z52.number()).max(10),
-        itens: z52.array(itemInput).min(1).max(20)
+        title: z53.string().min(1).max(200),
+        description: z53.string().max(4e3).nullable().optional(),
+        responsibleUserId: z53.number(),
+        supervisorUserIds: z53.array(z53.number()).max(10),
+        itens: z53.array(itemInput).min(1).max(20)
       })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
-        await ensureTables3(db);
+        const db = await getDbOrThrow6();
+        await ensureTables4(db);
         const sem = weekBounds(input.semana);
         const respNome = await nomeDe(db, input.responsibleUserId);
         const criador = await nomeDe(db, ctx.user.id);
@@ -7937,19 +7957,20 @@ var init_weeklyGoals2 = __esm({
         return { id };
       }),
       // ── Editar meta (admin/criador): troca itens e registra o antes/depois na linha do tempo ──
-      update: moduleProcedure(GESTAO).input(z52.object({
-        id: z52.number(),
-        title: z52.string().min(1).max(200),
-        description: z52.string().max(4e3).nullable().optional(),
-        supervisorUserIds: z52.array(z52.number()).max(10),
-        itens: z52.array(itemInput).min(1).max(20)
+      update: moduleProcedure(GESTAO2).input(z53.object({
+        id: z53.number(),
+        title: z53.string().min(1).max(200),
+        description: z53.string().max(4e3).nullable().optional(),
+        supervisorUserIds: z53.array(z53.number()).max(10),
+        itens: z53.array(itemInput).min(1).max(20)
       })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
-        await ensureTables3(db);
+        const db = await getDbOrThrow6();
+        await ensureTables4(db);
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador edita a meta" });
-        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError40({ code: "BAD_REQUEST", message: "Meta j\xE1 encerrada" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador edita a meta" });
+        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError41({ code: "BAD_REQUEST", message: "Meta j\xE1 encerrada" });
         const antes = descreveItens(await itensDaMeta(db, input.id));
+        const tituloAntes = m.goal.title;
         await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [input.id]);
         await db.$client.execute(`DELETE FROM weekly_goal_items WHERE goal_id = ?`, [input.id]);
         await gravarItens(db, input.id, weekBounds(m.goal.weekStart), input.itens);
@@ -7959,24 +7980,24 @@ var init_weeklyGoals2 = __esm({
         const sups = Array.from(/* @__PURE__ */ new Set([m.goal.createdBy, ...input.supervisorUserIds])).filter((u) => u !== m.goal.responsibleUserId);
         for (const uid of sups) await db.$client.execute(`INSERT IGNORE INTO weekly_goal_supervisors (goal_id, user_id, user_name) VALUES (?, ?, ?)`, [input.id, uid, await nomeDe(db, uid)]);
         const depois = descreveItens(await itensDaMeta(db, input.id));
-        await mensagemSistema(db, input.id, `Meta alterada por ${await nomeDe(db, ctx.user.id)}. Antes: ${antes}. Agora: ${depois}. A ci\xEAncia do respons\xE1vel foi pedida de novo.`);
-        await avisar([m.goal.responsibleUserId], "Meta semanal alterada", `${input.title} \u2014 ${depois}. Confirme a ci\xEAncia.`, input.id);
+        await mensagemSistema(db, input.id, `Meta alterada por ${await nomeDe(db, ctx.user.id)}.${tituloAntes.trim() !== input.title.trim() ? ` T\xEDtulo: "${tituloAntes}" \u2192 "${input.title.trim()}".` : ""} Antes: ${antes}. Agora: ${depois}. A ci\xEAncia do respons\xE1vel foi pedida de novo.`);
+        await avisar([m.goal.responsibleUserId], "Meta semanal alterada pela supervis\xE3o", `${await nomeDe(db, ctx.user.id)} alterou a meta: ${input.title} \u2014 ${depois}. Confirme a ci\xEAncia.`, input.id);
         return { success: true };
       }),
-      cancel: moduleProcedure(GESTAO).input(z52.object({ id: z52.number(), motivo: z52.string().min(1).max(500) })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
+      cancel: moduleProcedure(GESTAO2).input(z53.object({ id: z53.number(), motivo: z53.string().min(1).max(500) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError40({ code: "FORBIDDEN" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError41({ code: "FORBIDDEN" });
         await db.$client.execute(`UPDATE weekly_goals SET status = 'cancelada', closed_at = NOW(), closed_by = ?, closing_summary = ? WHERE id = ?`, [ctx.user.id, input.motivo, input.id]);
         await mensagemSistema(db, input.id, `Meta cancelada por ${await nomeDe(db, ctx.user.id)}: ${input.motivo}`);
         await avisar([m.goal.responsibleUserId], "Meta semanal cancelada", input.motivo, input.id, ctx.user.id);
         return { success: true };
       }),
       // ── Excluir meta de vez (admin/criador): apaga também relatos, conversa e avisos dela ──
-      delete: moduleProcedure(GESTAO).input(z52.object({ id: z52.number() })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
+      delete: moduleProcedure(GESTAO2).input(z53.object({ id: z53.number() })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador exclui a meta" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador exclui a meta" });
         const id = input.id;
         await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [id]);
         for (const t2 of ["weekly_goal_items", "weekly_goal_supervisors", "weekly_goal_entries", "weekly_goal_messages"]) {
@@ -7990,10 +8011,10 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Encerrar a semana com avaliação (supervisor/criador/admin) ──
-      close: moduleProcedure(GESTAO).input(z52.object({ id: z52.number(), avaliacao: z52.string().min(1).max(2e3) })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
+      close: moduleProcedure(GESTAO2).input(z53.object({ id: z53.number(), avaliacao: z53.string().min(1).max(2e3) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEncerrar(m.papel)) throw new TRPCError40({ code: "FORBIDDEN" });
+        if (!podeEncerrar(m.papel)) throw new TRPCError41({ code: "FORBIDDEN" });
         const res = await resumoDaMeta(db, m.goal, hojeISO());
         await db.$client.execute(`UPDATE weekly_goals SET status = 'encerrada', closed_at = NOW(), closed_by = ?, closing_summary = ? WHERE id = ?`, [ctx.user.id, input.avaliacao, input.id]);
         await mensagemSistema(db, input.id, `Semana encerrada por ${await nomeDe(db, ctx.user.id)}. Resultado: ${res.progresso.total.carregadas} de ${res.progresso.total.meta} cargas (${res.progresso.total.pct}%). Avalia\xE7\xE3o: ${input.avaliacao}`);
@@ -8001,12 +8022,12 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Ciência do responsável ──
-      acknowledge: moduleProcedure(USO, GESTAO).input(z52.object({ id: z52.number(), ack: z52.enum(["de_acordo", "com_ressalva"]), comentario: z52.string().max(1e3).optional() })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
+      acknowledge: moduleProcedure(USO2, GESTAO2).input(z53.object({ id: z53.number(), ack: z53.enum(["de_acordo", "com_ressalva"]), comentario: z53.string().max(1e3).optional() })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeDarCiencia(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel d\xE1 ci\xEAncia" });
-        if (m.goal.ack !== "pendente" && m.goal.status !== "em_negociacao") throw new TRPCError40({ code: "BAD_REQUEST", message: "A ci\xEAncia desta meta j\xE1 foi registrada" });
-        if (input.ack === "com_ressalva" && !input.comentario?.trim()) throw new TRPCError40({ code: "BAD_REQUEST", message: "Explique a ressalva" });
+        if (!podeDarCiencia(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel d\xE1 ci\xEAncia" });
+        if (m.goal.ack !== "pendente" && m.goal.status !== "em_negociacao") throw new TRPCError41({ code: "BAD_REQUEST", message: "A ci\xEAncia desta meta j\xE1 foi registrada" });
+        if (input.ack === "com_ressalva" && !input.comentario?.trim()) throw new TRPCError41({ code: "BAD_REQUEST", message: "Explique a ressalva" });
         const novoStatus = input.ack === "de_acordo" ? "em_andamento" : "em_negociacao";
         await db.$client.execute(
           `UPDATE weekly_goals SET ack = ?, ack_at = NOW(), ack_comment = ?, status = ? WHERE id = ? AND status <> 'encerrada' AND status <> 'cancelada'`,
@@ -8019,11 +8040,11 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Supervisão mantém a meta durante a negociação e pede nova confirmação ──
-      keepGoal: moduleProcedure(USO, GESTAO).input(z52.object({ id: z52.number(), justificativa: z52.string().min(1).max(1500) })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
+      keepGoal: moduleProcedure(USO2, GESTAO2).input(z53.object({ id: z53.number(), justificativa: z53.string().min(1).max(1500) })).mutation(async ({ ctx, input }) => {
+        const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEncerrar(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 a supervis\xE3o responde \xE0 ressalva" });
-        if (m.goal.status !== "em_negociacao") throw new TRPCError40({ code: "BAD_REQUEST", message: "A meta n\xE3o est\xE1 em negocia\xE7\xE3o" });
+        if (!podeEncerrar(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 a supervis\xE3o responde \xE0 ressalva" });
+        if (m.goal.status !== "em_negociacao") throw new TRPCError41({ code: "BAD_REQUEST", message: "A meta n\xE3o est\xE1 em negocia\xE7\xE3o" });
         await db.$client.execute(`UPDATE weekly_goals SET status = 'aguardando_ciencia', ack = 'pendente', ack_at = NULL WHERE id = ?`, [input.id]);
         const nome = await nomeDe(db, ctx.user.id);
         await mensagemSistema(db, input.id, `${nome} manteve a meta: ${input.justificativa.trim()}. O respons\xE1vel precisa confirmar (de acordo ou nova ressalva).`);
@@ -8031,22 +8052,22 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Relato do responsável ──
-      addEntry: moduleProcedure(USO, GESTAO).input(z52.object({
-        goalId: z52.number(),
+      addEntry: moduleProcedure(USO2, GESTAO2).input(z53.object({
+        goalId: z53.number(),
         entryDate: data.optional(),
-        kind: z52.enum(KINDS_ENTRY),
-        situacao: z52.enum(["ok", "atencao", "problema"]).default("ok"),
-        body: z52.string().min(1).max(3e3),
-        photoUrls: z52.array(z52.string().url()).max(5).optional()
+        kind: z53.enum(KINDS_ENTRY),
+        situacao: z53.enum(["ok", "atencao", "problema"]).default("ok"),
+        body: z53.string().min(1).max(3e3),
+        photoUrls: z53.array(z53.string().url()).max(5).optional()
       })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
+        const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.goalId);
-        if (!podeRelatar(m.papel)) throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel registra relatos" });
-        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError40({ code: "BAD_REQUEST", message: "Meta encerrada" });
-        if (m.goal.status !== "em_andamento") throw new TRPCError40({ code: "BAD_REQUEST", message: 'A meta s\xF3 segue em andamento depois do acordo: d\xEA o "de acordo" (ou resolva a negocia\xE7\xE3o) antes de relatar' });
+        if (!podeRelatar(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel registra relatos" });
+        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError41({ code: "BAD_REQUEST", message: "Meta encerrada" });
+        if (m.goal.status !== "em_andamento") throw new TRPCError41({ code: "BAD_REQUEST", message: 'A meta s\xF3 segue em andamento depois do acordo: d\xEA o "de acordo" (ou resolva a negocia\xE7\xE3o) antes de relatar' });
         const dia2 = input.entryDate ?? hojeISO();
         const sem = weekBounds(m.goal.weekStart);
-        if (dia2 < sem.start || dia2 > sem.end) throw new TRPCError40({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
+        if (dia2 < sem.start || dia2 > sem.end) throw new TRPCError41({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
         const situacao = input.kind === "problema" ? "problema" : input.situacao;
         const nome = await nomeDe(db, ctx.user.id);
         const [res] = await db.$client.execute(
@@ -8061,18 +8082,20 @@ var init_weeklyGoals2 = __esm({
         return { id: Number(res.insertId) };
       }),
       // ── Conversa (perguntas, respostas, comentários) ──
-      addMessage: moduleProcedure(USO, GESTAO).input(z52.object({
-        goalId: z52.number(),
-        kind: z52.enum(["pergunta", "resposta", "comentario"]),
-        body: z52.string().min(1).max(3e3),
-        entryId: z52.number().optional(),
-        parentId: z52.number().optional(),
+      addMessage: moduleProcedure(USO2, GESTAO2).input(z53.object({
+        goalId: z53.number(),
+        kind: z53.enum(["pergunta", "resposta", "comentario"]),
+        body: z53.string().max(3e3).default(""),
+        anexos: z53.array(z53.object({ url: z53.string().url().max(2e3), nome: z53.string().max(255) })).max(5).optional(),
+        entryId: z53.number().optional(),
+        parentId: z53.number().optional(),
         dia: data.optional(),
-        geral: z52.boolean().optional()
+        geral: z53.boolean().optional()
       })).mutation(async ({ ctx, input }) => {
-        const db = await getDbOrThrow5();
+        if (!input.body.trim() && !input.anexos?.length) throw new TRPCError41({ code: "BAD_REQUEST", message: "Escreva uma mensagem ou anexe um arquivo" });
+        const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.goalId);
-        if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError40({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode enviar este tipo de mensagem" });
+        if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError41({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode enviar este tipo de mensagem" });
         const nome = await nomeDe(db, ctx.user.id);
         const papel = m.papel === "responsavel" ? "responsavel" : m.papel === "admin" ? "admin" : "supervisor";
         let dia2 = input.geral ? null : input.dia ?? hojeISO();
@@ -8085,15 +8108,15 @@ var init_weeklyGoals2 = __esm({
           if (pm) dia2 = pm.msg_date ?? null;
         }
         const [res] = await db.$client.execute(
-          `INSERT INTO weekly_goal_messages (goal_id, entry_id, parent_id, kind, body, author_user_id, author_name, author_role, msg_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [input.goalId, input.entryId ?? null, input.parentId ?? null, input.kind, input.body.trim(), ctx.user.id, nome, papel, dia2]
+          `INSERT INTO weekly_goal_messages (goal_id, entry_id, parent_id, kind, body, author_user_id, author_name, author_role, msg_date, anexos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [input.goalId, input.entryId ?? null, input.parentId ?? null, input.kind, input.body.trim(), ctx.user.id, nome, papel, dia2, input.anexos?.length ? JSON.stringify(input.anexos) : null]
         );
         if (input.kind === "resposta" && input.parentId) {
           await db.$client.execute(`UPDATE weekly_goal_messages SET answered = 1 WHERE id = ? AND goal_id = ?`, [input.parentId, input.goalId]);
         }
         const destinatarios = m.papel === "responsavel" ? interessados(m) : [m.goal.responsibleUserId];
         const titulo = input.kind === "pergunta" ? "Pergunta na meta semanal" : input.kind === "resposta" ? "Resposta na meta semanal" : "Coment\xE1rio na meta semanal";
-        await avisar(destinatarios, titulo, `${nome}: ${input.body.trim().slice(0, 140)}`, input.goalId, ctx.user.id);
+        await avisar(destinatarios, titulo, `${nome}: ${input.body.trim().slice(0, 140) || "enviou um anexo"}`, input.goalId, ctx.user.id);
         return { id: Number(res.insertId) };
       })
     });
@@ -8108,11 +8131,11 @@ function pascoa(ano) {
   const a = ano % 19;
   const b = Math.floor(ano / 100);
   const c = ano % 100;
-  const d = Math.floor(b / 4);
+  const d2 = Math.floor(b / 4);
   const e = b % 4;
   const f = Math.floor((b + 8) / 25);
   const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
+  const h = (19 * a + b - d2 - g + 15) % 30;
   const i = Math.floor(c / 4);
   const k = c % 4;
   const l = (32 + 2 * e + 2 * i - h - k) % 7;
@@ -8122,9 +8145,9 @@ function pascoa(ano) {
   return { mes, dia: dia2 };
 }
 function addDiasData(ano, mes, dia2, offset) {
-  const d = new Date(Date.UTC(ano, mes - 1, dia2));
-  d.setUTCDate(d.getUTCDate() + offset);
-  return { ano: d.getUTCFullYear(), mes: d.getUTCMonth() + 1, dia: d.getUTCDate() };
+  const d2 = new Date(Date.UTC(ano, mes - 1, dia2));
+  d2.setUTCDate(d2.getUTCDate() + offset);
+  return { ano: d2.getUTCFullYear(), mes: d2.getUTCMonth() + 1, dia: d2.getUTCDate() };
 }
 function feriadosDoAno(ano) {
   const datas = /* @__PURE__ */ new Set();
@@ -8175,11 +8198,11 @@ function proximoDiaUtil(dataISO) {
   let [ano, mes, dia2] = dataISO.split("-").map(Number);
   let atual = dataISO;
   while (!ehDiaUtil(atual)) {
-    const d = new Date(Date.UTC(ano, mes - 1, dia2));
-    d.setUTCDate(d.getUTCDate() + 1);
-    ano = d.getUTCFullYear();
-    mes = d.getUTCMonth() + 1;
-    dia2 = d.getUTCDate();
+    const d2 = new Date(Date.UTC(ano, mes - 1, dia2));
+    d2.setUTCDate(d2.getUTCDate() + 1);
+    ano = d2.getUTCFullYear();
+    mes = d2.getUTCMonth() + 1;
+    dia2 = d2.getUTCDate();
     atual = toISO(ano, mes, dia2);
   }
   return atual;
@@ -8189,11 +8212,11 @@ function somarDiasUteis(dataISO, dias) {
   let atual = dataISO;
   let restantes = dias;
   while (restantes > 0) {
-    const d = new Date(Date.UTC(ano, mes - 1, dia2));
-    d.setUTCDate(d.getUTCDate() + 1);
-    ano = d.getUTCFullYear();
-    mes = d.getUTCMonth() + 1;
-    dia2 = d.getUTCDate();
+    const d2 = new Date(Date.UTC(ano, mes - 1, dia2));
+    d2.setUTCDate(d2.getUTCDate() + 1);
+    ano = d2.getUTCFullYear();
+    mes = d2.getUTCMonth() + 1;
+    dia2 = d2.getUTCDate();
     atual = toISO(ano, mes, dia2);
     if (ehDiaUtil(atual)) restantes--;
   }
@@ -8216,9 +8239,9 @@ __export(prazoPagamento_exports, {
 });
 function somarDiasCorridos(dataISO, dias) {
   const { ano, mes, dia: dia2 } = parseDataISO(dataISO);
-  const d = new Date(Date.UTC(ano, mes - 1, dia2));
-  d.setUTCDate(d.getUTCDate() + dias);
-  return toISO2(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  const d2 = new Date(Date.UTC(ano, mes - 1, dia2));
+  d2.setUTCDate(d2.getUTCDate() + dias);
+  return toISO2(d2.getUTCFullYear(), d2.getUTCMonth() + 1, d2.getUTCDate());
 }
 function normalizarCnpj(cnpj) {
   return (cnpj ?? "").replace(/\D/g, "");
@@ -8255,11 +8278,11 @@ function calcularFaixaMensalRebnic(dataEmissaoISO) {
 }
 function calcularQuartaSemanaSeguinte(dataReferenciaISO) {
   const { ano, mes, dia: dia2 } = parseDataISO(dataReferenciaISO);
-  const d = new Date(Date.UTC(ano, mes - 1, dia2));
-  const domingoDaSemana = d.getUTCDay();
-  d.setUTCDate(d.getUTCDate() - domingoDaSemana);
-  d.setUTCDate(d.getUTCDate() + 10);
-  const quarta = toISO2(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  const d2 = new Date(Date.UTC(ano, mes - 1, dia2));
+  const domingoDaSemana = d2.getUTCDay();
+  d2.setUTCDate(d2.getUTCDate() - domingoDaSemana);
+  d2.setUTCDate(d2.getUTCDate() + 10);
+  const quarta = toISO2(d2.getUTCFullYear(), d2.getUTCMonth() + 1, d2.getUTCDate());
   return proximoDiaUtil(quarta);
 }
 function calcularDataPrevisaoPagamento(cnpj, dataEmissao, regras, dataEntregaCarga) {
@@ -8501,7 +8524,7 @@ __export(heartbeat_exports, {
   listHeartbeatJobs: () => listHeartbeatJobs,
   updateHeartbeatJob: () => updateHeartbeatJob
 });
-import { TRPCError as TRPCError41 } from "@trpc/server";
+import { TRPCError as TRPCError42 } from "@trpc/server";
 async function createHeartbeatJob(job, userSession) {
   validateCallbackPath(job.path);
   return callForge(
@@ -8551,13 +8574,13 @@ var init_heartbeat = __esm({
     SERVICE = "webdevtoken.v1.WebDevService";
     buildEndpoint = (rpc) => {
       if (!ENV.forgeApiUrl) {
-        throw new TRPCError41({
+        throw new TRPCError42({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service URL is not configured (BUILT_IN_FORGE_API_URL)."
         });
       }
       if (!ENV.forgeApiKey) {
-        throw new TRPCError41({
+        throw new TRPCError42({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service API key is not configured (BUILT_IN_FORGE_API_KEY)."
         });
@@ -8585,7 +8608,7 @@ var init_heartbeat = __esm({
           body: JSON.stringify(body)
         });
       } catch (error) {
-        throw new TRPCError41({
+        throw new TRPCError42({
           code: "INTERNAL_SERVER_ERROR",
           message: `Heartbeat ${rpc} network error: ${String(error)}`
         });
@@ -8605,7 +8628,7 @@ var init_heartbeat = __esm({
       else if (status === 400 || status === 422) code = "BAD_REQUEST";
       else if (status === 409) code = "CONFLICT";
       else if (status === 429) code = "TOO_MANY_REQUESTS";
-      return new TRPCError41({
+      return new TRPCError42({
         code,
         message: `Heartbeat ${rpc} failed (${status})${detail ? `: ${detail}` : ""}`
       });
@@ -8617,7 +8640,7 @@ var init_heartbeat = __esm({
     };
     validateCallbackPath = (path4) => {
       if (!path4 || !path4.startsWith("/api/scheduled/")) {
-        throw new TRPCError41({
+        throw new TRPCError42({
           code: "BAD_REQUEST",
           message: "callback path must start with /api/scheduled/"
         });
@@ -11138,7 +11161,7 @@ var cargoLoadsRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
-    const normalizeDate = (d) => d.length === 10 ? d + "T12:00:00" : d;
+    const normalizeDate = (d2) => d2.length === 10 ? d2 + "T12:00:00" : d2;
     const weekStartStr = input.weekStart.slice(0, 10);
     const weekEndStr = input.weekEnd.slice(0, 10);
     const areaId = inputArea(input);
@@ -11151,7 +11174,7 @@ var cargoLoadsRouter = router({
     const deductions = await db.select({ cargoLoadId: clientAdvanceDeductions.cargoLoadId, amount: clientAdvanceDeductions.amount }).from(clientAdvanceDeductions).innerJoin(clientAdvances, eq7(clientAdvanceDeductions.advanceId, clientAdvances.id)).where(and4(eq7(clientAdvanceDeductions.clientId, input.clientId), areaScopeCondition(advanceAreaId, areaId)));
     const deducted = new Set(deductions.map((row) => row.cargoLoadId));
     const deductedByLoad = /* @__PURE__ */ new Map();
-    for (const d of deductions) if (d.cargoLoadId) deductedByLoad.set(d.cargoLoadId, (deductedByLoad.get(d.cargoLoadId) || 0) + Number(d.amount || 0));
+    for (const d2 of deductions) if (d2.cargoLoadId) deductedByLoad.set(d2.cargoLoadId, (deductedByLoad.get(d2.cargoLoadId) || 0) + Number(d2.amount || 0));
     const remainingValue = (load) => Math.max(0, (getCargoFinancialValue(load, areaId === null ? { ...client, pricePerTon: terms.unitPrice } : client, area) || 0) - (deductedByLoad.get(load.id) || 0));
     const eligible = loads.filter((load) => areaId === null ? !deducted.has(load.id) : load.paymentStatus !== "pago" && remainingValue(load) > 5e-3);
     if (!eligible.length) throw new TRPCError5({ code: "BAD_REQUEST", message: "N\xE3o h\xE1 cargas entregues com saldo a fechar nesta \xE1rea e per\xEDodo." });
@@ -11583,13 +11606,13 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
         priceType: cargoDestinations.priceType
       }).from(cargoDestinations).where(eq7(cargoDestinations.id, realDestId)).limit(1);
       if (destRows.length > 0) {
-        const d = destRows[0];
-        if (d.isBuyer) {
-          const effectivePrice = d.pricePerUnit ?? (d.priceType === "m3" ? d.pricePerM3 : d.pricePerTon);
-          const effectiveUnit = d.unit ?? (d.priceType === "m3" ? "m3" : "ton");
-          buyerInfo = { name: d.name, pricePerUnit: effectivePrice, unit: effectiveUnit };
+        const d2 = destRows[0];
+        if (d2.isBuyer) {
+          const effectivePrice = d2.pricePerUnit ?? (d2.priceType === "m3" ? d2.pricePerM3 : d2.pricePerTon);
+          const effectiveUnit = d2.unit ?? (d2.priceType === "m3" ? "m3" : "ton");
+          buyerInfo = { name: d2.name, pricePerUnit: effectivePrice, unit: effectiveUnit };
         } else {
-          destInfo = { name: d.name, pricePerTon: d.pricePerTon, pricePerM3: d.pricePerM3, priceType: d.priceType };
+          destInfo = { name: d2.name, pricePerTon: d2.pricePerTon, pricePerM3: d2.pricePerM3, priceType: d2.priceType };
         }
       }
     }
@@ -13157,8 +13180,8 @@ function loadKg(l) {
   return parseFloat(String(l.weightNetKg || l.weightOutKg || "0")) || 0;
 }
 function loadInClosingWeek(l, c) {
-  const d = loadDia(l);
-  return d !== "" && d >= diaStr(c.weekStart) && d <= diaStr(c.weekEnd);
+  const d2 = loadDia(l);
+  return d2 !== "" && d2 >= diaStr(c.weekStart) && d2 <= diaStr(c.weekEnd);
 }
 function legacyClosingLive(closing, loads, opts = {}) {
   if (opts.windowStartDia && diaStr(closing.weekStart) < opts.windowStartDia) return null;
@@ -13180,7 +13203,7 @@ function calculatePortalTotals({
 }) {
   const totalAdvanceBalance = advances.filter((a) => a.status === "ativo").reduce((sum, a) => sum + parseFloat(String(a.balanceRemaining || "0")), 0);
   const valorAbatidoAdiantamento = deductions.reduce(
-    (sum, d) => sum + parseFloat(String(d.amount || "0")),
+    (sum, d2) => sum + parseFloat(String(d2.amount || "0")),
     0
   );
   if (areaPending) {
@@ -13204,7 +13227,7 @@ function calculatePortalTotals({
   let valorPago = advances.length > 0 ? valorAbatidoAdiantamento : valorFechamentosPagos;
   if (normalizePortalAreaId(areaId) !== null) {
     const paidClosingIds = new Set(weeklyClosings.filter((c) => c.status === "pago").map((c) => c.id));
-    const independentDeductions = deductions.filter((d) => !paidClosingIds.has(d.weeklyClosingId)).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+    const independentDeductions = deductions.filter((d2) => !paidClosingIds.has(d2.weeklyClosingId)).reduce((sum, d2) => sum + Number(d2.amount || 0), 0);
     const standalonePayments = manualPayments.filter((p) => p.status === "pago").reduce((sum, p) => sum + Number(p.netAmount ?? p.amount ?? p.grossAmount ?? 0), 0);
     valorPago = Math.round((valorFechamentosPagos + independentDeductions + standalonePayments) * 100) / 100;
   }
@@ -13464,7 +13487,7 @@ var clientPortalRouter = router({
       )).orderBy(desc8(clientAdvanceDeductions.date)).limit(200);
       const scopedLoadIds = new Set(loads.map((load) => load.id));
       advanceDeductions = advanceDeductions.filter(
-        (d) => advanceIds.includes(d.advanceId) && (d.cargoLoadId == null || scopedLoadIds.has(d.cargoLoadId))
+        (d2) => advanceIds.includes(d2.advanceId) && (d2.cargoLoadId == null || scopedLoadIds.has(d2.cargoLoadId))
       );
     }
     const closingScope = await areaCondition(cargoWeeklyClosings, areaId);
@@ -16906,7 +16929,7 @@ var reportsRouter = router({
     };
     const destNameMap = /* @__PURE__ */ new Map();
     const allDestinations = await db.select({ id: cargoDestinations.id, name: cargoDestinations.name }).from(cargoDestinations);
-    for (const d of allDestinations) destNameMap.set(d.id, d.name);
+    for (const d2 of allDestinations) destNameMap.set(d2.id, d2.name);
     const calcFreightCost = (cargo) => {
       if (!cargo.vehicleId || !thirdPartyIds.includes(cargo.vehicleId)) return 0;
       const worksiteName = cargo.workLocationId ? locationMap.get(cargo.workLocationId) ?? "" : "";
@@ -16967,7 +16990,7 @@ var reportsRouter = router({
     const destMap = /* @__PURE__ */ new Map();
     if (destIds.length > 0) {
       const dests = await db.select({ id: cargoDestinations.id, pricePerTon: cargoDestinations.pricePerTon, pricePerM3: cargoDestinations.pricePerM3, priceType: cargoDestinations.priceType }).from(cargoDestinations).where(inArray7(cargoDestinations.id, destIds));
-      for (const d of dests) destMap.set(d.id, d);
+      for (const d2 of dests) destMap.set(d2.id, d2);
     }
     const calcEstimatedRevenue = (cargo) => {
       if (!cargo.destinationId) return 0;
@@ -17683,8 +17706,8 @@ import { eq as eq28, desc as desc20, and as and18, gte as gte9, lte as lte9 } fr
 function formatCurrency(value) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
-function formatDate(d) {
-  return new Date(d).toLocaleDateString("pt-BR");
+function formatDate(d2) {
+  return new Date(d2).toLocaleDateString("pt-BR");
 }
 var BTREE_LOGO = "https://btreeambiental.com/icon-btree-512.png";
 var KOBAYASHI_LOGO = "https://res.cloudinary.com/djob7pxme/image/upload/v1773053506/btree-static/bubi6hkzpedz2tj7ti8v.png";
@@ -18138,40 +18161,40 @@ function normalizarPreco(raw) {
 // server/routers/buyerClients.ts
 init_schema();
 import { eq as eq29, desc as desc21, sql as sql16, and as and19 } from "drizzle-orm";
-function destToBuyer(d) {
+function destToBuyer(d2) {
   return {
-    id: d.id,
-    name: d.name,
+    id: d2.id,
+    name: d2.name,
     // Nome/Razão Social
-    nickname: d.nickname ?? null,
+    nickname: d2.nickname ?? null,
     // Apelido (nome curto)
-    cnpjCpf: d.cnpjCpf,
-    inscricaoEstadual: d.inscricaoEstadual,
-    phone: d.phone,
-    email: d.email,
-    address: d.address,
-    city: d.city,
-    state: d.state,
-    cep: d.cep,
-    contactPerson: d.contactPerson,
-    product: d.product,
-    paymentMethod: d.paymentMethod,
+    cnpjCpf: d2.cnpjCpf,
+    inscricaoEstadual: d2.inscricaoEstadual,
+    phone: d2.phone,
+    email: d2.email,
+    address: d2.address,
+    city: d2.city,
+    state: d2.state,
+    cep: d2.cep,
+    contactPerson: d2.contactPerson,
+    product: d2.product,
+    paymentMethod: d2.paymentMethod,
     // pricePerUnit: use price_per_unit if set, otherwise derive from price_per_ton/m3
-    pricePerUnit: d.pricePerUnit ?? (d.priceType === "m3" ? d.pricePerM3 : d.pricePerTon),
-    unit: d.unit ?? (d.priceType === "m3" ? "m3" : "ton"),
-    notes: d.notes,
-    active: d.active,
-    isBuyer: d.isBuyer,
+    pricePerUnit: d2.pricePerUnit ?? (d2.priceType === "m3" ? d2.pricePerM3 : d2.pricePerTon),
+    unit: d2.unit ?? (d2.priceType === "m3" ? "m3" : "ton"),
+    notes: d2.notes,
+    active: d2.active,
+    isBuyer: d2.isBuyer,
     // 0 = destino normal, 1 = comprador
     // Extra destination fields
-    pricePerTon: d.pricePerTon,
-    pricePerM3: d.pricePerM3,
-    priceType: d.priceType,
+    pricePerTon: d2.pricePerTon,
+    pricePerM3: d2.pricePerM3,
+    priceType: d2.priceType,
     // Só preenchido quando o comprador não emite boleto/NF (ex: Enerbio) — dias após a
     // entrega em que o pagamento é esperado. Usado em Contas a Receber > Cargas Entregues.
-    paymentTermDaysAfterDelivery: d.paymentTermDaysAfterDelivery ?? null,
+    paymentTermDaysAfterDelivery: d2.paymentTermDaysAfterDelivery ?? null,
     // Categoria usada na comissão do motorista por carga entregue nesse destino (Folha de Pagamento)
-    commissionCategory: d.commissionCategory ?? "nenhuma"
+    commissionCategory: d2.commissionCategory ?? "nenhuma"
   };
 }
 var buyerClientsRouter = router({
@@ -21697,7 +21720,7 @@ var purchaseRequestsRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
-    const toMs = (d) => d ? (/* @__PURE__ */ new Date(d + "T12:00:00")).getTime() : null;
+    const toMs = (d2) => d2 ? (/* @__PURE__ */ new Date(d2 + "T12:00:00")).getTime() : null;
     await db.execute(sql23`UPDATE purchase_requests SET purchased_at = ${toMs(input.purchaseDate)}, expected_arrival = ${toMs(input.expectedArrival)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
@@ -23142,7 +23165,7 @@ var clientAdvancesRouter = router({
         const [closing] = await db.select().from(cargoWeeklyClosings).where(and23(eq40(cargoWeeklyClosings.id, input.weeklyClosingId), eq40(cargoWeeklyClosings.clientId, advance.clientId), areaScopeCondition(closingAreaId2, normalizeAreaId(advance.areaId)))).limit(1);
         if (closing && closing.status !== "pago") {
           const deductions = await db.select().from(clientAdvanceDeductions).where(and23(eq40(clientAdvanceDeductions.weeklyClosingId, input.weeklyClosingId), eq40(clientAdvanceDeductions.clientId, advance.clientId)));
-          const totalDeducted = deductions.reduce((sum, d) => sum + parseFloat(d.amount || "0"), 0);
+          const totalDeducted = deductions.reduce((sum, d2) => sum + parseFloat(d2.amount || "0"), 0);
           const totalAmount = parseFloat(closing.totalAmount || "0");
           if (totalAmount > 0 && totalDeducted >= totalAmount * 0.99) {
             const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
@@ -23311,15 +23334,15 @@ var clientAdvancesRouter = router({
       throw new TRPCError32({ code: "BAD_REQUEST", message: `Este adiantamento possui ${deductions.length} abatimento(s). Use a op\xE7\xE3o 'For\xE7ar exclus\xE3o' para remover tudo.` });
     }
     if (deductions.length > 0 && input.force) {
-      const loadIds = deductions.map((d) => d.cargoLoadId).filter(Boolean);
+      const loadIds = deductions.map((d2) => d2.cargoLoadId).filter(Boolean);
       for (const loadId of loadIds) {
         try {
           const allCargoDeductions = await db.select().from(clientAdvanceDeductions).where(eq40(clientAdvanceDeductions.cargoLoadId, loadId));
-          const otherDeductions = allCargoDeductions.filter((d) => d.advanceId !== input.id);
+          const otherDeductions = allCargoDeductions.filter((d2) => d2.advanceId !== input.id);
           const [cargo] = await db.select({ paymentStatus: cargoLoads.paymentStatus }).from(cargoLoads).where(and23(eq40(cargoLoads.id, loadId), eq40(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId2, normalizeAreaId(advance.areaId))));
           if (cargo?.paymentStatus === "pago" && otherDeductions.length === 0) {
-            const thisAdvanceDeductions = allCargoDeductions.filter((d) => d.advanceId === input.id);
-            const totalThisAdvance = thisAdvanceDeductions.reduce((sum, d) => sum + parseFloat(d.amount || "0"), 0);
+            const thisAdvanceDeductions = allCargoDeductions.filter((d2) => d2.advanceId === input.id);
+            const totalThisAdvance = thisAdvanceDeductions.reduce((sum, d2) => sum + parseFloat(d2.amount || "0"), 0);
             if (totalThisAdvance > 0) {
               await db.update(cargoLoads).set({ paymentStatus: "sem_boleto", paidAt: null }).where(and23(eq40(cargoLoads.id, loadId), eq40(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId2, normalizeAreaId(advance.areaId))));
             }
@@ -23343,20 +23366,20 @@ var clientAdvancesRouter = router({
     const allDeductions = await db.select().from(clientAdvanceDeductions).where(eq40(clientAdvanceDeductions.advanceId, input.advanceId)).orderBy(asc5(clientAdvanceDeductions.id));
     const seen = /* @__PURE__ */ new Map();
     const toDelete = [];
-    for (const d of allDeductions) {
-      const key = d.cargoLoadId;
+    for (const d2 of allDeductions) {
+      const key = d2.cargoLoadId;
       if (key === null || key === void 0) continue;
       if (!seen.has(key)) {
-        seen.set(key, d.id);
+        seen.set(key, d2.id);
       } else {
-        toDelete.push(d.id);
+        toDelete.push(d2.id);
       }
     }
     for (const id of toDelete) {
       await db.delete(clientAdvanceDeductions).where(eq40(clientAdvanceDeductions.id, id));
     }
     const remaining = await db.select().from(clientAdvanceDeductions).where(eq40(clientAdvanceDeductions.advanceId, input.advanceId));
-    const totalDeducted = remaining.reduce((sum, d) => sum + parseFloat(d.amount || "0"), 0);
+    const totalDeducted = remaining.reduce((sum, d2) => sum + parseFloat(d2.amount || "0"), 0);
     const [currentAdvance] = await db.select().from(clientAdvances).where(and23(eq40(clientAdvances.id, advance.id), eq40(clientAdvances.clientId, advance.clientId), areaScopeCondition(advanceAreaId2, normalizeAreaId(advance.areaId)))).limit(1);
     if (currentAdvance) {
       const originalAmount = parseFloat(currentAdvance.amount || "0");
@@ -25018,9 +25041,9 @@ function parseCsv(texto) {
     let valor = null;
     if (iValor >= 0) valor = parseValorBR(cols[iValor] ?? "");
     if (valor === null && (iDeb >= 0 || iCred >= 0)) {
-      const d = iDeb >= 0 ? parseValorBR(cols[iDeb] ?? "") : null;
+      const d2 = iDeb >= 0 ? parseValorBR(cols[iDeb] ?? "") : null;
       const c = iCred >= 0 ? parseValorBR(cols[iCred] ?? "") : null;
-      if (d) valor = -Math.abs(d);
+      if (d2) valor = -Math.abs(d2);
       else if (c) valor = Math.abs(c);
     }
     if (valor === null || valor === 0) continue;
@@ -25247,8 +25270,8 @@ async function carregarLinhasClassificadas(db, dataInicio, dataFim, conta = "tod
       `SELECT cnpj_cpf FROM cargo_destinations WHERE is_buyer = 1 AND cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''`
     );
     for (const r of cd) {
-      const d = String(r.cnpj_cpf).replace(/\D/g, "");
-      if (d.length === 14) compradoresCnpj.add(d);
+      const d2 = String(r.cnpj_cpf).replace(/\D/g, "");
+      if (d2.length === 14) compradoresCnpj.add(d2);
     }
   } catch {
   }
@@ -25257,8 +25280,8 @@ async function carregarLinhasClassificadas(db, dataInicio, dataFim, conta = "tod
       `SELECT DISTINCT cnpj_destinatario FROM notas_fiscais WHERE cnpj_destinatario IS NOT NULL AND cnpj_destinatario <> ''`
     );
     for (const r of nf) {
-      const d = String(r.cnpj_destinatario).replace(/\D/g, "");
-      if (d.length === 14) compradoresCnpj.add(d);
+      const d2 = String(r.cnpj_destinatario).replace(/\D/g, "");
+      if (d2.length === 14) compradoresCnpj.add(d2);
     }
   } catch {
   }
@@ -25573,8 +25596,8 @@ var financialRealRouter = router({
   // ── Conciliação: pagamentos marcados no sistema × débitos do banco ──
   conciliacao: moduleProcedure(SLUG).input(periodoInput).query(async ({ input }) => {
     const db = await getDbOrThrow();
-    const folga = (d, dias) => {
-      const x = /* @__PURE__ */ new Date(d + "T12:00:00");
+    const folga = (d2, dias) => {
+      const x = /* @__PURE__ */ new Date(d2 + "T12:00:00");
       x.setDate(x.getDate() + dias);
       return x.toISOString().slice(0, 10);
     };
@@ -25596,13 +25619,13 @@ var financialRealRouter = router({
       tipoResultado: c.tipoResultado
     }));
     const m = casarPagamentos(sistema.pagamentos, debitos, 7);
-    const dentro = (d) => d >= input.dataInicio && d <= input.dataFim;
+    const dentro = (d2) => d2 >= input.dataInicio && d2 <= input.dataFim;
     const r26 = (n) => Math.round(n * 100) / 100;
     const soma = (a) => r26(a.reduce((s, x) => s + x.valor, 0));
     const casados = m.casados.filter((c) => dentro(c.pagamento.data));
     const pagamentosSemBanco = m.pagamentosSemBanco.filter((p) => dentro(p.data));
-    const debitosSemSistema = m.debitosSemSistema.filter((d) => dentro(d.data));
-    const debitosNoPeriodo = debitos.filter((d) => dentro(d.data));
+    const debitosSemSistema = m.debitosSemSistema.filter((d2) => dentro(d2.data));
+    const debitosNoPeriodo = debitos.filter((d2) => dentro(d2.data));
     const pagamentosNoPeriodo = sistema.pagamentos.filter((p) => dentro(p.data));
     return {
       resumo: {
@@ -25634,17 +25657,17 @@ var financialRealRouter = router({
         valor: p.valor,
         data: p.data
       })),
-      debitosSemSistema: debitosSemSistema.sort((a, b) => b.valor - a.valor).slice(0, 100).map((d) => ({
-        id: d.id,
-        data: d.data,
-        valor: d.valor,
-        descricao: d.descricao,
-        complemento: d.complemento,
-        classificado: d.classificado,
-        grupo: d.grupo,
-        centroCusto: d.centroCusto,
-        natureza: d.natureza,
-        tipoResultado: d.tipoResultado
+      debitosSemSistema: debitosSemSistema.sort((a, b) => b.valor - a.valor).slice(0, 100).map((d2) => ({
+        id: d2.id,
+        data: d2.data,
+        valor: d2.valor,
+        descricao: d2.descricao,
+        complemento: d2.complemento,
+        classificado: d2.classificado,
+        grupo: d2.grupo,
+        centroCusto: d2.centroCusto,
+        natureza: d2.natureza,
+        tipoResultado: d2.tipoResultado
       })),
       erros: sistema.erros
     };
@@ -25843,10 +25866,10 @@ async function custoPorPlanta(db, inicio, fim, opts = {}) {
           const v = Number(r.totalAmount ?? 0);
           if (!(v > 0)) continue;
           const fonte = r.employmentType === "clt" || r.employmentType === "pj" ? "folha" : "diarias";
-          const d = dias.get(`${r.collaboratorId}|${ym}`);
-          const total = d?.reduce((t2, x) => t2 + x.n, 0) ?? 0;
-          if (!d || total === 0) somar(ym, null, fonte, v);
-          else for (const x of d) somar(ym, x.p, fonte, v * x.n / total);
+          const d2 = dias.get(`${r.collaboratorId}|${ym}`);
+          const total = d2?.reduce((t2, x) => t2 + x.n, 0) ?? 0;
+          if (!d2 || total === 0) somar(ym, null, fonte, v);
+          else for (const x of d2) somar(ym, x.p, fonte, v * x.n / total);
         }
       }
       for (const x of Array.from(acc.values())) linhas.push({ ...x, valor: r24(x.valor) });
@@ -25933,8 +25956,8 @@ async function custoPorPlanta(db, inicio, fim, opts = {}) {
       periodo
     );
     for (const r of dup) {
-      const d = r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10);
-      alertas.push({ tipo: "duplicado", texto: `\u201C${r.descr}\u201D lan\xE7ado ${r.n}x no mesmo dia (${d.split("-").reverse().join("/")}) com o mesmo valor.` });
+      const d2 = r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10);
+      alertas.push({ tipo: "duplicado", texto: `\u201C${r.descr}\u201D lan\xE7ado ${r.n}x no mesmo dia (${d2.split("-").reverse().join("/")}) com o mesmo valor.` });
     }
     const manut = await q(
       db,
@@ -25946,8 +25969,8 @@ async function custoPorPlanta(db, inicio, fim, opts = {}) {
       periodo
     );
     for (const r of manut) {
-      const d = r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10);
-      alertas.push({ tipo: "manutencao", texto: `\u201C${r.descr}\u201D (R$ ${Number(r.v).toFixed(2)}, ${d.split("-").reverse().join("/")}) tem o mesmo valor e data de uma manuten\xE7\xE3o j\xE1 registrada. Se for o mesmo gasto, n\xE3o ligue a fonte \u201CManuten\xE7\xE3o dos registros\u201D.` });
+      const d2 = r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10);
+      alertas.push({ tipo: "manutencao", texto: `\u201C${r.descr}\u201D (R$ ${Number(r.v).toFixed(2)}, ${d2.split("-").reverse().join("/")}) tem o mesmo valor e data de uma manuten\xE7\xE3o j\xE1 registrada. Se for o mesmo gasto, n\xE3o ligue a fonte \u201CManuten\xE7\xE3o dos registros\u201D.` });
     }
   });
   if (madeiraSemPreco > 0) {
@@ -26007,17 +26030,17 @@ function parseValor(raw) {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 function somarMeses(data3, meses) {
-  const [a, m, d] = data3.split("-").map(Number);
+  const [a, m, d2] = data3.split("-").map(Number);
   const alvo = new Date(Date.UTC(a, m - 1 + meses, 1));
   const ultimo = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate();
-  alvo.setUTCDate(Math.min(d, ultimo));
+  alvo.setUTCDate(Math.min(d2, ultimo));
   return alvo.toISOString().slice(0, 10);
 }
 var ISO = /^\d{4}-\d{2}-\d{2}$/;
 function dataValida(s) {
   if (!s || !ISO.test(s)) return false;
-  const d = /* @__PURE__ */ new Date(`${s}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  const d2 = /* @__PURE__ */ new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d2.getTime()) && d2.toISOString().slice(0, 10) === s;
 }
 function validarCusto(e, opts = {}) {
   const erros = [];
@@ -26040,8 +26063,8 @@ function parseDataFlex2(raw) {
   if (raw === null || raw === void 0 || raw === "") return null;
   if (typeof raw === "number") {
     if (!Number.isFinite(raw) || raw < 1 || raw > 8e4) return null;
-    const d = new Date(Math.round((raw - 25569) * 864e5));
-    const iso2 = d.toISOString().slice(0, 10);
+    const d2 = new Date(Math.round((raw - 25569) * 864e5));
+    const iso2 = d2.toISOString().slice(0, 10);
     return dataValida(iso2) ? iso2 : null;
   }
   const s = String(raw).trim();
@@ -26691,12 +26714,12 @@ var custosRouter = router({
          ORDER BY ${colData} DESC, l.id DESC LIMIT 1000`,
       params
     );
-    const d = (v) => v ? v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10) : null;
+    const d2 = (v) => v ? v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10) : null;
     const itens = rows2.map((r) => ({
       id: Number(r.id),
-      dataCompetencia: d(r.data_competencia),
-      dataVencimento: d(r.data_vencimento),
-      dataPagamento: d(r.data_pagamento),
+      dataCompetencia: d2(r.data_competencia),
+      dataVencimento: d2(r.data_vencimento),
+      dataPagamento: d2(r.data_pagamento),
       status: String(r.status),
       plantaId: r.planta_id ? Number(r.planta_id) : null,
       plantaNome: r.planta_nome,
@@ -27044,14 +27067,14 @@ var custosRouter = router({
          ORDER BY l.data_competencia DESC, l.id DESC LIMIT 500`,
       [ctx.user.id, ini, fim]
     );
-    const d = (v) => v ? v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10) : null;
+    const d2 = (v) => v ? v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10) : null;
     const itens = rows2.map((r) => {
       const conferencia = ["conferido", "devolvido"].includes(r.conferencia_status) ? r.conferencia_status : "pendente";
       return {
         id: Number(r.id),
-        dataCompetencia: d(r.data_competencia),
-        dataVencimento: d(r.data_vencimento),
-        dataPagamento: d(r.data_pagamento),
+        dataCompetencia: d2(r.data_competencia),
+        dataVencimento: d2(r.data_vencimento),
+        dataPagamento: d2(r.data_pagamento),
         status: String(r.status),
         plantaId: r.planta_id ? Number(r.planta_id) : null,
         plantaNome: r.planta_nome,
@@ -27414,16 +27437,606 @@ var custosRouter = router({
   })
 });
 
-// server/routers/modulosConfig.ts
+// server/routers/tarefas.ts
 init_trpc();
 init_permissions();
-init_modulosAtivos();
+init_notifications();
 import { z as z50 } from "zod";
 import { TRPCError as TRPCError38 } from "@trpc/server";
+var USO = "tarefas";
+var GESTAO = "tarefas-gestao";
+var STATUS = ["a_fazer", "andamento", "concluida"];
+var STATUS_LABEL = { a_fazer: "A fazer", andamento: "Em andamento", concluida: "Conclu\xEDda" };
+var PRIORIDADES = ["baixa", "media", "alta"];
+var PENDENCIAS = ["aprovacao", "resposta", "material", "bloqueada", "espera"];
+var PENDENCIA_LABEL = {
+  aprovacao: "Aguardando aprova\xE7\xE3o",
+  resposta: "Aguardando resposta",
+  material: "Aguardando material/pe\xE7a",
+  bloqueada: "Bloqueada",
+  espera: "Em espera"
+};
+var dataIso = z50.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 async function getDbOrThrow3() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
   if (!db) throw new TRPCError38({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  return db;
+}
+var ensurePromise4 = null;
+function ensureTables3(db) {
+  if (!ensurePromise4) {
+    ensurePromise4 = (async () => {
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS tarefas (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          titulo VARCHAR(200) NOT NULL,
+          descricao TEXT NULL,
+          status VARCHAR(12) NOT NULL DEFAULT 'a_fazer',
+          prioridade VARCHAR(8) NOT NULL DEFAULT 'media',
+          prazo DATE NULL,
+          local_id INT NULL,
+          responsavel_colaborador_id INT NOT NULL,
+          responsavel_nome VARCHAR(150) NULL,
+          criado_por INT NULL,
+          criado_por_nome VARCHAR(120) NULL,
+          concluida_em DATETIME NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          KEY tarefas_resp (responsavel_colaborador_id),
+          KEY tarefas_status (status),
+          KEY tarefas_prazo (prazo)
+        )
+      `);
+      const [cols] = await db.$client.execute(
+        `SELECT column_name AS c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'tarefas'`
+      );
+      const tem = new Set(cols.map((r) => String(r.c ?? r.COLUMN_NAME).toLowerCase()));
+      for (const [nome, def] of [
+        ["pendencia", "VARCHAR(12) NULL"],
+        ["pendencia_motivo", "VARCHAR(300) NULL"],
+        ["pendencia_desde", "DATETIME NULL"],
+        ["origem", "VARCHAR(20) NULL"],
+        ["origem_id", "INT NULL"],
+        ["responsavel_user_id", "INT NULL"]
+      ]) {
+        if (!tem.has(nome)) await db.$client.execute(`ALTER TABLE tarefas ADD COLUMN ${nome} ${def}`);
+      }
+      const [idx] = await db.$client.execute(
+        `SELECT COUNT(*) AS n FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'tarefas' AND index_name = 'tarefas_origem_unica'`
+      );
+      if (Number(idx[0]?.n ?? 0) === 0) {
+        await db.$client.execute(`ALTER TABLE tarefas ADD UNIQUE KEY tarefas_origem_unica (origem, origem_id)`);
+      }
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS tarefa_historico (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          tarefa_id INT NOT NULL,
+          tipo VARCHAR(12) NOT NULL DEFAULT 'comentario',
+          texto TEXT NULL,
+          foto_url TEXT NULL,
+          user_id INT NULL,
+          user_nome VARCHAR(120) NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          KEY tarefa_hist_tarefa (tarefa_id)
+        )
+      `);
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS tarefa_anexos (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          tarefa_id INT NOT NULL,
+          nome VARCHAR(255) NOT NULL,
+          url TEXT NOT NULL,
+          mime VARCHAR(120) NULL,
+          tamanho INT NULL,
+          user_id INT NULL,
+          user_nome VARCHAR(120) NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          KEY tarefa_anexos_tarefa (tarefa_id)
+        )
+      `);
+    })().catch((e) => {
+      ensurePromise4 = null;
+      throw e;
+    });
+  }
+  return ensurePromise4;
+}
+var d = (v) => v ? v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10) : null;
+var dt = (v) => v ? v instanceof Date ? v.toISOString() : String(v) : null;
+async function ehGestor(ctx) {
+  if (ctx.user.role === "admin") return true;
+  const p = await resolveUserPermissions(ctx.user.id, ctx.user.role);
+  return p.modules === null || p.modules.includes(GESTAO);
+}
+async function meusColaboradorIds(db, userId) {
+  const [rows2] = await db.$client.execute(`SELECT id FROM collaborators WHERE user_id = ?`, [userId]);
+  return rows2.map((r) => Number(r.id));
+}
+var SELECT_TAREFA = `
+  SELECT t.*, g.name AS local_nome,
+         (SELECT COUNT(*) FROM tarefa_historico h WHERE h.tarefa_id = t.id AND h.tipo = 'comentario') AS qtd_coment
+  FROM tarefas t LEFT JOIN gps_locations g ON g.id = t.local_id`;
+function mapTarefa(r) {
+  return {
+    id: Number(r.id),
+    titulo: String(r.titulo),
+    descricao: r.descricao ?? null,
+    status: String(r.status),
+    prioridade: String(r.prioridade),
+    prazo: d(r.prazo),
+    localId: r.local_id ? Number(r.local_id) : null,
+    localNome: r.local_nome ?? null,
+    responsavelId: Number(r.responsavel_colaborador_id),
+    responsavelNome: r.responsavel_nome ?? null,
+    criadoPorId: r.criado_por ? Number(r.criado_por) : null,
+    criadoPorNome: r.criado_por_nome ?? null,
+    concluidaEm: dt(r.concluida_em),
+    criadaEm: dt(r.created_at),
+    qtdComentarios: Number(r.qtd_coment ?? 0),
+    origem: r.origem ?? null,
+    origemId: r.origem_id ? Number(r.origem_id) : null,
+    pendencia: r.pendencia ?? null,
+    pendenciaMotivo: r.pendencia_motivo ?? null,
+    pendenciaDesde: dt(r.pendencia_desde)
+  };
+}
+async function registrar(db, tarefaId, tipo, texto, fotoUrl, ctx) {
+  await db.$client.execute(
+    `INSERT INTO tarefa_historico (tarefa_id, tipo, texto, foto_url, user_id, user_nome) VALUES (?, ?, ?, ?, ?, ?)`,
+    [tarefaId, tipo, texto, fotoUrl, ctx.user.id ?? null, ctx.user.name ?? null]
+  );
+}
+async function avisarTarefa(db, ctx, t2, titulo, mensagem) {
+  try {
+    const ids = /* @__PURE__ */ new Set();
+    if (t2.criado_por) ids.add(Number(t2.criado_por));
+    let respUser = t2.responsavel_user_id ? Number(t2.responsavel_user_id) : 0;
+    if (!respUser && t2.responsavel_colaborador_id) {
+      const [c] = await db.$client.execute(`SELECT user_id FROM collaborators WHERE id = ?`, [t2.responsavel_colaborador_id]);
+      respUser = Number(c[0]?.user_id ?? 0);
+    }
+    if (respUser) ids.add(respUser);
+    ids.delete(Number(ctx.user.id));
+    if (!ids.size) return;
+    const gestores = [];
+    const comuns = [];
+    for (const id of Array.from(ids)) (id === respUser ? comuns : gestores).push(id);
+    if (comuns.length) await notifyUsers({ recipientUserIds: comuns, type: "geral", title: titulo, message: mensagem, relatedId: Number(t2.id), relatedType: "tarefa" });
+    if (gestores.length) await notifyUsers({ recipientUserIds: gestores, type: "geral", title: titulo, message: mensagem, relatedId: Number(t2.id), relatedType: "tarefa_equipe" });
+  } catch (e) {
+    console.warn("[tarefas] aviso:", e?.message);
+  }
+}
+async function podeAcessar(db, ctx, t2) {
+  const gestor = await ehGestor(ctx);
+  const meus = await meusColaboradorIds(db, ctx.user.id);
+  return { gestor, responsavel: meus.includes(Number(t2.responsavel_colaborador_id)) || Number(t2.responsavel_user_id) === Number(ctx.user.id), criador: Number(t2.criado_por) === Number(ctx.user.id) };
+}
+var MARCA_META = "meta_semanal";
+var MSG_META = "Esta tarefa vem da Meta Semanal: o andamento segue a meta. Abra a meta para alterar.";
+var ultimaSyncMetas = 0;
+var fmtDia = (iso) => iso.split("-").reverse().slice(0, 2).join("/");
+async function sincronizarMetas(db, forcar = false) {
+  if (!forcar && Date.now() - ultimaSyncMetas < 2e4) return;
+  ultimaSyncMetas = Date.now();
+  try {
+    const [tem] = await db.$client.execute(
+      `SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'weekly_goals'`
+    );
+    if (!Number(tem[0]?.n ?? 0)) return;
+    const desde = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 19).replace("T", " ");
+    const [metas] = await db.$client.execute(
+      `SELECT id, title, week_start, week_end, responsible_user_id, responsible_name, status, created_by
+       FROM weekly_goals
+       WHERE status IN ('aguardando_ciencia','em_negociacao','em_andamento') OR (status = 'encerrada' AND closed_at >= ?)`,
+      [desde]
+    );
+    const [canc] = await db.$client.execute(`SELECT id FROM weekly_goals WHERE status = 'cancelada'`);
+    for (const c of canc) {
+      const [t2] = await db.$client.execute(`SELECT id FROM tarefas WHERE origem = ? AND origem_id = ?`, [MARCA_META, c.id]);
+      for (const x of t2) {
+        await db.$client.execute(`DELETE FROM tarefa_historico WHERE tarefa_id = ?`, [x.id]);
+        await db.$client.execute(`DELETE FROM tarefas WHERE id = ?`, [x.id]);
+      }
+    }
+    const [orfas] = await db.$client.execute(
+      `SELECT t.id FROM tarefas t LEFT JOIN weekly_goals w ON w.id = t.origem_id WHERE t.origem = ? AND w.id IS NULL`,
+      [MARCA_META]
+    );
+    for (const x of orfas) {
+      await db.$client.execute(`DELETE FROM tarefa_historico WHERE tarefa_id = ?`, [x.id]);
+      await db.$client.execute(`DELETE FROM tarefas WHERE id = ?`, [x.id]);
+    }
+    if (!metas.length) return;
+    const userIds = Array.from(new Set(metas.map((m) => Number(m.responsible_user_id))));
+    const [cols] = await db.$client.execute(
+      `SELECT id, name, user_id FROM collaborators WHERE user_id IN (${userIds.map(() => "?").join(",")}) ORDER BY id`,
+      userIds
+    );
+    const colabPorUser = /* @__PURE__ */ new Map();
+    for (const c of cols) if (!colabPorUser.has(Number(c.user_id))) colabPorUser.set(Number(c.user_id), { id: Number(c.id), name: String(c.name ?? "").trim() });
+    const [exist] = await db.$client.execute(`SELECT * FROM tarefas WHERE origem = ?`, [MARCA_META]);
+    const porMeta = /* @__PURE__ */ new Map();
+    for (const e of exist) porMeta.set(Number(e.origem_id), e);
+    const hojeBR = (/* @__PURE__ */ new Date()).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    for (const m of metas) {
+      const comecou = String(m.week_start).slice(0, 10) <= hojeBR;
+      const status = m.status === "encerrada" ? "concluida" : m.status === "em_andamento" && comecou ? "andamento" : "a_fazer";
+      const pendencia = m.status === "em_negociacao" ? "resposta" : null;
+      const motivo = pendencia ? "Meta em negocia\xE7\xE3o com o supervisor" : null;
+      const titulo = `Meta semanal: ${String(m.title).trim()}`.slice(0, 200);
+      const descricao = `Semana de ${fmtDia(String(m.week_start))} a ${fmtDia(String(m.week_end))}. Abra a meta para ver os compradores, os dias e conversar.`;
+      const prazo = String(m.week_end).slice(0, 10);
+      const colab = colabPorUser.get(Number(m.responsible_user_id));
+      const nome = colab?.name || m.responsible_name || null;
+      const atual = porMeta.get(Number(m.id));
+      if (!atual) {
+        const [res] = await db.$client.execute(
+          `INSERT INTO tarefas (titulo, descricao, status, prioridade, prazo, responsavel_colaborador_id, responsavel_nome, responsavel_user_id,
+             criado_por, criado_por_nome, concluida_em, pendencia, pendencia_motivo, pendencia_desde, origem, origem_id)
+           VALUES (?, ?, ?, 'media', ?, ?, ?, ?, ?, 'Meta Semanal', ${status === "concluida" ? "NOW()" : "NULL"}, ?, ?, ${pendencia ? "NOW()" : "NULL"}, ?, ?)`,
+          [titulo, descricao, status, prazo, colab?.id ?? 0, nome, m.responsible_user_id, m.created_by ?? null, pendencia, motivo, MARCA_META, m.id]
+        );
+        await db.$client.execute(`INSERT INTO tarefa_historico (tarefa_id, tipo, texto, user_nome) VALUES (?, 'criada', ?, 'Meta Semanal')`, [Number(res.insertId), "Tarefa criada a partir da Meta Semanal"]);
+      } else if (atual.titulo !== titulo || d(atual.prazo) !== prazo || atual.status !== status || (atual.pendencia ?? null) !== pendencia || Number(atual.responsavel_user_id) !== Number(m.responsible_user_id) || (atual.responsavel_nome ?? null) !== nome) {
+        const mudouStatus = atual.status !== status;
+        await db.$client.execute(
+          `UPDATE tarefas SET titulo = ?, descricao = ?, status = ?, prazo = ?, responsavel_colaborador_id = ?, responsavel_nome = ?, responsavel_user_id = ?,
+             pendencia = ?, pendencia_motivo = ?, pendencia_desde = ${pendencia ? atual.pendencia ? "pendencia_desde" : "NOW()" : "NULL"},
+             concluida_em = ${status === "concluida" ? atual.status === "concluida" ? "concluida_em" : "NOW()" : "NULL"}
+           WHERE id = ?`,
+          [titulo, descricao, status, prazo, colab?.id ?? 0, nome, m.responsible_user_id, pendencia, motivo, atual.id]
+        );
+        if (mudouStatus) {
+          await db.$client.execute(
+            `INSERT INTO tarefa_historico (tarefa_id, tipo, texto, user_nome) VALUES (?, 'status', ?, 'Meta Semanal')`,
+            [atual.id, `${STATUS_LABEL[String(atual.status)] ?? atual.status} \u2192 ${STATUS_LABEL[status]} (acompanha a meta)`]
+          );
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[tarefas] sincronizar metas:", e?.message);
+  }
+}
+var tarefasRouter = router({
+  // Colaboradores ativos (para atribuir) e permissão do usuário.
+  contexto: moduleProcedure(USO, GESTAO).query(async ({ ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const gestor = await ehGestor(ctx);
+    const meus = await meusColaboradorIds(db, ctx.user.id);
+    const [rows2] = await db.$client.execute(`SELECT id, name FROM collaborators WHERE (active = 1 OR active IS NULL) ORDER BY name`);
+    return {
+      gestor,
+      meuColaboradorId: meus[0] ?? null,
+      colaboradores: gestor ? rows2.map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome) : []
+    };
+  }),
+  // Força a sincronização das metas semanais (usado logo após criar/alterar/encerrar uma meta dentro das Tarefas).
+  sincronizarMetasAgora: moduleProcedure(USO, GESTAO).mutation(async () => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    await sincronizarMetas(db, true);
+    return { ok: true };
+  }),
+  // Minhas tarefas: as do(s) colaborador(es) ligado(s) ao meu usuário.
+  minhas: moduleProcedure(USO, GESTAO).input(z50.object({ concluidasDias: z50.number().int().min(1).max(365).default(14) }).optional()).query(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    await sincronizarMetas(db);
+    const meus = await meusColaboradorIds(db, ctx.user.id);
+    const desde = new Date(Date.now() - (input?.concluidasDias ?? 14) * 864e5).toISOString().slice(0, 19).replace("T", " ");
+    const filtroResp = meus.length ? `(t.responsavel_colaborador_id IN (${meus.map(() => "?").join(",")}) OR t.responsavel_user_id = ?)` : `t.responsavel_user_id = ?`;
+    const [rows2] = await db.$client.execute(
+      `${SELECT_TAREFA}
+         WHERE ${filtroResp} AND (t.status <> 'concluida' OR t.concluida_em >= ?)
+         ORDER BY t.prazo IS NULL, t.prazo, t.id DESC LIMIT 500`,
+      [...meus, ctx.user.id, desde]
+    );
+    const itens = rows2.map(mapTarefa);
+    return { itens, semVinculo: !meus.length && itens.length === 0 };
+  }),
+  // Equipe inteira (supervisores).
+  equipe: moduleProcedure(GESTAO).input(z50.object({
+    colaboradorId: z50.number().int().positive().optional(),
+    localId: z50.number().int().positive().optional(),
+    status: z50.enum(STATUS).optional(),
+    atrasadas: z50.boolean().optional(),
+    pendencia: z50.enum(["qualquer", ...PENDENCIAS]).optional(),
+    busca: z50.string().max(100).optional(),
+    concluidasDias: z50.number().int().min(1).max(365).default(14)
+  })).query(async ({ input }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    await sincronizarMetas(db);
+    const hoje = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const desde = new Date(Date.now() - input.concluidasDias * 864e5).toISOString().slice(0, 19).replace("T", " ");
+    const where = ["(t.status <> 'concluida' OR t.concluida_em >= ?)"];
+    const params = [desde];
+    if (input.colaboradorId) {
+      where.push("t.responsavel_colaborador_id = ?");
+      params.push(input.colaboradorId);
+    }
+    if (input.localId) {
+      where.push("t.local_id = ?");
+      params.push(input.localId);
+    }
+    if (input.status) {
+      where.push("t.status = ?");
+      params.push(input.status);
+    }
+    if (input.atrasadas) {
+      where.push("t.prazo < ? AND t.status <> 'concluida'");
+      params.push(hoje);
+    }
+    if (input.pendencia === "qualquer") where.push("t.pendencia IS NOT NULL AND t.status <> 'concluida'");
+    else if (input.pendencia) {
+      where.push("t.pendencia = ?");
+      params.push(input.pendencia);
+    }
+    if (input.busca?.trim()) {
+      where.push("(t.titulo LIKE ? OR t.descricao LIKE ? OR t.responsavel_nome LIKE ?)");
+      const b = `%${input.busca.trim()}%`;
+      params.push(b, b, b);
+    }
+    const [rows2] = await db.$client.execute(
+      `${SELECT_TAREFA} WHERE ${where.join(" AND ")} ORDER BY t.prazo IS NULL, t.prazo, t.id DESC LIMIT 1000`,
+      params
+    );
+    const itens = rows2.map(mapTarefa);
+    const abertas = itens.filter((i) => i.status !== "concluida");
+    return {
+      itens,
+      resumo: {
+        abertas: abertas.length,
+        atrasadas: abertas.filter((i) => i.prazo && i.prazo < hoje).length,
+        andamento: itens.filter((i) => i.status === "andamento").length,
+        aguardando: abertas.filter((i) => i.pendencia).length,
+        concluidas: itens.filter((i) => i.status === "concluida").length
+      }
+    };
+  }),
+  criar: moduleProcedure(USO, GESTAO).input(z50.object({
+    titulo: z50.string().trim().min(2, "D\xEA um t\xEDtulo \xE0 tarefa").max(200),
+    descricao: z50.string().trim().max(4e3).nullable().optional(),
+    prioridade: z50.enum(PRIORIDADES).default("media"),
+    prazo: dataIso.nullable().optional(),
+    localId: z50.number().int().positive().nullable().optional(),
+    responsavelColaboradorId: z50.number().int().positive().nullable().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const gestor = await ehGestor(ctx);
+    let resp = input.responsavelColaboradorId ?? null;
+    if (!gestor) {
+      const meus = await meusColaboradorIds(db, ctx.user.id);
+      if (!meus.length) throw new TRPCError38({ code: "BAD_REQUEST", message: "Seu usu\xE1rio n\xE3o est\xE1 ligado a um colaborador. Fale com o escrit\xF3rio." });
+      resp = meus[0];
+    } else if (!resp) {
+      throw new TRPCError38({ code: "BAD_REQUEST", message: "Escolha o respons\xE1vel pela tarefa" });
+    }
+    const [c] = await db.$client.execute(`SELECT id, name FROM collaborators WHERE id = ? AND (active = 1 OR active IS NULL)`, [resp]);
+    const colab = c[0];
+    if (!colab) throw new TRPCError38({ code: "BAD_REQUEST", message: "Colaborador inv\xE1lido ou inativo" });
+    const [res] = await db.$client.execute(
+      `INSERT INTO tarefas (titulo, descricao, prioridade, prazo, local_id, responsavel_colaborador_id, responsavel_nome, criado_por, criado_por_nome)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [input.titulo, input.descricao || null, input.prioridade, input.prazo ?? null, input.localId ?? null, resp, String(colab.name ?? "").trim(), ctx.user.id ?? null, ctx.user.name ?? null]
+    );
+    const id = Number(res.insertId);
+    await registrar(db, id, "criada", `Tarefa criada para ${String(colab.name ?? "").trim()}`, null, ctx);
+    return { id };
+  }),
+  detalhe: moduleProcedure(USO, GESTAO).input(z50.object({ id: z50.number().int().positive() })).query(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`${SELECT_TAREFA} WHERE t.id = ?`, [input.id]);
+    const r = rows2[0];
+    if (!r) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    const acc = await podeAcessar(db, ctx, r);
+    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    const [h] = await db.$client.execute(`SELECT id, tipo, texto, foto_url, user_id, user_nome, created_at FROM tarefa_historico WHERE tarefa_id = ? ORDER BY id`, [input.id]);
+    const [an] = await db.$client.execute(`SELECT id, nome, url, mime, tamanho, user_id, user_nome, created_at FROM tarefa_anexos WHERE tarefa_id = ? ORDER BY id`, [input.id]);
+    return {
+      tarefa: mapTarefa(r),
+      historico: h.map((x) => ({ id: Number(x.id), tipo: String(x.tipo), texto: x.texto ?? null, fotoUrl: x.foto_url ?? null, por: x.user_nome ?? null, porId: x.user_id ? Number(x.user_id) : null, em: dt(x.created_at) })),
+      anexos: an.map((x) => ({ id: Number(x.id), nome: String(x.nome), url: String(x.url), mime: x.mime ?? null, tamanho: x.tamanho ? Number(x.tamanho) : null, porId: x.user_id ? Number(x.user_id) : null, por: x.user_nome ?? null, em: dt(x.created_at) })),
+      meuUserId: Number(ctx.user.id),
+      gestor: acc.gestor,
+      podeEditar: r.origem !== MARCA_META && (acc.gestor || acc.criador),
+      podeMudar: true
+    };
+  }),
+  editar: moduleProcedure(USO, GESTAO).input(z50.object({
+    id: z50.number().int().positive(),
+    titulo: z50.string().trim().min(2).max(200),
+    descricao: z50.string().trim().max(4e3).nullable().optional(),
+    prioridade: z50.enum(PRIORIDADES),
+    prazo: dataIso.nullable().optional(),
+    localId: z50.number().int().positive().nullable().optional(),
+    responsavelColaboradorId: z50.number().int().positive().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
+    const t2 = rows2[0];
+    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    const acc = await podeAcessar(db, ctx, t2);
+    if (!acc.gestor && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 quem criou a tarefa ou um supervisor pode alter\xE1-la" });
+    let resp = Number(t2.responsavel_colaborador_id);
+    let nome = t2.responsavel_nome;
+    if (acc.gestor && input.responsavelColaboradorId && input.responsavelColaboradorId !== resp) {
+      const [c] = await db.$client.execute(`SELECT id, name FROM collaborators WHERE id = ? AND (active = 1 OR active IS NULL)`, [input.responsavelColaboradorId]);
+      const colab = c[0];
+      if (!colab) throw new TRPCError38({ code: "BAD_REQUEST", message: "Colaborador inv\xE1lido ou inativo" });
+      resp = input.responsavelColaboradorId;
+      nome = String(colab.name ?? "").trim();
+      await registrar(db, input.id, "editada", `Respons\xE1vel alterado para ${nome}`, null, ctx);
+    }
+    await db.$client.execute(
+      `UPDATE tarefas SET titulo = ?, descricao = ?, prioridade = ?, prazo = ?, local_id = ?, responsavel_colaborador_id = ?, responsavel_nome = ? WHERE id = ?`,
+      [input.titulo, input.descricao || null, input.prioridade, input.prazo ?? null, input.localId ?? null, resp, nome, input.id]
+    );
+    return { ok: true };
+  }),
+  // Muda o andamento (A fazer → Em andamento → Concluída). O responsável, quem criou e os supervisores podem.
+  mudarStatus: moduleProcedure(USO, GESTAO).input(z50.object({
+    id: z50.number().int().positive(),
+    status: z50.enum(STATUS),
+    comentario: z50.string().trim().max(2e3).nullable().optional(),
+    fotoUrl: z50.string().max(2e3).nullable().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
+    const t2 = rows2[0];
+    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    const acc = await podeAcessar(db, ctx, t2);
+    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (t2.status === input.status) return { ok: true };
+    if (input.status === "concluida" && t2.pendencia === "aprovacao" && !acc.gestor) {
+      throw new TRPCError38({ code: "FORBIDDEN", message: "Esta tarefa aguarda a aprova\xE7\xE3o de um supervisor para ser conclu\xEDda" });
+    }
+    if (input.status === "concluida" && t2.pendencia === "bloqueada") {
+      throw new TRPCError38({ code: "BAD_REQUEST", message: "Resolva o bloqueio antes de concluir a tarefa" });
+    }
+    if (input.status === "concluida") {
+      await db.$client.execute(`UPDATE tarefas SET status = ?, concluida_em = NOW(), pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.status, input.id]);
+    } else {
+      await db.$client.execute(`UPDATE tarefas SET status = ?, concluida_em = NULL WHERE id = ?`, [input.status, input.id]);
+    }
+    await registrar(db, input.id, "status", `${STATUS_LABEL[String(t2.status)] ?? t2.status} \u2192 ${STATUS_LABEL[input.status]}${input.comentario ? `: ${input.comentario}` : ""}`, input.fotoUrl ?? null, ctx);
+    return { ok: true };
+  }),
+  // Marca (ou remove) uma pendência: o que está impedindo a tarefa de andar. Ex.: aguardando aprovação, resposta do cliente, material.
+  definirPendencia: moduleProcedure(USO, GESTAO).input(z50.object({
+    id: z50.number().int().positive(),
+    pendencia: z50.enum(PENDENCIAS).nullable(),
+    motivo: z50.string().trim().max(300).nullable().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
+    const t2 = rows2[0];
+    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    const acc = await podeAcessar(db, ctx, t2);
+    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (t2.status === "concluida") throw new TRPCError38({ code: "BAD_REQUEST", message: "A tarefa j\xE1 est\xE1 conclu\xEDda" });
+    if (t2.pendencia === "aprovacao" && input.pendencia !== "aprovacao" && !acc.gestor) {
+      throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 um supervisor pode liberar uma tarefa que aguarda aprova\xE7\xE3o" });
+    }
+    if (input.pendencia === "bloqueada" && !input.motivo) throw new TRPCError38({ code: "BAD_REQUEST", message: "Explique o que est\xE1 bloqueando a tarefa" });
+    if (input.pendencia) {
+      await db.$client.execute(`UPDATE tarefas SET pendencia = ?, pendencia_motivo = ?, pendencia_desde = NOW() WHERE id = ?`, [input.pendencia, input.motivo || null, input.id]);
+      await registrar(db, input.id, "pendencia", `${PENDENCIA_LABEL[input.pendencia]}${input.motivo ? `: ${input.motivo}` : ""}`, null, ctx);
+    } else {
+      await db.$client.execute(`UPDATE tarefas SET pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+      await registrar(db, input.id, "pendencia", "Pend\xEAncia removida", null, ctx);
+    }
+    return { ok: true };
+  }),
+  // Supervisor responde a uma tarefa "Aguardando aprovação": aprova (e conclui) ou devolve para ajustes.
+  aprovar: moduleProcedure(GESTAO).input(z50.object({ id: z50.number().int().positive(), aprovar: z50.boolean(), comentario: z50.string().trim().max(500).nullable().optional() })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
+    const t2 = rows2[0];
+    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    if (t2.pendencia !== "aprovacao") throw new TRPCError38({ code: "BAD_REQUEST", message: "Esta tarefa n\xE3o est\xE1 aguardando aprova\xE7\xE3o" });
+    if (!input.aprovar && !input.comentario) throw new TRPCError38({ code: "BAD_REQUEST", message: "Explique o que precisa ser ajustado" });
+    if (input.aprovar) {
+      await db.$client.execute(`UPDATE tarefas SET status = 'concluida', concluida_em = NOW(), pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+      await registrar(db, input.id, "status", `Aprovada e conclu\xEDda${input.comentario ? `: ${input.comentario}` : ""}`, null, ctx);
+    } else {
+      await db.$client.execute(`UPDATE tarefas SET status = 'andamento', concluida_em = NULL, pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+      await registrar(db, input.id, "status", `Devolvida para ajustes: ${input.comentario}`, null, ctx);
+    }
+    return { ok: true };
+  }),
+  comentar: moduleProcedure(USO, GESTAO).input(z50.object({
+    id: z50.number().int().positive(),
+    texto: z50.string().trim().max(2e3).optional(),
+    fotoUrl: z50.string().max(2e3).nullable().optional()
+  })).mutation(async ({ input, ctx }) => {
+    if (!input.texto && !input.fotoUrl) throw new TRPCError38({ code: "BAD_REQUEST", message: "Escreva um coment\xE1rio ou anexe uma foto" });
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
+    const t2 = rows2[0];
+    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    const acc = await podeAcessar(db, ctx, t2);
+    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    await registrar(db, input.id, "comentario", input.texto ?? null, input.fotoUrl ?? null, ctx);
+    await avisarTarefa(db, ctx, t2, `Mensagem na tarefa: ${String(t2.titulo).slice(0, 80)}`, `${ctx.user.name ?? "Algu\xE9m"}: ${input.texto ?? "enviou uma foto"}`.slice(0, 300));
+    return { ok: true };
+  }),
+  // Anexos (documentos, planilhas, PDFs, fotos). O arquivo sobe no navegador (Cloudinary); aqui só guardamos o endereço.
+  anexar: moduleProcedure(USO, GESTAO).input(z50.object({
+    id: z50.number().int().positive(),
+    nome: z50.string().trim().min(1).max(255),
+    url: z50.string().url().max(2e3),
+    mime: z50.string().max(120).nullable().optional(),
+    tamanho: z50.number().int().min(0).max(50 * 1024 * 1024).nullable().optional()
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
+    const t2 = rows2[0];
+    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    const acc = await podeAcessar(db, ctx, t2);
+    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    await db.$client.execute(
+      `INSERT INTO tarefa_anexos (tarefa_id, nome, url, mime, tamanho, user_id, user_nome) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [input.id, input.nome, input.url, input.mime ?? null, input.tamanho ?? null, ctx.user.id ?? null, ctx.user.name ?? null]
+    );
+    await registrar(db, input.id, "anexo", `Anexou o arquivo "${input.nome}"`, null, ctx);
+    await avisarTarefa(db, ctx, t2, `Arquivo anexado na tarefa: ${String(t2.titulo).slice(0, 80)}`, `${ctx.user.name ?? "Algu\xE9m"} anexou "${input.nome}"`);
+    return { ok: true };
+  }),
+  removerAnexo: moduleProcedure(USO, GESTAO).input(z50.object({ id: z50.number().int().positive() })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefa_anexos WHERE id = ?`, [input.id]);
+    const a = rows2[0];
+    if (!a) throw new TRPCError38({ code: "NOT_FOUND", message: "Anexo n\xE3o encontrado" });
+    const gestor = await ehGestor(ctx);
+    if (!gestor && Number(a.user_id) !== Number(ctx.user.id)) throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 quem anexou ou um supervisor pode remover" });
+    await db.$client.execute(`DELETE FROM tarefa_anexos WHERE id = ?`, [input.id]);
+    await registrar(db, a.tarefa_id, "anexo", `Removeu o arquivo "${a.nome}"`, null, ctx);
+    return { ok: true };
+  }),
+  excluir: moduleProcedure(USO, GESTAO).input(z50.object({ id: z50.number().int().positive() })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
+    const t2 = rows2[0];
+    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    const acc = await podeAcessar(db, ctx, t2);
+    if (!acc.gestor && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 quem criou a tarefa ou um supervisor pode exclu\xED-la" });
+    await db.$client.execute(`DELETE FROM tarefa_historico WHERE tarefa_id = ?`, [input.id]);
+    await db.$client.execute(`DELETE FROM tarefa_anexos WHERE tarefa_id = ?`, [input.id]);
+    await db.$client.execute(`DELETE FROM tarefas WHERE id = ?`, [input.id]);
+    return { ok: true };
+  })
+});
+
+// server/routers/modulosConfig.ts
+init_trpc();
+init_permissions();
+init_modulosAtivos();
+import { z as z51 } from "zod";
+import { TRPCError as TRPCError39 } from "@trpc/server";
+async function getDbOrThrow4() {
+  const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+  const db = await getDb2();
+  if (!db) throw new TRPCError39({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
 var modulosConfigRouter = router({
@@ -27431,7 +28044,7 @@ var modulosConfigRouter = router({
   inativos: protectedProcedure.query(async () => Array.from(await modulosInativos())),
   // Administrador: todos os módulos com o estado de cada um.
   listar: adminProcedure.query(async () => {
-    const db = await getDbOrThrow3();
+    const db = await getDbOrThrow4();
     await ensureModuloConfig(db);
     const [rows2] = await db.$client.execute(`SELECT slug, ativo, atualizado_por_nome, updated_at FROM modulo_config`);
     const mapa = /* @__PURE__ */ new Map();
@@ -27451,9 +28064,9 @@ var modulosConfigRouter = router({
       atualizadoEm: mapa.get(m.slug)?.em ?? null
     }));
   }),
-  definir: adminProcedure.input(z50.object({ slug: z50.string().max(60), ativo: z50.boolean() })).mutation(async ({ input, ctx }) => {
-    if (!SYSTEM_MODULES.some((m) => m.slug === input.slug)) throw new TRPCError38({ code: "BAD_REQUEST", message: "M\xF3dulo desconhecido" });
-    const db = await getDbOrThrow3();
+  definir: adminProcedure.input(z51.object({ slug: z51.string().max(60), ativo: z51.boolean() })).mutation(async ({ input, ctx }) => {
+    if (!SYSTEM_MODULES.some((m) => m.slug === input.slug)) throw new TRPCError39({ code: "BAD_REQUEST", message: "M\xF3dulo desconhecido" });
+    const db = await getDbOrThrow4();
     await ensureModuloConfig(db);
     await db.$client.execute(
       `INSERT INTO modulo_config (slug, ativo, atualizado_por, atualizado_por_nome) VALUES (?, ?, ?, ?)
@@ -27467,18 +28080,18 @@ var modulosConfigRouter = router({
 
 // server/routers/quickAccess.ts
 init_trpc();
-import { z as z51 } from "zod";
-import { TRPCError as TRPCError39 } from "@trpc/server";
-async function getDbOrThrow4() {
+import { z as z52 } from "zod";
+import { TRPCError as TRPCError40 } from "@trpc/server";
+async function getDbOrThrow5() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError39({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError40({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
-var ensurePromise4 = null;
+var ensurePromise5 = null;
 function ensureTable(db) {
-  if (!ensurePromise4) {
-    ensurePromise4 = (async () => {
+  if (!ensurePromise5) {
+    ensurePromise5 = (async () => {
       await db.$client.execute(`
         CREATE TABLE IF NOT EXISTS user_quick_access (
           user_id INT PRIMARY KEY,
@@ -27487,17 +28100,17 @@ function ensureTable(db) {
         )
       `);
     })().catch((e) => {
-      ensurePromise4 = null;
+      ensurePromise5 = null;
       throw e;
     });
   }
-  return ensurePromise4;
+  return ensurePromise5;
 }
 var quickAccessRouter = router({
   // null = sem personalização (usa o padrão)
   get: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user.role !== "admin") return { itens: null };
-    const db = await getDbOrThrow4();
+    const db = await getDbOrThrow5();
     await ensureTable(db);
     const [rows2] = await db.$client.execute(`SELECT itens_json FROM user_quick_access WHERE user_id = ?`, [ctx.user.id]);
     const r = rows2[0];
@@ -27509,9 +28122,9 @@ var quickAccessRouter = router({
       return { itens: null };
     }
   }),
-  save: protectedProcedure.input(z51.object({ itens: z51.array(z51.string().max(80)).max(60) })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 administradores podem personalizar o Painel" });
-    const db = await getDbOrThrow4();
+  save: protectedProcedure.input(z52.object({ itens: z52.array(z52.string().max(80)).max(60) })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 administradores podem personalizar o Painel" });
+    const db = await getDbOrThrow5();
     await ensureTable(db);
     await db.$client.execute(
       `INSERT INTO user_quick_access (user_id, itens_json) VALUES (?, ?) ON DUPLICATE KEY UPDATE itens_json = VALUES(itens_json)`,
@@ -27521,8 +28134,8 @@ var quickAccessRouter = router({
   }),
   // Volta ao padrão
   reset: protectedProcedure.mutation(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError39({ code: "FORBIDDEN" });
-    const db = await getDbOrThrow4();
+    if (ctx.user.role !== "admin") throw new TRPCError40({ code: "FORBIDDEN" });
+    const db = await getDbOrThrow5();
     await ensureTable(db);
     await db.$client.execute(`DELETE FROM user_quick_access WHERE user_id = ?`, [ctx.user.id]);
     return { ok: true };
@@ -27533,7 +28146,7 @@ var quickAccessRouter = router({
 init_weeklyGoals2();
 
 // server/routers/contasReceber.ts
-import { z as z53 } from "zod";
+import { z as z54 } from "zod";
 init_trpc();
 init_permissions();
 
@@ -27578,16 +28191,16 @@ function soDigitos(s) {
 }
 
 // server/routers/contasReceber.ts
-var data2 = z53.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-var entrada = z53.object({
-  mes: z53.number().min(1).max(12),
-  ano: z53.number().min(2020).max(2100),
+var data2 = z54.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+var entrada = z54.object({
+  mes: z54.number().min(1).max(12),
+  ano: z54.number().min(2020).max(2100),
   /** período de emissão (NF/boleto) ou entrega (carga); quando informado, substitui o mês */
   dataInicio: data2.optional(),
   dataFim: data2.optional(),
-  cnpj: z53.string().optional(),
-  pesquisa: z53.string().optional(),
-  statusFiltro: z53.enum(["todos", "em_aberto", "pago", "cancelado"]).default("todos")
+  cnpj: z54.string().optional(),
+  pesquisa: z54.string().optional(),
+  statusFiltro: z54.enum(["todos", "em_aberto", "pago", "cancelado"]).default("todos")
 });
 function num4(v) {
   const s = String(v ?? "0").trim();
@@ -27737,7 +28350,7 @@ var contasReceberRouter = router({
 // server/routers/contaAzul.ts
 init_trpc();
 init_prazoPagamento();
-import { z as z54 } from "zod";
+import { z as z55 } from "zod";
 import axios2 from "axios";
 import zlib from "zlib";
 
@@ -27970,9 +28583,9 @@ async function buscarDataEntregaCarga(db, numeroNota) {
 async function syncNotasFiscais(mes, ano) {
   const db = await getDbInstance();
   if (!db) return { synced: 0, errors: ["DB indispon\xEDvel"] };
-  const fmtDate = (d) => d.toISOString().slice(0, 10);
-  const addDay = (d, n) => {
-    const r = new Date(d);
+  const fmtDate = (d2) => d2.toISOString().slice(0, 10);
+  const addDay = (d2, n) => {
+    const r = new Date(d2);
     r.setDate(r.getDate() + n);
     return r;
   };
@@ -28121,7 +28734,7 @@ async function syncNotasFiscais(mes, ano) {
   return { synced, errors };
 }
 var contaAzulRouter = router({
-  setRefreshToken: protectedProcedure.input(z54.object({ refreshToken: z54.string().min(10) })).mutation(async ({ input }) => {
+  setRefreshToken: protectedProcedure.input(z55.object({ refreshToken: z55.string().min(10) })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(
@@ -28145,14 +28758,14 @@ var contaAzulRouter = router({
       configurado: Number(tokenRows?.[0]?.cnt ?? 0) > 0
     };
   }),
-  listNotasFiscais: protectedProcedure.input(z54.object({
-    mes: z54.number().min(1).max(12),
-    ano: z54.number().min(2020).max(2100),
+  listNotasFiscais: protectedProcedure.input(z55.object({
+    mes: z55.number().min(1).max(12),
+    ano: z55.number().min(2020).max(2100),
     // período de emissão (substitui o mês quando os dois são informados)
-    dataInicio: z54.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    dataFim: z54.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    pesquisa: z54.string().optional(),
-    incluirCanceladas: z54.boolean().optional()
+    dataInicio: z55.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    dataFim: z55.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    pesquisa: z55.string().optional(),
+    incluirCanceladas: z55.boolean().optional()
   })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { notas: [], error: "DB indispon\xEDvel" };
@@ -28192,7 +28805,7 @@ var contaAzulRouter = router({
   }),
   // Resumo (Vencidos/Vencem hoje/A vencer/Recebidos/Total) apenas das NFs sem boleto correspondente.
   // O frontend soma este resultado ao summaryBoletos (Sicoob) para formar os cards finais.
-  summaryNFsSemBoleto: protectedProcedure.input(z54.object({ mes: z54.number().min(1).max(12), ano: z54.number().min(2020).max(2100) })).query(async ({ input }) => {
+  summaryNFsSemBoleto: protectedProcedure.input(z55.object({ mes: z55.number().min(1).max(12), ano: z55.number().min(2020).max(2100) })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { vencidos: 0, vencemHoje: 0, aVencer: 0, recebidos: 0, total: 0, error: "DB indispon\xEDvel" };
     const [rows2] = await db.$client.execute(
@@ -28220,10 +28833,10 @@ var contaAzulRouter = router({
     return { ...resumo, error: null };
   }),
   // Altera o Status NF (manual). Registra auditoria e, se "pago", a data de pagamento confirmado.
-  updateStatusNf: protectedProcedure.input(z54.object({
-    id: z54.number(),
-    novoStatus: z54.enum(["em_aberto", "pago", "cancelado"]),
-    dataPagamentoConfirmado: z54.string().optional()
+  updateStatusNf: protectedProcedure.input(z55.object({
+    id: z55.number(),
+    novoStatus: z55.enum(["em_aberto", "pago", "cancelado"]),
+    dataPagamentoConfirmado: z55.string().optional()
     // "YYYY-MM-DD" — obrigatório apenas quando novoStatus = pago (default: hoje)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
@@ -28252,7 +28865,7 @@ var contaAzulRouter = router({
   // Guarda o valor original (só na primeira edição) e registra no log de auditoria com o
   // Anexa/troca o comprovante de pagamento da NF. O upload em si (Cloudinary) acontece no
   // cliente; aqui só grava a URL já pronta.
-  updateReceiptNF: protectedProcedure.input(z54.object({ id: z54.number(), receiptUrl: z54.string().url() })).mutation(async ({ input }) => {
+  updateReceiptNF: protectedProcedure.input(z55.object({ id: z55.number(), receiptUrl: z55.string().url() })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(`UPDATE notas_fiscais SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
@@ -28260,7 +28873,7 @@ var contaAzulRouter = router({
   }),
   // motivo — comum quando o cliente desconta na hora de pagar por divergência de peso
   // entre o que a NF declara e o que foi efetivamente entregue/pesado.
-  updateValorNF: protectedProcedure.input(z54.object({ id: z54.number(), valor: z54.string(), observacao: z54.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
+  updateValorNF: protectedProcedure.input(z55.object({ id: z55.number(), valor: z55.string(), observacao: z55.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     const [rows2] = await db.$client.execute(
@@ -28281,7 +28894,7 @@ var contaAzulRouter = router({
     return { success: true };
   }),
   // Histórico de alterações de uma NF (auditoria)
-  historicoStatusNf: protectedProcedure.input(z54.object({ notaFiscalId: z54.number() })).query(async ({ input }) => {
+  historicoStatusNf: protectedProcedure.input(z55.object({ notaFiscalId: z55.number() })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { historico: [], error: "DB indispon\xEDvel" };
     const [rows2] = await db.$client.execute(
@@ -28290,7 +28903,7 @@ var contaAzulRouter = router({
     );
     return { historico: rows2 ?? [], error: null };
   }),
-  syncNotasFiscais: protectedProcedure.input(z54.object({ mes: z54.number().min(1).max(12), ano: z54.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+  syncNotasFiscais: protectedProcedure.input(z55.object({ mes: z55.number().min(1).max(12), ano: z55.number().min(2020).max(2100) })).mutation(async ({ input }) => {
     try {
       return { success: true, ...await syncNotasFiscais(input.mes, input.ano) };
     } catch (e) {
@@ -28304,7 +28917,7 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z55 } from "zod";
+import { z as z56 } from "zod";
 import { desc as desc33, eq as eq44, and as and26, sql as sql30 } from "drizzle-orm";
 async function getNextActionCode(db) {
   if (!db) return "AC-00001";
@@ -28329,9 +28942,9 @@ var fiscalNotesRouter = router({
     return { actionCode: await getNextActionCode(db) };
   }),
   // Listar todas as notas com filtros
-  list: protectedProcedure.input(z55.object({
-    quantityType: z55.enum(["m3", "ton", "all"]).optional(),
-    status: z55.enum(["available", "used", "all"]).optional()
+  list: protectedProcedure.input(z56.object({
+    quantityType: z56.enum(["m3", "ton", "all"]).optional(),
+    status: z56.enum(["available", "used", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -28346,8 +28959,8 @@ var fiscalNotesRouter = router({
     return rows2;
   }),
   // Listar apenas notas disponíveis para o select no Controle de Cargas
-  getAvailable: protectedProcedure.input(z55.object({
-    quantityType: z55.enum(["m3", "ton", "all"]).optional()
+  getAvailable: protectedProcedure.input(z56.object({
+    quantityType: z56.enum(["m3", "ton", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -28359,16 +28972,16 @@ var fiscalNotesRouter = router({
     return rows2;
   }),
   // Criar nova nota/ação
-  create: protectedProcedure.input(z55.object({
-    invoiceNumber: z55.string().optional(),
-    issueDate: z55.string(),
-    quantityType: z55.enum(["m3", "ton"]),
-    quantity: z55.string(),
-    fileBase64: z55.string().optional(),
+  create: protectedProcedure.input(z56.object({
+    invoiceNumber: z56.string().optional(),
+    issueDate: z56.string(),
+    quantityType: z56.enum(["m3", "ton"]),
+    quantity: z56.string(),
+    fileBase64: z56.string().optional(),
     // base64 do arquivo
-    fileName: z55.string().optional(),
-    fileMimeType: z55.string().optional(),
-    notes: z55.string().optional()
+    fileName: z56.string().optional(),
+    fileMimeType: z56.string().optional(),
+    notes: z56.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -28398,13 +29011,13 @@ var fiscalNotesRouter = router({
     return { success: true, actionCode };
   }),
   // Marcar nota como utilizada (chamado ao salvar uma carga)
-  markAsUsed: protectedProcedure.input(z55.object({
-    id: z55.number(),
-    cargoId: z55.number().optional(),
-    clientId: z55.number().optional(),
-    clientName: z55.string().optional(),
-    destination: z55.string().optional(),
-    workLocation: z55.string().optional()
+  markAsUsed: protectedProcedure.input(z56.object({
+    id: z56.number(),
+    cargoId: z56.number().optional(),
+    clientId: z56.number().optional(),
+    clientName: z56.string().optional(),
+    destination: z56.string().optional(),
+    workLocation: z56.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -28425,16 +29038,16 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Editar nota/ação (data, quantidade, NF, observações, arquivo)
-  update: protectedProcedure.input(z55.object({
-    id: z55.number(),
-    invoiceNumber: z55.string().optional(),
-    issueDate: z55.string().optional(),
-    quantityType: z55.enum(["m3", "ton"]).optional(),
-    quantity: z55.string().optional(),
-    fileBase64: z55.string().optional(),
-    fileName: z55.string().optional(),
-    fileMimeType: z55.string().optional(),
-    notes: z55.string().optional()
+  update: protectedProcedure.input(z56.object({
+    id: z56.number(),
+    invoiceNumber: z56.string().optional(),
+    issueDate: z56.string().optional(),
+    quantityType: z56.enum(["m3", "ton"]).optional(),
+    quantity: z56.string().optional(),
+    fileBase64: z56.string().optional(),
+    fileName: z56.string().optional(),
+    fileMimeType: z56.string().optional(),
+    notes: z56.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -28461,7 +29074,7 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Liberar nota (desfazer uso — admin)
-  release: protectedProcedure.input(z55.object({ id: z55.number() })).mutation(async ({ input }) => {
+  release: protectedProcedure.input(z56.object({ id: z56.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.update(fiscalNotes).set({
@@ -28474,20 +29087,20 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Deletar nota (somente disponíveis)
-  delete: protectedProcedure.input(z55.object({ id: z55.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z56.object({ id: z56.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.delete(fiscalNotes).where(eq44(fiscalNotes.id, input.id));
     return { success: true };
   }),
   // Relatório-planilha: notas com dados da carga, local e destino
-  report: protectedProcedure.input(z55.object({
-    workLocationId: z55.number().optional(),
-    destinationId: z55.number().optional(),
-    dateFrom: z55.string().optional(),
-    dateTo: z55.string().optional(),
-    search: z55.string().optional(),
-    limit: z55.number().optional().default(500)
+  report: protectedProcedure.input(z56.object({
+    workLocationId: z56.number().optional(),
+    destinationId: z56.number().optional(),
+    dateFrom: z56.string().optional(),
+    dateTo: z56.string().optional(),
+    search: z56.string().optional(),
+    limit: z56.number().optional().default(500)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -28530,9 +29143,9 @@ var fiscalNotesRouter = router({
       const realId = rawId >= 1e4 ? rawId - 1e4 : rawId;
       let destName = "", destNick = "";
       try {
-        const [d] = await db.select({ name: cargoDestinations.name, nickname: cargoDestinations.nickname }).from(cargoDestinations).where(eq44(cargoDestinations.id, realId)).limit(1);
-        destName = (d?.name || "").toUpperCase();
-        destNick = (d?.nickname || "").toUpperCase();
+        const [d2] = await db.select({ name: cargoDestinations.name, nickname: cargoDestinations.nickname }).from(cargoDestinations).where(eq44(cargoDestinations.id, realId)).limit(1);
+        destName = (d2?.name || "").toUpperCase();
+        destNick = (d2?.nickname || "").toUpperCase();
       } catch {
       }
       const keys = [destName, destNick].filter((k) => k && k.trim());
@@ -28584,7 +29197,7 @@ var fiscalNotesRouter = router({
 // server/routers/notificationSettings.ts
 init_trpc();
 init_db();
-import { z as z56 } from "zod";
+import { z as z57 } from "zod";
 import { sql as sql31 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
@@ -28725,11 +29338,11 @@ var notificationSettingsRouter = router({
   // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
   // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
   // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
-  updateCargoNfResponsible: protectedProcedure.input(z56.object({
-    recipients: z56.array(z56.object({
-      collaboratorId: z56.number().nullable(),
-      manualName: z56.string().nullable().optional(),
-      manualPhone: z56.string().nullable().optional()
+  updateCargoNfResponsible: protectedProcedure.input(z57.object({
+    recipients: z57.array(z57.object({
+      collaboratorId: z57.number().nullable(),
+      manualName: z57.string().nullable().optional(),
+      manualPhone: z57.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -28739,11 +29352,11 @@ var notificationSettingsRouter = router({
     return { ok: true };
   }),
   // Idem, pra quem recebe o aviso de "nova solicitação de compra".
-  updatePurchaseRequestNewResponsible: protectedProcedure.input(z56.object({
-    recipients: z56.array(z56.object({
-      collaboratorId: z56.number().nullable(),
-      manualName: z56.string().nullable().optional(),
-      manualPhone: z56.string().nullable().optional()
+  updatePurchaseRequestNewResponsible: protectedProcedure.input(z57.object({
+    recipients: z57.array(z57.object({
+      collaboratorId: z57.number().nullable(),
+      manualName: z57.string().nullable().optional(),
+      manualPhone: z57.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -28752,12 +29365,12 @@ var notificationSettingsRouter = router({
     await setSetting(db, "purchaseRequestNewResponsible", input);
     return { ok: true };
   }),
-  update: protectedProcedure.input(z56.record(z56.string(), z56.object({
-    enabled: z56.boolean(),
-    hour: z56.number().int().min(0).max(23),
-    minute: z56.number().int().min(0).max(59),
-    weekday: z56.number().int().min(0).max(6).nullable(),
-    whatsappCollaboratorIds: z56.array(z56.number())
+  update: protectedProcedure.input(z57.record(z57.string(), z57.object({
+    enabled: z57.boolean(),
+    hour: z57.number().int().min(0).max(23),
+    minute: z57.number().int().min(0).max(59),
+    weekday: z57.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z57.array(z57.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -28765,9 +29378,9 @@ var notificationSettingsRouter = router({
     await setSetting(db, "jobConfig", input);
     return { ok: true };
   }),
-  updateClientConfig: protectedProcedure.input(z56.record(z56.string(), z56.object({
-    enabled: z56.boolean(),
-    clientIds: z56.array(z56.number())
+  updateClientConfig: protectedProcedure.input(z57.record(z57.string(), z57.object({
+    enabled: z57.boolean(),
+    clientIds: z57.array(z57.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -28778,7 +29391,7 @@ var notificationSettingsRouter = router({
 });
 
 // server/routers.ts
-import { z as z57 } from "zod";
+import { z as z58 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -28960,10 +29573,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z57.object({
-      name: z57.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z57.string().email("Email inv\xE1lido"),
-      password: z57.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z58.object({
+      name: z58.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z58.string().email("Email inv\xE1lido"),
+      password: z58.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -28978,9 +29591,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z57.object({
-      email: z57.string().email("Email inv\xE1lido"),
-      password: z57.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z58.object({
+      email: z58.string().email("Email inv\xE1lido"),
+      password: z58.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -28999,11 +29612,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z57.object({
-      seedKey: z57.string(),
-      email: z57.string().email(),
-      name: z57.string(),
-      password: z57.string().min(4)
+    seedAdmin: publicProcedure.input(z58.object({
+      seedKey: z58.string(),
+      email: z58.string().email(),
+      name: z58.string(),
+      password: z58.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -29013,9 +29626,9 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z57.object({
-      email: z57.string().email("Email inv\xE1lido"),
-      origin: z57.string().url().optional()
+    forgotPassword: publicProcedure.input(z58.object({
+      email: z58.string().email("Email inv\xE1lido"),
+      origin: z58.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
@@ -29029,9 +29642,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z57.object({
-      token: z57.string().min(1),
-      password: z57.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z58.object({
+      token: z58.string().min(1),
+      password: z58.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -29100,7 +29713,7 @@ var appRouter = router({
   notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z57.object({ key: z57.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z58.object({ key: z58.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -29154,6 +29767,7 @@ var appRouter = router({
   sicoob: sicoobRouter,
   financialReal: financialRealRouter,
   custos: custosRouter,
+  tarefas: tarefasRouter,
   modulosConfig: modulosConfigRouter,
   quickAccess: quickAccessRouter,
   weeklyGoals: weeklyGoalsRouter,
@@ -31493,7 +32107,7 @@ async function startServer() {
         "amazonaws.com"
       ];
       const urlObj = new URL(url);
-      if (!allowed.some((d) => urlObj.hostname.endsWith(d))) {
+      if (!allowed.some((d2) => urlObj.hostname.endsWith(d2))) {
         return res.status(403).json({ error: "Domain not allowed" });
       }
       const https2 = await import("https");
@@ -31611,7 +32225,7 @@ function schedulePendingPaymentsCheck() {
             byCollab[r.collaboratorName].count++;
             byCollab[r.collaboratorName].total += parseFloat(r.dailyValue || "0");
           }
-          const lines = Object.entries(byCollab).map(([name2, d]) => `\u2022 ${name2}: ${d.count} dia(s) \u2014 R$ ${d.total.toFixed(2)}`).join("\n");
+          const lines = Object.entries(byCollab).map(([name2, d2]) => `\u2022 ${name2}: ${d2.count} dia(s) \u2014 R$ ${d2.total.toFixed(2)}`).join("\n");
           await notifyOwner2({
             title: `\u26A0\uFE0F Alerta semanal: ${pendingRecords.length} pagamento(s) pendente(s)`,
             content: `Relat\xF3rio semanal de pagamentos pendentes h\xE1 mais de 7 dias.
