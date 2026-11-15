@@ -19,15 +19,23 @@ const fmt = (d: string) => d.split("-").reverse().slice(0, 2).join("/");
 
 type Linha = { destinationId: number | ""; targetCargas: number; observacao: string; porDia: boolean; dias: Record<string, number> };
 
-export function WeeklyGoalForm({ semanaInicio, inicial, onDone, onCancel }: {
+const somaDias = (d: string, n: number) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) + n * 86400000).toISOString().slice(0, 10);
+const fmtCompleto = (d: string) => d.split("-").reverse().slice(0, 2).join("/");
+const tituloDaSemana = (ini: string) => `Meta semanal ${fmtCompleto(ini)} a ${fmtCompleto(somaDias(ini, 6))}`;
+
+export function WeeklyGoalForm({ semanaInicio: semanaBase, inicial, onDone, onCancel }: {
   semanaInicio: string;
   inicial?: { id: number; title: string; description: string | null; supervisorIds: number[]; responsibleUserId: number; itens: any[] };
   onDone: () => void;
   onCancel: () => void;
 }) {
+  // Período: na criação dá para escolher a semana (anterior, atual e as próximas); na edição fica a da meta.
+  const [semanaInicio, setSemanaInicio] = useState(semanaBase);
   const dias = useMemo(() => diasDaSemana(semanaInicio), [semanaInicio]);
+  const opcoesSemana = useMemo(() => Array.from({ length: 6 }, (_, k) => somaDias(semanaBase, (k - 1) * 7)), [semanaBase]);
+  const [tituloEditado, setTituloEditado] = useState(false);
   const opcoes = trpc.weeklyGoals.opcoes.useQuery();
-  const [title, setTitle] = useState(inicial?.title ?? "Meta da semana");
+  const [title, setTitle] = useState(inicial?.title ?? tituloDaSemana(semanaBase));
   const [description, setDescription] = useState(inicial?.description ?? "");
   const [responsavel, setResponsavel] = useState<number | "">(inicial?.responsibleUserId ?? "");
   const [supervisores, setSupervisores] = useState<number[]>(inicial?.supervisorIds ?? []);
@@ -71,9 +79,27 @@ export function WeeklyGoalForm({ semanaInicio, inicial, onDone, onCancel }: {
 
   return (
     <div className="space-y-5 pb-8">
+      {!inicial && (
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Período da meta</label>
+          <select value={semanaInicio} onChange={e => {
+            const nova = e.target.value;
+            setSemanaInicio(nova);
+            if (!tituloEditado) setTitle(tituloDaSemana(nova));
+            setLinhas(ls => ls.map(l => ({ ...l, dias: {} }))); // os dias planejados pertenciam à outra semana
+          }} className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm">
+            {opcoesSemana.map(ini => (
+              <option key={ini} value={ini}>
+                {fmtCompleto(ini)} a {fmtCompleto(somaDias(ini, 6))}{ini === semanaBase ? " (esta semana)" : ini < semanaBase ? " (semana passada)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div>
         <label className="text-xs text-gray-500 block mb-1">Título</label>
-        <Input value={title} onChange={e => setTitle(e.target.value)} />
+        <Input value={title} onChange={e => { setTitle(e.target.value); setTituloEditado(true); }} />
       </div>
 
       {!inicial && (

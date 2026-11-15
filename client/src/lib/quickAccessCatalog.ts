@@ -2,7 +2,7 @@
 // Catálogo dos atalhos que podem aparecer no Painel. O id é o caminho da tela; o slug é o módulo de permissão.
 import {
   ClipboardList, Truck, UserCheck, Users, Layers, Car, Package, Scissors, Wrench, Receipt, Wallet, Globe, Target,
-  FileText, FileCheck, FileBarChart, Leaf, Navigation, Map, Fuel, Building2, ShoppingCart, TrendingDown, TrendingUp,
+  ListChecks, ClipboardCheck, FileText, FileCheck, FileBarChart, Leaf, Navigation, Map, Fuel, Building2, ShoppingCart, TrendingDown, TrendingUp,
   Landmark, ArrowLeftRight, BarChart3, Shirt,
 } from "lucide-react";
 
@@ -13,7 +13,8 @@ const a = (label: string, path: string, slug: string | null, icon: any, color: s
 export const CATALOGO_PAINEL: AtalhoPainel[] = [
   a("Presenças", "/presencas", "presencas", ClipboardList, "bg-blue-500"),
   a("Cargas", "/cargas", "cargas", Truck, "bg-teal-500"),
-  a("Metas Semanais", "/metas-semanais", "metas-semanais", Target, "bg-lime-600"),
+  a("Minhas Tarefas", "/tarefas", "tarefas", ListChecks, "bg-teal-600"),
+  a("Tarefas da Equipe", "/tarefas-equipe", "tarefas-gestao", ClipboardCheck, "bg-cyan-700"),
   a("Colaboradores", "/colaboradores", "colaboradores", UserCheck, "bg-emerald-500"),
   a("Clientes", "/clientes", "clientes", Users, "bg-green-500"),
   a("Equipamentos", "/setores", "equipamentos", Layers, "bg-orange-500"),

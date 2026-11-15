@@ -34,7 +34,7 @@ import {
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  ToggleRight, LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight, Loader2, ShieldAlert, Target
+  ToggleRight, ListChecks, ClipboardCheck, LayoutDashboard, LogOut, PanelLeft, Users, UserCheck, Truck, ClipboardList, Layers, ShieldCheck, Car, Package, Globe, ArrowLeft, Home, Phone, Mail, Code2, Navigation, Scissors, Fuel, CheckCircle2, Receipt, Wallet, Map, Leaf, DollarSign, BarChart3, Building2, Route, Download, Smartphone, X, FileBarChart, TrendingUp, Wrench, Droplets, ShoppingCart, TrendingDown, RefreshCw, FileText, FileCheck, Database, Settings, Bell, ChevronRight, Radio, Shirt, Landmark, ArrowLeftRight, Loader2, ShieldAlert, Target
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -84,6 +84,7 @@ type MenuItem = {
   path: string;
   slug: string | null;
   icon?: React.ElementType;
+  hidden?: boolean;
 };
 
 type MenuGroup = {
@@ -137,7 +138,10 @@ const menuGroups: MenuGroup[] = [
     items: [
       { label: "Controle de Cargas", path: "/cargas", slug: "cargas", icon: Truck },
       { label: "Meus Gastos", path: "/meus-gastos", slug: "meus-gastos", icon: Receipt },
-      { label: "Metas Semanais", path: "/metas-semanais", slug: "metas-semanais", icon: Target },
+      { label: "Minhas Tarefas", path: "/tarefas", slug: "tarefas", icon: ListChecks },
+      { label: "Tarefas da Equipe", path: "/tarefas-equipe", slug: "tarefas-gestao", icon: ClipboardCheck },
+      // Metas Semanais vivem dentro das Tarefas (hidden: sai do menu, mas a rota e a permissão continuam)
+      { label: "Metas Semanais", path: "/metas-semanais", slug: "metas-semanais", icon: Target, hidden: true },
       { label: "Controle de Notas", path: "/controle-notas", slug: "controle-notas", icon: FileText },
       { label: "Conferência de Notas", path: "/conferencia-notas", slug: "conferencia-notas", icon: FileCheck },
       { label: "Relatório de Destinos", path: "/relatorio-destinos", slug: "relatorio-destinos", icon: FileBarChart },
@@ -500,6 +504,7 @@ function DashboardLayoutContent({
                 const isGroupOpen = !!openGroups[group.label];
                 const hasActiveChild = group.items.some(item => item.path === location);
                 const visibleItems = group.items.filter(item => {
+                  if (item.hidden) return false;
                   if (item.slug === null) return isAdmin;
                   return hasAccess(item.slug);
                 });

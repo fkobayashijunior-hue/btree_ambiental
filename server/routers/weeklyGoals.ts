@@ -70,6 +70,9 @@ function ensureTables(db: Db): Promise<void> {
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX weekly_goal_messages_goal_idx (goal_id, created_at)
       )`);
+      // anexos (fotos e arquivos) da conversa: JSON [{url, nome}]
+      try { await run(`ALTER TABLE weekly_goal_messages ADD COLUMN anexos TEXT NULL`); }
+      catch (e: any) { if (!/duplicate column/i.test(String(e?.message ?? e))) throw e; }
     })().catch(e => { ensurePromise = null; throw e; });
   }
   return ensurePromise;
@@ -163,9 +166,11 @@ async function resumoDaMeta(db: Db, g: GoalRow, hoje: string) {
                                     SUM(entry_date = ? AND (kind = 'problema' OR situacao = 'problema')) AS prob
                              FROM weekly_goal_entries WHERE goal_id = ?`, [hoje, hoje, hoje, g.id]);
   const [pq] = await q(db, `SELECT COUNT(*) AS n FROM weekly_goal_messages WHERE goal_id = ? AND kind = 'pergunta' AND answered = 0`, [g.id]);
+  // Mensagem do responsável na conversa do dia vale como relato do dia
+  const [msgHoje] = await q(db, `SELECT COUNT(*) AS n FROM weekly_goal_messages WHERE goal_id = ? AND author_role = 'responsavel' AND kind <> 'sistema' AND msg_date = ?`, [g.id, hoje]);
   const decorridos = hoje < sem.start ? 0 : hoje > sem.end ? 7 : sem.days.indexOf(hoje) + 1;
   const alertas: Alerta[] = calcularAlertas({
-    status: g.status, ack: g.ack, hoje, semana: { start: sem.start, end: sem.end }, relatosHoje: Number(rel?.hoje ?? 0),
+    status: g.status, ack: g.ack, hoje, semana: { start: sem.start, end: sem.end }, relatosHoje: Number(rel?.hoje ?? 0) + Number(msgHoje?.n ?? 0),
     fechouHoje: Number(rel?.fechou ?? 0) > 0, problemaHoje: Number(rel?.prob ?? 0) > 0,
     perguntasSemResposta: Number(pq?.n ?? 0), pctMeta: prog.total.pct, diasDecorridos: decorridos,
   });
@@ -299,6 +304,11 @@ export const weeklyGoalsRouter = router({
           mensagens: tiposMensagemPermitidos(m.papel),
         },
         itens: res.itens, progresso: res.progresso, alertas: res.alertas, hoje, dias,
+        // última alteração feita pela supervisão (para avisar o responsável em destaque enquanto ele não der ciência)
+        ultimaAlteracao: (() => {
+          const a = messages.filter(x => x.kind === "sistema" && String(x.body).startsWith("Meta alterada por")).pop();
+          return a ? { texto: String(a.body), criadoEm: a.created_at as any } : null;
+        })(),
         conversaMeta: (() => {
           const raizes = messages.filter(x => x.msg_date == null && !x.parent_id && x.kind !== "sistema");
           const ids = new Set(raizes.map(x => x.id));
@@ -360,6 +370,7 @@ export const weeklyGoalsRouter = router({
       if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Meta já encerrada" });
 
       const antes = descreveItens(await itensDaMeta(db, input.id));
+      const tituloAntes = m.goal.title;
       await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [input.id]);
       await db.$client.execute(`DELETE FROM weekly_goal_items WHERE goal_id = ?`, [input.id]);
       await gravarItens(db, input.id, weekBounds(m.goal.weekStart), input.itens);
@@ -371,8 +382,8 @@ export const weeklyGoalsRouter = router({
       for (const uid of sups) await db.$client.execute(`INSERT IGNORE INTO weekly_goal_supervisors (goal_id, user_id, user_name) VALUES (?, ?, ?)`, [input.id, uid, await nomeDe(db, uid)]);
 
       const depois = descreveItens(await itensDaMeta(db, input.id));
-      await mensagemSistema(db, input.id, `Meta alterada por ${await nomeDe(db, ctx.user.id)}. Antes: ${antes}. Agora: ${depois}. A ciência do responsável foi pedida de novo.`);
-      await avisar([m.goal.responsibleUserId], "Meta semanal alterada", `${input.title} — ${depois}. Confirme a ciência.`, input.id);
+      await mensagemSistema(db, input.id, `Meta alterada por ${await nomeDe(db, ctx.user.id)}.${tituloAntes.trim() !== input.title.trim() ? ` Título: "${tituloAntes}" → "${input.title.trim()}".` : ""} Antes: ${antes}. Agora: ${depois}. A ciência do responsável foi pedida de novo.`);
+      await avisar([m.goal.responsibleUserId], "Meta semanal alterada pela supervisão", `${await nomeDe(db, ctx.user.id)} alterou a meta: ${input.title} — ${depois}. Confirme a ciência.`, input.id);
       return { success: true };
     }),
 
@@ -494,13 +505,15 @@ export const weeklyGoalsRouter = router({
     .input(z.object({
       goalId: z.number(),
       kind: z.enum(["pergunta", "resposta", "comentario"]),
-      body: z.string().min(1).max(3000),
+      body: z.string().max(3000).default(""),
+      anexos: z.array(z.object({ url: z.string().url().max(2000), nome: z.string().max(255) })).max(5).optional(),
       entryId: z.number().optional(),
       parentId: z.number().optional(),
       dia: data.optional(),
       geral: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      if (!input.body.trim() && !input.anexos?.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Escreva uma mensagem ou anexe um arquivo" });
       const db = await getDbOrThrow();
       const m = await exigirPapel(db, ctx.user, input.goalId);
       if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode enviar este tipo de mensagem" });
@@ -516,15 +529,15 @@ export const weeklyGoalsRouter = router({
         if (pm) dia = pm.msg_date ?? null; // resposta fica no mesmo lugar da mensagem respondida (dia ou conversa da meta)
       }
       const [res] = (await db.$client.execute(
-        `INSERT INTO weekly_goal_messages (goal_id, entry_id, parent_id, kind, body, author_user_id, author_name, author_role, msg_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [input.goalId, input.entryId ?? null, input.parentId ?? null, input.kind, input.body.trim(), ctx.user.id, nome, papel, dia]
+        `INSERT INTO weekly_goal_messages (goal_id, entry_id, parent_id, kind, body, author_user_id, author_name, author_role, msg_date, anexos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [input.goalId, input.entryId ?? null, input.parentId ?? null, input.kind, input.body.trim(), ctx.user.id, nome, papel, dia, input.anexos?.length ? JSON.stringify(input.anexos) : null]
       )) as any;
       if (input.kind === "resposta" && input.parentId) {
         await db.$client.execute(`UPDATE weekly_goal_messages SET answered = 1 WHERE id = ? AND goal_id = ?`, [input.parentId, input.goalId]);
       }
       const destinatarios = m.papel === "responsavel" ? interessados(m) : [m.goal.responsibleUserId];
       const titulo = input.kind === "pergunta" ? "Pergunta na meta semanal" : input.kind === "resposta" ? "Resposta na meta semanal" : "Comentário na meta semanal";
-      await avisar(destinatarios, titulo, `${nome}: ${input.body.trim().slice(0, 140)}`, input.goalId, ctx.user.id);
+      await avisar(destinatarios, titulo, `${nome}: ${input.body.trim().slice(0, 140) || "enviou um anexo"}`, input.goalId, ctx.user.id);
       return { id: Number(res.insertId) };
     }),
 });
@@ -538,7 +551,10 @@ function mapEntry(e: any) {
   };
 }
 function mapMsg(x: any) {
+  let anexos: { url: string; nome: string }[] = [];
+  try { anexos = x.anexos ? JSON.parse(x.anexos) : []; } catch { anexos = []; }
   return {
+    anexos,
     id: x.id as number, entryId: (x.entry_id ?? null) as number | null, parentId: (x.parent_id ?? null) as number | null,
     kind: x.kind as string, body: x.body as string, autor: (x.author_name ?? "Sistema") as string,
     papel: (x.author_role ?? "sistema") as string, respondida: Number(x.answered) === 1, data: (x.msg_date ?? null) as string | null,

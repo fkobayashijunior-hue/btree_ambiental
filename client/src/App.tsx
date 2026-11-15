@@ -34,6 +34,8 @@ import GpsTrackingPage from "./pages/GpsTrackingPage";
 import ChainsawModule from "./pages/ChainsawModule";
 import ExtraExpenses from "./pages/ExtraExpenses";
 import MeusGastosPage from "./pages/MeusGastosPage";
+import MinhasTarefasPage from "./pages/MinhasTarefasPage";
+import TarefasEquipePage from "./pages/TarefasEquipePage";
 import FinancialModule from "./pages/FinancialModule";
 import PayrollPage from "./pages/PayrollPage";
 import GpsLocationsPage from "./pages/GpsLocationsPage";
@@ -154,6 +156,12 @@ function Router() {
       </Route>
       <Route path={"/motosserras"}>
         {() => <WithLayout component={ChainsawModule} />}
+      </Route>
+      <Route path={"/tarefas"}>
+        {() => <WithLayout component={MinhasTarefasPage} />}
+      </Route>
+      <Route path={"/tarefas-equipe"}>
+        {() => <WithLayout component={TarefasEquipePage} />}
       </Route>
       <Route path={"/meus-gastos"}>
         {() => <WithLayout component={MeusGastosPage} />}
