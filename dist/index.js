@@ -360,7 +360,7 @@ var init_schema = __esm({
       paymentTermDaysAfterDelivery: int("payment_term_days_after_delivery"),
       // Categoria usada para calcular a comissão do motorista por carga entregue nesse destino
       // (Folha de Pagamento). 'nenhuma' = destino não gera comissão de motorista.
-      commissionCategory: mysqlEnum("commission_category", ["nenhuma", "enerbio", "mabam", "lider", "sonoco"]).default("nenhuma")
+      commissionCategory: mysqlEnum("commission_category", ["nenhuma", "enerbio", "mabam", "lider", "sonoco", "aurora"]).default("nenhuma")
     });
     cargoLoads = mysqlTable("cargo_loads", {
       agreedUnit: mysqlEnum("agreed_unit", ["ton", "m3"]),
@@ -4864,6 +4864,21 @@ async function ensurePayrollTable(db) {
   } catch (e) {
     console.warn("[Payroll] migrateCommissionRatesCollaboratorId:", e?.message);
   }
+  try {
+    const [ct] = await db.execute(
+      `SELECT COLUMN_TYPE AS tipo FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cargo_destinations' AND COLUMN_NAME = 'commission_category'`
+    );
+    const tipo = String(ct[0]?.tipo ?? "");
+    if (tipo && !tipo.includes("'aurora'")) {
+      await db.execute(`ALTER TABLE cargo_destinations MODIFY COLUMN commission_category ENUM('nenhuma','enerbio','mabam','lider','sonoco','aurora') DEFAULT 'nenhuma'`);
+    }
+    await db.execute(
+      `INSERT IGNORE INTO payroll_commission_rates (collaborator_id, chave, valor)
+       SELECT id, 'motorista_aurora', '68.00' FROM collaborators WHERE name LIKE 'Ruan Matheus de Oliveira%'`
+    );
+  } catch (e) {
+    console.warn("[Payroll] migrateCategoriaAurora:", e?.message);
+  }
 }
 async function getCommissionRatesMap(db, collaboratorId = 0) {
   const map = {};
@@ -5645,7 +5660,7 @@ var init_payroll = __esm({
             byCat.set(lr.categoria, g);
           }
           const rows2 = Array.from(byCat.entries()).map(([categoria, g]) => ({ categoria, qtd: g.qtd, totalKg: g.totalKg }));
-          const labels = { enerbio: "Enerbio", mabam: "Mabam (Rebnic)", lider: "L\xEDder", sonoco: "Sonoco" };
+          const labels = { enerbio: "Enerbio", mabam: "Mabam (Rebnic)", lider: "L\xEDder", sonoco: "Sonoco", aurora: "Aurora" };
           const items = rows2.map((r) => {
             const rate = rates[`motorista_${r.categoria}`] ?? 0;
             const quantidade = porTonelada ? parseFloat(r.totalKg ?? "0") / 1e3 : Number(r.qtd);
@@ -18242,7 +18257,7 @@ var buyerClientsRouter = router({
     isBuyer: z30.number().optional(),
     // 0 = destino normal, 1 = comprador
     paymentTermDaysAfterDelivery: z30.number().nullable().optional(),
-    commissionCategory: z30.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco"]).optional()
+    commissionCategory: z30.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco", "aurora"]).optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
@@ -18286,7 +18301,7 @@ var buyerClientsRouter = router({
     isBuyer: z30.number().optional(),
     // 0 = destino normal, 1 = comprador
     paymentTermDaysAfterDelivery: z30.number().nullable().optional(),
-    commissionCategory: z30.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco"]).optional()
+    commissionCategory: z30.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco", "aurora"]).optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
