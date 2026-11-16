@@ -116,6 +116,23 @@ async function ensurePayrollTable(db: any) {
   } catch (e: any) {
     console.warn('[Payroll] migrateCommissionRatesCollaboratorId:', e?.message);
   }
+  // Categoria de comissão "Aurora" (destino com tarifa própria por tonelada) + tarifa do Ruan.
+  try {
+    const [ct] = await db.execute(
+      `SELECT COLUMN_TYPE AS tipo FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cargo_destinations' AND COLUMN_NAME = 'commission_category'`
+    ) as any;
+    const tipo = String((ct as any[])[0]?.tipo ?? "");
+    if (tipo && !tipo.includes("'aurora'")) {
+      await db.execute(`ALTER TABLE cargo_destinations MODIFY COLUMN commission_category ENUM('nenhuma','enerbio','mabam','lider','sonoco','aurora') DEFAULT 'nenhuma'`);
+    }
+    // R$ 68,00/ton para o Ruan Matheus de Oliveira dos Santos (INSERT IGNORE: não sobrescreve ajuste feito depois pela tela)
+    await db.execute(
+      `INSERT IGNORE INTO payroll_commission_rates (collaborator_id, chave, valor)
+       SELECT id, 'motorista_aurora', '68.00' FROM collaborators WHERE name LIKE 'Ruan Matheus de Oliveira%'`
+    );
+  } catch (e: any) {
+    console.warn('[Payroll] migrateCategoriaAurora:', e?.message);
+  }
 }
 
 const COMMISSION_RATE_DEFAULTS: Record<string, string> = {
@@ -1136,7 +1153,7 @@ export const payrollRouter = router({
           byCat.set(lr.categoria, g);
         }
         const rows = Array.from(byCat.entries()).map(([categoria, g]) => ({ categoria, qtd: g.qtd, totalKg: g.totalKg }));
-        const labels: Record<string, string> = { enerbio: "Enerbio", mabam: "Mabam (Rebnic)", lider: "Líder", sonoco: "Sonoco" };
+        const labels: Record<string, string> = { enerbio: "Enerbio", mabam: "Mabam (Rebnic)", lider: "Líder", sonoco: "Sonoco", aurora: "Aurora" };
         const items = (rows as any[]).map((r: any) => {
           const rate = rates[`motorista_${r.categoria}`] ?? 0;
           const quantidade = porTonelada ? parseFloat(r.totalKg ?? "0") / 1000 : Number(r.qtd);

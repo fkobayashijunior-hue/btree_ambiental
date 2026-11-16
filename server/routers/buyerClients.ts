@@ -100,7 +100,7 @@ export const buyerClientsRouter = router({
       notes: z.string().optional(),
       isBuyer: z.number().optional(), // 0 = destino normal, 1 = comprador
       paymentTermDaysAfterDelivery: z.number().nullable().optional(),
-      commissionCategory: z.enum(['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco']).optional(),
+      commissionCategory: z.enum(['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco', 'aurora']).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -146,7 +146,7 @@ export const buyerClientsRouter = router({
       active: z.number().optional(),
       isBuyer: z.number().optional(), // 0 = destino normal, 1 = comprador
       paymentTermDaysAfterDelivery: z.number().nullable().optional(),
-      commissionCategory: z.enum(['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco']).optional(),
+      commissionCategory: z.enum(['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco', 'aurora']).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

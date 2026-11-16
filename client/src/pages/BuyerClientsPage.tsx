@@ -22,7 +22,7 @@ export default function BuyerClientsPage() {
     address: "", city: "", state: "", cep: "", contactPerson: "",
     product: "", paymentMethod: "", pricePerUnit: "", unit: "ton", notes: "",
     paymentTermDaysAfterDelivery: "",
-    commissionCategory: "nenhuma" as "nenhuma" | "enerbio" | "mabam" | "lider" | "sonoco",
+    commissionCategory: "nenhuma" as "nenhuma" | "enerbio" | "mabam" | "lider" | "sonoco" | "aurora",
   });
   const [isBuyerForm, setIsBuyerForm] = useState(false); // toggle comprador
   const [editId, setEditId] = useState<number | null>(null);
@@ -293,6 +293,7 @@ export default function BuyerClientsPage() {
                   <SelectItem value="mabam">Mabam (Rebnic)</SelectItem>
                   <SelectItem value="lider">Líder</SelectItem>
                   <SelectItem value="sonoco">Sonoco</SelectItem>
+                  <SelectItem value="aurora">Aurora</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-emerald-700">

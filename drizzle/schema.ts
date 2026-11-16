@@ -66,7 +66,7 @@ export const cargoDestinations = mysqlTable("cargo_destinations", {
 	paymentTermDaysAfterDelivery: int("payment_term_days_after_delivery"),
 	// Categoria usada para calcular a comissão do motorista por carga entregue nesse destino
 	// (Folha de Pagamento). 'nenhuma' = destino não gera comissão de motorista.
-	commissionCategory: mysqlEnum("commission_category", ['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco']).default('nenhuma'),
+	commissionCategory: mysqlEnum("commission_category", ['nenhuma', 'enerbio', 'mabam', 'lider', 'sonoco', 'aurora']).default('nenhuma'),
 });
 
 export const cargoLoads = mysqlTable("cargo_loads", {
