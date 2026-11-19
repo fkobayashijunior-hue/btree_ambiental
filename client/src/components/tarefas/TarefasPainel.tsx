@@ -40,6 +40,7 @@ const PENDENCIAS = [
 const diasDesde = (iso?: string | null) => (iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)) : 0);
 const hojeLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const dataBR = (d?: string | null) => (d ? d.split("-").reverse().join("/") : "");
+const soDataBR = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "");
 const dataHoraBR = (iso?: string | null) => { if (!iso) return ""; const x = new Date(iso); return `${x.toLocaleDateString("pt-BR")} ${x.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`; };
 const atrasada = (t: any) => !!t.prazo && t.prazo < hojeLocal() && t.status !== "concluida";
 const tamanhoBR = (b?: number | null) => (!b ? "" : b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);
@@ -128,7 +129,7 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
             {t.localNome && <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-600"><MapPin className="h-3 w-3" />{t.localNome}</span>}
             {t.qtdComentarios > 0 && <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-600"><MessageSquare className="h-3 w-3" />{t.qtdComentarios}</span>}
           </div>
-          {pend && <p className={`mt-1.5 rounded-lg px-2 py-1 text-xs font-medium ${pend.cls}`}>⏸ {pend.l}{t.pendenciaMotivo ? ` · ${t.pendenciaMotivo}` : ""}{diasDesde(t.pendenciaDesde) > 0 ? ` (há ${diasDesde(t.pendenciaDesde)} dia(s))` : ""}</p>}
+          {pend && <p className={`mt-1.5 rounded-lg px-2 py-1 text-xs font-medium ${pend.cls}`}>⏸ {pend.l}{t.pendenciaMotivo ? ` · ${t.pendenciaMotivo}` : ""}{t.pendenciaDesde ? ` · desde ${soDataBR(t.pendenciaDesde)}` : ""}{diasDesde(t.pendenciaDesde) > 0 ? ` (há ${diasDesde(t.pendenciaDesde)} dia(s))` : ""}{t.pendenciaRespNomes ? ` · 👤 ${t.pendenciaRespNomes}` : ""}</p>}
           {equipe && <p className="mt-1.5 flex items-center gap-1 text-xs text-gray-500"><User className="h-3 w-3" />{t.responsavelNome ?? "-"}</p>}
           {ehMeta(t) && <p className="mt-1.5 text-[11px] font-medium text-lime-700">Toque para abrir a meta →</p>}
         </button>
@@ -265,7 +266,9 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
                           return (
                             <div title={t.pendenciaMotivo ?? ""}>
                               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${pend.cls}`}>⏸ {pend.l}</span>
-                              {(t.pendenciaMotivo || dias > 0) && <p className="mt-0.5 text-[11px] text-gray-500">{t.pendenciaMotivo ?? ""}{dias > 0 ? `${t.pendenciaMotivo ? " · " : ""}há ${dias} dia(s)` : ""}</p>}
+                              {t.pendenciaDesde && <p className="mt-0.5 text-[11px] text-gray-500">Desde {soDataBR(t.pendenciaDesde)}{dias > 0 ? ` (há ${dias} dia(s))` : ""}</p>}
+                              {t.pendenciaMotivo && <p className="mt-0.5 text-[11px] text-gray-500">{t.pendenciaMotivo}</p>}
+                              {t.pendenciaRespNomes && <p className="mt-0.5 text-[11px] text-gray-600">👤 {t.pendenciaRespNomes}</p>}
                             </div>
                           );
                         })()}
@@ -395,11 +398,16 @@ function TarefaDetalhe({ id, onClose, onChanged, onEditar }: any) {
   const [enviando, setEnviando] = useState(false);
   const [pendSel, setPendSel] = useState("");
   const [pendMotivo, setPendMotivo] = useState("");
+  const [pendDesc, setPendDesc] = useState("");
+  const [pendDesde, setPendDesde] = useState(""); // quando a pendência começou (vazio = agora)
+  const [pendResp, setPendResp] = useState<number[]>([]); // pessoas (colaboradores com usuário) responsáveis pela pendência
+  const ctxPessoas = trpc.tarefas.contexto.useQuery();
+  const pessoas: { id: number; nome: string }[] = (ctxPessoas.data as any)?.pessoas ?? [];
   const { toque, vv } = useAreaVisivel(!!id);
   const refresh = () => { q.refetch(); onChanged?.(); };
   const mudar = trpc.tarefas.mudarStatus.useMutation({ onSuccess: () => { setTexto(""); setFoto(""); refresh(); }, onError: (e) => toast.error(e.message) });
   const comentar = trpc.tarefas.comentar.useMutation({ onSuccess: () => { setTexto(""); setFoto(""); refresh(); }, onError: (e) => toast.error(e.message) });
-  const definirPend = trpc.tarefas.definirPendencia.useMutation({ onSuccess: () => { setPendSel(""); setPendMotivo(""); refresh(); toast.success("Situação atualizada"); }, onError: (e) => toast.error(e.message) });
+  const definirPend = trpc.tarefas.definirPendencia.useMutation({ onSuccess: () => { setPendSel(""); setPendMotivo(""); setPendDesc(""); setPendDesde(""); setPendResp([]); refresh(); toast.success("Situação atualizada"); }, onError: (e) => toast.error(e.message) });
   const aprovar = trpc.tarefas.aprovar.useMutation({ onSuccess: () => { setTexto(""); refresh(); toast.success("Resposta registrada"); }, onError: (e) => toast.error(e.message) });
   const excluir = trpc.tarefas.excluir.useMutation({ onSuccess: () => { toast.success("Tarefa excluída"); onChanged?.(); onClose(); }, onError: (e) => toast.error(e.message) });
   const anexarArq = trpc.tarefas.anexar.useMutation({ onSuccess: () => { refresh(); toast.success("Arquivo anexado"); }, onError: (e) => toast.error(e.message) });
@@ -418,7 +426,7 @@ function TarefaDetalhe({ id, onClose, onChanged, onEditar }: any) {
     } catch { toast.error("Não foi possível enviar o arquivo."); } finally { setEnviandoArq(false); }
   });
   const fimConversa = useRef<HTMLDivElement>(null);
-  useEffect(() => { setTexto(""); setFoto(""); setPendSel(""); setPendMotivo(""); }, [id]);
+  useEffect(() => { setTexto(""); setFoto(""); setPendSel(""); setPendMotivo(""); setPendDesc(""); setPendDesde(""); setPendResp([]); }, [id]);
 
   const t = q.data?.tarefa;
   const hist = q.data?.historico ?? [];
@@ -474,7 +482,10 @@ function TarefaDetalhe({ id, onClose, onChanged, onEditar }: any) {
                 <p className="text-sm font-medium">Pendência</p>
                 {t.pendencia ? (
                   <p className={`rounded-lg px-2 py-1.5 text-sm font-medium ${PENDENCIAS.find((p) => p.v === t.pendencia)?.cls}`}>
-                    ⏸ {PENDENCIAS.find((p) => p.v === t.pendencia)?.l}{t.pendenciaMotivo ? ` · ${t.pendenciaMotivo}` : ""}{diasDesde(t.pendenciaDesde) > 0 ? ` (há ${diasDesde(t.pendenciaDesde)} dia(s))` : ""}
+                    ⏸ {PENDENCIAS.find((p) => p.v === t.pendencia)?.l}{t.pendenciaMotivo ? ` · ${t.pendenciaMotivo}` : ""}
+                    {t.pendenciaDesde && <span className="mt-0.5 block text-xs font-normal">📅 Iniciada em <b>{soDataBR(t.pendenciaDesde)}</b>{diasDesde(t.pendenciaDesde) > 0 ? ` (há ${diasDesde(t.pendenciaDesde)} dia(s))` : ""}</span>}
+                    {t.pendenciaRespNomes &&<span className="mt-0.5 block text-xs font-normal">👤 Responsável: <b>{t.pendenciaRespNomes}</b></span>}
+                    {t.pendenciaDescricao && <span className="mt-1 block whitespace-pre-wrap text-xs font-normal">{t.pendenciaDescricao}</span>}
                   </p>
                 ) : <p className="text-xs text-gray-500">Nada impedindo a tarefa. Se estiver esperando algo, marque abaixo.</p>}
                 {t.pendencia === "aprovacao" && q.data?.gestor && (
@@ -491,14 +502,61 @@ function TarefaDetalhe({ id, onClose, onChanged, onEditar }: any) {
                 </div>
                 {pendSel && (
                   <div className="space-y-2">
-                    <Input value={pendMotivo} onChange={(e) => setPendMotivo(e.target.value)} placeholder={PENDENCIAS.find((p) => p.v === pendSel)?.dica} maxLength={300} className="h-10" />
-                    <Button size="sm" disabled={definirPend.isPending} onClick={() => definirPend.mutate({ id: t.id, pendencia: pendSel as any, motivo: pendMotivo.trim() || null })}>Marcar pendência</Button>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-gray-700">{PENDENCIAS.find((p) => p.v === pendSel)?.dica} <span className="font-normal text-gray-500">(escolha uma ou mais pessoas)</span></p>
+                      {pessoas.length === 0 ? <p className="text-xs text-gray-500">Nenhum colaborador ativo com usuário no sistema. Use o texto abaixo.</p> : (
+                        <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+                          {pessoas.map((p) => {
+                            const on = pendResp.includes(p.id);
+                            return <button key={p.id} type="button" onClick={() => setPendResp(on ? pendResp.filter((x) => x !== p.id) : [...pendResp, p.id])} className={`rounded-full border px-2.5 py-1 text-xs ${on ? "border-emerald-600 bg-emerald-50 font-medium text-emerald-800" : "border-gray-200 bg-white hover:bg-gray-100"}`}>{on ? "✓ " : ""}{p.nome}</button>;
+                          })}
+                        </div>
+                      )}
+                      <Input value={pendMotivo} onChange={(e) => setPendMotivo(e.target.value)} placeholder={pessoas.length ? "Outro? Digite aqui (cliente, fornecedor...)" : PENDENCIAS.find((p) => p.v === pendSel)?.dica} maxLength={300} className="h-10" />
+                    </div>
+                    <Textarea value={pendDesc} onChange={(e) => setPendDesc(e.target.value)} placeholder="Descrição da pendência: explique com detalhes o que está pendente (opcional)" rows={3} maxLength={2000} />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-xs font-medium text-gray-700">Começou em</label>
+                      <Input type="date" value={pendDesde} max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)} onChange={(e) => setPendDesde(e.target.value)} className="h-9 w-auto" />
+                      <span className="text-[11px] text-gray-500">{pendDesde ? "" : "vazio = agora"}</span>
+                    </div>
+                    <Button size="sm" disabled={definirPend.isPending} onClick={() => definirPend.mutate({ id: t.id, pendencia: pendSel as any, motivo: pendMotivo.trim() || null, descricao: pendDesc.trim() || null, responsaveis: pendResp, desde: pendDesde || null })}>Marcar pendência</Button>
                   </div>
                 )}
                 {t.pendencia && (t.pendencia !== "aprovacao" || q.data?.gestor) && (
                   <Button size="sm" variant="ghost" className="gap-1 text-gray-600" disabled={definirPend.isPending} onClick={() => definirPend.mutate({ id: t.id, pendencia: null })}>Remover pendência (liberar)</Button>
                 )}
               </div>
+            )}
+
+            {/* Histórico das pendências (fica visível mesmo com a tarefa concluída) */}
+            {(q.data as any)?.pendencias?.length > 0 && (
+              <details className="rounded-xl border p-3" open={t.status === "concluida"}>
+                <summary className="cursor-pointer text-sm font-medium">Pendências desta tarefa ({(q.data as any).pendencias.length})</summary>
+                <ul className="mt-2 space-y-2">
+                  {[...(q.data as any).pendencias].reverse().map((p: any) => {
+                    const info = PENDENCIAS.find((x) => x.v === p.tipo);
+                    const fim = p.resolvidaEm ? new Date(p.resolvidaEm).getTime() : Date.now();
+                    const min = Math.max(0, Math.round((fim - new Date(p.abertaEm).getTime()) / 60000));
+                    const durou = min < 60 ? `${min} min` : min < 1440 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} dia(s)`;
+                    const COMO: Record<string, string> = { removida: "Liberada", trocada: "Substituída por outra pendência", concluida: "Resolvida ao concluir a tarefa", aprovada: "Aprovada pelo supervisor", devolvida: "Devolvida para ajustes pelo supervisor" };
+                    return (
+                      <li key={p.id} className="space-y-1 rounded-lg bg-gray-50 p-2.5 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${info?.cls}`}>⏸ {info?.l ?? p.tipo}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${p.resolvidaEm ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{p.resolvidaEm ? "Resolvida" : "Em aberto"}</span>
+                          <span className="text-xs text-gray-500">{durou}{p.resolvidaEm ? "" : " até agora"}</span>
+                        </div>
+                        {p.respNomes && <p className="text-xs text-gray-700">👤 Responsável: <b>{p.respNomes}</b></p>}
+                        {p.motivo && <p className="text-xs text-gray-700"><b>Motivo:</b> {p.motivo}</p>}
+                        {p.descricao && <p className="whitespace-pre-wrap text-xs text-gray-700"><b>Descrição:</b> {p.descricao}</p>}
+                        <p className="text-[11px] text-gray-500">Aberta por {p.abertaPor ?? "-"} · iniciada em {soDataBR(p.abertaEm)}</p>
+                        {p.resolvidaEm && <p className="text-[11px] text-gray-500">{COMO[p.resolucao] ?? "Encerrada"} por {p.resolvidaPor ?? "-"} em {dataHoraBR(p.resolvidaEm)}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </details>
             )}
 
             {/* Anexos */}

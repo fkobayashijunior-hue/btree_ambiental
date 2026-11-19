@@ -61,6 +61,7 @@ function ensureTables(db: any): Promise<void> {
       for (const [nome, def] of [
         ["pendencia", "VARCHAR(12) NULL"], ["pendencia_motivo", "VARCHAR(300) NULL"], ["pendencia_desde", "DATETIME NULL"],
         ["origem", "VARCHAR(20) NULL"], ["origem_id", "INT NULL"], ["responsavel_user_id", "INT NULL"],
+        ["pendencia_resp_ids", "VARCHAR(255) NULL"], ["pendencia_descricao", "TEXT NULL"], ["pendencia_resp_nomes", "VARCHAR(600) NULL"],
       ] as [string, string][]) {
         if (!tem.has(nome)) await db.$client.execute(`ALTER TABLE tarefas ADD COLUMN ${nome} ${def}`);
       }
@@ -98,6 +99,26 @@ function ensureTables(db: any): Promise<void> {
           KEY tarefa_anexos_tarefa (tarefa_id)
         )
       `);
+      // Cada pendência que a tarefa teve (para o histórico detalhado, inclusive depois de concluída)
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS tarefa_pendencias (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          tarefa_id INT NOT NULL,
+          tipo VARCHAR(12) NOT NULL,
+          motivo VARCHAR(300) NULL,
+          descricao TEXT NULL,
+          resp_nomes VARCHAR(600) NULL,
+          aberta_por INT NULL,
+          aberta_por_nome VARCHAR(120) NULL,
+          aberta_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          resolvida_em DATETIME NULL,
+          resolvida_por INT NULL,
+          resolvida_por_nome VARCHAR(120) NULL,
+          resolucao VARCHAR(20) NULL,
+          KEY tarefa_pend_tarefa (tarefa_id)
+        )
+      `);
+      await recuperarPendenciasAntigas(db);
     })().catch((e) => { ensurePromise = null; throw e; });
   }
   return ensurePromise;
@@ -133,6 +154,9 @@ function mapTarefa(r: any) {
     concluidaEm: dt(r.concluida_em), criadaEm: dt(r.created_at), qtdComentarios: Number(r.qtd_coment ?? 0),
     origem: (r.origem as string | null) ?? null, origemId: r.origem_id ? Number(r.origem_id) : null,
     pendencia: (r.pendencia as string | null) ?? null, pendenciaMotivo: (r.pendencia_motivo as string | null) ?? null, pendenciaDesde: dt(r.pendencia_desde),
+    pendenciaDescricao: (r.pendencia_descricao as string | null) ?? null,
+    pendenciaRespIds: String(r.pendencia_resp_ids ?? "").split(",").filter(Boolean).map(Number),
+    pendenciaRespNomes: (r.pendencia_resp_nomes as string | null) ?? null,
   };
 }
 
@@ -140,6 +164,68 @@ async function registrar(db: any, tarefaId: number, tipo: string, texto: string 
   await db.$client.execute(
     `INSERT INTO tarefa_historico (tarefa_id, tipo, texto, foto_url, user_id, user_nome) VALUES (?, ?, ?, ?, ?, ?)`,
     [tarefaId, tipo, texto, fotoUrl, ctx.user.id ?? null, ctx.user.name ?? null]
+  );
+}
+
+/** Uma vez só: reconstrói a lista de pendências de tarefas antigas a partir do histórico de mudanças (tabela vazia = ainda não feito). */
+async function recuperarPendenciasAntigas(db: any) {
+  try {
+    const [n] = (await db.$client.execute(`SELECT COUNT(*) AS n FROM tarefa_pendencias`)) as any;
+    if (Number((n as any[])[0]?.n ?? 0) > 0) return;
+    const [ev] = (await db.$client.execute(
+      `SELECT tarefa_id, tipo, texto, user_id, user_nome, created_at FROM tarefa_historico WHERE tipo IN (pendencia,status) ORDER BY tarefa_id, id`
+    )) as any;
+    const porLabel = Object.fromEntries(Object.entries(PENDENCIA_LABEL).map(([k, v]) => [v, k]));
+    const atual = new Map<number, { id: number }>();
+    const ultimo = new Map<number, any>();
+    const fechar = async (tarefaId: number, e: any, resolucao: string) => {
+      const a = atual.get(tarefaId); if (!a) return;
+      await db.$client.execute(`UPDATE tarefa_pendencias SET resolvida_em = ?, resolvida_por = ?, resolvida_por_nome = ?, resolucao = ? WHERE id = ?`, [e.created_at, e.user_id ?? null, e.user_nome ?? null, resolucao, a.id]);
+      atual.delete(tarefaId);
+    };
+    for (const e of ev as any[]) {
+      const tid = Number(e.tarefa_id); const texto = String(e.texto ?? "");
+      ultimo.set(tid, e);
+      if (e.tipo === "pendencia") {
+        if (texto.startsWith("Pendência removida")) { await fechar(tid, e, "removida"); continue; }
+        const label = Object.keys(porLabel).find((l) => texto.startsWith(l));
+        if (!label) continue;
+        await fechar(tid, e, "trocada");
+        let resto = texto.slice(label.length).replace(/^:s*/, "");
+        let desc: string | null = null; let resp: string | null = null;
+        const mD = resto.match(/ · Descrição: ([sS]*)$/); if (mD) { desc = mD[1]; resto = resto.slice(0, mD.index); }
+        const mR = resto.match(/ · Responsável(is): ([sS]*)$/); if (mR) { resp = mR[1]; resto = resto.slice(0, mR.index); }
+        const motivo = resto.replace(/^ · /, "").trim() || null;
+        const [r] = (await db.$client.execute(
+          `INSERT INTO tarefa_pendencias (tarefa_id, tipo, motivo, descricao, resp_nomes, aberta_por, aberta_por_nome, aberta_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [tid, porLabel[label], motivo, desc, resp, e.user_id ?? null, e.user_nome ?? null, e.created_at]
+        )) as any;
+        atual.set(tid, { id: Number((r as any).insertId) });
+      } else if (e.tipo === "status") {
+        if (/Aprovada e concluída/.test(texto)) await fechar(tid, e, "aprovada");
+        else if (/Devolvida para ajustes/.test(texto)) await fechar(tid, e, "devolvida");
+        else if (/→ Concluída/.test(texto)) await fechar(tid, e, "concluida");
+      }
+    }
+    // pendência que ficou "aberta" no histórico mas a tarefa já não tem pendência: encerra na última movimentação
+    for (const [tid, a] of Array.from(atual.entries())) {
+      const [t] = (await db.$client.execute(`SELECT pendencia FROM tarefas WHERE id = ?`, [tid])) as any;
+      if (!(t as any[])[0]?.pendencia) await fechar(tid, ultimo.get(tid), "removida");
+    }
+  } catch (e: any) { console.warn("[tarefas] recuperar pendências:", e?.message); }
+}
+
+async function abrirPendencia(db: any, tarefaId: number, tipo: string, motivo: string | null, descricao: string | null, respNomes: string | null, ctx: any, desde: string | null = null) {
+  await db.$client.execute(
+    `INSERT INTO tarefa_pendencias (tarefa_id, tipo, motivo, descricao, resp_nomes, aberta_por, aberta_por_nome, aberta_em) VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()))`,
+    [tarefaId, tipo, motivo, descricao, respNomes, ctx.user.id ?? null, ctx.user.name ?? null, desde]
+  );
+}
+/** Encerra a pendência em aberto da tarefa e guarda como ela terminou (removida, trocada, concluída, aprovada, devolvida). */
+async function fecharPendencias(db: any, tarefaId: number, ctx: any, resolucao: string) {
+  await db.$client.execute(
+    `UPDATE tarefa_pendencias SET resolvida_em = NOW(), resolvida_por = ?, resolvida_por_nome = ?, resolucao = ? WHERE tarefa_id = ? AND resolvida_em IS NULL`,
+    [ctx.user.id ?? null, ctx.user.name ?? null, resolucao, tarefaId]
   );
 }
 
@@ -154,11 +240,18 @@ async function avisarTarefa(db: any, ctx: any, t: any, titulo: string, mensagem:
       respUser = Number((c as any[])[0]?.user_id ?? 0);
     }
     if (respUser) ids.add(respUser);
+    const pr = String(t.pendencia_resp_ids ?? "").split(",").filter(Boolean).map(Number);
+    if (t.pendencia && pr.length) {
+      const [cs] = (await db.$client.execute(`SELECT user_id FROM collaborators WHERE id IN (${pr.map(() => "?").join(",")})`, pr)) as any;
+      for (const c of cs as any[]) if (c.user_id) ids.add(Number(c.user_id));
+    }
     ids.delete(Number(ctx.user.id));
     if (!ids.size) return;
     const gestores: number[] = [];
     const comuns: number[] = [];
-    for (const id of Array.from(ids)) (id === respUser ? comuns : gestores).push(id);
+    const pendUsers = new Set<number>();
+    if (t.pendencia && pr.length) { const [cs] = (await db.$client.execute(`SELECT user_id FROM collaborators WHERE id IN (${pr.map(() => "?").join(",")})`, pr)) as any; for (const c of cs as any[]) if (c.user_id) pendUsers.add(Number(c.user_id)); }
+    for (const id of Array.from(ids)) ((id === respUser || pendUsers.has(id)) ? comuns : gestores).push(id);
     // o responsável abre em "Minhas tarefas"; quem criou/supervisiona abre em "Tarefas da equipe"
     if (comuns.length) await notifyUsers({ recipientUserIds: comuns, type: "geral", title: titulo, message: mensagem, relatedId: Number(t.id), relatedType: "tarefa" });
     if (gestores.length) await notifyUsers({ recipientUserIds: gestores, type: "geral", title: titulo, message: mensagem, relatedId: Number(t.id), relatedType: "tarefa_equipe" });
@@ -166,10 +259,12 @@ async function avisarTarefa(db: any, ctx: any, t: any, titulo: string, mensagem:
 }
 
 /** Quem pode mexer numa tarefa: supervisor, o responsável ou quem criou. */
-async function podeAcessar(db: any, ctx: any, t: any): Promise<{ gestor: boolean; responsavel: boolean; criador: boolean }> {
+async function podeAcessar(db: any, ctx: any, t: any): Promise<{ gestor: boolean; responsavel: boolean; criador: boolean; pendResp: boolean }> {
   const gestor = await ehGestor(ctx);
   const meus = await meusColaboradorIds(db, ctx.user.id);
-  return { gestor, responsavel: meus.includes(Number(t.responsavel_colaborador_id)) || Number(t.responsavel_user_id) === Number(ctx.user.id), criador: Number(t.criado_por) === Number(ctx.user.id) };
+  const idsPend = String(t.pendencia_resp_ids ?? "");
+  const pendResp = !!t.pendencia && meus.some((id) => idsPend.includes(`,${id},`));
+  return { gestor, pendResp, responsavel: meus.includes(Number(t.responsavel_colaborador_id)) || Number(t.responsavel_user_id) === Number(ctx.user.id), criador: Number(t.criado_por) === Number(ctx.user.id) };
 }
 
 // ───────── Integração com Metas Semanais ─────────
@@ -279,11 +374,13 @@ export const tarefasRouter = router({
     await ensureTables(db);
     const gestor = await ehGestor(ctx as any);
     const meus = await meusColaboradorIds(db, ctx.user.id);
-    const [rows] = (await db.$client.execute(`SELECT id, name FROM collaborators WHERE (active = 1 OR active IS NULL) ORDER BY name`)) as any;
+    const [rows] = (await db.$client.execute(`SELECT id, name, user_id FROM collaborators WHERE (active = 1 OR active IS NULL) ORDER BY name`)) as any;
     return {
       gestor,
       meuColaboradorId: meus[0] ?? null,
       colaboradores: gestor ? (rows as any[]).map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome) : [],
+      // quem pode ser responsável por uma pendência: colaborador ativo que tem usuário (login) no sistema
+      pessoas: (rows as any[]).filter((r) => r.user_id).map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome),
     };
   }),
 
@@ -305,12 +402,13 @@ export const tarefasRouter = router({
       const meus = await meusColaboradorIds(db, ctx.user.id);
       const desde = new Date(Date.now() - (input?.concluidasDias ?? 14) * 86400000).toISOString().slice(0, 19).replace("T", " ");
       // minhas = as do(s) colaborador(es) ligado(s) ao meu usuário + as ligadas diretamente ao meu usuário (ex.: metas semanais)
-      const filtroResp = meus.length ? `(t.responsavel_colaborador_id IN (${meus.map(() => "?").join(",")}) OR t.responsavel_user_id = ?)` : `t.responsavel_user_id = ?`;
+      const pend = meus.map(() => "t.pendencia_resp_ids LIKE ?").join(" OR ");
+      const filtroResp = meus.length ? `(t.responsavel_colaborador_id IN (${meus.map(() => "?").join(",")}) OR t.responsavel_user_id = ? OR (t.pendencia IS NOT NULL AND (${pend})))` : `t.responsavel_user_id = ?`;
       const [rows] = (await db.$client.execute(
         `${SELECT_TAREFA}
          WHERE ${filtroResp} AND (t.status <> 'concluida' OR t.concluida_em >= ?)
          ORDER BY t.prazo IS NULL, t.prazo, t.id DESC LIMIT 500`,
-        [...meus, ctx.user.id, desde]
+        meus.length ? [...meus, ctx.user.id, ...meus.map((id) => `%,${id},%`), desde] : [ctx.user.id, desde]
       )) as any;
       const itens = (rows as any[]).map(mapTarefa);
       return { itens, semVinculo: !meus.length && itens.length === 0 };
@@ -403,11 +501,13 @@ export const tarefasRouter = router({
       const r = (rows as any[])[0];
       if (!r) throw new TRPCError({ code: "NOT_FOUND", message: "Tarefa não encontrada" });
       const acc = await podeAcessar(db, ctx, r);
-      if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
+      if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
       const [h] = (await db.$client.execute(`SELECT id, tipo, texto, foto_url, user_id, user_nome, created_at FROM tarefa_historico WHERE tarefa_id = ? ORDER BY id`, [input.id])) as any;
       const [an] = (await db.$client.execute(`SELECT id, nome, url, mime, tamanho, user_id, user_nome, created_at FROM tarefa_anexos WHERE tarefa_id = ? ORDER BY id`, [input.id])) as any;
+      const [pe] = (await db.$client.execute(`SELECT * FROM tarefa_pendencias WHERE tarefa_id = ? ORDER BY id`, [input.id])) as any;
       return {
         tarefa: mapTarefa(r),
+        pendencias: (pe as any[]).map((x) => ({ id: Number(x.id), tipo: String(x.tipo), motivo: (x.motivo as string | null) ?? null, descricao: (x.descricao as string | null) ?? null, respNomes: (x.resp_nomes as string | null) ?? null, abertaPor: (x.aberta_por_nome as string | null) ?? null, abertaEm: dt(x.aberta_em), resolvidaEm: dt(x.resolvida_em), resolvidaPor: (x.resolvida_por_nome as string | null) ?? null, resolucao: (x.resolucao as string | null) ?? null })),
         historico: (h as any[]).map((x) => ({ id: Number(x.id), tipo: String(x.tipo), texto: (x.texto as string | null) ?? null, fotoUrl: (x.foto_url as string | null) ?? null, por: (x.user_nome as string | null) ?? null, porId: x.user_id ? Number(x.user_id) : null, em: dt(x.created_at) })),
         anexos: (an as any[]).map((x) => ({ id: Number(x.id), nome: String(x.nome), url: String(x.url), mime: (x.mime as string | null) ?? null, tamanho: x.tamanho ? Number(x.tamanho) : null, porId: x.user_id ? Number(x.user_id) : null, por: (x.user_nome as string | null) ?? null, em: dt(x.created_at) })),
         meuUserId: Number(ctx.user.id),
@@ -479,6 +579,7 @@ export const tarefasRouter = router({
       if (input.status === "concluida") {
         // concluir encerra qualquer pendência (aprovação só por supervisor, bloqueio precisa ser resolvido antes)
         await db.$client.execute(`UPDATE tarefas SET status = ?, concluida_em = NOW(), pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.status, input.id]);
+        await fecharPendencias(db, input.id, ctx, "concluida");
       } else {
         await db.$client.execute(`UPDATE tarefas SET status = ?, concluida_em = NULL WHERE id = ?`, [input.status, input.id]);
       }
@@ -492,6 +593,9 @@ export const tarefasRouter = router({
       id: z.number().int().positive(),
       pendencia: z.enum(PENDENCIAS).nullable(),
       motivo: z.string().trim().max(300).nullable().optional(),
+      descricao: z.string().trim().max(2000).nullable().optional(), // detalhes da pendência
+      responsaveis: z.array(z.number().int().positive()).max(10).optional(), // colaboradores responsáveis por resolver a pendência
+      desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), // quando a pendência começou (vazio = agora)
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDbOrThrow();
@@ -501,17 +605,43 @@ export const tarefasRouter = router({
       if (!t) throw new TRPCError({ code: "NOT_FOUND", message: "Tarefa não encontrada" });
       if (t.origem === MARCA_META) throw new TRPCError({ code: "BAD_REQUEST", message: MSG_META });
       const acc = await podeAcessar(db, ctx, t);
-      if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
+      if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
       if (t.status === "concluida") throw new TRPCError({ code: "BAD_REQUEST", message: "A tarefa já está concluída" });
       if (t.pendencia === "aprovacao" && input.pendencia !== "aprovacao" && !acc.gestor) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Só um supervisor pode liberar uma tarefa que aguarda aprovação" });
       }
       if (input.pendencia === "bloqueada" && !input.motivo) throw new TRPCError({ code: "BAD_REQUEST", message: "Explique o que está bloqueando a tarefa" });
       if (input.pendencia) {
-        await db.$client.execute(`UPDATE tarefas SET pendencia = ?, pendencia_motivo = ?, pendencia_desde = NOW() WHERE id = ?`, [input.pendencia, input.motivo || null, input.id]);
-        await registrar(db, input.id, "pendencia", `${PENDENCIA_LABEL[input.pendencia]}${input.motivo ? `: ${input.motivo}` : ""}`, null, ctx);
+        // quem deve resolver a pendência (uma ou mais pessoas)
+        const idsResp = Array.from(new Set(input.responsaveis ?? []));
+        let pessoas: { id: number; nome: string; userId: number | null }[] = [];
+        if (idsResp.length) {
+          const [cs] = (await db.$client.execute(`SELECT id, name, user_id FROM collaborators WHERE id IN (${idsResp.map(() => "?").join(",")})`, idsResp)) as any;
+          pessoas = (cs as any[]).map((c) => ({ id: Number(c.id), nome: String(c.name ?? "").trim(), userId: c.user_id ? Number(c.user_id) : null }));
+        }
+        let desdeSql: string | null = null;
+        if (input.desde) {
+          const d = new Date(input.desde + "T12:00:00");
+          if (isNaN(d.getTime())) throw new TRPCError({ code: "BAD_REQUEST", message: "Data de início inválida" });
+          if (d.getTime() > Date.now() + 24 * 3600 * 1000) throw new TRPCError({ code: "BAD_REQUEST", message: "A data de início não pode estar no futuro" });
+          // só a data: hoje vale o momento atual; outro dia fica ao meio-dia (evita virar o dia por fuso)
+          const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+          desdeSql = input.desde === hoje ? null : input.desde + " 12:00:00";
+        }
+        const respIds = pessoas.length ? `,${pessoas.map((p) => p.id).join(",")},` : null;
+        const respNomes = pessoas.length ? pessoas.map((p) => p.nome).join(", ").slice(0, 600) : null;
+        await db.$client.execute(`UPDATE tarefas SET pendencia = ?, pendencia_motivo = ?, pendencia_desde = COALESCE(?, NOW()), pendencia_resp_ids = ?, pendencia_resp_nomes = ?, pendencia_descricao = ? WHERE id = ?`, [input.pendencia, input.motivo || null, desdeSql, respIds, respNomes, input.descricao || null, input.id]);
+        await registrar(db, input.id, "pendencia", `${PENDENCIA_LABEL[input.pendencia]}${input.motivo ? `: ${input.motivo}` : ""}${respNomes ? ` · Responsável(is): ${respNomes}` : ""}${input.descricao ? ` · Descrição: ${input.descricao}` : ""}`, null, ctx);
+        await fecharPendencias(db, input.id, ctx, "trocada");
+        await abrirPendencia(db, input.id, input.pendencia, input.motivo || null, input.descricao || null, respNomes, ctx, desdeSql);
+        const avisar = pessoas.map((p) => p.userId).filter((u): u is number => !!u && u !== Number(ctx.user.id));
+        if (avisar.length) {
+          try { await notifyUsers({ recipientUserIds: avisar, type: "geral", title: `Pendência para você: ${String(t.titulo).slice(0, 80)}`, message: `${ctx.user.name ?? "Alguém"} marcou "${PENDENCIA_LABEL[input.pendencia]}" e indicou você como responsável.`.slice(0, 300), relatedId: Number(t.id), relatedType: "tarefa" }); }
+          catch (e: any) { console.warn("[tarefas] aviso pendência:", e?.message); }
+        }
       } else {
-        await db.$client.execute(`UPDATE tarefas SET pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+        await db.$client.execute(`UPDATE tarefas SET pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL, pendencia_resp_ids = NULL, pendencia_resp_nomes = NULL, pendencia_descricao = NULL WHERE id = ?`, [input.id]);
+        await fecharPendencias(db, input.id, ctx, "removida");
         await registrar(db, input.id, "pendencia", "Pendência removida", null, ctx);
       }
       return { ok: true };
@@ -531,9 +661,11 @@ export const tarefasRouter = router({
       if (!input.aprovar && !input.comentario) throw new TRPCError({ code: "BAD_REQUEST", message: "Explique o que precisa ser ajustado" });
       if (input.aprovar) {
         await db.$client.execute(`UPDATE tarefas SET status = 'concluida', concluida_em = NOW(), pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+        await fecharPendencias(db, input.id, ctx, "aprovada");
         await registrar(db, input.id, "status", `Aprovada e concluída${input.comentario ? `: ${input.comentario}` : ""}`, null, ctx);
       } else {
         await db.$client.execute(`UPDATE tarefas SET status = 'andamento', concluida_em = NULL, pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+        await fecharPendencias(db, input.id, ctx, "devolvida");
         await registrar(db, input.id, "status", `Devolvida para ajustes: ${input.comentario}`, null, ctx);
       }
       return { ok: true };
@@ -553,7 +685,7 @@ export const tarefasRouter = router({
       const t = (rows as any[])[0];
       if (!t) throw new TRPCError({ code: "NOT_FOUND", message: "Tarefa não encontrada" });
       const acc = await podeAcessar(db, ctx, t);
-      if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
+      if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
       await registrar(db, input.id, "comentario", input.texto ?? null, input.fotoUrl ?? null, ctx);
       await avisarTarefa(db, ctx, t, `Mensagem na tarefa: ${String(t.titulo).slice(0, 80)}`, `${ctx.user.name ?? "Alguém"}: ${input.texto ?? "enviou uma foto"}`.slice(0, 300));
       return { ok: true };
@@ -575,7 +707,7 @@ export const tarefasRouter = router({
       const t = (rows as any[])[0];
       if (!t) throw new TRPCError({ code: "NOT_FOUND", message: "Tarefa não encontrada" });
       const acc = await podeAcessar(db, ctx, t);
-      if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
+      if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
       await db.$client.execute(
         `INSERT INTO tarefa_anexos (tarefa_id, nome, url, mime, tamanho, user_id, user_nome) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [input.id, input.nome, input.url, input.mime ?? null, input.tamanho ?? null, ctx.user.id ?? null, ctx.user.name ?? null]
@@ -613,6 +745,7 @@ export const tarefasRouter = router({
       if (!acc.gestor && !acc.criador) throw new TRPCError({ code: "FORBIDDEN", message: "Só quem criou a tarefa ou um supervisor pode excluí-la" });
       await db.$client.execute(`DELETE FROM tarefa_historico WHERE tarefa_id = ?`, [input.id]);
       await db.$client.execute(`DELETE FROM tarefa_anexos WHERE tarefa_id = ?`, [input.id]);
+      await db.$client.execute(`DELETE FROM tarefa_pendencias WHERE tarefa_id = ?`, [input.id]);
       await db.$client.execute(`DELETE FROM tarefas WHERE id = ?`, [input.id]);
       return { ok: true };
     }),
