@@ -670,6 +670,259 @@ async function generateWeeklyClosingPDF(closing: any, clientName: string, loadsA
   await generatePDFFromHtml(html, `fechamento-semanal-${clientName.replace(/\s+/g,'-')}.pdf`);
 }
 
+// ===== COMPONENTE: HISTÓRICO DOS FECHAMENTOS (por semana do mês, com TODAS as cargas da semana) =====
+function HistoricoFechamentosView({ clientsList }: { clientsList: Array<{ id: number; name: string; pricePerTon?: string | null }> }) {
+  const hojeMes = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }).slice(0, 7);
+  const [mes, setMes] = useState(hojeMes);
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const { data: closings = [], isLoading } = trpc.cargoLoads.listWeeklyClosings.useQuery();
+  const { data: loads = [] } = trpc.cargoLoads.list.useQuery({});
+
+  const mudarMes = (delta: number) => {
+    const [a, m] = mes.split("-").map(Number);
+    const d = new Date(a, m - 1 + delta, 1);
+    setMes(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
+  const nomeMes = (() => {
+    const [a, m] = mes.split("-").map(Number);
+    const t = new Date(a, m - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  })();
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const ddmm = (v: any) => safeDate(v).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const brl = (v: number) => `R$ ${formatBR(v, 2)}`;
+  const dataCarga = (l: any) => iso(safeDate(l.deliveryDate || l.date));
+  const pesoKg = (l: any) => parseFloat(l.weightNetKg || l.weightOutKg || "0") || 0;
+  // Valor da carga: pelo preço do fechamento da semana; sem fechamento, pelo preço cadastrado do cliente (se houver).
+  const valorCarga = (l: any, f?: { preco: number; porM3: boolean }): number | null => {
+    const cliente = clientsList.find(x => x.id === l.clientId);
+    const preco = f?.preco || (l.areaId == null ? parseFloat((cliente as any)?.pricePerTon || "0") || 0 : 0);
+    if (!preco) return null;
+    return f?.porM3 ? (parseFloat(l.volumeM3 || "0") || 0) * preco : (pesoKg(l) / 1000) * preco;
+  };
+
+  // Semanas (sábado a sexta) cuja sexta-feira cai no mês escolhido, da mais recente para a mais antiga.
+  const semanas = (() => {
+    const [a, m] = mes.split("-").map(Number);
+    const out: { ini: string; fim: string }[] = [];
+    for (let d = new Date(a, m, 0); d.getMonth() === m - 1; d.setDate(d.getDate() - 1)) {
+      if (d.getDay() === 5) { const s = new Date(d); s.setDate(s.getDate() - 6); out.push({ ini: iso(s), fim: iso(d) }); }
+    }
+    return out;
+  })();
+
+  const statusDe = (c: any) => {
+    const atrasado = c.status === "fechado" && c.dueDate && safeDate(c.dueDate) < new Date();
+    if (c.status === "pago") return { t: c.paidViaAdvance ? "Pago via adiantamento" : "Pago", cls: "bg-green-100 text-green-700" };
+    if (atrasado) return { t: "Atrasado", cls: "bg-red-100 text-red-700" };
+    if (c.status === "fechado") return { t: "Aguardando", cls: "bg-yellow-100 text-yellow-700" };
+    return { t: "Aberto", cls: "bg-blue-100 text-blue-700" };
+  };
+
+  const itens = semanas.map(({ ini, fim }) => {
+    const cargas = loads
+      .filter((l: any) => l.status === "entregue" && dataCarga(l) >= ini && dataCarga(l) <= fim)
+      .sort((a: any, b: any) => dataCarga(a).localeCompare(dataCarga(b)) || String(a.clientName).localeCompare(String(b.clientName)));
+    const fechs = closings
+      .filter((c: any) => c.weekEnd && iso(safeDate(c.weekEnd)) === fim)
+      .map((c: any) => {
+        const cliente = clientsList.find(x => x.id === c.clientId);
+        const preco = parseFloat(c.pricePerTon || (c.areaId == null ? (cliente as any)?.pricePerTon : null) || "0");
+        const doFech = cargas.filter((l: any) => l.clientId === c.clientId && (l.areaId ?? null) === (c.areaId ?? null));
+        const kg = doFech.reduce((s: number, l: any) => s + pesoKg(l), 0);
+        const m3 = doFech.reduce((s: number, l: any) => s + parseFloat(l.volumeM3 || "0"), 0);
+        const porM3 = c.priceUnit === "m3";
+        return { c, preco, porM3, qtd: doFech.length, kg, m3, total: porM3 ? m3 * preco : (kg / 1000) * preco };
+      })
+      .sort((a, b) => String(a.c.clientName).localeCompare(String(b.c.clientName)));
+    const kg = cargas.reduce((s: number, l: any) => s + pesoKg(l), 0);
+    return { ini, fim, cargas, fechs, kg, fechado: fechs.reduce((s, f) => s + f.total, 0), pago: fechs.filter(f => f.c.status === "pago").reduce((s, f) => s + f.total, 0) };
+  });
+
+  const totCargas = itens.reduce((s, i) => s + i.cargas.length, 0);
+  const totKg = itens.reduce((s, i) => s + i.kg, 0);
+  const totFechado = itens.reduce((s, i) => s + i.fechado, 0);
+  const totPago = itens.reduce((s, i) => s + i.pago, 0);
+  const totFechs = itens.reduce((s, i) => s + i.fechs.length, 0);
+  const alterna = (k: string) => setAbertos(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
+
+  const baixarExcel = async () => {
+    try {
+      const { exportMultiSheetExcel } = await import("@/lib/exportExcel");
+      const sub = `${nomeMes} · gerado em ${new Date().toLocaleString("pt-BR")}`;
+      const sem = (ini: string, fim: string) => `${ddmm(ini)} a ${ddmm(fim)}`;
+      const dd = (v: any) => (v ? safeDate(v).toLocaleDateString("pt-BR") : "");
+      await exportMultiSheetExcel({
+        filename: `historico-fechamentos-${mes}.xlsx`,
+        sheets: [
+          {
+            sheetName: "Resumo por semana", title: `Histórico de fechamentos — ${nomeMes}`, subtitle: sub,
+            columns: [
+              { header: "Semana", width: 16 }, { header: "Cargas entregues", width: 16, align: "right" }, { header: "Peso (ton)", width: 14, align: "right", numFmt: "#,##0.000" },
+              { header: "Fechamentos", width: 13, align: "right" }, { header: "Valor fechado (R$)", width: 20, align: "right", numFmt: "#,##0.00" }, { header: "Valor pago (R$)", width: 18, align: "right", numFmt: "#,##0.00" },
+            ],
+            rows: itens.map(i => [sem(i.ini, i.fim), i.cargas.length, i.kg / 1000, i.fechs.length, i.fechado, i.pago]),
+            totalsRow: ["Total", totCargas, totKg / 1000, totFechs, totFechado, totPago],
+          },
+          {
+            sheetName: "Fechamentos", title: `Fechamentos semanais — ${nomeMes}`, subtitle: sub,
+            columns: [
+              { header: "Semana", width: 16 }, { header: "Cliente", width: 30 }, { header: "Cargas", width: 9, align: "right" }, { header: "Quantidade", width: 14, align: "right", numFmt: "#,##0.000" },
+              { header: "Unidade", width: 9, align: "center" }, { header: "Preço (R$)", width: 13, align: "right", numFmt: "#,##0.00" }, { header: "Valor (R$)", width: 15, align: "right", numFmt: "#,##0.00" },
+              { header: "Situação", width: 18 }, { header: "Vencimento", width: 13, align: "center" }, { header: "Pago em", width: 13, align: "center" },
+            ],
+            rows: itens.flatMap(i => i.fechs.map(f => [sem(i.ini, i.fim), f.c.clientName || "Cliente", f.qtd, f.porM3 ? f.m3 : f.kg / 1000, f.porM3 ? "m³" : "ton", f.preco, f.total, statusDe(f.c).t, dd(f.c.dueDate), f.c.status === "pago" ? dd(f.c.paidAt) : ""])),
+            totalsRow: ["Total", "", itens.reduce((s, i) => s + i.fechs.reduce((a, f) => a + f.qtd, 0), 0), "", "", "", totFechado, "", "", ""],
+          },
+          {
+            sheetName: "Cargas entregues", title: `Cargas entregues — ${nomeMes}`, subtitle: sub,
+            columns: [
+              { header: "Semana", width: 16 }, { header: "Data", width: 12, align: "center" }, { header: "Cliente", width: 30 }, { header: "Nota fiscal", width: 14 },
+              { header: "Destino", width: 28 }, { header: "Placa", width: 11 }, { header: "Motorista", width: 24 }, { header: "Peso (ton)", width: 13, align: "right", numFmt: "#,##0.000" }, { header: "Valor da carga (R$)", width: 18, align: "right", numFmt: "#,##0.00" }, { header: "Fechamento", width: 18 },
+            ],
+            rows: itens.flatMap(i => i.cargas.map((l: any) => {
+              const f = i.fechs.find(x => x.c.clientId === l.clientId && (x.c.areaId ?? null) === (l.areaId ?? null));
+              return [sem(i.ini, i.fim), dd(l.deliveryDate || l.date), l.clientName || "", l.invoiceNumber || "", l.destination || "", l.vehiclePlate || "", l.driverName || "", pesoKg(l) / 1000, valorCarga(l, f), f ? statusDe(f.c).t : "Sem fechamento"];
+            })),
+            totalsRow: ["Total", "", "", "", "", "", "", totKg / 1000, itens.reduce((s, i) => s + i.cargas.reduce((a: number, l: any) => a + (valorCarga(l, i.fechs.find(x => x.c.clientId === l.clientId && (x.c.areaId ?? null) === (l.areaId ?? null))) ?? 0), 0), 0), ""],
+          },
+        ],
+      });
+    } catch { toast.error("Não foi possível gerar o Excel."); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 rounded-lg border bg-white p-1">
+          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => mudarMes(-1)} aria-label="Mês anterior"><ChevronRight className="h-4 w-4 rotate-180" /></Button>
+          <span className="min-w-[9rem] text-center text-sm font-semibold text-emerald-800">{nomeMes}</span>
+          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => mudarMes(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></Button>
+        </div>
+        {mes !== hojeMes && <Button variant="outline" size="sm" onClick={() => setMes(hojeMes)}>Mês atual</Button>}
+        <Button variant="outline" size="sm" className="ml-auto gap-1.5" disabled={isLoading || totCargas + totFechs === 0} onClick={baixarExcel}><Download className="h-3.5 w-3.5" /> Baixar Excel</Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { l: "Cargas entregues", v: String(totCargas), c: "bg-emerald-50 text-emerald-800" },
+          { l: "Peso", v: `${formatBR(totKg / 1000)} ton`, c: "bg-purple-50 text-purple-800" },
+          { l: "Fechamentos", v: String(totFechs), c: "bg-gray-50 text-gray-700" },
+          { l: "Valor fechado", v: brl(totFechado), c: "bg-blue-50 text-blue-800", sub: totPago > 0 ? `${brl(totPago)} pago` : undefined },
+        ].map(k => (
+          <div key={k.l} className={`rounded-xl p-3 ${k.c}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{k.l}</p>
+            <p className="text-lg font-black">{k.v}</p>
+            {(k as any).sub && <p className="text-[10px] opacity-70">{(k as any).sub}</p>}
+          </div>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />)}</div>
+      ) : (
+        <div className="space-y-3">
+          {itens.map(({ ini, fim, cargas, fechs, kg, fechado }) => {
+            const k = fim;
+            const aberto = abertos.has(k);
+            return (
+              <div key={k} className="overflow-hidden rounded-xl border bg-white">
+                <button type="button" onClick={() => alterna(k)} className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left hover:bg-gray-50">
+                  {aberto ? <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" /> : <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-gray-900">Semana {ddmm(ini)} a {ddmm(fim)}</p>
+                    <p className="text-xs text-gray-500">{fechs.length === 0 ? "Sem fechamento nesta semana" : `${fechs.length} fechamento(s)`}</p>
+                  </div>
+                  <div className="text-right text-xs text-gray-600">
+                    <p>{cargas.length} carga(s) · {formatBR(kg / 1000)} ton</p>
+                  </div>
+                  <span className="whitespace-nowrap text-base font-black text-emerald-800">{fechs.length ? brl(fechado) : "-"}</span>
+                </button>
+                {aberto && (
+                  <div className="space-y-3 border-t bg-gray-50/50 px-3 py-3">
+                    {fechs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Fechamentos da semana</p>
+                        {fechs.map(({ c, preco, porM3, qtd, kg: fkg, m3, total }) => {
+                          const st = statusDe(c);
+                          return (
+                            <div key={`${c.id}-${c.areaId ?? "x"}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-white px-3 py-2 text-xs">
+                              <span className="min-w-0 flex-1 truncate font-semibold text-gray-900" translate="no">{c.clientName || "Cliente"}{c.areaId != null ? ` · Área #${c.areaId}` : ""}</span>
+                              <span className="text-gray-600">{qtd} carga(s) · {porM3 ? `${formatBR(m3, 3)} m³` : `${formatBR(fkg / 1000)} ton`}{preco ? ` · R$ ${formatBR(preco)}/${porM3 ? "m³" : "ton"}` : ""}</span>
+                              <span className={`whitespace-nowrap rounded-full px-2 py-0.5 font-medium ${st.cls}`}>{st.t}</span>
+                              <span className="whitespace-nowrap text-sm font-black text-emerald-800">{brl(total)}</span>
+                              {c.status === "pago" && c.paidAt ? <span className="text-green-700">pago em {safeDate(c.paidAt).toLocaleDateString("pt-BR")}</span> : c.dueDate ? <span className="text-gray-500">vence {safeDate(c.dueDate).toLocaleDateString("pt-BR")}</span> : null}
+                              {c.receiptUrl && <a href={c.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-green-700 underline">Comprovante</a>}
+                              <button type="button" className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] hover:bg-gray-50" onClick={() => {
+                                const doCliente = loads.filter((l: any) => l.clientId === c.clientId && (l.areaId ?? null) === (c.areaId ?? null));
+                                generateWeeklyClosingPDF(c, `${c.clientName || "Cliente"}${c.areaId != null ? ` — Área #${c.areaId}` : ""}`, doCliente, preco);
+                              }}><Download className="h-3 w-3" /> PDF</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Cargas entregues na semana ({cargas.length})</p>
+                    {cargas.length === 0 ? <p className="py-3 text-center text-sm text-gray-400">Nenhuma carga entregue nesta semana.</p> : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="text-gray-500">
+                            <tr className="border-b">
+                              <th className="px-2 py-1.5 text-left font-medium">#</th>
+                              <th className="px-2 py-1.5 text-left font-medium">Data</th>
+                              <th className="px-2 py-1.5 text-left font-medium">Cliente</th>
+                              <th className="px-2 py-1.5 text-left font-medium">Nota fiscal</th>
+                              <th className="px-2 py-1.5 text-left font-medium">Destino</th>
+                              <th className="px-2 py-1.5 text-left font-medium">Placa</th>
+                              <th className="px-2 py-1.5 text-left font-medium">Motorista</th>
+                              <th className="px-2 py-1.5 text-right font-medium">Peso</th>
+                              <th className="px-2 py-1.5 text-right font-medium">Valor</th>
+                              <th className="px-2 py-1.5 text-left font-medium">Fechamento</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cargas.map((l: any, i: number) => {
+                              const f = fechs.find(x => x.c.clientId === l.clientId && (x.c.areaId ?? null) === (l.areaId ?? null));
+                              const st = f ? statusDe(f.c) : null;
+                              const w = pesoKg(l);
+                              return (
+                                <tr key={l.id} className="border-b border-gray-100 bg-white">
+                                  <td className="px-2 py-1.5 text-gray-400">{i + 1}</td>
+                                  <td className="whitespace-nowrap px-2 py-1.5">{ddmm(l.deliveryDate || l.date)}</td>
+                                  <td className="px-2 py-1.5 font-medium" translate="no">{l.clientName || "-"}</td>
+                                  <td className="px-2 py-1.5">{l.invoiceNumber || "-"}</td>
+                                  <td className="px-2 py-1.5">{l.destination || "-"}</td>
+                                  <td className="whitespace-nowrap px-2 py-1.5">{l.vehiclePlate || "-"}</td>
+                                  <td className="px-2 py-1.5">{l.driverName || "-"}</td>
+                                  <td className="whitespace-nowrap px-2 py-1.5 text-right">{w > 0 ? `${formatBR(w / 1000, 3)} ton` : "-"}</td>
+                                  <td className="whitespace-nowrap px-2 py-1.5 text-right font-medium">{valorCarga(l, f) != null ? brl(valorCarga(l, f) as number) : "-"}</td>
+                                  <td className="px-2 py-1.5">{st ? <span className={`whitespace-nowrap rounded-full px-2 py-0.5 ${st.cls}`}>{st.t}</span> : <span className="text-gray-400">Sem fechamento</span>}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr className="font-bold">
+                              <td colSpan={7} className="px-2 py-1.5 text-right">Total</td>
+                              <td className="whitespace-nowrap px-2 py-1.5 text-right">{formatBR(kg / 1000, 3)} ton</td>
+                              <td className="whitespace-nowrap px-2 py-1.5 text-right text-emerald-800">{brl(cargas.reduce((s: number, l: any) => s + (valorCarga(l, fechs.find(x => x.c.clientId === l.clientId && (x.c.areaId ?? null) === (l.areaId ?? null))) ?? 0), 0))}</td>
+                              <td />
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WeeklyClosingsView({
   clientsList, loads, closingClientId, setClosingClientId,
   closingWeekStart, setClosingWeekStart, closingWeekEnd, setClosingWeekEnd,
@@ -1328,7 +1581,7 @@ export default function CargoControl() {
   const [areaChosen, setAreaChosen] = useState(false);
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [viewMode, setViewMode] = useState<"cliente" | "lista" | "tracking" | "fechamentos">("cliente");
+  const [viewMode, setViewMode] = useState<"cliente" | "lista" | "tracking" | "fechamentos" | "historico">("cliente");
   const [closingClientId, setClosingClientId] = useState<number>(0);
   // Acesso rápido por cliente: na aba Fechamentos controla o filtro dos fechamentos; nas demais, o filtro das cargas
   const activeClientId = viewMode === "fechamentos" ? closingClientId : filterClientId;
@@ -2501,6 +2754,14 @@ export default function CargoControl() {
             <CalendarClock className="h-3.5 w-3.5" /> Fechamentos
           </Button>
           <Button
+            variant="outline"
+            size="sm"
+            className={`gap-1.5 text-xs ${viewMode === "historico" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : ""}`}
+            onClick={() => setViewMode("historico")}
+          >
+            <FileCheck className="h-3.5 w-3.5" /> Histórico
+          </Button>
+          <Button
             className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
             size="sm"
             onClick={() => { resetForm(); setEditId(null); setIsFormOpen(true); }}
@@ -2643,7 +2904,7 @@ export default function CargoControl() {
       )}
 
       {/* Filtros */}
-      {viewMode !== "fechamentos" && (
+      {viewMode !== "fechamentos" && viewMode !== "historico" && (
       <div id="cargo-list-section" className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -2725,7 +2986,10 @@ export default function CargoControl() {
       )}
 
       {/* Lista de Cargas */}
-      {viewMode === "fechamentos" ? (
+      {viewMode === "historico" ? (
+        /* ===== VIEW: HISTÓRICO DOS FECHAMENTOS (por mês) ===== */
+        <HistoricoFechamentosView clientsList={clientsList} />
+      ) : viewMode === "fechamentos" ? (
         /* ===== VIEW: FECHAMENTOS SEMANAIS ===== */
         <WeeklyClosingsView
           clientsList={clientsList}

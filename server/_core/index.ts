@@ -641,6 +641,46 @@ async function runAutoMigrations() {
       }
       console.log('[AutoMigration] Sonoco: regra de prazo (7 corridos + 1, próximo dia útil) aplicada; NFs recalculadas:', recalculadas);
     } catch (e: any) { console.log('[AutoMigration] Sonoco prazo:', e?.message); }
+    // Aurora: previsão de pagamento = ENTREGA da carga + 3 dias ÚTEIS (pula sábado, domingo e feriado nacional).
+    // O CNPJ vem do cadastro de destinos/compradores (nome ou apelido com "Aurora"); a regra só é criada se ainda não existir
+    // (INSERT IGNORE — não sobrescreve ajuste feito depois) e recalcula só as NFs em aberto, sem boleto correspondente.
+    try {
+      const [dest]: any = await db.execute(/*sql*/`
+        SELECT DISTINCT cnpj_cpf FROM cargo_destinations
+        WHERE (name LIKE '%aurora%' OR nickname LIKE '%aurora%') AND cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''
+      `);
+      const cnpjs = Array.from(new Set((dest as any[]).map((d) => String(d.cnpj_cpf).replace(/\D/g, "")).filter((c) => c.length === 14)));
+      for (const c of cnpjs) {
+        await db.execute(/*sql*/`
+          INSERT IGNORE INTO cliente_prazo_pagamento (cnpj, nome, tipo_regra, parametros)
+          VALUES ('${c}', 'Aurora', 'dias_corridos', '{"dias":3,"modo":"uteis"}')
+        `);
+      }
+      if (cnpjs.length) {
+        const { calcularDataPrevisaoPagamento } = await import('../utils/prazoPagamento');
+        const [rg]: any = await db.execute(/*sql*/`SELECT cnpj, tipo_regra AS tipoRegra, parametros FROM cliente_prazo_pagamento WHERE ativo = 1`);
+        const [nfs]: any = await db.execute(/*sql*/`
+          SELECT nf.id, nf.cnpj_destinatario, nf.data_emissao, nf.data_previsao_pagamento, cl.entrega
+          FROM notas_fiscais nf
+          LEFT JOIN sicoob_boletos sb ON sb.nf_referente = nf.numero_nota AND sb.cnpj_pagador = nf.cnpj_destinatario
+          LEFT JOIN (
+            SELECT TRIM(SUBSTRING_INDEX(invoice_number, 'NF ', -1)) AS numero, DATE_FORMAT(MAX(delivery_date), '%Y-%m-%d') AS entrega
+            FROM cargo_loads WHERE invoice_number IS NOT NULL AND invoice_number <> '' AND delivery_date IS NOT NULL GROUP BY 1
+          ) cl ON cl.numero = nf.numero_nota
+          WHERE sb.id IS NULL AND nf.cnpj_destinatario IN (${cnpjs.map((c) => "'" + c + "'").join(",")}) AND nf.status_nf_interno = 'em_aberto'
+            AND nf.data_emissao IS NOT NULL AND nf.data_emissao <> ''
+        `);
+        let recalculadas = 0;
+        for (const nf of (nfs as any[])) {
+          const nova = calcularDataPrevisaoPagamento(nf.cnpj_destinatario, nf.data_emissao, rg as any[], nf.entrega ?? null);
+          if (nova && nova !== nf.data_previsao_pagamento) {
+            await db.execute(/*sql*/`UPDATE notas_fiscais SET data_previsao_pagamento = '${nova}' WHERE id = ${Number(nf.id)}`);
+            recalculadas++;
+          }
+        }
+        console.log('[AutoMigration] Aurora: regra de prazo (entrega + 3 dias úteis) aplicada ao(s) CNPJ(s)', cnpjs.join(","), "NFs recalculadas:", recalculadas);
+      } else console.log('[AutoMigration] Aurora: nenhum destino "Aurora" com CNPJ cadastrado; regra não criada');
+    } catch (e: any) { console.log('[AutoMigration] Aurora prazo:', e?.message); }
 
     // Backfill: recalcular Data Previsão de Pagamento das NFs da A.R.C. Logística que já
     // haviam sido sincronizadas antes da regra existir (só quando não há boleto correspondente)

@@ -27513,7 +27513,10 @@ function ensureTables3(db) {
         ["pendencia_desde", "DATETIME NULL"],
         ["origem", "VARCHAR(20) NULL"],
         ["origem_id", "INT NULL"],
-        ["responsavel_user_id", "INT NULL"]
+        ["responsavel_user_id", "INT NULL"],
+        ["pendencia_resp_ids", "VARCHAR(255) NULL"],
+        ["pendencia_descricao", "TEXT NULL"],
+        ["pendencia_resp_nomes", "VARCHAR(600) NULL"]
       ]) {
         if (!tem.has(nome)) await db.$client.execute(`ALTER TABLE tarefas ADD COLUMN ${nome} ${def}`);
       }
@@ -27550,6 +27553,25 @@ function ensureTables3(db) {
           KEY tarefa_anexos_tarefa (tarefa_id)
         )
       `);
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS tarefa_pendencias (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          tarefa_id INT NOT NULL,
+          tipo VARCHAR(12) NOT NULL,
+          motivo VARCHAR(300) NULL,
+          descricao TEXT NULL,
+          resp_nomes VARCHAR(600) NULL,
+          aberta_por INT NULL,
+          aberta_por_nome VARCHAR(120) NULL,
+          aberta_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          resolvida_em DATETIME NULL,
+          resolvida_por INT NULL,
+          resolvida_por_nome VARCHAR(120) NULL,
+          resolucao VARCHAR(20) NULL,
+          KEY tarefa_pend_tarefa (tarefa_id)
+        )
+      `);
+      await recuperarPendenciasAntigas(db);
     })().catch((e) => {
       ensurePromise4 = null;
       throw e;
@@ -27593,13 +27615,89 @@ function mapTarefa(r) {
     origemId: r.origem_id ? Number(r.origem_id) : null,
     pendencia: r.pendencia ?? null,
     pendenciaMotivo: r.pendencia_motivo ?? null,
-    pendenciaDesde: dt(r.pendencia_desde)
+    pendenciaDesde: dt(r.pendencia_desde),
+    pendenciaDescricao: r.pendencia_descricao ?? null,
+    pendenciaRespIds: String(r.pendencia_resp_ids ?? "").split(",").filter(Boolean).map(Number),
+    pendenciaRespNomes: r.pendencia_resp_nomes ?? null
   };
 }
 async function registrar(db, tarefaId, tipo, texto, fotoUrl, ctx) {
   await db.$client.execute(
     `INSERT INTO tarefa_historico (tarefa_id, tipo, texto, foto_url, user_id, user_nome) VALUES (?, ?, ?, ?, ?, ?)`,
     [tarefaId, tipo, texto, fotoUrl, ctx.user.id ?? null, ctx.user.name ?? null]
+  );
+}
+async function recuperarPendenciasAntigas(db) {
+  try {
+    const [n] = await db.$client.execute(`SELECT COUNT(*) AS n FROM tarefa_pendencias`);
+    if (Number(n[0]?.n ?? 0) > 0) return;
+    const [ev] = await db.$client.execute(
+      `SELECT tarefa_id, tipo, texto, user_id, user_nome, created_at FROM tarefa_historico WHERE tipo IN (pendencia,status) ORDER BY tarefa_id, id`
+    );
+    const porLabel = Object.fromEntries(Object.entries(PENDENCIA_LABEL).map(([k, v]) => [v, k]));
+    const atual = /* @__PURE__ */ new Map();
+    const ultimo = /* @__PURE__ */ new Map();
+    const fechar = async (tarefaId, e, resolucao) => {
+      const a = atual.get(tarefaId);
+      if (!a) return;
+      await db.$client.execute(`UPDATE tarefa_pendencias SET resolvida_em = ?, resolvida_por = ?, resolvida_por_nome = ?, resolucao = ? WHERE id = ?`, [e.created_at, e.user_id ?? null, e.user_nome ?? null, resolucao, a.id]);
+      atual.delete(tarefaId);
+    };
+    for (const e of ev) {
+      const tid = Number(e.tarefa_id);
+      const texto = String(e.texto ?? "");
+      ultimo.set(tid, e);
+      if (e.tipo === "pendencia") {
+        if (texto.startsWith("Pend\xEAncia removida")) {
+          await fechar(tid, e, "removida");
+          continue;
+        }
+        const label = Object.keys(porLabel).find((l) => texto.startsWith(l));
+        if (!label) continue;
+        await fechar(tid, e, "trocada");
+        let resto = texto.slice(label.length).replace(/^:s*/, "");
+        let desc34 = null;
+        let resp = null;
+        const mD = resto.match(/ · Descrição: ([sS]*)$/);
+        if (mD) {
+          desc34 = mD[1];
+          resto = resto.slice(0, mD.index);
+        }
+        const mR = resto.match(/ · Responsável(is): ([sS]*)$/);
+        if (mR) {
+          resp = mR[1];
+          resto = resto.slice(0, mR.index);
+        }
+        const motivo = resto.replace(/^ · /, "").trim() || null;
+        const [r] = await db.$client.execute(
+          `INSERT INTO tarefa_pendencias (tarefa_id, tipo, motivo, descricao, resp_nomes, aberta_por, aberta_por_nome, aberta_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [tid, porLabel[label], motivo, desc34, resp, e.user_id ?? null, e.user_nome ?? null, e.created_at]
+        );
+        atual.set(tid, { id: Number(r.insertId) });
+      } else if (e.tipo === "status") {
+        if (/Aprovada e concluída/.test(texto)) await fechar(tid, e, "aprovada");
+        else if (/Devolvida para ajustes/.test(texto)) await fechar(tid, e, "devolvida");
+        else if (/→ Concluída/.test(texto)) await fechar(tid, e, "concluida");
+      }
+    }
+    for (const [tid, a] of Array.from(atual.entries())) {
+      const [t2] = await db.$client.execute(`SELECT pendencia FROM tarefas WHERE id = ?`, [tid]);
+      if (!t2[0]?.pendencia) await fechar(tid, ultimo.get(tid), "removida");
+    }
+  } catch (e) {
+    console.warn("[tarefas] recuperar pend\xEAncias:", e?.message);
+  }
+}
+async function abrirPendencia(db, tarefaId, tipo, motivo, descricao, respNomes, ctx, desde = null) {
+  await db.$client.execute(
+    `INSERT INTO tarefa_pendencias (tarefa_id, tipo, motivo, descricao, resp_nomes, aberta_por, aberta_por_nome, aberta_em) VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()))`,
+    [tarefaId, tipo, motivo, descricao, respNomes, ctx.user.id ?? null, ctx.user.name ?? null, desde]
+  );
+}
+async function fecharPendencias(db, tarefaId, ctx, resolucao) {
+  await db.$client.execute(
+    `UPDATE tarefa_pendencias SET resolvida_em = NOW(), resolvida_por = ?, resolvida_por_nome = ?, resolucao = ? WHERE tarefa_id = ? AND resolvida_em IS NULL`,
+    [ctx.user.id ?? null, ctx.user.name ?? null, resolucao, tarefaId]
   );
 }
 async function avisarTarefa(db, ctx, t2, titulo, mensagem) {
@@ -27612,11 +27710,21 @@ async function avisarTarefa(db, ctx, t2, titulo, mensagem) {
       respUser = Number(c[0]?.user_id ?? 0);
     }
     if (respUser) ids.add(respUser);
+    const pr = String(t2.pendencia_resp_ids ?? "").split(",").filter(Boolean).map(Number);
+    if (t2.pendencia && pr.length) {
+      const [cs] = await db.$client.execute(`SELECT user_id FROM collaborators WHERE id IN (${pr.map(() => "?").join(",")})`, pr);
+      for (const c of cs) if (c.user_id) ids.add(Number(c.user_id));
+    }
     ids.delete(Number(ctx.user.id));
     if (!ids.size) return;
     const gestores = [];
     const comuns = [];
-    for (const id of Array.from(ids)) (id === respUser ? comuns : gestores).push(id);
+    const pendUsers = /* @__PURE__ */ new Set();
+    if (t2.pendencia && pr.length) {
+      const [cs] = await db.$client.execute(`SELECT user_id FROM collaborators WHERE id IN (${pr.map(() => "?").join(",")})`, pr);
+      for (const c of cs) if (c.user_id) pendUsers.add(Number(c.user_id));
+    }
+    for (const id of Array.from(ids)) (id === respUser || pendUsers.has(id) ? comuns : gestores).push(id);
     if (comuns.length) await notifyUsers({ recipientUserIds: comuns, type: "geral", title: titulo, message: mensagem, relatedId: Number(t2.id), relatedType: "tarefa" });
     if (gestores.length) await notifyUsers({ recipientUserIds: gestores, type: "geral", title: titulo, message: mensagem, relatedId: Number(t2.id), relatedType: "tarefa_equipe" });
   } catch (e) {
@@ -27626,7 +27734,9 @@ async function avisarTarefa(db, ctx, t2, titulo, mensagem) {
 async function podeAcessar(db, ctx, t2) {
   const gestor = await ehGestor(ctx);
   const meus = await meusColaboradorIds(db, ctx.user.id);
-  return { gestor, responsavel: meus.includes(Number(t2.responsavel_colaborador_id)) || Number(t2.responsavel_user_id) === Number(ctx.user.id), criador: Number(t2.criado_por) === Number(ctx.user.id) };
+  const idsPend = String(t2.pendencia_resp_ids ?? "");
+  const pendResp = !!t2.pendencia && meus.some((id) => idsPend.includes(`,${id},`));
+  return { gestor, pendResp, responsavel: meus.includes(Number(t2.responsavel_colaborador_id)) || Number(t2.responsavel_user_id) === Number(ctx.user.id), criador: Number(t2.criado_por) === Number(ctx.user.id) };
 }
 var MARCA_META = "meta_semanal";
 var MSG_META = "Esta tarefa vem da Meta Semanal: o andamento segue a meta. Abra a meta para alterar.";
@@ -27722,11 +27832,13 @@ var tarefasRouter = router({
     await ensureTables3(db);
     const gestor = await ehGestor(ctx);
     const meus = await meusColaboradorIds(db, ctx.user.id);
-    const [rows2] = await db.$client.execute(`SELECT id, name FROM collaborators WHERE (active = 1 OR active IS NULL) ORDER BY name`);
+    const [rows2] = await db.$client.execute(`SELECT id, name, user_id FROM collaborators WHERE (active = 1 OR active IS NULL) ORDER BY name`);
     return {
       gestor,
       meuColaboradorId: meus[0] ?? null,
-      colaboradores: gestor ? rows2.map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome) : []
+      colaboradores: gestor ? rows2.map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome) : [],
+      // quem pode ser responsável por uma pendência: colaborador ativo que tem usuário (login) no sistema
+      pessoas: rows2.filter((r) => r.user_id).map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome)
     };
   }),
   // Força a sincronização das metas semanais (usado logo após criar/alterar/encerrar uma meta dentro das Tarefas).
@@ -27743,12 +27855,13 @@ var tarefasRouter = router({
     await sincronizarMetas(db);
     const meus = await meusColaboradorIds(db, ctx.user.id);
     const desde = new Date(Date.now() - (input?.concluidasDias ?? 14) * 864e5).toISOString().slice(0, 19).replace("T", " ");
-    const filtroResp = meus.length ? `(t.responsavel_colaborador_id IN (${meus.map(() => "?").join(",")}) OR t.responsavel_user_id = ?)` : `t.responsavel_user_id = ?`;
+    const pend = meus.map(() => "t.pendencia_resp_ids LIKE ?").join(" OR ");
+    const filtroResp = meus.length ? `(t.responsavel_colaborador_id IN (${meus.map(() => "?").join(",")}) OR t.responsavel_user_id = ? OR (t.pendencia IS NOT NULL AND (${pend})))` : `t.responsavel_user_id = ?`;
     const [rows2] = await db.$client.execute(
       `${SELECT_TAREFA}
          WHERE ${filtroResp} AND (t.status <> 'concluida' OR t.concluida_em >= ?)
          ORDER BY t.prazo IS NULL, t.prazo, t.id DESC LIMIT 500`,
-      [...meus, ctx.user.id, desde]
+      meus.length ? [...meus, ctx.user.id, ...meus.map((id) => `%,${id},%`), desde] : [ctx.user.id, desde]
     );
     const itens = rows2.map(mapTarefa);
     return { itens, semVinculo: !meus.length && itens.length === 0 };
@@ -27851,11 +27964,13 @@ var tarefasRouter = router({
     const r = rows2[0];
     if (!r) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
     const acc = await podeAcessar(db, ctx, r);
-    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
     const [h] = await db.$client.execute(`SELECT id, tipo, texto, foto_url, user_id, user_nome, created_at FROM tarefa_historico WHERE tarefa_id = ? ORDER BY id`, [input.id]);
     const [an] = await db.$client.execute(`SELECT id, nome, url, mime, tamanho, user_id, user_nome, created_at FROM tarefa_anexos WHERE tarefa_id = ? ORDER BY id`, [input.id]);
+    const [pe] = await db.$client.execute(`SELECT * FROM tarefa_pendencias WHERE tarefa_id = ? ORDER BY id`, [input.id]);
     return {
       tarefa: mapTarefa(r),
+      pendencias: pe.map((x) => ({ id: Number(x.id), tipo: String(x.tipo), motivo: x.motivo ?? null, descricao: x.descricao ?? null, respNomes: x.resp_nomes ?? null, abertaPor: x.aberta_por_nome ?? null, abertaEm: dt(x.aberta_em), resolvidaEm: dt(x.resolvida_em), resolvidaPor: x.resolvida_por_nome ?? null, resolucao: x.resolucao ?? null })),
       historico: h.map((x) => ({ id: Number(x.id), tipo: String(x.tipo), texto: x.texto ?? null, fotoUrl: x.foto_url ?? null, por: x.user_nome ?? null, porId: x.user_id ? Number(x.user_id) : null, em: dt(x.created_at) })),
       anexos: an.map((x) => ({ id: Number(x.id), nome: String(x.nome), url: String(x.url), mime: x.mime ?? null, tamanho: x.tamanho ? Number(x.tamanho) : null, porId: x.user_id ? Number(x.user_id) : null, por: x.user_nome ?? null, em: dt(x.created_at) })),
       meuUserId: Number(ctx.user.id),
@@ -27921,6 +28036,7 @@ var tarefasRouter = router({
     }
     if (input.status === "concluida") {
       await db.$client.execute(`UPDATE tarefas SET status = ?, concluida_em = NOW(), pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.status, input.id]);
+      await fecharPendencias(db, input.id, ctx, "concluida");
     } else {
       await db.$client.execute(`UPDATE tarefas SET status = ?, concluida_em = NULL WHERE id = ?`, [input.status, input.id]);
     }
@@ -27931,7 +28047,13 @@ var tarefasRouter = router({
   definirPendencia: moduleProcedure(USO, GESTAO).input(z50.object({
     id: z50.number().int().positive(),
     pendencia: z50.enum(PENDENCIAS).nullable(),
-    motivo: z50.string().trim().max(300).nullable().optional()
+    motivo: z50.string().trim().max(300).nullable().optional(),
+    descricao: z50.string().trim().max(2e3).nullable().optional(),
+    // detalhes da pendência
+    responsaveis: z50.array(z50.number().int().positive()).max(10).optional(),
+    // colaboradores responsáveis por resolver a pendência
+    desde: z50.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()
+    // quando a pendência começou (vazio = agora)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbOrThrow3();
     await ensureTables3(db);
@@ -27940,17 +28062,44 @@ var tarefasRouter = router({
     if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
     if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
     if (t2.status === "concluida") throw new TRPCError38({ code: "BAD_REQUEST", message: "A tarefa j\xE1 est\xE1 conclu\xEDda" });
     if (t2.pendencia === "aprovacao" && input.pendencia !== "aprovacao" && !acc.gestor) {
       throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 um supervisor pode liberar uma tarefa que aguarda aprova\xE7\xE3o" });
     }
     if (input.pendencia === "bloqueada" && !input.motivo) throw new TRPCError38({ code: "BAD_REQUEST", message: "Explique o que est\xE1 bloqueando a tarefa" });
     if (input.pendencia) {
-      await db.$client.execute(`UPDATE tarefas SET pendencia = ?, pendencia_motivo = ?, pendencia_desde = NOW() WHERE id = ?`, [input.pendencia, input.motivo || null, input.id]);
-      await registrar(db, input.id, "pendencia", `${PENDENCIA_LABEL[input.pendencia]}${input.motivo ? `: ${input.motivo}` : ""}`, null, ctx);
+      const idsResp = Array.from(new Set(input.responsaveis ?? []));
+      let pessoas = [];
+      if (idsResp.length) {
+        const [cs] = await db.$client.execute(`SELECT id, name, user_id FROM collaborators WHERE id IN (${idsResp.map(() => "?").join(",")})`, idsResp);
+        pessoas = cs.map((c) => ({ id: Number(c.id), nome: String(c.name ?? "").trim(), userId: c.user_id ? Number(c.user_id) : null }));
+      }
+      let desdeSql = null;
+      if (input.desde) {
+        const d2 = /* @__PURE__ */ new Date(input.desde + "T12:00:00");
+        if (isNaN(d2.getTime())) throw new TRPCError38({ code: "BAD_REQUEST", message: "Data de in\xEDcio inv\xE1lida" });
+        if (d2.getTime() > Date.now() + 24 * 3600 * 1e3) throw new TRPCError38({ code: "BAD_REQUEST", message: "A data de in\xEDcio n\xE3o pode estar no futuro" });
+        const hoje = new Date(Date.now() - 3 * 3600 * 1e3).toISOString().slice(0, 10);
+        desdeSql = input.desde === hoje ? null : input.desde + " 12:00:00";
+      }
+      const respIds = pessoas.length ? `,${pessoas.map((p) => p.id).join(",")},` : null;
+      const respNomes = pessoas.length ? pessoas.map((p) => p.nome).join(", ").slice(0, 600) : null;
+      await db.$client.execute(`UPDATE tarefas SET pendencia = ?, pendencia_motivo = ?, pendencia_desde = COALESCE(?, NOW()), pendencia_resp_ids = ?, pendencia_resp_nomes = ?, pendencia_descricao = ? WHERE id = ?`, [input.pendencia, input.motivo || null, desdeSql, respIds, respNomes, input.descricao || null, input.id]);
+      await registrar(db, input.id, "pendencia", `${PENDENCIA_LABEL[input.pendencia]}${input.motivo ? `: ${input.motivo}` : ""}${respNomes ? ` \xB7 Respons\xE1vel(is): ${respNomes}` : ""}${input.descricao ? ` \xB7 Descri\xE7\xE3o: ${input.descricao}` : ""}`, null, ctx);
+      await fecharPendencias(db, input.id, ctx, "trocada");
+      await abrirPendencia(db, input.id, input.pendencia, input.motivo || null, input.descricao || null, respNomes, ctx, desdeSql);
+      const avisar2 = pessoas.map((p) => p.userId).filter((u) => !!u && u !== Number(ctx.user.id));
+      if (avisar2.length) {
+        try {
+          await notifyUsers({ recipientUserIds: avisar2, type: "geral", title: `Pend\xEAncia para voc\xEA: ${String(t2.titulo).slice(0, 80)}`, message: `${ctx.user.name ?? "Algu\xE9m"} marcou "${PENDENCIA_LABEL[input.pendencia]}" e indicou voc\xEA como respons\xE1vel.`.slice(0, 300), relatedId: Number(t2.id), relatedType: "tarefa" });
+        } catch (e) {
+          console.warn("[tarefas] aviso pend\xEAncia:", e?.message);
+        }
+      }
     } else {
-      await db.$client.execute(`UPDATE tarefas SET pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+      await db.$client.execute(`UPDATE tarefas SET pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL, pendencia_resp_ids = NULL, pendencia_resp_nomes = NULL, pendencia_descricao = NULL WHERE id = ?`, [input.id]);
+      await fecharPendencias(db, input.id, ctx, "removida");
       await registrar(db, input.id, "pendencia", "Pend\xEAncia removida", null, ctx);
     }
     return { ok: true };
@@ -27967,9 +28116,11 @@ var tarefasRouter = router({
     if (!input.aprovar && !input.comentario) throw new TRPCError38({ code: "BAD_REQUEST", message: "Explique o que precisa ser ajustado" });
     if (input.aprovar) {
       await db.$client.execute(`UPDATE tarefas SET status = 'concluida', concluida_em = NOW(), pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+      await fecharPendencias(db, input.id, ctx, "aprovada");
       await registrar(db, input.id, "status", `Aprovada e conclu\xEDda${input.comentario ? `: ${input.comentario}` : ""}`, null, ctx);
     } else {
       await db.$client.execute(`UPDATE tarefas SET status = 'andamento', concluida_em = NULL, pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
+      await fecharPendencias(db, input.id, ctx, "devolvida");
       await registrar(db, input.id, "status", `Devolvida para ajustes: ${input.comentario}`, null, ctx);
     }
     return { ok: true };
@@ -27986,7 +28137,7 @@ var tarefasRouter = router({
     const t2 = rows2[0];
     if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
     await registrar(db, input.id, "comentario", input.texto ?? null, input.fotoUrl ?? null, ctx);
     await avisarTarefa(db, ctx, t2, `Mensagem na tarefa: ${String(t2.titulo).slice(0, 80)}`, `${ctx.user.name ?? "Algu\xE9m"}: ${input.texto ?? "enviou uma foto"}`.slice(0, 300));
     return { ok: true };
@@ -28005,7 +28156,7 @@ var tarefasRouter = router({
     const t2 = rows2[0];
     if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
     await db.$client.execute(
       `INSERT INTO tarefa_anexos (tarefa_id, nome, url, mime, tamanho, user_id, user_nome) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [input.id, input.nome, input.url, input.mime ?? null, input.tamanho ?? null, ctx.user.id ?? null, ctx.user.name ?? null]
@@ -28037,6 +28188,7 @@ var tarefasRouter = router({
     if (!acc.gestor && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 quem criou a tarefa ou um supervisor pode exclu\xED-la" });
     await db.$client.execute(`DELETE FROM tarefa_historico WHERE tarefa_id = ?`, [input.id]);
     await db.$client.execute(`DELETE FROM tarefa_anexos WHERE tarefa_id = ?`, [input.id]);
+    await db.$client.execute(`DELETE FROM tarefa_pendencias WHERE tarefa_id = ?`, [input.id]);
     await db.$client.execute(`DELETE FROM tarefas WHERE id = ?`, [input.id]);
     return { ok: true };
   })
@@ -31184,6 +31336,60 @@ async function runAutoMigrations() {
       console.log("[AutoMigration] Sonoco: regra de prazo (7 corridos + 1, pr\xF3ximo dia \xFAtil) aplicada; NFs recalculadas:", recalculadas);
     } catch (e) {
       console.log("[AutoMigration] Sonoco prazo:", e?.message);
+    }
+    try {
+      const [dest] = await db.execute(
+        /*sql*/
+        `
+        SELECT DISTINCT cnpj_cpf FROM cargo_destinations
+        WHERE (name LIKE '%aurora%' OR nickname LIKE '%aurora%') AND cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''
+      `
+      );
+      const cnpjs = Array.from(new Set(dest.map((d2) => String(d2.cnpj_cpf).replace(/\D/g, "")).filter((c) => c.length === 14)));
+      for (const c of cnpjs) {
+        await db.execute(
+          /*sql*/
+          `
+          INSERT IGNORE INTO cliente_prazo_pagamento (cnpj, nome, tipo_regra, parametros)
+          VALUES ('${c}', 'Aurora', 'dias_corridos', '{"dias":3,"modo":"uteis"}')
+        `
+        );
+      }
+      if (cnpjs.length) {
+        const { calcularDataPrevisaoPagamento: calcularDataPrevisaoPagamento2 } = await Promise.resolve().then(() => (init_prazoPagamento(), prazoPagamento_exports));
+        const [rg] = await db.execute(
+          /*sql*/
+          `SELECT cnpj, tipo_regra AS tipoRegra, parametros FROM cliente_prazo_pagamento WHERE ativo = 1`
+        );
+        const [nfs] = await db.execute(
+          /*sql*/
+          `
+          SELECT nf.id, nf.cnpj_destinatario, nf.data_emissao, nf.data_previsao_pagamento, cl.entrega
+          FROM notas_fiscais nf
+          LEFT JOIN sicoob_boletos sb ON sb.nf_referente = nf.numero_nota AND sb.cnpj_pagador = nf.cnpj_destinatario
+          LEFT JOIN (
+            SELECT TRIM(SUBSTRING_INDEX(invoice_number, 'NF ', -1)) AS numero, DATE_FORMAT(MAX(delivery_date), '%Y-%m-%d') AS entrega
+            FROM cargo_loads WHERE invoice_number IS NOT NULL AND invoice_number <> '' AND delivery_date IS NOT NULL GROUP BY 1
+          ) cl ON cl.numero = nf.numero_nota
+          WHERE sb.id IS NULL AND nf.cnpj_destinatario IN (${cnpjs.map((c) => "'" + c + "'").join(",")}) AND nf.status_nf_interno = 'em_aberto'
+            AND nf.data_emissao IS NOT NULL AND nf.data_emissao <> ''
+        `
+        );
+        let recalculadas = 0;
+        for (const nf of nfs) {
+          const nova = calcularDataPrevisaoPagamento2(nf.cnpj_destinatario, nf.data_emissao, rg, nf.entrega ?? null);
+          if (nova && nova !== nf.data_previsao_pagamento) {
+            await db.execute(
+              /*sql*/
+              `UPDATE notas_fiscais SET data_previsao_pagamento = '${nova}' WHERE id = ${Number(nf.id)}`
+            );
+            recalculadas++;
+          }
+        }
+        console.log("[AutoMigration] Aurora: regra de prazo (entrega + 3 dias \xFAteis) aplicada ao(s) CNPJ(s)", cnpjs.join(","), "NFs recalculadas:", recalculadas);
+      } else console.log('[AutoMigration] Aurora: nenhum destino "Aurora" com CNPJ cadastrado; regra n\xE3o criada');
+    } catch (e) {
+      console.log("[AutoMigration] Aurora prazo:", e?.message);
     }
     try {
       await db.execute(
