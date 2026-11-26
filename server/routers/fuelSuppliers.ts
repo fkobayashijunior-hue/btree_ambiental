@@ -635,6 +635,9 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo não for encontrado, use
       transporterPlate: z.string().nullable().optional(),
       deliveryLocation: z.string().nullable().optional(),
       notes: z.string().nullable().optional(),
+      // anexos (foto ou PDF da nota fiscal e do boleto); null remove
+      invoicePhotoUrl: z.string().max(2000).nullable().optional(),
+      boletoPhotoUrl: z.string().max(2000).nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

@@ -13,6 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import ImportarCustosDialog from "./ImportarCustosDialog";
 import CustoFormSheet, { FORMAS } from "./CustoFormSheet";
 
+const MOTIVOS: Record<string, string> = { cheque: "Cheque", parcelado: "Parcelado", sem_nota: "Sem nota", nota_depois: "Nota pendente", outro: "Sem nota" };
+
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataBR = (d?: string | null) => (d ? d.split("-").reverse().join("/") : "-");
@@ -247,7 +249,7 @@ export default function CustosTab() {
                       {i.nfUrl ? (
                         <a href={i.nfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-emerald-700 hover:underline"><Paperclip className="h-3.5 w-3.5" /> {i.nfNumero || "Ver"}</a>
                       ) : i.nfNumero ? i.nfNumero : !cancelado ? (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600">Sem nota</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${i.semNotaMotivo ? "bg-gray-100 text-gray-600" : "bg-red-50 text-red-600"}`}>{(MOTIVOS[i.semNotaMotivo ?? ""] ?? "Sem nota")}</span>
                       ) : "-"}
                     </TableCell>
                     <TableCell>
@@ -259,7 +261,7 @@ export default function CustosTab() {
                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">Aguardando</span>
                       )}
                     </TableCell>
-                    <CelulaEdit ativo={ed(i, "valor")} tipo="texto" valor={String(i.valor).replace(".", ",")} onSave={(v: any) => salvarCampo(i, "valor", v)} className="whitespace-nowrap text-right font-semibold">{moeda(i.valor)}</CelulaEdit>
+                    <CelulaEdit ativo={ed(i, "valor") && !i.parcelasTotal} tipo="texto" valor={String(i.valor).replace(".", ",")} onSave={(v: any) => salvarCampo(i, "valor", v)} className="whitespace-nowrap text-right font-semibold">{moeda(i.valor)}</CelulaEdit>
                     <TableCell className="whitespace-nowrap">
                       {cancelado ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">Cancelado</span>
                         : i.status === "pago" ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">Pago</span>
@@ -320,7 +322,7 @@ export default function CustosTab() {
                       {i.nfUrl ? (
                         <a href={i.nfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700"><Paperclip className="h-3 w-3" /> Nota</a>
                       ) : !cancelado && !i.nfNumero ? (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-red-600">Sem nota</span>
+                        <span className={`rounded-full px-2 py-0.5 ${i.semNotaMotivo ? "bg-gray-100 text-gray-600" : "bg-red-50 text-red-600"}`}>{(MOTIVOS[i.semNotaMotivo ?? ""] ?? "Sem nota")}</span>
                       ) : null}
                     </div>
                     {!cancelado && i.conferencia === "devolvido" && i.conferenciaObs && (
@@ -408,15 +410,15 @@ export default function CustosTab() {
   const opTipoCusto = [{ v: "", l: "Não definido" }, { v: "direto", l: "Custo Direto" }, { v: "indireto", l: "Custo Indireto" }];
   const opCentros = [{ v: "", l: "Não definido" }, ...CENTROS.map((c) => ({ v: c, l: c }))];
   const opGrupo = [{ v: "fixo", l: "Despesas Fixas" }, { v: "variavel", l: "Despesas Variáveis" }];
-  const select = "h-10 rounded-md border border-input bg-background px-2 text-sm";
+  const select = "h-10 w-full min-w-0 sm:w-auto rounded-md border border-input bg-background px-2 text-sm";
 
   return (
     <div className="space-y-4 pb-24">
       {/* Mês */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" onClick={() => navMes(-1)} aria-label="Mês anterior"><ChevronLeft className="h-4 w-4" /></Button>
-          <span className="min-w-36 text-center text-base font-semibold">{MESES[mes - 1]} {ano}</span>
+          <span className="min-w-32 text-center text-base sm:min-w-36 font-semibold">{MESES[mes - 1]} {ano}</span>
           <Button variant="outline" size="icon" onClick={() => navMes(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="flex gap-2">
@@ -472,7 +474,7 @@ export default function CustosTab() {
       )}
 
       {/* Filtros básicos */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
         <select className={select} value={plantaId ?? ""} onChange={(e) => setPlantaId(e.target.value ? Number(e.target.value) : undefined)}>
           <option value="">Todos os locais</option>
           {(plantas.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
@@ -579,7 +581,7 @@ export default function CustosTab() {
       {/* Botão fixo */}
       <Button
         onClick={() => setForm({ open: true, item: null })}
-        className="fixed bottom-5 right-5 z-40 h-14 gap-2 rounded-full bg-emerald-600 px-6 text-base text-white shadow-lg hover:bg-emerald-700"
+        className="fixed bottom-20 right-4 z-40 h-12 gap-2 rounded-full bg-emerald-600 px-5 text-base sm:bottom-5 sm:right-5 sm:h-14 sm:px-6 text-white shadow-lg hover:bg-emerald-700"
       >
         <Plus className="h-5 w-5" /> Novo gasto
       </Button>

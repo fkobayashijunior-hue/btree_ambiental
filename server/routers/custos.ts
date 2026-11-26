@@ -8,11 +8,12 @@ import { custoPorPlanta } from "../utils/custoPlanta";
 import { router, adminProcedure } from "../_core/trpc";
 import { moduleProcedure, resolveUserPermissions } from "./permissions";
 import {
-  FORMAS_PAGAMENTO, CATEGORIAS_PADRAO, validarCusto, parseValor, dataValida, exigeCartao, somarMeses,
+  FORMAS_PAGAMENTO, CATEGORIAS_PADRAO, validarCusto, parseValor, dataValida, exigeCartao, somarMeses, aceitaParcelas, dividirParcelas,
 } from "../utils/custos";
 import { interpretarLinha, atribuirHashes, type LancamentoPronto } from "../utils/custosImport";
 
 const SLUG = "contas-a-pagar" as const;
+const MOTIVOS_SEM_NOTA = ["cheque", "parcelado", "sem_nota", "nota_depois", "outro"] as const;
 const MEUS = "meus-gastos" as const;
 const CENTROS_CUSTO = ["Financeiro/Administrativo", "Produção", "Logístico"] as const;
 
@@ -103,6 +104,8 @@ function ensureTables(db: any): Promise<void> {
         ["serie_id", "VARCHAR(36) NULL"],
         ["centro_custo", "VARCHAR(40) NULL"],
         ["tipo_custo", "VARCHAR(10) NULL"],
+        ["parcelas_total", "INT NULL"], // compra parcelada: nº de parcelas (o valor de cada parcela fica travado)
+        ["sem_nota_motivo", "VARCHAR(20) NULL"], // por que o gasto não tem nota (cheque, compra parcelada...)
       ];
       for (const [nome, def] of faltantes) {
         if (!tem.has(nome)) await db.$client.execute(`ALTER TABLE custo_lancamentos ADD COLUMN ${nome} ${def}`);
@@ -231,12 +234,51 @@ const entradaCusto = z.object({
   favorecido: z.string().max(150).nullable().optional(),
   nfNumero: z.string().max(40).nullable().optional(),
   nfUrl: z.string().max(2000).nullable().optional(),
+  semNotaMotivo: z.enum(MOTIVOS_SEM_NOTA).nullable().optional(),
   observacoes: z.string().max(2000).nullable().optional(),
   dataVencimento: dataOpc,
   dataPagamento: dataOpc,
   status: z.enum(["pendente", "pago"]).optional(),
   repetirMeses: z.number().int().min(1).max(36).optional(),
+  // Parcelamento (cartão de crédito, boleto ou cheque): o valor informado é o TOTAL e vira uma conta por parcela, mês a mês.
+  parcelas: z.number().int().min(1).max(36).optional(),
+  primeiraPaga: z.boolean().optional(), // parcelado em Meus Gastos: a 1ª parcela só entra como paga se marcado
 });
+
+function validarParcelas(input: { parcelas?: number; formaPagamento?: string | null }) {
+  if ((input.parcelas ?? 1) > 1 && !aceitaParcelas(input.formaPagamento)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Só dá para parcelar no cartão de crédito, boleto ou cheque" });
+  }
+}
+
+/** Transforma um gasto já lançado em parcelado: ele vira a parcela 1/n (valor total ÷ n) e as demais nascem pendentes, mês a mês. */
+async function parcelarExistente(db: any, id: number, nParc: number, descBase: string, total: number) {
+  const [rs] = (await db.$client.execute(`SELECT * FROM custo_lancamentos WHERE id = ?`, [id])) as any;
+  const r = (rs as any[])[0];
+  if (!r) return;
+  if (r.serie_id) throw new TRPCError({ code: "BAD_REQUEST", message: "Este gasto já faz parte de uma série ou de um parcelamento" });
+  const valores = dividirParcelas(total, nParc);
+  const serieId = randomUUID();
+  const d = (v: any) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+  const venc0 = d(r.data_vencimento);
+  const nome = (k: number) => `${descBase}`.slice(0, 240) + ` (${k + 1}/${nParc})`;
+  await db.$client.execute(`UPDATE custo_lancamentos SET descricao = ?, valor = ?, serie_id = ?, parcelas_total = ? WHERE id = ?`, [nome(0), valores[0], serieId, nParc, id]);
+  for (let k = 1; k < nParc; k++) {
+    const venc = somarMeses(venc0, k);
+    await db.$client.execute(
+      `INSERT INTO custo_lancamentos
+       (data_competencia, data_vencimento, data_pagamento, status, planta_id, categoria_id, tipo, descricao, favorecido, valor,
+        forma_pagamento, cartao_id, gasto_por_colaborador_id, gasto_por_nome, nf_numero, nf_url, sem_nota_motivo, observacoes, origem,
+        criado_por, criado_por_nome, serie_id, centro_custo, tipo_custo, parcelas_total)
+       VALUES (?,?,NULL,'pendente',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        venc, venc, r.planta_id, r.categoria_id, r.tipo, nome(k), r.favorecido, valores[k],
+        r.forma_pagamento, r.cartao_id, r.gasto_por_colaborador_id, r.gasto_por_nome, r.nf_numero, r.nf_url, r.sem_nota_motivo, r.observacoes, r.origem,
+        r.criado_por, r.criado_por_nome, serieId, r.centro_custo, r.tipo_custo, nParc,
+      ]
+    );
+  }
+}
 
 async function prepararEntrada(db: any, input: z.infer<typeof entradaCusto>, permitidas: number[] | null) {
   const valor = parseValor(input.valor);
@@ -266,6 +308,14 @@ const linhaImportacao = z.object({
 });
 
 const limpa = (s: string | null | undefined) => (s && s.trim() ? s.trim() : null);
+/** Motivo de não ter nota: só vale quando não há anexo. */
+const motivoSemNota = (i: { nfUrl?: string | null; semNotaMotivo?: string | null }) => (limpa(i.nfUrl) ? null : i.semNotaMotivo ?? null);
+/** Gasto novo precisa de nota (foto) OU do motivo de não ter; "outro" exige explicação nas observações. */
+function exigirNotaOuMotivo(i: { nfUrl?: string | null; semNotaMotivo?: string | null; observacoes?: string | null }) {
+  if (limpa(i.nfUrl)) return;
+  if (!i.semNotaMotivo) throw new TRPCError({ code: "BAD_REQUEST", message: "Anexe a foto da nota ou diga por que o gasto não tem nota" });
+  if (i.semNotaMotivo === "outro" && !limpa(i.observacoes)) throw new TRPCError({ code: "BAD_REQUEST", message: "Explique nas observações por que o gasto não tem nota" });
+}
 
 export const custosRouter = router({
   // Plantas que o usuário pode usar (respeita permissão por local).
@@ -482,9 +532,11 @@ export const custosRouter = router({
         gastoPorNome: r.gasto_por_nome as string | null,
         nfNumero: r.nf_numero as string | null,
         nfUrl: r.nf_url as string | null,
+        semNotaMotivo: (r.sem_nota_motivo as string | null) ?? null,
         observacoes: r.observacoes as string | null,
         origem: String(r.origem),
         serieId: (r.serie_id as string | null) ?? null,
+        parcelasTotal: r.parcelas_total ? Number(r.parcelas_total) : null,
         criadoPorNome: r.criado_por_nome as string | null,
         conferencia: (["conferido", "devolvido"].includes(r.conferencia_status) ? r.conferencia_status : "pendente") as "pendente" | "conferido" | "devolvido",
         conferidoPorNome: r.conferido_por_nome as string | null,
@@ -516,9 +568,13 @@ export const custosRouter = router({
       const db = await getDbOrThrow();
       await ensureTables(db);
       const permitidas = await plantasPermitidas(ctx as any);
+      exigirNotaOuMotivo(input);
       const { valor, tipo } = await prepararEntrada(db, input, permitidas);
+      validarParcelas(input);
       const status = input.status ?? "pago";
-      const n = input.repetirMeses ?? 1;
+      const nParc = input.parcelas ?? 1;
+      const n = nParc > 1 ? nParc : input.repetirMeses ?? 1;
+      const valoresParcela = nParc > 1 ? dividirParcelas(valor, nParc) : null;
       const serieId = n > 1 ? randomUUID() : null;
       let primeiroId = 0;
       for (let k = 0; k < n; k++) {
@@ -530,14 +586,18 @@ export const custosRouter = router({
         const [res] = (await db.$client.execute(
           `INSERT INTO custo_lancamentos
            (data_competencia, data_vencimento, data_pagamento, status, planta_id, categoria_id, tipo, descricao, favorecido, valor,
-            forma_pagamento, cartao_id, gasto_por_colaborador_id, gasto_por_nome, nf_numero, nf_url, observacoes, origem, criado_por, criado_por_nome, serie_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'manual', ?, ?, ?)`,
+            forma_pagamento, cartao_id, gasto_por_colaborador_id, gasto_por_nome, nf_numero, nf_url, sem_nota_motivo, observacoes, origem, criado_por, criado_por_nome, serie_id, parcelas_total)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'manual', ?, ?, ?, ?)`,
           [
-            comp, venc, pag, st, input.plantaId ?? null, input.categoriaId, tipo, input.descricao.trim(), limpa(input.favorecido), valor,
+            comp, venc, pag, st, input.plantaId ?? null, input.categoriaId, tipo,
+            valoresParcela ? `${input.descricao.trim()} (${k + 1}/${nParc})`.slice(0, 255) : input.descricao.trim(),
+            limpa(input.favorecido), valoresParcela ? valoresParcela[k] : valor,
             input.formaPagamento ?? null, exigeCartao(input.formaPagamento) ? input.cartaoId ?? null : null,
             input.gastoPorColaboradorId ?? null, limpa(input.gastoPorNome) ?? (ctx.user as any).name ?? null,
-            k === 0 ? limpa(input.nfNumero) : null, k === 0 ? limpa(input.nfUrl) : null, limpa(input.observacoes),
-            ctx.user.id ?? null, (ctx.user as any).name ?? null, serieId,
+            // parcelas são a mesma compra: a nota vale para todas
+            k === 0 || valoresParcela ? limpa(input.nfNumero) : null, k === 0 || valoresParcela ? limpa(input.nfUrl) : null,
+            k === 0 || valoresParcela ? motivoSemNota(input) : null, limpa(input.observacoes),
+            ctx.user.id ?? null, (ctx.user as any).name ?? null, serieId, valoresParcela ? nParc : null,
           ]
         )) as any;
         if (k === 0) primeiroId = Number((res as any).insertId);
@@ -551,10 +611,14 @@ export const custosRouter = router({
       const db = await getDbOrThrow();
       await ensureTables(db);
       const permitidas = await plantasPermitidas(ctx as any);
-      const [atual] = (await db.$client.execute(`SELECT planta_id, origem FROM custo_lancamentos WHERE id = ?`, [input.id])) as any;
+      const [atual] = (await db.$client.execute(`SELECT planta_id, origem, serie_id, valor, parcelas_total FROM custo_lancamentos WHERE id = ?`, [input.id])) as any;
       const reg = (atual as any[])[0];
       if (!reg) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
       exigirPlanta(permitidas, reg.planta_id);
+      if ((input.parcelas ?? 1) > 1) {
+        validarParcelas(input);
+        if (reg.serie_id) throw new TRPCError({ code: "BAD_REQUEST", message: "Este gasto já faz parte de uma série ou de um parcelamento" });
+      }
       if (reg.origem === "extrato_pedagio") {
         exigirPlanta(permitidas, input.plantaId);
         await db.$client.execute(
@@ -564,19 +628,21 @@ export const custosRouter = router({
         return { ok: true };
       }
       const { valor, tipo } = await prepararEntrada(db, input, permitidas);
+      if (reg.parcelas_total && Math.abs(valor - Number(reg.valor)) > 0.004) throw new TRPCError({ code: "BAD_REQUEST", message: "O valor de uma compra parcelada não pode ser alterado" });
       await db.$client.execute(
         `UPDATE custo_lancamentos SET data_competencia=?, data_vencimento=?, data_pagamento=?, status=COALESCE(?, status), planta_id=?, categoria_id=?,
            tipo=?, descricao=?, favorecido=?, valor=?, forma_pagamento=?, cartao_id=?, gasto_por_colaborador_id=?, gasto_por_nome=?,
-           nf_numero=?, nf_url=?, observacoes=?,
+           nf_numero=?, nf_url=?, sem_nota_motivo=?, observacoes=?,
            conferencia_status='pendente', conferido_por=NULL, conferido_por_nome=NULL, conferido_em=NULL WHERE id=?`,
         [
           input.dataVencimento ?? input.dataCompetencia, input.dataVencimento ?? input.dataCompetencia, input.dataPagamento ?? null, input.status ?? null,
           input.plantaId ?? null, input.categoriaId, tipo, input.descricao.trim(), limpa(input.favorecido), valor,
           input.formaPagamento ?? null, exigeCartao(input.formaPagamento) ? input.cartaoId ?? null : null,
-          input.gastoPorColaboradorId ?? null, limpa(input.gastoPorNome), limpa(input.nfNumero), limpa(input.nfUrl),
+          input.gastoPorColaboradorId ?? null, limpa(input.gastoPorNome), limpa(input.nfNumero), limpa(input.nfUrl), motivoSemNota(input),
           limpa(input.observacoes), input.id,
         ]
       );
+      if ((input.parcelas ?? 1) > 1) await parcelarExistente(db, input.id, input.parcelas!, input.descricao.trim(), valor);
       return { ok: true };
     }),
 
@@ -642,7 +708,7 @@ export const custosRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Só quem confere os gastos pode editar direto na tabela" });
       }
       const permitidas = await plantasPermitidas(ctx as any);
-      const [rows] = (await db.$client.execute(`SELECT id, planta_id, origem, status FROM custo_lancamentos WHERE id = ?`, [input.id])) as any;
+      const [rows] = (await db.$client.execute(`SELECT id, planta_id, origem, status, parcelas_total FROM custo_lancamentos WHERE id = ?`, [input.id])) as any;
       const reg = (rows as any[])[0];
       if (!reg) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
       if (reg.status === "cancelado") throw new TRPCError({ code: "BAD_REQUEST", message: "Gasto cancelado não pode ser editado" });
@@ -676,7 +742,7 @@ export const custosRouter = router({
           sets.push(["tipo_custo", s || null]);
           break;
         case "tipo": if (s !== "fixo" && s !== "variavel") throw erro("Valor inválido"); sets.push(["tipo", s]); break;
-        case "valor": { const n = parseValor(v); if (n === null || n <= 0) throw erro("Valor inválido"); sets.push(["valor", n]); break; }
+        case "valor": { if (reg.parcelas_total) throw erro("O valor de uma compra parcelada não pode ser alterado"); const n = parseValor(v); if (n === null || n <= 0) throw erro("Valor inválido"); sets.push(["valor", n]); break; }
         case "gastoPorColaboradorId": {
           if (!s) { sets.push(["gasto_por_colaborador_id", null], ["gasto_por_nome", null]); break; }
           const id = Number(s);
@@ -791,7 +857,9 @@ export const custosRouter = router({
           tipo: r.tipo === "fixo" ? "fixo" as const : "variavel" as const,
           descricao: String(r.descricao), favorecido: r.favorecido as string | null, valor: Number(r.valor),
           formaPagamento: r.forma_pagamento as string | null, cartaoId: r.cartao_id ? Number(r.cartao_id) : null, cartaoNome: r.cartao_nome as string | null,
-          gastoPorNome: r.gasto_por_nome as string | null, nfNumero: r.nf_numero as string | null, nfUrl: r.nf_url as string | null,
+          gastoPorNome: r.gasto_por_nome as string | null, nfNumero: r.nf_numero as string | null, nfUrl: r.nf_url as string | null, semNotaMotivo: (r.sem_nota_motivo as string | null) ?? null,
+          serieId: (r.serie_id as string | null) ?? null,
+        parcelasTotal: r.parcelas_total ? Number(r.parcelas_total) : null,
           observacoes: r.observacoes as string | null, origem: String(r.origem),
           conferencia, conferidoPorNome: r.conferido_por_nome as string | null, conferenciaObs: r.conferencia_obs as string | null,
           // só dá para alterar enquanto ainda não foi conferido
@@ -811,28 +879,65 @@ export const custosRouter = router({
       };
     }),
 
+  /** Lê a foto/PDF da nota por IA e devolve sugestões para preencher o formulário (a pessoa confere antes de salvar). */
+  lerNota: moduleProcedure(SLUG, MEUS)
+    .input(z.object({ url: z.string().url().max(2000) }))
+    .mutation(async ({ input }) => {
+      const db = await getDbOrThrow();
+      await ensureTables(db);
+      const [cs] = (await db.$client.execute(`SELECT id, nome FROM custo_categorias WHERE ativa = 1 AND origem_automatica = 0 ORDER BY ordem, nome`)) as any;
+      const cats = (cs as any[]).map((c) => ({ id: Number(c.id), nome: String(c.nome) }));
+      let cnpjEmpresa: string | null = (process.env.NFE_COMPRAS_CNPJ ?? "").replace(/\D/g, "") || null;
+      if (!cnpjEmpresa) {
+        try { const { carregarCertificado } = await import("../utils/nfeCompras/sefaz"); cnpjEmpresa = carregarCertificado().cnpj; } catch { cnpjEmpresa = null; }
+      }
+      const { lerNotaPorIA } = await import("../utils/leituraNota");
+      let l;
+      try { l = await lerNotaPorIA(input.url, cats.map((c) => c.nome), cnpjEmpresa); }
+      catch (e: any) { throw new TRPCError({ code: "BAD_REQUEST", message: String(e?.message ?? "Não foi possível ler a nota") }); }
+      if (l.nfNumero && l.valor) {
+        const [dup] = (await db.$client.execute(
+          `SELECT DATE_FORMAT(data_competencia, '%d/%m/%Y') AS d FROM custo_lancamentos WHERE nf_numero = ? AND ABS(valor - ?) < 0.01 AND status <> 'cancelado' LIMIT 1`,
+          [l.nfNumero, l.valor])) as any;
+        if ((dup as any[]).length) l.avisos.push(`Já existe um gasto com a NF ${l.nfNumero} e o mesmo valor (lançado em ${(dup as any[])[0].d}). Confira se não é duplicado.`);
+      }
+      return { ...l, categoriaId: cats.find((c) => c.nome === l.categoria)?.id ?? null };
+    }),
+
   meusCriar: moduleProcedure(MEUS)
     .input(entradaCusto.omit({ repetirMeses: true, status: true, dataVencimento: true, dataPagamento: true }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDbOrThrow();
       await ensureTables(db);
       const permitidas = await plantasPermitidas(ctx as any);
+      exigirNotaOuMotivo(input);
       const { valor, tipo } = await prepararEntrada(db, input as any, permitidas);
-      const [res] = (await db.$client.execute(
-        `INSERT INTO custo_lancamentos
-         (data_competencia, data_pagamento, status, planta_id, categoria_id, tipo, descricao, favorecido, valor,
-          forma_pagamento, cartao_id, gasto_por_nome, nf_numero, nf_url, observacoes, origem, criado_por, criado_por_nome)
-         VALUES (?,?, 'pago', ?,?,?,?,?,?,?,?,?,?,?,?, 'colaborador', ?, ?)`,
-        [
-          input.dataCompetencia, input.dataCompetencia, input.plantaId ?? null, input.categoriaId, tipo, input.descricao.trim(), limpa(input.favorecido), valor,
-          input.formaPagamento ?? null, exigeCartao(input.formaPagamento) ? input.cartaoId ?? null : null,
-          limpa(input.gastoPorNome) ?? (ctx.user as any).name ?? null, limpa(input.nfNumero), limpa(input.nfUrl), limpa(input.observacoes),
-          ctx.user.id ?? null, (ctx.user as any).name ?? null,
-        ]
-      )) as any;
-      const novoId = Number((res as any).insertId);
-      await db.$client.execute(`UPDATE custo_lancamentos SET data_vencimento = data_competencia WHERE id = ?`, [novoId]);
-      return { id: novoId, criados: 1 };
+      validarParcelas(input);
+      const nParc = input.parcelas ?? 1;
+      const valoresParcela = nParc > 1 ? dividirParcelas(valor, nParc) : null;
+      const serieId = valoresParcela ? randomUUID() : null;
+      let primeiroId = 0;
+      for (let k = 0; k < nParc; k++) {
+        // 1ª parcela = gasto de hoje (paga); as seguintes ficam pendentes, vencendo mês a mês.
+        const venc = somarMeses(input.dataCompetencia, k);
+        const [res] = (await db.$client.execute(
+          `INSERT INTO custo_lancamentos
+           (data_competencia, data_vencimento, data_pagamento, status, planta_id, categoria_id, tipo, descricao, favorecido, valor,
+            forma_pagamento, cartao_id, gasto_por_nome, nf_numero, nf_url, sem_nota_motivo, observacoes, origem, criado_por, criado_por_nome, serie_id, parcelas_total)
+           VALUES (?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?,?,?, 'colaborador', ?, ?, ?, ?)`,
+          [
+            venc, venc, k === 0 && (nParc === 1 || input.primeiraPaga) ? input.dataCompetencia : null, k === 0 && (nParc === 1 || input.primeiraPaga) ? "pago" : "pendente",
+            input.plantaId ?? null, input.categoriaId, tipo,
+            valoresParcela ? `${input.descricao.trim()} (${k + 1}/${nParc})`.slice(0, 255) : input.descricao.trim(),
+            limpa(input.favorecido), valoresParcela ? valoresParcela[k] : valor,
+            input.formaPagamento ?? null, exigeCartao(input.formaPagamento) ? input.cartaoId ?? null : null,
+            limpa(input.gastoPorNome) ?? (ctx.user as any).name ?? null, limpa(input.nfNumero), limpa(input.nfUrl), motivoSemNota(input), limpa(input.observacoes),
+            ctx.user.id ?? null, (ctx.user as any).name ?? null, serieId, valoresParcela ? nParc : null,
+          ]
+        )) as any;
+        if (k === 0) primeiroId = Number((res as any).insertId);
+      }
+      return { id: primeiroId, criados: nParc };
     }),
 
   meusEditar: moduleProcedure(MEUS)
@@ -841,23 +946,29 @@ export const custosRouter = router({
       const db = await getDbOrThrow();
       await ensureTables(db);
       const permitidas = await plantasPermitidas(ctx as any);
-      const [atual] = (await db.$client.execute(`SELECT criado_por, conferencia_status, status FROM custo_lancamentos WHERE id = ?`, [input.id])) as any;
+      const [atual] = (await db.$client.execute(`SELECT criado_por, conferencia_status, status, serie_id, valor, parcelas_total FROM custo_lancamentos WHERE id = ?`, [input.id])) as any;
       const reg = (atual as any[])[0];
       if (!reg || Number(reg.criado_por) !== Number(ctx.user.id)) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
+      if ((input.parcelas ?? 1) > 1) {
+        validarParcelas(input);
+        if (reg.serie_id) throw new TRPCError({ code: "BAD_REQUEST", message: "Este gasto já faz parte de uma série ou de um parcelamento" });
+      }
       if (reg.status === "cancelado") throw new TRPCError({ code: "BAD_REQUEST", message: "Este gasto foi cancelado" });
       if (reg.conferencia_status === "conferido") throw new TRPCError({ code: "BAD_REQUEST", message: "Este gasto já foi conferido e não pode mais ser alterado" });
       const { valor, tipo } = await prepararEntrada(db, input as any, permitidas);
+      if (reg.parcelas_total && Math.abs(valor - Number(reg.valor)) > 0.004) throw new TRPCError({ code: "BAD_REQUEST", message: "O valor de uma compra parcelada não pode ser alterado" });
       await db.$client.execute(
         `UPDATE custo_lancamentos SET data_competencia=?, data_pagamento=?, planta_id=?, categoria_id=?, tipo=?, descricao=?, favorecido=?, valor=?,
-           forma_pagamento=?, cartao_id=?, gasto_por_nome=?, nf_numero=?, nf_url=?, observacoes=?,
+           forma_pagamento=?, cartao_id=?, gasto_por_nome=?, nf_numero=?, nf_url=?, sem_nota_motivo=?, observacoes=?,
            conferencia_status='pendente', conferido_por=NULL, conferido_por_nome=NULL, conferido_em=NULL WHERE id=?`,
         [
           input.dataCompetencia, input.dataCompetencia, input.plantaId ?? null, input.categoriaId, tipo, input.descricao.trim(), limpa(input.favorecido), valor,
           input.formaPagamento ?? null, exigeCartao(input.formaPagamento) ? input.cartaoId ?? null : null,
-          limpa(input.gastoPorNome), limpa(input.nfNumero), limpa(input.nfUrl), limpa(input.observacoes), input.id,
+          limpa(input.gastoPorNome), limpa(input.nfNumero), limpa(input.nfUrl), motivoSemNota(input), limpa(input.observacoes), input.id,
         ]
       );
       await db.$client.execute(`UPDATE custo_lancamentos SET data_vencimento = data_competencia WHERE id = ?`, [input.id]);
+      if ((input.parcelas ?? 1) > 1) await parcelarExistente(db, input.id, input.parcelas!, input.descricao.trim(), valor);
       return { ok: true };
     }),
 

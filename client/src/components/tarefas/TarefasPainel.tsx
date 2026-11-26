@@ -14,7 +14,7 @@ import { WeeklyGoalForm } from "@/components/WeeklyGoalForm";
 import WeeklyGoalDetail from "@/pages/WeeklyGoalDetail";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import { useAreaVisivel, estiloTelaCheia } from "@/hooks/useAreaVisivel";
-import { AlertTriangle, Camera, CalendarDays, CheckCircle2, LayoutGrid, List, Loader2, MapPin, MessageSquare, Paperclip, Pencil, Play, Plus, Send, FileText, Download, Search, SlidersHorizontal, Target, Trash2, User, X } from "lucide-react";
+import { AlertTriangle, Camera, CalendarDays, CheckCircle2, LayoutGrid, List, Loader2, MapPin, MessageSquare, Paperclip, Pencil, Play, Plus, Send, FileText, Download, Search, SlidersHorizontal, Target, Trash2, User, X, Lock, ShieldCheck } from "lucide-react";
 
 const CLOUDINARY_CLOUD_NAME = "djob7pxme";
 const CLOUDINARY_UPLOAD_PRESET = "btree_ambiental";
@@ -93,6 +93,14 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
   const atualizar = () => Promise.all([utils.tarefas.minhas.invalidate(), utils.tarefas.equipe.invalidate(), utils.tarefas.detalhe.invalidate()]);
 
   const mudar = trpc.tarefas.mudarStatus.useMutation({ onSuccess: atualizar, onError: (e) => toast.error(e.message) });
+  // Solicitações de tarefa para outra pessoa que esperam a minha autorização (superior de quem pediu)
+  const qSolic = trpc.tarefas.solicitacoes.useQuery(undefined, { refetchInterval: 60000 });
+  const solicitacoes = qSolic.data ?? [];
+  const autorizar = trpc.tarefas.autorizar.useMutation({
+    onSuccess: (_r, v) => { toast.success(v.aprovar ? "Tarefa autorizada" : "Tarefa recusada"); qSolic.refetch(); atualizar(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const recusar = (t: any) => { const m = window.prompt(`Por que recusar "${t.titulo}"?`); if (m && m.trim()) autorizar.mutate({ id: t.id, aprovar: false, motivo: m.trim() }); };
 
   // Arrastar e soltar (computador): o cartão muda de coluna na hora e a mudança é confirmada no servidor.
   const toque = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
@@ -118,7 +126,7 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
     const atr = atrasada(t);
     const pend = PENDENCIAS.find((p) => p.v === t.pendencia);
     return (
-      <div draggable={visao === "quadro" && !toque && !ehMeta(t)} onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(t.id)); e.dataTransfer.effectAllowed = "move"; setArrastando(t.id); }} onDragEnd={() => { setArrastando(null); setSobre(null); }}
+      <div draggable={visao === "quadro" && !toque && !ehMeta(t) && !t.autorizacao} onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(t.id)); e.dataTransfer.effectAllowed = "move"; setArrastando(t.id); }} onDragEnd={() => { setArrastando(null); setSobre(null); }}
         className={`rounded-xl border bg-white p-3 shadow-sm ${visao === "quadro" && !toque ? "cursor-grab active:cursor-grabbing" : ""} ${arrastando === t.id ? "opacity-40" : ""} ${atr ? "border-red-300" : pend ? "border-dashed border-amber-300" : ""}`}>
         <button type="button" onClick={() => abrir(t)} className="block w-full text-left">
           <p className="font-medium leading-snug">{t.titulo}</p>
@@ -130,10 +138,12 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
             {t.qtdComentarios > 0 && <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-600"><MessageSquare className="h-3 w-3" />{t.qtdComentarios}</span>}
           </div>
           {pend && <p className={`mt-1.5 rounded-lg px-2 py-1 text-xs font-medium ${pend.cls}`}>⏸ {pend.l}{t.pendenciaMotivo ? ` · ${t.pendenciaMotivo}` : ""}{t.pendenciaDesde ? ` · desde ${soDataBR(t.pendenciaDesde)}` : ""}{diasDesde(t.pendenciaDesde) > 0 ? ` (há ${diasDesde(t.pendenciaDesde)} dia(s))` : ""}{t.pendenciaRespNomes ? ` · 👤 ${t.pendenciaRespNomes}` : ""}</p>}
+          {t.autorizacao === "pendente" && <p className="mt-1.5 flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-800"><Lock className="h-3 w-3 shrink-0" /> Para {t.responsavelNome ?? "-"} · aguardando autorização de {t.autorizadorNome ?? "um administrador"}</p>}
+          {t.autorizacao === "recusada" && <p className="mt-1.5 rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-700">✖ Recusada por {t.autorizadorNome ?? "-"}{t.autorizacaoMotivo ? `: ${t.autorizacaoMotivo}` : ""} · toque para alterar e reenviar, ou excluir</p>}
           {equipe && <p className="mt-1.5 flex items-center gap-1 text-xs text-gray-500"><User className="h-3 w-3" />{t.responsavelNome ?? "-"}</p>}
           {ehMeta(t) && <p className="mt-1.5 text-[11px] font-medium text-lime-700">Toque para abrir a meta →</p>}
         </button>
-        {t.status !== "concluida" && !t.pendencia && !ehMeta(t) && (
+        {t.status !== "concluida" && !t.pendencia && !ehMeta(t) && !t.autorizacao && (
           <div className="mt-2 flex gap-2">
             {t.status === "a_fazer" && <Button size="sm" variant="outline" className="h-8 flex-1 gap-1 text-xs" disabled={mudar.isPending} onClick={() => mudar.mutate({ id: t.id, status: "andamento" })}><Play className="h-3 w-3" /> Iniciar</Button>}
             <Button size="sm" className="h-8 flex-1 gap-1 bg-emerald-600 text-xs text-white hover:bg-emerald-700" disabled={mudar.isPending} onClick={() => mudar.mutate({ id: t.id, status: "concluida" })}><CheckCircle2 className="h-3 w-3" /> Concluir</Button>
@@ -200,6 +210,25 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
         </div>
       )}
 
+      {solicitacoes.length > 0 && (
+        <div className="space-y-2 rounded-xl border-2 border-indigo-200 bg-indigo-50/60 p-3">
+          <p className="flex items-center gap-1 text-sm font-semibold text-indigo-900"><ShieldCheck className="h-4 w-4" /> Para você autorizar ({solicitacoes.length})</p>
+          <p className="text-xs text-indigo-800">Tarefas que alguém da sua equipe quer criar para outra pessoa. Só valem depois da sua autorização.</p>
+          {solicitacoes.map((t: any) => (
+            <div key={t.id} className="rounded-lg border bg-white p-3">
+              <button type="button" className="block w-full text-left" onClick={() => setDetalheId(t.id)}>
+                <p className="font-medium leading-snug">{t.titulo}</p>
+                <p className="mt-0.5 text-xs text-gray-600">Pedida por <b>{t.criadoPorNome ?? "-"}</b> para <b>{t.responsavelNome ?? "-"}</b>{t.prazo ? ` · prazo ${dataBR(t.prazo)}` : ""}</p>
+              </button>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" className="h-8 flex-1 bg-emerald-600 text-xs text-white hover:bg-emerald-700" disabled={autorizar.isPending} onClick={() => autorizar.mutate({ id: t.id, aprovar: true })}>Autorizar</Button>
+                <Button size="sm" variant="outline" className="h-8 flex-1 text-xs text-red-700" disabled={autorizar.isPending} onClick={() => recusar(t)}>Recusar</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {semVinculo && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -253,7 +282,7 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
                   const col = COLUNAS.find((c) => c.v === t.status); const prio = PRIORIDADES.find((p) => p.v === t.prioridade);
                   return (
                     <tr key={t.id} className={`border-t ${atrasada(t) ? "bg-red-50/50" : ""}`}>
-                      <td className="px-3 py-2">{ehMeta(t) && <span className="mr-1.5 rounded-full bg-lime-100 px-2 py-0.5 text-[11px] font-medium text-lime-800">🎯 Meta</span>}<button type="button" className="text-left font-medium hover:underline" onClick={() => abrir(t)}>{t.titulo}</button>{t.qtdComentarios > 0 && <span className="ml-2 text-xs text-gray-400">💬 {t.qtdComentarios}</span>}</td>
+                      <td className="px-3 py-2">{ehMeta(t) && <span className="mr-1.5 rounded-full bg-lime-100 px-2 py-0.5 text-[11px] font-medium text-lime-800">🎯 Meta</span>}<button type="button" className="text-left font-medium hover:underline" onClick={() => abrir(t)}>{t.titulo}</button>{t.autorizacao === "pendente" && <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] text-indigo-800">🔒 Aguardando autorização</span>}{t.autorizacao === "recusada" && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[11px] text-red-700">✖ Recusada</span>}{t.qtdComentarios > 0 && <span className="ml-2 text-xs text-gray-400">💬 {t.qtdComentarios}</span>}</td>
                       {equipe && <td className="px-3 py-2">{t.responsavelNome ?? "-"}</td>}
                       <td className={`whitespace-nowrap px-3 py-2 ${atrasada(t) ? "font-medium text-red-700" : ""}`}>{t.prazo ? dataBR(t.prazo) : "-"}{atrasada(t) ? " ⚠" : ""}</td>
                       <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs ${prio?.cls}`}>{prio?.l}</span></td>
@@ -275,7 +304,7 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
                       </td>
                       <td className="px-3 py-2">{t.localNome ?? "-"}</td>
                       <td className="px-3 py-2 text-right">
-                        {t.status !== "concluida" && !t.pendencia && !ehMeta(t) && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={mudar.isPending} onClick={() => mudar.mutate({ id: t.id, status: t.status === "a_fazer" ? "andamento" : "concluida" })}>{t.status === "a_fazer" ? "Iniciar" : "Concluir"}</Button>}
+                        {t.status !== "concluida" && !t.pendencia && !ehMeta(t) && !t.autorizacao && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={mudar.isPending} onClick={() => mudar.mutate({ id: t.id, status: t.status === "a_fazer" ? "andamento" : "concluida" })}>{t.status === "a_fazer" ? "Iniciar" : "Concluir"}</Button>}
                       </td>
                     </tr>
                   );
@@ -292,6 +321,7 @@ export default function TarefasPainel({ modo }: { modo: "minhas" | "equipe" }) {
       )}
 
       <TarefaForm open={form.open} item={form.item} gestor={gestor} colaboradores={ctxQ.data?.colaboradores ?? []} locais={locais.data ?? []}
+        diretos={ctxQ.data?.diretos ?? null} meuColaboradorId={ctxQ.data?.meuColaboradorId ?? null} superiorNome={ctxQ.data?.meuSuperiorNome ?? null}
         onClose={() => setForm({ open: false, item: null })} onSaved={atualizar} />
       <TarefaDetalhe id={detalheId} onClose={() => setDetalheId(null)} onChanged={atualizar}
         onEditar={(t) => { setDetalheId(null); setForm({ open: true, item: t }); }} />
@@ -326,7 +356,7 @@ function MetaJanela({ estado, onClose }: { estado: { id?: number } | null; onClo
 }
 
 // ───────── Nova tarefa / editar ─────────
-function TarefaForm({ open, item, gestor, colaboradores, locais, onClose, onSaved }: any) {
+function TarefaForm({ open, item, gestor, colaboradores, locais, diretos, meuColaboradorId, superiorNome, onClose, onSaved }: any) {
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [prioridade, setPrioridade] = useState("media");
@@ -345,17 +375,21 @@ function TarefaForm({ open, item, gestor, colaboradores, locais, onClose, onSave
 
   const salvar = async () => {
     if (titulo.trim().length < 2) return toast.error("Dê um título à tarefa");
-    if (gestor && !resp) return toast.error("Escolha o responsável");
     const base = { titulo: titulo.trim(), descricao: descricao.trim() || null, prioridade, prazo: prazo || null, localId: localId ? Number(localId) : null };
     try {
-      if (item) await editar.mutateAsync({ id: item.id, ...base, responsavelColaboradorId: gestor && resp ? Number(resp) : undefined });
-      else await criar.mutateAsync({ ...base, responsavelColaboradorId: gestor && resp ? Number(resp) : undefined });
-      toast.success(item ? "Tarefa alterada" : "Tarefa criada");
+      const r: any = item
+        ? await editar.mutateAsync({ id: item.id, ...base, responsavelColaboradorId: resp ? Number(resp) : undefined })
+        : await criar.mutateAsync({ ...base, responsavelColaboradorId: resp ? Number(resp) : undefined });
+      if (r?.aguardandoAutorizacao) toast.success(`Enviada para autorização de ${r.autorizadorNome}. A tarefa só chega à pessoa depois de autorizada.`, { duration: 7000 });
+      else toast.success(item ? "Tarefa alterada" : "Tarefa criada");
       onSaved(); onClose();
     } catch (e: any) { toast.error(e?.message ?? "Não foi possível salvar"); }
   };
   const pend = criar.isPending || editar.isPending;
   const sel = "h-11 w-full rounded-md border border-input bg-background px-2 text-sm";
+  // diretos = null: admin (cria para qualquer um). Senão, só para si e para quem está abaixo na hierarquia.
+  const respMudou = !!resp && (!item || Number(resp) !== Number(item.responsavelId));
+  const precisaAutorizacao = respMudou && Array.isArray(diretos) && !diretos.includes(Number(resp));
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -364,10 +398,16 @@ function TarefaForm({ open, item, gestor, colaboradores, locais, onClose, onSave
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div><label className="mb-1 block text-sm font-medium">O que precisa ser feito?</label><Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Trocar o óleo do trator 02" className="h-11" maxLength={200} /></div>
           <div><label className="mb-1 block text-sm font-medium">Detalhes (opcional)</label><Textarea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} /></div>
-          {gestor ? (
-            <div><label className="mb-1 block text-sm font-medium">Responsável</label>
-              <select className={sel} value={resp} onChange={(e) => setResp(e.target.value)}><option value="">Escolha...</option>{colaboradores.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></div>
-          ) : !item && <p className="rounded-lg bg-gray-50 p-2 text-xs text-gray-600">A tarefa será atribuída a você.</p>}
+          <div><label className="mb-1 block text-sm font-medium">Responsável</label>
+            <select className={sel} value={resp} onChange={(e) => setResp(e.target.value)}>
+              <option value="">{item ? "Manter o atual" : "Eu mesmo"}</option>
+              {colaboradores.map((c: any) => <option key={c.id} value={c.id}>{c.nome}{Number(c.id) === Number(meuColaboradorId) ? " (eu)" : ""}</option>)}
+            </select>
+            {precisaAutorizacao && (
+              <p className="mt-1 flex items-start gap-1 rounded-lg bg-indigo-50 p-2 text-xs text-indigo-900"><Lock className="mt-0.5 h-3 w-3 shrink-0" />
+                <span>Essa pessoa não está abaixo de você. A tarefa vai primeiro para a <b>autorização de {superiorNome ?? "um administrador"}</b> e só chega a ela depois de autorizada.</span></p>
+            )}
+          </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Prioridade</label>
             <div className="grid grid-cols-3 gap-2">
@@ -380,7 +420,7 @@ function TarefaForm({ open, item, gestor, colaboradores, locais, onClose, onSave
               <select className={sel} value={localId} onChange={(e) => setLocalId(e.target.value)}><option value="">Sem local</option>{locais.map((l: any) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
           </div>
           <div className="flex gap-2">
-            <Button className="h-11 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={pend} onClick={salvar}>{pend ? "Salvando..." : item ? "Salvar alterações" : "Criar tarefa"}</Button>
+            <Button className="h-11 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={pend} onClick={salvar}>{pend ? "Salvando..." : precisaAutorizacao ? "Enviar para autorização" : item ? "Salvar alterações" : "Criar tarefa"}</Button>
             <Button variant="outline" className="h-11" onClick={onClose}>Cancelar</Button>
           </div>
         </div>
@@ -406,6 +446,7 @@ function TarefaDetalhe({ id, onClose, onChanged, onEditar }: any) {
   const { toque, vv } = useAreaVisivel(!!id);
   const refresh = () => { q.refetch(); onChanged?.(); };
   const mudar = trpc.tarefas.mudarStatus.useMutation({ onSuccess: () => { setTexto(""); setFoto(""); refresh(); }, onError: (e) => toast.error(e.message) });
+  const autorizarT = trpc.tarefas.autorizar.useMutation({ onSuccess: (_r, v) => { toast.success(v.aprovar ? "Tarefa autorizada" : "Tarefa recusada"); refresh(); }, onError: (e) => toast.error(e.message) });
   const comentar = trpc.tarefas.comentar.useMutation({ onSuccess: () => { setTexto(""); setFoto(""); refresh(); }, onError: (e) => toast.error(e.message) });
   const definirPend = trpc.tarefas.definirPendencia.useMutation({ onSuccess: () => { setPendSel(""); setPendMotivo(""); setPendDesc(""); setPendDesde(""); setPendResp([]); refresh(); toast.success("Situação atualizada"); }, onError: (e) => toast.error(e.message) });
   const aprovar = trpc.tarefas.aprovar.useMutation({ onSuccess: () => { setTexto(""); refresh(); toast.success("Resposta registrada"); }, onError: (e) => toast.error(e.message) });
@@ -466,8 +507,28 @@ function TarefaDetalhe({ id, onClose, onChanged, onEditar }: any) {
             <p className="text-xs text-gray-500">Responsável: <b>{t.responsavelNome ?? "-"}</b> · criada por {t.criadoPorNome ?? "-"} em {dataHoraBR(t.criadaEm)}</p>
             {t.descricao && <p className="whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-sm">{t.descricao}</p>}
 
+            {t.autorizacao === "pendente" && (
+              <div className="space-y-2 rounded-xl border-2 border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">
+                <p className="flex items-center gap-1 font-medium"><Lock className="h-4 w-4" /> Aguardando autorização de {t.autorizadorNome ?? "um administrador"}</p>
+                <p className="text-xs">{t.criadoPorNome ?? "-"} pediu esta tarefa para {t.responsavelNome ?? "-"}. Ela só aparece para a pessoa depois de autorizada.</p>
+                {q.data?.podeAutorizar && (
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={autorizarT.isPending} onClick={() => autorizarT.mutate({ id: t.id, aprovar: true })}>Autorizar</Button>
+                    <Button size="sm" variant="outline" className="flex-1 text-red-700" disabled={autorizarT.isPending} onClick={() => { const m = window.prompt("Por que recusar?"); if (m && m.trim()) autorizarT.mutate({ id: t.id, aprovar: false, motivo: m.trim() }); }}>Recusar</Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {t.autorizacao === "recusada" && (
+              <div className="rounded-xl border-2 border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                <p className="font-medium">✖ Recusada por {t.autorizadorNome ?? "-"}</p>
+                {t.autorizacaoMotivo && <p className="mt-0.5 text-xs">{t.autorizacaoMotivo}</p>}
+                <p className="mt-1 text-xs">Você pode alterar a tarefa (por exemplo, trocar o responsável) para reenviar, ou excluí-la.</p>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
-              {COLUNAS.filter((c) => c.v !== t.status && !(c.v === "concluida" && ((t.pendencia === "aprovacao" && !q.data?.gestor) || t.pendencia === "bloqueada"))).map((c) => (
+              {q.data?.podeMudar !== false && COLUNAS.filter((c) => c.v !== t.status && !(c.v === "concluida" && ((t.pendencia === "aprovacao" && !q.data?.gestor) || t.pendencia === "bloqueada"))).map((c) => (
                 <Button key={c.v} size="sm" variant={c.v === "concluida" ? "default" : "outline"} className={c.v === "concluida" ? "bg-emerald-600 text-white hover:bg-emerald-700" : ""} disabled={mudar.isPending}
                   onClick={() => mudar.mutate({ id: t.id, status: c.v, comentario: texto.trim() || null, fotoUrl: foto || null })}>
                   {c.v === "concluida" ? "Concluir" : c.v === "andamento" ? (t.status === "concluida" ? "Reabrir" : "Iniciar") : "Voltar para A fazer"}
@@ -477,7 +538,7 @@ function TarefaDetalhe({ id, onClose, onChanged, onEditar }: any) {
               {q.data?.podeEditar && <Button size="sm" variant="ghost" className="gap-1 text-red-600 hover:text-red-700" disabled={excluir.isPending} onClick={() => confirm("Excluir esta tarefa e todo o histórico dela?") && excluir.mutate({ id: t.id })}><Trash2 className="h-3.5 w-3.5" /> Excluir</Button>}
             </div>
 
-            {t.status !== "concluida" && (
+            {t.status !== "concluida" && !t.autorizacao && (
               <div className="space-y-2 rounded-xl border p-3">
                 <p className="text-sm font-medium">Pendência</p>
                 {t.pendencia ? (

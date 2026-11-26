@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 
 export const FORMAS_PAGAMENTO = [
-  "dinheiro", "pix", "cartao_credito", "cartao_debito", "transferencia", "boleto", "debito_conta", "outro",
+  "dinheiro", "pix", "cartao_credito", "cartao_debito", "transferencia", "boleto", "cheque", "debito_conta", "outro",
 ] as const;
 export type FormaPagamento = typeof FORMAS_PAGAMENTO[number];
 
@@ -13,6 +13,7 @@ export const FORMA_LABEL: Record<FormaPagamento, string> = {
   cartao_debito: "Cartão de débito",
   transferencia: "Transferência",
   boleto: "Boleto",
+  cheque: "Cheque",
   debito_conta: "Débito em conta",
   outro: "Outro",
 };
@@ -47,6 +48,19 @@ export function parseValor(raw: unknown): number | null {
 }
 
 /** Soma meses a uma data AAAA-MM-DD mantendo o dia (e usando o último dia do mês quando ele não existe). */
+/** Formas de pagamento que aceitam parcelamento. */
+export const aceitaParcelas = (forma: string | null | undefined) =>
+  forma === "cartao_credito" || forma === "boleto" || forma === "cheque";
+
+/** Divide o total em n parcelas (em centavos); a última absorve a diferença, então a soma sempre fecha com o total. */
+export function dividirParcelas(total: number, n: number): number[] {
+  const cent = Math.round(total * 100);
+  const base = Math.floor(cent / n);
+  const parcelas = Array.from({ length: n }, () => base);
+  parcelas[n - 1] += cent - base * n;
+  return parcelas.map((c) => c / 100);
+}
+
 export function somarMeses(data: string, meses: number): string {
   const [a, m, d] = data.split("-").map(Number);
   const alvo = new Date(Date.UTC(a, m - 1 + meses, 1));

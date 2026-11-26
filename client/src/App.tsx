@@ -69,6 +69,7 @@ import FinancialConsolidatedPage from "./pages/FinancialConsolidatedPage";
 import FiscalNotesPage from "./pages/FiscalNotesPage";
 import ContasAReceberPage from "./pages/ContasAReceberPage";
 import ContasAPagarPage from "./pages/ContasAPagarPage";
+import NotasCompraPage from "./pages/NotasCompraPage";
 import ExtratoMovimentacoesPage from "./pages/ExtratoMovimentacoesPage";
 import FluxoCaixaPage from "./pages/FluxoCaixaPage";
 // import FinancialRealDashboard from "./pages/FinancialRealDashboard"; // desativado até a página ser finalizada
@@ -216,6 +217,9 @@ function Router() {
       </Route>
       <Route path={"/terceirizados"}>
         {() => <WithLayout component={ThirdPartyContractorsPage} />}
+      </Route>
+      <Route path={"/notas-compra"}>
+        {() => <WithLayout component={NotasCompraPage} />}
       </Route>
       <Route path={"/compras"}>
         {() => <WithLayout component={PurchaseRequestsPage} />}

@@ -1697,6 +1697,9 @@ function scheduleSicoobSync() {
 }
 scheduleSicoobSync();
 
+// ── NF-e de compra: busca na SEFAZ de hora em hora (só com NFE_COMPRAS_ATIVO=1 no .env) ──
+import('../utils/nfeCompras/sincronizar').then((m) => m.agendarNfeCompras()).catch((e) => console.error('[NFeCompras] Falha ao agendar:', e?.message ?? e));
+
 // ── Cron job: lembrete diário do fechamento do dia (metas semanais) — 17:00, segunda a sábado ──
 function scheduleWeeklyGoalReminder() {
   const HORA = 17;

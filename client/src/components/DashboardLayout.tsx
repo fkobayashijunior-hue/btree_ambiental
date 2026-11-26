@@ -199,6 +199,7 @@ const menuGroups: MenuGroup[] = [
       { label: "Fornecedores", path: "/fornecedores", slug: "fornecedores", icon: Building2 },
       { label: "Orçamentos", path: "/orcamentos", slug: "orcamentos", icon: TrendingDown },
       { label: "Estoque", path: "/estoque", slug: "estoque", icon: Package },
+      { label: "Notas de Compra", path: "/notas-compra", slug: "notas-compra", icon: FileText },
     ],
   },
   // ── Financeiro ──

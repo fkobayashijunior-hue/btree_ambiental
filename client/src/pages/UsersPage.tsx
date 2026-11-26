@@ -33,6 +33,7 @@ type FormData = {
   email: string;
   password: string;
   role: "user" | "admin";
+  superiorId: string; // superior imediato ("" = nenhum)
 };
 
 const emptyForm: FormData = {
@@ -40,6 +41,7 @@ const emptyForm: FormData = {
   email: "",
   password: "",
   role: "user",
+  superiorId: "",
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -108,15 +110,16 @@ export default function UsersPage() {
         email: form.email,
         role: form.role,
         password: form.password || undefined,
+        superiorId: form.superiorId ? Number(form.superiorId) : null,
       });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate({ ...form, superiorId: form.superiorId ? Number(form.superiorId) : null });
     }
   };
 
   const openEdit = (u: any) => {
     setEditId(u.id);
-    setForm({ name: u.name, email: u.email, password: "", role: u.role });
+    setForm({ name: u.name, email: u.email, password: "", role: u.role, superiorId: u.superiorId ? String(u.superiorId) : "" });
     setIsOpen(true);
   };
 
@@ -231,6 +234,9 @@ export default function UsersPage() {
                           </div>
                           <div>
                             <span className="font-medium text-gray-800">{u.name}</span>
+                            {u.superiorId && (
+                              <p className="text-xs text-gray-500">Superior: {usersList.find((x: any) => x.id === u.superiorId)?.name ?? "-"}</p>
+                            )}
                             {u.role === 'admin' && (
                               <p className="text-xs text-purple-600 flex items-center gap-1">
                                 <Shield className="h-3 w-3" /> Admin Sistema
@@ -383,6 +389,21 @@ export default function UsersPage() {
               </select>
               <p className="text-xs text-gray-400 mt-1">
                 Admin Sistema tem acesso total, incluindo gestão de usuários e configurações.
+              </p>
+            </div>
+
+            <div>
+              <Label>Superior</Label>
+              <select
+                value={form.superiorId}
+                onChange={e => setForm(f => ({ ...f, superiorId: e.target.value }))}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Nenhum</option>
+                {usersList.filter((x: any) => x.id !== editId).map((x: any) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Em Tarefas, cada um cria tarefas direto para si e para quem está abaixo dele. Para outras pessoas, o superior precisa autorizar.
               </p>
             </div>
 

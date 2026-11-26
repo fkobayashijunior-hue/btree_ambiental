@@ -2455,11 +2455,11 @@ var init_cloudinary = __esm({
 
 // server/lib/clientAreaScope.ts
 import { and as and3, eq as eq5, isNull } from "drizzle-orm";
-import { TRPCError as TRPCError4 } from "@trpc/server";
+import { TRPCError as TRPCError5 } from "@trpc/server";
 function normalizeAreaId(value) {
   if (value === void 0 || value === null || value === 0 || value === "") return null;
   const n = Number(value);
-  if (!Number.isSafeInteger(n) || n <= 0) throw new TRPCError4({ code: "BAD_REQUEST", message: "\xC1rea inv\xE1lida." });
+  if (!Number.isSafeInteger(n) || n <= 0) throw new TRPCError5({ code: "BAD_REQUEST", message: "\xC1rea inv\xE1lida." });
   return n;
 }
 function areaScopeCondition(column, areaId) {
@@ -2473,7 +2473,7 @@ async function getClientArea(db, clientId, areaId) {
   const id = normalizeAreaId(areaId);
   if (id === null) return null;
   const [area] = await db.select().from(clientAreas).where(and3(eq5(clientAreas.id, id), eq5(clientAreas.clientId, clientId))).limit(1);
-  if (!area) throw new TRPCError4({ code: "BAD_REQUEST", message: "A \xE1rea n\xE3o pertence ao cliente selecionado." });
+  if (!area) throw new TRPCError5({ code: "BAD_REQUEST", message: "A \xE1rea n\xE3o pertence ao cliente selecionado." });
   return area;
 }
 function financialNumber(value) {
@@ -2484,7 +2484,7 @@ function areaAgreementIsComplete(area) {
   return !!area && area.agreementStatus === "confirmed" && ["ton", "m3"].includes(area.unit) && financialNumber(area.unitPrice) > 0 && !!area.paymentMethod?.trim() && Number.isInteger(area.paymentTermDays) && area.paymentTermDays >= 0 && ["manual", "semanal", "quinzenal", "mensal"].includes(area.billingCycle);
 }
 function requireConfirmedArea(area) {
-  if (area && !areaAgreementIsComplete(area)) throw new TRPCError4({ code: "PRECONDITION_FAILED", message: "Acordo desta \xE1rea a configurar. Confirme pre\xE7o, unidade, forma, prazo e ciclo de pagamento antes de calcular ou abater valores." });
+  if (area && !areaAgreementIsComplete(area)) throw new TRPCError5({ code: "PRECONDITION_FAILED", message: "Acordo desta \xE1rea a configurar. Confirme pre\xE7o, unidade, forma, prazo e ciclo de pagamento antes de calcular ou abater valores." });
 }
 function getAreaPriceTerms(client, area) {
   if (!area) return { unit: "ton", unitPrice: financialNumber(client?.pricePerTon), paymentMethod: null, paymentTermDays: client?.paymentTermDays ?? 21, billingCycle: client?.billingCycle ?? "mensal" };
@@ -3133,8 +3133,8 @@ import { XMLParser } from "fast-xml-parser";
 function extractNfDataFromXml(xml) {
   const fallback = { invoiceNumber: null, quantity: null, unit: null };
   try {
-    const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
-    const parsed = parser.parse(xml);
+    const parser2 = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
+    const parsed = parser2.parse(xml);
     const nNF = findFirstTag(parsed, "nNF");
     const invoiceNumber = nNF ? String(nNF).trim() : null;
     const det = findFirstTag(parsed, "det");
@@ -3203,9 +3203,9 @@ import { PDFParse } from "pdf-parse";
 async function extractNfDataFromPdfText(buffer) {
   const fallback = { invoiceNumber: null, quantity: null, unit: null };
   try {
-    const parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
-    await parser.destroy();
+    const parser2 = new PDFParse({ data: buffer });
+    const result = await parser2.getText();
+    await parser2.destroy();
     const text2 = result.text || "";
     if (!text2.trim()) return fallback;
     let invoiceNumber = null;
@@ -3231,16 +3231,16 @@ async function extractNfDataFromPdfText(buffer) {
     const itemMatch = text2.match(/\b(TON|M3|M³|KG)\b\s+(\d+(?:[.,]\d+)?)/i);
     if (itemMatch) {
       const rawUnit = itemMatch[1].toUpperCase();
-      const num5 = parseFloat(itemMatch[2].replace(",", "."));
-      if (!isNaN(num5) && num5 > 0) {
+      const num6 = parseFloat(itemMatch[2].replace(",", "."));
+      if (!isNaN(num6) && num6 > 0) {
         if (rawUnit === "TON") {
-          quantity = String(num5);
+          quantity = String(num6);
           unit = "ton";
         } else if (rawUnit === "KG") {
-          quantity = String(num5 / 1e3);
+          quantity = String(num6 / 1e3);
           unit = "ton";
         } else if (rawUnit === "M3" || rawUnit === "M\xB3") {
-          quantity = String(num5);
+          quantity = String(num6);
           unit = "m3";
         }
       }
@@ -3248,9 +3248,9 @@ async function extractNfDataFromPdfText(buffer) {
     if (!quantity) {
       const pesoMatch = text2.match(/PESO\s*L[IÍ]QUIDO[^\d]{0,15}([\d.,]+)/i);
       if (pesoMatch) {
-        const num5 = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
-        if (!isNaN(num5) && num5 > 0) {
-          quantity = num5 > 100 ? String(num5 / 1e3) : String(num5);
+        const num6 = parseFloat(pesoMatch[1].replace(/\./g, "").replace(",", "."));
+        if (!isNaN(num6) && num6 > 0) {
+          quantity = num6 > 100 ? String(num6 / 1e3) : String(num6);
           unit = "ton";
         }
       }
@@ -3591,9 +3591,9 @@ function casarPagamentos(pagamentos, debitos, toleranciaDias = 7) {
   const porCentavos = /* @__PURE__ */ new Map();
   for (const d2 of debitos) {
     const k = Math.round(d2.valor * 100);
-    const arr = porCentavos.get(k) ?? [];
-    arr.push(d2);
-    porCentavos.set(k, arr);
+    const arr2 = porCentavos.get(k) ?? [];
+    arr2.push(d2);
+    porCentavos.set(k, arr2);
   }
   const casados = [];
   const semBanco = [];
@@ -4367,12 +4367,12 @@ var init_modulosAtivos = __esm({
 
 // server/routers/permissions.ts
 import { z as z16 } from "zod";
-import { TRPCError as TRPCError12 } from "@trpc/server";
+import { TRPCError as TRPCError13 } from "@trpc/server";
 import { eq as eq16, sql as sql5 } from "drizzle-orm";
 async function resolveUserPermissions(userId, role) {
   if (role === "admin") return { modules: null, profile: "admin", allowedClientIds: null, allowedWorkLocationIds: null };
   const db = await getDb();
-  if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+  if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
   let perm = null;
   try {
     const [permRow] = await db.select().from(userPermissions).where(eq16(userPermissions.userId, userId));
@@ -4424,12 +4424,12 @@ function moduleProcedure(...slugs) {
   return protectedProcedure.use(async ({ ctx, next }) => {
     const inativos = await modulosInativos();
     if (inativos.size > 0 && slugs.every((s) => inativos.has(s))) {
-      throw new TRPCError12({ code: "FORBIDDEN", message: "M\xF3dulo desativado pelo administrador" });
+      throw new TRPCError13({ code: "FORBIDDEN", message: "M\xF3dulo desativado pelo administrador" });
     }
     if (ctx.user.role !== "admin") {
       const perms = await resolveUserPermissions(ctx.user.id, ctx.user.role);
       if (perms.modules !== null && !slugs.some((slug) => perms.modules.includes(slug))) {
-        throw new TRPCError12({ code: "FORBIDDEN", message: "Sem permiss\xE3o para este m\xF3dulo" });
+        throw new TRPCError13({ code: "FORBIDDEN", message: "Sem permiss\xE3o para este m\xF3dulo" });
       }
     }
     return next();
@@ -4493,6 +4493,7 @@ var init_permissions = __esm({
       { slug: "fornecedores", label: "Fornecedores", group: "Compras" },
       { slug: "orcamentos", label: "Or\xE7amentos", group: "Compras" },
       { slug: "estoque", label: "Estoque", group: "Compras" },
+      { slug: "notas-compra", label: "Notas de Compra (NF-e)", group: "Compras" },
       // Financeiro
       { slug: "financeiro", label: "M\xF3dulo Financeiro", group: "Financeiro" },
       { slug: "gastos-extras", label: "Gastos Extras", group: "Financeiro" },
@@ -4565,17 +4566,17 @@ var init_permissions = __esm({
       }),
       // Listar clientes (para seletor de clientes permitidos)
       listClients: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
         const db = await getDb();
-        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
         const allClients = await db.select({ id: clients.id, name: clients.name }).from(clients);
         return allClients;
       }),
       // Listar todos os usuários E colaboradores com suas permissões
       listUsers: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
         const db = await getDb();
-        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
         const allUsers = await db.select({
           id: users.id,
           name: users.name,
@@ -4662,9 +4663,9 @@ var init_permissions = __esm({
         allowedClientIds: z16.array(z16.number()).nullable().optional(),
         allowedWorkLocationIds: z16.array(z16.number()).nullable().optional()
       })).mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
         const db = await getDb();
-        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
         const modulesJson = input.modules === null ? null : JSON.stringify(input.modules);
         const allowedClientIdsJson = input.allowedClientIds === null || input.allowedClientIds === void 0 ? null : JSON.stringify(input.allowedClientIds);
         const allowedWorkLocationIdsJson = input.allowedWorkLocationIds === null || input.allowedWorkLocationIds === void 0 ? null : JSON.stringify(input.allowedWorkLocationIds);
@@ -4710,13 +4711,13 @@ var init_permissions = __esm({
         userId: z16.number(),
         profileKey: z16.string()
       })).mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
         const profile = PROFILES[input.profileKey];
-        if (!profile) throw new TRPCError12({ code: "BAD_REQUEST", message: "Perfil inv\xE1lido" });
+        if (!profile) throw new TRPCError13({ code: "BAD_REQUEST", message: "Perfil inv\xE1lido" });
         const db = await getDb();
-        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
         if (input.userId < 0) {
-          throw new TRPCError12({ code: "BAD_REQUEST", message: "Colaborador precisa fazer login para receber perfil completo" });
+          throw new TRPCError13({ code: "BAD_REQUEST", message: "Colaborador precisa fazer login para receber perfil completo" });
         }
         const modulesJson = input.profileKey === "admin" ? null : JSON.stringify(profile.modules);
         try {
@@ -4747,9 +4748,9 @@ var init_permissions = __esm({
         collaboratorId: z16.number(),
         clientId: z16.number().nullable()
       })).mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError12({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
         const db = await getDb();
-        if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(collaborators).set({ clientId: input.clientId }).where(eq16(collaborators.id, input.collaboratorId));
         return { success: true };
       })
@@ -4765,7 +4766,7 @@ __export(payroll_exports, {
 });
 import { z as z24 } from "zod";
 import { eq as eq23, sql as sql12 } from "drizzle-orm";
-import { TRPCError as TRPCError16 } from "@trpc/server";
+import { TRPCError as TRPCError17 } from "@trpc/server";
 async function ensurePayrollTable(db) {
   try {
     await db.execute(`
@@ -4903,7 +4904,7 @@ async function requireAdmin(ctx) {
   if (ctx.user.role === "admin") return;
   const perms = await resolveUserPermissions(ctx.user.id, ctx.user.role);
   if (perms.modules !== null && !perms.modules.includes("folha-pagamento")) {
-    throw new TRPCError16({ code: "FORBIDDEN", message: "Apenas administradores ou usu\xE1rios com acesso \xE0 Folha de Pagamento." });
+    throw new TRPCError17({ code: "FORBIDDEN", message: "Apenas administradores ou usu\xE1rios com acesso \xE0 Folha de Pagamento." });
   }
 }
 function computeTotal(employmentType, baseValue, unitCount, commission, discount = 0) {
@@ -5257,7 +5258,7 @@ var init_payroll = __esm({
       getMonth: protectedProcedure.input(z24.object({ referenceMonth: z24.string() })).query(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         const [year, month] = input.referenceMonth.split("-").map(Number);
         const activeCollaborators = await db.select().from(collaborators).where(eq23(collaborators.active, 1));
@@ -5428,10 +5429,10 @@ var init_payroll = __esm({
       })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         const [collab] = await db.select().from(collaborators).where(eq23(collaborators.id, input.collaboratorId));
-        if (!collab) throw new TRPCError16({ code: "NOT_FOUND", message: "Colaborador n\xE3o encontrado." });
+        if (!collab) throw new TRPCError17({ code: "NOT_FOUND", message: "Colaborador n\xE3o encontrado." });
         const employmentType = collab.employmentType || "diarista";
         const baseValue = input.baseValueOverride !== void 0 ? parseFloat(input.baseValueOverride) : parseFloat(baseRateOf(collab));
         const isDaily = employmentType === "diarista" || employmentType === "terceirizado";
@@ -5485,7 +5486,7 @@ var init_payroll = __esm({
       closeMonth: protectedProcedure.input(z24.object({ referenceMonth: z24.string() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         const [year, month] = input.referenceMonth.split("-").map(Number);
         const activeCollaborators = await db.select().from(collaborators).where(eq23(collaborators.active, 1));
@@ -5533,14 +5534,14 @@ var init_payroll = __esm({
       markPaid: protectedProcedure.input(z24.object({ id: z24.number(), paidAt: z24.string() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ status: "pago", paidAt: input.paidAt }).where(eq23(payrollEntries.id, input.id));
         return { success: true };
       }),
       unmarkPaid: protectedProcedure.input(z24.object({ id: z24.number() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ status: "fechado", paidAt: null }).where(eq23(payrollEntries.id, input.id));
         return { success: true };
       }),
@@ -5549,14 +5550,14 @@ var init_payroll = __esm({
       markCommissionPaid: protectedProcedure.input(z24.object({ id: z24.number(), paidAt: z24.string() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ commissionStatus: "pago", commissionPaidAt: input.paidAt }).where(eq23(payrollEntries.id, input.id));
         return { success: true };
       }),
       unmarkCommissionPaid: protectedProcedure.input(z24.object({ id: z24.number() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(payrollEntries).set({ commissionStatus: "pendente", commissionPaidAt: null }).where(eq23(payrollEntries.id, input.id));
         return { success: true };
       }),
@@ -5565,7 +5566,7 @@ var init_payroll = __esm({
       markWeeklyPaid: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), weekFriday: z24.string() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         await db.execute(
           sql12`INSERT INTO payroll_weekly_payments (collaborator_id, week_friday, paid, paid_at)
@@ -5577,7 +5578,7 @@ var init_payroll = __esm({
       unmarkWeeklyPaid: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), weekFriday: z24.string() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         await db.execute(
           sql12`INSERT INTO payroll_weekly_payments (collaborator_id, week_friday, paid, paid_at)
@@ -5590,7 +5591,7 @@ var init_payroll = __esm({
       reopenEntry: protectedProcedure.input(z24.object({ id: z24.number() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await db.delete(payrollEntries).where(eq23(payrollEntries.id, input.id));
         return { success: true };
       }),
@@ -5600,14 +5601,14 @@ var init_payroll = __esm({
       getCommissionRates: protectedProcedure.input(z24.object({ collaboratorId: z24.number().optional() }).optional()).query(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         return getCommissionRatesMap(db, input?.collaboratorId ?? 0);
       }),
       updateCommissionRates: protectedProcedure.input(z24.object({ rates: z24.record(z24.string(), z24.string()), collaboratorId: z24.number().optional() })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         const collaboratorId = input.collaboratorId ?? 0;
         for (const [chave2, valor] of Object.entries(input.rates)) {
@@ -5624,7 +5625,7 @@ var init_payroll = __esm({
       updateCommissionUnit: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), unit: z24.enum(["carga", "tonelada", "fixo"]) })).mutation(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await db.update(collaborators).set({ commissionUnit: input.unit }).where(eq23(collaborators.id, input.collaboratorId));
         return { success: true };
       }),
@@ -5633,10 +5634,10 @@ var init_payroll = __esm({
       getCommissionBreakdown: protectedProcedure.input(z24.object({ collaboratorId: z24.number(), referenceMonth: z24.string(), numOperadoresOverride: z24.number().optional() })).query(async ({ ctx, input }) => {
         await requireAdmin(ctx);
         const db = await getDb();
-        if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+        if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
         await ensurePayrollTable(db);
         const [collab] = await db.select().from(collaborators).where(eq23(collaborators.id, input.collaboratorId));
-        if (!collab) throw new TRPCError16({ code: "NOT_FOUND", message: "Colaborador n\xE3o encontrado." });
+        if (!collab) throw new TRPCError17({ code: "NOT_FOUND", message: "Colaborador n\xE3o encontrado." });
         const rates = await getCommissionRatesMap(
           db,
           collab.role === "motorista" || collab.role === "terceirizado" ? input.collaboratorId : 0
@@ -5970,7 +5971,7 @@ async function getSicoobToken() {
   tokenCache = { token: access_token, idToken: id_token ?? access_token, expiresAt: Date.now() + (expires_in - 60) * 1e3 };
   return access_token;
 }
-async function sicoobGet(path4, params) {
+async function sicoobGet(path5, params) {
   const token = await getSicoobToken();
   const agent = getSicoobAgent();
   const clientId = process.env.SICOOB_CLIENT_ID ?? "";
@@ -5978,8 +5979,8 @@ async function sicoobGet(path4, params) {
   const cleanParams = Object.fromEntries(
     Object.entries(params).filter(([, v]) => v !== void 0)
   );
-  console.log(`[SicoobGet] ${path4} params=`, cleanParams);
-  const res = await axios.get(`${baseUrl}${path4}`, {
+  console.log(`[SicoobGet] ${path5} params=`, cleanParams);
+  const res = await axios.get(`${baseUrl}${path5}`, {
     params: cleanParams,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -7447,6 +7448,868 @@ var init_financeiroDetalhe = __esm({
   }
 });
 
+// server/utils/nfeCompras/sefaz.ts
+var sefaz_exports = {};
+__export(sefaz_exports, {
+  ambienteAtual: () => ambienteAtual,
+  carregarCertificado: () => carregarCertificado,
+  consultarDistribuicao: () => consultarDistribuicao,
+  enviarCiencia: () => enviarCiencia,
+  infoCertificado: () => infoCertificado,
+  modoSefaz: () => modoSefaz,
+  montarEventoAssinado: () => montarEventoAssinado
+});
+import fs2 from "fs";
+import path2 from "path";
+import https2 from "https";
+import tls from "tls";
+import crypto3 from "crypto";
+import zlib from "zlib";
+import { execFileSync } from "child_process";
+function ambienteAtual() {
+  return (process.env.NFE_COMPRAS_AMBIENTE ?? "").toLowerCase().startsWith("homolog") ? "homologacao" : "producao";
+}
+function caminhoCert() {
+  const p = process.env.NFE_CERT_PATH || process.env.SICOOB_CERT_PATH;
+  const senha = process.env.NFE_CERT_PASSPHRASE ?? process.env.SICOOB_CERT_PASSPHRASE ?? "";
+  if (!p) throw new Error("Certificado n\xE3o configurado (NFE_CERT_PATH ou SICOOB_CERT_PATH no .env)");
+  const resolvido = path2.resolve(process.cwd(), p);
+  if (!fs2.existsSync(resolvido)) throw new Error(`Arquivo do certificado n\xE3o encontrado: ${resolvido}`);
+  return { arquivo: resolvido, senha };
+}
+function carregarCertificado() {
+  if (certCache) return certCache;
+  const { arquivo, senha } = caminhoCert();
+  const pfx = fs2.readFileSync(arquivo);
+  const ctx = tls.createSecureContext({ pfx, passphrase: senha });
+  const sock = new tls.TLSSocket(null, { secureContext: ctx });
+  const c = sock.getCertificate();
+  sock.destroy();
+  const cn = String(c?.subject?.CN ?? "");
+  const cnpj = (cn.match(/(\d{14})\s*$/)?.[1] ?? process.env.NFE_COMPRAS_CNPJ ?? "").replace(/\D/g, "");
+  if (cnpj.length !== 14) throw new Error("N\xE3o consegui ler o CNPJ do certificado; defina NFE_COMPRAS_CNPJ no .env");
+  certCache = {
+    pfx,
+    senha,
+    cnpj,
+    nome: cn.replace(/:\d{14}\s*$/, "").trim(),
+    validoAte: new Date(c?.valid_to).toISOString(),
+    // A SEFAZ usa certificados da ICP-Brasil, que não estão na lista padrão de autoridades do Node; a conexão continua
+    // cifrada e autenticada pelo nosso certificado (prática comum em integrações de NF-e).
+    agente: new https2.Agent({ pfx, passphrase: senha, rejectUnauthorized: false, keepAlive: true })
+  };
+  return certCache;
+}
+function chaveParaAssinar() {
+  if (chaveCache) return chaveCache;
+  const { arquivo, senha } = caminhoCert();
+  const env = { ...process.env, NFE_PFX_SENHA: senha };
+  let saida = "";
+  let ultimoErro = "";
+  for (const extra of [[], ["-legacy"]]) {
+    try {
+      saida = execFileSync("openssl", ["pkcs12", "-in", arquivo, "-nodes", "-passin", "env:NFE_PFX_SENHA", ...extra], { env, stdio: ["ignore", "pipe", "pipe"] }).toString();
+      if (saida.includes("PRIVATE KEY-----")) break;
+    } catch (e) {
+      ultimoErro = String(e?.stderr ?? e?.message ?? e).split("\n")[0];
+      saida = "";
+    }
+  }
+  const key = saida.match(/-----BEGIN (?:RSA |ENCRYPTED )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |ENCRYPTED )?PRIVATE KEY-----/)?.[0];
+  if (!key) throw new Error(`N\xE3o consegui ler a chave do certificado com o openssl${ultimoErro ? `: ${ultimoErro}` : ""}`);
+  const pub = crypto3.createPublicKey(key).export({ type: "spki", format: "der" }).toString("base64");
+  const certs = saida.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
+  const titular = certs.find((c) => {
+    try {
+      return new crypto3.X509Certificate(c).publicKey.export({ type: "spki", format: "der" }).toString("base64") === pub;
+    } catch {
+      return false;
+    }
+  }) ?? certs[0];
+  if (!titular) throw new Error("Certificado do titular n\xE3o encontrado no .pfx");
+  chaveCache = { keyPem: key, certB64: titular.replace(/-----(BEGIN|END) CERTIFICATE-----|\s/g, "") };
+  return chaveCache;
+}
+function postSoap(url, action, corpo, agente) {
+  const envelope = `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body>${corpo}</soap12:Body></soap12:Envelope>`;
+  return new Promise((resolve, reject) => {
+    const req = https2.request(url, {
+      method: "POST",
+      agent: agente,
+      timeout: 6e4,
+      headers: { "Content-Type": `application/soap+xml; charset=utf-8; action="${action}"`, "Content-Length": Buffer.byteLength(envelope) }
+    }, (res) => {
+      const partes = [];
+      res.on("data", (d2) => partes.push(d2));
+      res.on("end", () => {
+        const txt2 = Buffer.concat(partes).toString("utf8");
+        if ((res.statusCode ?? 500) >= 400) reject(new Error(`SEFAZ respondeu HTTP ${res.statusCode}: ${txt2.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300)}`));
+        else resolve(txt2);
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("Tempo esgotado esperando a SEFAZ")));
+    req.on("error", reject);
+    req.write(envelope);
+    req.end();
+  });
+}
+async function consultarDistribuicao(opts) {
+  const amb = opts.ambiente ?? ambienteAtual();
+  const cert = carregarCertificado();
+  const filtro = opts.chave ? `<consChNFe><chNFe>${opts.chave}</chNFe></consChNFe>` : `<distNSU><ultNSU>${String(opts.ultNSU ?? "0").padStart(15, "0")}</ultNSU></distNSU>`;
+  const corpo = `<nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe"><nfeDadosMsg><distDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><tpAmb>${tpAmb(amb)}</tpAmb><cUFAutor>${cUFAutor()}</cUFAutor><CNPJ>${cert.cnpj}</CNPJ>${filtro}</distDFeInt></nfeDadosMsg></nfeDistDFeInteresse>`;
+  const resp = await postSoap(URLS[amb].dist, "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse", corpo, cert.agente);
+  const ret = tag(resp, "retDistDFeInt");
+  if (!ret) throw new Error(`Resposta inesperada da SEFAZ: ${resp.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300)}`);
+  const docs = [];
+  for (const m of Array.from(ret.matchAll(/<(?:\w+:)?docZip([^>]*)>([^<]+)<\/(?:\w+:)?docZip>/g))) {
+    const attrs = m[1];
+    const nsu = attrs.match(/NSU="(\d+)"/)?.[1] ?? "";
+    const schema = attrs.match(/schema="([^"]+)"/)?.[1] ?? "";
+    try {
+      docs.push({ nsu, schema, xml: zlib.gunzipSync(Buffer.from(m[2].trim(), "base64")).toString("utf8") });
+    } catch {
+    }
+  }
+  return {
+    cStat: tag(ret, "cStat") ?? "",
+    xMotivo: tag(ret, "xMotivo") ?? "",
+    ultNSU: tag(ret, "ultNSU") ?? "0",
+    maxNSU: tag(ret, "maxNSU") ?? "0",
+    dhResp: tag(ret, "dhResp"),
+    docs
+  };
+}
+function dhBrasilia() {
+  const d2 = new Date(Date.now() - 3 * 36e5 - 6e4);
+  return d2.toISOString().slice(0, 19) + "-03:00";
+}
+function montarEventoAssinado(chave2, cnpj, amb, tpEvento = "210210", descEvento = "Ciencia da Operacao") {
+  const { keyPem, certB64 } = chaveParaAssinar();
+  const id = `ID${tpEvento}${chave2}01`;
+  const miolo = `<cOrgao>91</cOrgao><tpAmb>${tpAmb(amb)}</tpAmb><CNPJ>${cnpj}</CNPJ><chNFe>${chave2}</chNFe><dhEvento>${dhBrasilia()}</dhEvento><tpEvento>${tpEvento}</tpEvento><nSeqEvento>1</nSeqEvento><verEvento>1.00</verEvento><detEvento versao="1.00"><descEvento>${descEvento}</descEvento></detEvento>`;
+  const infCanonico = `<infEvento xmlns="http://www.portalfiscal.inf.br/nfe" Id="${id}">${miolo}</infEvento>`;
+  const digest = crypto3.createHash("sha1").update(infCanonico, "utf8").digest("base64");
+  const signedInfo = (ns) => `<SignedInfo${ns}><CanonicalizationMethod Algorithm="${C14N}"></CanonicalizationMethod><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></SignatureMethod><Reference URI="#${id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform><Transform Algorithm="${C14N}"></Transform></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></DigestMethod><DigestValue>${digest}</DigestValue></Reference></SignedInfo>`;
+  const assinatura = crypto3.createSign("RSA-SHA1").update(signedInfo(` xmlns="http://www.w3.org/2000/09/xmldsig#"`), "utf8").sign(keyPem, "base64");
+  return `<evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00"><infEvento Id="${id}">${miolo}</infEvento><Signature xmlns="http://www.w3.org/2000/09/xmldsig#">${signedInfo("")}<SignatureValue>${assinatura}</SignatureValue><KeyInfo><X509Data><X509Certificate>${certB64}</X509Certificate></X509Data></KeyInfo></Signature></evento>`;
+}
+async function enviarCiencia(chaves, ambiente) {
+  const amb = ambiente ?? ambienteAtual();
+  const cert = carregarCertificado();
+  const lote = chaves.slice(0, 20);
+  const eventos = lote.map((c) => montarEventoAssinado(c, cert.cnpj, amb)).join("");
+  const idLote = String(Date.now()).slice(-15);
+  const corpo = `<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4"><envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00"><idLote>${idLote}</idLote>${eventos}</envEvento></nfeDadosMsg>`;
+  const resp = await postSoap(URLS[amb].evento, "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEventoNF", corpo, cert.agente);
+  const ret = tag(resp, "retEnvEvento");
+  if (!ret) throw new Error(`Resposta inesperada da SEFAZ: ${resp.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300)}`);
+  const retornos = [];
+  for (const m of Array.from(ret.matchAll(/<(?:\w+:)?retEvento[^>]*>([\s\S]*?)<\/(?:\w+:)?retEvento>/g))) {
+    const r = m[1];
+    const cStat = tag(r, "cStat") ?? "";
+    retornos.push({ chave: tag(r, "chNFe") ?? "", cStat, xMotivo: tag(r, "xMotivo") ?? "", ok: ["135", "136", "573"].includes(cStat) });
+  }
+  return { cStatLote: tag(ret, "cStat") ?? "", xMotivoLote: tag(ret, "xMotivo") ?? "", retornos };
+}
+function infoCertificado() {
+  try {
+    const c = carregarCertificado();
+    const dias = Math.floor((new Date(c.validoAte).getTime() - Date.now()) / 864e5);
+    return { ok: true, cnpj: c.cnpj, nome: c.nome, validoAte: c.validoAte, diasRestantes: dias };
+  } catch (e) {
+    return { ok: false, erro: String(e?.message ?? e) };
+  }
+}
+var modoSefaz, tpAmb, URLS, cUFAutor, certCache, chaveCache, tag, C14N;
+var init_sefaz = __esm({
+  "server/utils/nfeCompras/sefaz.ts"() {
+    "use strict";
+    modoSefaz = () => (process.env.NFE_COMPRAS_MODO ?? "").toLowerCase() === "sefaz";
+    tpAmb = (a) => a === "producao" ? "1" : "2";
+    URLS = {
+      producao: {
+        dist: "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx",
+        evento: "https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx"
+      },
+      homologacao: {
+        dist: "https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx",
+        evento: "https://hom1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx"
+      }
+    };
+    cUFAutor = () => (process.env.NFE_COMPRAS_UF ?? "41").replace(/\D/g, "") || "41";
+    certCache = null;
+    chaveCache = null;
+    tag = (xml, nome) => xml.match(new RegExp(`<(?:\\w+:)?${nome}[^>]*>([\\s\\S]*?)</(?:\\w+:)?${nome}>`))?.[1] ?? null;
+    C14N = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315";
+  }
+});
+
+// server/utils/leituraNota.ts
+var leituraNota_exports = {};
+__export(leituraNota_exports, {
+  MODELO_GEMINI: () => MODELO_GEMINI,
+  MODELO_LEITURA: () => MODELO_LEITURA,
+  chaveValida: () => chaveValida,
+  cnpjValido: () => cnpjValido,
+  conferirLeitura: () => conferirLeitura,
+  lerArquivoPorIA: () => lerArquivoPorIA,
+  lerNotaPorIA: () => lerNotaPorIA,
+  provedorLeitura: () => provedorLeitura
+});
+import Anthropic from "@anthropic-ai/sdk";
+function getCliente() {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("ANTHROPIC_API_KEY n\xE3o configurada no servidor");
+  if (!cliente) cliente = new Anthropic({ apiKey: key, baseURL: "https://api.anthropic.com", timeout: 9e4, maxRetries: 2 });
+  return cliente;
+}
+function cnpjValido(c) {
+  const d2 = c.replace(/\D/g, "");
+  if (d2.length !== 14 || /^(\d)\1+$/.test(d2)) return false;
+  const dv = (base, pesos) => {
+    const s = base.split("").reduce((t2, n, i) => t2 + Number(n) * pesos[i], 0) % 11;
+    return s < 2 ? 0 : 11 - s;
+  };
+  const d1 = dv(d2.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  const d22 = dv(d2.slice(0, 12) + d1, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  return d2.endsWith(`${d1}${d22}`);
+}
+function chaveValida(k) {
+  const d2 = k.replace(/\D/g, "");
+  if (d2.length !== 44) return false;
+  let s = 0, p = 2;
+  for (let i = 42; i >= 0; i--) {
+    s += Number(d2[i]) * p;
+    p = p === 9 ? 2 : p + 1;
+  }
+  const dv = s % 11 < 2 ? 0 : 11 - s % 11;
+  return Number(d2[43]) === dv;
+}
+function conferirLeitura(b, cnpjEmpresa, hojeISO2) {
+  const avisos = [];
+  const so = (s) => (s ?? "").replace(/\D/g, "");
+  let cnpj = so(b.emitente_cnpj);
+  let numero = (b.numero_nf ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  let serie = (b.serie ?? "").replace(/\D/g, "").replace(/^0+/, "") || null;
+  let chave2 = so(b.chave_acesso) || null;
+  if (chave2 && chaveValida(chave2)) {
+    cnpj = chave2.slice(6, 20);
+    serie = String(Number(chave2.slice(22, 25)));
+    numero = String(Number(chave2.slice(25, 34)));
+  } else if (chave2) {
+    avisos.push("A chave de acesso n\xE3o foi lida corretamente; confira o n\xBA da NF e o fornecedor.");
+    chave2 = null;
+  }
+  if (cnpj && cnpjEmpresa && cnpj === cnpjEmpresa) {
+    avisos.push("A leitura confundiu o comprador (BTREE) com o fornecedor; o CNPJ do fornecedor ficou em branco.");
+    cnpj = "";
+  }
+  if (cnpj && !cnpjValido(cnpj)) {
+    avisos.push("O CNPJ do fornecedor n\xE3o confere; foi deixado em branco.");
+    cnpj = "";
+  }
+  let data3 = /^\d{4}-\d{2}-\d{2}$/.test(b.data_emissao ?? "") ? b.data_emissao : null;
+  if (data3) {
+    const dias = (Date.parse(hojeISO2) - Date.parse(data3)) / 864e5;
+    if (dias < -1) {
+      avisos.push("A data lida est\xE1 no futuro; confira.");
+    } else if (dias > 180) {
+      avisos.push(`A data lida (${data3.split("-").reverse().join("/")}) \xE9 antiga; confira o ano.`);
+    }
+  } else if (b.data_emissao) avisos.push("N\xE3o deu para ler a data; confira.");
+  const valor = Number(b.valor_total) > 0 ? Math.round(Number(b.valor_total) * 100) / 100 : null;
+  if (!valor) avisos.push("N\xE3o deu para ler o valor total.");
+  if (!b.legivel) avisos.push("A foto est\xE1 dif\xEDcil de ler; confira todos os campos ou tire outra foto.");
+  if (b.tipo_documento === "cupom_nao_fiscal" || b.tipo_documento === "recibo" || b.tipo_documento === "outro") {
+    avisos.push("O documento n\xE3o parece ser uma nota fiscal (pedido, recibo ou comprovante).");
+  }
+  const nome = (b.emitente_nome ?? "").trim() || null;
+  const itens = (b.itens_resumo ?? "").trim();
+  const combustivel = /gasolina|diesel|etanol|combust[ií]vel/i.test(itens);
+  if (combustivel) avisos.push("Parece ser combust\xEDvel: ele \xE9 lan\xE7ado no Controle de Abastecimento, n\xE3o aqui.");
+  return {
+    valor,
+    data: data3,
+    descricao: itens ? `${itens}${nome ? ` - ${nome}` : ""}`.slice(0, 200) : nome,
+    favorecido: nome,
+    favorecidoCnpj: cnpj || null,
+    nfNumero: numero || null,
+    serie,
+    chave: chave2,
+    categoria: combustivel ? null : (b.categoria ?? "").trim() || null,
+    formaPagamento: FORMAS.includes(b.forma_pagamento) && b.forma_pagamento ? b.forma_pagamento : null,
+    tipoDocumento: b.tipo_documento,
+    legivel: !!b.legivel,
+    avisos
+  };
+}
+async function baixar(url) {
+  if (!CLOUDINARY.test(url)) throw new Error("Endere\xE7o do arquivo n\xE3o permitido");
+  const pdf = /\.pdf($|\?)/i.test(url);
+  const alvo = pdf ? url : url.replace("/image/upload/", "/image/upload/f_jpg,q_85,w_2000,h_2000,c_limit/");
+  const r = await fetch(alvo);
+  if (!r.ok) throw new Error(`N\xE3o consegui baixar o arquivo (${r.status})`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > 2e7) throw new Error("Arquivo grande demais para leitura autom\xE1tica");
+  return { data: buf.toString("base64"), mime: pdf ? "application/pdf" : "image/jpeg" };
+}
+function provedorLeitura() {
+  const escolha = (process.env.LEITURA_NOTA_IA ?? "").toLowerCase();
+  const temClaude = !!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_API_KEY.startsWith("sua-chave");
+  const temGemini = !!process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.startsWith("sua-chave");
+  if (escolha === "gemini") return temGemini ? "gemini" : null;
+  if (escolha === "claude") return temClaude ? "claude" : null;
+  return temClaude ? "claude" : temGemini ? "gemini" : null;
+}
+async function viaClaude(arq, pedido, schema) {
+  const bloco = arq.mime === "application/pdf" ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: arq.data } } : { type: "image", source: { type: "base64", media_type: "image/jpeg", data: arq.data } };
+  const r = await getCliente().beta.messages.create({
+    model: MODELO_LEITURA,
+    max_tokens: 8e3,
+    // se o filtro de segurança recusar (raríssimo aqui), a própria API refaz com o modelo reserva
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    system: SISTEMA,
+    messages: [{ role: "user", content: [bloco, { type: "text", text: pedido }] }],
+    output_config: { format: { type: "json_schema", schema } }
+  });
+  if (r.stop_reason === "refusal") throw new Error("A leitura autom\xE1tica foi recusada; preencha os campos \xE0 m\xE3o");
+  if (r.stop_reason === "max_tokens") throw new Error("A leitura autom\xE1tica n\xE3o terminou; preencha os campos \xE0 m\xE3o");
+  return r.content.find((b) => b.type === "text")?.text ?? "";
+}
+async function viaGemini(arq, pedido, schema) {
+  const semAdditional = JSON.parse(JSON.stringify(schema, (k, v) => k === "additionalProperties" ? void 0 : v));
+  const corpo = {
+    systemInstruction: { parts: [{ text: SISTEMA }] },
+    contents: [{ role: "user", parts: [{ inline_data: { mime_type: arq.mime, data: arq.data } }, { text: pedido }] }],
+    generationConfig: { responseMimeType: "application/json", responseJsonSchema: semAdditional }
+  };
+  let ultimo = "";
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    if (tentativa) await new Promise((ok) => setTimeout(ok, 2e3 * tentativa));
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY ?? "" },
+      body: JSON.stringify(corpo),
+      signal: AbortSignal.timeout(9e4)
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) {
+      const texto = (j?.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
+      if (!texto) throw new Error("A leitura autom\xE1tica n\xE3o devolveu dados; preencha os campos \xE0 m\xE3o");
+      return texto;
+    }
+    ultimo = `${r.status} ${j?.error?.message ?? ""}`.trim();
+    if (r.status !== 503 && r.status !== 429 && r.status !== 500) break;
+  }
+  throw new Error(`O Gemini n\xE3o respondeu (${ultimo.slice(0, 160)}); preencha os campos \xE0 m\xE3o`);
+}
+async function lerNotaPorIA(url, categorias, cnpjEmpresa) {
+  if (!provedorLeitura()) throw new Error("Leitura autom\xE1tica indispon\xEDvel: nenhuma chave de IA configurada no servidor (ANTHROPIC_API_KEY ou GEMINI_API_KEY)");
+  return lerArquivoPorIA(await baixar(url), categorias, cnpjEmpresa);
+}
+async function lerArquivoPorIA(arq, categorias, cnpjEmpresa) {
+  const provedor = provedorLeitura();
+  if (!provedor) throw new Error("Leitura autom\xE1tica indispon\xEDvel: nenhuma chave de IA configurada no servidor (ANTHROPIC_API_KEY ou GEMINI_API_KEY)");
+  const cats = categorias.length ? categorias : ["Outros"];
+  const schema = {
+    type: "object",
+    properties: {
+      tipo_documento: { type: "string", enum: ["nfe_danfe", "nfce_cupom", "cupom_nao_fiscal", "recibo", "nfse", "outro"] },
+      emitente_nome: { type: "string" },
+      emitente_cnpj: { type: "string" },
+      numero_nf: { type: "string" },
+      serie: { type: "string" },
+      data_emissao: { type: "string" },
+      valor_total: { type: "number" },
+      chave_acesso: { type: "string" },
+      forma_pagamento: { type: "string", enum: [...FORMAS] },
+      itens_resumo: { type: "string" },
+      categoria: { type: "string", enum: cats },
+      legivel: { type: "boolean" },
+      observacoes: { type: "string" }
+    },
+    required: [
+      "tipo_documento",
+      "emitente_nome",
+      "emitente_cnpj",
+      "numero_nf",
+      "serie",
+      "data_emissao",
+      "valor_total",
+      "chave_acesso",
+      "forma_pagamento",
+      "itens_resumo",
+      "categoria",
+      "legivel",
+      "observacoes"
+    ],
+    additionalProperties: false
+  };
+  const pedido = `Extraia os dados deste comprovante de despesa da empresa${cnpjEmpresa ? ` (a empresa compradora tem CNPJ ${cnpjEmpresa}; ela NUNCA \xE9 o fornecedor)` : ""}.
+Regras:
+- emitente = quem vendeu/prestou o servi\xE7o (o fornecedor), n\xE3o o comprador.
+- emitente_cnpj e chave_acesso: s\xF3 os d\xEDgitos (CNPJ com 14, chave com 44). Se n\xE3o aparecer, deixe "".
+- data_emissao no formato AAAA-MM-DD.
+- valor_total = valor final pago (depois de descontos), em reais, com ponto decimal.
+- numero_nf e serie sem zeros \xE0 esquerda. Em pedido/recibo sem n\xFAmero de nota fiscal, deixe numero_nf "".
+- itens_resumo: uma linha curta com o que foi comprado (ex.: "Gasolina comum 45,2 L", "2 refei\xE7\xF5es").
+- forma_pagamento: a que aparecer no comprovante, ou "" se n\xE3o aparecer.
+- categoria: a que melhor descreve o gasto.
+- Se um campo n\xE3o estiver leg\xEDvel ou n\xE3o existir, use "" (ou 0 no valor). Nunca invente.
+- legivel = false se a foto estiver ruim a ponto de comprometer valor, data ou fornecedor.`;
+  const texto = provedor === "claude" ? await viaClaude(arq, pedido, schema) : await viaGemini(arq, pedido, schema);
+  let bruta;
+  try {
+    bruta = JSON.parse(texto);
+  } catch {
+    throw new Error("A leitura autom\xE1tica devolveu um formato inesperado");
+  }
+  const hoje = new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10);
+  return { ...conferirLeitura(bruta, cnpjEmpresa, hoje), ia: provedor === "claude" ? MODELO_LEITURA : MODELO_GEMINI };
+}
+var MODELO_LEITURA, FORMAS, cliente, CLOUDINARY, SISTEMA, MODELO_GEMINI;
+var init_leituraNota = __esm({
+  "server/utils/leituraNota.ts"() {
+    "use strict";
+    MODELO_LEITURA = "claude-sonnet-5-5";
+    FORMAS = ["dinheiro", "pix", "cartao_credito", "cartao_debito", "transferencia", "boleto", "cheque", "debito_conta", "outro", ""];
+    cliente = null;
+    CLOUDINARY = /^https:\/\/res\.cloudinary\.com\/[\w-]+\/(image|raw)\/upload\//;
+    SISTEMA = "Voc\xEA l\xEA fotos e PDFs de notas fiscais e comprovantes brasileiros (DANFE de NF-e, cupom NFC-e, cupom de posto, recibo, nota de servi\xE7o) para preencher um lan\xE7amento de despesa. Responda s\xF3 com os dados pedidos.";
+    MODELO_GEMINI = process.env.LEITURA_NOTA_GEMINI_MODELO || "gemini-3.5-flash-lite";
+  }
+});
+
+// server/utils/nfeCompras/xml.ts
+import { XMLParser as XMLParser2 } from "fast-xml-parser";
+function extrairCompleta(p) {
+  const proc = p.nfeProc ?? null;
+  const nfe = proc?.NFe ?? p.NFe ?? null;
+  const inf = nfe?.infNFe;
+  if (!inf) return null;
+  const chave2 = String(inf["@_Id"] ?? "").replace(/^NFe/, "") || txt(proc?.protNFe?.infProt?.chNFe) || "";
+  if (!/^\d{44}$/.test(chave2)) return null;
+  const ide = inf.ide ?? {}, emit = inf.emit ?? {}, dest = inf.dest ?? {};
+  const cStatProt = txt(proc?.protNFe?.infProt?.cStat);
+  return {
+    chave: chave2,
+    emitenteCnpj: txt(emit.CNPJ) ?? txt(emit.CPF),
+    emitenteNome: txt(emit.xNome),
+    emitenteIe: txt(emit.IE),
+    destCnpj: txt(dest.CNPJ) ?? txt(dest.CPF),
+    numero: txt(ide.nNF),
+    serie: txt(ide.serie),
+    dataEmissao: dataLocal(ide.dhEmi ?? ide.dEmi),
+    valorTotal: num4(inf.total?.ICMSTot?.vNF),
+    situacao: cStatProt && ["110", "301", "302", "303"].includes(cStatProt) ? "denegada" : "autorizada",
+    protocolo: txt(proc?.protNFe?.infProt?.nProt),
+    natureza: txt(ide.natOp)
+  };
+}
+function lerDocumento(xml) {
+  let p;
+  try {
+    p = lerXml(xml);
+  } catch {
+    return { tipo: "outro", motivo: "XML inv\xE1lido" };
+  }
+  if (p.resNFe) {
+    const r = p.resNFe;
+    const chave2 = txt(r.chNFe) ?? "";
+    if (!/^\d{44}$/.test(chave2)) return { tipo: "outro", motivo: "resumo sem chave" };
+    return {
+      tipo: "resumo",
+      nota: {
+        chave: chave2,
+        emitenteCnpj: txt(r.CNPJ) ?? txt(r.CPF),
+        emitenteNome: txt(r.xNome),
+        emitenteIe: txt(r.IE),
+        destCnpj: null,
+        // número e série estão dentro da chave (posições 26-34 e 23-25)
+        numero: String(Number(chave2.slice(25, 34))),
+        serie: String(Number(chave2.slice(22, 25))),
+        dataEmissao: dataLocal(r.dhEmi),
+        valorTotal: num4(r.vNF),
+        situacao: SIT_RESUMO[String(txt(r.cSitNFe) ?? "1")] ?? "autorizada",
+        protocolo: txt(r.nProt),
+        natureza: null
+      }
+    };
+  }
+  if (p.nfeProc || p.NFe) {
+    const nota = extrairCompleta(p);
+    return nota ? { tipo: "completa", nota } : { tipo: "outro", motivo: "NF-e sem chave" };
+  }
+  const ev = p.resEvento ?? p.procEventoNFe?.evento?.infEvento ?? null;
+  if (ev) {
+    return {
+      tipo: "evento",
+      chave: txt(ev.chNFe) ?? "",
+      tpEvento: txt(ev.tpEvento) ?? "",
+      descricao: txt(ev.xEvento) ?? txt(ev.detEvento?.descEvento),
+      data: dataLocal(ev.dhEvento)
+    };
+  }
+  return { tipo: "outro", motivo: `documento n\xE3o tratado (${Object.keys(p).filter((k) => k !== "?xml")[0] ?? "?"})` };
+}
+function detalharCompleta(xml) {
+  const p = lerXml(xml);
+  const inf = (p.nfeProc?.NFe ?? p.NFe)?.infNFe ?? {};
+  const t2 = inf.total?.ICMSTot ?? {};
+  return {
+    itens: arr(inf.det).map((d2) => ({
+      item: Number(d2["@_nItem"] ?? 0),
+      codigo: txt(d2.prod?.cProd),
+      descricao: txt(d2.prod?.xProd),
+      ncm: txt(d2.prod?.NCM),
+      cfop: txt(d2.prod?.CFOP),
+      unidade: txt(d2.prod?.uCom),
+      quantidade: num4(d2.prod?.qCom),
+      valorUnitario: num4(d2.prod?.vUnCom),
+      valorTotal: num4(d2.prod?.vProd)
+    })),
+    totais: {
+      produtos: num4(t2.vProd),
+      frete: num4(t2.vFrete),
+      seguro: num4(t2.vSeg),
+      desconto: num4(t2.vDesc),
+      outros: num4(t2.vOutro),
+      icms: num4(t2.vICMS),
+      icmsSt: num4(t2.vST),
+      ipi: num4(t2.vIPI),
+      nota: num4(t2.vNF)
+    },
+    pagamentos: arr(inf.pag?.detPag).map((x) => ({ forma: txt(x.tPag), valor: num4(x.vPag) })),
+    duplicatas: arr(inf.cobr?.dup).map((x) => ({ numero: txt(x.nDup), vencimento: txt(x.dVenc), valor: num4(x.vDup) })),
+    informacoes: txt(inf.infAdic?.infCpl)
+  };
+}
+var parser, lerXml, arr, num4, txt, dataLocal, SIT_RESUMO;
+var init_xml = __esm({
+  "server/utils/nfeCompras/xml.ts"() {
+    "use strict";
+    parser = new XMLParser2({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true, parseTagValue: false, trimValues: true });
+    lerXml = (xml) => parser.parse(xml);
+    arr = (v) => v == null ? [] : Array.isArray(v) ? v : [v];
+    num4 = (v) => {
+      const n = Number(String(v ?? "").replace(",", "."));
+      return Number.isFinite(n) ? n : 0;
+    };
+    txt = (v) => v == null ? null : typeof v === "object" ? v["#text"] != null ? String(v["#text"]) : null : String(v);
+    dataLocal = (v) => {
+      const s = txt(v);
+      if (!s) return null;
+      const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}:\d{2}))?/);
+      return m ? `${m[1]} ${m[2] ?? "00:00:00"}` : null;
+    };
+    SIT_RESUMO = { "1": "autorizada", "2": "denegada", "3": "cancelada" };
+  }
+});
+
+// server/utils/nfeCompras/sincronizar.ts
+var sincronizar_exports = {};
+__export(sincronizar_exports, {
+  agendarNfeCompras: () => agendarNfeCompras,
+  buscarPorChave: () => buscarPorChave,
+  ensureNfeTables: () => ensureNfeTables,
+  getDbNfe: () => getDbNfe,
+  gravarNota: () => gravarNota,
+  sincronizarNfeCompras: () => sincronizarNfeCompras
+});
+async function getDbNfe() {
+  const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+  const db = await getDb2();
+  if (!db) throw new Error("Banco indispon\xEDvel");
+  return db;
+}
+function ensureNfeTables(db) {
+  if (!ensurePromise5) {
+    ensurePromise5 = (async () => {
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS nfe_compras (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ambiente VARCHAR(12) NOT NULL DEFAULT 'producao',
+          chave CHAR(44) NOT NULL,
+          nsu BIGINT NULL,
+          emitente_cnpj VARCHAR(14) NULL,
+          emitente_nome VARCHAR(200) NULL,
+          emitente_ie VARCHAR(20) NULL,
+          numero VARCHAR(12) NULL,
+          serie VARCHAR(5) NULL,
+          data_emissao DATETIME NULL,
+          valor_total DECIMAL(15,2) NOT NULL DEFAULT 0,
+          natureza VARCHAR(120) NULL,
+          protocolo VARCHAR(20) NULL,
+          situacao VARCHAR(12) NOT NULL DEFAULT 'autorizada',
+          tipo VARCHAR(10) NOT NULL DEFAULT 'resumo',
+          propria TINYINT NOT NULL DEFAULT 0,
+          manifestacao VARCHAR(16) NOT NULL DEFAULT 'nenhuma',
+          manifestacao_em DATETIME NULL,
+          manifestacao_msg VARCHAR(255) NULL,
+          ciencia_tentativas INT NOT NULL DEFAULT 0,
+          ultima_busca_chave DATETIME NULL,
+          xml MEDIUMTEXT NULL,
+          xml_resumo TEXT NULL,
+          origem VARCHAR(10) NOT NULL DEFAULT 'sefaz',
+          recebida_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          atualizada_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY nfe_compras_chave (ambiente, chave),
+          KEY nfe_compras_emissao (data_emissao),
+          KEY nfe_compras_emitente (emitente_cnpj)
+        )
+      `);
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS nfe_compras_controle (
+          id VARCHAR(40) PRIMARY KEY,
+          ult_nsu BIGINT NOT NULL DEFAULT 0,
+          max_nsu BIGINT NOT NULL DEFAULT 0,
+          ultima_consulta DATETIME NULL,
+          proxima_permitida DATETIME NULL,
+          ultimo_cstat VARCHAR(5) NULL,
+          ultimo_motivo VARCHAR(255) NULL,
+          ultimo_erro VARCHAR(500) NULL
+        )
+      `);
+      await db.$client.execute(`
+        CREATE TABLE IF NOT EXISTS nfe_compras_log (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          ambiente VARCHAR(12) NOT NULL,
+          tipo VARCHAR(20) NOT NULL,
+          cstat VARCHAR(5) NULL,
+          motivo VARCHAR(255) NULL,
+          documentos INT NOT NULL DEFAULT 0,
+          detalhe VARCHAR(500) NULL,
+          KEY nfe_compras_log_em (em)
+        )
+      `);
+    })().catch((e) => {
+      ensurePromise5 = null;
+      throw e;
+    });
+  }
+  return ensurePromise5;
+}
+async function log(db, amb, tipo, cstat, motivo, documentos = 0, detalhe = null) {
+  try {
+    await db.$client.execute(
+      `INSERT INTO nfe_compras_log (ambiente, tipo, cstat, motivo, documentos, detalhe) VALUES (?, ?, ?, ?, ?, ?)`,
+      [amb, tipo, cstat, (motivo ?? "").slice(0, 255) || null, documentos, detalhe ? detalhe.slice(0, 500) : null]
+    );
+  } catch {
+  }
+}
+async function gravarNota(db, amb, n, tipo, xml, nsu, origem, cnpjEmpresa) {
+  const propria = n.emitenteCnpj && n.emitenteCnpj === cnpjEmpresa ? 1 : 0;
+  const base = [
+    amb,
+    n.chave,
+    nsu ? Number(nsu) : null,
+    n.emitenteCnpj,
+    n.emitenteNome?.slice(0, 200) ?? null,
+    n.emitenteIe,
+    n.numero,
+    n.serie,
+    n.dataEmissao,
+    n.valorTotal,
+    n.natureza?.slice(0, 120) ?? null,
+    n.protocolo,
+    n.situacao,
+    propria,
+    origem
+  ];
+  if (tipo === "completa") {
+    await db.$client.execute(
+      `INSERT INTO nfe_compras (ambiente, chave, nsu, emitente_cnpj, emitente_nome, emitente_ie, numero, serie, data_emissao, valor_total, natureza, protocolo, situacao, propria, origem, tipo, xml)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completa', ?)
+       ON DUPLICATE KEY UPDATE tipo = 'completa', xml = VALUES(xml), nsu = COALESCE(VALUES(nsu), nsu), emitente_cnpj = VALUES(emitente_cnpj),
+         emitente_nome = VALUES(emitente_nome), emitente_ie = VALUES(emitente_ie), numero = VALUES(numero), serie = VALUES(serie),
+         data_emissao = VALUES(data_emissao), valor_total = VALUES(valor_total), natureza = VALUES(natureza),
+         protocolo = COALESCE(VALUES(protocolo), protocolo), situacao = IF(situacao = 'cancelada', situacao, VALUES(situacao))`,
+      [...base, xml]
+    );
+  } else {
+    await db.$client.execute(
+      `INSERT INTO nfe_compras (ambiente, chave, nsu, emitente_cnpj, emitente_nome, emitente_ie, numero, serie, data_emissao, valor_total, natureza, protocolo, situacao, propria, origem, tipo, xml_resumo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'resumo', ?)
+       ON DUPLICATE KEY UPDATE xml_resumo = VALUES(xml_resumo), situacao = IF(VALUES(situacao) = 'autorizada', situacao, VALUES(situacao))`,
+      [...base, xml]
+    );
+  }
+}
+async function sincronizarNfeCompras(opts = { origem: "manual" }) {
+  if (!modoSefaz()) return { ok: false, mensagem: "A busca na SEFAZ est\xE1 desligada: as notas v\xEAm do Conta Azul (importe os XMLs).", novas: 0, completas: 0, cienciasEnviadas: 0 };
+  if (rodando) return { ok: false, mensagem: "Uma busca j\xE1 est\xE1 em andamento. Aguarde alguns instantes.", novas: 0, completas: 0, cienciasEnviadas: 0 };
+  rodando = true;
+  const amb = ambienteAtual();
+  let db = null;
+  try {
+    db = await getDbNfe();
+    await ensureNfeTables(db);
+    const cert = carregarCertificado();
+    const ctrlId = `${amb}:${cert.cnpj}`;
+    await db.$client.execute(`INSERT IGNORE INTO nfe_compras_controle (id) VALUES (?)`, [ctrlId]);
+    const [cr] = await db.$client.execute(`SELECT *, (proxima_permitida > NOW()) AS aguardando, DATE_FORMAT(proxima_permitida, '%H:%i') AS prox_hora FROM nfe_compras_controle WHERE id = ?`, [ctrlId]);
+    const ctrl = cr[0];
+    let novas = 0, completas = 0, ciencias = 0;
+    let mensagem = "";
+    let esperarUmaHora = false;
+    if (Number(ctrl.aguardando) === 1) {
+      mensagem = `A SEFAZ s\xF3 permite nova consulta a partir de ${ctrl.prox_hora}.`;
+    } else {
+      let ult = String(ctrl.ult_nsu ?? 0);
+      for (let rodada = 0; rodada < 30; rodada++) {
+        const r = await consultarDistribuicao({ ultNSU: ult, ambiente: amb });
+        await log(db, amb, "distribuicao", r.cStat, r.xMotivo, r.docs.length, `ultNSU ${ult} \u2192 ${r.ultNSU} (max ${r.maxNSU}) \xB7 ${opts.origem}`);
+        if (r.cStat === "138") {
+          for (const d2 of r.docs) {
+            const lido = lerDocumento(d2.xml);
+            if (lido.tipo === "resumo" || lido.tipo === "completa") {
+              const [ex] = await db.$client.execute(`SELECT id FROM nfe_compras WHERE ambiente = ? AND chave = ?`, [amb, lido.nota.chave]);
+              if (!ex.length) novas++;
+              if (lido.tipo === "completa") completas++;
+              await gravarNota(db, amb, lido.nota, lido.tipo, d2.xml, d2.nsu, "sefaz", cert.cnpj);
+            } else if (lido.tipo === "evento" && /^\d{44}$/.test(lido.chave)) {
+              if (lido.tpEvento === "110111") {
+                await db.$client.execute(`UPDATE nfe_compras SET situacao = 'cancelada' WHERE ambiente = ? AND chave = ?`, [amb, lido.chave]);
+              }
+              await log(db, amb, "evento", lido.tpEvento, lido.descricao, 0, lido.chave);
+            }
+          }
+          ult = r.ultNSU;
+          await db.$client.execute(
+            `UPDATE nfe_compras_controle SET ult_nsu = ?, max_nsu = ?, ultima_consulta = NOW(), ultimo_cstat = ?, ultimo_motivo = ?, ultimo_erro = NULL WHERE id = ?`,
+            [Number(r.ultNSU), Number(r.maxNSU), r.cStat, r.xMotivo.slice(0, 255), ctrlId]
+          );
+          if (Number(r.ultNSU) >= Number(r.maxNSU)) {
+            esperarUmaHora = true;
+            break;
+          }
+          continue;
+        }
+        esperarUmaHora = true;
+        const ultNovo = Math.max(Number(r.ultNSU) || 0, Number(ult) || 0);
+        await db.$client.execute(
+          `UPDATE nfe_compras_controle SET ult_nsu = ?, max_nsu = GREATEST(max_nsu, ?), ultima_consulta = NOW(), ultimo_cstat = ?, ultimo_motivo = ?, ultimo_erro = ? WHERE id = ?`,
+          [ultNovo, Number(r.maxNSU) || 0, r.cStat, r.xMotivo.slice(0, 255), r.cStat === "137" ? null : `${r.cStat} - ${r.xMotivo}`.slice(0, 500), ctrlId]
+        );
+        if (r.cStat !== "137") mensagem = `SEFAZ: ${r.cStat} - ${r.xMotivo}`;
+        break;
+      }
+      if (esperarUmaHora) await db.$client.execute(`UPDATE nfe_compras_controle SET proxima_permitida = NOW() + INTERVAL 61 MINUTE WHERE id = ?`, [ctrlId]);
+    }
+    const [pend] = await db.$client.execute(
+      `SELECT chave FROM nfe_compras WHERE ambiente = ? AND tipo = 'resumo' AND situacao = 'autorizada' AND propria = 0
+         AND manifestacao IN ('nenhuma', 'erro') AND ciencia_tentativas < 3 ORDER BY data_emissao DESC LIMIT 300`,
+      [amb]
+    );
+    const chaves = pend.map((x) => String(x.chave));
+    for (let i = 0; i < chaves.length; i += 20) {
+      const lote = chaves.slice(i, i + 20);
+      try {
+        const r = await enviarCiencia(lote, amb);
+        await log(db, amb, "ciencia", r.cStatLote, r.xMotivoLote, lote.length);
+        const porChave = new Map(r.retornos.map((x) => [x.chave, x]));
+        for (const c of lote) {
+          const x = porChave.get(c);
+          const ok = !!x?.ok;
+          if (ok) ciencias++;
+          await db.$client.execute(
+            `UPDATE nfe_compras SET manifestacao = ?, manifestacao_em = NOW(), manifestacao_msg = ?, ciencia_tentativas = ciencia_tentativas + 1 WHERE ambiente = ? AND chave = ?`,
+            [ok ? "ciencia" : "erro", x ? `${x.cStat} - ${x.xMotivo}`.slice(0, 255) : `${r.cStatLote} - ${r.xMotivoLote}`.slice(0, 255), amb, c]
+          );
+        }
+      } catch (e) {
+        await log(db, amb, "ciencia_erro", null, String(e?.message ?? e), lote.length);
+        await db.$client.execute(
+          `UPDATE nfe_compras SET manifestacao = 'erro', manifestacao_msg = ?, ciencia_tentativas = ciencia_tentativas + 1 WHERE ambiente = ? AND chave IN (${lote.map(() => "?").join(",")})`,
+          [String(e?.message ?? e).slice(0, 255), amb, ...lote]
+        );
+        break;
+      }
+    }
+    if (opts.origem === "automatica") {
+      const [atras] = await db.$client.execute(
+        `SELECT chave FROM nfe_compras WHERE ambiente = ? AND tipo = 'resumo' AND manifestacao = 'ciencia' AND manifestacao_em < NOW() - INTERVAL 2 HOUR
+           AND (ultima_busca_chave IS NULL OR ultima_busca_chave < NOW() - INTERVAL 6 HOUR) ORDER BY manifestacao_em LIMIT 5`,
+        [amb]
+      );
+      for (const a of atras) {
+        const r = await buscarPorChave(db, amb, String(a.chave), cert.cnpj).catch(() => null);
+        if (r?.completa) completas++;
+      }
+    }
+    if (!mensagem) {
+      mensagem = novas || completas || ciencias ? `${novas} nota(s) nova(s), ${completas} com XML completo${ciencias ? `, ci\xEAncia enviada para ${ciencias}` : ""}.` : "Nenhuma nota nova na SEFAZ.";
+    }
+    return { ok: true, mensagem, novas, completas, cienciasEnviadas: ciencias };
+  } catch (e) {
+    const msg = String(e?.message ?? e);
+    if (db) {
+      await log(db, amb, "erro", null, msg);
+      try {
+        const cert = carregarCertificado();
+        await db.$client.execute(`UPDATE nfe_compras_controle SET ultimo_erro = ?, ultima_consulta = NOW() WHERE id = ?`, [msg.slice(0, 500), `${amb}:${cert.cnpj}`]);
+      } catch {
+      }
+    }
+    return { ok: false, mensagem: msg, novas: 0, completas: 0, cienciasEnviadas: 0 };
+  } finally {
+    rodando = false;
+  }
+}
+async function buscarPorChave(db, amb, chave2, cnpjEmpresa) {
+  await db.$client.execute(`UPDATE nfe_compras SET ultima_busca_chave = NOW() WHERE ambiente = ? AND chave = ?`, [amb, chave2]);
+  const r = await consultarDistribuicao({ chave: chave2, ambiente: amb });
+  await log(db, amb, "chave", r.cStat, r.xMotivo, r.docs.length, chave2);
+  let achou = false, completa = false;
+  for (const d2 of r.docs) {
+    const lido = lerDocumento(d2.xml);
+    if ((lido.tipo === "resumo" || lido.tipo === "completa") && lido.nota.chave === chave2) {
+      await gravarNota(db, amb, lido.nota, lido.tipo, d2.xml, null, "chave", cnpjEmpresa);
+      achou = true;
+      if (lido.tipo === "completa") completa = true;
+    } else if (lido.tipo === "evento" && lido.chave === chave2 && lido.tpEvento === "110111") {
+      await db.$client.execute(`UPDATE nfe_compras SET situacao = 'cancelada' WHERE ambiente = ? AND chave = ?`, [amb, chave2]);
+    }
+  }
+  return { cStat: r.cStat, xMotivo: r.xMotivo, achou, completa };
+}
+function agendarNfeCompras() {
+  if (!modoSefaz() || process.env.NFE_COMPRAS_ATIVO !== "1") {
+    console.log("[NFeCompras] Busca autom\xE1tica na SEFAZ desligada (as notas v\xEAm por importa\xE7\xE3o dos XMLs)");
+    return;
+  }
+  const proxima = () => {
+    const agora = /* @__PURE__ */ new Date();
+    const alvo = new Date(agora);
+    alvo.setMinutes(7, 0, 0);
+    if (alvo.getTime() <= agora.getTime()) alvo.setHours(alvo.getHours() + 1);
+    setTimeout(async () => {
+      const h = Number((/* @__PURE__ */ new Date()).toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }));
+      if (h >= 6 && h <= 22) {
+        const r = await sincronizarNfeCompras({ origem: "automatica" });
+        console.log(`[NFeCompras] ${r.ok ? "OK" : "ERRO"}: ${r.mensagem}`);
+      }
+      proxima();
+    }, Math.max(alvo.getTime() - agora.getTime(), 6e4));
+  };
+  proxima();
+  console.log(`[NFeCompras] Busca autom\xE1tica ligada (${ambienteAtual()})`);
+}
+var ensurePromise5, rodando;
+var init_sincronizar = __esm({
+  "server/utils/nfeCompras/sincronizar.ts"() {
+    "use strict";
+    init_sefaz();
+    init_xml();
+    ensurePromise5 = null;
+    rodando = false;
+  }
+});
+
 // server/utils/weeklyGoals.ts
 function addDays(date, n) {
   return fmt(toUtc(date) + n * DIA_MS);
@@ -7545,17 +8408,17 @@ __export(weeklyGoals_exports, {
   enviarLembretesFechamento: () => enviarLembretesFechamento,
   weeklyGoalsRouter: () => weeklyGoalsRouter
 });
-import { z as z53 } from "zod";
-import { TRPCError as TRPCError41 } from "@trpc/server";
+import { z as z54 } from "zod";
+import { TRPCError as TRPCError43 } from "@trpc/server";
 async function getDbOrThrow6() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError41({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError43({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
 function ensureTables4(db) {
-  if (!ensurePromise6) {
-    ensurePromise6 = (async () => {
+  if (!ensurePromise7) {
+    ensurePromise7 = (async () => {
       const run = (s) => db.$client.execute(s);
       await run(`CREATE TABLE IF NOT EXISTS weekly_goals (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -7602,22 +8465,22 @@ function ensureTables4(db) {
         if (!/duplicate column/i.test(String(e?.message ?? e))) throw e;
       }
     })().catch((e) => {
-      ensurePromise6 = null;
+      ensurePromise7 = null;
       throw e;
     });
   }
-  return ensurePromise6;
+  return ensurePromise7;
 }
 async function carregarMeta(db, id) {
   const [g] = await q2(db, `SELECT * FROM weekly_goals WHERE id = ?`, [id]);
-  if (!g) throw new TRPCError41({ code: "NOT_FOUND", message: "Meta n\xE3o encontrada" });
+  if (!g) throw new TRPCError43({ code: "NOT_FOUND", message: "Meta n\xE3o encontrada" });
   const sups = await q2(db, `SELECT user_id, user_name FROM weekly_goal_supervisors WHERE goal_id = ? ORDER BY user_name`, [id]);
   return { goal: mapGoal(g), supervisors: sups.map((s) => ({ userId: s.user_id, name: s.user_name ?? "" })) };
 }
 async function exigirPapel(db, user, id) {
   const m = await carregarMeta(db, id);
   const papel = papelNaMeta({ id: user.id, isAdmin: isAdmin(user) }, m.goal, m.supervisors.map((s) => s.userId));
-  if (!podeVer(papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o participa desta meta" });
+  if (!podeVer(papel)) throw new TRPCError43({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o participa desta meta" });
   return { ...m, papel };
 }
 async function nomeDe(db, userId) {
@@ -7709,7 +8572,7 @@ async function resumoDaMeta(db, g, hoje) {
 async function gravarItens(db, goalId, semana, itens) {
   for (const it of itens) {
     const [d2] = await q2(db, `SELECT id, name, nickname FROM cargo_destinations WHERE id = ?`, [normalizaDestino(it.destinationId) ?? it.destinationId]);
-    if (!d2) throw new TRPCError41({ code: "BAD_REQUEST", message: "Comprador n\xE3o encontrado" });
+    if (!d2) throw new TRPCError43({ code: "BAD_REQUEST", message: "Comprador n\xE3o encontrado" });
     const [res] = await db.$client.execute(
       `INSERT INTO weekly_goal_items (goal_id, destination_id, destination_name, target_cargas, observacao) VALUES (?, ?, ?, ?, ?)`,
       [goalId, d2.id, String(d2.nickname || d2.name), it.targetCargas, it.observacao ?? null]
@@ -7776,7 +8639,7 @@ async function enviarLembretesFechamento(hoje = hojeISO()) {
   }
   return metas.length;
 }
-var USO2, GESTAO2, data, q2, ensurePromise6, isAdmin, mapGoal, interessados, itemInput, descreveItens, weeklyGoalsRouter;
+var USO2, GESTAO2, data, q2, ensurePromise7, isAdmin, mapGoal, interessados, itemInput, descreveItens, weeklyGoalsRouter;
 var init_weeklyGoals2 = __esm({
   "server/routers/weeklyGoals.ts"() {
     "use strict";
@@ -7786,9 +8649,9 @@ var init_weeklyGoals2 = __esm({
     init_weeklyGoals();
     USO2 = "metas-semanais";
     GESTAO2 = "metas-semanais-gestao";
-    data = z53.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    data = z54.string().regex(/^\d{4}-\d{2}-\d{2}$/);
     q2 = async (db, sql34, params = []) => (await db.$client.execute(sql34, params))[0];
-    ensurePromise6 = null;
+    ensurePromise7 = null;
     isAdmin = (u) => u.role === "admin";
     mapGoal = (r) => ({
       id: r.id,
@@ -7809,11 +8672,11 @@ var init_weeklyGoals2 = __esm({
       createdAt: r.created_at
     });
     interessados = (m) => [m.goal.createdBy, ...m.supervisors.map((s) => s.userId)];
-    itemInput = z53.object({
-      destinationId: z53.number(),
-      targetCargas: z53.number().int().min(1).max(500),
-      observacao: z53.string().max(300).nullable().optional(),
-      dias: z53.array(z53.object({ data, target: z53.number().int().min(0).max(100) })).max(7).optional()
+    itemInput = z54.object({
+      destinationId: z54.number(),
+      targetCargas: z54.number().int().min(1).max(500),
+      observacao: z54.string().max(300).nullable().optional(),
+      dias: z54.array(z54.object({ data, target: z54.number().int().min(0).max(100) })).max(7).optional()
     });
     descreveItens = (itens) => itens.map((i) => `${i.targetCargas}x ${i.destinationName}`).join(", ");
     weeklyGoalsRouter = router({
@@ -7850,7 +8713,7 @@ var init_weeklyGoals2 = __esm({
         };
       }),
       // ── Lista da semana, conforme o papel do usuário ──
-      list: moduleProcedure(USO2, GESTAO2).input(z53.object({ semana: data.optional() }).optional()).query(async ({ ctx, input }) => {
+      list: moduleProcedure(USO2, GESTAO2).input(z54.object({ semana: data.optional() }).optional()).query(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         await ensureTables4(db);
         const hoje = hojeISO();
@@ -7876,7 +8739,7 @@ var init_weeklyGoals2 = __esm({
         return { semana: sem, hoje, metas: out };
       }),
       // ── Detalhe completo: itens, dia a dia, relatos, conversa ──
-      getById: moduleProcedure(USO2, GESTAO2).input(z53.object({ id: z53.number() })).query(async ({ ctx, input }) => {
+      getById: moduleProcedure(USO2, GESTAO2).input(z54.object({ id: z54.number() })).query(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         await ensureTables4(db);
         const m = await exigirPapel(db, ctx.user, input.id);
@@ -7941,13 +8804,13 @@ var init_weeklyGoals2 = __esm({
         };
       }),
       // ── Criar meta (gestão) ──
-      create: moduleProcedure(GESTAO2).input(z53.object({
+      create: moduleProcedure(GESTAO2).input(z54.object({
         semana: data,
-        title: z53.string().min(1).max(200),
-        description: z53.string().max(4e3).nullable().optional(),
-        responsibleUserId: z53.number(),
-        supervisorUserIds: z53.array(z53.number()).max(10),
-        itens: z53.array(itemInput).min(1).max(20)
+        title: z54.string().min(1).max(200),
+        description: z54.string().max(4e3).nullable().optional(),
+        responsibleUserId: z54.number(),
+        supervisorUserIds: z54.array(z54.number()).max(10),
+        itens: z54.array(itemInput).min(1).max(20)
       })).mutation(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         await ensureTables4(db);
@@ -7972,18 +8835,18 @@ var init_weeklyGoals2 = __esm({
         return { id };
       }),
       // ── Editar meta (admin/criador): troca itens e registra o antes/depois na linha do tempo ──
-      update: moduleProcedure(GESTAO2).input(z53.object({
-        id: z53.number(),
-        title: z53.string().min(1).max(200),
-        description: z53.string().max(4e3).nullable().optional(),
-        supervisorUserIds: z53.array(z53.number()).max(10),
-        itens: z53.array(itemInput).min(1).max(20)
+      update: moduleProcedure(GESTAO2).input(z54.object({
+        id: z54.number(),
+        title: z54.string().min(1).max(200),
+        description: z54.string().max(4e3).nullable().optional(),
+        supervisorUserIds: z54.array(z54.number()).max(10),
+        itens: z54.array(itemInput).min(1).max(20)
       })).mutation(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         await ensureTables4(db);
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador edita a meta" });
-        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError41({ code: "BAD_REQUEST", message: "Meta j\xE1 encerrada" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError43({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador edita a meta" });
+        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError43({ code: "BAD_REQUEST", message: "Meta j\xE1 encerrada" });
         const antes = descreveItens(await itensDaMeta(db, input.id));
         const tituloAntes = m.goal.title;
         await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [input.id]);
@@ -7999,20 +8862,20 @@ var init_weeklyGoals2 = __esm({
         await avisar([m.goal.responsibleUserId], "Meta semanal alterada pela supervis\xE3o", `${await nomeDe(db, ctx.user.id)} alterou a meta: ${input.title} \u2014 ${depois}. Confirme a ci\xEAncia.`, input.id);
         return { success: true };
       }),
-      cancel: moduleProcedure(GESTAO2).input(z53.object({ id: z53.number(), motivo: z53.string().min(1).max(500) })).mutation(async ({ ctx, input }) => {
+      cancel: moduleProcedure(GESTAO2).input(z54.object({ id: z54.number(), motivo: z54.string().min(1).max(500) })).mutation(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError41({ code: "FORBIDDEN" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError43({ code: "FORBIDDEN" });
         await db.$client.execute(`UPDATE weekly_goals SET status = 'cancelada', closed_at = NOW(), closed_by = ?, closing_summary = ? WHERE id = ?`, [ctx.user.id, input.motivo, input.id]);
         await mensagemSistema(db, input.id, `Meta cancelada por ${await nomeDe(db, ctx.user.id)}: ${input.motivo}`);
         await avisar([m.goal.responsibleUserId], "Meta semanal cancelada", input.motivo, input.id, ctx.user.id);
         return { success: true };
       }),
       // ── Excluir meta de vez (admin/criador): apaga também relatos, conversa e avisos dela ──
-      delete: moduleProcedure(GESTAO2).input(z53.object({ id: z53.number() })).mutation(async ({ ctx, input }) => {
+      delete: moduleProcedure(GESTAO2).input(z54.object({ id: z54.number() })).mutation(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEditarMeta(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador exclui a meta" });
+        if (!podeEditarMeta(m.papel)) throw new TRPCError43({ code: "FORBIDDEN", message: "S\xF3 o criador ou o administrador exclui a meta" });
         const id = input.id;
         await db.$client.execute(`DELETE FROM weekly_goal_item_days WHERE item_id IN (SELECT id FROM weekly_goal_items WHERE goal_id = ?)`, [id]);
         for (const t2 of ["weekly_goal_items", "weekly_goal_supervisors", "weekly_goal_entries", "weekly_goal_messages"]) {
@@ -8026,10 +8889,10 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Encerrar a semana com avaliação (supervisor/criador/admin) ──
-      close: moduleProcedure(GESTAO2).input(z53.object({ id: z53.number(), avaliacao: z53.string().min(1).max(2e3) })).mutation(async ({ ctx, input }) => {
+      close: moduleProcedure(GESTAO2).input(z54.object({ id: z54.number(), avaliacao: z54.string().min(1).max(2e3) })).mutation(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEncerrar(m.papel)) throw new TRPCError41({ code: "FORBIDDEN" });
+        if (!podeEncerrar(m.papel)) throw new TRPCError43({ code: "FORBIDDEN" });
         const res = await resumoDaMeta(db, m.goal, hojeISO());
         await db.$client.execute(`UPDATE weekly_goals SET status = 'encerrada', closed_at = NOW(), closed_by = ?, closing_summary = ? WHERE id = ?`, [ctx.user.id, input.avaliacao, input.id]);
         await mensagemSistema(db, input.id, `Semana encerrada por ${await nomeDe(db, ctx.user.id)}. Resultado: ${res.progresso.total.carregadas} de ${res.progresso.total.meta} cargas (${res.progresso.total.pct}%). Avalia\xE7\xE3o: ${input.avaliacao}`);
@@ -8037,12 +8900,12 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Ciência do responsável ──
-      acknowledge: moduleProcedure(USO2, GESTAO2).input(z53.object({ id: z53.number(), ack: z53.enum(["de_acordo", "com_ressalva"]), comentario: z53.string().max(1e3).optional() })).mutation(async ({ ctx, input }) => {
+      acknowledge: moduleProcedure(USO2, GESTAO2).input(z54.object({ id: z54.number(), ack: z54.enum(["de_acordo", "com_ressalva"]), comentario: z54.string().max(1e3).optional() })).mutation(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeDarCiencia(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel d\xE1 ci\xEAncia" });
-        if (m.goal.ack !== "pendente" && m.goal.status !== "em_negociacao") throw new TRPCError41({ code: "BAD_REQUEST", message: "A ci\xEAncia desta meta j\xE1 foi registrada" });
-        if (input.ack === "com_ressalva" && !input.comentario?.trim()) throw new TRPCError41({ code: "BAD_REQUEST", message: "Explique a ressalva" });
+        if (!podeDarCiencia(m.papel)) throw new TRPCError43({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel d\xE1 ci\xEAncia" });
+        if (m.goal.ack !== "pendente" && m.goal.status !== "em_negociacao") throw new TRPCError43({ code: "BAD_REQUEST", message: "A ci\xEAncia desta meta j\xE1 foi registrada" });
+        if (input.ack === "com_ressalva" && !input.comentario?.trim()) throw new TRPCError43({ code: "BAD_REQUEST", message: "Explique a ressalva" });
         const novoStatus = input.ack === "de_acordo" ? "em_andamento" : "em_negociacao";
         await db.$client.execute(
           `UPDATE weekly_goals SET ack = ?, ack_at = NOW(), ack_comment = ?, status = ? WHERE id = ? AND status <> 'encerrada' AND status <> 'cancelada'`,
@@ -8055,11 +8918,11 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Supervisão mantém a meta durante a negociação e pede nova confirmação ──
-      keepGoal: moduleProcedure(USO2, GESTAO2).input(z53.object({ id: z53.number(), justificativa: z53.string().min(1).max(1500) })).mutation(async ({ ctx, input }) => {
+      keepGoal: moduleProcedure(USO2, GESTAO2).input(z54.object({ id: z54.number(), justificativa: z54.string().min(1).max(1500) })).mutation(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.id);
-        if (!podeEncerrar(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 a supervis\xE3o responde \xE0 ressalva" });
-        if (m.goal.status !== "em_negociacao") throw new TRPCError41({ code: "BAD_REQUEST", message: "A meta n\xE3o est\xE1 em negocia\xE7\xE3o" });
+        if (!podeEncerrar(m.papel)) throw new TRPCError43({ code: "FORBIDDEN", message: "S\xF3 a supervis\xE3o responde \xE0 ressalva" });
+        if (m.goal.status !== "em_negociacao") throw new TRPCError43({ code: "BAD_REQUEST", message: "A meta n\xE3o est\xE1 em negocia\xE7\xE3o" });
         await db.$client.execute(`UPDATE weekly_goals SET status = 'aguardando_ciencia', ack = 'pendente', ack_at = NULL WHERE id = ?`, [input.id]);
         const nome = await nomeDe(db, ctx.user.id);
         await mensagemSistema(db, input.id, `${nome} manteve a meta: ${input.justificativa.trim()}. O respons\xE1vel precisa confirmar (de acordo ou nova ressalva).`);
@@ -8067,22 +8930,22 @@ var init_weeklyGoals2 = __esm({
         return { success: true };
       }),
       // ── Relato do responsável ──
-      addEntry: moduleProcedure(USO2, GESTAO2).input(z53.object({
-        goalId: z53.number(),
+      addEntry: moduleProcedure(USO2, GESTAO2).input(z54.object({
+        goalId: z54.number(),
         entryDate: data.optional(),
-        kind: z53.enum(KINDS_ENTRY),
-        situacao: z53.enum(["ok", "atencao", "problema"]).default("ok"),
-        body: z53.string().min(1).max(3e3),
-        photoUrls: z53.array(z53.string().url()).max(5).optional()
+        kind: z54.enum(KINDS_ENTRY),
+        situacao: z54.enum(["ok", "atencao", "problema"]).default("ok"),
+        body: z54.string().min(1).max(3e3),
+        photoUrls: z54.array(z54.string().url()).max(5).optional()
       })).mutation(async ({ ctx, input }) => {
         const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.goalId);
-        if (!podeRelatar(m.papel)) throw new TRPCError41({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel registra relatos" });
-        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError41({ code: "BAD_REQUEST", message: "Meta encerrada" });
-        if (m.goal.status !== "em_andamento") throw new TRPCError41({ code: "BAD_REQUEST", message: 'A meta s\xF3 segue em andamento depois do acordo: d\xEA o "de acordo" (ou resolva a negocia\xE7\xE3o) antes de relatar' });
+        if (!podeRelatar(m.papel)) throw new TRPCError43({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel registra relatos" });
+        if (["encerrada", "cancelada"].includes(m.goal.status)) throw new TRPCError43({ code: "BAD_REQUEST", message: "Meta encerrada" });
+        if (m.goal.status !== "em_andamento") throw new TRPCError43({ code: "BAD_REQUEST", message: 'A meta s\xF3 segue em andamento depois do acordo: d\xEA o "de acordo" (ou resolva a negocia\xE7\xE3o) antes de relatar' });
         const dia2 = input.entryDate ?? hojeISO();
         const sem = weekBounds(m.goal.weekStart);
-        if (dia2 < sem.start || dia2 > sem.end) throw new TRPCError41({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
+        if (dia2 < sem.start || dia2 > sem.end) throw new TRPCError43({ code: "BAD_REQUEST", message: "Data fora da semana da meta" });
         const situacao = input.kind === "problema" ? "problema" : input.situacao;
         const nome = await nomeDe(db, ctx.user.id);
         const [res] = await db.$client.execute(
@@ -8097,20 +8960,20 @@ var init_weeklyGoals2 = __esm({
         return { id: Number(res.insertId) };
       }),
       // ── Conversa (perguntas, respostas, comentários) ──
-      addMessage: moduleProcedure(USO2, GESTAO2).input(z53.object({
-        goalId: z53.number(),
-        kind: z53.enum(["pergunta", "resposta", "comentario"]),
-        body: z53.string().max(3e3).default(""),
-        anexos: z53.array(z53.object({ url: z53.string().url().max(2e3), nome: z53.string().max(255) })).max(5).optional(),
-        entryId: z53.number().optional(),
-        parentId: z53.number().optional(),
+      addMessage: moduleProcedure(USO2, GESTAO2).input(z54.object({
+        goalId: z54.number(),
+        kind: z54.enum(["pergunta", "resposta", "comentario"]),
+        body: z54.string().max(3e3).default(""),
+        anexos: z54.array(z54.object({ url: z54.string().url().max(2e3), nome: z54.string().max(255) })).max(5).optional(),
+        entryId: z54.number().optional(),
+        parentId: z54.number().optional(),
         dia: data.optional(),
-        geral: z53.boolean().optional()
+        geral: z54.boolean().optional()
       })).mutation(async ({ ctx, input }) => {
-        if (!input.body.trim() && !input.anexos?.length) throw new TRPCError41({ code: "BAD_REQUEST", message: "Escreva uma mensagem ou anexe um arquivo" });
+        if (!input.body.trim() && !input.anexos?.length) throw new TRPCError43({ code: "BAD_REQUEST", message: "Escreva uma mensagem ou anexe um arquivo" });
         const db = await getDbOrThrow6();
         const m = await exigirPapel(db, ctx.user, input.goalId);
-        if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError41({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode enviar este tipo de mensagem" });
+        if (!tiposMensagemPermitidos(m.papel).includes(input.kind)) throw new TRPCError43({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode enviar este tipo de mensagem" });
         const nome = await nomeDe(db, ctx.user.id);
         const papel = m.papel === "responsavel" ? "responsavel" : m.papel === "admin" ? "admin" : "supervisor";
         let dia2 = input.geral ? null : input.dia ?? hojeISO();
@@ -8360,10 +9223,10 @@ function traccarHeaders2() {
     Accept: "application/json"
   };
 }
-async function traccarGet2(path4) {
+async function traccarGet2(path5) {
   if (!TRACCAR_URL2) return null;
   try {
-    const res = await fetch(`${TRACCAR_URL2}/api${path4}`, {
+    const res = await fetch(`${TRACCAR_URL2}/api${path5}`, {
       headers: traccarHeaders2()
     });
     if (!res.ok) return null;
@@ -8415,7 +9278,7 @@ async function geofenceCheckHandler(req, res) {
     return res.status(200).json({ processed: 0, message: "Traccar n\xE3o configurado" });
   }
   const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-  const log = [];
+  const log2 = [];
   let processed = 0;
   try {
     const activeGeofences = await db.select().from(geofences).where(and27(eq45(geofences.isActive, 1), sql33`${geofences.traccarDeviceId} IS NOT NULL`));
@@ -8423,7 +9286,7 @@ async function geofenceCheckHandler(req, res) {
       if (!geo.traccarDeviceId) continue;
       const pos = await getDevicePosition2(geo.traccarDeviceId);
       if (!pos) {
-        log.push(`[Geofence ${geo.name}] Sem posi\xE7\xE3o GPS dispon\xEDvel`);
+        log2.push(`[Geofence ${geo.name}] Sem posi\xE7\xE3o GPS dispon\xEDvel`);
         continue;
       }
       const inside = isInsideGeofence2(
@@ -8476,7 +9339,7 @@ async function geofenceCheckHandler(req, res) {
             totalCost: "0",
             traccarPositionsJson: JSON.stringify([{ lat: pos.lat, lng: pos.lng, ts: now }])
           });
-          log.push(`[Porteira ${geo.name}] Novo frete aberto \u2014 ${vehicleName || "ve\xEDculo desconhecido"} entrou`);
+          log2.push(`[Porteira ${geo.name}] Novo frete aberto \u2014 ${vehicleName || "ve\xEDculo desconhecido"} entrou`);
         } else {
           let traj = [];
           if (openTrip.traccarPositionsJson) {
@@ -8508,13 +9371,13 @@ async function geofenceCheckHandler(req, res) {
             distanceKm,
             traccarPositionsJson: JSON.stringify(traj)
           }).where(eq45(freightTrips.id, openTrip.id));
-          log.push(`[Porteira ${geo.name}] Frete #${openTrip.id} fechado \u2014 ${distanceKm}km percorridos`);
+          log2.push(`[Porteira ${geo.name}] Frete #${openTrip.id} fechado \u2014 ${distanceKm}km percorridos`);
         }
       }
       processed++;
     }
-    console.log(`[GeofenceCheck] Processadas ${processed} porteiras. ${log.join(" | ")}`);
-    return res.status(200).json({ processed, log, timestamp: now });
+    console.log(`[GeofenceCheck] Processadas ${processed} porteiras. ${log2.join(" | ")}`);
+    return res.status(200).json({ processed, log: log2, timestamp: now });
   } catch (err) {
     console.error("[GeofenceCheck] Erro:", err);
     return res.status(500).json({ error: err.message });
@@ -8539,7 +9402,7 @@ __export(heartbeat_exports, {
   listHeartbeatJobs: () => listHeartbeatJobs,
   updateHeartbeatJob: () => updateHeartbeatJob
 });
-import { TRPCError as TRPCError42 } from "@trpc/server";
+import { TRPCError as TRPCError44 } from "@trpc/server";
 async function createHeartbeatJob(job, userSession) {
   validateCallbackPath(job.path);
   return callForge(
@@ -8589,13 +9452,13 @@ var init_heartbeat = __esm({
     SERVICE = "webdevtoken.v1.WebDevService";
     buildEndpoint = (rpc) => {
       if (!ENV.forgeApiUrl) {
-        throw new TRPCError42({
+        throw new TRPCError44({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service URL is not configured (BUILT_IN_FORGE_API_URL)."
         });
       }
       if (!ENV.forgeApiKey) {
-        throw new TRPCError42({
+        throw new TRPCError44({
           code: "INTERNAL_SERVER_ERROR",
           message: "Heartbeat service API key is not configured (BUILT_IN_FORGE_API_KEY)."
         });
@@ -8623,7 +9486,7 @@ var init_heartbeat = __esm({
           body: JSON.stringify(body)
         });
       } catch (error) {
-        throw new TRPCError42({
+        throw new TRPCError44({
           code: "INTERNAL_SERVER_ERROR",
           message: `Heartbeat ${rpc} network error: ${String(error)}`
         });
@@ -8643,7 +9506,7 @@ var init_heartbeat = __esm({
       else if (status === 400 || status === 422) code = "BAD_REQUEST";
       else if (status === 409) code = "CONFLICT";
       else if (status === 429) code = "TOO_MANY_REQUESTS";
-      return new TRPCError42({
+      return new TRPCError44({
         code,
         message: `Heartbeat ${rpc} failed (${status})${detail ? `: ${detail}` : ""}`
       });
@@ -8653,9 +9516,9 @@ var init_heartbeat = __esm({
       if (typeof payload === "string") return payload;
       return JSON.stringify(payload);
     };
-    validateCallbackPath = (path4) => {
-      if (!path4 || !path4.startsWith("/api/scheduled/")) {
-        throw new TRPCError42({
+    validateCallbackPath = (path5) => {
+      if (!path5 || !path5.startsWith("/api/scheduled/")) {
+        throw new TRPCError44({
           code: "BAD_REQUEST",
           message: "callback path must start with /api/scheduled/"
         });
@@ -8666,7 +9529,7 @@ var init_heartbeat = __esm({
 
 // server/_core/index.ts
 import dotenv from "dotenv";
-import path3 from "path";
+import path4 from "path";
 import express2 from "express";
 import { createServer } from "http";
 import cors from "cors";
@@ -9316,7 +10179,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z5 } from "zod";
-import { TRPCError as TRPCError3 } from "@trpc/server";
+import { TRPCError as TRPCError4 } from "@trpc/server";
 import { eq as eq4, desc as desc2 } from "drizzle-orm";
 
 // server/auth.ts
@@ -9366,6 +10229,59 @@ async function loginUser(email, password) {
   return userWithoutPassword;
 }
 
+// server/utils/hierarquia.ts
+import { TRPCError as TRPCError3 } from "@trpc/server";
+var pronto = null;
+function ensureHierarquia(db) {
+  if (!pronto) {
+    pronto = db.$client.execute(`
+      CREATE TABLE IF NOT EXISTS usuario_superior (
+        user_id INT NOT NULL PRIMARY KEY,
+        superior_user_id INT NOT NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY usuario_superior_sup (superior_user_id)
+      )`).then(() => void 0).catch((e) => {
+      pronto = null;
+      throw e;
+    });
+  }
+  return pronto;
+}
+async function mapaSuperiores(db) {
+  await ensureHierarquia(db);
+  const [rows2] = await db.$client.execute(`SELECT user_id, superior_user_id FROM usuario_superior`);
+  return new Map(rows2.map((r) => [Number(r.user_id), Number(r.superior_user_id)]));
+}
+function subordinadosDe(mapa, userId) {
+  const filhos = /* @__PURE__ */ new Map();
+  for (const [u, s] of Array.from(mapa.entries())) filhos.set(s, [...filhos.get(s) ?? [], u]);
+  const res = /* @__PURE__ */ new Set();
+  const fila = [...filhos.get(userId) ?? []];
+  while (fila.length) {
+    const u = fila.shift();
+    if (res.has(u) || u === userId) continue;
+    res.add(u);
+    fila.push(...filhos.get(u) ?? []);
+  }
+  return res;
+}
+async function definirSuperior(db, userId, superiorId) {
+  await ensureHierarquia(db);
+  if (!superiorId) {
+    await db.$client.execute(`DELETE FROM usuario_superior WHERE user_id = ?`, [userId]);
+    return;
+  }
+  if (superiorId === userId) throw new TRPCError3({ code: "BAD_REQUEST", message: "O usu\xE1rio n\xE3o pode ser superior de si mesmo" });
+  const mapa = await mapaSuperiores(db);
+  if (subordinadosDe(mapa, userId).has(superiorId)) {
+    throw new TRPCError3({ code: "BAD_REQUEST", message: "Esse superior est\xE1 abaixo deste usu\xE1rio na hierarquia" });
+  }
+  await db.$client.execute(
+    `INSERT INTO usuario_superior (user_id, superior_user_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE superior_user_id = VALUES(superior_user_id)`,
+    [userId, superiorId]
+  );
+}
+
 // server/routers/usersManagement.ts
 var usersManagementRouter = router({
   // Listar todos os usuários (admin only)
@@ -9373,10 +10289,10 @@ var usersManagementRouter = router({
     search: z5.string().optional()
   }).optional()).query(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
-      throw new TRPCError3({ code: "FORBIDDEN", message: "Acesso negado" });
+      throw new TRPCError4({ code: "FORBIDDEN", message: "Acesso negado" });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
     let query = db.select({
       id: users.id,
       name: users.name,
@@ -9386,7 +10302,8 @@ var usersManagementRouter = router({
       createdAt: users.createdAt,
       lastSignedIn: users.lastSignedIn
     }).from(users).$dynamic();
-    const results = await query.orderBy(desc2(users.createdAt));
+    const sup = await mapaSuperiores(db);
+    const results = (await query.orderBy(desc2(users.createdAt))).map((u) => ({ ...u, superiorId: sup.get(u.id) ?? null }));
     if (input?.search) {
       const s = input.search.toLowerCase();
       return results.filter(
@@ -9400,19 +10317,21 @@ var usersManagementRouter = router({
     name: z5.string().min(2),
     email: z5.string().email(),
     password: z5.string().min(4),
-    role: z5.enum(["user", "admin"]).default("user")
+    role: z5.enum(["user", "admin"]).default("user"),
+    superiorId: z5.number().int().positive().nullable().optional()
+    // superior imediato (hierarquia das Tarefas)
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
-      throw new TRPCError3({ code: "FORBIDDEN", message: "Acesso negado" });
+      throw new TRPCError4({ code: "FORBIDDEN", message: "Acesso negado" });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
     const existing = await db.select({ id: users.id }).from(users).where(eq4(users.email, input.email)).limit(1);
     if (existing.length > 0) {
-      throw new TRPCError3({ code: "CONFLICT", message: "Email j\xE1 cadastrado" });
+      throw new TRPCError4({ code: "CONFLICT", message: "Email j\xE1 cadastrado" });
     }
     const passwordHash = await hashPassword(input.password);
-    await db.insert(users).values({
+    const [res] = await db.insert(users).values({
       name: input.name,
       email: input.email,
       passwordHash,
@@ -9420,6 +10339,7 @@ var usersManagementRouter = router({
       role: input.role,
       lastSignedIn: (/* @__PURE__ */ new Date()).toISOString()
     });
+    if (input.superiorId && res?.insertId) await definirSuperior(db, Number(res.insertId), input.superiorId);
     return { success: true };
   }),
   // Atualizar usuário (admin only)
@@ -9428,13 +10348,15 @@ var usersManagementRouter = router({
     name: z5.string().min(2).optional(),
     email: z5.string().email().optional(),
     role: z5.enum(["user", "admin"]).optional(),
-    password: z5.string().min(4).optional()
+    password: z5.string().min(4).optional(),
+    superiorId: z5.number().int().positive().nullable().optional()
+    // null remove o superior
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
-      throw new TRPCError3({ code: "FORBIDDEN", message: "Acesso negado" });
+      throw new TRPCError4({ code: "FORBIDDEN", message: "Acesso negado" });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
     const updateData = { updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     if (input.name) updateData.name = input.name;
     if (input.email) updateData.email = input.email;
@@ -9442,20 +10364,23 @@ var usersManagementRouter = router({
     if (input.password) {
       updateData.passwordHash = await hashPassword(input.password);
     }
+    if (input.superiorId !== void 0) await definirSuperior(db, input.id, input.superiorId);
     await db.update(users).set(updateData).where(eq4(users.id, input.id));
     return { success: true };
   }),
   // Remover usuário (admin only, não pode remover a si mesmo)
   delete: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
-      throw new TRPCError3({ code: "FORBIDDEN", message: "Acesso negado" });
+      throw new TRPCError4({ code: "FORBIDDEN", message: "Acesso negado" });
     }
     if (ctx.user.id === input.id) {
-      throw new TRPCError3({ code: "BAD_REQUEST", message: "Voc\xEA n\xE3o pode remover sua pr\xF3pria conta" });
+      throw new TRPCError4({ code: "BAD_REQUEST", message: "Voc\xEA n\xE3o pode remover sua pr\xF3pria conta" });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
     await db.delete(users).where(eq4(users.id, input.id));
+    await definirSuperior(db, input.id, null);
+    await db.$client.execute(`DELETE FROM usuario_superior WHERE superior_user_id = ?`, [input.id]);
     return { success: true };
   })
 });
@@ -9467,7 +10392,7 @@ init_schema();
 init_cloudinary();
 init_clientAreaScope();
 import { z as z7 } from "zod";
-import { TRPCError as TRPCError5 } from "@trpc/server";
+import { TRPCError as TRPCError6 } from "@trpc/server";
 import { eq as eq7, desc as desc3, asc as asc2, and as and4, sql as sql2, ne, or as or3 } from "drizzle-orm";
 import mysql3 from "mysql2/promise";
 var cargoAreaId = cargoLoads.areaId;
@@ -9568,7 +10493,7 @@ var cargoLoadsRouter = router({
   }),
   listDestinations: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(cargoDestinations).where(eq7(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
   }),
   createDestination: protectedProcedure.input(z7.object({
@@ -9796,7 +10721,7 @@ var cargoLoadsRouter = router({
   }),
   deleteDestination: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(cargoDestinations).set({ active: 0 }).where(eq7(cargoDestinations.id, input.id));
     return { success: true };
   }),
@@ -9810,7 +10735,7 @@ var cargoLoadsRouter = router({
     areaId: z7.number().nullable().optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let userAllowedClientIds = null;
     if (ctx.user.role !== "admin") {
       const { userPermissions: upTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -9924,7 +10849,7 @@ var cargoLoadsRouter = router({
   }),
   getById: protectedProcedure.input(z7.object({ id: z7.number(), areaId: z7.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const result = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
@@ -9993,7 +10918,7 @@ var cargoLoadsRouter = router({
       fiscalNoteActionCode: fiscalNotes.actionCode,
       fiscalNoteQuantityType: fiscalNotes.quantityType
     }).from(cargoLoads).leftJoin(clients, eq7(cargoLoads.clientId, clients.id)).leftJoin(clientAreas, eq7(cargoLoads.areaId, clientAreas.id)).leftJoin(cargoDestinations, eq7(cargoLoads.destinationId, cargoDestinations.id)).leftJoin(equipment, eq7(cargoLoads.vehicleId, equipment.id)).leftJoin(gpsLocations, eq7(cargoLoads.workLocationId, gpsLocations.id)).leftJoin(collaborators, eq7(cargoLoads.driverCollaboratorId, collaborators.id)).leftJoin(fiscalNotes, eq7(cargoLoads.fiscalNoteId, fiscalNotes.id)).where(and4(eq7(cargoLoads.id, input.id), listArea(input))).limit(1);
-    if (!result.length) throw new TRPCError5({ code: "NOT_FOUND" });
+    if (!result.length) throw new TRPCError6({ code: "NOT_FOUND" });
     const r = result[0];
     return {
       ...r,
@@ -10010,9 +10935,9 @@ var cargoLoadsRouter = router({
   // Listagem pública para portal do cliente (por token)
   getByClientToken: publicProcedure.input(z7.object({ clientId: z7.number(), token: z7.string(), areaId: z7.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const client = await db.select().from(clients).where(eq7(clients.id, input.clientId)).limit(1);
-    if (!client.length) throw new TRPCError5({ code: "NOT_FOUND" });
+    if (!client.length) throw new TRPCError6({ code: "NOT_FOUND" });
     const loads = await db.select().from(cargoLoads).where(and4(eq7(cargoLoads.clientId, input.clientId), listArea(input))).orderBy(desc3(cargoLoads.date), desc3(cargoLoads.createdAt));
     return loads;
   }),
@@ -10022,7 +10947,7 @@ var cargoLoadsRouter = router({
     photoType: z7.enum(["cargo", "weight_out", "weight_in"]).default("cargo")
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const uploaded = await cloudinaryUpload(input.photoBase64, `btree/cargo/${input.cargoId}`);
     if (input.photoType === "weight_out") {
       await db.update(cargoLoads).set({ weightOutPhotoUrl: uploaded.url, updatedAt: (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") }).where(eq7(cargoLoads.id, input.cargoId));
@@ -10096,26 +11021,26 @@ var cargoLoadsRouter = router({
     // window.location.origin do cliente, pra montar o link de upload de NF certo (local/staging/produção)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const areaId = inputArea(input);
     let verifiedClient = null;
     let area = null;
     if (input.clientId != null) {
       [verifiedClient] = await db.select().from(clients).where(eq7(clients.id, input.clientId)).limit(1);
-      if (!verifiedClient) throw new TRPCError5({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
+      if (!verifiedClient) throw new TRPCError6({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
       area = await checkedArea(db, input.clientId, areaId, false);
-    } else if (areaId !== null) throw new TRPCError5({ code: "BAD_REQUEST", message: "\xC1rea exige cliente." });
+    } else if (areaId !== null) throw new TRPCError6({ code: "BAD_REQUEST", message: "\xC1rea exige cliente." });
     const areaTerms = areaId === null ? null : getAreaPriceTerms(verifiedClient, area);
     const effectiveWorkLocationId = areaId !== null ? area.workLocationId : input.workLocationId || null;
     if (areaId === null && effectiveWorkLocationId && input.clientId != null) {
       const [ownedAreaLocation] = await db.select({ id: clientAreas.id }).from(clientAreas).where(eq7(clientAreas.workLocationId, effectiveWorkLocationId)).limit(1);
-      if (ownedAreaLocation) throw new TRPCError5({ code: "BAD_REQUEST", message: "Selecione a \xE1rea correspondente ao local de trabalho." });
+      if (ownedAreaLocation) throw new TRPCError6({ code: "BAD_REQUEST", message: "Selecione a \xE1rea correspondente ao local de trabalho." });
     }
     if (input.invoiceNumber && input.invoiceNumber.trim() !== "") {
       const existing = await db.select({ id: cargoLoads.id, vehiclePlate: cargoLoads.vehiclePlate, date: cargoLoads.date }).from(cargoLoads).where(eq7(cargoLoads.invoiceNumber, input.invoiceNumber.trim())).limit(1);
       if (existing.length > 0) {
         const dateFmt = existing[0].date ? new Date(existing[0].date).toLocaleDateString("pt-BR") : "N/I";
-        throw new TRPCError5({
+        throw new TRPCError6({
           code: "CONFLICT",
           message: `Nota fiscal ${input.invoiceNumber} j\xE1 est\xE1 sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || "N/I"}, Data: ${dateFmt}). Verifique o n\xFAmero da nota.`
         });
@@ -10171,7 +11096,7 @@ var cargoLoadsRouter = router({
       const realErr = dbErr.cause || dbErr;
       console.error("[cargoLoads.create] DB ERROR:", realErr.code, realErr.errno, realErr.sqlState, realErr.sqlMessage || realErr.message);
       console.error("[cargoLoads.create] Full error:", dbErr.message);
-      throw new TRPCError5({
+      throw new TRPCError6({
         code: "INTERNAL_SERVER_ERROR",
         message: `Erro DB [${realErr.code || "UNKNOWN"}]: ${realErr.sqlMessage || realErr.message || dbErr.message}`
       });
@@ -10215,8 +11140,8 @@ var cargoLoadsRouter = router({
           `);
         const rows2 = row;
         if (rows2 && rows2.length > 0 && rows2[0]?.action_code) {
-          const num5 = parseInt(String(rows2[0].action_code).replace("AC-", ""), 10);
-          if (!isNaN(num5)) actionCode = `AC-${String(num5 + 1).padStart(5, "0")}`;
+          const num6 = parseInt(String(rows2[0].action_code).replace("AC-", ""), 10);
+          if (!isNaN(num6)) actionCode = `AC-${String(num6 + 1).padStart(5, "0")}`;
         }
       } catch {
       }
@@ -10290,8 +11215,8 @@ var cargoLoadsRouter = router({
       const [newCargo] = await db.select({ id: cargoLoads.id }).from(cargoLoads).orderBy(desc3(cargoLoads.id)).limit(1);
       createdId = newCargo?.id ?? null;
       if (createdId) {
-        const crypto5 = await import("crypto");
-        const token = crypto5.randomBytes(24).toString("hex");
+        const crypto6 = await import("crypto");
+        const token = crypto6.randomBytes(24).toString("hex");
         let responsavelCargaId = input.responsavelCargaId ?? null;
         if (responsavelCargaId === null && input.responsavelCargaId === void 0) {
           const [collab] = await db.select({ id: collaborators.id }).from(collaborators).where(eq7(collaborators.userId, ctx.user.id)).limit(1);
@@ -10370,7 +11295,7 @@ var cargoLoadsRouter = router({
     noteUnit: z7.enum(["m3", "ton"]).optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [scopeCargo] = await db.select({
       id: cargoLoads.id,
       clientId: cargoLoads.clientId,
@@ -10384,28 +11309,28 @@ var cargoLoadsRouter = router({
       agreedPaymentMethod: cargoLoads.agreedPaymentMethod,
       agreedPaymentTermDays: cargoLoads.agreedPaymentTermDays
     }).from(cargoLoads).where(eq7(cargoLoads.id, input.id)).limit(1);
-    if (!scopeCargo) throw new TRPCError5({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada." });
+    if (!scopeCargo) throw new TRPCError6({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada." });
     const nextAreaId = hasField(input, "areaId") ? inputArea(input) : normalizeAreaId(scopeCargo.areaId);
     const nextClientId = hasField(input, "clientId") ? input.clientId ?? null : scopeCargo.clientId;
-    if (nextClientId == null && nextAreaId !== null) throw new TRPCError5({ code: "BAD_REQUEST", message: "\xC1rea exige cliente cadastrado." });
+    if (nextClientId == null && nextAreaId !== null) throw new TRPCError6({ code: "BAD_REQUEST", message: "\xC1rea exige cliente cadastrado." });
     const nextClient = nextClientId == null ? { id: null, name: input.clientName || scopeCargo.clientName } : (await db.select().from(clients).where(eq7(clients.id, nextClientId)).limit(1))[0];
-    if (!nextClient) throw new TRPCError5({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
+    if (!nextClient) throw new TRPCError6({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
     const linked = await db.select({ id: clientAdvanceDeductions.id }).from(clientAdvanceDeductions).where(eq7(clientAdvanceDeductions.cargoLoadId, input.id)).limit(1);
-    if ((scopeCargo.paymentStatus === "pago" || linked.length) && (scopeCargo.clientId !== nextClientId || !sameArea(scopeCargo.areaId, nextAreaId))) throw new TRPCError5({ code: "CONFLICT", message: "N\xE3o \xE9 permitido mudar cliente/\xE1rea de carga j\xE1 vinculada financeiramente." });
+    if ((scopeCargo.paymentStatus === "pago" || linked.length) && (scopeCargo.clientId !== nextClientId || !sameArea(scopeCargo.areaId, nextAreaId))) throw new TRPCError6({ code: "CONFLICT", message: "N\xE3o \xE9 permitido mudar cliente/\xE1rea de carga j\xE1 vinculada financeiramente." });
     if (scopeCargo.clientId !== nextClientId || !sameArea(scopeCargo.areaId, nextAreaId)) {
       const [closingLink] = await db.select({ id: cargoWeeklyClosings.id }).from(cargoWeeklyClosings).where(and4(
         eq7(cargoWeeklyClosings.clientId, scopeCargo.clientId),
         areaScopeCondition(closingAreaId, normalizeAreaId(scopeCargo.areaId)),
         sql2`DATE(${scopeCargo.deliveryDate || scopeCargo.date}) BETWEEN DATE(${cargoWeeklyClosings.weekStart}) AND DATE(${cargoWeeklyClosings.weekEnd})`
       )).limit(1);
-      if (closingLink) throw new TRPCError5({ code: "CONFLICT", message: "Esta carga j\xE1 faz parte de um fechamento. Cliente e \xE1rea devem ser preservados." });
+      if (closingLink) throw new TRPCError6({ code: "CONFLICT", message: "Esta carga j\xE1 faz parte de um fechamento. Cliente e \xE1rea devem ser preservados." });
     }
     const nextArea = nextAreaId === null ? null : await checkedArea(db, nextClientId, nextAreaId, false);
     if (nextArea && input.paymentStatus === "pago" && scopeCargo.paymentStatus !== "pago") requireConfirmedArea(nextArea);
     const requestedWorkLocationId = hasField(input, "workLocationId") ? input.workLocationId || null : null;
     if (nextAreaId === null && requestedWorkLocationId && nextClientId != null) {
       const [ownedAreaLocation] = await db.select({ id: clientAreas.id }).from(clientAreas).where(eq7(clientAreas.workLocationId, requestedWorkLocationId)).limit(1);
-      if (ownedAreaLocation) throw new TRPCError5({ code: "BAD_REQUEST", message: "Selecione a \xE1rea correspondente ao local de trabalho." });
+      if (ownedAreaLocation) throw new TRPCError6({ code: "BAD_REQUEST", message: "Selecione a \xE1rea correspondente ao local de trabalho." });
     }
     const nextTerms = nextAreaId === null ? null : getAreaPriceTerms(nextClient, nextArea);
     const areaChanged = !sameArea(scopeCargo.areaId, nextAreaId);
@@ -10439,7 +11364,7 @@ var cargoLoadsRouter = router({
       )).limit(1);
       if (existing.length > 0) {
         const dateFmt = existing[0].date ? new Date(existing[0].date).toLocaleDateString("pt-BR") : "N/I";
-        throw new TRPCError5({
+        throw new TRPCError6({
           code: "CONFLICT",
           message: `Nota fiscal ${effectiveInvoiceNumber} j\xE1 est\xE1 sendo usada em outra carga (Placa: ${existing[0].vehiclePlate || "N/I"}, Data: ${dateFmt}). Verifique o n\xFAmero da nota.`
         });
@@ -10565,7 +11490,7 @@ var cargoLoadsRouter = router({
       const realErr = dbErr.cause || dbErr;
       console.error("[cargoLoads.update] DB ERROR:", realErr.code, realErr.errno, realErr.sqlState, realErr.sqlMessage || realErr.message);
       console.error("[cargoLoads.update] Full error:", dbErr.message);
-      throw new TRPCError5({
+      throw new TRPCError6({
         code: "INTERNAL_SERVER_ERROR",
         message: `Erro DB [${realErr.code || "UNKNOWN"}]: ${realErr.sqlMessage || realErr.message || dbErr.message}`
       });
@@ -10598,7 +11523,7 @@ var cargoLoadsRouter = router({
     trackingNotes: z7.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(cargoLoads).set({
       trackingStatus: input.trackingStatus,
       trackingNotes: input.trackingNotes,
@@ -10632,7 +11557,7 @@ var cargoLoadsRouter = router({
     boletoDueDate: z7.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let priorCargo;
     if (input.docType === "invoice") {
       [priorCargo] = await db.select({
@@ -10723,7 +11648,7 @@ var cargoLoadsRouter = router({
     areaId: z7.number().nullable().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
@@ -10761,11 +11686,11 @@ var cargoLoadsRouter = router({
     areaId: z7.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId }).from(cargoLoads).where(eq7(cargoLoads.id, input.id)).limit(1);
-    if (!cargo) throw new TRPCError5({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada." });
-    if (input.clientId !== void 0 && cargo.clientId !== input.clientId) throw new TRPCError5({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
-    if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError5({ code: "BAD_REQUEST", message: "A carga pertence a outra \xE1rea financeira." });
+    if (!cargo) throw new TRPCError6({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada." });
+    if (input.clientId !== void 0 && cargo.clientId !== input.clientId) throw new TRPCError6({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
+    if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError6({ code: "BAD_REQUEST", message: "A carga pertence a outra \xE1rea financeira." });
     if (normalizeAreaId(cargo.areaId) !== null) await checkedArea(db, cargo.clientId, normalizeAreaId(cargo.areaId), true);
     const conn = await getDirectConnection();
     try {
@@ -10783,11 +11708,11 @@ var cargoLoadsRouter = router({
   // Desfazer pagamento de uma carga (reverter para sem_boleto)
   unmarkAsPaid: protectedProcedure.input(z7.object({ id: z7.number(), clientId: z7.number().optional(), areaId: z7.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId }).from(cargoLoads).where(eq7(cargoLoads.id, input.id)).limit(1);
-    if (!cargo) throw new TRPCError5({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada." });
-    if (input.clientId !== void 0 && cargo.clientId !== input.clientId) throw new TRPCError5({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
-    if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError5({ code: "BAD_REQUEST", message: "A carga pertence a outra \xE1rea financeira." });
+    if (!cargo) throw new TRPCError6({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada." });
+    if (input.clientId !== void 0 && cargo.clientId !== input.clientId) throw new TRPCError6({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
+    if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError6({ code: "BAD_REQUEST", message: "A carga pertence a outra \xE1rea financeira." });
     const conn = await getDirectConnection();
     try {
       const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
@@ -10809,11 +11734,11 @@ var cargoLoadsRouter = router({
     areaId: z7.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId }).from(cargoLoads).where(eq7(cargoLoads.id, input.id)).limit(1);
-    if (!cargo) throw new TRPCError5({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada." });
-    if (input.clientId !== void 0 && cargo.clientId !== input.clientId) throw new TRPCError5({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
-    if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError5({ code: "BAD_REQUEST", message: "A carga pertence a outra \xE1rea financeira." });
+    if (!cargo) throw new TRPCError6({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada." });
+    if (input.clientId !== void 0 && cargo.clientId !== input.clientId) throw new TRPCError6({ code: "BAD_REQUEST", message: "A carga pertence a outro cliente." });
+    if (hasField(input, "areaId") && !sameArea(cargo.areaId, inputArea(input))) throw new TRPCError6({ code: "BAD_REQUEST", message: "A carga pertence a outra \xE1rea financeira." });
     const conn = await getDirectConnection();
     try {
       const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
@@ -10829,17 +11754,17 @@ var cargoLoadsRouter = router({
   }),
   delete: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
-      throw new TRPCError5({ code: "FORBIDDEN" });
+      throw new TRPCError6({ code: "FORBIDDEN" });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(cargoLoads).where(eq7(cargoLoads.id, input.id));
     return { success: true };
   }),
   // ===== TRACKING PHOTOS =====
   listTrackingPhotos: protectedProcedure.input(z7.object({ cargoId: z7.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(cargoTrackingPhotos).where(eq7(cargoTrackingPhotos.cargoId, input.cargoId)).orderBy(cargoTrackingPhotos.createdAt);
   }),
   addTrackingPhoto: protectedProcedure.input(z7.object({
@@ -10849,7 +11774,7 @@ var cargoLoadsRouter = router({
     notes: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const uploaded = await cloudinaryUpload(input.photoBase64, `btree/tracking/${input.cargoId}`);
     await db.insert(cargoTrackingPhotos).values({
       cargoId: input.cargoId,
@@ -10863,26 +11788,26 @@ var cargoLoadsRouter = router({
   }),
   deleteTrackingPhoto: protectedProcedure.input(z7.object({ id: z7.number() })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
-      throw new TRPCError5({ code: "FORBIDDEN" });
+      throw new TRPCError6({ code: "FORBIDDEN" });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(cargoTrackingPhotos).where(eq7(cargoTrackingPhotos.id, input.id));
     return { success: true };
   }),
   // Listar fotos de tracking para o portal do cliente (público)
   getTrackingPhotosPublic: publicProcedure.input(z7.object({ cargoId: z7.number(), clientId: z7.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [load] = await db.select({ clientId: cargoLoads.clientId, clientName: cargoLoads.clientName }).from(cargoLoads).where(eq7(cargoLoads.id, input.cargoId)).limit(1);
-    if (!load) throw new TRPCError5({ code: "NOT_FOUND" });
+    if (!load) throw new TRPCError6({ code: "NOT_FOUND" });
     return db.select().from(cargoTrackingPhotos).where(eq7(cargoTrackingPhotos.cargoId, input.cargoId)).orderBy(cargoTrackingPhotos.createdAt);
   }),
   // ===== CAMINHÕES E MOTORISTAS =====
   // Listar caminhões disponíveis (tipo veículo)
   listTrucks: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const driverAlias3 = { id: collaborators.id, name: collaborators.name };
     const all = await db.select({
       id: equipment.id,
@@ -10902,7 +11827,7 @@ var cargoLoadsRouter = router({
   // Listar motoristas (colaboradores ativos, ordem alfabética)
   listDrivers: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select({
       id: collaborators.id,
       name: collaborators.name,
@@ -10913,7 +11838,7 @@ var cargoLoadsRouter = router({
   // Buscar informações do motorista logado (colaborador vinculado + caminhão)
   getMyDriverInfo: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [myCollaborator] = await db.select({
       id: collaborators.id,
       name: collaborators.name,
@@ -10955,7 +11880,7 @@ var cargoLoadsRouter = router({
   // Buscar cargas pendentes do motorista logado
   getMyPendingLoads: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [myCollaborator] = await db.select({ id: collaborators.id }).from(collaborators).where(eq7(collaborators.userId, ctx.user.id)).limit(1);
     if (!myCollaborator) return [];
     const loads = await db.select({
@@ -11002,9 +11927,9 @@ var cargoLoadsRouter = router({
     defaultWidthM: z7.string().optional(),
     defaultLengthM: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError5({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(equipment).set({
       defaultHeightM: input.defaultHeightM || null,
       defaultWidthM: input.defaultWidthM || null,
@@ -11027,7 +11952,7 @@ var cargoLoadsRouter = router({
     finalVolumeM3: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const updateData = {
       trackingStatus: input.stage,
@@ -11076,7 +12001,7 @@ var cargoLoadsRouter = router({
   // ===== FECHAMENTOS SEMANAIS =====
   listWeeklyClosings: protectedProcedure.input(z7.object({ clientId: z7.number().optional(), areaId: z7.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     try {
       const { atualizarTotaisFechamentos: atualizarTotaisFechamentos2 } = await Promise.resolve().then(() => (init_closingRefresh(), closingRefresh_exports));
       await atualizarTotaisFechamentos2(db.$client);
@@ -11175,16 +12100,16 @@ var cargoLoadsRouter = router({
     areaId: z7.number().nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const normalizeDate = (d2) => d2.length === 10 ? d2 + "T12:00:00" : d2;
     const weekStartStr = input.weekStart.slice(0, 10);
     const weekEndStr = input.weekEnd.slice(0, 10);
     const areaId = inputArea(input);
     const [client] = await db.select().from(clients).where(eq7(clients.id, input.clientId)).limit(1);
-    if (!client) throw new TRPCError5({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
+    if (!client) throw new TRPCError6({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
     const area = areaId === null ? null : await checkedArea(db, input.clientId, areaId, true);
     const terms = areaId === null ? { unit: "ton", unitPrice: input.pricePerTon || client.pricePerTon, paymentTermDays: client.paymentTermDays || 21 } : getAreaPriceTerms(client, area);
-    if (!terms || !terms.unitPrice) throw new TRPCError5({ code: "BAD_REQUEST", message: "Acordo da \xE1rea pendente ou sem pre\xE7o." });
+    if (!terms || !terms.unitPrice) throw new TRPCError6({ code: "BAD_REQUEST", message: "Acordo da \xE1rea pendente ou sem pre\xE7o." });
     const loads = await db.select().from(cargoLoads).where(and4(eq7(cargoLoads.clientId, input.clientId), eq7(cargoLoads.status, "entregue"), areaScopeCondition(cargoAreaId, areaId), sql2`DATE(COALESCE(${cargoLoads.deliveryDate}, ${cargoLoads.date})) >= ${weekStartStr}`, sql2`DATE(COALESCE(${cargoLoads.deliveryDate}, ${cargoLoads.date})) <= ${weekEndStr}`));
     const deductions = await db.select({ cargoLoadId: clientAdvanceDeductions.cargoLoadId, amount: clientAdvanceDeductions.amount }).from(clientAdvanceDeductions).innerJoin(clientAdvances, eq7(clientAdvanceDeductions.advanceId, clientAdvances.id)).where(and4(eq7(clientAdvanceDeductions.clientId, input.clientId), areaScopeCondition(advanceAreaId, areaId)));
     const deducted = new Set(deductions.map((row) => row.cargoLoadId));
@@ -11192,7 +12117,7 @@ var cargoLoadsRouter = router({
     for (const d2 of deductions) if (d2.cargoLoadId) deductedByLoad.set(d2.cargoLoadId, (deductedByLoad.get(d2.cargoLoadId) || 0) + Number(d2.amount || 0));
     const remainingValue = (load) => Math.max(0, (getCargoFinancialValue(load, areaId === null ? { ...client, pricePerTon: terms.unitPrice } : client, area) || 0) - (deductedByLoad.get(load.id) || 0));
     const eligible = loads.filter((load) => areaId === null ? !deducted.has(load.id) : load.paymentStatus !== "pago" && remainingValue(load) > 5e-3);
-    if (!eligible.length) throw new TRPCError5({ code: "BAD_REQUEST", message: "N\xE3o h\xE1 cargas entregues com saldo a fechar nesta \xE1rea e per\xEDodo." });
+    if (!eligible.length) throw new TRPCError6({ code: "BAD_REQUEST", message: "N\xE3o h\xE1 cargas entregues com saldo a fechar nesta \xE1rea e per\xEDodo." });
     const totalWeightKg = eligible.reduce((sum, load) => sum + (parseFloat(String(load.weightNetKg || load.weightOutKg || "0").replace(",", ".")) || 0), 0);
     const totalVolumeM3 = eligible.reduce((sum, load) => sum + (parseFloat(String(load.finalVolumeM3 || load.volumeM3 || "0").replace(",", ".")) || 0), 0);
     const totalAmount = eligible.reduce((sum, load) => sum + remainingValue(load), 0).toFixed(2);
@@ -11202,7 +12127,7 @@ var cargoLoadsRouter = router({
     try {
       [result] = await db.insert(cargoWeeklyClosings).values({ clientId: input.clientId, areaId, areaScopeKey: areaId ?? 0, weekStart: weekStartStr + " 12:00:00", weekEnd: weekEndStr + " 12:00:00", totalLoads: eligible.length, totalWeightKg: totalWeightKg.toFixed(2), totalVolumeM3: totalVolumeM3.toFixed(3), totalAmount, pricePerTon: String(areaId === null ? input.pricePerTon || terms.unitPrice : terms.unitPrice), priceUnit: terms.unit, dueDate: dueDate.toISOString().slice(0, 10) + " 12:00:00", status: "fechado", closedBy: ctx.user.id, notes: input.notes });
     } catch (e) {
-      if (e?.code === "ER_DUP_ENTRY" || e?.errno === 1062) throw new TRPCError5({ code: "CONFLICT", message: "J\xE1 existe um fechamento para este cliente, \xE1rea e semana." });
+      if (e?.code === "ER_DUP_ENTRY" || e?.errno === 1062) throw new TRPCError6({ code: "CONFLICT", message: "J\xE1 existe um fechamento para este cliente, \xE1rea e semana." });
       throw e;
     }
     const totalLoads = eligible.length;
@@ -11231,10 +12156,10 @@ var cargoLoadsRouter = router({
     areaId: z7.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const [scopeClosing] = await db.select().from(cargoWeeklyClosings).where(eq7(cargoWeeklyClosings.id, input.id)).limit(1);
-    if (!scopeClosing) throw new TRPCError5({ code: "NOT_FOUND", message: "Fechamento n\xE3o encontrado." });
-    if (hasField(input, "areaId") && !sameArea(scopeClosing.areaId, inputArea(input))) throw new TRPCError5({ code: "BAD_REQUEST", message: "Fechamento pertence a outra \xE1rea." });
+    if (!scopeClosing) throw new TRPCError6({ code: "NOT_FOUND", message: "Fechamento n\xE3o encontrado." });
+    if (hasField(input, "areaId") && !sameArea(scopeClosing.areaId, inputArea(input))) throw new TRPCError6({ code: "BAD_REQUEST", message: "Fechamento pertence a outra \xE1rea." });
     if (normalizeAreaId(scopeClosing.areaId) !== null) await checkedArea(db, scopeClosing.clientId, normalizeAreaId(scopeClosing.areaId), true);
     if (input.status === "pago") {
       try {
@@ -11304,10 +12229,10 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
   }),
   deleteWeeklyClosing: protectedProcedure.input(z7.object({ id: z7.number(), areaId: z7.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const [closing] = await db.select().from(cargoWeeklyClosings).where(eq7(cargoWeeklyClosings.id, input.id)).limit(1);
-    if (!closing) throw new TRPCError5({ code: "NOT_FOUND", message: "Fechamento n\xE3o encontrado." });
-    if (hasField(input, "areaId") && !sameArea(closing.areaId, inputArea(input))) throw new TRPCError5({ code: "BAD_REQUEST", message: "Fechamento pertence a outra \xE1rea." });
+    if (!closing) throw new TRPCError6({ code: "NOT_FOUND", message: "Fechamento n\xE3o encontrado." });
+    if (hasField(input, "areaId") && !sameArea(closing.areaId, inputArea(input))) throw new TRPCError6({ code: "BAD_REQUEST", message: "Fechamento pertence a outra \xE1rea." });
     await db.delete(cargoWeeklyClosings).where(and4(eq7(cargoWeeklyClosings.id, closing.id), areaScopeCondition(closingAreaId, normalizeAreaId(closing.areaId))));
     return { success: true };
   }),
@@ -11319,10 +12244,10 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     areaId: z7.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const [closing] = await db.select().from(cargoWeeklyClosings).where(eq7(cargoWeeklyClosings.id, input.id)).limit(1);
-    if (!closing) throw new TRPCError5({ code: "NOT_FOUND", message: "Fechamento n\xE3o encontrado." });
-    if (hasField(input, "areaId") && !sameArea(closing.areaId, inputArea(input))) throw new TRPCError5({ code: "BAD_REQUEST", message: "Fechamento pertence a outra \xE1rea." });
+    if (!closing) throw new TRPCError6({ code: "NOT_FOUND", message: "Fechamento n\xE3o encontrado." });
+    if (hasField(input, "areaId") && !sameArea(closing.areaId, inputArea(input))) throw new TRPCError6({ code: "BAD_REQUEST", message: "Fechamento pertence a outra \xE1rea." });
     const conn = await getDirectConnection();
     try {
       const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
@@ -11339,7 +12264,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
   // ===== DOCUMENTOS DO CLIENTE =====
   listClientDocuments: protectedProcedure.input(z7.object({ clientId: z7.number(), areaId: z7.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     await checkedArea(db, input.clientId, inputArea(input), false);
     let conn = null;
     try {
@@ -11368,7 +12293,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       return rows2 || [];
     } catch (err) {
       console.error("[listClientDocuments] Error:", err?.message, err?.code, err?.errno);
-      throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao listar documentos: ${err?.message || "Desconhecido"}` });
+      throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao listar documentos: ${err?.message || "Desconhecido"}` });
     } finally {
       if (conn) await conn.end().catch(() => {
       });
@@ -11385,7 +12310,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     notes: z7.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     await checkedArea(db, input.clientId, inputArea(input), false);
     const uploaded = await cloudinaryUpload(
       input.fileBase64,
@@ -11418,7 +12343,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       return { success: true, id: result?.insertId, url: uploaded.url };
     } catch (err) {
       console.error("[uploadClientDocument] Error:", err?.message, err?.code, err?.errno, err?.sqlState);
-      throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao salvar documento: ${err?.message || "Desconhecido"}` });
+      throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao salvar documento: ${err?.message || "Desconhecido"}` });
     } finally {
       if (conn) await conn.end().catch(() => {
       });
@@ -11432,7 +12357,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       return { success: true };
     } catch (err) {
       console.error("[deleteClientDocument] Error:", err?.message);
-      throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao excluir documento: ${err?.message || "Desconhecido"}` });
+      throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao excluir documento: ${err?.message || "Desconhecido"}` });
     } finally {
       if (conn) await conn.end().catch(() => {
       });
@@ -11448,7 +12373,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     paymentTermDays: z7.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const { clientId, ...rest } = input;
     await db.update(clients).set(rest).where(eq7(clients.id, clientId));
     return { success: true };
@@ -11456,7 +12381,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
   // ===== RELATÓRIO POR DESTINO/COMPRADOR =====
   markReceivedByBuyer: protectedProcedure.input(z7.object({ id: z7.number(), received: z7.boolean() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.update(cargoLoads).set({
       receivedByBuyer: input.received ? 1 : 0,
@@ -11534,7 +12459,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     areaId: z7.number().nullable().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const conditions = [];
     const areaCondition2 = listArea(input);
     if (areaCondition2) conditions.push(areaCondition2);
@@ -11639,7 +12564,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     contractor: z7.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const conditions = [
       sql2`${cargoLoads.thirdPartyContractor} IS NOT NULL AND ${cargoLoads.thirdPartyContractor} != ''`
     ];
@@ -11735,7 +12660,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
   // dados mínimos pra identificar a carga — nunca a carga inteira.
   getByNfUploadToken: publicProcedure.input(z7.object({ token: z7.string().min(10) })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({
       id: cargoLoads.id,
       vehiclePlate: cargoLoads.vehiclePlate,
@@ -11747,7 +12672,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       invoiceNumber: cargoLoads.invoiceNumber,
       invoiceUrl: cargoLoads.invoiceUrl
     }).from(cargoLoads).where(eq7(cargoLoads.nfUploadToken, input.token)).limit(1);
-    if (!cargo) throw new TRPCError5({ code: "NOT_FOUND", message: "Link inv\xE1lido ou expirado." });
+    if (!cargo) throw new TRPCError6({ code: "NOT_FOUND", message: "Link inv\xE1lido ou expirado." });
     const unit = await resolveDestinationUnit(db, cargo.destinationId);
     let displayWeightNetKg = cargo.weightNetKg;
     if (!displayWeightNetKg || parseFloat(displayWeightNetKg.replace(",", ".")) <= 0) {
@@ -11770,7 +12695,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     noteUnit: z7.enum(["m3", "ton"]).optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({
       id: cargoLoads.id,
       responsavelCargaId: cargoLoads.responsavelCargaId,
@@ -11782,7 +12707,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
       destinationId: cargoLoads.destinationId,
       vehicleId: cargoLoads.vehicleId
     }).from(cargoLoads).where(eq7(cargoLoads.nfUploadToken, input.token)).limit(1);
-    if (!cargo) throw new TRPCError5({ code: "NOT_FOUND", message: "Link inv\xE1lido ou expirado." });
+    if (!cargo) throw new TRPCError6({ code: "NOT_FOUND", message: "Link inv\xE1lido ou expirado." });
     const updateData = {};
     if (input.invoiceFileBase64) {
       try {
@@ -11791,7 +12716,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
         updateData.invoiceUrl = uploaded.url;
       } catch (e) {
         console.error("[cargoLoads.uploadNfByToken] Erro upload NF:", e);
-        throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao enviar o arquivo. Tente novamente." });
+        throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao enviar o arquivo. Tente novamente." });
       }
     }
     let effectiveInvoiceNumber = input.invoiceNumber?.trim() || void 0;
@@ -11812,7 +12737,7 @@ Valor: R$ ${totalAmount}${input.receiptUrl ? "\nComprovante anexado." : ""}`
     if (effectiveInvoiceNumber) {
       const existing = await db.select({ id: cargoLoads.id }).from(cargoLoads).where(and4(eq7(cargoLoads.invoiceNumber, effectiveInvoiceNumber), ne(cargoLoads.id, cargo.id))).limit(1);
       if (existing.length > 0) {
-        throw new TRPCError5({ code: "CONFLICT", message: `Nota fiscal ${effectiveInvoiceNumber} j\xE1 est\xE1 sendo usada em outra carga.` });
+        throw new TRPCError6({ code: "CONFLICT", message: `Nota fiscal ${effectiveInvoiceNumber} j\xE1 est\xE1 sendo usada em outra carga.` });
       }
     }
     if (input.invoiceNumber !== void 0 || effectiveInvoiceNumber) updateData.invoiceNumber = effectiveInvoiceNumber || null;
@@ -11881,7 +12806,7 @@ init_db();
 init_schema();
 init_cloudinary();
 import { z as z8 } from "zod";
-import { TRPCError as TRPCError6 } from "@trpc/server";
+import { TRPCError as TRPCError7 } from "@trpc/server";
 import { eq as eq8, desc as desc4, sql as sql3, inArray as inArray2 } from "drizzle-orm";
 async function resolveAllowedClientIds2(db, ctx) {
   if (ctx.user.role === "admin") return null;
@@ -11920,7 +12845,7 @@ var machineHoursRouter = router({
   // === HORAS TRABALHADAS ===
   listHours: protectedProcedure.input(z8.object({ equipmentId: z8.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const allowedClientIds = await resolveAllowedClientIds2(db, ctx);
     let allowedLocationIds = null;
     if (allowedClientIds && allowedClientIds.length > 0) {
@@ -11956,7 +12881,7 @@ var machineHoursRouter = router({
     workLocationId: z8.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { workLocationId, ...rest } = input;
     await db.insert(machineHours).values({
       ...rest,
@@ -11978,7 +12903,7 @@ var machineHoursRouter = router({
     workLocationId: z8.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, date, ...rest } = input;
     await db.update(machineHours).set({
       ...rest,
@@ -11987,16 +12912,16 @@ var machineHoursRouter = router({
     return { success: true };
   }),
   deleteHours: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError7({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(machineHours).where(eq8(machineHours.id, input.id));
     return { success: true };
   }),
   // === MANUTENÇÕES ===
   listMaintenance: protectedProcedure.input(z8.object({ equipmentId: z8.number().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     if (input?.equipmentId) return results.filter((r) => r.equipmentId === input.equipmentId);
     return results;
@@ -12018,7 +12943,7 @@ var machineHoursRouter = router({
     nextMaintenanceHours: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(machineMaintenance).values({
       ...input,
       date: input.date,
@@ -12065,7 +12990,7 @@ var machineHoursRouter = router({
     nextMaintenanceHours: z8.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, date, ...rest } = input;
     await db.update(machineMaintenance).set({
       ...rest,
@@ -12074,16 +12999,16 @@ var machineHoursRouter = router({
     return { success: true };
   }),
   deleteMaintenance: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError7({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(machineMaintenance).where(eq8(machineMaintenance.id, input.id));
     return { success: true };
   }),
   // === ABASTECIMENTO ===
   listFuel: protectedProcedure.input(z8.object({ equipmentId: z8.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const allowedClientIds = await resolveAllowedClientIds2(db, ctx);
     let allowedLocationIds = null;
     if (allowedClientIds && allowedClientIds.length > 0) {
@@ -12119,7 +13044,7 @@ var machineHoursRouter = router({
     workLocationId: z8.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { workLocationId, ...rest } = input;
     await db.insert(machineFuel).values({
       ...rest,
@@ -12159,22 +13084,22 @@ var machineHoursRouter = router({
     workLocationId: z8.number().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, ...rest } = input;
     await db.update(machineFuel).set(rest).where(eq8(machineFuel.id, id));
     return { success: true };
   }),
   deleteFuel: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError7({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(machineFuel).where(eq8(machineFuel.id, input.id));
     return { success: true };
   }),
   // === ALERTAS DE MANUTENÇÃO PREVENTIVA ===
   maintenanceAlerts: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const equipmentList = await db.select().from(equipment);
@@ -12216,7 +13141,7 @@ var machineHoursRouter = router({
   // === RESUMO POR EQUIPAMENTO ===
   equipmentSummary: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const equipmentList = await db.select().from(equipment);
     const hoursRecords = await db.select().from(machineHours).orderBy(desc4(machineHours.createdAt));
     const maintenances = await db.select().from(machineMaintenance).orderBy(desc4(machineMaintenance.createdAt));
@@ -12259,7 +13184,7 @@ var machineHoursRouter = router({
   // === ÓLEO ===
   listOil: protectedProcedure.input(z8.object({ equipmentId: z8.number().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(equipmentOilRecords).orderBy(desc4(equipmentOilRecords.createdAt));
     return input?.equipmentId ? results.filter((r) => r.equipmentId === input.equipmentId) : results;
   }),
@@ -12276,7 +13201,7 @@ var machineHoursRouter = router({
     notes: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(equipmentOilRecords).values({
       ...input,
       date: input.date,
@@ -12322,7 +13247,7 @@ var machineHoursRouter = router({
     notes: z8.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, date, ...rest } = input;
     await db.update(equipmentOilRecords).set({
       ...rest,
@@ -12331,16 +13256,16 @@ var machineHoursRouter = router({
     return { success: true };
   }),
   deleteOil: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError7({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(equipmentOilRecords).where(eq8(equipmentOilRecords.id, input.id));
     return { success: true };
   }),
   // === ESTOQUE DE ÓLEO ===
   listOilStock: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(oilStock).orderBy(desc4(oilStock.createdAt));
   }),
   addOilStock: protectedProcedure.input(z8.object({
@@ -12354,7 +13279,7 @@ var machineHoursRouter = router({
     notes: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let photoUrl;
     if (input.photoBase64 && input.photoBase64.startsWith("data:")) {
       const res2 = await cloudinaryUpload(input.photoBase64, "btree/oil-stock");
@@ -12389,9 +13314,9 @@ var machineHoursRouter = router({
     return { id: res.insertId, updated: false };
   }),
   deleteOilStock: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError6({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError7({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(oilStock).where(eq8(oilStock.id, input.id));
     return { success: true };
   }),
@@ -12405,13 +13330,13 @@ var machineHoursRouter = router({
     notes: z8.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [stockItem] = await db.select().from(oilStock).where(eq8(oilStock.id, input.oilStockId));
-    if (!stockItem) throw new TRPCError6({ code: "NOT_FOUND", message: "Item de estoque n\xE3o encontrado" });
+    if (!stockItem) throw new TRPCError7({ code: "NOT_FOUND", message: "Item de estoque n\xE3o encontrado" });
     const currentQty = parseFloat(stockItem.quantityLiters);
     const usedQty = parseFloat(input.quantityLiters);
     if (usedQty > currentQty) {
-      throw new TRPCError6({ code: "BAD_REQUEST", message: `Estoque insuficiente. Dispon\xEDvel: ${currentQty.toFixed(2)}L` });
+      throw new TRPCError7({ code: "BAD_REQUEST", message: `Estoque insuficiente. Dispon\xEDvel: ${currentQty.toFixed(2)}L` });
     }
     const newQty = (currentQty - usedQty).toFixed(2);
     await db.update(oilStock).set({ quantityLiters: newQty }).where(eq8(oilStock.id, input.oilStockId));
@@ -12464,7 +13389,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z9 } from "zod";
-import { TRPCError as TRPCError7 } from "@trpc/server";
+import { TRPCError as TRPCError8 } from "@trpc/server";
 import { eq as eq9, desc as desc5, inArray as inArray3, sql as sql4 } from "drizzle-orm";
 
 // server/notifyTeam.ts
@@ -12567,9 +13492,9 @@ Registrado por: ${payload.registeredBy}` : ""
 function sanitizeNumeric(value) {
   if (value === null || value === void 0 || value === "") return null;
   const str = String(value).trim().replace(",", ".");
-  const num5 = parseFloat(str);
-  if (isNaN(num5)) return null;
-  return String(num5);
+  const num6 = parseFloat(str);
+  if (isNaN(num6)) return null;
+  return String(num6);
 }
 
 // server/routers/vehicleRecords.ts
@@ -12579,7 +13504,7 @@ var vehicleRecordsRouter = router({
     recordType: z9.enum(["abastecimento", "manutencao", "km"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let allowedClientIds = null;
     if (ctx.user.role !== "admin") {
       try {
@@ -12670,7 +13595,7 @@ var vehicleRecordsRouter = router({
     oil2tMl: z9.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let photoUrl;
     let photosJson;
     const photosToUpload = input.photosBase64?.filter((p) => p.startsWith("data:")) || [];
@@ -12811,7 +13736,7 @@ var vehicleRecordsRouter = router({
     oil2tMl: z9.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, photoBase64, photosBase64, date, ...rest } = input;
     let photoUrl;
     let photosJson;
@@ -12851,9 +13776,9 @@ var vehicleRecordsRouter = router({
     return { success: true };
   }),
   delete: protectedProcedure.input(z9.object({ id: z9.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError7({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError8({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(vehicleRecords).where(eq9(vehicleRecords.id, input.id));
     return { success: true };
   })
@@ -12865,13 +13790,13 @@ init_db();
 init_schema();
 init_cloudinary();
 import { z as z10 } from "zod";
-import { TRPCError as TRPCError8 } from "@trpc/server";
+import { TRPCError as TRPCError9 } from "@trpc/server";
 import { eq as eq10, desc as desc6 } from "drizzle-orm";
 var partsRouter = router({
   // === PEÇAS ===
   listParts: protectedProcedure.input(z10.object({ search: z10.string().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(parts).orderBy(desc6(parts.createdAt));
     if (input?.search) {
       const s = input.search.toLowerCase();
@@ -12894,7 +13819,7 @@ var partsRouter = router({
     notes: z10.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let photoUrl;
     if (input.photoBase64) {
       const result = await cloudinaryUpload(input.photoBase64, "btree/parts");
@@ -12919,7 +13844,7 @@ var partsRouter = router({
     active: z10.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, photoBase64, ...rest } = input;
     const updateData = { ...rest, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     if (photoBase64) {
@@ -12930,9 +13855,9 @@ var partsRouter = router({
     return { success: true };
   }),
   deletePart: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError8({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError9({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(parts).where(eq10(parts.id, input.id));
     return { success: true };
   }),
@@ -12941,7 +13866,7 @@ var partsRouter = router({
     status: z10.enum(["pendente", "aprovado", "rejeitado", "comprado", "entregue"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(partsRequests).orderBy(desc6(partsRequests.createdAt));
     if (input?.status) return results.filter((r) => r.status === input.status);
     return results;
@@ -12957,7 +13882,7 @@ var partsRouter = router({
     estimatedCost: z10.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(partsRequests).values({
       ...input,
       status: "pendente",
@@ -12986,10 +13911,10 @@ var partsRouter = router({
     rejectionReason: z10.string().optional()
   })).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin" && input.status !== "comprado" && input.status !== "entregue") {
-      throw new TRPCError8({ code: "FORBIDDEN", message: "Apenas admins podem aprovar/rejeitar" });
+      throw new TRPCError9({ code: "FORBIDDEN", message: "Apenas admins podem aprovar/rejeitar" });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const updateData = {
       status: input.status,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -13003,9 +13928,9 @@ var partsRouter = router({
     return { success: true };
   }),
   deleteRequest: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError8({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError9({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(partsRequests).where(eq10(partsRequests.id, input.id));
     return { success: true };
   })
@@ -13016,12 +13941,12 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z11 } from "zod";
-import { TRPCError as TRPCError9 } from "@trpc/server";
+import { TRPCError as TRPCError10 } from "@trpc/server";
 import { eq as eq11, desc as desc7, ne as ne2 } from "drizzle-orm";
 var clientsRouter = router({
   list: protectedProcedure.input(z11.object({ search: z11.string().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select().from(clients).where(ne2(clients.active, 0)).orderBy(desc7(clients.createdAt));
     if (input?.search) {
       const s = input.search.toLowerCase();
@@ -13044,7 +13969,7 @@ var clientsRouter = router({
     paymentTermDays: z11.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(clients).values({ ...input, createdBy: ctx.user.id });
     return { success: true };
   }),
@@ -13063,15 +13988,15 @@ var clientsRouter = router({
     paymentTermDays: z11.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, ...rest } = input;
     await db.update(clients).set({ ...rest, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq11(clients.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z11.object({ id: z11.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError9({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError10({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(clients).set({ active: 0, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq11(clients.id, input.id));
     return { success: true };
   })
@@ -13084,7 +14009,7 @@ init_schema();
 init_clientAreaScope();
 import { z as z12 } from "zod";
 import { and as and5, eq as eq12, isNull as isNull2 } from "drizzle-orm";
-import { TRPCError as TRPCError10 } from "@trpc/server";
+import { TRPCError as TRPCError11 } from "@trpc/server";
 var name = z12.string().trim().min(1).max(255);
 var optionalText = z12.string().trim().max(255).optional();
 function locationName(client, area) {
@@ -13092,7 +14017,7 @@ function locationName(client, area) {
 }
 async function database() {
   const db = await getDb();
-  if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel." });
+  if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel." });
   return db;
 }
 var clientAreasRouter = router({
@@ -13115,9 +14040,9 @@ var clientAreasRouter = router({
     const db = await database();
     return db.transaction(async (tx) => {
       const [client] = await tx.select({ id: clients.id, name: clients.name }).from(clients).where(eq12(clients.id, input.clientId)).limit(1);
-      if (!client) throw new TRPCError10({ code: "NOT_FOUND", message: "Cliente n\xE3o encontrado." });
+      if (!client) throw new TRPCError11({ code: "NOT_FOUND", message: "Cliente n\xE3o encontrado." });
       const [duplicate] = await tx.select({ id: clientAreas.id }).from(clientAreas).where(and5(eq12(clientAreas.clientId, input.clientId), eq12(clientAreas.name, input.name), input.fieldName ? eq12(clientAreas.fieldName, input.fieldName) : isNull2(clientAreas.fieldName))).limit(1);
-      if (duplicate) throw new TRPCError10({ code: "CONFLICT", message: "J\xE1 existe uma \xE1rea com esse nome neste cliente." });
+      if (duplicate) throw new TRPCError11({ code: "CONFLICT", message: "J\xE1 existe uma \xE1rea com esse nome neste cliente." });
       const [location] = await tx.insert(gpsLocations).values({ name: locationName(client.name, input), clientId: input.clientId, latitude: "", longitude: "", radiusMeters: 2e3, isActive: 1, notes: "Local de custos da \xE1rea. GPS ainda n\xE3o informado; sem detec\xE7\xE3o autom\xE1tica.", createdBy: ctx.user.id, createdByName: ctx.user.name });
       const [created] = await tx.insert(clientAreas).values({ ...input, fieldName: input.fieldName || null, workLocationId: Number(location.insertId), agreementStatus: "pending", createdBy: ctx.user.id });
       return { success: true, id: Number(created.insertId), workLocationId: Number(location.insertId) };
@@ -13138,14 +14063,14 @@ var clientAreasRouter = router({
     const db = await database();
     const result = await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(clientAreas).where(eq12(clientAreas.id, input.id)).limit(1);
-      if (!existing) throw new TRPCError10({ code: "NOT_FOUND", message: "\xC1rea n\xE3o encontrada." });
+      if (!existing) throw new TRPCError11({ code: "NOT_FOUND", message: "\xC1rea n\xE3o encontrada." });
       const { id, ...patch } = input;
       const data3 = { ...patch, ...patch.fieldName !== void 0 ? { fieldName: patch.fieldName || null } : {}, ...patch.unitPrice !== void 0 ? { unitPrice: patch.unitPrice.replace(",", ".") } : {} };
       const merged = { ...existing, ...data3 };
       if (merged.agreementStatus === "confirmed") requireConfirmedArea(merged);
       if (patch.name && patch.name !== existing.name || patch.fieldName !== void 0 && (patch.fieldName || null) !== existing.fieldName) {
         const [dup] = await tx.select({ id: clientAreas.id }).from(clientAreas).where(and5(eq12(clientAreas.clientId, existing.clientId), eq12(clientAreas.name, merged.name), merged.fieldName ? eq12(clientAreas.fieldName, merged.fieldName) : isNull2(clientAreas.fieldName))).limit(1);
-        if (dup) throw new TRPCError10({ code: "CONFLICT", message: "J\xE1 existe uma \xE1rea com esse nome." });
+        if (dup) throw new TRPCError11({ code: "CONFLICT", message: "J\xE1 existe uma \xE1rea com esse nome." });
       }
       await tx.update(clientAreas).set(data3).where(eq12(clientAreas.id, id));
       if (merged.agreementStatus === "confirmed") {
@@ -13177,7 +14102,7 @@ init_db();
 init_schema();
 init_clientAreaScope();
 import { z as z13 } from "zod";
-import { TRPCError as TRPCError11 } from "@trpc/server";
+import { TRPCError as TRPCError12 } from "@trpc/server";
 import { eq as eq13, and as and6, isNull as isNull3, like as like3, desc as desc8, inArray as inArray4 } from "drizzle-orm";
 import bcrypt3 from "bcryptjs";
 function normalizePortalAreaId(value) {
@@ -13402,10 +14327,10 @@ async function assertExistingAreaScope(db, table, id, requestedArea, clientId) {
   if (requestedArea === void 0) return null;
   const normalized = normalizePortalAreaId(requestedArea);
   const [row] = await db.select().from(table).where(eq13(table.id, id)).limit(1);
-  if (!row) throw new TRPCError11({ code: "NOT_FOUND", message: "Registro n\xE3o encontrado." });
+  if (!row) throw new TRPCError12({ code: "NOT_FOUND", message: "Registro n\xE3o encontrado." });
   const stored = normalizePortalAreaId(row.areaId);
   if (stored !== normalized) {
-    throw new TRPCError11({ code: "FORBIDDEN", message: "O registro pertence a outra \xE1rea." });
+    throw new TRPCError12({ code: "FORBIDDEN", message: "O registro pertence a outra \xE1rea." });
   }
   if (clientId !== void 0 && normalized !== null) await findArea(db, clientId, normalized);
   return row;
@@ -13443,7 +14368,7 @@ var clientPortalRouter = router({
     }).from(clients).where(
       and6(eq13(clients.id, input.clientId), eq13(clients.email, input.email.trim().toLowerCase()))
     ).limit(1);
-    if (!client) throw new TRPCError11({ code: "UNAUTHORIZED", message: "Acesso n\xE3o autorizado." });
+    if (!client) throw new TRPCError12({ code: "UNAUTHORIZED", message: "Acesso n\xE3o autorizado." });
     const areaId = normalizePortalAreaId(input.areaId);
     const selectedAreaRow = await findArea(db, input.clientId, areaId);
     const selectedArea = publicArea(selectedAreaRow);
@@ -13589,7 +14514,7 @@ var clientPortalRouter = router({
     const areaId = input?.areaId === void 0 ? void 0 : normalizePortalAreaId(input.areaId);
     if (areaId !== void 0 && areaId !== null) {
       const [area] = await db.select({ id: clientAreas.id }).from(clientAreas).where(eq13(clientAreas.id, areaId)).limit(1);
-      if (!area) throw new TRPCError11({ code: "NOT_FOUND", message: "\xC1rea n\xE3o encontrada." });
+      if (!area) throw new TRPCError12({ code: "NOT_FOUND", message: "\xC1rea n\xE3o encontrada." });
     }
     const scope = areaId === void 0 ? void 0 : await areaCondition(clientPayments, areaId);
     const rows2 = await db.select({ payment: clientPayments, clientName: clients.name }).from(clientPayments).leftJoin(clients, eq13(clientPayments.clientId, clients.id)).where(scope).orderBy(desc8(clientPayments.dueDate));
@@ -13625,7 +14550,7 @@ var clientPortalRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [existing] = await db.select().from(clientPayments).where(eq13(clientPayments.id, input.id)).limit(1);
-    if (!existing) throw new TRPCError11({ code: "NOT_FOUND", message: "Pagamento n\xE3o encontrado." });
+    if (!existing) throw new TRPCError12({ code: "NOT_FOUND", message: "Pagamento n\xE3o encontrado." });
     await assertExistingAreaScope(db, clientPayments, input.id, input.areaId, existing.clientId);
     const { id, areaId, paidAt, dueDate, grossAmount, netAmount, ...rest } = input;
     const updateData = { ...rest };
@@ -14143,13 +15068,13 @@ init_permissions();
 init_db();
 init_schema();
 import { z as z17 } from "zod";
-import { TRPCError as TRPCError13 } from "@trpc/server";
+import { TRPCError as TRPCError14 } from "@trpc/server";
 import { eq as eq17, desc as desc11 } from "drizzle-orm";
 var purchaseOrdersRouter = router({
   // Listar todos os pedidos
   listOrders: moduleProcedure("pecas").input(z17.object({ status: z17.string().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const orders = await db.select().from(purchaseOrders).orderBy(desc11(purchaseOrders.createdAt));
     if (input?.status) return orders.filter((o) => o.status === input.status);
     return orders;
@@ -14157,9 +15082,9 @@ var purchaseOrdersRouter = router({
   // Buscar pedido com itens
   getOrder: moduleProcedure("pecas").input(z17.object({ id: z17.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [order] = await db.select().from(purchaseOrders).where(eq17(purchaseOrders.id, input.id));
-    if (!order) throw new TRPCError13({ code: "NOT_FOUND" });
+    if (!order) throw new TRPCError14({ code: "NOT_FOUND" });
     const items = await db.select().from(purchaseOrderItems).where(eq17(purchaseOrderItems.orderId, input.id));
     return { ...order, items };
   }),
@@ -14180,7 +15105,7 @@ var purchaseOrdersRouter = router({
     })).min(1)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [result] = await db.insert(purchaseOrders).values({
       title: input.title,
       notes: input.notes,
@@ -14225,7 +15150,7 @@ var purchaseOrdersRouter = router({
     status: z17.enum(["rascunho", "enviado", "aprovado", "rejeitado", "comprado"])
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const updateData = { status: input.status, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     if (input.status === "aprovado") {
       updateData.approvedBy = ctx.user.id;
@@ -14249,9 +15174,9 @@ var purchaseOrdersRouter = router({
   }),
   // Deletar pedido
   deleteOrder: protectedProcedure.input(z17.object({ id: z17.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError13({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError14({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(purchaseOrders).where(eq17(purchaseOrders.id, input.id));
     return { success: true };
   })
@@ -14263,7 +15188,7 @@ init_db();
 init_schema();
 init_notification();
 import { z as z18 } from "zod";
-import { TRPCError as TRPCError14 } from "@trpc/server";
+import { TRPCError as TRPCError15 } from "@trpc/server";
 import { eq as eq18, desc as desc12, and as and8, inArray as inArray5, lt, sql as sql6 } from "drizzle-orm";
 var attendanceRouter = router({
   // Listar presenças com filtros
@@ -14275,7 +15200,7 @@ var attendanceRouter = router({
     paymentStatus: z18.enum(["pendente", "pago"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     try {
       let allowedClientIds = null;
       if (ctx.user.role !== "admin") {
@@ -14389,7 +15314,7 @@ var attendanceRouter = router({
       }));
     } catch (err) {
       console.error("[attendance.list] ERRO DETALHADO:", err.message, err.stack);
-      throw new TRPCError14({
+      throw new TRPCError15({
         code: "INTERNAL_SERVER_ERROR",
         message: `Failed query: ${err.message}`
       });
@@ -14412,7 +15337,7 @@ var attendanceRouter = router({
     workLocationId: z18.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const [collaborator] = await db.select({ name: collaborators.name, monthlySalary: collaborators.monthlySalary }).from(collaborators).where(eq18(collaborators.id, input.collaboratorId));
     const collaboratorName = collaborator?.name || `ID ${input.collaboratorId}`;
     let finalDailyValue = input.dailyValue;
@@ -14491,7 +15416,7 @@ Registrado por: ${ctx.user.name}`
     paid: z18.boolean()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(collaboratorAttendance).set({
       paymentStatusCa: input.paid ? "pago" : "pendente",
       paidAt: input.paid ? (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ") : null
@@ -14500,17 +15425,17 @@ Registrado por: ${ctx.user.name}`
   }),
   // Deletar presença
   delete: protectedProcedure.input(z18.object({ id: z18.number() })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError14({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(collaboratorAttendance).where(eq18(collaboratorAttendance.id, input.id));
     return { success: true };
   }),
   // Verificar e notificar pagamentos pendentes há mais de 7 dias
   checkPendingPayments: protectedProcedure.mutation(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError14({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError15({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const sevenDaysAgoDate = /* @__PURE__ */ new Date();
     sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 7);
     const sevenDaysAgo = sevenDaysAgoDate.toISOString().slice(0, 19).replace("T", " ");
@@ -14559,7 +15484,7 @@ ${lines}`
     locationName: z18.string().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     let resolvedWorkLocationId = input.workLocationId || null;
     let resolvedLocationName = input.locationName || null;
     if (resolvedLocationName && !resolvedWorkLocationId) {
@@ -14583,7 +15508,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z19 } from "zod";
-import { TRPCError as TRPCError15 } from "@trpc/server";
+import { TRPCError as TRPCError16 } from "@trpc/server";
 import { eq as eq19, and as and9, desc as desc13, gte as gte2, lte as lte2, sql as sql7 } from "drizzle-orm";
 function getTraccarUrl() {
   return process.env.TRACCAR_URL || "";
@@ -14609,12 +15534,12 @@ function traccarAuth() {
     Accept: "application/json"
   };
 }
-async function traccarFetch(path4, options) {
+async function traccarFetch(path5, options) {
   const TRACCAR_URL3 = getTraccarUrl();
   if (!TRACCAR_URL3) {
     throw new Error("Traccar nao configurado. Configure TRACCAR_URL e TRACCAR_TOKEN.");
   }
-  const url = `${TRACCAR_URL3}/api${path4}`;
+  const url = `${TRACCAR_URL3}/api${path5}`;
   const res = await fetch(url, {
     ...options,
     headers: { ...traccarAuth(), ...options?.headers || {} }
@@ -14763,7 +15688,7 @@ var traccarRouter = router({
   /** Lista todos os vinculos GPS-equipamento */
   listDeviceLinks: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     return db.select({
       id: gpsDeviceLinks.id,
       equipmentId: gpsDeviceLinks.equipmentId,
@@ -14783,7 +15708,7 @@ var traccarRouter = router({
     traccarUniqueId: z19.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq19(gpsDeviceLinks.equipmentId, input.equipmentId));
     const [result] = await db.insert(gpsDeviceLinks).values({
       equipmentId: input.equipmentId,
@@ -14798,7 +15723,7 @@ var traccarRouter = router({
   /** Remove vinculo GPS de um equipamento */
   unlinkDevice: protectedProcedure.input(z19.object({ linkId: z19.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     await db.update(gpsDeviceLinks).set({ active: 0 }).where(eq19(gpsDeviceLinks.id, input.linkId));
     return { ok: true };
   }),
@@ -14809,7 +15734,7 @@ var traccarRouter = router({
    */
   syncDailyHours: protectedProcedure.input(z19.object({ date: z19.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
     const from = new Date(targetDate);
     from.setHours(0, 0, 0, 0);
@@ -14871,7 +15796,7 @@ var traccarRouter = router({
   /** Horas acumuladas por equipamento (GPS + manual) */
   equipmentHoursSummary: protectedProcedure.input(z19.object({ equipmentId: z19.number().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const baseQuery = db.select({
       equipmentId: gpsHoursLog.equipmentId,
       equipmentName: equipment.name,
@@ -14887,14 +15812,14 @@ var traccarRouter = router({
   /** Log de horas de um equipamento especifico */
   hoursLog: protectedProcedure.input(z19.object({ equipmentId: z19.number(), limit: z19.number().default(30) })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     return db.select().from(gpsHoursLog).where(eq19(gpsHoursLog.equipmentId, input.equipmentId)).orderBy(desc13(gpsHoursLog.date)).limit(input.limit);
   }),
   // ─── PLANOS DE MANUTENCAO PREVENTIVA ────────────────────────────────────────
   /** Lista planos de manutencao de um equipamento */
   listMaintenancePlans: protectedProcedure.input(z19.object({ equipmentId: z19.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     return db.select().from(preventiveMaintenancePlans).where(and9(
       eq19(preventiveMaintenancePlans.equipmentId, input.equipmentId),
       eq19(preventiveMaintenancePlans.active, 1)
@@ -14912,7 +15837,7 @@ var traccarRouter = router({
     notes: z19.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     if (input.id) {
       await db.update(preventiveMaintenancePlans).set({
         name: input.name,
@@ -14940,7 +15865,7 @@ var traccarRouter = router({
   /** Remove um plano de manutencao */
   deleteMaintenancePlan: protectedProcedure.input(z19.object({ id: z19.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     await db.update(preventiveMaintenancePlans).set({ active: 0 }).where(eq19(preventiveMaintenancePlans.id, input.id));
     return { ok: true };
   }),
@@ -14948,7 +15873,7 @@ var traccarRouter = router({
   /** Lista alertas pendentes (todos ou por equipamento) */
   listAlerts: protectedProcedure.input(z19.object({ equipmentId: z19.number().optional(), status: z19.string().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const conditions = [];
     if (input.equipmentId) conditions.push(eq19(preventiveMaintenanceAlerts.equipmentId, input.equipmentId));
     if (input.status) conditions.push(eq19(preventiveMaintenanceAlerts.status, input.status));
@@ -14975,7 +15900,7 @@ var traccarRouter = router({
     resolvedHourMeter: z19.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const now = (/* @__PURE__ */ new Date()).toISOString();
     await db.update(preventiveMaintenanceAlerts).set({
       status: input.status,
@@ -15000,7 +15925,7 @@ var traccarRouter = router({
    */
   syncDailyOdometer: protectedProcedure.input(z19.object({ date: z19.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
     const from = new Date(targetDate);
     from.setHours(0, 0, 0, 0);
@@ -15036,7 +15961,7 @@ var traccarRouter = router({
    */
   detectFreightTrips: protectedProcedure.input(z19.object({ date: z19.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     const targetDate = input.date ? new Date(input.date) : new Date(Date.now() - 864e5);
     const from = new Date(targetDate);
     from.setHours(0, 0, 0, 0);
@@ -15144,7 +16069,7 @@ var traccarRouter = router({
     notes: z19.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponivel" });
     await db.update(autoFreightTrips).set({ status: input.status, notes: input.notes }).where(eq19(autoFreightTrips.id, input.id));
     return { ok: true };
   }),
@@ -16726,13 +17651,13 @@ init_db();
 init_clientAreaScope();
 init_schema();
 import { z as z27 } from "zod";
-import { TRPCError as TRPCError17 } from "@trpc/server";
+import { TRPCError as TRPCError18 } from "@trpc/server";
 import { eq as eq26, desc as desc19, and as and16, gte as gte7, lte as lte7, sql as sql14, inArray as inArray7 } from "drizzle-orm";
 var reportsRouter = router({
   // ── Listar todos os locais de trabalho (para filtro) ──────────────────────
   locations: moduleProcedure("dashboard-exec").query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
     return db.select({ id: gpsLocations.id, name: gpsLocations.name, isActive: gpsLocations.isActive }).from(gpsLocations).orderBy(gpsLocations.name);
   }),
   // ── Padronizar nomes de locais (atualizar locationName em registros antigos) ──
@@ -16742,7 +17667,7 @@ var reportsRouter = router({
     newLocationName: z27.string()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
     await db.execute(sql14`
         UPDATE collaborator_attendance 
         SET location_name = ${input.newLocationName}, work_location_id = ${input.newLocationId}
@@ -16753,7 +17678,7 @@ var reportsRouter = router({
   // ── Listar nomes de locais únicos (para padronização) ──────────────────────
   uniqueLocationNames: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
     const results = await db.execute(sql14`
       SELECT DISTINCT location_name FROM collaborator_attendance 
       WHERE location_name IS NOT NULL AND location_name != ''
@@ -16771,7 +17696,7 @@ var reportsRouter = router({
     includeCargas: z27.boolean().default(true)
   })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
     const dateFrom = input.dateFrom + " 00:00:00";
     const dateTo = input.dateTo + " 23:59:59";
     let maoDeObra = [];
@@ -16925,7 +17850,7 @@ var reportsRouter = router({
     // filtro por local específico
   })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
     const dateFrom = input.dateFrom + " 00:00:00";
     const dateTo = input.dateTo + " 23:59:59";
     const locations = await db.select({ id: gpsLocations.id, name: gpsLocations.name }).from(gpsLocations).where(eq26(gpsLocations.isActive, 1)).orderBy(gpsLocations.name);
@@ -17246,7 +18171,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z28 } from "zod";
-import { TRPCError as TRPCError18 } from "@trpc/server";
+import { TRPCError as TRPCError19 } from "@trpc/server";
 import { eq as eq27, and as and17, gte as gte8, lte as lte8, isNotNull as isNotNull2 } from "drizzle-orm";
 var auditDataRouter = router({
   list: protectedProcedure.input(z28.object({
@@ -17258,10 +18183,10 @@ var auditDataRouter = router({
     localId: z28.number().optional()
   })).query(async ({ input, ctx }) => {
     if (ctx.user.role !== "admin") {
-      throw new TRPCError18({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      throw new TRPCError19({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR" });
     const dateFrom = input.dateFrom + " 00:00:00";
     const dateTo = input.dateTo + " 23:59:59";
     const rows2 = [];
@@ -17716,7 +18641,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z29 } from "zod";
-import { TRPCError as TRPCError19 } from "@trpc/server";
+import { TRPCError as TRPCError20 } from "@trpc/server";
 import { eq as eq28, desc as desc20, and as and18, gte as gte9, lte as lte9 } from "drizzle-orm";
 function formatCurrency(value) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -18001,7 +18926,7 @@ var reportPdfRouter = router({
     includeCargas: z29.boolean().default(true)
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "DB indispon\xEDvel" });
     const dateFrom = input.dateFrom + " 00:00:00";
     const dateTo = input.dateTo + " 23:59:59";
     let locationName2 = "Todos os Locais";
@@ -18136,7 +19061,7 @@ init_trpc();
 init_db();
 init_permissions();
 import { z as z30 } from "zod";
-import { TRPCError as TRPCError20 } from "@trpc/server";
+import { TRPCError as TRPCError21 } from "@trpc/server";
 
 // server/utils/precoCarga.ts
 var garantida = null;
@@ -18216,22 +19141,22 @@ var buyerClientsRouter = router({
   // list: retorna TODOS os destinos (is_buyer ou não) — tela unificada
   list: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const rows2 = await db.select().from(cargoDestinations).orderBy(desc21(cargoDestinations.id));
     return rows2.map(destToBuyer);
   }),
   // listActive: retorna todos os destinos ativos (para seleção em cargas, relatórios, etc.)
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const rows2 = await db.select().from(cargoDestinations).where(eq29(cargoDestinations.active, 1)).orderBy(cargoDestinations.name);
     return rows2.map(destToBuyer);
   }),
   getById: protectedProcedure.input(z30.object({ id: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const [dest] = await db.select().from(cargoDestinations).where(eq29(cargoDestinations.id, input.id));
-    if (!dest) throw new TRPCError20({ code: "NOT_FOUND" });
+    if (!dest) throw new TRPCError21({ code: "NOT_FOUND" });
     const prices = await db.select().from(buyerPriceHistory).where(eq29(buyerPriceHistory.buyerId, input.id)).orderBy(desc21(buyerPriceHistory.id));
     const payments = await db.select().from(buyerPayments).where(eq29(buyerPayments.buyerId, input.id)).orderBy(desc21(buyerPayments.id));
     return { ...destToBuyer(dest), prices, payments };
@@ -18260,7 +19185,7 @@ var buyerClientsRouter = router({
     commissionCategory: z30.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco", "aurora"]).optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const unit = input.unit || "ton";
     const pricePerTon = unit === "ton" ? input.pricePerUnit || null : null;
@@ -18304,7 +19229,7 @@ var buyerClientsRouter = router({
     commissionCategory: z30.enum(["nenhuma", "enerbio", "mabam", "lider", "sonoco", "aurora"]).optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const unit = input.unit || "ton";
     const pricePerTon = unit === "ton" ? input.pricePerUnit || null : null;
     const pricePerM3 = unit === "m3" ? input.pricePerUnit || null : null;
@@ -18338,11 +19263,11 @@ var buyerClientsRouter = router({
   }),
   delete: protectedProcedure.input(z30.object({ id: z30.number(), force: z30.boolean().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const loads = await db.execute(sql16`SELECT COUNT(*) as cnt FROM cargo_loads WHERE destination_id = ${input.id}`);
     const loadCount = loads[0]?.[0]?.cnt ?? 0;
     if (loadCount > 0 && !input.force) {
-      throw new TRPCError20({
+      throw new TRPCError21({
         code: "PRECONDITION_FAILED",
         message: `Este destino possui ${loadCount} carga(s) vinculada(s). Use force=true para excluir mesmo assim (as cargas n\xE3o ser\xE3o apagadas).`
       });
@@ -18350,7 +19275,7 @@ var buyerClientsRouter = router({
     const payments = await db.execute(sql16`SELECT COUNT(*) as cnt FROM buyer_payments WHERE buyer_id = ${input.id}`);
     const payCount = payments[0]?.[0]?.cnt ?? 0;
     if (payCount > 0 && !input.force) {
-      throw new TRPCError20({
+      throw new TRPCError21({
         code: "PRECONDITION_FAILED",
         message: `Este comprador possui ${payCount} pagamento(s) vinculado(s). Use force=true para excluir mesmo assim.`
       });
@@ -18371,7 +19296,7 @@ var buyerClientsRouter = router({
     dataFim: z30.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
   })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await ensureBuyerPriceOverride(db);
     const [rows2] = await db.$client.execute(
       `SELECT cl.id, cl.date, cl.delivery_date, cl.weight_net_kg, cl.weight_out_kg, cl.volume_m3,
@@ -18441,12 +19366,12 @@ var buyerClientsRouter = router({
   // Edita o preço de UMA carga (preco vazio = volta ao preço do comprador). Vale só para Contas a Receber.
   setCargaPreco: moduleProcedure("contas-a-receber").input(z30.object({ id: z30.number().int().positive(), preco: z30.string().nullable() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     let preco;
     try {
       preco = normalizarPreco(input.preco);
     } catch (e) {
-      throw new TRPCError20({ code: "BAD_REQUEST", message: e.message });
+      throw new TRPCError21({ code: "BAD_REQUEST", message: e.message });
     }
     await ensureBuyerPriceOverride(db);
     await db.$client.execute(`UPDATE cargo_loads SET buyer_price_override = ? WHERE id = ?`, [preco, input.id]);
@@ -18461,13 +19386,13 @@ var buyerClientsRouter = router({
     preco: z30.string().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
-    if (input.fim < input.inicio) throw new TRPCError20({ code: "BAD_REQUEST", message: "A data final \xE9 anterior \xE0 inicial" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.fim < input.inicio) throw new TRPCError21({ code: "BAD_REQUEST", message: "A data final \xE9 anterior \xE0 inicial" });
     let preco;
     try {
       preco = normalizarPreco(input.preco);
     } catch (e) {
-      throw new TRPCError20({ code: "BAD_REQUEST", message: e.message });
+      throw new TRPCError21({ code: "BAD_REQUEST", message: e.message });
     }
     await ensureBuyerPriceOverride(db);
     const [res] = await db.$client.execute(
@@ -18484,7 +19409,7 @@ var buyerClientsRouter = router({
   // sem relação com payment_status (pagamento da BTREE ao cliente/fornecedor da carga).
   markCargaRecebida: protectedProcedure.input(z30.object({ id: z30.number(), buyerPaidAt: z30.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const buyerPaidAt = input.buyerPaidAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     await db.$client.execute(`UPDATE cargo_loads SET buyer_paid_at = ? WHERE id = ?`, [buyerPaidAt, input.id]);
     return { success: true };
@@ -18493,13 +19418,13 @@ var buyerClientsRouter = router({
   // marcar como recebido (o financeiro pode anexar antes ou depois de dar baixa).
   updateCargaReceipt: protectedProcedure.input(z30.object({ id: z30.number(), receiptUrl: z30.string().url() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.$client.execute(`UPDATE cargo_loads SET buyer_receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
     return { success: true };
   }),
   unmarkCargaRecebida: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.$client.execute(`UPDATE cargo_loads SET buyer_paid_at = NULL WHERE id = ?`, [input.id]);
     return { success: true };
   }),
@@ -18514,7 +19439,7 @@ var buyerClientsRouter = router({
     notes: z30.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.execute(sql16`
         INSERT INTO buyer_price_history (buyer_id, product, price_per_unit, unit, valid_from, valid_until, notes, created_at)
@@ -18524,7 +19449,7 @@ var buyerClientsRouter = router({
   }),
   deletePrice: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(buyerPriceHistory).where(eq29(buyerPriceHistory.id, input.id));
     return { success: true };
   }),
@@ -18545,7 +19470,7 @@ var buyerClientsRouter = router({
     // ex: "Mai/2026"
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.execute(sql16`
         INSERT INTO buyer_payments (buyer_id, amount, payment_date, payment_method, invoice_number, notes, status, created_at)
@@ -18589,13 +19514,13 @@ var buyerClientsRouter = router({
     status: z30.enum(["pendente", "pago", "atrasado"])
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(buyerPayments).set({ status: input.status }).where(eq29(buyerPayments.id, input.id));
     return { success: true };
   }),
   deletePayment: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(buyerPayments).where(eq29(buyerPayments.id, input.id));
     return { success: true };
   }),
@@ -18605,7 +19530,7 @@ var buyerClientsRouter = router({
     endDate: z30.string().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const buyers = await db.select().from(cargoDestinations).where(and19(eq29(cargoDestinations.isBuyer, 1), eq29(cargoDestinations.active, 1))).orderBy(cargoDestinations.name);
     const results = await Promise.all(buyers.map(async (buyer) => {
       const buyerMapped = destToBuyer(buyer);
@@ -18668,19 +19593,19 @@ var buyerClientsRouter = router({
   }),
   getPayments: protectedProcedure.input(z30.object({ buyerId: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     const payments = await db.select().from(buyerPayments).where(eq29(buyerPayments.buyerId, input.buyerId)).orderBy(desc21(buyerPayments.id));
     return payments;
   }),
   // ─── Produtos/Preços por Comprador ──────────────────────────────────────────
   listProductPrices: protectedProcedure.input(z30.object({ buyerId: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(buyerProductPrices).where(and19(eq29(buyerProductPrices.buyerId, input.buyerId), eq29(buyerProductPrices.isActive, 1))).orderBy(buyerProductPrices.productName);
   }),
   listActiveProductPricesByBuyer: protectedProcedure.input(z30.object({ buyerId: z30.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(buyerProductPrices).where(and19(eq29(buyerProductPrices.buyerId, input.buyerId), eq29(buyerProductPrices.isActive, 1))).orderBy(buyerProductPrices.productName);
   }),
   addProductPrice: protectedProcedure.input(z30.object({
@@ -18690,7 +19615,7 @@ var buyerClientsRouter = router({
     pricePerUnit: z30.string().min(1)
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(buyerProductPrices).values({
       buyerId: input.buyerId,
       productName: input.productName,
@@ -18707,13 +19632,13 @@ var buyerClientsRouter = router({
     pricePerUnit: z30.string().min(1)
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(buyerProductPrices).set({ productName: input.productName, unit: input.unit, pricePerUnit: input.pricePerUnit }).where(eq29(buyerProductPrices.id, input.id));
     return { success: true };
   }),
   deleteProductPrice: protectedProcedure.input(z30.object({ id: z30.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(buyerProductPrices).set({ isActive: 0 }).where(eq29(buyerProductPrices.id, input.id));
     return { success: true };
   })
@@ -18724,7 +19649,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z31 } from "zod";
-import { TRPCError as TRPCError21 } from "@trpc/server";
+import { TRPCError as TRPCError22 } from "@trpc/server";
 import { eq as eq30, sql as sql17 } from "drizzle-orm";
 var freightRouter = router({
   list: protectedProcedure.input(z31.object({
@@ -18732,7 +19657,7 @@ var freightRouter = router({
     endDate: z31.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     let query = `SELECT * FROM freight_calculations ORDER BY id DESC`;
     if (input?.startDate && input?.endDate) {
       query = `SELECT * FROM freight_calculations WHERE date >= '${input.startDate}' AND date <= '${input.endDate}' ORDER BY id DESC`;
@@ -18742,9 +19667,9 @@ var freightRouter = router({
   }),
   getById: protectedProcedure.input(z31.object({ id: z31.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const [rows2] = await db.execute(sql17`SELECT * FROM freight_calculations WHERE id = ${input.id}`);
-    if (!rows2 || rows2.length === 0) throw new TRPCError21({ code: "NOT_FOUND" });
+    if (!rows2 || rows2.length === 0) throw new TRPCError22({ code: "NOT_FOUND" });
     return rows2[0];
   }),
   create: protectedProcedure.input(z31.object({
@@ -18774,7 +19699,7 @@ var freightRouter = router({
     notes: z31.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     await db.execute(sql17`
         INSERT INTO freight_calculations (cargo_load_id, date, vehicle_plate, driver_name, driver_type, origin, destination, distance_km, fuel_liters, fuel_cost_per_liter, fuel_total_cost, driver_cost, toll_cost, maintenance_cost, other_costs, other_costs_description, total_cost, cost_per_km, cost_per_ton, weight_ton, revenue_per_ton, total_revenue, profit, notes, created_by, created_at)
@@ -18828,7 +19753,7 @@ var freightRouter = router({
     notes: z31.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data3 } = input;
     await db.update(freightCalculations).set({
       cargoLoadId: data3.cargoLoadId || null,
@@ -18860,7 +19785,7 @@ var freightRouter = router({
   }),
   delete: protectedProcedure.input(z31.object({ id: z31.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(freightCalculations).where(eq30(freightCalculations.id, input.id));
     return { success: true };
   }),
@@ -18870,7 +19795,7 @@ var freightRouter = router({
     endDate: z31.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
     let whereClause = "";
     if (input?.startDate && input?.endDate) {
       whereClause = `WHERE date >= '${input.startDate}' AND date <= '${input.endDate}'`;
@@ -18899,7 +19824,7 @@ init_db();
 init_schema();
 init_llm();
 import { z as z32 } from "zod";
-import { TRPCError as TRPCError22 } from "@trpc/server";
+import { TRPCError as TRPCError23 } from "@trpc/server";
 import { eq as eq31, desc as desc23, and as and20 } from "drizzle-orm";
 
 // server/storage.ts
@@ -18958,12 +19883,12 @@ async function storagePut(relKey, data3, contentType = "application/octet-stream
 var fuelSuppliersRouter = router({
   list: moduleProcedure("fornecedores-combustivel", "contas-pagar-combustivel", "relatorios-combustivel").query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).orderBy(desc23(fuelSuppliers.id));
   }),
   listActive: moduleProcedure("abastecimento").query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSuppliers).where(eq31(fuelSuppliers.isActive, 1)).orderBy(fuelSuppliers.name);
   }),
   listActiveByLocation: protectedProcedure.input(z32.object({
@@ -18971,7 +19896,7 @@ var fuelSuppliersRouter = router({
     fuelType: z32.enum(["diesel", "diesel_s10", "gasolina", "etanol", "gnv"]).optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     if (input.fuelType) {
       const priceRows = await db.select({
         supplierId: fuelSupplierPrices.supplierId,
@@ -19000,7 +19925,7 @@ var fuelSuppliersRouter = router({
   // ===== RESUMO DE LOCAIS/PREÇOS POR FORNECEDOR (baseado nas NFs cadastradas) =====
   getSupplierSummary: moduleProcedure("fornecedores-combustivel").input(z32.object({ supplierId: z32.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const invoices = await db.select().from(fuelInvoices).where(eq31(fuelInvoices.supplierId, input.supplierId)).orderBy(desc23(fuelInvoices.id));
     const groups = {};
     for (const inv of invoices) {
@@ -19033,7 +19958,7 @@ var fuelSuppliersRouter = router({
     locationType: z32.enum(["simflor", "astorga", "postos"]).optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const conditions = [
       eq31(fuelSupplierPrices.supplierId, input.supplierId),
       eq31(fuelSupplierPrices.fuelType, input.fuelType),
@@ -19052,7 +19977,7 @@ var fuelSuppliersRouter = router({
   }),
   listSupplierPrices: moduleProcedure("fornecedores-combustivel").input(z32.object({ supplierId: z32.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(fuelSupplierPrices).where(eq31(fuelSupplierPrices.supplierId, input.supplierId)).orderBy(fuelSupplierPrices.locationType, fuelSupplierPrices.fuelType);
   }),
   upsertSupplierPrice: moduleProcedure("fornecedores-combustivel").input(z32.object({
@@ -19063,7 +19988,7 @@ var fuelSuppliersRouter = router({
     isActive: z32.number().optional().default(1)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const [existing] = await db.select().from(fuelSupplierPrices).where(and20(
       eq31(fuelSupplierPrices.supplierId, input.supplierId),
       eq31(fuelSupplierPrices.fuelType, input.fuelType),
@@ -19088,7 +20013,7 @@ var fuelSuppliersRouter = router({
   }),
   deleteSupplierPrice: moduleProcedure("fornecedores-combustivel").input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelSupplierPrices).where(eq31(fuelSupplierPrices.id, input.id));
     return { success: true };
   }),
@@ -19114,7 +20039,7 @@ var fuelSuppliersRouter = router({
     managerName: z32.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(fuelSuppliers).values({
       name: input.name,
       tradeName: input.tradeName || null,
@@ -19162,7 +20087,7 @@ var fuelSuppliersRouter = router({
     managerName: z32.string().nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data3 } = input;
     const updateData = {};
     if (data3.name !== void 0) updateData.name = data3.name;
@@ -19201,7 +20126,7 @@ var fuelSuppliersRouter = router({
   }),
   priceHistory: moduleProcedure("fornecedores-combustivel", "relatorios-combustivel").input(z32.object({ supplierId: z32.number().optional() })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     if (input.supplierId) {
       return db.select().from(fuelPriceHistory).where(eq31(fuelPriceHistory.supplierId, input.supplierId)).orderBy(desc23(fuelPriceHistory.changedAt));
     }
@@ -19212,7 +20137,7 @@ var fuelSuppliersRouter = router({
     endDate: z32.string().optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
     const { gte: gte13, lte: lte13 } = await import("drizzle-orm");
     let conditions = [eq31(vehicleRecords2.recordType, "abastecimento")];
@@ -19227,7 +20152,7 @@ var fuelSuppliersRouter = router({
   }),
   delete: moduleProcedure("fornecedores-combustivel").input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelSuppliers).where(eq31(fuelSuppliers.id, input.id));
     return { success: true };
   }),
@@ -19300,7 +20225,7 @@ var fuelSuppliersRouter = router({
       }
     }
     if (uploadedPhotos.length === 0) {
-      throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR", message: "N\xE3o foi poss\xEDvel fazer upload das fotos. Tente novamente." });
+      throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "N\xE3o foi poss\xEDvel fazer upload das fotos. Tente novamente." });
     }
     const imageContents = uploadedPhotos.map((p) => ({
       type: "image_url",
@@ -19396,7 +20321,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     status: z32.enum(["pendente", "pago", "vencido", "cancelado"]).optional()
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     let conditions = [];
     if (input?.supplierId) conditions.push(eq31(fuelInvoices.supplierId, input.supplierId));
     if (input?.status) conditions.push(eq31(fuelInvoices.status, input.status));
@@ -19429,7 +20354,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     boletoPhotoUrl: z32.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(fuelInvoices).values({
       supplierId: input.supplierId,
       invoiceNumber: input.invoiceNumber,
@@ -19484,10 +20409,13 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     transporterName: z32.string().nullable().optional(),
     transporterPlate: z32.string().nullable().optional(),
     deliveryLocation: z32.string().nullable().optional(),
-    notes: z32.string().nullable().optional()
+    notes: z32.string().nullable().optional(),
+    // anexos (foto ou PDF da nota fiscal e do boleto); null remove
+    invoicePhotoUrl: z32.string().max(2e3).nullable().optional(),
+    boletoPhotoUrl: z32.string().max(2e3).nullable().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data3 } = input;
     const updateData = {};
     for (const [key, val] of Object.entries(data3)) {
@@ -19502,7 +20430,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     paidAmount: z32.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(fuelInvoices).set({
       status: "pago",
       paidAt: input.paidAt,
@@ -19512,14 +20440,14 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
   }),
   deleteInvoice: moduleProcedure("contas-pagar-combustivel").input(z32.object({ id: z32.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(fuelInvoices).where(eq31(fuelInvoices.id, input.id));
     return { success: true };
   }),
   // ===== SALDO DO TANQUE POR LOCAL =====
   tankStatus: moduleProcedure("contas-pagar-combustivel").query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const { vehicleRecords: vehicleRecords2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
     const suppliers2 = await db.select().from(fuelSuppliers).where(and20(eq31(fuelSuppliers.isActive, 1)));
     const tanksWithCapacity = suppliers2.filter((s) => s.tankCapacity && parseFloat(s.tankCapacity) > 0);
@@ -19561,7 +20489,7 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
   // ===== LISTAR NFs ATIVAS (com saldo) PARA VINCULAR NO ABASTECIMENTO =====
   activeInvoices: protectedProcedure.input(z32.object({ supplierId: z32.number().optional() }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     let conditions = [eq31(fuelInvoices.status, "pendente")];
     if (input?.supplierId) conditions.push(eq31(fuelInvoices.supplierId, input.supplierId));
     const invoices = await db.select().from(fuelInvoices).where(and20(...conditions)).orderBy(desc23(fuelInvoices.id));
@@ -19590,9 +20518,9 @@ Retorne APENAS o JSON, sem texto adicional. Se um campo n\xE3o for encontrado, u
     vehicleRecordId: z32.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR" });
     const [invoice] = await db.select().from(fuelInvoices).where(eq31(fuelInvoices.id, input.invoiceId));
-    if (!invoice) throw new TRPCError22({ code: "NOT_FOUND", message: "NF n\xE3o encontrada" });
+    if (!invoice) throw new TRPCError23({ code: "NOT_FOUND", message: "NF n\xE3o encontrada" });
     const currentUsed = parseFloat(invoice.litersUsed || "0");
     const newUsed = currentUsed + input.liters;
     await db.update(fuelInvoices).set({
@@ -19648,18 +20576,18 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z33 } from "zod";
-import { TRPCError as TRPCError23 } from "@trpc/server";
+import { TRPCError as TRPCError24 } from "@trpc/server";
 import { eq as eq32, asc as asc3 } from "drizzle-orm";
 var thirdPartyContractorsRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const rows2 = await db.select().from(thirdPartyContractors).orderBy(asc3(thirdPartyContractors.name));
     return rows2;
   }),
   listActive: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const rows2 = await db.select().from(thirdPartyContractors).where(eq32(thirdPartyContractors.isActive, 1)).orderBy(asc3(thirdPartyContractors.name));
     return rows2;
   }),
@@ -19670,7 +20598,7 @@ var thirdPartyContractorsRouter = router({
     notes: z33.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.insert(thirdPartyContractors).values({
       name: input.name.trim(),
       ratePerM3: input.ratePerM3.replace(",", "."),
@@ -19690,7 +20618,7 @@ var thirdPartyContractorsRouter = router({
     isActive: z33.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const { id, ...rest } = input;
     const updateData = {};
     if (rest.name !== void 0) updateData.name = rest.name.trim();
@@ -19703,7 +20631,7 @@ var thirdPartyContractorsRouter = router({
   }),
   delete: protectedProcedure.input(z33.object({ id: z33.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.delete(thirdPartyContractors).where(eq32(thirdPartyContractors.id, input.id));
     return { success: true };
   })
@@ -19714,12 +20642,12 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z34 } from "zod";
-import { TRPCError as TRPCError24 } from "@trpc/server";
+import { TRPCError as TRPCError25 } from "@trpc/server";
 import { eq as eq33 } from "drizzle-orm";
 var purchaseCategoriesRouter = router({
   list: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     return await db.select().from(purchaseCategories).orderBy(purchaseCategories.name);
   }),
   create: protectedProcedure.input(z34.object({
@@ -19727,7 +20655,7 @@ var purchaseCategoriesRouter = router({
     color: z34.string().optional().default("#6B7280")
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(purchaseCategories).values({
       name: input.name,
       color: input.color,
@@ -19741,13 +20669,13 @@ var purchaseCategoriesRouter = router({
     color: z34.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(purchaseCategories).set({ name: input.name, color: input.color }).where(eq33(purchaseCategories.id, input.id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z34.object({ id: z34.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(purchaseCategories).where(eq33(purchaseCategories.id, input.id));
     return { success: true };
   })
@@ -19758,7 +20686,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z35 } from "zod";
-import { TRPCError as TRPCError25 } from "@trpc/server";
+import { TRPCError as TRPCError26 } from "@trpc/server";
 import { eq as eq34, and as and21, desc as desc25, gte as gte10, lte as lte10, sql as sql19 } from "drizzle-orm";
 var TRACCAR_URL = process.env.TRACCAR_URL || "";
 var TRACCAR_TOKEN = process.env.TRACCAR_TOKEN || "";
@@ -19779,10 +20707,10 @@ function traccarHeaders() {
     Accept: "application/json"
   };
 }
-async function traccarGet(path4) {
+async function traccarGet(path5) {
   if (!TRACCAR_URL) return null;
   try {
-    const res = await fetch(`${TRACCAR_URL}/api${path4}`, {
+    const res = await fetch(`${TRACCAR_URL}/api${path5}`, {
       headers: traccarHeaders()
     });
     if (!res.ok) return null;
@@ -19853,7 +20781,7 @@ var freightCyclesRouter = router({
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(farmGeofences).values({
       name: input.name,
       latitude: input.latitude,
@@ -19879,7 +20807,7 @@ var freightCyclesRouter = router({
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...rest } = input;
     await db.update(farmGeofences).set(rest).where(eq34(farmGeofences.id, id));
     return { ok: true };
@@ -19887,7 +20815,7 @@ var freightCyclesRouter = router({
   /** Remove geofence */
   deleteGeofence: protectedProcedure.input(z35.object({ id: z35.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(farmGeofences).where(eq34(farmGeofences.id, input.id));
     return { ok: true };
   }),
@@ -19914,9 +20842,9 @@ var freightCyclesRouter = router({
   /** Detalhe de um ciclo */
   getCycle: protectedProcedure.input(z35.object({ id: z35.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const [cycle] = await db.select().from(freightCycles).where(eq34(freightCycles.id, input.id));
-    if (!cycle) throw new TRPCError25({ code: "NOT_FOUND" });
+    if (!cycle) throw new TRPCError26({ code: "NOT_FOUND" });
     return cycle;
   }),
   /** Ciclos ativos (em_fazenda ou em_transito) */
@@ -19930,7 +20858,7 @@ var freightCyclesRouter = router({
   /** Vincula uma carga ao ciclo */
   linkCargoLoad: protectedProcedure.input(z35.object({ cycleId: z35.number(), cargoLoadId: z35.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const [cargo] = await db.select({ destination: cargoLoads.destination }).from(cargoLoads).where(eq34(cargoLoads.id, input.cargoLoadId));
     await db.update(freightCycles).set({
       cargoLoadId: input.cargoLoadId,
@@ -19947,7 +20875,7 @@ var freightCyclesRouter = router({
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(freightCycles).set({
       driverCollaboratorId: input.driverCollaboratorId ?? null,
       driverName: input.driverName ?? null
@@ -19962,9 +20890,9 @@ var freightCyclesRouter = router({
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     const [cycle] = await db.select().from(freightCycles).where(eq34(freightCycles.id, input.cycleId));
-    if (!cycle) throw new TRPCError25({ code: "NOT_FOUND" });
+    if (!cycle) throw new TRPCError26({ code: "NOT_FOUND" });
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     const fromStr = cycle.leftFarmAt || cycle.arrivedFarmAt || now;
     let fuelCost = 0;
@@ -19988,7 +20916,7 @@ var freightCyclesRouter = router({
   /** Cancela um ciclo */
   cancelCycle: protectedProcedure.input(z35.object({ cycleId: z35.number(), notes: z35.string().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(freightCycles).set({ status: "cancelado", notes: input.notes ?? null }).where(eq34(freightCycles.id, input.cycleId));
     return { ok: true };
   }),
@@ -20000,12 +20928,12 @@ var freightCyclesRouter = router({
    */
   pollGeofences: protectedProcedure.mutation(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
     if (!TRACCAR_URL) return { processed: 0, message: "Traccar n\xE3o configurado" };
     const geofences3 = await db.select().from(farmGeofences).where(eq34(farmGeofences.active, 1));
     const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
     let processed = 0;
-    const log = [];
+    const log2 = [];
     for (const geo of geofences3) {
       if (!geo.equipmentId) continue;
       const [link] = await db.select().from(gpsDeviceLinks).where(
@@ -20040,7 +20968,7 @@ var freightCyclesRouter = router({
             startLat: String(pos.lat),
             startLng: String(pos.lng)
           });
-          log.push(`[Geofence] Novo ciclo aberto para equipamento ${geo.equipmentId} (chegou na fazenda)`);
+          log2.push(`[Geofence] Novo ciclo aberto para equipamento ${geo.equipmentId} (chegou na fazenda)`);
         } else if (activeCycle.status === "em_transito") {
           const fromStr = activeCycle.leftFarmAt || activeCycle.arrivedFarmAt || now;
           const costs = await calcCyclesCosts(db, geo.equipmentId, fromStr, now);
@@ -20076,7 +21004,7 @@ var freightCyclesRouter = router({
             startLat: String(pos.lat),
             startLng: String(pos.lng)
           });
-          log.push(`[Geofence] Ciclo ${activeCycle.id} conclu\xEDdo (${distanceKm}km, R$${totalCost.toFixed(2)}). Novo ciclo aberto.`);
+          log2.push(`[Geofence] Ciclo ${activeCycle.id} conclu\xEDdo (${distanceKm}km, R$${totalCost.toFixed(2)}). Novo ciclo aberto.`);
         }
       } else {
         if (activeCycle?.status === "em_fazenda") {
@@ -20084,7 +21012,7 @@ var freightCyclesRouter = router({
             status: "em_transito",
             leftFarmAt: now
           }).where(eq34(freightCycles.id, activeCycle.id));
-          log.push(`[Geofence] Ciclo ${activeCycle.id} \u2192 em_transito (saiu da fazenda)`);
+          log2.push(`[Geofence] Ciclo ${activeCycle.id} \u2192 em_transito (saiu da fazenda)`);
         } else if (activeCycle?.status === "em_transito") {
           const newPoint = { lat: pos.lat, lng: pos.lng, ts: now };
           let traj = [];
@@ -20102,10 +21030,10 @@ var freightCyclesRouter = router({
       }
       processed++;
     }
-    if (log.length > 0) {
-      console.log("[FreightCycles]", log.join(" | "));
+    if (log2.length > 0) {
+      console.log("[FreightCycles]", log2.join(" | "));
     }
-    return { processed, log };
+    return { processed, log: log2 };
   }),
   /** Status em tempo real de todos os veículos monitorados */
   realtimeStatus: protectedProcedure.query(async () => {
@@ -20161,7 +21089,7 @@ init_permissions();
 init_db();
 init_schema();
 import { z as z36 } from "zod";
-import { TRPCError as TRPCError26 } from "@trpc/server";
+import { TRPCError as TRPCError27 } from "@trpc/server";
 import { eq as eq35, desc as desc26, sql as sql20 } from "drizzle-orm";
 var normalizeCnpj = (cnpj) => cnpj.replace(/\D/g, "");
 async function syncSupplierCategories(db, supplierId, categoryIds) {
@@ -20175,7 +21103,7 @@ async function syncSupplierCategories(db, supplierId, categoryIds) {
 var suppliersRouter = router({
   list: moduleProcedure("fornecedores", "orcamentos", "compras").input(z36.object({ activeOnly: z36.boolean().optional().default(true) }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     let rows2;
     if (input?.activeOnly !== false) {
       rows2 = await db.select().from(suppliers).where(eq35(suppliers.active, 1)).orderBy(suppliers.companyName);
@@ -20201,9 +21129,9 @@ var suppliersRouter = router({
   }),
   getById: moduleProcedure("fornecedores").input(z36.object({ id: z36.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const [supplier] = await db.select().from(suppliers).where(eq35(suppliers.id, input.id));
-    if (!supplier) throw new TRPCError26({ code: "NOT_FOUND" });
+    if (!supplier) throw new TRPCError27({ code: "NOT_FOUND" });
     const contacts = await db.select().from(supplierContacts).where(eq35(supplierContacts.supplierId, input.id));
     const categoryLinks = await db.select({
       categoryId: supplierCategories.categoryId,
@@ -20246,12 +21174,12 @@ var suppliersRouter = router({
     categoryIds: z36.array(z36.number()).optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     if (input.cnpj && normalizeCnpj(input.cnpj)) {
       const normCnpj = normalizeCnpj(input.cnpj);
       const existing = await db.select({ id: suppliers.id, companyName: suppliers.companyName }).from(suppliers).where(sql20`REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(${suppliers.cnpj}, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ${normCnpj}`).limit(1);
       if (existing.length > 0) {
-        throw new TRPCError26({ code: "CONFLICT", message: `J\xE1 existe um fornecedor com esse CNPJ: "${existing[0].companyName}". Edite o cadastro existente em vez de criar um novo.` });
+        throw new TRPCError27({ code: "CONFLICT", message: `J\xE1 existe um fornecedor com esse CNPJ: "${existing[0].companyName}". Edite o cadastro existente em vez de criar um novo.` });
       }
     }
     const [result] = await db.insert(suppliers).values({
@@ -20296,12 +21224,12 @@ var suppliersRouter = router({
     categoryIds: z36.array(z36.number()).optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     if (input.cnpj && normalizeCnpj(input.cnpj)) {
       const normCnpj = normalizeCnpj(input.cnpj);
       const existing = await db.select({ id: suppliers.id, companyName: suppliers.companyName }).from(suppliers).where(sql20`REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(${suppliers.cnpj}, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ${normCnpj} AND ${suppliers.id} != ${input.id}`).limit(1);
       if (existing.length > 0) {
-        throw new TRPCError26({ code: "CONFLICT", message: `J\xE1 existe outro fornecedor com esse CNPJ: "${existing[0].companyName}".` });
+        throw new TRPCError27({ code: "CONFLICT", message: `J\xE1 existe outro fornecedor com esse CNPJ: "${existing[0].companyName}".` });
       }
     }
     const { id, name: name2, active, categoryIds, ...rest } = input;
@@ -20317,7 +21245,7 @@ var suppliersRouter = router({
   // Permanent delete
   delete: moduleProcedure("fornecedores").input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(supplierContacts).where(eq35(supplierContacts.supplierId, input.id));
     await db.delete(supplierCategories).where(eq35(supplierCategories.supplierId, input.id));
     await db.delete(suppliers).where(eq35(suppliers.id, input.id));
@@ -20333,7 +21261,7 @@ var suppliersRouter = router({
     email: z36.string().email().optional().or(z36.literal(""))
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(supplierContacts).values({
       supplierId: input.supplierId,
       contactName: input.contactName,
@@ -20354,7 +21282,7 @@ var suppliersRouter = router({
     email: z36.string().email().optional().or(z36.literal(""))
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...rest } = input;
     await db.update(supplierContacts).set({
       ...rest,
@@ -20364,13 +21292,13 @@ var suppliersRouter = router({
   }),
   deleteContact: moduleProcedure("fornecedores").input(z36.object({ id: z36.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(supplierContacts).where(eq35(supplierContacts.id, input.id));
     return { success: true };
   }),
   syncFromQuotationResponses: moduleProcedure("fornecedores").mutation(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR" });
     const responses = await db.select().from(quotationResponses);
     let created = 0;
     let skipped = 0;
@@ -20426,10 +21354,10 @@ init_permissions();
 init_db();
 init_notifications();
 import { z as z37 } from "zod";
-import { TRPCError as TRPCError27 } from "@trpc/server";
+import { TRPCError as TRPCError28 } from "@trpc/server";
 async function getPool() {
   const db = await getDb();
-  if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db.$client;
 }
 async function withTx(fn) {
@@ -20503,12 +21431,12 @@ async function insertMovement(conn, m) {
 }
 async function requireProductAndLocation(conn, productId, locationIds) {
   const [p] = await conn.execute(`SELECT id, active FROM stock_products WHERE id = ?`, [productId]);
-  if (!p[0]) throw new TRPCError27({ code: "NOT_FOUND", message: "Produto n\xE3o encontrado" });
-  if (!p[0].active) throw new TRPCError27({ code: "BAD_REQUEST", message: "Produto inativo" });
+  if (!p[0]) throw new TRPCError28({ code: "NOT_FOUND", message: "Produto n\xE3o encontrado" });
+  if (!p[0].active) throw new TRPCError28({ code: "BAD_REQUEST", message: "Produto inativo" });
   for (const lid of locationIds) {
     const [l] = await conn.execute(`SELECT id, active FROM stock_locations WHERE id = ?`, [lid]);
-    if (!l[0]) throw new TRPCError27({ code: "NOT_FOUND", message: "Local de estoque n\xE3o encontrado" });
-    if (!l[0].active) throw new TRPCError27({ code: "BAD_REQUEST", message: "Local de estoque inativo" });
+    if (!l[0]) throw new TRPCError28({ code: "NOT_FOUND", message: "Local de estoque n\xE3o encontrado" });
+    if (!l[0].active) throw new TRPCError28({ code: "BAD_REQUEST", message: "Local de estoque inativo" });
   }
 }
 var qtyInput = z37.number().positive("Quantidade deve ser maior que zero");
@@ -20516,15 +21444,15 @@ function contentFactor(productUnit, density, content, contentUnit, itemName) {
   const u = (productUnit || "").trim().toLowerCase();
   if (u !== "l" && u !== "kg" && u !== "m") return 1;
   if (!content || content <= 0 || !contentUnit) {
-    throw new TRPCError27({ code: "BAD_REQUEST", message: `"${itemName}": informe o conte\xFAdo por unidade (ex: 20 L) \u2014 o estoque desse produto \xE9 em ${productUnit}.` });
+    throw new TRPCError28({ code: "BAD_REQUEST", message: `"${itemName}": informe o conte\xFAdo por unidade (ex: 20 L) \u2014 o estoque desse produto \xE9 em ${productUnit}.` });
   }
   const cu = contentUnit.toLowerCase();
   if (cu === u) return content;
   if (u === "m" || cu === "m") {
-    throw new TRPCError27({ code: "BAD_REQUEST", message: `"${itemName}": o estoque \xE9 em ${productUnit} e o conte\xFAdo veio em ${contentUnit}. Informe o conte\xFAdo em ${productUnit}.` });
+    throw new TRPCError28({ code: "BAD_REQUEST", message: `"${itemName}": o estoque \xE9 em ${productUnit} e o conte\xFAdo veio em ${contentUnit}. Informe o conte\xFAdo em ${productUnit}.` });
   }
   if (!(density > 0)) {
-    throw new TRPCError27({ code: "BAD_REQUEST", message: `"${itemName}": conte\xFAdo em ${contentUnit} mas o estoque \xE9 em ${productUnit}. Cadastre a densidade (kg/L) do produto ou informe o conte\xFAdo em ${productUnit}.` });
+    throw new TRPCError28({ code: "BAD_REQUEST", message: `"${itemName}": conte\xFAdo em ${contentUnit} mas o estoque \xE9 em ${productUnit}. Cadastre a densidade (kg/L) do produto ou informe o conte\xFAdo em ${productUnit}.` });
   }
   return u === "l" ? content / density : content * density;
 }
@@ -20562,7 +21490,7 @@ var stockRouter = router({
     const pool = await getPool();
     const [dup] = await pool.execute(`SELECT id, name FROM stock_products`);
     const exists = dup.find((p) => normName(p.name) === normName(input.name));
-    if (exists) throw new TRPCError27({ code: "CONFLICT", message: `J\xE1 existe o produto "${exists.name}" no cat\xE1logo.` });
+    if (exists) throw new TRPCError28({ code: "CONFLICT", message: `J\xE1 existe o produto "${exists.name}" no cat\xE1logo.` });
     const [r] = await pool.execute(
       `INSERT INTO stock_products (name, code, brand, tracks_weight, density_kg_l, unit, category_id, min_stock, notes) VALUES (?,?,?,?,?,?,?,?,?)`,
       [input.name.trim(), input.code || null, input.brand?.trim() || null, input.tracksWeight ? 1 : 0, input.tracksWeight && input.densityKgL ? input.densityKgL.toFixed(3) : null, input.unit, input.categoryId ?? null, input.minStock.toFixed(3), input.notes ?? null]
@@ -20582,11 +21510,11 @@ var stockRouter = router({
   deleteProduct: adminProcedure.input(z37.object({ id: z37.number() })).mutation(async ({ input }) => {
     return withTx(async (conn) => {
       const [p] = await conn.execute(`SELECT id, name FROM stock_products WHERE id = ? FOR UPDATE`, [input.id]);
-      if (!p[0]) throw new TRPCError27({ code: "NOT_FOUND", message: "Produto n\xE3o encontrado" });
+      if (!p[0]) throw new TRPCError28({ code: "NOT_FOUND", message: "Produto n\xE3o encontrado" });
       const [mv] = await conn.execute(`SELECT COUNT(*) AS n FROM stock_movements WHERE product_id = ?`, [input.id]);
       const [ln] = await conn.execute(`SELECT COUNT(*) AS n FROM stock_loans WHERE product_id = ?`, [input.id]);
       if (num2(mv[0].n) > 0 || num2(ln[0].n) > 0) {
-        throw new TRPCError27({ code: "BAD_REQUEST", message: `"${p[0].name}" j\xE1 tem movimenta\xE7\xF5es no estoque e n\xE3o pode ser exclu\xEDdo (isso apagaria o hist\xF3rico). Abra "Editar" e desmarque "Ativo" para tir\xE1-lo de uso.` });
+        throw new TRPCError28({ code: "BAD_REQUEST", message: `"${p[0].name}" j\xE1 tem movimenta\xE7\xF5es no estoque e n\xE3o pode ser exclu\xEDdo (isso apagaria o hist\xF3rico). Abra "Editar" e desmarque "Ativo" para tir\xE1-lo de uso.` });
       }
       await conn.execute(`UPDATE purchase_request_items SET stock_product_id = NULL WHERE stock_product_id = ?`, [input.id]);
       await conn.execute(`DELETE FROM stock_balances WHERE product_id = ?`, [input.id]);
@@ -20710,7 +21638,7 @@ var stockRouter = router({
   pendingReceipt: moduleProcedure("estoque", "compras").input(z37.object({ purchaseRequestId: z37.number() })).query(async ({ input }) => {
     const pool = await getPool();
     const [prs] = await pool.execute(`SELECT id, title, status FROM purchase_requests WHERE id = ?`, [input.purchaseRequestId]);
-    if (!prs[0]) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!prs[0]) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const [items] = await pool.execute(`SELECT * FROM purchase_request_items WHERE request_id = ? ORDER BY id`, [input.purchaseRequestId]);
     const [products] = await pool.execute(`SELECT id, name, unit FROM stock_products WHERE active = 1`);
     const byName = new Map(products.map((p) => [normName(p.name), p]));
@@ -20749,23 +21677,23 @@ var stockRouter = router({
     const result = await withTx(async (conn) => {
       const [prs] = await conn.execute(`SELECT id, title, status, requested_by FROM purchase_requests WHERE id = ? FOR UPDATE`, [input.purchaseRequestId]);
       const pr = prs[0];
-      if (!pr) throw new TRPCError27({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+      if (!pr) throw new TRPCError28({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
       if (!["comprada", "purchased"].includes(pr.status)) {
-        throw new TRPCError27({ code: "BAD_REQUEST", message: "S\xF3 \xE9 poss\xEDvel receber no estoque uma solicita\xE7\xE3o com status Comprada." });
+        throw new TRPCError28({ code: "BAD_REQUEST", message: "S\xF3 \xE9 poss\xEDvel receber no estoque uma solicita\xE7\xE3o com status Comprada." });
       }
       const [collabRows] = await conn.execute(`SELECT id FROM collaborators WHERE id = ?`, [input.receivedByCollaboratorId]);
-      if (!collabRows[0]) throw new TRPCError27({ code: "NOT_FOUND", message: "Colaborador (quem recebeu) n\xE3o encontrado" });
+      if (!collabRows[0]) throw new TRPCError28({ code: "NOT_FOUND", message: "Colaborador (quem recebeu) n\xE3o encontrado" });
       const nowMs = Date.now();
       for (const it of input.items) {
         const [rows2] = await conn.execute(`SELECT * FROM purchase_request_items WHERE id = ? AND request_id = ? FOR UPDATE`, [it.itemId, input.purchaseRequestId]);
         const item = rows2[0];
-        if (!item) throw new TRPCError27({ code: "NOT_FOUND", message: `Item ${it.itemId} n\xE3o pertence a esta solicita\xE7\xE3o` });
+        if (!item) throw new TRPCError28({ code: "NOT_FOUND", message: `Item ${it.itemId} n\xE3o pertence a esta solicita\xE7\xE3o` });
         const requested = parseQuantity(item.quantity) ?? 1;
         const already = num2(item.received_quantity);
         const remaining = requested - already;
-        if (remaining <= 0) throw new TRPCError27({ code: "BAD_REQUEST", message: `"${item.name}" j\xE1 foi totalmente recebido.` });
+        if (remaining <= 0) throw new TRPCError28({ code: "BAD_REQUEST", message: `"${item.name}" j\xE1 foi totalmente recebido.` });
         if (it.quantityReceived > remaining + 1e-9) {
-          throw new TRPCError27({ code: "BAD_REQUEST", message: `"${item.name}": faltam receber ${remaining}, n\xE3o ${it.quantityReceived}.` });
+          throw new TRPCError28({ code: "BAD_REQUEST", message: `"${item.name}": faltam receber ${remaining}, n\xE3o ${it.quantityReceived}.` });
         }
         await requireProductAndLocation(conn, it.productId, [it.locationId]);
         const [q3] = await conn.execute(
@@ -20836,7 +21764,7 @@ var stockRouter = router({
     reason: z37.string().max(255).optional()
   })).mutation(async ({ input, ctx }) => {
     if (!input.productId && !input.newProductName?.trim()) {
-      throw new TRPCError27({ code: "BAD_REQUEST", message: "Selecione um produto do cat\xE1logo ou informe o nome de um novo." });
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Selecione um produto do cat\xE1logo ou informe o nome de um novo." });
     }
     return withTx(async (conn) => {
       let productId = input.productId ?? null;
@@ -20883,7 +21811,7 @@ var stockRouter = router({
     grossWeightOut: z37.number().positive().optional()
   })).mutation(async ({ input, ctx }) => {
     if (!input.destinationEquipmentId && !input.destinationCollaboratorId && !(input.destinationNote || "").trim()) {
-      throw new TRPCError27({ code: "BAD_REQUEST", message: "Informe pra onde/quem levou o item (equipamento, colaborador ou destino)." });
+      throw new TRPCError28({ code: "BAD_REQUEST", message: "Informe pra onde/quem levou o item (equipamento, colaborador ou destino)." });
     }
     return withTx(async (conn) => {
       await requireProductAndLocation(conn, input.productId, [input.locationId]);
@@ -20891,8 +21819,8 @@ var stockRouter = router({
       const tracksWeight = !!pw[0]?.tracks_weight;
       const balance = await lockBalance(conn, input.productId, input.locationId);
       if (tracksWeight) {
-        if (!input.grossWeightOut) throw new TRPCError27({ code: "BAD_REQUEST", message: "Informe o peso na balan\xE7a na sa\xEDda." });
-        if (balance <= 1e-9) throw new TRPCError27({ code: "BAD_REQUEST", message: "Sem saldo desse produto nesse local." });
+        if (!input.grossWeightOut) throw new TRPCError28({ code: "BAD_REQUEST", message: "Informe o peso na balan\xE7a na sa\xEDda." });
+        if (balance <= 1e-9) throw new TRPCError28({ code: "BAD_REQUEST", message: "Sem saldo desse produto nesse local." });
         const [r] = await conn.execute(
           `INSERT INTO stock_loans (product_id, location_id, gross_weight_out, destination_collaborator_id, destination_equipment_id, destination_note, reason, created_by)
              VALUES (?,?,?,?,?,?,?,?)`,
@@ -20909,9 +21837,9 @@ var stockRouter = router({
         );
         return { id: r.insertId, balanceAfter: balance };
       }
-      if (!input.quantity) throw new TRPCError27({ code: "BAD_REQUEST", message: "Informe a quantidade." });
+      if (!input.quantity) throw new TRPCError28({ code: "BAD_REQUEST", message: "Informe a quantidade." });
       if (input.quantity > balance + 1e-9) {
-        throw new TRPCError27({ code: "BAD_REQUEST", message: `Saldo insuficiente nesse local (dispon\xEDvel: ${balance}).` });
+        throw new TRPCError28({ code: "BAD_REQUEST", message: `Saldo insuficiente nesse local (dispon\xEDvel: ${balance}).` });
       }
       const newBalance = balance - input.quantity;
       await setBalance(conn, input.productId, input.locationId, newBalance);
@@ -20968,12 +21896,12 @@ var stockRouter = router({
     return withTx(async (conn) => {
       const [ls] = await conn.execute(`SELECT * FROM stock_loans WHERE id = ? FOR UPDATE`, [input.loanId]);
       const loan = ls[0];
-      if (!loan) throw new TRPCError27({ code: "NOT_FOUND", message: "Retirada n\xE3o encontrada" });
-      if (loan.status !== "aberta") throw new TRPCError27({ code: "BAD_REQUEST", message: "Essa retirada j\xE1 foi devolvida." });
+      if (!loan) throw new TRPCError28({ code: "NOT_FOUND", message: "Retirada n\xE3o encontrada" });
+      if (loan.status !== "aberta") throw new TRPCError28({ code: "BAD_REQUEST", message: "Essa retirada j\xE1 foi devolvida." });
       const out = num2(loan.gross_weight_out);
       const consumed = out - input.grossWeightIn;
       if (consumed < -1e-9) {
-        throw new TRPCError27({ code: "BAD_REQUEST", message: `Peso na devolu\xE7\xE3o (${input.grossWeightIn}) maior que na sa\xEDda (${out}). Confira a balan\xE7a.` });
+        throw new TRPCError28({ code: "BAD_REQUEST", message: `Peso na devolu\xE7\xE3o (${input.grossWeightIn}) maior que na sa\xEDda (${out}). Confira a balan\xE7a.` });
       }
       const usedKg = Math.max(0, consumed);
       const [dp] = await conn.execute(`SELECT density_kg_l, unit FROM stock_products WHERE id = ?`, [loan.product_id]);
@@ -20982,7 +21910,7 @@ var stockRouter = router({
       const used = density > 0 ? Number((usedKg / density).toFixed(3)) : usedKg;
       const balance = await lockBalance(conn, loan.product_id, loan.location_id);
       if (used > balance + 1e-9) {
-        throw new TRPCError27({ code: "BAD_REQUEST", message: `Consumo (${used.toFixed(3)} ${unitLabel}) maior que o saldo do local (${balance}). Confira os pesos ou ajuste o estoque.` });
+        throw new TRPCError28({ code: "BAD_REQUEST", message: `Consumo (${used.toFixed(3)} ${unitLabel}) maior que o saldo do local (${balance}). Confira os pesos ou ajuste o estoque.` });
       }
       let movId = null;
       let newBalance = balance;
@@ -21010,14 +21938,14 @@ var stockRouter = router({
     });
   }),
   transfer: moduleProcedure("estoque").input(z37.object({ productId: z37.number(), fromLocationId: z37.number(), toLocationId: z37.number(), quantity: qtyInput, collaboratorId: z37.number().nullable().optional(), reason: z37.string().optional() })).mutation(async ({ input, ctx }) => {
-    if (input.fromLocationId === input.toLocationId) throw new TRPCError27({ code: "BAD_REQUEST", message: "Origem e destino s\xE3o o mesmo local." });
+    if (input.fromLocationId === input.toLocationId) throw new TRPCError28({ code: "BAD_REQUEST", message: "Origem e destino s\xE3o o mesmo local." });
     return withTx(async (conn) => {
       await requireProductAndLocation(conn, input.productId, [input.fromLocationId, input.toLocationId]);
       const ordered = [input.fromLocationId, input.toLocationId].sort((a, b) => a - b);
       const bal = {};
       for (const lid of ordered) bal[lid] = await lockBalance(conn, input.productId, lid);
       if (input.quantity > bal[input.fromLocationId] + 1e-9) {
-        throw new TRPCError27({ code: "BAD_REQUEST", message: `Saldo insuficiente na origem (dispon\xEDvel: ${bal[input.fromLocationId]}).` });
+        throw new TRPCError28({ code: "BAD_REQUEST", message: `Saldo insuficiente na origem (dispon\xEDvel: ${bal[input.fromLocationId]}).` });
       }
       const fromAfter = bal[input.fromLocationId] - input.quantity;
       await setBalance(conn, input.productId, input.fromLocationId, fromAfter);
@@ -21042,7 +21970,7 @@ var stockRouter = router({
       await requireProductAndLocation(conn, input.productId, [input.locationId]);
       const balance = await lockBalance(conn, input.productId, input.locationId);
       const delta = input.newQuantity - balance;
-      if (Math.abs(delta) < 1e-9) throw new TRPCError27({ code: "BAD_REQUEST", message: "O saldo informado \xE9 igual ao atual." });
+      if (Math.abs(delta) < 1e-9) throw new TRPCError28({ code: "BAD_REQUEST", message: "O saldo informado \xE9 igual ao atual." });
       await setBalance(conn, input.productId, input.locationId, input.newQuantity);
       const id = await insertMovement(conn, {
         productId: input.productId,
@@ -21063,7 +21991,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z38 } from "zod";
-import { TRPCError as TRPCError28 } from "@trpc/server";
+import { TRPCError as TRPCError29 } from "@trpc/server";
 import { eq as eq36, desc as desc27, asc as asc4, sql as sql21 } from "drizzle-orm";
 var quotationsRouter = router({
   // List all quotations, optionally filtered by category or supplier
@@ -21072,7 +22000,7 @@ var quotationsRouter = router({
     supplierId: z38.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const rows2 = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -21097,7 +22025,7 @@ var quotationsRouter = router({
   // List by product name — price history across suppliers, lowest price first
   listByProduct: protectedProcedure.input(z38.object({ productName: z38.string() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const rows2 = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -21118,7 +22046,7 @@ var quotationsRouter = router({
   // List grouped by category — returns categories with their products and price history
   listByCategory: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const rows2 = await db.select({
       id: quotations.id,
       supplierId: quotations.supplierId,
@@ -21192,7 +22120,7 @@ var quotationsRouter = router({
     notes: z38.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const now = Date.now();
     const [result] = await db.insert(quotations).values({
       supplierId: input.supplierId,
@@ -21221,14 +22149,14 @@ var quotationsRouter = router({
     notes: z38.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data3 } = input;
     await db.update(quotations).set(data3).where(eq36(quotations.id, id));
     return { success: true };
   }),
   delete: protectedProcedure.input(z38.object({ id: z38.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(quotations).where(eq36(quotations.id, input.id));
     return { success: true };
   })
@@ -21242,7 +22170,7 @@ init_schema();
 init_cloudinary();
 init_notifications();
 import { z as z39 } from "zod";
-import { TRPCError as TRPCError29 } from "@trpc/server";
+import { TRPCError as TRPCError30 } from "@trpc/server";
 import { eq as eq37, sql as sql23 } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -21339,7 +22267,7 @@ async function createPurchaseRequestCore(db, params) {
   } catch (err) {
     const cause = err?.cause?.message || err?.message || String(err);
     console.error("[createPurchaseRequestCore] ERRO:", cause);
-    throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gravar: ${cause}` });
+    throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gravar: ${cause}` });
   }
   const requestId = result.insertId;
   if (items.length > 0) {
@@ -21386,7 +22314,7 @@ var ALLOWED_TRANSITIONS = {
 async function applyPurchaseQuotationDecision(db, params) {
   const [rows2] = await db.execute(sql23`SELECT status, requested_by FROM purchase_requests WHERE id = ${params.purchaseRequestId} LIMIT 1`);
   const pr = rows2[0];
-  if (!pr) throw new TRPCError29({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o de compra n\xE3o encontrada" });
+  if (!pr) throw new TRPCError30({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o de compra n\xE3o encontrada" });
   const currentStatus = STATUS_FROM_DB[pr.status] || pr.status;
   const terminalStates = ["negada", "cancelada", "recebida"];
   const nextStatus = terminalStates.includes(currentStatus) ? currentStatus : "comprada";
@@ -21500,9 +22428,9 @@ function normalizeRow(r) {
 var purchaseRequestsRouter = router({
   // Diagnóstico: mostra as colunas reais da tabela no banco (para troubleshooting). Só admin.
   schemaInfo: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError29({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError30({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [cols] = await db.execute(`SHOW COLUMNS FROM purchase_requests`);
     return cols.map((c) => ({ field: c.Field, type: c.Type, null: c.Null, default: c.Default }));
   }),
@@ -21511,7 +22439,7 @@ var purchaseRequestsRouter = router({
   // precisa enxergar o equipamento mesmo que ele não pertença a um dos seus clientes liberados.
   listEquipmentOptions: moduleProcedure("compras").query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [rows2] = await db.execute(sql23`
       SELECT e.id, e.name, e.license_plate AS licensePlate, t.name AS typeName
       FROM equipment e LEFT JOIN equipment_types t ON t.id = e.type_id
@@ -21525,7 +22453,7 @@ var purchaseRequestsRouter = router({
     categoryId: z39.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await ensureDirectPurchaseSchema(db);
     const [rows2] = await db.execute(`
         SELECT
@@ -21589,7 +22517,7 @@ var purchaseRequestsRouter = router({
   }),
   getById: moduleProcedure("compras").input(z39.object({ id: z39.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await ensureDirectPurchaseSchema(db);
     const [rows2] = await db.execute(sql23`
         SELECT
@@ -21635,7 +22563,7 @@ var purchaseRequestsRouter = router({
         LIMIT 1
       `);
     const row = rows2[0];
-    if (!row) throw new TRPCError29({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!row) throw new TRPCError30({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const normalized = normalizeRow(row);
     const items = await db.select().from(purchaseRequestItems).where(eq37(purchaseRequestItems.requestId, input.id));
     return { ...normalized, items };
@@ -21658,7 +22586,7 @@ var purchaseRequestsRouter = router({
     })).optional().default([])
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     return createPurchaseRequestCore(db, { ...input, userId: ctx.user.id, requesterName: ctx.user.name });
   }),
   update: moduleProcedure("compras").input(z39.object({
@@ -21672,7 +22600,7 @@ var purchaseRequestsRouter = router({
     notes: z39.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const sets = [];
     if (input.title !== void 0) sets.push(sql23`title = ${input.title}`);
     if (input.description !== void 0) sets.push(sql23`description = ${input.description}`);
@@ -21690,13 +22618,13 @@ var purchaseRequestsRouter = router({
   // Atualizar status diretamente (para a grade de edição)
   updateStatus: moduleProcedure("compras").input(z39.object({ id: z39.number(), status: statusEnum })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [curRows] = await db.execute(sql23`SELECT status, requested_by FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
     const current = curRows[0];
-    if (!current) throw new TRPCError29({ code: "NOT_FOUND" });
+    if (!current) throw new TRPCError30({ code: "NOT_FOUND" });
     const currentStatusNorm = STATUS_FROM_DB[current.status] || current.status;
     if (currentStatusNorm !== input.status && !ALLOWED_TRANSITIONS[currentStatusNorm]?.includes(input.status)) {
-      throw new TRPCError29({ code: "BAD_REQUEST", message: `N\xE3o \xE9 poss\xEDvel mudar de "${currentStatusNorm}" para "${input.status}"` });
+      throw new TRPCError30({ code: "BAD_REQUEST", message: `N\xE3o \xE9 poss\xEDvel mudar de "${currentStatusNorm}" para "${input.status}"` });
     }
     const nowMs = Date.now();
     if (input.status === "lida") {
@@ -21734,7 +22662,7 @@ var purchaseRequestsRouter = router({
     // 'YYYY-MM-DD' ou null
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const toMs = (d2) => d2 ? (/* @__PURE__ */ new Date(d2 + "T12:00:00")).getTime() : null;
     await db.execute(sql23`UPDATE purchase_requests SET purchased_at = ${toMs(input.purchaseDate)}, expected_arrival = ${toMs(input.expectedArrival)}, updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
@@ -21745,7 +22673,7 @@ var purchaseRequestsRouter = router({
     responseNotes: z39.string().min(1)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql23`UPDATE purchase_requests
          SET response_notes = ${input.responseNotes}, responded_by = ${ctx.user.id}, responded_at = NOW(),
              read_at = COALESCE(read_at, ${Date.now()}),
@@ -21759,16 +22687,16 @@ var purchaseRequestsRouter = router({
     denialReason: z39.string().min(1)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await db.execute(sql23`UPDATE purchase_requests SET status = 'negada', denial_reason = ${input.denialReason}, responded_by = ${ctx.user.id}, responded_at = NOW(), updated_at = NOW() WHERE id = ${input.id}`);
     return { success: true };
   }),
   toggleItemConfirm: moduleProcedure("compras").input(z39.object({ itemId: z39.number(), confirmed: z39.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [chk] = await db.execute(sql23`SELECT received_quantity FROM purchase_request_items WHERE id = ${input.itemId} LIMIT 1`);
     if (Number(chk[0]?.received_quantity || 0) > 0) {
-      throw new TRPCError29({ code: "BAD_REQUEST", message: "Este item j\xE1 foi lan\xE7ado no estoque. Corre\xE7\xF5es s\xE3o feitas no m\xF3dulo de Estoque (ajuste)." });
+      throw new TRPCError30({ code: "BAD_REQUEST", message: "Este item j\xE1 foi lan\xE7ado no estoque. Corre\xE7\xF5es s\xE3o feitas no m\xF3dulo de Estoque (ajuste)." });
     }
     await db.execute(sql23`UPDATE purchase_request_items SET confirmed = ${input.confirmed ? 1 : 0} WHERE id = ${input.itemId}`);
     return { success: true };
@@ -21779,7 +22707,7 @@ var purchaseRequestsRouter = router({
     mimeType: z39.string().default("image/jpeg")
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const dataUri = `data:${input.mimeType};base64,${input.imageBase64}`;
     const { url } = await cloudinaryUpload(dataUri, `btree/purchase-requests/${input.id}`, `foto-${Date.now()}.jpg`);
     const [rows2] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
@@ -21796,7 +22724,7 @@ var purchaseRequestsRouter = router({
   }),
   removeImage: moduleProcedure("compras").input(z39.object({ id: z39.number(), imageUrl: z39.string() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [rows2] = await db.execute(sql23`SELECT images FROM purchase_requests WHERE id = ${input.id}`);
     const current = rows2[0]?.images;
     let images = [];
@@ -21811,10 +22739,10 @@ var purchaseRequestsRouter = router({
   }),
   delete: moduleProcedure("compras").input(z39.object({ id: z39.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [mv] = await db.execute(sql23`SELECT COUNT(*) AS n FROM stock_movements WHERE purchase_request_id = ${input.id}`);
     if (Number(mv[0]?.n ?? 0) > 0) {
-      throw new TRPCError29({ code: "BAD_REQUEST", message: "Essa solicita\xE7\xE3o j\xE1 deu entrada no estoque e n\xE3o pode ser exclu\xEDda (o hist\xF3rico do estoque aponta pra ela)." });
+      throw new TRPCError30({ code: "BAD_REQUEST", message: "Essa solicita\xE7\xE3o j\xE1 deu entrada no estoque e n\xE3o pode ser exclu\xEDda (o hist\xF3rico do estoque aponta pra ela)." });
     }
     await db.execute(sql23`UPDATE quotations SET purchase_request_id = NULL WHERE purchase_request_id = ${input.id}`);
     await db.execute(sql23`DELETE FROM purchase_request_items WHERE request_id = ${input.id}`);
@@ -21825,13 +22753,13 @@ var purchaseRequestsRouter = router({
   // cadastrados — fecha o ciclo Compra -> Orçamento.
   requestQuotation: moduleProcedure("compras").input(z39.object({ id: z39.number() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [rows2] = await db.execute(sql23`SELECT title, requested_by, quotation_request_id, status FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
     const pr = rows2[0];
-    if (!pr) throw new TRPCError29({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (pr.quotation_request_id) throw new TRPCError29({ code: "BAD_REQUEST", message: "Esta solicita\xE7\xE3o j\xE1 tem um or\xE7amento vinculado" });
+    if (!pr) throw new TRPCError30({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (pr.quotation_request_id) throw new TRPCError30({ code: "BAD_REQUEST", message: "Esta solicita\xE7\xE3o j\xE1 tem um or\xE7amento vinculado" });
     const items = await db.select().from(purchaseRequestItems).where(eq37(purchaseRequestItems.requestId, input.id));
-    if (items.length === 0) throw new TRPCError29({ code: "BAD_REQUEST", message: "Adicione ao menos um item antes de solicitar or\xE7amento" });
+    if (items.length === 0) throw new TRPCError30({ code: "BAD_REQUEST", message: "Adicione ao menos um item antes de solicitar or\xE7amento" });
     let requesterName = null;
     let requesterId;
     if (pr.requested_by) {
@@ -21885,11 +22813,11 @@ var purchaseRequestsRouter = router({
     })).min(1, "Adicione ao menos um item")
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     await ensureDirectPurchaseSchema(db);
     const [supRows] = await db.execute(sql23`SELECT company_name FROM suppliers WHERE id = ${input.supplierId} LIMIT 1`);
     const supplierName = supRows[0]?.company_name;
-    if (!supplierName) throw new TRPCError29({ code: "NOT_FOUND", message: "Fornecedor n\xE3o encontrado" });
+    if (!supplierName) throw new TRPCError30({ code: "NOT_FOUND", message: "Fornecedor n\xE3o encontrado" });
     const status = "comprada";
     const total = input.items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
     const nowMs = Date.now();
@@ -21980,7 +22908,7 @@ var purchaseRequestsRouter = router({
     items: z39.array(z39.object({ itemId: z39.number(), price: z39.string() })).min(1)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR" });
     const [supRows] = await db.execute(sql23`SELECT company_name FROM suppliers WHERE id = ${input.winningSupplierId} LIMIT 1`);
     const supplierName = supRows[0]?.company_name || "";
     const [prRows] = await db.execute(sql23`SELECT category_id FROM purchase_requests WHERE id = ${input.id} LIMIT 1`);
@@ -22018,7 +22946,7 @@ init_trpc();
 init_db();
 init_schema();
 import { z as z40 } from "zod";
-import { TRPCError as TRPCError30 } from "@trpc/server";
+import { TRPCError as TRPCError31 } from "@trpc/server";
 import { eq as eq38, desc as desc28 } from "drizzle-orm";
 var invoiceControlRouter = router({
   // Listar notas com filtros — mostra todas as cargas (sem filtro de status)
@@ -22033,7 +22961,7 @@ var invoiceControlRouter = router({
     limit: z40.number().optional().default(200)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const results = await db.select({
       id: cargoLoads.id,
       date: cargoLoads.date,
@@ -22080,7 +23008,7 @@ var invoiceControlRouter = router({
   // Marcar/desmarcar nota como conferida (sem colunas extras que podem não existir)
   toggleChecked: protectedProcedure.input(z40.object({ id: z40.number(), checked: z40.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     await db.update(cargoLoads).set({
       invoiceChecked: input.checked ? 1 : 0,
       invoiceCheckedAt: input.checked ? Date.now() : 0
@@ -22090,7 +23018,7 @@ var invoiceControlRouter = router({
   // Estatísticas resumidas — todas as cargas
   stats: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError30({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const all = await db.select({
       invoiceChecked: cargoLoads.invoiceChecked,
       invoiceNumber: cargoLoads.invoiceNumber
@@ -22117,7 +23045,7 @@ init_notification();
 init_notifications();
 import { z as z41 } from "zod";
 import { eq as eq39, desc as desc29, sql as sql25 } from "drizzle-orm";
-import { TRPCError as TRPCError31 } from "@trpc/server";
+import { TRPCError as TRPCError32 } from "@trpc/server";
 import crypto2 from "crypto";
 async function ensureSuppliersAndCategory(db, req, responses, createdByUserId) {
   for (const resp of responses) {
@@ -22273,7 +23201,7 @@ var quotationRequestsRouter = router({
   // Listar todas as solicitações (protegido)
   list: moduleProcedure("orcamentos").query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const rows2 = await db.select().from(quotationRequests).orderBy(desc29(quotationRequests.createdAt));
     const allResponses = await db.select({
       id: quotationResponses.id,
@@ -22294,7 +23222,7 @@ var quotationRequestsRouter = router({
   // (nome do item, preço, data do orçamento, fornecedor, CNPJ).
   listItemCatalog: moduleProcedure("orcamentos").query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const requests = await db.select().from(quotationRequests);
     const requestTitleById = new Map(requests.map((r) => [r.id, r.title]));
     const responses = await db.select().from(quotationResponses).orderBy(desc29(quotationResponses.createdAt));
@@ -22327,9 +23255,9 @@ var quotationRequestsRouter = router({
   // Buscar por ID com respostas (protegido)
   getById: moduleProcedure("orcamentos").input(z41.object({ id: z41.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.id, input.id));
-    if (!req) throw new TRPCError31({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!req) throw new TRPCError32({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const responses = await db.select().from(quotationResponses).where(eq39(quotationResponses.quotationRequestId, input.id)).orderBy(desc29(quotationResponses.createdAt));
     const [prRows] = await db.execute(sql25`SELECT id, status, final_price, payment_method, invoice_url, receipt_url FROM purchase_requests WHERE quotation_request_id = ${input.id} LIMIT 1`);
     const linkedPr = prRows[0];
@@ -22368,7 +23296,7 @@ var quotationRequestsRouter = router({
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const token = crypto2.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1e3;
     const [result] = await db.insert(quotationRequests).values({
@@ -22394,7 +23322,7 @@ var quotationRequestsRouter = router({
   // Cancelar solicitação (protegido)
   cancel: moduleProcedure("orcamentos").input(z41.object({ id: z41.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(quotationRequests).set({ status: "cancelada" }).where(eq39(quotationRequests.id, input.id));
     return { success: true };
   }),
@@ -22414,7 +23342,7 @@ var quotationRequestsRouter = router({
     notes: z41.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const set = {};
     if (input.supplierName !== void 0) set.supplierName = input.supplierName;
     if (input.tradeName !== void 0) set.tradeName = input.tradeName;
@@ -22444,7 +23372,7 @@ var quotationRequestsRouter = router({
     })).min(1)
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(quotationResponses).set({ itemsJson: JSON.stringify(input.items) }).where(eq39(quotationResponses.id, input.responseId));
     return { success: true };
   }),
@@ -22456,9 +23384,9 @@ var quotationRequestsRouter = router({
     choices: z41.record(z41.string(), z41.object({ responseId: z41.number(), itemIndex: z41.number(), quantity: z41.string().optional() }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.id, input.quotationRequestId));
-    if (!req) throw new TRPCError31({ code: "NOT_FOUND" });
+    if (!req) throw new TRPCError32({ code: "NOT_FOUND" });
     await db.update(quotationRequests).set({ bestChoices: JSON.stringify(input.choices) }).where(eq39(quotationRequests.id, input.quotationRequestId));
     return { success: true };
   }),
@@ -22472,22 +23400,22 @@ var quotationRequestsRouter = router({
     receiptUrl: z41.string().url().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.id, input.quotationRequestId));
-    if (!req) throw new TRPCError31({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!req) throw new TRPCError32({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const [prRows] = await db.execute(sql25`SELECT id FROM purchase_requests WHERE quotation_request_id = ${input.quotationRequestId} LIMIT 1`);
     const purchaseRequestId = prRows[0]?.id;
     if (!purchaseRequestId) {
-      throw new TRPCError31({ code: "BAD_REQUEST", message: "Este or\xE7amento n\xE3o est\xE1 vinculado a nenhuma solicita\xE7\xE3o de compra" });
+      throw new TRPCError32({ code: "BAD_REQUEST", message: "Este or\xE7amento n\xE3o est\xE1 vinculado a nenhuma solicita\xE7\xE3o de compra" });
     }
     const responses = await db.select().from(quotationResponses).where(eq39(quotationResponses.quotationRequestId, input.quotationRequestId));
     if (responses.length === 0) {
-      throw new TRPCError31({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o ainda." });
+      throw new TRPCError32({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o ainda." });
     }
     const { categoryId } = await ensureSuppliersAndCategory(db, req, responses, ctx.user.id);
     const { summaryItems, grandTotal, bySupplier } = computeBestPriceBreakdown(req, responses);
     if (bySupplier.length === 0) {
-      throw new TRPCError31({ code: "BAD_REQUEST", message: "Nenhum item com pre\xE7o definido ainda \u2014 escolha os vencedores na planilha antes de confirmar." });
+      throw new TRPCError32({ code: "BAD_REQUEST", message: "Nenhum item com pre\xE7o definido ainda \u2014 escolha os vencedores na planilha antes de confirmar." });
     }
     await recordWinningQuotations(db, { categoryId, purchaseRequestId, createdByUserId: ctx.user.id, summaryItems });
     const result = await applyPurchaseQuotationDecision(db, {
@@ -22509,21 +23437,21 @@ var quotationRequestsRouter = router({
     quotationRequestId: z41.number()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.id, input.quotationRequestId));
-    if (!req) throw new TRPCError31({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!req) throw new TRPCError32({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const [existingRows] = await db.execute(sql25`SELECT id FROM purchase_requests WHERE quotation_request_id = ${input.quotationRequestId} LIMIT 1`);
     if (existingRows[0]) {
-      throw new TRPCError31({ code: "BAD_REQUEST", message: "Este or\xE7amento j\xE1 tem uma solicita\xE7\xE3o de compra vinculada; use Confirmar Compra na tela da solicita\xE7\xE3o." });
+      throw new TRPCError32({ code: "BAD_REQUEST", message: "Este or\xE7amento j\xE1 tem uma solicita\xE7\xE3o de compra vinculada; use Confirmar Compra na tela da solicita\xE7\xE3o." });
     }
     const responses = await db.select().from(quotationResponses).where(eq39(quotationResponses.quotationRequestId, input.quotationRequestId));
     if (responses.length === 0) {
-      throw new TRPCError31({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o ainda." });
+      throw new TRPCError32({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o ainda." });
     }
     const { categoryId } = await ensureSuppliersAndCategory(db, req, responses, ctx.user.id);
     const { summaryItems, grandTotal, bySupplier } = computeBestPriceBreakdown(req, responses);
     if (bySupplier.length === 0) {
-      throw new TRPCError31({ code: "BAD_REQUEST", message: "Nenhum item com pre\xE7o definido ainda \u2014 escolha os vencedores na planilha antes de gerar a compra." });
+      throw new TRPCError32({ code: "BAD_REQUEST", message: "Nenhum item com pre\xE7o definido ainda \u2014 escolha os vencedores na planilha antes de gerar a compra." });
     }
     const winningSupplierId = bySupplier[0].supplierId;
     const finalPrice = grandTotal.toFixed(2);
@@ -22561,12 +23489,12 @@ var quotationRequestsRouter = router({
     quotationRequestId: z41.number()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.id, input.quotationRequestId));
-    if (!req) throw new TRPCError31({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (!req) throw new TRPCError32({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
     const responses = await db.select().from(quotationResponses).where(eq39(quotationResponses.quotationRequestId, input.quotationRequestId));
     if (responses.length === 0) {
-      throw new TRPCError31({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o" });
+      throw new TRPCError32({ code: "BAD_REQUEST", message: "Nenhuma resposta recebida para esta solicita\xE7\xE3o" });
     }
     const result = {
       suppliersCreated: 0,
@@ -22709,13 +23637,13 @@ var quotationRequestsRouter = router({
     notes: z41.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.token, input.token));
-    if (!req) throw new TRPCError31({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (req.status === "cancelada") throw new TRPCError31({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    if (!req) throw new TRPCError32({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError32({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
     const [existing] = await db.select().from(quotationResponses).where(eq39(quotationResponses.id, input.responseId));
     if (!existing || existing.quotationRequestId !== req.id) {
-      throw new TRPCError31({ code: "FORBIDDEN", message: "Resposta n\xE3o encontrada" });
+      throw new TRPCError32({ code: "FORBIDDEN", message: "Resposta n\xE3o encontrada" });
     }
     await db.update(quotationResponses).set({
       supplierName: input.supplierName,
@@ -22829,10 +23757,10 @@ var quotationRequestsRouter = router({
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.token, input.token));
-    if (!req) throw new TRPCError31({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (req.status === "cancelada") throw new TRPCError31({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    if (!req) throw new TRPCError32({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError32({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
     let linkedSupplierId = null;
     let linkedSupplier = {};
     try {
@@ -22954,12 +23882,12 @@ var quotationRequestsRouter = router({
     notes: z41.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR" });
     const [resp] = await db.select().from(quotationResponses).where(eq39(quotationResponses.responseToken, input.responseToken));
-    if (!resp) throw new TRPCError31({ code: "NOT_FOUND", message: "Resposta n\xE3o encontrada" });
+    if (!resp) throw new TRPCError32({ code: "NOT_FOUND", message: "Resposta n\xE3o encontrada" });
     const [req] = await db.select().from(quotationRequests).where(eq39(quotationRequests.id, resp.quotationRequestId));
-    if (!req) throw new TRPCError31({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
-    if (req.status === "cancelada") throw new TRPCError31({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
+    if (!req) throw new TRPCError32({ code: "NOT_FOUND", message: "Solicita\xE7\xE3o n\xE3o encontrada" });
+    if (req.status === "cancelada") throw new TRPCError32({ code: "BAD_REQUEST", message: "Solicita\xE7\xE3o cancelada" });
     await db.update(quotationResponses).set({
       supplierName: input.supplierName,
       cnpj: input.cnpj ?? null,
@@ -22987,7 +23915,7 @@ init_db();
 init_schema();
 init_clientAreaScope();
 import { z as z42 } from "zod";
-import { TRPCError as TRPCError32 } from "@trpc/server";
+import { TRPCError as TRPCError33 } from "@trpc/server";
 import { eq as eq40, desc as desc30, and as and23, asc as asc5, ne as ne3, sql as sql26 } from "drizzle-orm";
 var advanceAreaId2 = clientAdvances.areaId;
 var cargoAreaId2 = cargoLoads.areaId;
@@ -22996,7 +23924,7 @@ var hasField2 = (value, key) => !!value && Object.prototype.hasOwnProperty.call(
 var inputArea2 = (value) => normalizeAreaId(value?.areaId);
 var listArea2 = (input) => hasField2(input, "areaId") ? areaScopeCondition(advanceAreaId2, inputArea2(input)) : sql26`1 = 1`;
 var assertArea = (left, right) => {
-  if (!sameArea(left, right)) throw new TRPCError32({ code: "BAD_REQUEST", message: "Os registros pertencem a \xE1reas financeiras diferentes." });
+  if (!sameArea(left, right)) throw new TRPCError33({ code: "BAD_REQUEST", message: "Os registros pertencem a \xE1reas financeiras diferentes." });
 };
 async function checkedArea2(db, clientId, areaId, confirmed = false) {
   const area = await getClientArea(db, clientId, areaId);
@@ -23013,19 +23941,19 @@ var clientAdvancesRouter = router({
   // Listar adiantamentos de um cliente
   list: protectedProcedure.input(z42.object({ clientId: z42.number(), areaId: z42.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(and23(eq40(clientAdvances.clientId, input.clientId), listArea2(input))).orderBy(desc30(clientAdvances.date));
   }),
   // Listar adiantamentos de um cliente (alias para uso no CargoControl)
   listByClient: protectedProcedure.input(z42.object({ clientId: z42.number(), areaId: z42.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(and23(eq40(clientAdvances.clientId, input.clientId), listArea2(input))).orderBy(desc30(clientAdvances.date));
   }),
   // Listar todos os adiantamentos (para uso no PDF do CargoControl)
   listAll: protectedProcedure.input(z42.object({ areaId: z42.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     return db.select().from(clientAdvances).where(listArea2(input)).orderBy(desc30(clientAdvances.date));
   }),
   // Criar novo adiantamento
@@ -23040,10 +23968,10 @@ var clientAdvancesRouter = router({
     areaId: z42.number().nullable().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const areaId = inputArea2(input);
     const [client] = await db.select().from(clients).where(eq40(clients.id, input.clientId)).limit(1);
-    if (!client) throw new TRPCError32({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
+    if (!client) throw new TRPCError33({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
     const area = await checkedArea2(db, input.clientId, areaId, areaId !== null);
     const clientName = client?.name || `Cliente #${input.clientId}`;
     const [result] = await db.insert(clientAdvances).values({
@@ -23087,7 +24015,7 @@ var clientAdvancesRouter = router({
   // Buscar saldo total de adiantamentos ativos de um cliente
   getBalance: protectedProcedure.input(z42.object({ clientId: z42.number(), areaId: z42.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advances = await db.select().from(clientAdvances).where(and23(
       eq40(clientAdvances.clientId, input.clientId),
       eq40(clientAdvances.status, "ativo"),
@@ -23099,7 +24027,7 @@ var clientAdvancesRouter = router({
   // Listar deduções de um adiantamento
   listDeductions: protectedProcedure.input(z42.object({ clientId: z42.number(), areaId: z42.number().nullable().optional() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     if (!hasField2(input, "areaId")) {
       return db.select().from(clientAdvanceDeductions).where(eq40(clientAdvanceDeductions.clientId, input.clientId)).orderBy(desc30(clientAdvanceDeductions.date));
     }
@@ -23111,7 +24039,7 @@ var clientAdvancesRouter = router({
   // Listar TODAS as deduções (para o controle de cargas sem filtro de cliente)
   listAllDeductions: protectedProcedure.input(z42.object({ areaId: z42.number().nullable().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     if (!hasField2(input, "areaId")) return db.select().from(clientAdvanceDeductions).orderBy(desc30(clientAdvanceDeductions.date));
     const advances = await db.select({ id: clientAdvances.id }).from(clientAdvances).where(areaScopeCondition(advanceAreaId2, inputArea2(input)));
     const ids = advances.map((row) => row.id);
@@ -23130,25 +24058,25 @@ var clientAdvancesRouter = router({
     areaId: z42.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const areaId = inputArea2(input);
     const advance = await scopedAdvance(db, input.advanceId, input.clientId, areaId);
-    if (!advance) throw new TRPCError32({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError33({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     assertArea(advance.areaId, areaId);
     await checkedArea2(db, advance.clientId, normalizeAreaId(advance.areaId), normalizeAreaId(advance.areaId) !== null);
     if (input.cargoLoadId) {
       const [cargo] = await db.select({ id: cargoLoads.id, clientId: cargoLoads.clientId, areaId: cargoAreaId2 }).from(cargoLoads).where(eq40(cargoLoads.id, input.cargoLoadId)).limit(1);
-      if (!cargo) throw new TRPCError32({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada" });
-      if (cargo.clientId !== advance.clientId) throw new TRPCError32({ code: "BAD_REQUEST", message: "Carga e adiantamento pertencem a clientes diferentes." });
+      if (!cargo) throw new TRPCError33({ code: "NOT_FOUND", message: "Carga n\xE3o encontrada" });
+      if (cargo.clientId !== advance.clientId) throw new TRPCError33({ code: "BAD_REQUEST", message: "Carga e adiantamento pertencem a clientes diferentes." });
       assertArea(cargo.areaId, advance.areaId);
     }
     if (input.weeklyClosingId) {
       const [closing] = await db.select().from(cargoWeeklyClosings).where(and23(eq40(cargoWeeklyClosings.id, input.weeklyClosingId), eq40(cargoWeeklyClosings.clientId, advance.clientId), areaScopeCondition(closingAreaId2, normalizeAreaId(advance.areaId)))).limit(1);
-      if (!closing || closing.clientId !== advance.clientId) throw new TRPCError32({ code: "BAD_REQUEST", message: "Fechamento inv\xE1lido para este adiantamento." });
+      if (!closing || closing.clientId !== advance.clientId) throw new TRPCError33({ code: "BAD_REQUEST", message: "Fechamento inv\xE1lido para este adiantamento." });
       assertArea(closing.areaId, advance.areaId);
     }
     const balanceBefore = parseFloat(advance.balanceRemaining || "0");
-    if (balanceBefore <= 0) throw new TRPCError32({ code: "BAD_REQUEST", message: "Saldo insuficiente" });
+    if (balanceBefore <= 0) throw new TRPCError33({ code: "BAD_REQUEST", message: "Saldo insuficiente" });
     const deductAmount = Math.min(input.amount, balanceBefore);
     const balanceAfter = balanceBefore - deductAmount;
     await db.insert(clientAdvanceDeductions).values({
@@ -23212,21 +24140,21 @@ var clientAdvancesRouter = router({
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const areaId = inputArea2(input);
     const advance = await scopedAdvance(db, input.advanceId, input.clientId, areaId);
-    if (!advance) throw new TRPCError32({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError33({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     assertArea(advance.areaId, areaId);
     const advanceArea = normalizeAreaId(advance.areaId);
     const [client] = await db.select().from(clients).where(eq40(clients.id, advance.clientId)).limit(1);
     const area = advanceArea === null ? null : await checkedArea2(db, advance.clientId, advanceArea, true);
     let balanceRemaining = parseFloat(advance.balanceRemaining || "0");
-    if (balanceRemaining <= 0) throw new TRPCError32({ code: "BAD_REQUEST", message: "Saldo do adiantamento j\xE1 esgotado" });
+    if (balanceRemaining <= 0) throw new TRPCError33({ code: "BAD_REQUEST", message: "Saldo do adiantamento j\xE1 esgotado" });
     const results = [];
     const ids = input.loads.map((load) => load.id);
     const authoritativeLoads = ids.length ? await db.select().from(cargoLoads).where(and23(eq40(cargoLoads.clientId, advance.clientId), areaScopeCondition(cargoAreaId2, advanceArea), sql26`${cargoLoads.id} IN (${sql26.join(ids.map((id) => sql26`${id}`), sql26`, `)})`)) : [];
-    if (new Set(ids).size !== ids.length || authoritativeLoads.length !== ids.length) throw new TRPCError32({ code: "BAD_REQUEST", message: "Uma das cargas n\xE3o pertence ao cliente e \xE0 \xE1rea selecionados." });
-    if (authoritativeLoads.some((load) => load.status !== "entregue" || load.paymentStatus === "pago")) throw new TRPCError32({ code: "BAD_REQUEST", message: "Selecione somente cargas entregues ainda n\xE3o pagas." });
+    if (new Set(ids).size !== ids.length || authoritativeLoads.length !== ids.length) throw new TRPCError33({ code: "BAD_REQUEST", message: "Uma das cargas n\xE3o pertence ao cliente e \xE0 \xE1rea selecionados." });
+    if (authoritativeLoads.some((load) => load.status !== "entregue" || load.paymentStatus === "pago")) throw new TRPCError33({ code: "BAD_REQUEST", message: "Selecione somente cargas entregues ainda n\xE3o pagas." });
     const sortedLoads = authoritativeLoads.sort((a, b) => new Date(String(a.date)).getTime() - new Date(String(b.date)).getTime());
     for (const load of sortedLoads) {
       const loadValue = getCargoFinancialValue(load, client, area);
@@ -23294,9 +24222,9 @@ var clientAdvancesRouter = router({
     areaId: z42.number().nullable().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advance = await scopedAdvance(db, input.advanceId, void 0, inputArea2(input));
-    if (!advance) throw new TRPCError32({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError33({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     assertArea(advance.areaId, inputArea2(input));
     const buffer = Buffer.from(input.fileBase64, "base64");
     const ext = input.mimeType.includes("pdf") ? "pdf" : input.mimeType.split("/")[1] || "jpg";
@@ -23315,9 +24243,9 @@ var clientAdvancesRouter = router({
     receiptUrl: z42.string().optional().nullable()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advance = await scopedAdvance(db, input.id, void 0, inputArea2(input));
-    if (!advance) throw new TRPCError32({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError33({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     assertArea(advance.areaId, inputArea2(input));
     const updateData = {};
     if (input.description !== void 0) updateData.description = input.description;
@@ -23327,7 +24255,7 @@ var clientAdvancesRouter = router({
       const originalAmount = parseFloat(advance.amount || "0");
       const currentBalance = parseFloat(advance.balanceRemaining || "0");
       const deducted = originalAmount - currentBalance;
-      if (input.amount < deducted - 5e-3) throw new TRPCError32({ code: "BAD_REQUEST", message: "O valor n\xE3o pode ser menor que os abatimentos j\xE1 realizados." });
+      if (input.amount < deducted - 5e-3) throw new TRPCError33({ code: "BAD_REQUEST", message: "O valor n\xE3o pode ser menor que os abatimentos j\xE1 realizados." });
       const newBalance = Math.max(0, input.amount - deducted);
       updateData.amount = String(input.amount);
       updateData.balanceRemaining = String(newBalance);
@@ -23340,13 +24268,13 @@ var clientAdvancesRouter = router({
   // Se force=true, remove deduções e reverte paymentStatus das cargas abatidas
   delete: protectedProcedure.input(z42.object({ id: z42.number(), force: z42.boolean().optional(), areaId: z42.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advance = await scopedAdvance(db, input.id, void 0, inputArea2(input));
-    if (!advance) throw new TRPCError32({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError33({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     assertArea(advance.areaId, inputArea2(input));
     const deductions = await db.select().from(clientAdvanceDeductions).where(eq40(clientAdvanceDeductions.advanceId, advance.id));
     if (deductions.length > 0 && !input.force) {
-      throw new TRPCError32({ code: "BAD_REQUEST", message: `Este adiantamento possui ${deductions.length} abatimento(s). Use a op\xE7\xE3o 'For\xE7ar exclus\xE3o' para remover tudo.` });
+      throw new TRPCError33({ code: "BAD_REQUEST", message: `Este adiantamento possui ${deductions.length} abatimento(s). Use a op\xE7\xE3o 'For\xE7ar exclus\xE3o' para remover tudo.` });
     }
     if (deductions.length > 0 && input.force) {
       const loadIds = deductions.map((d2) => d2.cargoLoadId).filter(Boolean);
@@ -23374,9 +24302,9 @@ var clientAdvancesRouter = router({
   // Limpar deduções duplicadas de um adiantamento (manter apenas a mais antiga por cargo_load_id)
   cleanDuplicateDeductions: protectedProcedure.input(z42.object({ advanceId: z42.number(), areaId: z42.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const advance = await scopedAdvance(db, input.advanceId, void 0, inputArea2(input));
-    if (!advance) throw new TRPCError32({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
+    if (!advance) throw new TRPCError33({ code: "NOT_FOUND", message: "Adiantamento n\xE3o encontrado" });
     assertArea(advance.areaId, inputArea2(input));
     const allDeductions = await db.select().from(clientAdvanceDeductions).where(eq40(clientAdvanceDeductions.advanceId, input.advanceId)).orderBy(asc5(clientAdvanceDeductions.id));
     const seen = /* @__PURE__ */ new Map();
@@ -23410,10 +24338,10 @@ var clientAdvancesRouter = router({
   // Processar abatimentos retroativos: abate automaticamente cargas entregues sem dedução
   processRetroactiveDeductions: protectedProcedure.input(z42.object({ clientId: z42.number(), areaId: z42.number().nullable().optional() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError32({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
     const areaId = inputArea2(input);
     const [client] = await db.select().from(clients).where(eq40(clients.id, input.clientId)).limit(1);
-    if (!client) throw new TRPCError32({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
+    if (!client) throw new TRPCError33({ code: "BAD_REQUEST", message: "Cliente inv\xE1lido." });
     const area = areaId === null ? null : await checkedArea2(db, input.clientId, areaId, true);
     const advances = await db.select().from(clientAdvances).where(and23(eq40(clientAdvances.clientId, input.clientId), eq40(clientAdvances.status, "ativo"), areaScopeCondition(advanceAreaId2, areaId))).orderBy(asc5(clientAdvances.date));
     if (advances.length === 0) return { success: true, processed: 0, message: "Nenhum adiantamento ativo" };
@@ -23473,12 +24401,12 @@ init_db();
 init_schema();
 import { z as z43 } from "zod";
 import { eq as eq41, desc as desc31, and as and24, gte as gte11, lte as lte11, inArray as inArray8 } from "drizzle-orm";
-import { TRPCError as TRPCError33 } from "@trpc/server";
+import { TRPCError as TRPCError34 } from "@trpc/server";
 var thirdPartyRouter = router({
   // ===== TARIFAS DE FRETE =====
   listRates: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(freightRates).orderBy(freightRates.worksite, freightRates.destination);
   }),
   createRate: protectedProcedure.input(z43.object({
@@ -23488,7 +24416,7 @@ var thirdPartyRouter = router({
     notes: z43.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(freightRates).values({
       worksite: input.worksite,
       destination: input.destination,
@@ -23505,7 +24433,7 @@ var thirdPartyRouter = router({
     notes: z43.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(freightRates).set({
       worksite: input.worksite,
       destination: input.destination,
@@ -23516,7 +24444,7 @@ var thirdPartyRouter = router({
   }),
   deleteRate: protectedProcedure.input(z43.object({ id: z43.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(freightRates).where(eq41(freightRates.id, input.id));
     return { success: true };
   }),
@@ -23528,7 +24456,7 @@ var thirdPartyRouter = router({
     endDate: z43.string().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name, thirdPartyOwner: equipment.thirdPartyOwner }).from(equipment).where(eq41(equipment.isThirdParty, 1));
     const thirdPartyIds = thirdPartyTrucks.map((t2) => t2.id);
     const ownerMap = new Map(thirdPartyTrucks.map((t2) => [t2.id, t2.thirdPartyOwner ?? null]));
@@ -23596,7 +24524,7 @@ var thirdPartyRouter = router({
     notes: z43.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     const [result] = await db.insert(thirdPartyFuel).values({
       equipmentId: input.equipmentId,
       date: input.date,
@@ -23637,7 +24565,7 @@ var thirdPartyRouter = router({
     notes: z43.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(thirdPartyFuel).set({
       equipmentId: input.equipmentId,
       date: input.date,
@@ -23651,14 +24579,14 @@ var thirdPartyRouter = router({
   }),
   deleteFuel: protectedProcedure.input(z43.object({ id: z43.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(thirdPartyFuel).where(eq41(thirdPartyFuel.id, input.id));
     return { success: true };
   }),
   // ===== CAMINHÕES TERCEIRIZADOS =====
   listThirdPartyTrucks: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(equipment).where(eq41(equipment.isThirdParty, 1));
   }),
   setThirdParty: protectedProcedure.input(z43.object({
@@ -23667,7 +24595,7 @@ var thirdPartyRouter = router({
     thirdPartyOwner: z43.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(equipment).set({
       isThirdParty: input.isThirdParty ? 1 : 0,
       thirdPartyOwner: input.thirdPartyOwner ?? null
@@ -23683,7 +24611,7 @@ var thirdPartyRouter = router({
     equipmentId: z43.number().optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     const thirdPartyTrucks = await db.select({ id: equipment.id, name: equipment.name, thirdPartyOwner: equipment.thirdPartyOwner }).from(equipment).where(eq41(equipment.isThirdParty, 1));
     if (thirdPartyTrucks.length === 0) return [];
     const truckIds = thirdPartyTrucks.map((t2) => t2.id);
@@ -23795,7 +24723,7 @@ var thirdPartyRouter = router({
     manualAmount: z43.string().optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError33({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR" });
     const now = /* @__PURE__ */ new Date();
     const nowStr = now.toISOString().slice(0, 10);
     const finalAmount = input.manualAmount && parseFloat(input.manualAmount) > 0 ? input.manualAmount : input.netAmount;
@@ -23832,10 +24760,10 @@ init_db();
 init_schema();
 import { z as z44 } from "zod";
 import { eq as eq42 } from "drizzle-orm";
-import { TRPCError as TRPCError34 } from "@trpc/server";
+import { TRPCError as TRPCError35 } from "@trpc/server";
 async function requireDb() {
   const db = await getDb();
-  if (!db) throw new TRPCError34({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
+  if (!db) throw new TRPCError35({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
   return db;
 }
 var geofencesRouter = router({
@@ -23927,10 +24855,10 @@ init_db();
 init_schema();
 import { z as z45 } from "zod";
 import { eq as eq43, desc as desc32, and as and25, gte as gte12, lte as lte12 } from "drizzle-orm";
-import { TRPCError as TRPCError35 } from "@trpc/server";
+import { TRPCError as TRPCError36 } from "@trpc/server";
 async function requireDb2() {
   const db = await getDb();
-  if (!db) throw new TRPCError35({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
+  if (!db) throw new TRPCError36({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indispon\xEDvel" });
   return db;
 }
 var freightTripsRouter = router({
@@ -24918,7 +25846,7 @@ init_trpc();
 init_permissions();
 init_favorecidoCategoria();
 import { z as z48 } from "zod";
-import { TRPCError as TRPCError36 } from "@trpc/server";
+import { TRPCError as TRPCError37 } from "@trpc/server";
 
 // server/utils/bankImport.ts
 import { createHash } from "crypto";
@@ -24986,21 +25914,21 @@ function parseOfx(texto) {
   const avisos = [];
   const blocos = texto.split(/<STMTTRN>/i).slice(1);
   const base = [];
-  const tag = (bloco, nome) => {
+  const tag2 = (bloco, nome) => {
     const m = bloco.match(new RegExp(`<${nome}>([^<\\r\\n]*)`, "i"));
     return m ? m[1].trim() : null;
   };
   for (const b of blocos) {
-    const data3 = parseDataFlex(tag(b, "DTPOSTED") ?? "");
-    const valor = parseValorBR(tag(b, "TRNAMT") ?? "");
+    const data3 = parseDataFlex(tag2(b, "DTPOSTED") ?? "");
+    const valor = parseValorBR(tag2(b, "TRNAMT") ?? "");
     if (!data3 || valor === null) {
       avisos.push("Transa\xE7\xE3o OFX ignorada (data ou valor inv\xE1lido).");
       continue;
     }
-    const nome = tag(b, "NAME");
-    const memo = tag(b, "MEMO");
+    const nome = tag2(b, "NAME");
+    const memo = tag2(b, "MEMO");
     const descricao = [nome, memo && memo !== nome ? memo : null].filter(Boolean).join(" \u2014 ") || "(sem descri\xE7\xE3o)";
-    base.push({ data: data3, descricao, valor, documento: tag(b, "FITID") || tag(b, "CHECKNUM") });
+    base.push({ data: data3, descricao, valor, documento: tag2(b, "FITID") || tag2(b, "CHECKNUM") });
   }
   return { transacoes: comHash(base), formato: "ofx", avisos };
 }
@@ -25072,8 +26000,8 @@ function parseCsv(texto) {
   if (base.length === 0) avisos.push("Nenhuma transa\xE7\xE3o v\xE1lida encontrada no CSV.");
   return { transacoes: comHash(base), formato: "csv", avisos };
 }
-function parseExtrato(texto, nomeArquivo) {
-  const ehOfx = /<OFX>|<STMTTRN>/i.test(texto) || /\.ofx$/i.test(nomeArquivo ?? "");
+function parseExtrato(texto, nomeArquivo2) {
+  const ehOfx = /<OFX>|<STMTTRN>/i.test(texto) || /\.ofx$/i.test(nomeArquivo2 ?? "");
   return ehOfx ? parseOfx(texto) : parseCsv(texto);
 }
 
@@ -25085,7 +26013,7 @@ var TIPOS_RESULTADO = ["resultado", "financeiro_nao_resultado", "transferencia_p
 async function getDbOrThrow() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError36({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError37({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
 var ensurePromise2 = null;
@@ -25538,7 +26466,7 @@ var financialRealRouter = router({
       try {
         new RegExp(input.padrao.slice(3), "i");
       } catch {
-        throw new TRPCError36({ code: "BAD_REQUEST", message: "Express\xE3o regular inv\xE1lida" });
+        throw new TRPCError37({ code: "BAD_REQUEST", message: "Express\xE3o regular inv\xE1lida" });
       }
     }
     const db = await getDbOrThrow();
@@ -25737,7 +26665,7 @@ var financialRealRouter = router({
     const db = await getDbOrThrow();
     await ensureTables(db);
     const [c] = await db.$client.execute(`SELECT id FROM bank_accounts WHERE id = ?`, [input.contaId]);
-    if (!c[0]) throw new TRPCError36({ code: "NOT_FOUND", message: "Conta n\xE3o encontrada" });
+    if (!c[0]) throw new TRPCError37({ code: "NOT_FOUND", message: "Conta n\xE3o encontrada" });
     const parsed = parseExtrato(input.conteudo, input.nomeArquivo);
     let novos = 0;
     for (const t2 of parsed.transacoes) {
@@ -25765,8 +26693,8 @@ var financialRealRouter = router({
   })).mutation(async ({ input }) => {
     const inicio = input.anoInicio * 12 + (input.mesInicio - 1);
     const fim = input.anoFim * 12 + (input.mesFim - 1);
-    if (fim < inicio) throw new TRPCError36({ code: "BAD_REQUEST", message: "Per\xEDodo inv\xE1lido" });
-    if (fim - inicio + 1 > 24) throw new TRPCError36({ code: "BAD_REQUEST", message: "M\xE1ximo de 24 meses por vez" });
+    if (fim < inicio) throw new TRPCError37({ code: "BAD_REQUEST", message: "Per\xEDodo inv\xE1lido" });
+    if (fim - inicio + 1 > 24) throw new TRPCError37({ code: "BAD_REQUEST", message: "M\xE1ximo de 24 meses por vez" });
     const { syncSicoobExtrato: syncSicoobExtrato2 } = await Promise.resolve().then(() => (init_sicoob(), sicoob_exports));
     const resultado = [];
     for (let k = inicio; k <= fim; k++) {
@@ -25782,7 +26710,7 @@ var financialRealRouter = router({
 // server/routers/custos.ts
 init_financeiroCanonico();
 import { z as z49 } from "zod";
-import { TRPCError as TRPCError37 } from "@trpc/server";
+import { TRPCError as TRPCError38 } from "@trpc/server";
 import { randomUUID } from "node:crypto";
 
 // server/utils/custoPlanta.ts
@@ -26007,6 +26935,7 @@ var FORMAS_PAGAMENTO = [
   "cartao_debito",
   "transferencia",
   "boleto",
+  "cheque",
   "debito_conta",
   "outro"
 ];
@@ -26017,6 +26946,7 @@ var FORMA_LABEL = {
   cartao_debito: "Cart\xE3o de d\xE9bito",
   transferencia: "Transfer\xEAncia",
   boleto: "Boleto",
+  cheque: "Cheque",
   debito_conta: "D\xE9bito em conta",
   outro: "Outro"
 };
@@ -26043,6 +26973,14 @@ function parseValor(raw) {
   else if ((s.match(/\./g) ?? []).length > 1) s = s.replace(/\./g, "");
   const n = Number(s);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+var aceitaParcelas = (forma) => forma === "cartao_credito" || forma === "boleto" || forma === "cheque";
+function dividirParcelas(total, n) {
+  const cent = Math.round(total * 100);
+  const base = Math.floor(cent / n);
+  const parcelas = Array.from({ length: n }, () => base);
+  parcelas[n - 1] += cent - base * n;
+  return parcelas.map((c) => c / 100);
 }
 function somarMeses(data3, meses) {
   const [a, m, d2] = data3.split("-").map(Number);
@@ -26116,33 +27054,33 @@ function acharPlanta(l, texto) {
 }
 var MAX_REPETIR = 36;
 function interpretarLinha(r, l) {
-  const txt = (v) => {
+  const txt2 = (v) => {
     const s = String(v ?? "").trim();
     return s ? s : null;
   };
-  const dataVenc = txt(r.vencimento) ? parseDataFlex2(r.vencimento) : null;
-  const dataAntiga = txt(r.data) ? parseDataFlex2(r.data) : null;
-  if (txt(r.vencimento) && !dataVenc) return { erro: "Data de Vencimento inv\xE1lida (use dia/m\xEAs/ano)" };
+  const dataVenc = txt2(r.vencimento) ? parseDataFlex2(r.vencimento) : null;
+  const dataAntiga = txt2(r.data) ? parseDataFlex2(r.data) : null;
+  if (txt2(r.vencimento) && !dataVenc) return { erro: "Data de Vencimento inv\xE1lida (use dia/m\xEAs/ano)" };
   const dataComp = dataVenc ?? dataAntiga;
   if (!dataComp) return { erro: "Informe a Data de Vencimento (dia/m\xEAs/ano)" };
-  const descricao = txt(r.descricao);
+  const descricao = txt2(r.descricao);
   if (!descricao) return { erro: "Descri\xE7\xE3o vazia" };
   const valor = parseValor(r.valor);
   if (valor === null || valor <= 0) return { erro: "Valor inv\xE1lido (precisa ser maior que zero)" };
-  const plantaTxt = txt(r.planta);
+  const plantaTxt = txt2(r.planta);
   let planta = null;
   if (plantaTxt) {
     planta = acharPlanta(l, plantaTxt);
     if (!planta) return { erro: `Local \u201C${plantaTxt}\u201D n\xE3o encontrado` };
     if (l.plantasPermitidas && !l.plantasPermitidas.includes(planta.id)) return { erro: `Sem acesso ao local \u201C${planta.nome}\u201D` };
   }
-  const catTxt = txt(r.categoria);
+  const catTxt = txt2(r.categoria);
   if (!catTxt) return { erro: "Categoria vazia" };
   const cat = l.categorias.find((c) => chave(c.nome) === chave(catTxt));
   if (!cat) return { erro: `Categoria \u201C${catTxt}\u201D n\xE3o existe` };
   if (cat.automatica) return { erro: `\u201C${cat.nome}\u201D \xE9 lan\xE7ado no Controle de Abastecimento` };
   let tipo = cat.tipoPadrao;
-  const tipoTxt = txt(r.tipo);
+  const tipoTxt = txt2(r.tipo);
   if (tipoTxt) {
     const t2 = chave(tipoTxt);
     if (t2.includes("fix")) tipo = "fixo";
@@ -26150,13 +27088,13 @@ function interpretarLinha(r, l) {
     else return { erro: `Grupo deve ser \u201CDespesas Fixas\u201D ou \u201CDespesas Vari\xE1veis\u201D (veio \u201C${tipoTxt}\u201D)` };
   }
   let forma = null;
-  const formaTxt = txt(r.forma);
+  const formaTxt = txt2(r.forma);
   if (formaTxt) {
     forma = FORMA_POR_CHAVE[chave(formaTxt)] ?? null;
     if (!forma) return { erro: `Forma de pagamento \u201C${formaTxt}\u201D n\xE3o reconhecida` };
   }
   let cartaoId = null;
-  const cartaoTxt = txt(r.cartao);
+  const cartaoTxt = txt2(r.cartao);
   if (cartaoTxt) {
     const c = l.cartoes.find((x) => chave(x.nome) === chave(cartaoTxt));
     if (!c) return { erro: `Cart\xE3o \u201C${cartaoTxt}\u201D n\xE3o cadastrado` };
@@ -26166,11 +27104,11 @@ function interpretarLinha(r, l) {
   if (!exigeCartao(forma)) cartaoId = null;
   const venc = dataComp;
   let pago = null;
-  if (txt(r.pagoEm)) {
+  if (txt2(r.pagoEm)) {
     pago = parseDataFlex2(r.pagoEm);
     if (!pago) return { erro: "Pagamento inv\xE1lido" };
   }
-  const sitTxt = txt(r.situacao);
+  const sitTxt = txt2(r.situacao);
   if (sitTxt) {
     const k = chave(sitTxt);
     const ehPago = k.startsWith("pag");
@@ -26180,12 +27118,12 @@ function interpretarLinha(r, l) {
     if (ehPago && !pago) pago = venc ?? dataComp;
   }
   let repetir = 1;
-  if (txt(r.repetir)) {
+  if (txt2(r.repetir)) {
     const n = Number(String(r.repetir).replace(",", "."));
     if (!Number.isInteger(n) || n < 1 || n > MAX_REPETIR) return { erro: `Repetir (meses) deve ser um n\xFAmero de 1 a ${MAX_REPETIR}` };
     repetir = n;
   }
-  let gastoPorNome = txt(r.quemGastou);
+  let gastoPorNome = txt2(r.quemGastou);
   let gastoPorColaboradorId = null;
   if (gastoPorNome && l.colaboradores) {
     const c = l.colaboradores.find((x) => chave(x.nome) === chave(gastoPorNome));
@@ -26194,7 +27132,7 @@ function interpretarLinha(r, l) {
     gastoPorColaboradorId = c.id;
   }
   let centroCusto = null;
-  const centroTxt = txt(r.centroCusto);
+  const centroTxt = txt2(r.centroCusto);
   if (centroTxt) {
     const k = chave(centroTxt);
     if (k.startsWith("fin") || k.startsWith("adm")) centroCusto = "Financeiro/Administrativo";
@@ -26203,7 +27141,7 @@ function interpretarLinha(r, l) {
     else return { erro: `Centro de Custo deve ser \u201CFinanceiro/Administrativo\u201D, \u201CProdu\xE7\xE3o\u201D ou \u201CLog\xEDstico\u201D (veio \u201C${centroTxt}\u201D)` };
   }
   let tipoCusto = null;
-  const custoTxt = txt(r.tipoCusto);
+  const custoTxt = txt2(r.tipoCusto);
   if (custoTxt) {
     const k = chave(custoTxt);
     if (k.includes("indir")) tipoCusto = "indireto";
@@ -26215,13 +27153,13 @@ function interpretarLinha(r, l) {
     categoriaId: cat.id,
     tipo,
     descricao,
-    favorecido: txt(r.favorecido),
+    favorecido: txt2(r.favorecido),
     valor,
     formaPagamento: forma,
     cartaoId,
     gastoPorNome,
     gastoPorColaboradorId,
-    observacoes: txt(r.observacoes),
+    observacoes: txt2(r.observacoes),
     centroCusto,
     tipoCusto
   };
@@ -26236,7 +27174,7 @@ function interpretarLinha(r, l) {
       dataVencimento: dc,
       dataPagamento: primeiro ? pago : null,
       status: primeiro && pago ? "pago" : "pendente",
-      nfNumero: primeiro ? txt(r.nfNumero) : null
+      nfNumero: primeiro ? txt2(r.nfNumero) : null
     });
   }
   return { itens };
@@ -26254,12 +27192,13 @@ function atribuirHashes(itens) {
 
 // server/routers/custos.ts
 var SLUG2 = "contas-a-pagar";
+var MOTIVOS_SEM_NOTA = ["cheque", "parcelado", "sem_nota", "nota_depois", "outro"];
 var MEUS = "meus-gastos";
 var CENTROS_CUSTO = ["Financeiro/Administrativo", "Produ\xE7\xE3o", "Log\xEDstico"];
 async function getDbOrThrow2() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError37({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError38({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
 var ensurePromise3 = null;
@@ -26340,7 +27279,11 @@ function ensureTables2(db) {
         ["conferencia_obs", "VARCHAR(500) NULL"],
         ["serie_id", "VARCHAR(36) NULL"],
         ["centro_custo", "VARCHAR(40) NULL"],
-        ["tipo_custo", "VARCHAR(10) NULL"]
+        ["tipo_custo", "VARCHAR(10) NULL"],
+        ["parcelas_total", "INT NULL"],
+        // compra parcelada: nº de parcelas (o valor de cada parcela fica travado)
+        ["sem_nota_motivo", "VARCHAR(20) NULL"]
+        // por que o gasto não tem nota (cheque, compra parcelada...)
       ];
       for (const [nome, def] of faltantes) {
         if (!tem.has(nome)) await db.$client.execute(`ALTER TABLE custo_lancamentos ADD COLUMN ${nome} ${def}`);
@@ -26402,9 +27345,9 @@ function ensureTables2(db) {
 }
 var ultimaSync = /* @__PURE__ */ new Map();
 async function sincronizarPedagios(db, ini, fim, forcar = false) {
-  const chaveCache = `${ini}|${fim}`;
-  if (!forcar && Date.now() - (ultimaSync.get(chaveCache) ?? 0) < 6e4) return 0;
-  ultimaSync.set(chaveCache, Date.now());
+  const chaveCache2 = `${ini}|${fim}`;
+  if (!forcar && Date.now() - (ultimaSync.get(chaveCache2) ?? 0) < 6e4) return 0;
+  ultimaSync.set(chaveCache2, Date.now());
   let [cats] = await db.$client.execute(`SELECT id FROM custo_categorias WHERE nome = 'Ped\xE1gio / TAG' LIMIT 1`);
   let catId = cats[0]?.id;
   if (!catId) {
@@ -26442,7 +27385,7 @@ async function ehConferente(db, ctx) {
 }
 function exigirPlanta(permitidas, plantaId) {
   if (plantaId && permitidas && !permitidas.includes(plantaId)) {
-    throw new TRPCError37({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta planta" });
+    throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta planta" });
   }
 }
 var dataOpc = z49.string().refine(dataValida, "Data inv\xE1lida").nullable().optional();
@@ -26461,12 +27404,69 @@ var entradaCusto = z49.object({
   favorecido: z49.string().max(150).nullable().optional(),
   nfNumero: z49.string().max(40).nullable().optional(),
   nfUrl: z49.string().max(2e3).nullable().optional(),
+  semNotaMotivo: z49.enum(MOTIVOS_SEM_NOTA).nullable().optional(),
   observacoes: z49.string().max(2e3).nullable().optional(),
   dataVencimento: dataOpc,
   dataPagamento: dataOpc,
   status: z49.enum(["pendente", "pago"]).optional(),
-  repetirMeses: z49.number().int().min(1).max(36).optional()
+  repetirMeses: z49.number().int().min(1).max(36).optional(),
+  // Parcelamento (cartão de crédito, boleto ou cheque): o valor informado é o TOTAL e vira uma conta por parcela, mês a mês.
+  parcelas: z49.number().int().min(1).max(36).optional(),
+  primeiraPaga: z49.boolean().optional()
+  // parcelado em Meus Gastos: a 1ª parcela só entra como paga se marcado
 });
+function validarParcelas(input) {
+  if ((input.parcelas ?? 1) > 1 && !aceitaParcelas(input.formaPagamento)) {
+    throw new TRPCError38({ code: "BAD_REQUEST", message: "S\xF3 d\xE1 para parcelar no cart\xE3o de cr\xE9dito, boleto ou cheque" });
+  }
+}
+async function parcelarExistente(db, id, nParc, descBase, total) {
+  const [rs] = await db.$client.execute(`SELECT * FROM custo_lancamentos WHERE id = ?`, [id]);
+  const r = rs[0];
+  if (!r) return;
+  if (r.serie_id) throw new TRPCError38({ code: "BAD_REQUEST", message: "Este gasto j\xE1 faz parte de uma s\xE9rie ou de um parcelamento" });
+  const valores = dividirParcelas(total, nParc);
+  const serieId = randomUUID();
+  const d2 = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+  const venc0 = d2(r.data_vencimento);
+  const nome = (k) => `${descBase}`.slice(0, 240) + ` (${k + 1}/${nParc})`;
+  await db.$client.execute(`UPDATE custo_lancamentos SET descricao = ?, valor = ?, serie_id = ?, parcelas_total = ? WHERE id = ?`, [nome(0), valores[0], serieId, nParc, id]);
+  for (let k = 1; k < nParc; k++) {
+    const venc = somarMeses(venc0, k);
+    await db.$client.execute(
+      `INSERT INTO custo_lancamentos
+       (data_competencia, data_vencimento, data_pagamento, status, planta_id, categoria_id, tipo, descricao, favorecido, valor,
+        forma_pagamento, cartao_id, gasto_por_colaborador_id, gasto_por_nome, nf_numero, nf_url, sem_nota_motivo, observacoes, origem,
+        criado_por, criado_por_nome, serie_id, centro_custo, tipo_custo, parcelas_total)
+       VALUES (?,?,NULL,'pendente',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        venc,
+        venc,
+        r.planta_id,
+        r.categoria_id,
+        r.tipo,
+        nome(k),
+        r.favorecido,
+        valores[k],
+        r.forma_pagamento,
+        r.cartao_id,
+        r.gasto_por_colaborador_id,
+        r.gasto_por_nome,
+        r.nf_numero,
+        r.nf_url,
+        r.sem_nota_motivo,
+        r.observacoes,
+        r.origem,
+        r.criado_por,
+        r.criado_por_nome,
+        serieId,
+        r.centro_custo,
+        r.tipo_custo,
+        nParc
+      ]
+    );
+  }
+}
 async function prepararEntrada(db, input, permitidas) {
   const valor = parseValor(input.valor);
   const erros = validarCusto({
@@ -26478,16 +27478,16 @@ async function prepararEntrada(db, input, permitidas) {
     formaPagamento: input.formaPagamento,
     cartaoId: input.cartaoId
   }, { plantaObrigatoria: false });
-  if (erros.length) throw new TRPCError37({ code: "BAD_REQUEST", message: erros[0] });
+  if (erros.length) throw new TRPCError38({ code: "BAD_REQUEST", message: erros[0] });
   exigirPlanta(permitidas, input.plantaId);
   const [cats] = await db.$client.execute(
     `SELECT id, tipo_padrao, origem_automatica, ativa FROM custo_categorias WHERE id = ?`,
     [input.categoriaId]
   );
   const cat = cats[0];
-  if (!cat || !cat.ativa) throw new TRPCError37({ code: "BAD_REQUEST", message: "Tipo de gasto inv\xE1lido" });
+  if (!cat || !cat.ativa) throw new TRPCError38({ code: "BAD_REQUEST", message: "Tipo de gasto inv\xE1lido" });
   if (cat.origem_automatica) {
-    throw new TRPCError37({ code: "BAD_REQUEST", message: "Combust\xEDvel \xE9 lan\xE7ado no Controle de Abastecimento" });
+    throw new TRPCError38({ code: "BAD_REQUEST", message: "Combust\xEDvel \xE9 lan\xE7ado no Controle de Abastecimento" });
   }
   return { valor, tipo: input.tipo ?? (cat.tipo_padrao === "fixo" ? "fixo" : "variavel") };
 }
@@ -26514,6 +27514,12 @@ var linhaImportacao = z49.object({
   situacao: cel
 });
 var limpa = (s) => s && s.trim() ? s.trim() : null;
+var motivoSemNota = (i) => limpa(i.nfUrl) ? null : i.semNotaMotivo ?? null;
+function exigirNotaOuMotivo(i) {
+  if (limpa(i.nfUrl)) return;
+  if (!i.semNotaMotivo) throw new TRPCError38({ code: "BAD_REQUEST", message: "Anexe a foto da nota ou diga por que o gasto n\xE3o tem nota" });
+  if (i.semNotaMotivo === "outro" && !limpa(i.observacoes)) throw new TRPCError38({ code: "BAD_REQUEST", message: "Explique nas observa\xE7\xF5es por que o gasto n\xE3o tem nota" });
+}
 var custosRouter = router({
   // Plantas que o usuário pode usar (respeita permissão por local).
   plantas: moduleProcedure(SLUG2, MEUS).query(async ({ ctx }) => {
@@ -26568,7 +27574,7 @@ var custosRouter = router({
         );
       }
     } catch (e) {
-      if (String(e?.code) === "ER_DUP_ENTRY") throw new TRPCError37({ code: "CONFLICT", message: "J\xE1 existe um tipo de gasto com esse nome" });
+      if (String(e?.code) === "ER_DUP_ENTRY") throw new TRPCError38({ code: "CONFLICT", message: "J\xE1 existe um tipo de gasto com esse nome" });
       throw e;
     }
     return { ok: true };
@@ -26579,12 +27585,12 @@ var custosRouter = router({
     await ensureTables2(db);
     const [cat] = await db.$client.execute(`SELECT nome, origem_automatica FROM custo_categorias WHERE id = ?`, [input.id]);
     const c = cat[0];
-    if (!c) throw new TRPCError37({ code: "NOT_FOUND", message: "Tipo de gasto n\xE3o encontrado" });
-    if (c.origem_automatica) throw new TRPCError37({ code: "BAD_REQUEST", message: "Este tipo vem do Controle de Abastecimento e n\xE3o pode ser exclu\xEDdo" });
-    if (String(c.nome) === "Ped\xE1gio / TAG") throw new TRPCError37({ code: "BAD_REQUEST", message: "Este tipo \xE9 usado pelos ped\xE1gios do extrato e n\xE3o pode ser exclu\xEDdo" });
+    if (!c) throw new TRPCError38({ code: "NOT_FOUND", message: "Tipo de gasto n\xE3o encontrado" });
+    if (c.origem_automatica) throw new TRPCError38({ code: "BAD_REQUEST", message: "Este tipo vem do Controle de Abastecimento e n\xE3o pode ser exclu\xEDdo" });
+    if (String(c.nome) === "Ped\xE1gio / TAG") throw new TRPCError38({ code: "BAD_REQUEST", message: "Este tipo \xE9 usado pelos ped\xE1gios do extrato e n\xE3o pode ser exclu\xEDdo" });
     const [uso] = await db.$client.execute(`SELECT COUNT(*) AS n FROM custo_lancamentos WHERE categoria_id = ?`, [input.id]);
     const n = Number(uso[0]?.n ?? 0);
-    if (n > 0) throw new TRPCError37({ code: "BAD_REQUEST", message: `Em uso por ${n} gasto(s). Desmarque "Ativo" para escond\xEA-lo dos bot\xF5es sem perder o hist\xF3rico.` });
+    if (n > 0) throw new TRPCError38({ code: "BAD_REQUEST", message: `Em uso por ${n} gasto(s). Desmarque "Ativo" para escond\xEA-lo dos bot\xF5es sem perder o hist\xF3rico.` });
     await db.$client.execute(`DELETE FROM custo_categorias WHERE id = ?`, [input.id]);
     return { ok: true };
   }),
@@ -26594,7 +27600,7 @@ var custosRouter = router({
     await ensureTables2(db);
     const [uso] = await db.$client.execute(`SELECT COUNT(*) AS n FROM custo_lancamentos WHERE cartao_id = ?`, [input.id]);
     const n = Number(uso[0]?.n ?? 0);
-    if (n > 0) throw new TRPCError37({ code: "BAD_REQUEST", message: `Em uso por ${n} gasto(s). Desmarque "Ativo" para escond\xEA-lo sem perder o hist\xF3rico.` });
+    if (n > 0) throw new TRPCError38({ code: "BAD_REQUEST", message: `Em uso por ${n} gasto(s). Desmarque "Ativo" para escond\xEA-lo sem perder o hist\xF3rico.` });
     await db.$client.execute(`DELETE FROM custo_cartoes WHERE id = ?`, [input.id]);
     return { ok: true };
   }),
@@ -26753,9 +27759,11 @@ var custosRouter = router({
       gastoPorNome: r.gasto_por_nome,
       nfNumero: r.nf_numero,
       nfUrl: r.nf_url,
+      semNotaMotivo: r.sem_nota_motivo ?? null,
       observacoes: r.observacoes,
       origem: String(r.origem),
       serieId: r.serie_id ?? null,
+      parcelasTotal: r.parcelas_total ? Number(r.parcelas_total) : null,
       criadoPorNome: r.criado_por_nome,
       conferencia: ["conferido", "devolvido"].includes(r.conferencia_status) ? r.conferencia_status : "pendente",
       conferidoPorNome: r.conferido_por_nome,
@@ -26784,9 +27792,13 @@ var custosRouter = router({
     const db = await getDbOrThrow2();
     await ensureTables2(db);
     const permitidas = await plantasPermitidas(ctx);
+    exigirNotaOuMotivo(input);
     const { valor, tipo } = await prepararEntrada(db, input, permitidas);
+    validarParcelas(input);
     const status = input.status ?? "pago";
-    const n = input.repetirMeses ?? 1;
+    const nParc = input.parcelas ?? 1;
+    const n = nParc > 1 ? nParc : input.repetirMeses ?? 1;
+    const valoresParcela = nParc > 1 ? dividirParcelas(valor, nParc) : null;
     const serieId = n > 1 ? randomUUID() : null;
     let primeiroId = 0;
     for (let k = 0; k < n; k++) {
@@ -26797,8 +27809,8 @@ var custosRouter = router({
       const [res] = await db.$client.execute(
         `INSERT INTO custo_lancamentos
            (data_competencia, data_vencimento, data_pagamento, status, planta_id, categoria_id, tipo, descricao, favorecido, valor,
-            forma_pagamento, cartao_id, gasto_por_colaborador_id, gasto_por_nome, nf_numero, nf_url, observacoes, origem, criado_por, criado_por_nome, serie_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'manual', ?, ?, ?)`,
+            forma_pagamento, cartao_id, gasto_por_colaborador_id, gasto_por_nome, nf_numero, nf_url, sem_nota_motivo, observacoes, origem, criado_por, criado_por_nome, serie_id, parcelas_total)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'manual', ?, ?, ?, ?)`,
         [
           comp,
           venc,
@@ -26807,19 +27819,22 @@ var custosRouter = router({
           input.plantaId ?? null,
           input.categoriaId,
           tipo,
-          input.descricao.trim(),
+          valoresParcela ? `${input.descricao.trim()} (${k + 1}/${nParc})`.slice(0, 255) : input.descricao.trim(),
           limpa(input.favorecido),
-          valor,
+          valoresParcela ? valoresParcela[k] : valor,
           input.formaPagamento ?? null,
           exigeCartao(input.formaPagamento) ? input.cartaoId ?? null : null,
           input.gastoPorColaboradorId ?? null,
           limpa(input.gastoPorNome) ?? ctx.user.name ?? null,
-          k === 0 ? limpa(input.nfNumero) : null,
-          k === 0 ? limpa(input.nfUrl) : null,
+          // parcelas são a mesma compra: a nota vale para todas
+          k === 0 || valoresParcela ? limpa(input.nfNumero) : null,
+          k === 0 || valoresParcela ? limpa(input.nfUrl) : null,
+          k === 0 || valoresParcela ? motivoSemNota(input) : null,
           limpa(input.observacoes),
           ctx.user.id ?? null,
           ctx.user.name ?? null,
-          serieId
+          serieId,
+          valoresParcela ? nParc : null
         ]
       );
       if (k === 0) primeiroId = Number(res.insertId);
@@ -26830,10 +27845,14 @@ var custosRouter = router({
     const db = await getDbOrThrow2();
     await ensureTables2(db);
     const permitidas = await plantasPermitidas(ctx);
-    const [atual] = await db.$client.execute(`SELECT planta_id, origem FROM custo_lancamentos WHERE id = ?`, [input.id]);
+    const [atual] = await db.$client.execute(`SELECT planta_id, origem, serie_id, valor, parcelas_total FROM custo_lancamentos WHERE id = ?`, [input.id]);
     const reg = atual[0];
-    if (!reg) throw new TRPCError37({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
+    if (!reg) throw new TRPCError38({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
     exigirPlanta(permitidas, reg.planta_id);
+    if ((input.parcelas ?? 1) > 1) {
+      validarParcelas(input);
+      if (reg.serie_id) throw new TRPCError38({ code: "BAD_REQUEST", message: "Este gasto j\xE1 faz parte de uma s\xE9rie ou de um parcelamento" });
+    }
     if (reg.origem === "extrato_pedagio") {
       exigirPlanta(permitidas, input.plantaId);
       await db.$client.execute(
@@ -26843,10 +27862,11 @@ var custosRouter = router({
       return { ok: true };
     }
     const { valor, tipo } = await prepararEntrada(db, input, permitidas);
+    if (reg.parcelas_total && Math.abs(valor - Number(reg.valor)) > 4e-3) throw new TRPCError38({ code: "BAD_REQUEST", message: "O valor de uma compra parcelada n\xE3o pode ser alterado" });
     await db.$client.execute(
       `UPDATE custo_lancamentos SET data_competencia=?, data_vencimento=?, data_pagamento=?, status=COALESCE(?, status), planta_id=?, categoria_id=?,
            tipo=?, descricao=?, favorecido=?, valor=?, forma_pagamento=?, cartao_id=?, gasto_por_colaborador_id=?, gasto_por_nome=?,
-           nf_numero=?, nf_url=?, observacoes=?,
+           nf_numero=?, nf_url=?, sem_nota_motivo=?, observacoes=?,
            conferencia_status='pendente', conferido_por=NULL, conferido_por_nome=NULL, conferido_em=NULL WHERE id=?`,
       [
         input.dataVencimento ?? input.dataCompetencia,
@@ -26865,10 +27885,12 @@ var custosRouter = router({
         limpa(input.gastoPorNome),
         limpa(input.nfNumero),
         limpa(input.nfUrl),
+        motivoSemNota(input),
         limpa(input.observacoes),
         input.id
       ]
     );
+    if ((input.parcelas ?? 1) > 1) await parcelarExistente(db, input.id, input.parcelas, input.descricao.trim(), valor);
     return { ok: true };
   }),
   // ── Conferência: uma pessoa designada confere se o gasto foi preenchido corretamente ──
@@ -26888,13 +27910,13 @@ var custosRouter = router({
     const db = await getDbOrThrow2();
     await ensureTables2(db);
     if (!await ehConferente(db, ctx)) {
-      throw new TRPCError37({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel pela confer\xEAncia pode fazer isso" });
+      throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 o respons\xE1vel pela confer\xEAncia pode fazer isso" });
     }
     if (input.resultado === "devolvido" && !input.motivo) {
-      throw new TRPCError37({ code: "BAD_REQUEST", message: "Explique o que precisa ser corrigido" });
+      throw new TRPCError38({ code: "BAD_REQUEST", message: "Explique o que precisa ser corrigido" });
     }
     if (input.resultado === "conferido" && !input.centroCusto) {
-      throw new TRPCError37({ code: "BAD_REQUEST", message: "Escolha o centro de custo" });
+      throw new TRPCError38({ code: "BAD_REQUEST", message: "Escolha o centro de custo" });
     }
     const permitidas = await plantasPermitidas(ctx);
     const marcas = input.ids.map(() => "?").join(",");
@@ -26925,18 +27947,18 @@ var custosRouter = router({
     const db = await getDbOrThrow2();
     await ensureTables2(db);
     if (!await ehConferente(db, ctx)) {
-      throw new TRPCError37({ code: "FORBIDDEN", message: "S\xF3 quem confere os gastos pode editar direto na tabela" });
+      throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 quem confere os gastos pode editar direto na tabela" });
     }
     const permitidas = await plantasPermitidas(ctx);
-    const [rows2] = await db.$client.execute(`SELECT id, planta_id, origem, status FROM custo_lancamentos WHERE id = ?`, [input.id]);
+    const [rows2] = await db.$client.execute(`SELECT id, planta_id, origem, status, parcelas_total FROM custo_lancamentos WHERE id = ?`, [input.id]);
     const reg = rows2[0];
-    if (!reg) throw new TRPCError37({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
-    if (reg.status === "cancelado") throw new TRPCError37({ code: "BAD_REQUEST", message: "Gasto cancelado n\xE3o pode ser editado" });
+    if (!reg) throw new TRPCError38({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
+    if (reg.status === "cancelado") throw new TRPCError38({ code: "BAD_REQUEST", message: "Gasto cancelado n\xE3o pode ser editado" });
     exigirPlanta(permitidas, reg.planta_id);
     if (reg.origem === "extrato_pedagio" && !["plantaId", "observacoes", "nfNumero", "centroCusto", "tipoCusto"].includes(input.campo)) {
-      throw new TRPCError37({ code: "BAD_REQUEST", message: "Este ped\xE1gio veio do extrato: s\xF3 local, complemento, n\xBA documento e centro de custo podem mudar" });
+      throw new TRPCError38({ code: "BAD_REQUEST", message: "Este ped\xE1gio veio do extrato: s\xF3 local, complemento, n\xBA documento e centro de custo podem mudar" });
     }
-    const erro = (m) => new TRPCError37({ code: "BAD_REQUEST", message: m });
+    const erro = (m) => new TRPCError38({ code: "BAD_REQUEST", message: m });
     const v = input.valor;
     const s = v === null || v === void 0 ? "" : String(v).trim();
     const sets = [];
@@ -26973,6 +27995,7 @@ var custosRouter = router({
         sets.push(["tipo", s]);
         break;
       case "valor": {
+        if (reg.parcelas_total) throw erro("O valor de uma compra parcelada n\xE3o pode ser alterado");
         const n = parseValor(v);
         if (n === null || n <= 0) throw erro("Valor inv\xE1lido");
         sets.push(["valor", n]);
@@ -27105,6 +28128,9 @@ var custosRouter = router({
         gastoPorNome: r.gasto_por_nome,
         nfNumero: r.nf_numero,
         nfUrl: r.nf_url,
+        semNotaMotivo: r.sem_nota_motivo ?? null,
+        serieId: r.serie_id ?? null,
+        parcelasTotal: r.parcelas_total ? Number(r.parcelas_total) : null,
         observacoes: r.observacoes,
         origem: String(r.origem),
         conferencia,
@@ -27126,52 +28152,101 @@ var custosRouter = router({
       }
     };
   }),
+  /** Lê a foto/PDF da nota por IA e devolve sugestões para preencher o formulário (a pessoa confere antes de salvar). */
+  lerNota: moduleProcedure(SLUG2, MEUS).input(z49.object({ url: z49.string().url().max(2e3) })).mutation(async ({ input }) => {
+    const db = await getDbOrThrow2();
+    await ensureTables2(db);
+    const [cs] = await db.$client.execute(`SELECT id, nome FROM custo_categorias WHERE ativa = 1 AND origem_automatica = 0 ORDER BY ordem, nome`);
+    const cats = cs.map((c) => ({ id: Number(c.id), nome: String(c.nome) }));
+    let cnpjEmpresa = (process.env.NFE_COMPRAS_CNPJ ?? "").replace(/\D/g, "") || null;
+    if (!cnpjEmpresa) {
+      try {
+        const { carregarCertificado: carregarCertificado2 } = await Promise.resolve().then(() => (init_sefaz(), sefaz_exports));
+        cnpjEmpresa = carregarCertificado2().cnpj;
+      } catch {
+        cnpjEmpresa = null;
+      }
+    }
+    const { lerNotaPorIA: lerNotaPorIA2 } = await Promise.resolve().then(() => (init_leituraNota(), leituraNota_exports));
+    let l;
+    try {
+      l = await lerNotaPorIA2(input.url, cats.map((c) => c.nome), cnpjEmpresa);
+    } catch (e) {
+      throw new TRPCError38({ code: "BAD_REQUEST", message: String(e?.message ?? "N\xE3o foi poss\xEDvel ler a nota") });
+    }
+    if (l.nfNumero && l.valor) {
+      const [dup] = await db.$client.execute(
+        `SELECT DATE_FORMAT(data_competencia, '%d/%m/%Y') AS d FROM custo_lancamentos WHERE nf_numero = ? AND ABS(valor - ?) < 0.01 AND status <> 'cancelado' LIMIT 1`,
+        [l.nfNumero, l.valor]
+      );
+      if (dup.length) l.avisos.push(`J\xE1 existe um gasto com a NF ${l.nfNumero} e o mesmo valor (lan\xE7ado em ${dup[0].d}). Confira se n\xE3o \xE9 duplicado.`);
+    }
+    return { ...l, categoriaId: cats.find((c) => c.nome === l.categoria)?.id ?? null };
+  }),
   meusCriar: moduleProcedure(MEUS).input(entradaCusto.omit({ repetirMeses: true, status: true, dataVencimento: true, dataPagamento: true })).mutation(async ({ input, ctx }) => {
     const db = await getDbOrThrow2();
     await ensureTables2(db);
     const permitidas = await plantasPermitidas(ctx);
+    exigirNotaOuMotivo(input);
     const { valor, tipo } = await prepararEntrada(db, input, permitidas);
-    const [res] = await db.$client.execute(
-      `INSERT INTO custo_lancamentos
-         (data_competencia, data_pagamento, status, planta_id, categoria_id, tipo, descricao, favorecido, valor,
-          forma_pagamento, cartao_id, gasto_por_nome, nf_numero, nf_url, observacoes, origem, criado_por, criado_por_nome)
-         VALUES (?,?, 'pago', ?,?,?,?,?,?,?,?,?,?,?,?, 'colaborador', ?, ?)`,
-      [
-        input.dataCompetencia,
-        input.dataCompetencia,
-        input.plantaId ?? null,
-        input.categoriaId,
-        tipo,
-        input.descricao.trim(),
-        limpa(input.favorecido),
-        valor,
-        input.formaPagamento ?? null,
-        exigeCartao(input.formaPagamento) ? input.cartaoId ?? null : null,
-        limpa(input.gastoPorNome) ?? ctx.user.name ?? null,
-        limpa(input.nfNumero),
-        limpa(input.nfUrl),
-        limpa(input.observacoes),
-        ctx.user.id ?? null,
-        ctx.user.name ?? null
-      ]
-    );
-    const novoId = Number(res.insertId);
-    await db.$client.execute(`UPDATE custo_lancamentos SET data_vencimento = data_competencia WHERE id = ?`, [novoId]);
-    return { id: novoId, criados: 1 };
+    validarParcelas(input);
+    const nParc = input.parcelas ?? 1;
+    const valoresParcela = nParc > 1 ? dividirParcelas(valor, nParc) : null;
+    const serieId = valoresParcela ? randomUUID() : null;
+    let primeiroId = 0;
+    for (let k = 0; k < nParc; k++) {
+      const venc = somarMeses(input.dataCompetencia, k);
+      const [res] = await db.$client.execute(
+        `INSERT INTO custo_lancamentos
+           (data_competencia, data_vencimento, data_pagamento, status, planta_id, categoria_id, tipo, descricao, favorecido, valor,
+            forma_pagamento, cartao_id, gasto_por_nome, nf_numero, nf_url, sem_nota_motivo, observacoes, origem, criado_por, criado_por_nome, serie_id, parcelas_total)
+           VALUES (?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?,?,?, 'colaborador', ?, ?, ?, ?)`,
+        [
+          venc,
+          venc,
+          k === 0 && (nParc === 1 || input.primeiraPaga) ? input.dataCompetencia : null,
+          k === 0 && (nParc === 1 || input.primeiraPaga) ? "pago" : "pendente",
+          input.plantaId ?? null,
+          input.categoriaId,
+          tipo,
+          valoresParcela ? `${input.descricao.trim()} (${k + 1}/${nParc})`.slice(0, 255) : input.descricao.trim(),
+          limpa(input.favorecido),
+          valoresParcela ? valoresParcela[k] : valor,
+          input.formaPagamento ?? null,
+          exigeCartao(input.formaPagamento) ? input.cartaoId ?? null : null,
+          limpa(input.gastoPorNome) ?? ctx.user.name ?? null,
+          limpa(input.nfNumero),
+          limpa(input.nfUrl),
+          motivoSemNota(input),
+          limpa(input.observacoes),
+          ctx.user.id ?? null,
+          ctx.user.name ?? null,
+          serieId,
+          valoresParcela ? nParc : null
+        ]
+      );
+      if (k === 0) primeiroId = Number(res.insertId);
+    }
+    return { id: primeiroId, criados: nParc };
   }),
   meusEditar: moduleProcedure(MEUS).input(entradaCusto.omit({ repetirMeses: true, status: true, dataVencimento: true, dataPagamento: true }).extend({ id: z49.number().int().positive() })).mutation(async ({ input, ctx }) => {
     const db = await getDbOrThrow2();
     await ensureTables2(db);
     const permitidas = await plantasPermitidas(ctx);
-    const [atual] = await db.$client.execute(`SELECT criado_por, conferencia_status, status FROM custo_lancamentos WHERE id = ?`, [input.id]);
+    const [atual] = await db.$client.execute(`SELECT criado_por, conferencia_status, status, serie_id, valor, parcelas_total FROM custo_lancamentos WHERE id = ?`, [input.id]);
     const reg = atual[0];
-    if (!reg || Number(reg.criado_por) !== Number(ctx.user.id)) throw new TRPCError37({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
-    if (reg.status === "cancelado") throw new TRPCError37({ code: "BAD_REQUEST", message: "Este gasto foi cancelado" });
-    if (reg.conferencia_status === "conferido") throw new TRPCError37({ code: "BAD_REQUEST", message: "Este gasto j\xE1 foi conferido e n\xE3o pode mais ser alterado" });
+    if (!reg || Number(reg.criado_por) !== Number(ctx.user.id)) throw new TRPCError38({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
+    if ((input.parcelas ?? 1) > 1) {
+      validarParcelas(input);
+      if (reg.serie_id) throw new TRPCError38({ code: "BAD_REQUEST", message: "Este gasto j\xE1 faz parte de uma s\xE9rie ou de um parcelamento" });
+    }
+    if (reg.status === "cancelado") throw new TRPCError38({ code: "BAD_REQUEST", message: "Este gasto foi cancelado" });
+    if (reg.conferencia_status === "conferido") throw new TRPCError38({ code: "BAD_REQUEST", message: "Este gasto j\xE1 foi conferido e n\xE3o pode mais ser alterado" });
     const { valor, tipo } = await prepararEntrada(db, input, permitidas);
+    if (reg.parcelas_total && Math.abs(valor - Number(reg.valor)) > 4e-3) throw new TRPCError38({ code: "BAD_REQUEST", message: "O valor de uma compra parcelada n\xE3o pode ser alterado" });
     await db.$client.execute(
       `UPDATE custo_lancamentos SET data_competencia=?, data_pagamento=?, planta_id=?, categoria_id=?, tipo=?, descricao=?, favorecido=?, valor=?,
-           forma_pagamento=?, cartao_id=?, gasto_por_nome=?, nf_numero=?, nf_url=?, observacoes=?,
+           forma_pagamento=?, cartao_id=?, gasto_por_nome=?, nf_numero=?, nf_url=?, sem_nota_motivo=?, observacoes=?,
            conferencia_status='pendente', conferido_por=NULL, conferido_por_nome=NULL, conferido_em=NULL WHERE id=?`,
       [
         input.dataCompetencia,
@@ -27187,11 +28262,13 @@ var custosRouter = router({
         limpa(input.gastoPorNome),
         limpa(input.nfNumero),
         limpa(input.nfUrl),
+        motivoSemNota(input),
         limpa(input.observacoes),
         input.id
       ]
     );
     await db.$client.execute(`UPDATE custo_lancamentos SET data_vencimento = data_competencia WHERE id = ?`, [input.id]);
+    if ((input.parcelas ?? 1) > 1) await parcelarExistente(db, input.id, input.parcelas, input.descricao.trim(), valor);
     return { ok: true };
   }),
   meusCancelar: moduleProcedure(MEUS).input(z49.object({ id: z49.number().int().positive() })).mutation(async ({ input, ctx }) => {
@@ -27201,7 +28278,7 @@ var custosRouter = router({
       `UPDATE custo_lancamentos SET status = 'cancelado' WHERE id = ? AND criado_por = ? AND conferencia_status <> 'conferido'`,
       [input.id, ctx.user.id]
     );
-    if (!Number(res.affectedRows)) throw new TRPCError37({ code: "BAD_REQUEST", message: "Este gasto j\xE1 foi conferido ou n\xE3o \xE9 seu" });
+    if (!Number(res.affectedRows)) throw new TRPCError38({ code: "BAD_REQUEST", message: "Este gasto j\xE1 foi conferido ou n\xE3o \xE9 seu" });
     return { ok: true };
   }),
   // Importação por planilha: com confirmar=false só mostra a prévia (nada é gravado); com confirmar=true grava as linhas válidas.
@@ -27319,7 +28396,7 @@ var custosRouter = router({
     inicio: z49.string().refine(dataValida, "Data inv\xE1lida"),
     fim: z49.string().refine(dataValida, "Data inv\xE1lida")
   })).query(async ({ input, ctx }) => {
-    if (input.fim < input.inicio) throw new TRPCError37({ code: "BAD_REQUEST", message: "O fim do per\xEDodo \xE9 anterior ao in\xEDcio" });
+    if (input.fim < input.inicio) throw new TRPCError38({ code: "BAD_REQUEST", message: "O fim do per\xEDodo \xE9 anterior ao in\xEDcio" });
     const db = await getDbOrThrow2();
     await ensureTables2(db);
     const permitidas = await plantasPermitidas(ctx);
@@ -27328,7 +28405,7 @@ var custosRouter = router({
     } catch {
     }
     const meses = (Date.UTC(+input.fim.slice(0, 4), +input.fim.slice(5, 7) - 1, 1) - Date.UTC(+input.inicio.slice(0, 4), +input.inicio.slice(5, 7) - 1, 1)) / (30 * 864e5);
-    if (meses > 36) throw new TRPCError37({ code: "BAD_REQUEST", message: "Escolha no m\xE1ximo 36 meses" });
+    if (meses > 36) throw new TRPCError38({ code: "BAD_REQUEST", message: "Escolha no m\xE1ximo 36 meses" });
     let getFolhaMes;
     if (ctx.user.role === "admin") {
       const { payrollRouter: payrollRouter2 } = await Promise.resolve().then(() => (init_payroll(), payroll_exports));
@@ -27389,9 +28466,9 @@ var custosRouter = router({
     await ensureTables2(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM custo_lancamentos WHERE id = ?`, [input.id]);
     const reg = rows2[0];
-    if (!reg) throw new TRPCError37({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
+    if (!reg) throw new TRPCError38({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
     if (reg.origem === "extrato_pedagio") {
-      throw new TRPCError37({ code: "BAD_REQUEST", message: "Ped\xE1gios do extrato n\xE3o podem ser exclu\xEDdos (voltariam na pr\xF3xima atualiza\xE7\xE3o). Use Cancelar." });
+      throw new TRPCError38({ code: "BAD_REQUEST", message: "Ped\xE1gios do extrato n\xE3o podem ser exclu\xEDdos (voltariam na pr\xF3xima atualiza\xE7\xE3o). Use Cancelar." });
     }
     let alvo = [reg];
     if (input.serie && reg.serie_id) {
@@ -27417,9 +28494,9 @@ var custosRouter = router({
     const permitidas = await plantasPermitidas(ctx);
     const [atual] = await db.$client.execute(`SELECT planta_id, serie_id, data_competencia FROM custo_lancamentos WHERE id = ?`, [input.id]);
     const reg = atual[0];
-    if (!reg) throw new TRPCError37({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
+    if (!reg) throw new TRPCError38({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
     exigirPlanta(permitidas, reg.planta_id);
-    if (!reg.serie_id) throw new TRPCError37({ code: "BAD_REQUEST", message: "Este gasto n\xE3o faz parte de uma repeti\xE7\xE3o" });
+    if (!reg.serie_id) throw new TRPCError38({ code: "BAD_REQUEST", message: "Este gasto n\xE3o faz parte de uma repeti\xE7\xE3o" });
     const [res] = await db.$client.execute(
       `UPDATE custo_lancamentos SET status = 'cancelado' WHERE serie_id = ? AND data_competencia >= ? AND status = 'pendente'`,
       [reg.serie_id, reg.data_competencia]
@@ -27437,7 +28514,7 @@ var custosRouter = router({
     const permitidas = await plantasPermitidas(ctx);
     const [atual] = await db.$client.execute(`SELECT planta_id FROM custo_lancamentos WHERE id = ?`, [input.id]);
     const reg = atual[0];
-    if (!reg) throw new TRPCError37({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
+    if (!reg) throw new TRPCError38({ code: "NOT_FOUND", message: "Lan\xE7amento n\xE3o encontrado" });
     exigirPlanta(permitidas, reg.planta_id);
     const hoje = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     if (input.status === "pago") {
@@ -27457,7 +28534,7 @@ init_trpc();
 init_permissions();
 init_notifications();
 import { z as z50 } from "zod";
-import { TRPCError as TRPCError38 } from "@trpc/server";
+import { TRPCError as TRPCError39 } from "@trpc/server";
 var USO = "tarefas";
 var GESTAO = "tarefas-gestao";
 var STATUS = ["a_fazer", "andamento", "concluida"];
@@ -27475,7 +28552,7 @@ var dataIso = z50.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 async function getDbOrThrow3() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError38({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError39({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
 var ensurePromise4 = null;
@@ -27516,7 +28593,13 @@ function ensureTables3(db) {
         ["responsavel_user_id", "INT NULL"],
         ["pendencia_resp_ids", "VARCHAR(255) NULL"],
         ["pendencia_descricao", "TEXT NULL"],
-        ["pendencia_resp_nomes", "VARCHAR(600) NULL"]
+        ["pendencia_resp_nomes", "VARCHAR(600) NULL"],
+        // tarefa criada para alguém fora da hierarquia de quem criou: precisa da autorização do superior
+        ["autorizacao", "VARCHAR(12) NULL"],
+        ["autorizador_user_id", "INT NULL"],
+        ["autorizador_nome", "VARCHAR(120) NULL"],
+        ["autorizacao_motivo", "VARCHAR(300) NULL"],
+        ["autorizacao_em", "DATETIME NULL"]
       ]) {
         if (!tem.has(nome)) await db.$client.execute(`ALTER TABLE tarefas ADD COLUMN ${nome} ${def}`);
       }
@@ -27618,8 +28701,42 @@ function mapTarefa(r) {
     pendenciaDesde: dt(r.pendencia_desde),
     pendenciaDescricao: r.pendencia_descricao ?? null,
     pendenciaRespIds: String(r.pendencia_resp_ids ?? "").split(",").filter(Boolean).map(Number),
-    pendenciaRespNomes: r.pendencia_resp_nomes ?? null
+    pendenciaRespNomes: r.pendencia_resp_nomes ?? null,
+    autorizacao: r.autorizacao ?? null,
+    autorizadorNome: r.autorizador_nome ?? null,
+    autorizacaoMotivo: r.autorizacao_motivo ?? null
   };
+}
+async function regraAtribuicao(db, ctx, respColabId) {
+  if (ctx.user.role === "admin") return { direto: true };
+  const meus = await meusColaboradorIds(db, ctx.user.id);
+  if (meus.includes(respColabId)) return { direto: true };
+  const [c] = await db.$client.execute(`SELECT user_id FROM collaborators WHERE id = ?`, [respColabId]);
+  const alvo = Number(c[0]?.user_id ?? 0);
+  if (alvo && alvo === Number(ctx.user.id)) return { direto: true };
+  const mapa = await mapaSuperiores(db);
+  if (alvo && subordinadosDe(mapa, Number(ctx.user.id)).has(alvo)) return { direto: true };
+  const sup = mapa.get(Number(ctx.user.id)) ?? null;
+  let nome = null;
+  if (sup) {
+    const [u] = await db.$client.execute(`SELECT name FROM users WHERE id = ?`, [sup]);
+    nome = u[0]?.name?.trim() || null;
+  }
+  return { direto: false, autorizadorId: sup, autorizadorNome: nome };
+}
+async function avisarAutorizador(db, ctx, tarefaId, titulo, para, autorizadorId) {
+  try {
+    let ids = [];
+    if (autorizadorId) ids = [autorizadorId];
+    else {
+      const [a] = await db.$client.execute(`SELECT id FROM users WHERE role = 'admin'`);
+      ids = a.map((x) => Number(x.id));
+    }
+    ids = ids.filter((id) => id !== Number(ctx.user.id));
+    if (ids.length) await notifyUsers({ recipientUserIds: ids, type: "geral", title: "Tarefa aguardando sua autoriza\xE7\xE3o", message: `${ctx.user.name ?? "Um colaborador"} quer criar a tarefa "${titulo}" para ${para}`, relatedId: tarefaId, relatedType: "tarefa" });
+  } catch (e) {
+    console.warn("[tarefas] aviso de autoriza\xE7\xE3o:", e?.message);
+  }
 }
 async function registrar(db, tarefaId, tipo, texto, fotoUrl, ctx) {
   await db.$client.execute(
@@ -27632,7 +28749,7 @@ async function recuperarPendenciasAntigas(db) {
     const [n] = await db.$client.execute(`SELECT COUNT(*) AS n FROM tarefa_pendencias`);
     if (Number(n[0]?.n ?? 0) > 0) return;
     const [ev] = await db.$client.execute(
-      `SELECT tarefa_id, tipo, texto, user_id, user_nome, created_at FROM tarefa_historico WHERE tipo IN (pendencia,status) ORDER BY tarefa_id, id`
+      `SELECT tarefa_id, tipo, texto, user_id, user_nome, created_at FROM tarefa_historico WHERE tipo IN ('pendencia','status') ORDER BY tarefa_id, id`
     );
     const porLabel = Object.fromEntries(Object.entries(PENDENCIA_LABEL).map(([k, v]) => [v, k]));
     const atual = /* @__PURE__ */ new Map();
@@ -27655,15 +28772,15 @@ async function recuperarPendenciasAntigas(db) {
         const label = Object.keys(porLabel).find((l) => texto.startsWith(l));
         if (!label) continue;
         await fechar(tid, e, "trocada");
-        let resto = texto.slice(label.length).replace(/^:s*/, "");
+        let resto = texto.slice(label.length).replace(/^:\s*/, "");
         let desc34 = null;
         let resp = null;
-        const mD = resto.match(/ · Descrição: ([sS]*)$/);
+        const mD = resto.match(/ · Descrição: ([\s\S]*)$/);
         if (mD) {
           desc34 = mD[1];
           resto = resto.slice(0, mD.index);
         }
-        const mR = resto.match(/ · Responsável(is): ([sS]*)$/);
+        const mR = resto.match(/ · Responsável\(is\): ([\s\S]*)$/);
         if (mR) {
           resp = mR[1];
           resto = resto.slice(0, mR.index);
@@ -27736,7 +28853,8 @@ async function podeAcessar(db, ctx, t2) {
   const meus = await meusColaboradorIds(db, ctx.user.id);
   const idsPend = String(t2.pendencia_resp_ids ?? "");
   const pendResp = !!t2.pendencia && meus.some((id) => idsPend.includes(`,${id},`));
-  return { gestor, pendResp, responsavel: meus.includes(Number(t2.responsavel_colaborador_id)) || Number(t2.responsavel_user_id) === Number(ctx.user.id), criador: Number(t2.criado_por) === Number(ctx.user.id) };
+  const autorizador = t2.autorizacao === "pendente" && (ctx.user.role === "admin" || Number(t2.autorizador_user_id) === Number(ctx.user.id));
+  return { gestor, pendResp, autorizador, responsavel: meus.includes(Number(t2.responsavel_colaborador_id)) || Number(t2.responsavel_user_id) === Number(ctx.user.id), criador: Number(t2.criado_por) === Number(ctx.user.id) };
 }
 var MARCA_META = "meta_semanal";
 var MSG_META = "Esta tarefa vem da Meta Semanal: o andamento segue a meta. Abra a meta para alterar.";
@@ -27833,10 +28951,23 @@ var tarefasRouter = router({
     const gestor = await ehGestor(ctx);
     const meus = await meusColaboradorIds(db, ctx.user.id);
     const [rows2] = await db.$client.execute(`SELECT id, name, user_id FROM collaborators WHERE (active = 1 OR active IS NULL) ORDER BY name`);
+    const admin = ctx.user.role === "admin";
+    const mapa = await mapaSuperiores(db);
+    const abaixo = subordinadosDe(mapa, Number(ctx.user.id));
+    const diretos = admin ? null : rows2.filter((r) => meus.includes(Number(r.id)) || r.user_id && (Number(r.user_id) === Number(ctx.user.id) || abaixo.has(Number(r.user_id)))).map((r) => Number(r.id));
+    const sup = mapa.get(Number(ctx.user.id));
+    let meuSuperiorNome = null;
+    if (sup) {
+      const [u] = await db.$client.execute(`SELECT name FROM users WHERE id = ?`, [sup]);
+      meuSuperiorNome = u[0]?.name?.trim() || null;
+    }
     return {
       gestor,
+      admin,
       meuColaboradorId: meus[0] ?? null,
-      colaboradores: gestor ? rows2.map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome) : [],
+      diretos,
+      meuSuperiorNome,
+      colaboradores: rows2.map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome),
       // quem pode ser responsável por uma pendência: colaborador ativo que tem usuário (login) no sistema
       pessoas: rows2.filter((r) => r.user_id).map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome)
     };
@@ -27858,10 +28989,12 @@ var tarefasRouter = router({
     const pend = meus.map(() => "t.pendencia_resp_ids LIKE ?").join(" OR ");
     const filtroResp = meus.length ? `(t.responsavel_colaborador_id IN (${meus.map(() => "?").join(",")}) OR t.responsavel_user_id = ? OR (t.pendencia IS NOT NULL AND (${pend})))` : `t.responsavel_user_id = ?`;
     const [rows2] = await db.$client.execute(
+      // + as que eu pedi para outra pessoa e ainda aguardam autorização (ou foram recusadas)
       `${SELECT_TAREFA}
-         WHERE ${filtroResp} AND (t.status <> 'concluida' OR t.concluida_em >= ?)
+         WHERE ((${filtroResp} AND t.autorizacao IS NULL) OR (t.autorizacao IS NOT NULL AND t.criado_por = ?))
+           AND (t.status <> 'concluida' OR t.concluida_em >= ?)
          ORDER BY t.prazo IS NULL, t.prazo, t.id DESC LIMIT 500`,
-      meus.length ? [...meus, ctx.user.id, ...meus.map((id) => `%,${id},%`), desde] : [ctx.user.id, desde]
+      meus.length ? [...meus, ctx.user.id, ...meus.map((id) => `%,${id},%`), ctx.user.id, desde] : [ctx.user.id, ctx.user.id, desde]
     );
     const itens = rows2.map(mapTarefa);
     return { itens, semVinculo: !meus.length && itens.length === 0 };
@@ -27881,7 +29014,7 @@ var tarefasRouter = router({
     await sincronizarMetas(db);
     const hoje = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const desde = new Date(Date.now() - input.concluidasDias * 864e5).toISOString().slice(0, 19).replace("T", " ");
-    const where = ["(t.status <> 'concluida' OR t.concluida_em >= ?)"];
+    const where = ["(t.status <> 'concluida' OR t.concluida_em >= ?)", "t.autorizacao IS NULL"];
     const params = [desde];
     if (input.colaboradorId) {
       where.push("t.responsavel_colaborador_id = ?");
@@ -27936,35 +29069,50 @@ var tarefasRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbOrThrow3();
     await ensureTables3(db);
-    const gestor = await ehGestor(ctx);
     let resp = input.responsavelColaboradorId ?? null;
-    if (!gestor) {
+    if (!resp) {
       const meus = await meusColaboradorIds(db, ctx.user.id);
-      if (!meus.length) throw new TRPCError38({ code: "BAD_REQUEST", message: "Seu usu\xE1rio n\xE3o est\xE1 ligado a um colaborador. Fale com o escrit\xF3rio." });
+      if (!meus.length) throw new TRPCError39({ code: "BAD_REQUEST", message: "Seu usu\xE1rio n\xE3o est\xE1 ligado a um colaborador. Fale com o escrit\xF3rio." });
       resp = meus[0];
-    } else if (!resp) {
-      throw new TRPCError38({ code: "BAD_REQUEST", message: "Escolha o respons\xE1vel pela tarefa" });
     }
     const [c] = await db.$client.execute(`SELECT id, name FROM collaborators WHERE id = ? AND (active = 1 OR active IS NULL)`, [resp]);
     const colab = c[0];
-    if (!colab) throw new TRPCError38({ code: "BAD_REQUEST", message: "Colaborador inv\xE1lido ou inativo" });
+    if (!colab) throw new TRPCError39({ code: "BAD_REQUEST", message: "Colaborador inv\xE1lido ou inativo" });
+    const nomeResp = String(colab.name ?? "").trim();
+    const regra = await regraAtribuicao(db, ctx, resp);
+    const aut = regra.direto ? null : regra;
     const [res] = await db.$client.execute(
-      `INSERT INTO tarefas (titulo, descricao, prioridade, prazo, local_id, responsavel_colaborador_id, responsavel_nome, criado_por, criado_por_nome)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [input.titulo, input.descricao || null, input.prioridade, input.prazo ?? null, input.localId ?? null, resp, String(colab.name ?? "").trim(), ctx.user.id ?? null, ctx.user.name ?? null]
+      `INSERT INTO tarefas (titulo, descricao, prioridade, prazo, local_id, responsavel_colaborador_id, responsavel_nome, criado_por, criado_por_nome,
+           autorizacao, autorizador_user_id, autorizador_nome)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.titulo,
+        input.descricao || null,
+        input.prioridade,
+        input.prazo ?? null,
+        input.localId ?? null,
+        resp,
+        nomeResp,
+        ctx.user.id ?? null,
+        ctx.user.name ?? null,
+        aut ? "pendente" : null,
+        aut?.autorizadorId ?? null,
+        aut ? aut.autorizadorNome ?? "Administrador" : null
+      ]
     );
     const id = Number(res.insertId);
-    await registrar(db, id, "criada", `Tarefa criada para ${String(colab.name ?? "").trim()}`, null, ctx);
-    return { id };
+    await registrar(db, id, "criada", `Tarefa criada para ${nomeResp}${aut ? ` \xB7 aguardando autoriza\xE7\xE3o de ${aut.autorizadorNome ?? "um administrador"}` : ""}`, null, ctx);
+    if (aut) await avisarAutorizador(db, ctx, id, input.titulo, nomeResp, aut.autorizadorId);
+    return { id, aguardandoAutorizacao: !!aut, autorizadorNome: aut ? aut.autorizadorNome ?? "um administrador" : null };
   }),
   detalhe: moduleProcedure(USO, GESTAO).input(z50.object({ id: z50.number().int().positive() })).query(async ({ input, ctx }) => {
     const db = await getDbOrThrow3();
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`${SELECT_TAREFA} WHERE t.id = ?`, [input.id]);
     const r = rows2[0];
-    if (!r) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (!r) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
     const acc = await podeAcessar(db, ctx, r);
-    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp && !acc.autorizador) throw new TRPCError39({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
     const [h] = await db.$client.execute(`SELECT id, tipo, texto, foto_url, user_id, user_nome, created_at FROM tarefa_historico WHERE tarefa_id = ? ORDER BY id`, [input.id]);
     const [an] = await db.$client.execute(`SELECT id, nome, url, mime, tamanho, user_id, user_nome, created_at FROM tarefa_anexos WHERE tarefa_id = ? ORDER BY id`, [input.id]);
     const [pe] = await db.$client.execute(`SELECT * FROM tarefa_pendencias WHERE tarefa_id = ? ORDER BY id`, [input.id]);
@@ -27976,7 +29124,8 @@ var tarefasRouter = router({
       meuUserId: Number(ctx.user.id),
       gestor: acc.gestor,
       podeEditar: r.origem !== MARCA_META && (acc.gestor || acc.criador),
-      podeMudar: true
+      podeMudar: !r.autorizacao,
+      podeAutorizar: acc.autorizador
     };
   }),
   editar: moduleProcedure(USO, GESTAO).input(z50.object({
@@ -27992,25 +29141,40 @@ var tarefasRouter = router({
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
     const t2 = rows2[0];
-    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
-    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    if (!t2) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError39({ code: "BAD_REQUEST", message: MSG_META });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 quem criou a tarefa ou um supervisor pode alter\xE1-la" });
+    if (!acc.gestor && !acc.criador) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 quem criou a tarefa ou um supervisor pode alter\xE1-la" });
     let resp = Number(t2.responsavel_colaborador_id);
     let nome = t2.responsavel_nome;
-    if (acc.gestor && input.responsavelColaboradorId && input.responsavelColaboradorId !== resp) {
+    let regra = null;
+    if (input.responsavelColaboradorId && input.responsavelColaboradorId !== resp) {
       const [c] = await db.$client.execute(`SELECT id, name FROM collaborators WHERE id = ? AND (active = 1 OR active IS NULL)`, [input.responsavelColaboradorId]);
       const colab = c[0];
-      if (!colab) throw new TRPCError38({ code: "BAD_REQUEST", message: "Colaborador inv\xE1lido ou inativo" });
+      if (!colab) throw new TRPCError39({ code: "BAD_REQUEST", message: "Colaborador inv\xE1lido ou inativo" });
       resp = input.responsavelColaboradorId;
       nome = String(colab.name ?? "").trim();
+      regra = await regraAtribuicao(db, ctx, resp);
       await registrar(db, input.id, "editada", `Respons\xE1vel alterado para ${nome}`, null, ctx);
+    } else if (t2.autorizacao === "recusada") {
+      regra = await regraAtribuicao(db, ctx, resp);
     }
+    const aut = regra && !regra.direto ? regra : null;
     await db.$client.execute(
       `UPDATE tarefas SET titulo = ?, descricao = ?, prioridade = ?, prazo = ?, local_id = ?, responsavel_colaborador_id = ?, responsavel_nome = ? WHERE id = ?`,
       [input.titulo, input.descricao || null, input.prioridade, input.prazo ?? null, input.localId ?? null, resp, nome, input.id]
     );
-    return { ok: true };
+    if (regra) {
+      await db.$client.execute(
+        `UPDATE tarefas SET autorizacao = ?, autorizador_user_id = ?, autorizador_nome = ?, autorizacao_motivo = NULL, autorizacao_em = NULL WHERE id = ?`,
+        [aut ? "pendente" : null, aut?.autorizadorId ?? null, aut ? aut.autorizadorNome ?? "Administrador" : null, input.id]
+      );
+      if (aut) {
+        await registrar(db, input.id, "editada", `Aguardando autoriza\xE7\xE3o de ${aut.autorizadorNome ?? "um administrador"}`, null, ctx);
+        await avisarAutorizador(db, ctx, input.id, input.titulo, nome ?? "-", aut.autorizadorId);
+      }
+    }
+    return { ok: true, aguardandoAutorizacao: !!aut, autorizadorNome: aut ? aut.autorizadorNome ?? "um administrador" : null };
   }),
   // Muda o andamento (A fazer → Em andamento → Concluída). O responsável, quem criou e os supervisores podem.
   mudarStatus: moduleProcedure(USO, GESTAO).input(z50.object({
@@ -28023,16 +29187,17 @@ var tarefasRouter = router({
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
     const t2 = rows2[0];
-    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
-    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    if (!t2) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError39({ code: "BAD_REQUEST", message: MSG_META });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError39({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (t2.autorizacao) throw new TRPCError39({ code: "BAD_REQUEST", message: t2.autorizacao === "recusada" ? "Esta tarefa foi recusada pelo superior" : "Esta tarefa ainda aguarda autoriza\xE7\xE3o" });
     if (t2.status === input.status) return { ok: true };
     if (input.status === "concluida" && t2.pendencia === "aprovacao" && !acc.gestor) {
-      throw new TRPCError38({ code: "FORBIDDEN", message: "Esta tarefa aguarda a aprova\xE7\xE3o de um supervisor para ser conclu\xEDda" });
+      throw new TRPCError39({ code: "FORBIDDEN", message: "Esta tarefa aguarda a aprova\xE7\xE3o de um supervisor para ser conclu\xEDda" });
     }
     if (input.status === "concluida" && t2.pendencia === "bloqueada") {
-      throw new TRPCError38({ code: "BAD_REQUEST", message: "Resolva o bloqueio antes de concluir a tarefa" });
+      throw new TRPCError39({ code: "BAD_REQUEST", message: "Resolva o bloqueio antes de concluir a tarefa" });
     }
     if (input.status === "concluida") {
       await db.$client.execute(`UPDATE tarefas SET status = ?, concluida_em = NOW(), pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.status, input.id]);
@@ -28059,15 +29224,16 @@ var tarefasRouter = router({
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
     const t2 = rows2[0];
-    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
-    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    if (!t2) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError39({ code: "BAD_REQUEST", message: MSG_META });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
-    if (t2.status === "concluida") throw new TRPCError38({ code: "BAD_REQUEST", message: "A tarefa j\xE1 est\xE1 conclu\xEDda" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError39({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (t2.autorizacao) throw new TRPCError39({ code: "BAD_REQUEST", message: "Esta tarefa ainda n\xE3o foi autorizada" });
+    if (t2.status === "concluida") throw new TRPCError39({ code: "BAD_REQUEST", message: "A tarefa j\xE1 est\xE1 conclu\xEDda" });
     if (t2.pendencia === "aprovacao" && input.pendencia !== "aprovacao" && !acc.gestor) {
-      throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 um supervisor pode liberar uma tarefa que aguarda aprova\xE7\xE3o" });
+      throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 um supervisor pode liberar uma tarefa que aguarda aprova\xE7\xE3o" });
     }
-    if (input.pendencia === "bloqueada" && !input.motivo) throw new TRPCError38({ code: "BAD_REQUEST", message: "Explique o que est\xE1 bloqueando a tarefa" });
+    if (input.pendencia === "bloqueada" && !input.motivo) throw new TRPCError39({ code: "BAD_REQUEST", message: "Explique o que est\xE1 bloqueando a tarefa" });
     if (input.pendencia) {
       const idsResp = Array.from(new Set(input.responsaveis ?? []));
       let pessoas = [];
@@ -28078,8 +29244,8 @@ var tarefasRouter = router({
       let desdeSql = null;
       if (input.desde) {
         const d2 = /* @__PURE__ */ new Date(input.desde + "T12:00:00");
-        if (isNaN(d2.getTime())) throw new TRPCError38({ code: "BAD_REQUEST", message: "Data de in\xEDcio inv\xE1lida" });
-        if (d2.getTime() > Date.now() + 24 * 3600 * 1e3) throw new TRPCError38({ code: "BAD_REQUEST", message: "A data de in\xEDcio n\xE3o pode estar no futuro" });
+        if (isNaN(d2.getTime())) throw new TRPCError39({ code: "BAD_REQUEST", message: "Data de in\xEDcio inv\xE1lida" });
+        if (d2.getTime() > Date.now() + 24 * 3600 * 1e3) throw new TRPCError39({ code: "BAD_REQUEST", message: "A data de in\xEDcio n\xE3o pode estar no futuro" });
         const hoje = new Date(Date.now() - 3 * 3600 * 1e3).toISOString().slice(0, 10);
         desdeSql = input.desde === hoje ? null : input.desde + " 12:00:00";
       }
@@ -28110,10 +29276,10 @@ var tarefasRouter = router({
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
     const t2 = rows2[0];
-    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
-    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
-    if (t2.pendencia !== "aprovacao") throw new TRPCError38({ code: "BAD_REQUEST", message: "Esta tarefa n\xE3o est\xE1 aguardando aprova\xE7\xE3o" });
-    if (!input.aprovar && !input.comentario) throw new TRPCError38({ code: "BAD_REQUEST", message: "Explique o que precisa ser ajustado" });
+    if (!t2) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError39({ code: "BAD_REQUEST", message: MSG_META });
+    if (t2.pendencia !== "aprovacao") throw new TRPCError39({ code: "BAD_REQUEST", message: "Esta tarefa n\xE3o est\xE1 aguardando aprova\xE7\xE3o" });
+    if (!input.aprovar && !input.comentario) throw new TRPCError39({ code: "BAD_REQUEST", message: "Explique o que precisa ser ajustado" });
     if (input.aprovar) {
       await db.$client.execute(`UPDATE tarefas SET status = 'concluida', concluida_em = NOW(), pendencia = NULL, pendencia_motivo = NULL, pendencia_desde = NULL WHERE id = ?`, [input.id]);
       await fecharPendencias(db, input.id, ctx, "aprovada");
@@ -28125,19 +29291,63 @@ var tarefasRouter = router({
     }
     return { ok: true };
   }),
+  // Solicitações de tarefa que esperam a MINHA autorização (admin vê todas).
+  solicitacoes: moduleProcedure(USO, GESTAO).query(async ({ ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const admin = ctx.user.role === "admin";
+    const [rows2] = await db.$client.execute(
+      `${SELECT_TAREFA} WHERE t.autorizacao = 'pendente' ${admin ? "" : "AND t.autorizador_user_id = ?"} ORDER BY t.id DESC LIMIT 200`,
+      admin ? [] : [ctx.user.id]
+    );
+    return rows2.map(mapTarefa);
+  }),
+  // O superior autoriza (a tarefa passa a valer para o responsável) ou recusa (volta para quem pediu, com o motivo).
+  autorizar: moduleProcedure(USO, GESTAO).input(z50.object({ id: z50.number().int().positive(), aprovar: z50.boolean(), motivo: z50.string().trim().max(300).nullable().optional() })).mutation(async ({ input, ctx }) => {
+    const db = await getDbOrThrow3();
+    await ensureTables3(db);
+    const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
+    const t2 = rows2[0];
+    if (!t2) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.autorizacao !== "pendente") throw new TRPCError39({ code: "BAD_REQUEST", message: "Esta tarefa n\xE3o est\xE1 aguardando autoriza\xE7\xE3o" });
+    const acc = await podeAcessar(db, ctx, t2);
+    if (!acc.autorizador) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 o superior de quem pediu (ou um administrador) pode autorizar" });
+    if (!input.aprovar && !input.motivo) throw new TRPCError39({ code: "BAD_REQUEST", message: "Diga por que a tarefa foi recusada" });
+    const eu = String(ctx.user.name ?? "").trim() || "Superior";
+    await db.$client.execute(
+      `UPDATE tarefas SET autorizacao = ?, autorizacao_motivo = ?, autorizacao_em = NOW(), autorizador_user_id = ?, autorizador_nome = ? WHERE id = ?`,
+      [input.aprovar ? null : "recusada", input.aprovar ? null : input.motivo, ctx.user.id, eu, input.id]
+    );
+    await registrar(db, input.id, "status", input.aprovar ? `Autorizada por ${eu}` : `Recusada por ${eu}: ${input.motivo}`, null, ctx);
+    try {
+      const ids = /* @__PURE__ */ new Set();
+      if (t2.criado_por) ids.add(Number(t2.criado_por));
+      if (input.aprovar) {
+        const [c] = await db.$client.execute(`SELECT user_id FROM collaborators WHERE id = ?`, [t2.responsavel_colaborador_id]);
+        const u = Number(c[0]?.user_id ?? 0);
+        if (u) await notifyUsers({ recipientUserIds: [u], type: "geral", title: "Nova tarefa para voc\xEA", message: `"${t2.titulo}" (pedida por ${t2.criado_por_nome ?? "-"}, autorizada por ${eu})`, relatedId: Number(t2.id), relatedType: "tarefa" });
+        ids.delete(u);
+      }
+      ids.delete(Number(ctx.user.id));
+      if (ids.size) await notifyUsers({ recipientUserIds: Array.from(ids), type: "geral", title: input.aprovar ? "Tarefa autorizada" : "Tarefa recusada", message: input.aprovar ? `${eu} autorizou "${t2.titulo}" para ${t2.responsavel_nome ?? "-"}` : `${eu} recusou "${t2.titulo}": ${input.motivo}`, relatedId: Number(t2.id), relatedType: "tarefa" });
+    } catch (e) {
+      console.warn("[tarefas] aviso de autoriza\xE7\xE3o:", e?.message);
+    }
+    return { ok: true };
+  }),
   comentar: moduleProcedure(USO, GESTAO).input(z50.object({
     id: z50.number().int().positive(),
     texto: z50.string().trim().max(2e3).optional(),
     fotoUrl: z50.string().max(2e3).nullable().optional()
   })).mutation(async ({ input, ctx }) => {
-    if (!input.texto && !input.fotoUrl) throw new TRPCError38({ code: "BAD_REQUEST", message: "Escreva um coment\xE1rio ou anexe uma foto" });
+    if (!input.texto && !input.fotoUrl) throw new TRPCError39({ code: "BAD_REQUEST", message: "Escreva um coment\xE1rio ou anexe uma foto" });
     const db = await getDbOrThrow3();
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
     const t2 = rows2[0];
-    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (!t2) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError39({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
     await registrar(db, input.id, "comentario", input.texto ?? null, input.fotoUrl ?? null, ctx);
     await avisarTarefa(db, ctx, t2, `Mensagem na tarefa: ${String(t2.titulo).slice(0, 80)}`, `${ctx.user.name ?? "Algu\xE9m"}: ${input.texto ?? "enviou uma foto"}`.slice(0, 300));
     return { ok: true };
@@ -28154,9 +29364,9 @@ var tarefasRouter = router({
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
     const t2 = rows2[0];
-    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (!t2) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError38({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
+    if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError39({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o tem acesso a esta tarefa" });
     await db.$client.execute(
       `INSERT INTO tarefa_anexos (tarefa_id, nome, url, mime, tamanho, user_id, user_nome) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [input.id, input.nome, input.url, input.mime ?? null, input.tamanho ?? null, ctx.user.id ?? null, ctx.user.name ?? null]
@@ -28170,9 +29380,9 @@ var tarefasRouter = router({
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM tarefa_anexos WHERE id = ?`, [input.id]);
     const a = rows2[0];
-    if (!a) throw new TRPCError38({ code: "NOT_FOUND", message: "Anexo n\xE3o encontrado" });
+    if (!a) throw new TRPCError39({ code: "NOT_FOUND", message: "Anexo n\xE3o encontrado" });
     const gestor = await ehGestor(ctx);
-    if (!gestor && Number(a.user_id) !== Number(ctx.user.id)) throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 quem anexou ou um supervisor pode remover" });
+    if (!gestor && Number(a.user_id) !== Number(ctx.user.id)) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 quem anexou ou um supervisor pode remover" });
     await db.$client.execute(`DELETE FROM tarefa_anexos WHERE id = ?`, [input.id]);
     await registrar(db, a.tarefa_id, "anexo", `Removeu o arquivo "${a.nome}"`, null, ctx);
     return { ok: true };
@@ -28182,10 +29392,10 @@ var tarefasRouter = router({
     await ensureTables3(db);
     const [rows2] = await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id]);
     const t2 = rows2[0];
-    if (!t2) throw new TRPCError38({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
-    if (t2.origem === MARCA_META) throw new TRPCError38({ code: "BAD_REQUEST", message: MSG_META });
+    if (!t2) throw new TRPCError39({ code: "NOT_FOUND", message: "Tarefa n\xE3o encontrada" });
+    if (t2.origem === MARCA_META) throw new TRPCError39({ code: "BAD_REQUEST", message: MSG_META });
     const acc = await podeAcessar(db, ctx, t2);
-    if (!acc.gestor && !acc.criador) throw new TRPCError38({ code: "FORBIDDEN", message: "S\xF3 quem criou a tarefa ou um supervisor pode exclu\xED-la" });
+    if (!acc.gestor && !acc.criador) throw new TRPCError39({ code: "FORBIDDEN", message: "S\xF3 quem criou a tarefa ou um supervisor pode exclu\xED-la" });
     await db.$client.execute(`DELETE FROM tarefa_historico WHERE tarefa_id = ?`, [input.id]);
     await db.$client.execute(`DELETE FROM tarefa_anexos WHERE tarefa_id = ?`, [input.id]);
     await db.$client.execute(`DELETE FROM tarefa_pendencias WHERE tarefa_id = ?`, [input.id]);
@@ -28194,16 +29404,340 @@ var tarefasRouter = router({
   })
 });
 
+// server/routers/nfeCompras.ts
+init_trpc();
+init_permissions();
+init_sefaz();
+init_sincronizar();
+init_xml();
+import { z as z51 } from "zod";
+import { TRPCError as TRPCError40 } from "@trpc/server";
+
+// server/utils/nfeCompras/zip.ts
+import zlib2 from "zlib";
+var TABELA = (() => {
+  const t2 = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
+    t2[n] = c >>> 0;
+  }
+  return t2;
+})();
+function crc32(buf) {
+  let c = 4294967295;
+  for (let i = 0; i < buf.length; i++) c = TABELA[(c ^ buf[i]) & 255] ^ c >>> 8;
+  return (c ^ 4294967295) >>> 0;
+}
+function criarZip(arquivos) {
+  const partes = [];
+  const central = [];
+  let offset = 0;
+  const agora = /* @__PURE__ */ new Date();
+  const dosHora = (agora.getHours() << 11 | agora.getMinutes() << 5 | Math.floor(agora.getSeconds() / 2)) & 65535;
+  const dosData = (agora.getFullYear() - 1980 << 9 | agora.getMonth() + 1 << 5 | agora.getDate()) & 65535;
+  for (const a of arquivos) {
+    const dados = Buffer.isBuffer(a.conteudo) ? a.conteudo : Buffer.from(a.conteudo, "utf8");
+    const comp = zlib2.deflateRawSync(dados);
+    const nome = Buffer.from(a.nome, "utf8");
+    const crc = crc32(dados);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(67324752, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(2048, 6);
+    local.writeUInt16LE(8, 8);
+    local.writeUInt16LE(dosHora, 10);
+    local.writeUInt16LE(dosData, 12);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(comp.length, 18);
+    local.writeUInt32LE(dados.length, 22);
+    local.writeUInt16LE(nome.length, 26);
+    local.writeUInt16LE(0, 28);
+    partes.push(local, nome, comp);
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(33639248, 0);
+    cd.writeUInt16LE(20, 4);
+    cd.writeUInt16LE(20, 6);
+    cd.writeUInt16LE(2048, 8);
+    cd.writeUInt16LE(8, 10);
+    cd.writeUInt16LE(dosHora, 12);
+    cd.writeUInt16LE(dosData, 14);
+    cd.writeUInt32LE(crc, 16);
+    cd.writeUInt32LE(comp.length, 20);
+    cd.writeUInt32LE(dados.length, 24);
+    cd.writeUInt16LE(nome.length, 28);
+    cd.writeUInt32LE(offset, 42);
+    central.push(cd, nome);
+    offset += local.length + nome.length + comp.length;
+  }
+  const tamCentral = central.reduce((s, b) => s + b.length, 0);
+  const fim = Buffer.alloc(22);
+  fim.writeUInt32LE(101010256, 0);
+  fim.writeUInt16LE(arquivos.length, 8);
+  fim.writeUInt16LE(arquivos.length, 10);
+  fim.writeUInt32LE(tamCentral, 12);
+  fim.writeUInt32LE(offset, 16);
+  return Buffer.concat([...partes, ...central, fim]);
+}
+function lerZip(buf) {
+  let fim = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (buf.readUInt32LE(i) === 101010256) {
+      fim = i;
+      break;
+    }
+  }
+  if (fim < 0) throw new Error("Arquivo ZIP inv\xE1lido");
+  const total = buf.readUInt16LE(fim + 10);
+  let p = buf.readUInt32LE(fim + 16);
+  const saida = [];
+  for (let n = 0; n < total; n++) {
+    if (buf.readUInt32LE(p) !== 33639248) throw new Error("ZIP corrompido (diret\xF3rio central)");
+    const metodo = buf.readUInt16LE(p + 10);
+    const tamComp = buf.readUInt32LE(p + 20);
+    const lenNome = buf.readUInt16LE(p + 28), lenExtra = buf.readUInt16LE(p + 30), lenCom = buf.readUInt16LE(p + 32);
+    const local = buf.readUInt32LE(p + 42);
+    const nome = buf.subarray(p + 46, p + 46 + lenNome).toString("utf8");
+    p += 46 + lenNome + lenExtra + lenCom;
+    if (nome.endsWith("/")) continue;
+    if (buf.readUInt32LE(local) !== 67324752) throw new Error("ZIP corrompido (cabe\xE7alho local)");
+    const ini = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const comp = buf.subarray(ini, ini + tamComp);
+    if (metodo === 0) saida.push({ nome, dados: Buffer.from(comp) });
+    else if (metodo === 8) saida.push({ nome, dados: zlib2.inflateRawSync(comp) });
+  }
+  return saida;
+}
+
+// server/routers/nfeCompras.ts
+var MOD = "notas-compra";
+async function db0() {
+  const db = await getDbNfe().catch((e) => {
+    throw new TRPCError40({ code: "INTERNAL_SERVER_ERROR", message: String(e?.message ?? e) });
+  });
+  await ensureNfeTables(db);
+  return db;
+}
+var COLS = `id, chave, emitente_cnpj, emitente_nome, emitente_ie, numero, serie, DATE_FORMAT(data_emissao, '%Y-%m-%d %H:%i:%s') AS data_emissao,
+  valor_total, natureza, protocolo, situacao, tipo, propria, manifestacao, DATE_FORMAT(manifestacao_em, '%Y-%m-%d %H:%i:%s') AS manifestacao_em,
+  manifestacao_msg, origem, DATE_FORMAT(recebida_em, '%Y-%m-%d %H:%i:%s') AS recebida_em`;
+var mapNota = (r) => ({
+  id: Number(r.id),
+  chave: String(r.chave),
+  emitenteCnpj: r.emitente_cnpj ?? null,
+  emitenteNome: r.emitente_nome ?? null,
+  emitenteIe: r.emitente_ie ?? null,
+  numero: r.numero ?? null,
+  serie: r.serie ?? null,
+  dataEmissao: r.data_emissao ?? null,
+  valorTotal: Number(r.valor_total ?? 0),
+  natureza: r.natureza ?? null,
+  protocolo: r.protocolo ?? null,
+  situacao: String(r.situacao),
+  tipo: String(r.tipo),
+  propria: Number(r.propria) === 1,
+  manifestacao: String(r.manifestacao),
+  manifestacaoEm: r.manifestacao_em ?? null,
+  manifestacaoMsg: r.manifestacao_msg ?? null,
+  origem: String(r.origem),
+  recebidaEm: r.recebida_em ?? null
+});
+var nomeArquivo = (n) => `NFe_${n.numero ?? ""}_${(n.emitenteNome ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w]+/g, "_").slice(0, 40)}_${n.chave}`.replace(/_+/g, "_");
+var nfeComprasRouter = router({
+  status: moduleProcedure(MOD).query(async () => {
+    const db = await db0();
+    const amb = ambienteAtual();
+    const cert = infoCertificado();
+    let ctrl = null;
+    if (cert.ok) {
+      const [r] = await db.$client.execute(`SELECT ult_nsu, max_nsu, DATE_FORMAT(ultima_consulta, '%Y-%m-%d %H:%i:%s') AS ultima_consulta, (proxima_permitida > NOW()) AS aguardando, DATE_FORMAT(proxima_permitida, '%H:%i') AS prox_hora, ultimo_cstat, ultimo_motivo, ultimo_erro FROM nfe_compras_controle WHERE id = ?`, [`${amb}:${cert.cnpj}`]);
+      ctrl = r[0] ?? null;
+    }
+    const [c] = await db.$client.execute(
+      `SELECT SUM(tipo = 'resumo' AND situacao = 'autorizada' AND propria = 0) AS resumos, SUM(manifestacao = 'erro') AS erros_ciencia FROM nfe_compras WHERE ambiente = ?`,
+      [amb]
+    );
+    const cont = c[0] ?? {};
+    return {
+      ambiente: amb,
+      modo: modoSefaz() ? "sefaz" : "importacao",
+      automatico: modoSefaz() && process.env.NFE_COMPRAS_ATIVO === "1",
+      certificado: cert,
+      ultimaConsulta: ctrl?.ultima_consulta ?? null,
+      aguardando: Number(ctrl?.aguardando ?? 0) === 1,
+      proximaHora: ctrl?.prox_hora ?? null,
+      ultNsu: ctrl ? String(ctrl.ult_nsu) : null,
+      maxNsu: ctrl ? String(ctrl.max_nsu) : null,
+      ultimoCstat: ctrl?.ultimo_cstat ?? null,
+      ultimoMotivo: ctrl?.ultimo_motivo ?? null,
+      ultimoErro: ctrl?.ultimo_erro ?? null,
+      aguardandoXml: Number(cont.resumos ?? 0),
+      errosCiencia: Number(cont.erros_ciencia ?? 0)
+    };
+  }),
+  listar: moduleProcedure(MOD).input(z51.object({
+    ano: z51.number().int().min(2e3).max(2100),
+    mes: z51.number().int().min(1).max(12),
+    busca: z51.string().trim().max(100).optional(),
+    pagina: z51.number().int().min(1).default(1),
+    porPagina: z51.number().int().min(5).max(200).default(10),
+    incluirProprias: z51.boolean().optional()
+  })).query(async ({ input }) => {
+    const db = await db0();
+    const ini = `${input.ano}-${String(input.mes).padStart(2, "0")}-01`;
+    const where = ["ambiente = ?", "data_emissao >= ?", "data_emissao < DATE_ADD(?, INTERVAL 1 MONTH)"];
+    const params = [ambienteAtual(), ini, ini];
+    if (!input.incluirProprias) where.push("propria = 0");
+    if (input.busca) {
+      const b = input.busca;
+      const dig = b.replace(/\D/g, "");
+      where.push(`(emitente_nome LIKE ? OR numero = ? ${dig ? "OR chave LIKE ? OR emitente_cnpj LIKE ?" : ""})`);
+      params.push(`%${b}%`, b.replace(/^0+/, ""));
+      if (dig) params.push(`%${dig}%`, `%${dig}%`);
+    }
+    const w = where.join(" AND ");
+    const [tot] = await db.$client.execute(`SELECT COUNT(*) AS n, COALESCE(SUM(IF(situacao = 'autorizada', valor_total, 0)), 0) AS v FROM nfe_compras WHERE ${w}`, params);
+    const off = (input.pagina - 1) * input.porPagina;
+    const [rows2] = await db.$client.execute(`SELECT ${COLS} FROM nfe_compras WHERE ${w} ORDER BY data_emissao DESC, id DESC LIMIT ${Number(input.porPagina)} OFFSET ${Number(off)}`, params);
+    const t2 = tot[0] ?? {};
+    return { itens: rows2.map(mapNota), total: Number(t2.n ?? 0), valorTotal: Number(t2.v ?? 0) };
+  }),
+  detalhe: moduleProcedure(MOD).input(z51.object({ id: z51.number().int().positive() })).query(async ({ input }) => {
+    const db = await db0();
+    const [rows2] = await db.$client.execute(`SELECT ${COLS}, xml FROM nfe_compras WHERE id = ?`, [input.id]);
+    const r = rows2[0];
+    if (!r) throw new TRPCError40({ code: "NOT_FOUND", message: "Nota n\xE3o encontrada" });
+    let det = null;
+    if (r.xml) {
+      try {
+        det = detalharCompleta(r.xml);
+      } catch {
+        det = null;
+      }
+    }
+    return { nota: mapNota(r), detalhe: det };
+  }),
+  /** XML para baixar (completo; se ainda não chegou, o resumo). */
+  xml: moduleProcedure(MOD).input(z51.object({ id: z51.number().int().positive() })).query(async ({ input }) => {
+    const db = await db0();
+    const [rows2] = await db.$client.execute(`SELECT ${COLS}, xml, xml_resumo FROM nfe_compras WHERE id = ?`, [input.id]);
+    const r = rows2[0];
+    if (!r) throw new TRPCError40({ code: "NOT_FOUND", message: "Nota n\xE3o encontrada" });
+    const n = mapNota(r);
+    const conteudo = r.xml ?? r.xml_resumo;
+    if (!conteudo) throw new TRPCError40({ code: "NOT_FOUND", message: "XML ainda n\xE3o dispon\xEDvel" });
+    return { nome: `${nomeArquivo(n)}${r.xml ? "" : "_resumo"}.xml`, conteudo: String(conteudo), completo: !!r.xml };
+  }),
+  /** Todos os XMLs completos do mês num ZIP (base64), para o contador. */
+  zipMes: moduleProcedure(MOD).input(z51.object({ ano: z51.number().int(), mes: z51.number().int().min(1).max(12) })).mutation(async ({ input }) => {
+    const db = await db0();
+    const ini = `${input.ano}-${String(input.mes).padStart(2, "0")}-01`;
+    const [rows2] = await db.$client.execute(
+      `SELECT ${COLS}, xml FROM nfe_compras WHERE ambiente = ? AND propria = 0 AND xml IS NOT NULL AND data_emissao >= ? AND data_emissao < DATE_ADD(?, INTERVAL 1 MONTH) ORDER BY data_emissao`,
+      [ambienteAtual(), ini, ini]
+    );
+    const lista = rows2;
+    if (!lista.length) throw new TRPCError40({ code: "NOT_FOUND", message: "Nenhuma nota com XML completo neste m\xEAs" });
+    const zip = criarZip(lista.map((r) => ({ nome: `${nomeArquivo(mapNota(r))}.xml`, conteudo: String(r.xml) })));
+    return { nome: `NFe_compras_${input.ano}-${String(input.mes).padStart(2, "0")}.zip`, base64: zip.toString("base64"), quantidade: lista.length };
+  }),
+  atualizarAgora: moduleProcedure(MOD).mutation(async () => sincronizarNfeCompras({ origem: "manual" })),
+  buscarPorChave: moduleProcedure(MOD).input(z51.object({ chave: z51.string().transform((s) => s.replace(/\D/g, "")).pipe(z51.string().length(44, "A chave tem 44 d\xEDgitos")) })).mutation(async ({ input }) => {
+    if (!modoSefaz()) throw new TRPCError40({ code: "PRECONDITION_FAILED", message: "A busca na SEFAZ est\xE1 desligada: as notas v\xEAm do Conta Azul." });
+    const db = await db0();
+    let cnpj;
+    try {
+      cnpj = carregarCertificado().cnpj;
+    } catch (e) {
+      throw new TRPCError40({ code: "PRECONDITION_FAILED", message: String(e?.message ?? e) });
+    }
+    try {
+      const r = await buscarPorChave(db, ambienteAtual(), input.chave, cnpj);
+      if (!r.achou) return { ok: false, mensagem: `SEFAZ: ${r.cStat} - ${r.xMotivo}` };
+      return { ok: true, mensagem: r.completa ? "Nota encontrada com XML completo." : "Nota encontrada (resumo). O XML completo chega depois da Ci\xEAncia da Opera\xE7\xE3o." };
+    } catch (e) {
+      throw new TRPCError40({ code: "BAD_GATEWAY", message: String(e?.message ?? e) });
+    }
+  }),
+  /** Importa um arquivo baixado do Conta Azul (ou de outro lugar): um XML de NF-e, ou um ZIP com vários XMLs. */
+  importarArquivo: moduleProcedure(MOD).input(z51.object({ nome: z51.string().max(255), base64: z51.string().min(10).max(4e7) })).mutation(async ({ input }) => {
+    const db = await db0();
+    const amb = ambienteAtual();
+    let cnpj = "";
+    try {
+      cnpj = carregarCertificado().cnpj;
+    } catch {
+      cnpj = (process.env.NFE_COMPRAS_CNPJ ?? "").replace(/\D/g, "");
+    }
+    const buf = Buffer.from(input.base64, "base64");
+    let arquivos;
+    if (buf.length >= 4 && buf.readUInt32LE(0) === 67324752) {
+      try {
+        arquivos = lerZip(buf).filter((a) => /\.xml$/i.test(a.nome));
+      } catch (e) {
+        throw new TRPCError40({ code: "BAD_REQUEST", message: `${input.nome}: ${e?.message ?? "ZIP inv\xE1lido"}` });
+      }
+    } else arquivos = [{ nome: input.nome, dados: buf }];
+    let novas = 0, atualizadas = 0, canceladas = 0, emitidas = 0;
+    const ignoradas = [];
+    const pastaEmitidas = (nome) => /(^|\/)emitidas?\//i.test(nome);
+    for (const a of arquivos) {
+      const xml = a.dados.toString("utf8").replace(/^﻿/, "");
+      const doc = lerDocumento(xml);
+      if (doc.tipo === "completa") {
+        const n = doc.nota;
+        if (cnpj ? n.emitenteCnpj === cnpj : pastaEmitidas(a.nome)) {
+          emitidas++;
+          continue;
+        }
+        if (cnpj && n.destCnpj && n.destCnpj !== cnpj) {
+          ignoradas.push({ arquivo: a.nome, motivo: `n\xE3o \xE9 destinada \xE0 empresa (destinat\xE1rio ${n.destCnpj})` });
+          continue;
+        }
+        const [ex] = await db.$client.execute(`SELECT id FROM nfe_compras WHERE ambiente = ? AND chave = ?`, [amb, n.chave]);
+        await gravarNota(db, amb, n, "completa", xml, null, "upload", cnpj);
+        if (ex.length) atualizadas++;
+        else novas++;
+      } else if (doc.tipo === "evento") {
+        if (cnpj && doc.chave.slice(6, 20) === cnpj || pastaEmitidas(a.nome)) {
+          emitidas++;
+          continue;
+        }
+        if (doc.tpEvento === "110111" && /^\d{44}$/.test(doc.chave)) {
+          const [r] = await db.$client.execute(`UPDATE nfe_compras SET situacao = 'cancelada' WHERE ambiente = ? AND chave = ?`, [amb, doc.chave]);
+          if (r.affectedRows) canceladas++;
+          else ignoradas.push({ arquivo: a.nome, motivo: "cancelamento de nota que n\xE3o est\xE1 no sistema" });
+        }
+      } else if (pastaEmitidas(a.nome)) {
+        emitidas++;
+      } else {
+        ignoradas.push({ arquivo: a.nome, motivo: doc.tipo === "resumo" ? "\xE9 s\xF3 o resumo da nota, n\xE3o o XML completo" : doc.motivo });
+      }
+    }
+    if (!arquivos.length) ignoradas.push({ arquivo: input.nome, motivo: "nenhum XML dentro do ZIP" });
+    return { novas, atualizadas, canceladas, emitidas, ignoradas };
+  }),
+  /** Últimas consultas à SEFAZ (para diagnóstico). */
+  log: moduleProcedure(MOD).query(async () => {
+    const db = await db0();
+    const [rows2] = await db.$client.execute(
+      `SELECT DATE_FORMAT(em, '%Y-%m-%d %H:%i:%s') AS em, tipo, cstat, motivo, documentos, detalhe FROM nfe_compras_log WHERE ambiente = ? ORDER BY id DESC LIMIT 50`,
+      [ambienteAtual()]
+    );
+    return rows2.map((r) => ({ em: r.em, tipo: r.tipo, cstat: r.cstat, motivo: r.motivo, documentos: Number(r.documentos), detalhe: r.detalhe }));
+  })
+});
+
 // server/routers/modulosConfig.ts
 init_trpc();
 init_permissions();
 init_modulosAtivos();
-import { z as z51 } from "zod";
-import { TRPCError as TRPCError39 } from "@trpc/server";
+import { z as z52 } from "zod";
+import { TRPCError as TRPCError41 } from "@trpc/server";
 async function getDbOrThrow4() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError39({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError41({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
 var modulosConfigRouter = router({
@@ -28231,8 +29765,8 @@ var modulosConfigRouter = router({
       atualizadoEm: mapa.get(m.slug)?.em ?? null
     }));
   }),
-  definir: adminProcedure.input(z51.object({ slug: z51.string().max(60), ativo: z51.boolean() })).mutation(async ({ input, ctx }) => {
-    if (!SYSTEM_MODULES.some((m) => m.slug === input.slug)) throw new TRPCError39({ code: "BAD_REQUEST", message: "M\xF3dulo desconhecido" });
+  definir: adminProcedure.input(z52.object({ slug: z52.string().max(60), ativo: z52.boolean() })).mutation(async ({ input, ctx }) => {
+    if (!SYSTEM_MODULES.some((m) => m.slug === input.slug)) throw new TRPCError41({ code: "BAD_REQUEST", message: "M\xF3dulo desconhecido" });
     const db = await getDbOrThrow4();
     await ensureModuloConfig(db);
     await db.$client.execute(
@@ -28247,18 +29781,18 @@ var modulosConfigRouter = router({
 
 // server/routers/quickAccess.ts
 init_trpc();
-import { z as z52 } from "zod";
-import { TRPCError as TRPCError40 } from "@trpc/server";
+import { z as z53 } from "zod";
+import { TRPCError as TRPCError42 } from "@trpc/server";
 async function getDbOrThrow5() {
   const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
   const db = await getDb2();
-  if (!db) throw new TRPCError40({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
+  if (!db) throw new TRPCError42({ code: "INTERNAL_SERVER_ERROR", message: "Banco indispon\xEDvel" });
   return db;
 }
-var ensurePromise5 = null;
+var ensurePromise6 = null;
 function ensureTable(db) {
-  if (!ensurePromise5) {
-    ensurePromise5 = (async () => {
+  if (!ensurePromise6) {
+    ensurePromise6 = (async () => {
       await db.$client.execute(`
         CREATE TABLE IF NOT EXISTS user_quick_access (
           user_id INT PRIMARY KEY,
@@ -28267,11 +29801,11 @@ function ensureTable(db) {
         )
       `);
     })().catch((e) => {
-      ensurePromise5 = null;
+      ensurePromise6 = null;
       throw e;
     });
   }
-  return ensurePromise5;
+  return ensurePromise6;
 }
 var quickAccessRouter = router({
   // null = sem personalização (usa o padrão)
@@ -28289,8 +29823,8 @@ var quickAccessRouter = router({
       return { itens: null };
     }
   }),
-  save: protectedProcedure.input(z52.object({ itens: z52.array(z52.string().max(80)).max(60) })).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError40({ code: "FORBIDDEN", message: "S\xF3 administradores podem personalizar o Painel" });
+  save: protectedProcedure.input(z53.object({ itens: z53.array(z53.string().max(80)).max(60) })).mutation(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError42({ code: "FORBIDDEN", message: "S\xF3 administradores podem personalizar o Painel" });
     const db = await getDbOrThrow5();
     await ensureTable(db);
     await db.$client.execute(
@@ -28301,7 +29835,7 @@ var quickAccessRouter = router({
   }),
   // Volta ao padrão
   reset: protectedProcedure.mutation(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") throw new TRPCError40({ code: "FORBIDDEN" });
+    if (ctx.user.role !== "admin") throw new TRPCError42({ code: "FORBIDDEN" });
     const db = await getDbOrThrow5();
     await ensureTable(db);
     await db.$client.execute(`DELETE FROM user_quick_access WHERE user_id = ?`, [ctx.user.id]);
@@ -28313,7 +29847,7 @@ var quickAccessRouter = router({
 init_weeklyGoals2();
 
 // server/routers/contasReceber.ts
-import { z as z54 } from "zod";
+import { z as z55 } from "zod";
 init_trpc();
 init_permissions();
 
@@ -28358,18 +29892,18 @@ function soDigitos(s) {
 }
 
 // server/routers/contasReceber.ts
-var data2 = z54.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-var entrada = z54.object({
-  mes: z54.number().min(1).max(12),
-  ano: z54.number().min(2020).max(2100),
+var data2 = z55.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+var entrada = z55.object({
+  mes: z55.number().min(1).max(12),
+  ano: z55.number().min(2020).max(2100),
   /** período de emissão (NF/boleto) ou entrega (carga); quando informado, substitui o mês */
   dataInicio: data2.optional(),
   dataFim: data2.optional(),
-  cnpj: z54.string().optional(),
-  pesquisa: z54.string().optional(),
-  statusFiltro: z54.enum(["todos", "em_aberto", "pago", "cancelado"]).default("todos")
+  cnpj: z55.string().optional(),
+  pesquisa: z55.string().optional(),
+  statusFiltro: z55.enum(["todos", "em_aberto", "pago", "cancelado"]).default("todos")
 });
-function num4(v) {
+function num5(v) {
   const s = String(v ?? "0").trim();
   const n = s.includes(",") ? parseFloat(s.replace(/\./g, "").replace(",", ".")) : parseFloat(s);
   return Number.isFinite(n) ? n : 0;
@@ -28412,7 +29946,7 @@ var contasReceberRouter = router({
       }
       const [rows2] = await db.$client.execute(`SELECT situacao, data_vencimento, valor FROM sicoob_boletos WHERE ${where.join(" AND ")}`, params);
       for (const r of rows2) {
-        itens.push({ fonte: "boleto", valor: num4(r.valor), recebido: r.situacao === 3, cancelado: r.situacao === 2, vencimento: dia(r.data_vencimento) || null });
+        itens.push({ fonte: "boleto", valor: num5(r.valor), recebido: r.situacao === 3, cancelado: r.situacao === 2, vencimento: dia(r.data_vencimento) || null });
       }
     } catch (e) {
       erros.push(`Boletos: ${e.message}`);
@@ -28449,7 +29983,7 @@ var contasReceberRouter = router({
           if (pago && !String(r.data_pagamento_confirmado ?? "").startsWith(prefixo)) continue;
           if (!pago && !String(r.data_previsao_pagamento ?? "").startsWith(prefixo)) continue;
         }
-        itens.push({ fonte: "nf", valor: num4(r.valor_total), recebido: pago, cancelado, vencimento: r.data_previsao_pagamento ? dia(r.data_previsao_pagamento) : null });
+        itens.push({ fonte: "nf", valor: num5(r.valor_total), recebido: pago, cancelado, vencimento: r.data_previsao_pagamento ? dia(r.data_previsao_pagamento) : null });
       }
     } catch (e) {
       erros.push(`NFs: ${e.message}`);
@@ -28517,9 +30051,9 @@ var contasReceberRouter = router({
 // server/routers/contaAzul.ts
 init_trpc();
 init_prazoPagamento();
-import { z as z55 } from "zod";
+import { z as z56 } from "zod";
 import axios2 from "axios";
-import zlib from "zlib";
+import zlib3 from "zlib";
 
 // server/utils/resumoNFs.ts
 function pertenceAoPeriodo(dataISO, mes, ano) {
@@ -28617,25 +30151,25 @@ async function getContaAzulToken() {
   console.log("[ContaAzul] Token renovado com sucesso");
   return access_token;
 }
-async function caGet(path4, params) {
+async function caGet(path5, params) {
   const token = await getContaAzulToken();
-  const res = await axios2.get(`${BASE_URL}${path4}`, {
+  const res = await axios2.get(`${BASE_URL}${path5}`, {
     params,
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
   });
   return res.data;
 }
-async function caGetXml(path4) {
+async function caGetXml(path5) {
   const token = await getContaAzulToken();
-  const res = await axios2.get(`${BASE_URL}${path4}`, {
+  const res = await axios2.get(`${BASE_URL}${path5}`, {
     responseType: "text",
     headers: { Authorization: `Bearer ${token}`, Accept: "application/xml, text/xml, */*" }
   });
   return typeof res.data === "string" ? res.data : JSON.stringify(res.data);
 }
-async function caGetBuffer(path4) {
+async function caGetBuffer(path5) {
   const token = await getContaAzulToken();
-  const res = await axios2.get(`${BASE_URL}${path4}`, {
+  const res = await axios2.get(`${BASE_URL}${path5}`, {
     responseType: "arraybuffer",
     headers: { Authorization: `Bearer ${token}`, Accept: "*/*" }
   });
@@ -28662,7 +30196,7 @@ function lerArquivosDoZip(buf) {
     const name2 = buf.toString("utf8", p + 46, p + 46 + nameLen);
     const dataStart = localOffset + 30 + buf.readUInt16LE(localOffset + 26) + buf.readUInt16LE(localOffset + 28);
     const raw = buf.subarray(dataStart, dataStart + csize);
-    out.push({ name: name2, text: (method === 8 ? zlib.inflateRawSync(raw) : raw).toString("utf8") });
+    out.push({ name: name2, text: (method === 8 ? zlib3.inflateRawSync(raw) : raw).toString("utf8") });
     p += 46 + nameLen + extraLen + commentLen;
   }
   return out;
@@ -28703,8 +30237,8 @@ async function reconciliarNotasCanceladas(db, chavesListadas, inicioStr, fimStr)
   }
   return { verificadas: candidatas.length, canceladas, erros };
 }
-function extractTag(xml, tag) {
-  const m = xml.match(new RegExp(`<${tag}[^>]*>([^<]+)</${tag}>`));
+function extractTag(xml, tag2) {
+  const m = xml.match(new RegExp(`<${tag2}[^>]*>([^<]+)</${tag2}>`));
   return m?.[1]?.trim() ?? null;
 }
 function parseNFXml(xml) {
@@ -28901,7 +30435,7 @@ async function syncNotasFiscais(mes, ano) {
   return { synced, errors };
 }
 var contaAzulRouter = router({
-  setRefreshToken: protectedProcedure.input(z55.object({ refreshToken: z55.string().min(10) })).mutation(async ({ input }) => {
+  setRefreshToken: protectedProcedure.input(z56.object({ refreshToken: z56.string().min(10) })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(
@@ -28925,14 +30459,14 @@ var contaAzulRouter = router({
       configurado: Number(tokenRows?.[0]?.cnt ?? 0) > 0
     };
   }),
-  listNotasFiscais: protectedProcedure.input(z55.object({
-    mes: z55.number().min(1).max(12),
-    ano: z55.number().min(2020).max(2100),
+  listNotasFiscais: protectedProcedure.input(z56.object({
+    mes: z56.number().min(1).max(12),
+    ano: z56.number().min(2020).max(2100),
     // período de emissão (substitui o mês quando os dois são informados)
-    dataInicio: z55.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    dataFim: z55.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    pesquisa: z55.string().optional(),
-    incluirCanceladas: z55.boolean().optional()
+    dataInicio: z56.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    dataFim: z56.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    pesquisa: z56.string().optional(),
+    incluirCanceladas: z56.boolean().optional()
   })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { notas: [], error: "DB indispon\xEDvel" };
@@ -28972,7 +30506,7 @@ var contaAzulRouter = router({
   }),
   // Resumo (Vencidos/Vencem hoje/A vencer/Recebidos/Total) apenas das NFs sem boleto correspondente.
   // O frontend soma este resultado ao summaryBoletos (Sicoob) para formar os cards finais.
-  summaryNFsSemBoleto: protectedProcedure.input(z55.object({ mes: z55.number().min(1).max(12), ano: z55.number().min(2020).max(2100) })).query(async ({ input }) => {
+  summaryNFsSemBoleto: protectedProcedure.input(z56.object({ mes: z56.number().min(1).max(12), ano: z56.number().min(2020).max(2100) })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { vencidos: 0, vencemHoje: 0, aVencer: 0, recebidos: 0, total: 0, error: "DB indispon\xEDvel" };
     const [rows2] = await db.$client.execute(
@@ -29000,10 +30534,10 @@ var contaAzulRouter = router({
     return { ...resumo, error: null };
   }),
   // Altera o Status NF (manual). Registra auditoria e, se "pago", a data de pagamento confirmado.
-  updateStatusNf: protectedProcedure.input(z55.object({
-    id: z55.number(),
-    novoStatus: z55.enum(["em_aberto", "pago", "cancelado"]),
-    dataPagamentoConfirmado: z55.string().optional()
+  updateStatusNf: protectedProcedure.input(z56.object({
+    id: z56.number(),
+    novoStatus: z56.enum(["em_aberto", "pago", "cancelado"]),
+    dataPagamentoConfirmado: z56.string().optional()
     // "YYYY-MM-DD" — obrigatório apenas quando novoStatus = pago (default: hoje)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
@@ -29032,7 +30566,7 @@ var contaAzulRouter = router({
   // Guarda o valor original (só na primeira edição) e registra no log de auditoria com o
   // Anexa/troca o comprovante de pagamento da NF. O upload em si (Cloudinary) acontece no
   // cliente; aqui só grava a URL já pronta.
-  updateReceiptNF: protectedProcedure.input(z55.object({ id: z55.number(), receiptUrl: z55.string().url() })).mutation(async ({ input }) => {
+  updateReceiptNF: protectedProcedure.input(z56.object({ id: z56.number(), receiptUrl: z56.string().url() })).mutation(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     await db.$client.execute(`UPDATE notas_fiscais SET receipt_url = ? WHERE id = ?`, [input.receiptUrl, input.id]);
@@ -29040,7 +30574,7 @@ var contaAzulRouter = router({
   }),
   // motivo — comum quando o cliente desconta na hora de pagar por divergência de peso
   // entre o que a NF declara e o que foi efetivamente entregue/pesado.
-  updateValorNF: protectedProcedure.input(z55.object({ id: z55.number(), valor: z55.string(), observacao: z55.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
+  updateValorNF: protectedProcedure.input(z56.object({ id: z56.number(), valor: z56.string(), observacao: z56.string().min(1, "Informe o motivo do ajuste") })).mutation(async ({ input, ctx }) => {
     const db = await getDbInstance();
     if (!db) throw new Error("DB indispon\xEDvel");
     const [rows2] = await db.$client.execute(
@@ -29061,7 +30595,7 @@ var contaAzulRouter = router({
     return { success: true };
   }),
   // Histórico de alterações de uma NF (auditoria)
-  historicoStatusNf: protectedProcedure.input(z55.object({ notaFiscalId: z55.number() })).query(async ({ input }) => {
+  historicoStatusNf: protectedProcedure.input(z56.object({ notaFiscalId: z56.number() })).query(async ({ input }) => {
     const db = await getDbInstance();
     if (!db) return { historico: [], error: "DB indispon\xEDvel" };
     const [rows2] = await db.$client.execute(
@@ -29070,7 +30604,7 @@ var contaAzulRouter = router({
     );
     return { historico: rows2 ?? [], error: null };
   }),
-  syncNotasFiscais: protectedProcedure.input(z55.object({ mes: z55.number().min(1).max(12), ano: z55.number().min(2020).max(2100) })).mutation(async ({ input }) => {
+  syncNotasFiscais: protectedProcedure.input(z56.object({ mes: z56.number().min(1).max(12), ano: z56.number().min(2020).max(2100) })).mutation(async ({ input }) => {
     try {
       return { success: true, ...await syncNotasFiscais(input.mes, input.ano) };
     } catch (e) {
@@ -29084,7 +30618,7 @@ init_trpc();
 init_db();
 init_schema();
 init_cloudinary();
-import { z as z56 } from "zod";
+import { z as z57 } from "zod";
 import { desc as desc33, eq as eq44, and as and26, sql as sql30 } from "drizzle-orm";
 async function getNextActionCode(db) {
   if (!db) return "AC-00001";
@@ -29096,8 +30630,8 @@ async function getNextActionCode(db) {
     if (!rows2 || rows2.length === 0) return "AC-00001";
     const last = rows2[0]?.action_code;
     if (!last) return "AC-00001";
-    const num5 = parseInt(last.replace("AC-", ""), 10);
-    return `AC-${String(num5 + 1).padStart(5, "0")}`;
+    const num6 = parseInt(last.replace("AC-", ""), 10);
+    return `AC-${String(num6 + 1).padStart(5, "0")}`;
   } catch {
     return "AC-00001";
   }
@@ -29109,9 +30643,9 @@ var fiscalNotesRouter = router({
     return { actionCode: await getNextActionCode(db) };
   }),
   // Listar todas as notas com filtros
-  list: protectedProcedure.input(z56.object({
-    quantityType: z56.enum(["m3", "ton", "all"]).optional(),
-    status: z56.enum(["available", "used", "all"]).optional()
+  list: protectedProcedure.input(z57.object({
+    quantityType: z57.enum(["m3", "ton", "all"]).optional(),
+    status: z57.enum(["available", "used", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -29126,8 +30660,8 @@ var fiscalNotesRouter = router({
     return rows2;
   }),
   // Listar apenas notas disponíveis para o select no Controle de Cargas
-  getAvailable: protectedProcedure.input(z56.object({
-    quantityType: z56.enum(["m3", "ton", "all"]).optional()
+  getAvailable: protectedProcedure.input(z57.object({
+    quantityType: z57.enum(["m3", "ton", "all"]).optional()
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -29139,16 +30673,16 @@ var fiscalNotesRouter = router({
     return rows2;
   }),
   // Criar nova nota/ação
-  create: protectedProcedure.input(z56.object({
-    invoiceNumber: z56.string().optional(),
-    issueDate: z56.string(),
-    quantityType: z56.enum(["m3", "ton"]),
-    quantity: z56.string(),
-    fileBase64: z56.string().optional(),
+  create: protectedProcedure.input(z57.object({
+    invoiceNumber: z57.string().optional(),
+    issueDate: z57.string(),
+    quantityType: z57.enum(["m3", "ton"]),
+    quantity: z57.string(),
+    fileBase64: z57.string().optional(),
     // base64 do arquivo
-    fileName: z56.string().optional(),
-    fileMimeType: z56.string().optional(),
-    notes: z56.string().optional()
+    fileName: z57.string().optional(),
+    fileMimeType: z57.string().optional(),
+    notes: z57.string().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -29178,13 +30712,13 @@ var fiscalNotesRouter = router({
     return { success: true, actionCode };
   }),
   // Marcar nota como utilizada (chamado ao salvar uma carga)
-  markAsUsed: protectedProcedure.input(z56.object({
-    id: z56.number(),
-    cargoId: z56.number().optional(),
-    clientId: z56.number().optional(),
-    clientName: z56.string().optional(),
-    destination: z56.string().optional(),
-    workLocation: z56.string().optional()
+  markAsUsed: protectedProcedure.input(z57.object({
+    id: z57.number(),
+    cargoId: z57.number().optional(),
+    clientId: z57.number().optional(),
+    clientName: z57.string().optional(),
+    destination: z57.string().optional(),
+    workLocation: z57.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -29205,16 +30739,16 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Editar nota/ação (data, quantidade, NF, observações, arquivo)
-  update: protectedProcedure.input(z56.object({
-    id: z56.number(),
-    invoiceNumber: z56.string().optional(),
-    issueDate: z56.string().optional(),
-    quantityType: z56.enum(["m3", "ton"]).optional(),
-    quantity: z56.string().optional(),
-    fileBase64: z56.string().optional(),
-    fileName: z56.string().optional(),
-    fileMimeType: z56.string().optional(),
-    notes: z56.string().optional()
+  update: protectedProcedure.input(z57.object({
+    id: z57.number(),
+    invoiceNumber: z57.string().optional(),
+    issueDate: z57.string().optional(),
+    quantityType: z57.enum(["m3", "ton"]).optional(),
+    quantity: z57.string().optional(),
+    fileBase64: z57.string().optional(),
+    fileName: z57.string().optional(),
+    fileMimeType: z57.string().optional(),
+    notes: z57.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
@@ -29241,7 +30775,7 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Liberar nota (desfazer uso — admin)
-  release: protectedProcedure.input(z56.object({ id: z56.number() })).mutation(async ({ input }) => {
+  release: protectedProcedure.input(z57.object({ id: z57.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.update(fiscalNotes).set({
@@ -29254,20 +30788,20 @@ var fiscalNotesRouter = router({
     return { success: true };
   }),
   // Deletar nota (somente disponíveis)
-  delete: protectedProcedure.input(z56.object({ id: z56.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z57.object({ id: z57.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco indispon\xEDvel");
     await db.delete(fiscalNotes).where(eq44(fiscalNotes.id, input.id));
     return { success: true };
   }),
   // Relatório-planilha: notas com dados da carga, local e destino
-  report: protectedProcedure.input(z56.object({
-    workLocationId: z56.number().optional(),
-    destinationId: z56.number().optional(),
-    dateFrom: z56.string().optional(),
-    dateTo: z56.string().optional(),
-    search: z56.string().optional(),
-    limit: z56.number().optional().default(500)
+  report: protectedProcedure.input(z57.object({
+    workLocationId: z57.number().optional(),
+    destinationId: z57.number().optional(),
+    dateFrom: z57.string().optional(),
+    dateTo: z57.string().optional(),
+    search: z57.string().optional(),
+    limit: z57.number().optional().default(500)
   }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -29318,9 +30852,9 @@ var fiscalNotesRouter = router({
       const keys = [destName, destNick].filter((k) => k && k.trim());
       filtered = filtered.filter((r) => {
         if (r.cargoDestinationId === rawId || r.cargoDestinationId === realId) return true;
-        const txt = (r.cargoDestination || r.destinationName || r.destinationNickname || "").toUpperCase();
-        if (!txt) return false;
-        return keys.some((k) => txt === k || txt.startsWith(k + " \u2014") || txt.startsWith(k + " -") || txt.includes(k));
+        const txt2 = (r.cargoDestination || r.destinationName || r.destinationNickname || "").toUpperCase();
+        if (!txt2) return false;
+        return keys.some((k) => txt2 === k || txt2.startsWith(k + " \u2014") || txt2.startsWith(k + " -") || txt2.includes(k));
       });
     }
     if (input?.dateFrom) filtered = filtered.filter((r) => (r.cargoDate || r.issueDate || "") >= input.dateFrom);
@@ -29364,7 +30898,7 @@ var fiscalNotesRouter = router({
 // server/routers/notificationSettings.ts
 init_trpc();
 init_db();
-import { z as z57 } from "zod";
+import { z as z58 } from "zod";
 import { sql as sql31 } from "drizzle-orm";
 var JOB_KEYS = ["pagamentosPendentes", "boletoCombustivel", "fechamentoSemanal"];
 var JOB_META = {
@@ -29505,11 +31039,11 @@ var notificationSettingsRouter = router({
   // Define quem são os responsáveis (global, pode ser mais de um) pela emissão de NF do
   // Controle de Cargas. Cada item pode ser um colaborador cadastrado (collaboratorId) OU um
   // contato avulso (manualName/manualPhone), pra quando a pessoa não tem cadastro no sistema.
-  updateCargoNfResponsible: protectedProcedure.input(z57.object({
-    recipients: z57.array(z57.object({
-      collaboratorId: z57.number().nullable(),
-      manualName: z57.string().nullable().optional(),
-      manualPhone: z57.string().nullable().optional()
+  updateCargoNfResponsible: protectedProcedure.input(z58.object({
+    recipients: z58.array(z58.object({
+      collaboratorId: z58.number().nullable(),
+      manualName: z58.string().nullable().optional(),
+      manualPhone: z58.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -29519,11 +31053,11 @@ var notificationSettingsRouter = router({
     return { ok: true };
   }),
   // Idem, pra quem recebe o aviso de "nova solicitação de compra".
-  updatePurchaseRequestNewResponsible: protectedProcedure.input(z57.object({
-    recipients: z57.array(z57.object({
-      collaboratorId: z57.number().nullable(),
-      manualName: z57.string().nullable().optional(),
-      manualPhone: z57.string().nullable().optional()
+  updatePurchaseRequestNewResponsible: protectedProcedure.input(z58.object({
+    recipients: z58.array(z58.object({
+      collaboratorId: z58.number().nullable(),
+      manualName: z58.string().nullable().optional(),
+      manualPhone: z58.string().nullable().optional()
     }))
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -29532,12 +31066,12 @@ var notificationSettingsRouter = router({
     await setSetting(db, "purchaseRequestNewResponsible", input);
     return { ok: true };
   }),
-  update: protectedProcedure.input(z57.record(z57.string(), z57.object({
-    enabled: z57.boolean(),
-    hour: z57.number().int().min(0).max(23),
-    minute: z57.number().int().min(0).max(59),
-    weekday: z57.number().int().min(0).max(6).nullable(),
-    whatsappCollaboratorIds: z57.array(z57.number())
+  update: protectedProcedure.input(z58.record(z58.string(), z58.object({
+    enabled: z58.boolean(),
+    hour: z58.number().int().min(0).max(23),
+    minute: z58.number().int().min(0).max(59),
+    weekday: z58.number().int().min(0).max(6).nullable(),
+    whatsappCollaboratorIds: z58.array(z58.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -29545,9 +31079,9 @@ var notificationSettingsRouter = router({
     await setSetting(db, "jobConfig", input);
     return { ok: true };
   }),
-  updateClientConfig: protectedProcedure.input(z57.record(z57.string(), z57.object({
-    enabled: z57.boolean(),
-    clientIds: z57.array(z57.number())
+  updateClientConfig: protectedProcedure.input(z58.record(z58.string(), z58.object({
+    enabled: z58.boolean(),
+    clientIds: z58.array(z58.number())
   }))).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Banco de dados indispon\xEDvel");
@@ -29558,7 +31092,7 @@ var notificationSettingsRouter = router({
 });
 
 // server/routers.ts
-import { z as z58 } from "zod";
+import { z as z59 } from "zod";
 init_db();
 import { SignJWT } from "jose";
 
@@ -29655,7 +31189,7 @@ Se n\xE3o solicitou, ignore este email.`
 }
 
 // server/routers.ts
-import crypto3 from "crypto";
+import crypto4 from "crypto";
 async function createSessionToken(userId, email, name2) {
   const secret = new TextEncoder().encode(process.env.JWT_SECRET || "btree-secret-key");
   const expiresAt = Math.floor((Date.now() + 365 * 24 * 60 * 60 * 1e3) / 1e3);
@@ -29740,10 +31274,10 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    register: publicProcedure.input(z58.object({
-      name: z58.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-      email: z58.string().email("Email inv\xE1lido"),
-      password: z58.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    register: publicProcedure.input(z59.object({
+      name: z59.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+      email: z59.string().email("Email inv\xE1lido"),
+      password: z59.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await registerUser(input);
@@ -29758,9 +31292,9 @@ var appRouter = router({
         throw new Error(error instanceof Error ? error.message : "Erro ao registrar usu\xE1rio");
       }
     }),
-    login: publicProcedure.input(z58.object({
-      email: z58.string().email("Email inv\xE1lido"),
-      password: z58.string().min(1, "Senha \xE9 obrigat\xF3ria")
+    login: publicProcedure.input(z59.object({
+      email: z59.string().email("Email inv\xE1lido"),
+      password: z59.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })).mutation(async ({ input, ctx }) => {
       try {
         const user = await loginUser(input.email, input.password);
@@ -29779,11 +31313,11 @@ var appRouter = router({
       }
     }),
     // Rota de seed para criar/atualizar admin (apenas para uso interno)
-    seedAdmin: publicProcedure.input(z58.object({
-      seedKey: z58.string(),
-      email: z58.string().email(),
-      name: z58.string(),
-      password: z58.string().min(4)
+    seedAdmin: publicProcedure.input(z59.object({
+      seedKey: z59.string(),
+      email: z59.string().email(),
+      name: z59.string(),
+      password: z59.string().min(4)
     })).mutation(async ({ input }) => {
       if (input.seedKey !== "BTREE_SEED_2026") {
         throw new Error("Chave inv\xE1lida");
@@ -29793,15 +31327,15 @@ var appRouter = router({
       return { success: true, message: `Admin ${input.email} ${result.action === "updated" ? "atualizado" : "criado"} com sucesso` };
     }),
     // Solicitar recuperação de senha
-    forgotPassword: publicProcedure.input(z58.object({
-      email: z58.string().email("Email inv\xE1lido"),
-      origin: z58.string().url().optional()
+    forgotPassword: publicProcedure.input(z59.object({
+      email: z59.string().email("Email inv\xE1lido"),
+      origin: z59.string().url().optional()
     })).mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) {
         return { success: true };
       }
-      const token = crypto3.randomBytes(48).toString("hex");
+      const token = crypto4.randomBytes(48).toString("hex");
       await createPasswordResetToken(user.id, token);
       const baseUrl = input.origin || "https://btreeambiental.com";
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;
@@ -29809,9 +31343,9 @@ var appRouter = router({
       return { success: true };
     }),
     // Redefinir senha com token
-    resetPassword: publicProcedure.input(z58.object({
-      token: z58.string().min(1),
-      password: z58.string().min(6, "Senha deve ter pelo menos 6 caracteres")
+    resetPassword: publicProcedure.input(z59.object({
+      token: z59.string().min(1),
+      password: z59.string().min(6, "Senha deve ter pelo menos 6 caracteres")
     })).mutation(async ({ input }) => {
       const resetToken = await getValidResetToken(input.token);
       if (!resetToken) {
@@ -29880,7 +31414,7 @@ var appRouter = router({
   notificationSettings: notificationSettingsRouter,
   // Procedure de migração para criar tabelas faltantes na produção
   migrations: router({
-    run: publicProcedure.input(z58.object({ key: z58.string() })).mutation(async ({ input }) => {
+    run: publicProcedure.input(z59.object({ key: z59.string() })).mutation(async ({ input }) => {
       if (input.key !== "BTREE_SEED_2026") throw new Error("Chave inv\xE1lida");
       const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const db = await getDb2();
@@ -29935,6 +31469,7 @@ var appRouter = router({
   financialReal: financialRealRouter,
   custos: custosRouter,
   tarefas: tarefasRouter,
+  nfeCompras: nfeComprasRouter,
   modulosConfig: modulosConfigRouter,
   quickAccess: quickAccessRouter,
   weeklyGoals: weeklyGoalsRouter,
@@ -29989,9 +31524,9 @@ async function createContext(opts) {
 
 // server/_core/vite.ts
 import express from "express";
-import fs2 from "fs";
+import fs3 from "fs";
 import { nanoid } from "nanoid";
-import path2 from "path";
+import path3 from "path";
 async function setupVite(app, server) {
   const { createServer: createViteServer } = await import("vite");
   const serverOptions = {
@@ -30008,13 +31543,13 @@ async function setupVite(app, server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
     try {
-      const clientTemplate = path2.resolve(
+      const clientTemplate = path3.resolve(
         import.meta.dirname,
         "../..",
         "client",
         "index.html"
       );
-      let template = await fs2.promises.readFile(clientTemplate, "utf-8");
+      let template = await fs3.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
@@ -30028,15 +31563,15 @@ async function setupVite(app, server) {
   });
 }
 function serveStatic(app) {
-  const distPath = process.env.NODE_ENV === "development" ? path2.resolve(import.meta.dirname, "../..", "dist", "public") : path2.resolve(import.meta.dirname, "public");
-  if (!fs2.existsSync(distPath)) {
+  const distPath = process.env.NODE_ENV === "development" ? path3.resolve(import.meta.dirname, "../..", "dist", "public") : path3.resolve(import.meta.dirname, "public");
+  if (!fs3.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
     );
   }
   app.use(express.static(distPath));
   app.use("*", (_req, res) => {
-    res.sendFile(path2.resolve(distPath, "index.html"));
+    res.sendFile(path3.resolve(distPath, "index.html"));
   });
 }
 
@@ -30085,7 +31620,7 @@ function registerStorageProxy(app) {
 // server/webhooks/whatsappPurchaseBot.ts
 init_db();
 init_whatsapp();
-import crypto4 from "crypto";
+import crypto5 from "crypto";
 import { sql as sql32 } from "drizzle-orm";
 var URGENCY_LABELS = {
   baixa: "\u{1F7E2} Baixa",
@@ -30112,9 +31647,9 @@ function isValidSignature(req) {
   const signature = req.headers["x-hub-signature-256"];
   const rawBody = req.rawBody;
   if (!signature || !rawBody) return false;
-  const expected = "sha256=" + crypto4.createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  const expected = "sha256=" + crypto5.createHmac("sha256", appSecret).update(rawBody).digest("hex");
   try {
-    return crypto4.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+    return crypto5.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
   } catch {
     return false;
   }
@@ -30461,7 +31996,7 @@ async function whatsappWebhookHandler(req, res) {
 
 // server/_core/index.ts
 try {
-  const envPath = path3.resolve(process.cwd(), ".env");
+  const envPath = path4.resolve(process.cwd(), ".env");
   dotenv.config({ path: envPath, override: true });
   console.log("[ENV] Loaded .env with override from:", envPath);
 } catch (e) {
@@ -30471,9 +32006,9 @@ var MIGRATION_MARK = "/tmp/btree_last_migration";
 var MIGRATION_INTERVAL_MS = 6 * 60 * 60 * 1e3;
 function migrationDueRecently() {
   try {
-    const fs3 = __require("fs");
-    if (!fs3.existsSync(MIGRATION_MARK)) return false;
-    const ts = parseInt(fs3.readFileSync(MIGRATION_MARK, "utf8").trim() || "0", 10);
+    const fs4 = __require("fs");
+    if (!fs4.existsSync(MIGRATION_MARK)) return false;
+    const ts = parseInt(fs4.readFileSync(MIGRATION_MARK, "utf8").trim() || "0", 10);
     return Date.now() - ts < MIGRATION_INTERVAL_MS;
   } catch {
     return false;
@@ -30481,8 +32016,8 @@ function migrationDueRecently() {
 }
 function markMigrationRun() {
   try {
-    const fs3 = __require("fs");
-    fs3.writeFileSync(MIGRATION_MARK, String(Date.now()));
+    const fs4 = __require("fs");
+    fs4.writeFileSync(MIGRATION_MARK, String(Date.now()));
   } catch {
   }
 }
@@ -32331,9 +33866,9 @@ async function startServer() {
       if (!allowed.some((d2) => urlObj.hostname.endsWith(d2))) {
         return res.status(403).json({ error: "Domain not allowed" });
       }
-      const https2 = await import("https");
+      const https3 = await import("https");
       const http = await import("http");
-      const protocol = urlObj.protocol === "https:" ? https2 : http;
+      const protocol = urlObj.protocol === "https:" ? https3 : http;
       const chunks = [];
       await new Promise((resolve, reject) => {
         protocol.default.get(url, (imgRes) => {
@@ -32737,6 +34272,7 @@ function scheduleSicoobSync() {
   scheduleNext();
 }
 scheduleSicoobSync();
+Promise.resolve().then(() => (init_sincronizar(), sincronizar_exports)).then((m) => m.agendarNfeCompras()).catch((e) => console.error("[NFeCompras] Falha ao agendar:", e?.message ?? e));
 function scheduleWeeklyGoalReminder() {
   const HORA = 17;
   const scheduleNext = () => {
