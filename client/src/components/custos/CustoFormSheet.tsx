@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Camera, Check, ChevronDown, Droplet, Fuel, Home, Loader2, MapPin, MoreHorizontal, Package,
-  Route, Users, Utensils, Wifi, Wrench, X, Zap, FileText,
+  Route, Users, Utensils, Wifi, Wrench, X, Zap, FileText, Ban,
 } from "lucide-react";
 
 const CLOUDINARY_CLOUD_NAME = "djob7pxme";
@@ -26,7 +26,15 @@ const ICONES: Record<string, any> = {
 export const FORMAS = [
   { v: "dinheiro", l: "Dinheiro" }, { v: "pix", l: "Pix" }, { v: "cartao_credito", l: "Cartão de crédito" },
   { v: "cartao_debito", l: "Cartão de débito" }, { v: "transferencia", l: "Transferência" }, { v: "boleto", l: "Boleto" },
-  { v: "debito_conta", l: "Débito em conta" }, { v: "outro", l: "Outro" },
+  { v: "cheque", l: "Cheque" }, { v: "debito_conta", l: "Débito em conta" }, { v: "outro", l: "Outro" },
+];
+
+export const MOTIVOS_SEM_NOTA = [
+  { v: "cheque", l: "Pago com cheque" },
+  { v: "parcelado", l: "Compra parcelada" },
+  { v: "sem_nota", l: "Pagamento sem nota (autônomo, informal)" },
+  { v: "nota_depois", l: "A nota ainda vai chegar" },
+  { v: "outro", l: "Outro motivo" },
 ];
 
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -82,11 +90,17 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
   const [aPagar, setAPagar] = useState(false);
   const [repetir, setRepetir] = useState(false);
   const [meses, setMeses] = useState("12");
+  const [parcelas, setParcelas] = useState(1);
+  const [primeiraPaga, setPrimeiraPaga] = useState(false); // parcelado: a 1ª parcela só entra como paga se marcar
   const [vencimento, setVencimento] = useState("");
   const [favorecido, setFavorecido] = useState("");
   const [nfNumero, setNfNumero] = useState("");
   const [obs, setObs] = useState("");
   const [erro, setErro] = useState<string | null>(null);
+  const [lendo, setLendo] = useState(false);
+  const [temNota, setTemNota] = useState<"sim" | "nao" | null>(null); // gasto novo começa perguntando se tem nota
+  const [semMotivo, setSemMotivo] = useState("");
+  const [leitura, setLeitura] = useState<{ avisos: string[]; preenchidos: string[] } | null>(null);
 
   const bloqueado = item?.origem === "extrato_pedagio";
   const listaPlantas = plantas.data ?? [];
@@ -96,18 +110,22 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
   useEffect(() => {
     if (!open) return;
     setErro(null);
+    setLeitura(null);
+    setLendo(false);
     if (item) {
       setValor(String(item.valor).replace(".", ","));
       setDescricao(item.descricao ?? "");
       setPlantaId(item.plantaId ?? null);
       setCategoriaId(item.categoriaId ?? null);
       setNfUrl(item.nfUrl ?? "");
+      setTemNota(item.semNotaMotivo ? "nao" : "sim");
+      setSemMotivo(item.semNotaMotivo ?? "");
       setForma(item.formaPagamento ?? "");
       setCartaoId(item.cartaoId ?? null);
       setGastoPor(item.gastoPorNome ?? "");
       setData(item.dataVencimento ?? item.dataCompetencia ?? hoje());
-      setAPagar(item.status === "pendente");
-      setRepetir(false);
+      setAPagar(item.status === "pendente"); setPrimeiraPaga(item.status === "pago");
+      setRepetir(false); setParcelas(1);
       setVencimento(item.dataVencimento ?? "");
       setFavorecido(item.favorecido ?? "");
       setNfNumero(item.nfNumero ?? "");
@@ -115,11 +133,12 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
       setMais(true);
     } else {
       setValor(""); setDescricao(""); setCategoriaId(null); setNfUrl("");
+      setTemNota(null); setSemMotivo("");
       setPlantaId(null); // o local é opcional e começa sem seleção
       setForma(lerLS("custo.forma") || "");
       setCartaoId(Number(lerLS("custo.cartao")) || null);
       setGastoPor("");
-      setData(hoje()); setAPagar(false); setRepetir(false); setMeses("12"); setVencimento(""); setFavorecido(""); setNfNumero(""); setObs("");
+      setData(hoje()); setAPagar(false); setRepetir(false); setParcelas(1); setPrimeiraPaga(false); setMeses("12"); setVencimento(""); setFavorecido(""); setNfNumero(""); setObs("");
       setMais(false);
     }
   }, [open, item]);
@@ -155,6 +174,36 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
   const cancelarMeu = trpc.custos.meusCancelar.useMutation();
   const salvando = criar.isPending || editar.isPending;
   const precisaCartao = forma === "cartao_credito" || forma === "cartao_debito";
+  // parcelamento: cartão de crédito, boleto ou cheque (o valor informado é o total)
+  const podeParcelar = forma === "cartao_credito" || forma === "boleto" || forma === "cheque";
+  const qtdParcelas = podeParcelar && !item?.serieId ? parcelas : 1;
+  const totalNum = Number(valor.replace(/\./g, "").replace(",", "."));
+  const previaParcelas = totalNum > 0 && qtdParcelas > 1
+    ? (totalNum / qtdParcelas).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : null;
+  const lerNota = trpc.custos.lerNota.useMutation();
+
+  // Lê a nota por IA e preenche só o que ainda está vazio (nunca apaga o que a pessoa já digitou)
+  const lerPorIA = async (url: string) => {
+    setLendo(true);
+    setLeitura(null);
+    try {
+      const r = await lerNota.mutateAsync({ url });
+      const p: string[] = [];
+      if (r.valor && !valor.trim()) { setValor(r.valor.toFixed(2).replace(".", ",")); p.push("valor"); }
+      if (r.descricao && !descricao.trim()) { setDescricao(r.descricao); p.push("descrição"); }
+      if (r.data && (!data || data === hoje())) { setData(r.data); p.push("data"); }
+      if (r.categoriaId && !categoriaId) { setCategoriaId(r.categoriaId); p.push("tipo de gasto"); }
+      if (r.favorecido && !favorecido.trim()) { setFavorecido(r.favorecido); p.push("fornecedor"); }
+      if (r.nfNumero && !nfNumero.trim()) { setNfNumero(r.nfNumero); p.push("nº da NF"); }
+      if (r.formaPagamento) { setForma(r.formaPagamento); p.push("forma de pagamento"); }
+      setLeitura({ avisos: r.avisos, preenchidos: p });
+    } catch (e: any) {
+      setLeitura({ avisos: [e?.message ?? "Não foi possível ler a nota. Preencha os campos à mão."], preenchidos: [] });
+    } finally {
+      setLendo(false);
+    }
+  };
 
   const enviarFoto = () =>
     openFilePicker({ accept: "image/*,application/pdf" }, async (files: FileList) => {
@@ -168,7 +217,7 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
         fd.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
         const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, { method: "POST", body: fd });
         const j = await res.json();
-        if (j.secure_url) setNfUrl(j.secure_url);
+        if (j.secure_url) { setNfUrl(j.secure_url); if (!item && !bloqueado) lerPorIA(j.secure_url); }
         else toast.error("Não foi possível enviar a foto. Tente de novo.");
       } catch {
         toast.error("Não foi possível enviar a foto. Tente de novo.");
@@ -182,6 +231,12 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
     if (!descricao.trim()) return "Diga o que foi o gasto";
     if (!categoriaId) return "Escolha o tipo de gasto";
     if (precisaCartao && !cartaoId) { setMais(true); return "Escolha o cartão"; }
+    // novo gasto: com nota, a foto é obrigatória (a IA lê e preenche o resto); sem nota, é preciso dizer o motivo
+    if (!item && temNota === "sim" && !nfUrl) return "Tire a foto ou anexe a nota/comprovante";
+    if (!item && temNota === "nao" && !semMotivo) return "Escolha por que o gasto não tem nota";
+    if (!item && temNota === "nao" && semMotivo === "outro" && !obs.trim()) { setMais(true); return "Explique nas observações por que o gasto não tem nota"; }
+    if (enviando) return "Aguarde terminar o envio da foto";
+    if (lendo) return "Aguarde terminar a leitura da nota";
     return null;
   };
 
@@ -193,9 +248,11 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
       valor: valor.trim(), descricao: descricao.trim(), plantaId, categoriaId, dataCompetencia: data || hoje(),
       formaPagamento: forma || null, cartaoId: precisaCartao ? cartaoId : null,
       gastoPorNome: gastoPor.trim() || null, gastoPorColaboradorId: gastoPorId || null, favorecido: favorecido.trim() || null,
-      nfNumero: nfNumero.trim() || null, nfUrl: nfUrl || null, observacoes: obs.trim() || null,
-      status: aPagar || repetir ? "pendente" : "pago", dataVencimento: data || hoje(),
-      repetirMeses: !item && repetir ? Math.min(36, Math.max(2, Math.floor(Number(meses)) || 2)) : undefined,
+      nfNumero: nfNumero.trim() || null, nfUrl: nfUrl || null, semNotaMotivo: !nfUrl && temNota === "nao" ? ((semMotivo || null) as any) : null, observacoes: obs.trim() || null,
+      status: qtdParcelas > 1 ? (primeiraPaga ? "pago" : "pendente") : aPagar || repetir ? "pendente" : "pago",
+      primeiraPaga: qtdParcelas > 1 ? primeiraPaga : undefined, dataVencimento: data || hoje(),
+      repetirMeses: !item && repetir && qtdParcelas === 1 ? Math.min(36, Math.max(2, Math.floor(Number(meses)) || 2)) : undefined,
+      parcelas: qtdParcelas > 1 ? qtdParcelas : undefined,
     };
     try {
       if (item) {
@@ -205,7 +262,7 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
         const r = await criar.mutateAsync(payload);
         if (forma) gravarLS("custo.forma", forma);
         if (cartaoId) gravarLS("custo.cartao", String(cartaoId));
-        toast.success(r.criados > 1 ? `${r.criados} lançamentos programados (um por mês)` : "Custo lançado", {
+        toast.success(qtdParcelas > 1 ? `Compra parcelada em ${r.criados}x: uma parcela por mês` : r.criados > 1 ? `${r.criados} lançamentos programados (um por mês)` : "Custo lançado", {
           duration: 8000,
           action: {
             label: "Desfazer",
@@ -222,8 +279,8 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
       onSaved();
       if (outro && !item) {
         setValor(""); setDescricao(""); setNfUrl(""); setNfNumero(""); setObs(""); setFavorecido("");
+        setTemNota(null); setSemMotivo(""); setLeitura(null); setParcelas(1);
         setErro(null);
-        document.getElementById("custo-valor")?.focus();
       } else {
         onClose();
       }
@@ -245,7 +302,7 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="bottom" showClose={false}
-        className={toque ? "z-[60] flex flex-col overflow-hidden rounded-none border-0 p-0" : "flex max-h-[94dvh] flex-col overflow-hidden rounded-t-2xl p-0 md:mx-auto md:max-w-xl"}
+        className={toque ? "z-[60] flex flex-col overflow-hidden rounded-none border-0 p-0" : "flex max-h-[94dvh] flex-col overflow-hidden rounded-t-2xl p-0 md:mx-auto md:max-w-xl md:inset-y-auto md:top-[8dvh] md:bottom-auto md:max-h-[84dvh] md:rounded-2xl md:border"}
         onOpenAutoFocus={(e) => { if (toque) e.preventDefault(); }}
         style={toque ? { top: vv?.top ?? 0, bottom: "auto", height: vv?.h ?? "100dvh", maxHeight: "none" } : undefined}>
         <SheetHeader className="flex shrink-0 flex-row items-center justify-between gap-2 border-b px-4 py-2.5">
@@ -255,24 +312,91 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
           </button>
         </SheetHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4 pt-3">
+        {!item && temNota === null && (
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5">
+            <p className="text-lg font-semibold">Este gasto tem nota fiscal?</p>
+            <button type="button" onClick={() => setTemNota("sim")}
+              className="flex w-full items-center gap-4 rounded-2xl border-2 border-emerald-600 bg-emerald-50 p-4 text-left active:bg-emerald-100">
+              <Camera className="h-9 w-9 shrink-0 text-emerald-700" />
+              <span>
+                <span className="block text-base font-semibold text-emerald-900">Sim, tenho a nota ou o comprovante</span>
+                <span className="block text-sm text-emerald-800">Tire a foto ou anexe o arquivo: o sistema lê e preenche os dados para você conferir.</span>
+              </span>
+            </button>
+            <button type="button" onClick={() => setTemNota("nao")}
+              className="flex w-full items-center gap-4 rounded-2xl border-2 border-gray-300 bg-white p-4 text-left active:bg-gray-50">
+              <Ban className="h-9 w-9 shrink-0 text-gray-500" />
+              <span>
+                <span className="block text-base font-semibold text-gray-900">Não, este gasto não tem nota</span>
+                <span className="block text-sm text-gray-600">Por exemplo: cheque, compra parcelada, pagamento sem nota. Você preenche à mão e diz o motivo.</span>
+              </span>
+            </button>
+          </div>
+        )}
+
+        <div className={`min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4 pt-3 ${!item && temNota === null ? "hidden" : ""}`}>
           {bloqueado && (
             <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">Este pedágio veio do extrato do banco. Valor, data e tipo não mudam; você pode informar a planta, a nota e observações.</p>
           )}
-          {/* 1. Valor */}
+          {/* 1. Foto da nota: primeiro, porque a leitura automática preenche o resto */}
+          {(item || temNota === "sim") && (
+          <div>
+            <p className="mb-1 flex items-center justify-between text-base font-semibold"><span>Nota ou comprovante {!item && <span className="text-red-600">*</span>}</span>
+              {!item && <button type="button" onClick={() => { setTemNota(null); setNfUrl(""); setLeitura(null); }} className="text-sm font-medium text-gray-500 underline">Não tem nota?</button>}</p>
+            {nfUrl ? (
+              <div className="flex items-center gap-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 p-2">
+                {/\.pdf($|\?)/i.test(nfUrl) ? (
+                  <FileText className="h-12 w-12 text-emerald-700" />
+                ) : (
+                  <img src={nfUrl} alt="Nota" className="h-16 w-16 rounded-lg object-cover" />
+                )}
+                <span className="flex-1 text-sm font-medium text-emerald-800">Foto anexada</span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setNfUrl("")}><X className="h-4 w-4" /></Button>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" disabled={enviando} onClick={enviarFoto} className={`h-14 w-full gap-2 border-2 border-dashed text-base ${erro && !item && !nfUrl && /nota|comprovante/i.test(erro) ? "border-red-400 text-red-700" : ""}`}>
+                {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+                {enviando ? "Enviando..." : "Tirar foto da nota"}
+              </Button>
+            )}
+            {!item && !nfUrl && !enviando && <p className="mt-1 text-xs text-gray-500">Tire a foto primeiro: os campos abaixo são preenchidos pela leitura da nota.</p>}
+            {lendo && <p className="mt-2 flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800"><Loader2 className="h-4 w-4 animate-spin" /> Lendo a nota...</p>}
+            {leitura && !lendo && (
+              <div className={`mt-2 space-y-1 rounded-lg px-3 py-2 text-sm ${leitura.preenchidos.length ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-900"}`}>
+                {leitura.preenchidos.length > 0 && <p className="font-medium">Preenchido pela leitura da nota: {leitura.preenchidos.join(", ")}. Confira antes de salvar.</p>}
+                {leitura.avisos.map((a, i) => <p key={i} className="text-amber-800">⚠ {a}</p>)}
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* Sem nota: precisa dizer o motivo (cheque, compra parcelada...) */}
+          {temNota === "nao" && (
+            <div className="rounded-xl border-2 border-gray-200 p-3">
+              <p className="mb-2 flex items-center justify-between text-base font-semibold"><span className="flex items-center gap-1"><Ban className="h-4 w-4 text-gray-500" /> Por que não tem nota? {!item && <span className="text-red-600">*</span>}</span>
+                <button type="button" onClick={() => { setTemNota(item ? "sim" : null); setSemMotivo(""); }} className="text-sm font-medium text-gray-500 underline">{item ? "Anexar nota" : "Tem nota?"}</button></p>
+              <div className="grid grid-cols-1 gap-2">
+                {MOTIVOS_SEM_NOTA.map((m) => <Chip key={m.v} ativo={semMotivo === m.v} onClick={() => setSemMotivo(m.v)}>{semMotivo === m.v && <Check className="h-4 w-4" />} {m.l}</Chip>)}
+              </div>
+              {semMotivo === "outro" && <p className="mt-2 text-xs text-gray-600">Explique em “Mais opções → Observações”.</p>}
+            </div>
+          )}
+
+          {/* 2. Valor */}
           <div>
             <label htmlFor="custo-valor" className="mb-1 block text-base font-semibold">Quanto foi?</label>
             <div className="flex items-center gap-2">
               <span className="text-2xl font-semibold text-gray-500">R$</span>
               <Input
-                id="custo-valor" autoFocus={!toque} inputMode="decimal" placeholder="0,00" value={valor}
+                id="custo-valor" autoFocus={!toque && !!item} inputMode="decimal" placeholder="0,00" value={valor}
                 onChange={(e) => setValor(e.target.value.replace(/[^\d.,]/g, ""))}
-                className="h-14 text-2xl font-semibold" disabled={bloqueado}
+                className="h-14 text-2xl font-semibold" disabled={bloqueado || !!item?.parcelasTotal}
               />
             </div>
+            {!!item?.parcelasTotal && <p className="mt-1 text-xs text-amber-800">Compra parcelada em {item.parcelasTotal}x: o valor de cada parcela não pode ser alterado.</p>}
           </div>
 
-          {/* 2. O que foi */}
+          {/* 3. O que foi */}
           <div>
             <label htmlFor="custo-desc" className="mb-1 block text-base font-semibold">O que foi?</label>
             <Input
@@ -281,7 +405,7 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
             />
           </div>
 
-          {/* 3. Planta */}
+          {/* 4. Planta */}
           <div>
             <p className="mb-1 flex items-center gap-1 text-base font-semibold"><MapPin className="h-4 w-4 text-emerald-600" /> De qual local? <span className="text-xs font-normal text-gray-500">(opcional)</span></p>
             {plantas.isLoading ? (
@@ -299,7 +423,7 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
             )}
           </div>
 
-          {/* 4. Tipo de gasto */}
+          {/* 5. Tipo de gasto */}
           <div>
             <p className="mb-1 text-base font-semibold">Que tipo de gasto?</p>
             <div className="grid grid-cols-2 gap-2">
@@ -313,27 +437,6 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
               })}
             </div>
             <p className="mt-1 text-xs text-gray-500">Combustível é lançado no Controle de Abastecimento.</p>
-          </div>
-
-          {/* 5. Foto da nota */}
-          <div>
-            <p className="mb-1 text-base font-semibold">Nota ou comprovante</p>
-            {nfUrl ? (
-              <div className="flex items-center gap-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 p-2">
-                {/\.pdf($|\?)/i.test(nfUrl) ? (
-                  <FileText className="h-12 w-12 text-emerald-700" />
-                ) : (
-                  <img src={nfUrl} alt="Nota" className="h-16 w-16 rounded-lg object-cover" />
-                )}
-                <span className="flex-1 text-sm font-medium text-emerald-800">Foto anexada</span>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setNfUrl("")}><X className="h-4 w-4" /></Button>
-              </div>
-            ) : (
-              <Button type="button" variant="outline" disabled={enviando} onClick={enviarFoto} className="h-14 w-full gap-2 border-2 border-dashed text-base">
-                {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
-                {enviando ? "Enviando..." : "Tirar foto da nota"}
-              </Button>
-            )}
           </div>
 
           {/* Mais opções */}
@@ -351,6 +454,22 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
                     {FORMAS.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}
                   </select>
                 </div>
+                {podeParcelar && !item?.serieId && (
+                  <div className="rounded-lg bg-amber-50 p-2">
+                    <label className="mb-1 block text-sm font-medium text-amber-900">{item ? "Dividir este gasto em parcelas?" : "Em quantas parcelas?"}</label>
+                    <select value={parcelas} onChange={(e) => setParcelas(Number(e.target.value))} className="h-11 w-full rounded-md border border-input bg-background px-2 text-sm">
+                      <option value={1}>À vista (1x)</option>
+                      {Array.from({ length: 35 }, (_, i) => i + 2).map((n) => <option key={n} value={n}>{n}x</option>)}
+                    </select>
+                    {qtdParcelas > 1 && (
+                      <p className="mt-1 text-xs text-amber-900">
+                        {previaParcelas
+                          ? <>O valor informado é o <b>total</b>: {qtdParcelas}x de <b>{previaParcelas}</b>, vencendo todo mês a partir da data abaixo. {item ? "Este gasto vira a 1ª parcela e as demais são criadas como pendentes." : "Todas as parcelas ficam pendentes, a não ser que você marque que a 1ª já foi paga."}</>
+                          : "Informe o valor total para ver o valor de cada parcela."}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {precisaCartao && (
                   <div>
                     <label className="mb-1 block text-sm font-medium">Qual cartão?</label>
@@ -381,7 +500,13 @@ export default function CustoFormSheet({ open, onClose, onSaved, item, modo }: P
                   <label className="mb-1 block text-sm font-medium">Data (vencimento, ou o dia do gasto se já foi pago)</label>
                   <Input type="date" value={data} onChange={(e) => setData(e.target.value)} className="h-11" disabled={bloqueado} />
                 </div>
-                <label className={`flex items-center gap-2 text-sm ${colab ? "hidden" : ""}`}>
+                {qtdParcelas > 1 && (
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" checked={primeiraPaga} onChange={(e) => setPrimeiraPaga(e.target.checked)} className="h-4 w-4" />
+                    A 1ª parcela já foi paga
+                  </label>
+                )}
+                <label className={`flex items-center gap-2 text-sm ${colab || qtdParcelas > 1 ? "hidden" : ""}`}>
                   <input type="checkbox" checked={aPagar} onChange={(e) => setAPagar(e.target.checked)} className="h-4 w-4" />
                   Ainda não foi pago (conta a pagar)
                 </label>

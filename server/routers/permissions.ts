@@ -58,6 +58,7 @@ export const SYSTEM_MODULES = [
   { slug: "fornecedores",               label: "Fornecedores", group: "Compras" },
   { slug: "orcamentos",                 label: "Orçamentos", group: "Compras" },
   { slug: "estoque",                    label: "Estoque", group: "Compras" },
+  { slug: "notas-compra",               label: "Notas de Compra (NF-e)", group: "Compras" },
   // Financeiro
   { slug: "financeiro",                 label: "Módulo Financeiro", group: "Financeiro" },
   { slug: "gastos-extras",              label: "Gastos Extras", group: "Financeiro" },

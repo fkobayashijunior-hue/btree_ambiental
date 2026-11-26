@@ -41,6 +41,7 @@ export const CATALOGO_PAINEL: AtalhoPainel[] = [
   a("Combustível: fornecedores", "/fornecedores-combustivel", "fornecedores-combustivel", Fuel, "bg-yellow-600"),
   a("Compradores", "/compradores", "compradores", Building2, "bg-indigo-600"),
   a("Compras", "/compras", "compras", ShoppingCart, "bg-purple-600"),
+  a("Notas de Compra", "/notas-compra", "notas-compra", FileText, "bg-violet-600"),
   a("Uniformes", "/uniformes", "uniformes", Shirt, "bg-stone-500"),
 ];
 

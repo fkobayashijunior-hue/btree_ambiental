@@ -7,8 +7,41 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  Plus, FileText, Calendar, DollarSign, Truck, CheckCircle2, Clock, AlertTriangle, X, Search, Filter, Pencil, Trash2, Eye, Camera, Upload, Loader2, Image as ImageIcon, Download, Copy, Droplets, Gauge
+  Plus, FileText, Calendar, DollarSign, Truck, CheckCircle2, Clock, AlertTriangle, X, Search, Filter, Pencil, Trash2, Eye, Camera, Upload, Loader2, Image as ImageIcon, Download, Copy, Droplets, Gauge, Paperclip
 } from "lucide-react";
+
+// Anexo pode ser foto ou PDF (Cloudinary guarda os dois)
+const ehPdf = (url?: string | null) => !!url && /\.pdf($|\?)/i.test(url);
+
+/** Um anexo (NF ou boleto): tirar foto, escolher arquivo (foto ou PDF), ver e remover. */
+function AnexoSlot({ titulo, url, enviando, onArquivo, onRemover }: { titulo: string; url: string; enviando: boolean; onArquivo: (f: File) => void; onRemover: () => void }) {
+  const cam = useRef<HTMLInputElement>(null);
+  const arq = useRef<HTMLInputElement>(null);
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-semibold uppercase tracking-wide text-gray-600">{titulo}</label>
+      <input ref={cam} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onArquivo(f); e.target.value = ""; }} />
+      <input ref={arq} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onArquivo(f); e.target.value = ""; }} />
+      {enviando ? (
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600"><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</div>
+      ) : url ? (
+        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-2">
+          {ehPdf(url)
+            ? <div className="flex h-12 w-12 items-center justify-center rounded bg-red-100 text-xs font-bold text-red-700">PDF</div>
+            : <img src={url} alt={titulo} className="h-12 w-12 rounded object-cover" />}
+          <a href={url} target="_blank" rel="noreferrer" className="flex-1 text-xs font-medium text-green-700 underline">Abrir {titulo.toLowerCase()}</a>
+          <button type="button" title="Trocar" onClick={() => arq.current?.click()} className="rounded p-1 text-xs text-green-700 hover:bg-green-100"><Upload className="h-4 w-4" /></button>
+          <button type="button" title="Remover" onClick={onRemover} className="rounded p-1 hover:bg-green-100"><X className="h-4 w-4 text-green-600" /></button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" className="h-9 flex-1 gap-2 text-xs" onClick={() => cam.current?.click()}><Camera className="h-3.5 w-3.5" /> Câmera</Button>
+          <Button type="button" variant="outline" className="h-9 flex-1 gap-2 text-xs" onClick={() => arq.current?.click()}><Upload className="h-3.5 w-3.5" /> Foto ou PDF</Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATUS_LABELS: Record<string, string> = {
   pendente: "Pendente",
@@ -166,7 +199,7 @@ export default function FuelInvoicesPage() {
       formData.append('file', file);
       formData.append('upload_preset', 'btree_ambiental');
       formData.append('folder', 'btree-invoices');
-      const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/image/upload', {
+      const res = await fetch('https://api.cloudinary.com/v1_1/djob7pxme/auto/upload', {
         method: 'POST',
         body: formData,
       });
@@ -230,6 +263,18 @@ export default function FuelInvoicesPage() {
       toast.error("Erro ao enviar foto do boleto. Tente novamente.");
       setBoletoPreview(null);
     }
+  };
+
+  // Edição: só anexa o arquivo (foto ou PDF), sem leitura por IA
+  const [enviandoAnexo, setEnviandoAnexo] = useState<"nf" | "boleto" | null>(null);
+  const anexarNaEdicao = async (file: File, tipo: "nf" | "boleto") => {
+    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10MB."); return; }
+    setEnviandoAnexo(tipo);
+    const url = await uploadToCloudinary(file, tipo);
+    setEnviandoAnexo(null);
+    if (!url) { toast.error("Não foi possível enviar o arquivo. Tente novamente."); return; }
+    setForm((f) => (tipo === "nf" ? { ...f, invoicePhotoUrl: url } : { ...f, boletoPhotoUrl: url }));
+    toast.success(tipo === "nf" ? "Nota fiscal anexada. Clique em Atualizar para gravar." : "Boleto anexado. Clique em Atualizar para gravar.");
   };
 
   const handleAnalyzePhotos = () => {
@@ -310,7 +355,7 @@ export default function FuelInvoicesPage() {
       boletoPhotoUrl: form.boletoPhotoUrl || undefined,
     };
     if (editingId) {
-      updateMutation.mutate({ id: editingId, ...payload });
+      updateMutation.mutate({ id: editingId, ...payload, invoicePhotoUrl: form.invoicePhotoUrl || null, boletoPhotoUrl: form.boletoPhotoUrl || null });
     } else {
       createMutation.mutate(payload);
     }
@@ -592,9 +637,14 @@ export default function FuelInvoicesPage() {
                             {STATUS_LABELS[inv.effectiveStatus]}
                           </Badge>
                           {inv.invoicePhotoUrl && (
-                            <span className="text-xs text-blue-500 flex items-center gap-0.5" title="Nota com foto anexada">
-                              <ImageIcon className="h-3 w-3" />
-                            </span>
+                            <a href={inv.invoicePhotoUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-100" title="Abrir a nota fiscal">
+                              <Paperclip className="h-3 w-3" /> NF
+                            </a>
+                          )}
+                          {inv.boletoPhotoUrl && (
+                            <a href={inv.boletoPhotoUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-100" title="Abrir o boleto">
+                              <Paperclip className="h-3 w-3" /> Boleto
+                            </a>
                           )}
                         </div>
                         <div className="text-right">
@@ -757,11 +807,14 @@ export default function FuelInvoicesPage() {
               <h3 className="text-lg font-bold text-gray-800">Detalhes da Nota</h3>
               <button onClick={() => setViewInvoice(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="h-5 w-5" /></button>
             </div>
-            {viewInvoice.invoicePhotoUrl && (
-              <div className="rounded-lg overflow-hidden border border-gray-200">
-                <img src={viewInvoice.invoicePhotoUrl} alt="Foto da NF" className="w-full max-h-[300px] object-contain bg-gray-50" />
+            {[["Nota fiscal", viewInvoice.invoicePhotoUrl], ["Boleto", viewInvoice.boletoPhotoUrl]].filter(([, u]) => u).map(([rot, u]: any) => (
+              <div key={rot} className="space-y-1">
+                <div className="flex items-center justify-between text-sm"><span className="font-medium text-gray-700">{rot}</span><a href={u} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Abrir em outra aba</a></div>
+                {ehPdf(u)
+                  ? <a href={u} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700"><span className="rounded bg-red-100 px-2 py-1 text-xs font-bold text-red-700">PDF</span> Abrir {rot.toLowerCase()}</a>
+                  : <div className="overflow-hidden rounded-lg border border-gray-200"><img src={u} alt={rot} className="max-h-[300px] w-full bg-gray-50 object-contain" /></div>}
               </div>
-            )}
+            ))}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-500">Fornecedor:</span><p className="font-medium">{viewInvoice.supplierName}</p></div>
               <div><span className="text-gray-500">NF:</span><p className="font-medium">{viewInvoice.invoiceNumber}</p></div>
@@ -821,11 +874,11 @@ export default function FuelInvoicesPage() {
                       <label className="text-xs font-semibold text-blue-800 uppercase tracking-wide">1. Foto da Nota Fiscal</label>
                       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
                         onChange={e => { const f = e.target.files?.[0]; if (f) handleNFSelect(f); e.target.value = ""; }} />
-                      <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden"
                         onChange={e => { const f = e.target.files?.[0]; if (f) handleNFSelect(f); e.target.value = ""; }} />
                       {scanPreview ? (
                         <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-2">
-                          <img src={scanPreview} alt="NF" className="w-12 h-12 object-cover rounded" />
+                          {ehPdf(form.invoicePhotoUrl) ? <div className="flex h-12 w-12 items-center justify-center rounded bg-red-100 text-xs font-bold text-red-700">PDF</div> : <img src={scanPreview} alt="NF" className="w-12 h-12 object-cover rounded" />}
                           <span className="text-xs text-green-700 font-medium flex-1">Nota fiscal adicionada</span>
                           <button onClick={() => { setScanPreview(null); setPendingPhotos(p => p.filter(x => x.label !== 'nf')); setForm(f => ({ ...f, invoicePhotoUrl: '' })); }} className="p-1 rounded hover:bg-green-100">
                             <X className="h-4 w-4 text-green-600" />
@@ -850,11 +903,11 @@ export default function FuelInvoicesPage() {
                       <label className="text-xs font-semibold text-blue-800 uppercase tracking-wide">2. Foto do Boleto (opcional)</label>
                       <input ref={boletoCameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
                         onChange={e => { const f = e.target.files?.[0]; if (f) handleBoletoSelect(f); e.target.value = ""; }} />
-                      <input ref={boletoFileInputRef} type="file" accept="image/*" className="hidden"
+                      <input ref={boletoFileInputRef} type="file" accept="image/*,application/pdf" className="hidden"
                         onChange={e => { const f = e.target.files?.[0]; if (f) handleBoletoSelect(f); e.target.value = ""; }} />
                       {boletoPreview ? (
                         <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-2">
-                          <img src={boletoPreview} alt="Boleto" className="w-12 h-12 object-cover rounded" />
+                          {ehPdf(form.boletoPhotoUrl) ? <div className="flex h-12 w-12 items-center justify-center rounded bg-red-100 text-xs font-bold text-red-700">PDF</div> : <img src={boletoPreview} alt="Boleto" className="w-12 h-12 object-cover rounded" />}
                           <span className="text-xs text-green-700 font-medium flex-1">Boleto adicionado</span>
                           <button onClick={() => { setBoletoPreview(null); setPendingPhotos(p => p.filter(x => x.label !== 'boleto')); setForm(f => ({ ...f, boletoPhotoUrl: '' })); }} className="p-1 rounded hover:bg-green-100">
                             <X className="h-4 w-4 text-green-600" />
@@ -886,6 +939,17 @@ export default function FuelInvoicesPage() {
                     )}
                   </>
                 )}
+              </div>
+            )}
+
+            {editingId && (
+              <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+                <div className="flex items-center gap-2"><Paperclip className="h-4 w-4 text-gray-600" /><span className="text-sm font-semibold text-gray-800">Nota fiscal e boleto</span></div>
+                <AnexoSlot titulo="Nota fiscal" url={form.invoicePhotoUrl} enviando={enviandoAnexo === "nf"}
+                  onArquivo={(f) => anexarNaEdicao(f, "nf")} onRemover={() => setForm((x) => ({ ...x, invoicePhotoUrl: "" }))} />
+                <AnexoSlot titulo="Boleto" url={form.boletoPhotoUrl} enviando={enviandoAnexo === "boleto"}
+                  onArquivo={(f) => anexarNaEdicao(f, "boleto")} onRemover={() => setForm((x) => ({ ...x, boletoPhotoUrl: "" }))} />
+                <p className="text-[11px] text-gray-500">Os anexos são gravados ao clicar em "Atualizar".</p>
               </div>
             )}
 

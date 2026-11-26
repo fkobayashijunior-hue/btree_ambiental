@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { router } from "../_core/trpc";
 import { moduleProcedure, resolveUserPermissions } from "./permissions";
 import { notifyUsers } from "./notifications";
+import { mapaSuperiores, subordinadosDe } from "../utils/hierarquia";
 
 const USO = "tarefas" as const;
 const GESTAO = "tarefas-gestao" as const;
@@ -62,6 +63,9 @@ function ensureTables(db: any): Promise<void> {
         ["pendencia", "VARCHAR(12) NULL"], ["pendencia_motivo", "VARCHAR(300) NULL"], ["pendencia_desde", "DATETIME NULL"],
         ["origem", "VARCHAR(20) NULL"], ["origem_id", "INT NULL"], ["responsavel_user_id", "INT NULL"],
         ["pendencia_resp_ids", "VARCHAR(255) NULL"], ["pendencia_descricao", "TEXT NULL"], ["pendencia_resp_nomes", "VARCHAR(600) NULL"],
+        // tarefa criada para alguém fora da hierarquia de quem criou: precisa da autorização do superior
+        ["autorizacao", "VARCHAR(12) NULL"], ["autorizador_user_id", "INT NULL"], ["autorizador_nome", "VARCHAR(120) NULL"],
+        ["autorizacao_motivo", "VARCHAR(300) NULL"], ["autorizacao_em", "DATETIME NULL"],
       ] as [string, string][]) {
         if (!tem.has(nome)) await db.$client.execute(`ALTER TABLE tarefas ADD COLUMN ${nome} ${def}`);
       }
@@ -157,7 +161,45 @@ function mapTarefa(r: any) {
     pendenciaDescricao: (r.pendencia_descricao as string | null) ?? null,
     pendenciaRespIds: String(r.pendencia_resp_ids ?? "").split(",").filter(Boolean).map(Number),
     pendenciaRespNomes: (r.pendencia_resp_nomes as string | null) ?? null,
+    autorizacao: (r.autorizacao as "pendente" | "recusada" | null) ?? null,
+    autorizadorNome: (r.autorizador_nome as string | null) ?? null,
+    autorizacaoMotivo: (r.autorizacao_motivo as string | null) ?? null,
   };
+}
+
+// ───────── Hierarquia: quem pode criar tarefa para quem ─────────
+// Cada um cria direto para si e para quem está abaixo dele (Usuários do Sistema → Superior). Para os demais,
+// a tarefa fica aguardando a autorização do superior de quem criou (sem superior cadastrado: um administrador autoriza).
+// Administradores criam para qualquer pessoa.
+type Regra = { direto: true } | { direto: false; autorizadorId: number | null; autorizadorNome: string | null };
+
+async function regraAtribuicao(db: any, ctx: any, respColabId: number): Promise<Regra> {
+  if (ctx.user.role === "admin") return { direto: true };
+  const meus = await meusColaboradorIds(db, ctx.user.id);
+  if (meus.includes(respColabId)) return { direto: true };
+  const [c] = (await db.$client.execute(`SELECT user_id FROM collaborators WHERE id = ?`, [respColabId])) as any;
+  const alvo = Number((c as any[])[0]?.user_id ?? 0);
+  if (alvo && alvo === Number(ctx.user.id)) return { direto: true };
+  const mapa = await mapaSuperiores(db);
+  if (alvo && subordinadosDe(mapa, Number(ctx.user.id)).has(alvo)) return { direto: true };
+  const sup = mapa.get(Number(ctx.user.id)) ?? null;
+  let nome: string | null = null;
+  if (sup) {
+    const [u] = (await db.$client.execute(`SELECT name FROM users WHERE id = ?`, [sup])) as any;
+    nome = ((u as any[])[0]?.name as string | undefined)?.trim() || null;
+  }
+  return { direto: false, autorizadorId: sup, autorizadorNome: nome };
+}
+
+/** Avisa quem precisa autorizar (o superior; sem superior, os administradores). */
+async function avisarAutorizador(db: any, ctx: any, tarefaId: number, titulo: string, para: string, autorizadorId: number | null) {
+  try {
+    let ids: number[] = [];
+    if (autorizadorId) ids = [autorizadorId];
+    else { const [a] = (await db.$client.execute(`SELECT id FROM users WHERE role = 'admin'`)) as any; ids = (a as any[]).map((x) => Number(x.id)); }
+    ids = ids.filter((id) => id !== Number(ctx.user.id));
+    if (ids.length) await notifyUsers({ recipientUserIds: ids, type: "geral", title: "Tarefa aguardando sua autorização", message: `${ctx.user.name ?? "Um colaborador"} quer criar a tarefa "${titulo}" para ${para}`, relatedId: tarefaId, relatedType: "tarefa" });
+  } catch (e: any) { console.warn("[tarefas] aviso de autorização:", e?.message); }
 }
 
 async function registrar(db: any, tarefaId: number, tipo: string, texto: string | null, fotoUrl: string | null, ctx: any) {
@@ -173,7 +215,7 @@ async function recuperarPendenciasAntigas(db: any) {
     const [n] = (await db.$client.execute(`SELECT COUNT(*) AS n FROM tarefa_pendencias`)) as any;
     if (Number((n as any[])[0]?.n ?? 0) > 0) return;
     const [ev] = (await db.$client.execute(
-      `SELECT tarefa_id, tipo, texto, user_id, user_nome, created_at FROM tarefa_historico WHERE tipo IN (pendencia,status) ORDER BY tarefa_id, id`
+      `SELECT tarefa_id, tipo, texto, user_id, user_nome, created_at FROM tarefa_historico WHERE tipo IN ('pendencia','status') ORDER BY tarefa_id, id`
     )) as any;
     const porLabel = Object.fromEntries(Object.entries(PENDENCIA_LABEL).map(([k, v]) => [v, k]));
     const atual = new Map<number, { id: number }>();
@@ -191,10 +233,10 @@ async function recuperarPendenciasAntigas(db: any) {
         const label = Object.keys(porLabel).find((l) => texto.startsWith(l));
         if (!label) continue;
         await fechar(tid, e, "trocada");
-        let resto = texto.slice(label.length).replace(/^:s*/, "");
+        let resto = texto.slice(label.length).replace(/^:\s*/, "");
         let desc: string | null = null; let resp: string | null = null;
-        const mD = resto.match(/ · Descrição: ([sS]*)$/); if (mD) { desc = mD[1]; resto = resto.slice(0, mD.index); }
-        const mR = resto.match(/ · Responsável(is): ([sS]*)$/); if (mR) { resp = mR[1]; resto = resto.slice(0, mR.index); }
+        const mD = resto.match(/ · Descrição: ([\s\S]*)$/); if (mD) { desc = mD[1]; resto = resto.slice(0, mD.index); }
+        const mR = resto.match(/ · Responsável\(is\): ([\s\S]*)$/); if (mR) { resp = mR[1]; resto = resto.slice(0, mR.index); }
         const motivo = resto.replace(/^ · /, "").trim() || null;
         const [r] = (await db.$client.execute(
           `INSERT INTO tarefa_pendencias (tarefa_id, tipo, motivo, descricao, resp_nomes, aberta_por, aberta_por_nome, aberta_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -259,12 +301,13 @@ async function avisarTarefa(db: any, ctx: any, t: any, titulo: string, mensagem:
 }
 
 /** Quem pode mexer numa tarefa: supervisor, o responsável ou quem criou. */
-async function podeAcessar(db: any, ctx: any, t: any): Promise<{ gestor: boolean; responsavel: boolean; criador: boolean; pendResp: boolean }> {
+async function podeAcessar(db: any, ctx: any, t: any): Promise<{ gestor: boolean; responsavel: boolean; criador: boolean; pendResp: boolean; autorizador: boolean }> {
   const gestor = await ehGestor(ctx);
   const meus = await meusColaboradorIds(db, ctx.user.id);
   const idsPend = String(t.pendencia_resp_ids ?? "");
   const pendResp = !!t.pendencia && meus.some((id) => idsPend.includes(`,${id},`));
-  return { gestor, pendResp, responsavel: meus.includes(Number(t.responsavel_colaborador_id)) || Number(t.responsavel_user_id) === Number(ctx.user.id), criador: Number(t.criado_por) === Number(ctx.user.id) };
+  const autorizador = t.autorizacao === "pendente" && (ctx.user.role === "admin" || Number(t.autorizador_user_id) === Number(ctx.user.id));
+  return { gestor, pendResp, autorizador, responsavel: meus.includes(Number(t.responsavel_colaborador_id)) || Number(t.responsavel_user_id) === Number(ctx.user.id), criador: Number(t.criado_por) === Number(ctx.user.id) };
 }
 
 // ───────── Integração com Metas Semanais ─────────
@@ -375,10 +418,21 @@ export const tarefasRouter = router({
     const gestor = await ehGestor(ctx as any);
     const meus = await meusColaboradorIds(db, ctx.user.id);
     const [rows] = (await db.$client.execute(`SELECT id, name, user_id FROM collaborators WHERE (active = 1 OR active IS NULL) ORDER BY name`)) as any;
+    // para quem posso criar tarefa direto (eu e quem está abaixo de mim); os demais precisam de autorização. null = qualquer um (admin)
+    const admin = ctx.user.role === "admin";
+    const mapa = await mapaSuperiores(db);
+    const abaixo = subordinadosDe(mapa, Number(ctx.user.id));
+    const diretos = admin ? null : (rows as any[]).filter((r) => meus.includes(Number(r.id)) || (r.user_id && (Number(r.user_id) === Number(ctx.user.id) || abaixo.has(Number(r.user_id))))).map((r) => Number(r.id));
+    const sup = mapa.get(Number(ctx.user.id));
+    let meuSuperiorNome: string | null = null;
+    if (sup) { const [u] = (await db.$client.execute(`SELECT name FROM users WHERE id = ?`, [sup])) as any; meuSuperiorNome = ((u as any[])[0]?.name as string | undefined)?.trim() || null; }
     return {
       gestor,
+      admin,
       meuColaboradorId: meus[0] ?? null,
-      colaboradores: gestor ? (rows as any[]).map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome) : [],
+      diretos,
+      meuSuperiorNome,
+      colaboradores: (rows as any[]).map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome),
       // quem pode ser responsável por uma pendência: colaborador ativo que tem usuário (login) no sistema
       pessoas: (rows as any[]).filter((r) => r.user_id).map((r) => ({ id: Number(r.id), nome: String(r.name ?? "").trim() })).filter((c) => c.nome),
     };
@@ -405,10 +459,12 @@ export const tarefasRouter = router({
       const pend = meus.map(() => "t.pendencia_resp_ids LIKE ?").join(" OR ");
       const filtroResp = meus.length ? `(t.responsavel_colaborador_id IN (${meus.map(() => "?").join(",")}) OR t.responsavel_user_id = ? OR (t.pendencia IS NOT NULL AND (${pend})))` : `t.responsavel_user_id = ?`;
       const [rows] = (await db.$client.execute(
+        // + as que eu pedi para outra pessoa e ainda aguardam autorização (ou foram recusadas)
         `${SELECT_TAREFA}
-         WHERE ${filtroResp} AND (t.status <> 'concluida' OR t.concluida_em >= ?)
+         WHERE ((${filtroResp} AND t.autorizacao IS NULL) OR (t.autorizacao IS NOT NULL AND t.criado_por = ?))
+           AND (t.status <> 'concluida' OR t.concluida_em >= ?)
          ORDER BY t.prazo IS NULL, t.prazo, t.id DESC LIMIT 500`,
-        meus.length ? [...meus, ctx.user.id, ...meus.map((id) => `%,${id},%`), desde] : [ctx.user.id, desde]
+        meus.length ? [...meus, ctx.user.id, ...meus.map((id) => `%,${id},%`), ctx.user.id, desde] : [ctx.user.id, ctx.user.id, desde]
       )) as any;
       const itens = (rows as any[]).map(mapTarefa);
       return { itens, semVinculo: !meus.length && itens.length === 0 };
@@ -431,7 +487,7 @@ export const tarefasRouter = router({
       await sincronizarMetas(db);
       const hoje = new Date().toISOString().slice(0, 10);
       const desde = new Date(Date.now() - input.concluidasDias * 86400000).toISOString().slice(0, 19).replace("T", " ");
-      const where: string[] = ["(t.status <> 'concluida' OR t.concluida_em >= ?)"];
+      const where: string[] = ["(t.status <> 'concluida' OR t.concluida_em >= ?)", "t.autorizacao IS NULL"];
       const params: any[] = [desde];
       if (input.colaboradorId) { where.push("t.responsavel_colaborador_id = ?"); params.push(input.colaboradorId); }
       if (input.localId) { where.push("t.local_id = ?"); params.push(input.localId); }
@@ -469,27 +525,30 @@ export const tarefasRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDbOrThrow();
       await ensureTables(db);
-      const gestor = await ehGestor(ctx as any);
       let resp = input.responsavelColaboradorId ?? null;
-      if (!gestor) {
-        // colaborador só cria tarefa para si mesmo
+      if (!resp) {
+        // sem responsável escolhido: a tarefa é de quem criou
         const meus = await meusColaboradorIds(db, ctx.user.id);
         if (!meus.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Seu usuário não está ligado a um colaborador. Fale com o escritório." });
         resp = meus[0];
-      } else if (!resp) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Escolha o responsável pela tarefa" });
       }
       const [c] = (await db.$client.execute(`SELECT id, name FROM collaborators WHERE id = ? AND (active = 1 OR active IS NULL)`, [resp])) as any;
       const colab = (c as any[])[0];
       if (!colab) throw new TRPCError({ code: "BAD_REQUEST", message: "Colaborador inválido ou inativo" });
+      const nomeResp = String(colab.name ?? "").trim();
+      const regra = await regraAtribuicao(db, ctx, resp);
+      const aut = regra.direto ? null : regra;
       const [res] = (await db.$client.execute(
-        `INSERT INTO tarefas (titulo, descricao, prioridade, prazo, local_id, responsavel_colaborador_id, responsavel_nome, criado_por, criado_por_nome)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [input.titulo, input.descricao || null, input.prioridade, input.prazo ?? null, input.localId ?? null, resp, String(colab.name ?? "").trim(), ctx.user.id ?? null, (ctx.user as any).name ?? null]
+        `INSERT INTO tarefas (titulo, descricao, prioridade, prazo, local_id, responsavel_colaborador_id, responsavel_nome, criado_por, criado_por_nome,
+           autorizacao, autorizador_user_id, autorizador_nome)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [input.titulo, input.descricao || null, input.prioridade, input.prazo ?? null, input.localId ?? null, resp, nomeResp, ctx.user.id ?? null, (ctx.user as any).name ?? null,
+         aut ? "pendente" : null, aut?.autorizadorId ?? null, aut ? aut.autorizadorNome ?? "Administrador" : null]
       )) as any;
       const id = Number((res as any).insertId);
-      await registrar(db, id, "criada", `Tarefa criada para ${String(colab.name ?? "").trim()}`, null, ctx);
-      return { id };
+      await registrar(db, id, "criada", `Tarefa criada para ${nomeResp}${aut ? ` · aguardando autorização de ${aut.autorizadorNome ?? "um administrador"}` : ""}`, null, ctx);
+      if (aut) await avisarAutorizador(db, ctx, id, input.titulo, nomeResp, aut.autorizadorId);
+      return { id, aguardandoAutorizacao: !!aut, autorizadorNome: aut ? aut.autorizadorNome ?? "um administrador" : null };
     }),
 
   detalhe: moduleProcedure(USO, GESTAO)
@@ -501,7 +560,7 @@ export const tarefasRouter = router({
       const r = (rows as any[])[0];
       if (!r) throw new TRPCError({ code: "NOT_FOUND", message: "Tarefa não encontrada" });
       const acc = await podeAcessar(db, ctx, r);
-      if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
+      if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp && !acc.autorizador) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
       const [h] = (await db.$client.execute(`SELECT id, tipo, texto, foto_url, user_id, user_nome, created_at FROM tarefa_historico WHERE tarefa_id = ? ORDER BY id`, [input.id])) as any;
       const [an] = (await db.$client.execute(`SELECT id, nome, url, mime, tamanho, user_id, user_nome, created_at FROM tarefa_anexos WHERE tarefa_id = ? ORDER BY id`, [input.id])) as any;
       const [pe] = (await db.$client.execute(`SELECT * FROM tarefa_pendencias WHERE tarefa_id = ? ORDER BY id`, [input.id])) as any;
@@ -513,7 +572,8 @@ export const tarefasRouter = router({
         meuUserId: Number(ctx.user.id),
         gestor: acc.gestor,
         podeEditar: r.origem !== MARCA_META && (acc.gestor || acc.criador),
-        podeMudar: true,
+        podeMudar: !r.autorizacao,
+        podeAutorizar: acc.autorizador,
       };
     }),
 
@@ -538,18 +598,34 @@ export const tarefasRouter = router({
       if (!acc.gestor && !acc.criador) throw new TRPCError({ code: "FORBIDDEN", message: "Só quem criou a tarefa ou um supervisor pode alterá-la" });
       let resp = Number(t.responsavel_colaborador_id);
       let nome = t.responsavel_nome as string | null;
-      if (acc.gestor && input.responsavelColaboradorId && input.responsavelColaboradorId !== resp) {
+      // trocar o responsável para alguém fora da hierarquia (ou reenviar uma recusada) volta a pedir autorização
+      let regra: Regra | null = null;
+      if (input.responsavelColaboradorId && input.responsavelColaboradorId !== resp) {
         const [c] = (await db.$client.execute(`SELECT id, name FROM collaborators WHERE id = ? AND (active = 1 OR active IS NULL)`, [input.responsavelColaboradorId])) as any;
         const colab = (c as any[])[0];
         if (!colab) throw new TRPCError({ code: "BAD_REQUEST", message: "Colaborador inválido ou inativo" });
         resp = input.responsavelColaboradorId; nome = String(colab.name ?? "").trim();
+        regra = await regraAtribuicao(db, ctx, resp);
         await registrar(db, input.id, "editada", `Responsável alterado para ${nome}`, null, ctx);
+      } else if (t.autorizacao === "recusada") {
+        regra = await regraAtribuicao(db, ctx, resp);
       }
+      const aut = regra && !regra.direto ? regra : null;
       await db.$client.execute(
         `UPDATE tarefas SET titulo = ?, descricao = ?, prioridade = ?, prazo = ?, local_id = ?, responsavel_colaborador_id = ?, responsavel_nome = ? WHERE id = ?`,
         [input.titulo, input.descricao || null, input.prioridade, input.prazo ?? null, input.localId ?? null, resp, nome, input.id]
       );
-      return { ok: true };
+      if (regra) {
+        await db.$client.execute(
+          `UPDATE tarefas SET autorizacao = ?, autorizador_user_id = ?, autorizador_nome = ?, autorizacao_motivo = NULL, autorizacao_em = NULL WHERE id = ?`,
+          [aut ? "pendente" : null, aut?.autorizadorId ?? null, aut ? aut.autorizadorNome ?? "Administrador" : null, input.id]
+        );
+        if (aut) {
+          await registrar(db, input.id, "editada", `Aguardando autorização de ${aut.autorizadorNome ?? "um administrador"}`, null, ctx);
+          await avisarAutorizador(db, ctx, input.id, input.titulo, nome ?? "-", aut.autorizadorId);
+        }
+      }
+      return { ok: true, aguardandoAutorizacao: !!aut, autorizadorNome: aut ? aut.autorizadorNome ?? "um administrador" : null };
     }),
 
   // Muda o andamento (A fazer → Em andamento → Concluída). O responsável, quem criou e os supervisores podem.
@@ -569,6 +645,7 @@ export const tarefasRouter = router({
       if (t.origem === MARCA_META) throw new TRPCError({ code: "BAD_REQUEST", message: MSG_META });
       const acc = await podeAcessar(db, ctx, t);
       if (!acc.gestor && !acc.responsavel && !acc.criador) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
+      if (t.autorizacao) throw new TRPCError({ code: "BAD_REQUEST", message: t.autorizacao === "recusada" ? "Esta tarefa foi recusada pelo superior" : "Esta tarefa ainda aguarda autorização" });
       if (t.status === input.status) return { ok: true };
       if (input.status === "concluida" && t.pendencia === "aprovacao" && !acc.gestor) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Esta tarefa aguarda a aprovação de um supervisor para ser concluída" });
@@ -606,6 +683,7 @@ export const tarefasRouter = router({
       if (t.origem === MARCA_META) throw new TRPCError({ code: "BAD_REQUEST", message: MSG_META });
       const acc = await podeAcessar(db, ctx, t);
       if (!acc.gestor && !acc.responsavel && !acc.criador && !acc.pendResp) throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta tarefa" });
+      if (t.autorizacao) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta tarefa ainda não foi autorizada" });
       if (t.status === "concluida") throw new TRPCError({ code: "BAD_REQUEST", message: "A tarefa já está concluída" });
       if (t.pendencia === "aprovacao" && input.pendencia !== "aprovacao" && !acc.gestor) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Só um supervisor pode liberar uma tarefa que aguarda aprovação" });
@@ -668,6 +746,53 @@ export const tarefasRouter = router({
         await fecharPendencias(db, input.id, ctx, "devolvida");
         await registrar(db, input.id, "status", `Devolvida para ajustes: ${input.comentario}`, null, ctx);
       }
+      return { ok: true };
+    }),
+
+  // Solicitações de tarefa que esperam a MINHA autorização (admin vê todas).
+  solicitacoes: moduleProcedure(USO, GESTAO).query(async ({ ctx }) => {
+    const db = await getDbOrThrow();
+    await ensureTables(db);
+    const admin = ctx.user.role === "admin";
+    const [rows] = (await db.$client.execute(
+      `${SELECT_TAREFA} WHERE t.autorizacao = 'pendente' ${admin ? "" : "AND t.autorizador_user_id = ?"} ORDER BY t.id DESC LIMIT 200`,
+      admin ? [] : [ctx.user.id]
+    )) as any;
+    return (rows as any[]).map(mapTarefa);
+  }),
+
+  // O superior autoriza (a tarefa passa a valer para o responsável) ou recusa (volta para quem pediu, com o motivo).
+  autorizar: moduleProcedure(USO, GESTAO)
+    .input(z.object({ id: z.number().int().positive(), aprovar: z.boolean(), motivo: z.string().trim().max(300).nullable().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDbOrThrow();
+      await ensureTables(db);
+      const [rows] = (await db.$client.execute(`SELECT * FROM tarefas WHERE id = ?`, [input.id])) as any;
+      const t = (rows as any[])[0];
+      if (!t) throw new TRPCError({ code: "NOT_FOUND", message: "Tarefa não encontrada" });
+      if (t.autorizacao !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta tarefa não está aguardando autorização" });
+      const acc = await podeAcessar(db, ctx, t);
+      if (!acc.autorizador) throw new TRPCError({ code: "FORBIDDEN", message: "Só o superior de quem pediu (ou um administrador) pode autorizar" });
+      if (!input.aprovar && !input.motivo) throw new TRPCError({ code: "BAD_REQUEST", message: "Diga por que a tarefa foi recusada" });
+      const eu = String((ctx.user as any).name ?? "").trim() || "Superior";
+      await db.$client.execute(
+        `UPDATE tarefas SET autorizacao = ?, autorizacao_motivo = ?, autorizacao_em = NOW(), autorizador_user_id = ?, autorizador_nome = ? WHERE id = ?`,
+        [input.aprovar ? null : "recusada", input.aprovar ? null : input.motivo, ctx.user.id, eu, input.id]
+      );
+      await registrar(db, input.id, "status", input.aprovar ? `Autorizada por ${eu}` : `Recusada por ${eu}: ${input.motivo}`, null, ctx);
+      try {
+        // quem pediu fica sabendo; se autorizada, o responsável também
+        const ids = new Set<number>();
+        if (t.criado_por) ids.add(Number(t.criado_por));
+        if (input.aprovar) {
+          const [c] = (await db.$client.execute(`SELECT user_id FROM collaborators WHERE id = ?`, [t.responsavel_colaborador_id])) as any;
+          const u = Number((c as any[])[0]?.user_id ?? 0);
+          if (u) await notifyUsers({ recipientUserIds: [u], type: "geral", title: "Nova tarefa para você", message: `"${t.titulo}" (pedida por ${t.criado_por_nome ?? "-"}, autorizada por ${eu})`, relatedId: Number(t.id), relatedType: "tarefa" });
+          ids.delete(u);
+        }
+        ids.delete(Number(ctx.user.id));
+        if (ids.size) await notifyUsers({ recipientUserIds: Array.from(ids), type: "geral", title: input.aprovar ? "Tarefa autorizada" : "Tarefa recusada", message: input.aprovar ? `${eu} autorizou "${t.titulo}" para ${t.responsavel_nome ?? "-"}` : `${eu} recusou "${t.titulo}": ${input.motivo}`, relatedId: Number(t.id), relatedType: "tarefa" });
+      } catch (e: any) { console.warn("[tarefas] aviso de autorização:", e?.message); }
       return { ok: true };
     }),
 

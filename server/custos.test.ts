@@ -142,3 +142,20 @@ describe("importação de planilha", () => {
     expect(atribuirHashes([l.itens[0], l.itens[0]]).map((x) => x.hash)).toEqual(a.map((x) => x.hash));
   });
 });
+
+import { dividirParcelas, aceitaParcelas } from "./utils/custos";
+describe("parcelamento", () => {
+  it("divide e a última parcela absorve os centavos", () => {
+    expect(dividirParcelas(1000, 3)).toEqual([333.33, 333.33, 333.34]);
+    expect(dividirParcelas(100, 4)).toEqual([25, 25, 25, 25]);
+    const p = dividirParcelas(1234.57, 7);
+    expect(Math.round(p.reduce((s, v) => s + v, 0) * 100)).toBe(123457);
+  });
+  it("só cartão de crédito, boleto e cheque parcelam", () => {
+    expect(aceitaParcelas("cheque")).toBe(true);
+    expect(aceitaParcelas("boleto")).toBe(true);
+    expect(aceitaParcelas("cartao_credito")).toBe(true);
+    expect(aceitaParcelas("pix")).toBe(false);
+    expect(aceitaParcelas(null)).toBe(false);
+  });
+});

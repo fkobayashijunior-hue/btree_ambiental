@@ -79,7 +79,7 @@ export default function MeusGastosPage() {
                       {!cancelado && i.conferencia === "devolvido" && <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700">Corrigir</span>}
                       {i.nfUrl ? (
                         <a href={i.nfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700"><Paperclip className="h-3 w-3" /> Nota</a>
-                      ) : !cancelado && !i.nfNumero ? <span className="rounded-full bg-red-50 px-2 py-0.5 text-red-600">Sem nota</span> : null}
+                      ) : !cancelado && !i.nfNumero ? <span className={`rounded-full px-2 py-0.5 ${i.semNotaMotivo ? "bg-gray-100 text-gray-600" : "bg-red-50 text-red-600"}`}>{({ cheque: "Cheque", parcelado: "Parcelado", sem_nota: "Sem nota", nota_depois: "Nota pendente", outro: "Sem nota" } as Record<string, string>)[i.semNotaMotivo ?? ""] ?? "Sem nota"}</span> : null}
                     </div>
                     {!cancelado && i.conferencia === "devolvido" && i.conferenciaObs && (
                       <p className="mt-1 rounded-lg bg-red-50 px-2 py-1 text-xs text-red-700">Para corrigir: {i.conferenciaObs}. Toque para alterar e salvar de novo.</p>

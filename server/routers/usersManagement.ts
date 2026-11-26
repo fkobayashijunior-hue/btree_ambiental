@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import { users } from "../../drizzle/schema";
 import { eq, like, or, desc } from "drizzle-orm";
 import { hashPassword } from "../auth";
+import { mapaSuperiores, definirSuperior } from "../utils/hierarquia";
 
 export const usersManagementRouter = router({
   // Listar todos os usuários (admin only)
@@ -30,7 +31,8 @@ export const usersManagementRouter = router({
         lastSignedIn: users.lastSignedIn,
       }).from(users).$dynamic();
 
-      const results = await query.orderBy(desc(users.createdAt));
+      const sup = await mapaSuperiores(db);
+      const results = (await query.orderBy(desc(users.createdAt))).map((u) => ({ ...u, superiorId: sup.get(u.id) ?? null }));
 
       // Filter in memory if search provided
       if (input?.search) {
@@ -52,6 +54,7 @@ export const usersManagementRouter = router({
       email: z.string().email(),
       password: z.string().min(4),
       role: z.enum(["user", "admin"]).default("user"),
+      superiorId: z.number().int().positive().nullable().optional(), // superior imediato (hierarquia das Tarefas)
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") {
@@ -67,7 +70,7 @@ export const usersManagementRouter = router({
       }
 
       const passwordHash = await hashPassword(input.password);
-      await db.insert(users).values({
+      const [res] = await db.insert(users).values({
         name: input.name,
         email: input.email,
         passwordHash,
@@ -75,6 +78,7 @@ export const usersManagementRouter = router({
         role: input.role,
         lastSignedIn: new Date().toISOString(),
       });
+      if (input.superiorId && res?.insertId) await definirSuperior(db, Number(res.insertId), input.superiorId);
 
       return { success: true };
     }),
@@ -87,6 +91,7 @@ export const usersManagementRouter = router({
       email: z.string().email().optional(),
       role: z.enum(["user", "admin"]).optional(),
       password: z.string().min(4).optional(),
+      superiorId: z.number().int().positive().nullable().optional(), // null remove o superior
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") {
@@ -103,6 +108,7 @@ export const usersManagementRouter = router({
         updateData.passwordHash = await hashPassword(input.password);
       }
 
+      if (input.superiorId !== undefined) await definirSuperior(db, input.id, input.superiorId);
       await db.update(users).set(updateData).where(eq(users.id, input.id));
       return { success: true };
     }),
@@ -121,6 +127,9 @@ export const usersManagementRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível" });
 
       await db.delete(users).where(eq(users.id, input.id));
+      // quem estava abaixo dele fica sem superior (o administrador define outro)
+      await definirSuperior(db, input.id, null);
+      await db.$client.execute(`DELETE FROM usuario_superior WHERE superior_user_id = ?`, [input.id]);
       return { success: true };
     }),
 });
